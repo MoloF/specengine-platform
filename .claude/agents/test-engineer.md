@@ -2,7 +2,7 @@
 name: test-engineer
 description: Verifies a SpecEngine task by running it — writes integration tests in crates/*/tests and xtask/tests for the behaviour named in the acceptance criteria, maintains the fixture repositories in fixtures/, runs check, nextest, clippy and cargo xtask docs check, and verifies the named mutations. Presents command output, not impressions.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: claude-fable-5-1
+model: claude-opus-5-5
 effort: xhigh
 color: cyan
 ---

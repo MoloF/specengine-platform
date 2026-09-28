@@ -1,0 +1,34 @@
+[package]
+name = "specengine-ra"
+version = "0.1.0"
+edition.workspace = true
+# The pinned `ra_ap_*` set declares `rust-version = "1.98"` and uses APIs
+# stabilised in 1.98 (`str::substr_range`); the workspace floor (1.90) does not apply.
+rust-version = "1.98"
+license.workspace = true
+publish = false
+description = "Layer C of SpecEngine: rust-analyzer as a library (ra_ap_* =0.0.352), read-only workspace loading and monikers"
+
+[dependencies]
+ra_ap_load-cargo.workspace = true
+ra_ap_project_model.workspace = true
+ra_ap_ide.workspace = true
+ra_ap_ide_db.workspace = true
+ra_ap_hir_expand.workspace = true
+ra_ap_vfs.workspace = true
+ra_ap_paths.workspace = true
+ra_ap_syntax.workspace = true
+ra_ap_proc_macro_api.workspace = true
+# Not used in code: exact pins of transitive crates the `ra_ap_*` manifests only
+# bound from below, kept as direct dependencies so the lock file cannot drift
+# (owner's decision 2026-09-29; versions in the root manifest):
+# - `salsa`, `salsa-macros`, `salsa-macro-rules` =0.28.2: 0.28.5 changed the
+#   `HashEqLike` trait the `ra_ap_*` =0.0.352 queries implement, so they no
+#   longer compile against it;
+# - `unicode-ident` =1.0.24 (Unicode 17): `ra-ap-rustc_lexer` asserts that
+#   `unicode-ident` and `unicode-properties` 0.1.4 (Unicode 17) share one
+#   Unicode version, and 1.0.26 moved to Unicode 18.
+salsa.workspace = true
+salsa-macros.workspace = true
+salsa-macro-rules.workspace = true
+unicode-ident.workspace = true

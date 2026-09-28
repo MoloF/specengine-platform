@@ -2,7 +2,7 @@
 name: spec-writer
 description: Maintains the SpecEngine documentation under the convention in docs/canon/documentation-system.md — writes task specs in docs/features/, ADR decisions with a canon diff in the same change, Tier 1 README files of subtrees, rebuilds the index and passes cargo xtask docs check. After implementation, ticks off the criteria, fills in "Implementation", moves the truth into the canon and compresses the shipped spec.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: claude-fable-5-1
+model: claude-opus-5-5
 effort: xhigh
 color: blue
 ---

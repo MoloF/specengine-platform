@@ -1,0 +1,13 @@
+[package]
+name = "specengine-code"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Code side of SpecEngine: tree-sitter parsing, the normalized AST hash, item collection and module paths"
+
+[dependencies]
+tree-sitter.workspace = true
+tree-sitter-rust.workspace = true
+blake3.workspace = true

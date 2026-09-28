@@ -1,0 +1,1 @@
+{"mcpServers": {"specengine": {"type": "stdio", "command": "cargo", "args": ["run", "-q", "-p", "specengine-mcp", "--features", "probes"]}}}

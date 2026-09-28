@@ -20,6 +20,8 @@ specengine-platform/
     specengine-mcp/                # rmcp server: tools, resources, prompts, MRTR/elicitation
     specengine-http/               # axum: REST, SSE, /mcp, embedded UI
     specengine-import/             # importers: one adapter per pilot project's convention
+    specengine-ra/                 # layer C: rust-analyzer as a library; outside default-members (ra_ap_* never in the core graph)
+    specengine-eval/               # permanent measurement harness over pilot corpora (paths at run time, read-only, JSON aggregates)
     specengine-cli/                # `spec` binary (alias `specengine`)
   ui/                              # Vite + React 19 + TS (Phase 4)
   plugin/                          # Claude Code plugin: plugin.json, .mcp.json, hooks, skills, agents
@@ -36,7 +38,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 1. Decisions are made and recorded as ADR-0001…ADR-0021 (`docs/decisions/`), each with its canon diff.
 2. **Read before the first line of code**: tracey sources (daemon + bridge topology, `pre-commit`/`bump`, word-level diff), limpet (`anchor.rs`), cgr docs (`mcp-server.md`, `duplicates.md`, `structural-delta.md`), `codegraph-rust/docs/data-model.md`, fiberplane/drift and amiss (fingerprint, verdicts, exit codes), `/speckit.converge` (gap types). **Run tracey on one crate of a pilot project** — input for ADR-0019.
 3. **Hold W** (`docs/canon/documentation-system.md` §1): the live specs 04-08 are monolithic (up to 57 KB); the worst working set is ≈ 146 KB against a target of ≤ 40 KB (`cargo xtask docs budget`). Each pipeline task extracts its slice into `docs/features/<slug>.md` and, on shipping, moves the truth into canon; when a section of 04-08 is exhausted it is shortened, and an exhausted document gets `status: shipped`.
-4. Spikes on the pilot projects, each yielding a number or a yes/no:
+4. Spikes on the pilot projects, each yielding a number or a yes/no. Owner decision 2026-09-28: no throwaway code — the spikes are delivered as the first production increments of `specengine-code`, `-mcp`, `-import`, `-ra` plus the permanent harness `specengine-eval`; groups, thresholds and results in `docs/features/phase-0-spikes.md`:
    - **AST hash**: tree-sitter 0.27 + tree-sitter-rust 0.24.2 compatibility is confirmed, speed is not a concern. The spike checks **correctness**: hashes of all symbols in the pilot projects match before/after `cargo fmt` and after stripping comments; unparsed items yield `cannot_verify`, not a shared hash; the same comparison for `syn` 3 → decision ADR-0021.
    - **Read** limpet (`src/memory/anchor.rs`, resolution ladder) and sem.
    - **Module resolver (layer A)**: share of symbols with an unambiguous `qpath` in each pilot workspace.
@@ -101,7 +103,7 @@ Screens per 07 §3: Tree, Node, Graph, Queue (with diff and in-place editing), T
 | AC-8 | **Machine-verified**: `verified` is set only after SpecEngine itself runs the `@verifies` tests | test |
 | AC-9 | **Staleness**: editing a node from the `spec_snapshot` of a `ready` task makes it `stale`, the bundle shows the diff | test |
 | AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects |
-| AC-11 | **Homoglyphs**: IDs with mixed scripts are rejected with an auto-fix | test on IDs where a Latin letter is swapped for its Cyrillic look-alike (U+0420 for `R`, U+0415 for `E`) |
+| AC-11 | **Homoglyphs**: IDs with mixed scripts are rejected with an auto-fix | test on IDs where a Latin letter is swapped for its Cyrillic look-alike (U+0420 for `P`, U+0415 for `E`) |
 | AC-12 | **Responsiveness**: an MCP event is visible in the UI ≤ 1 s | e2e |
 | AC-13 | **Meaning change without revision fails**: pre-commit fails if a node's `norm_hash` changed without a `rev` bump and without `--editorial` | test on a temp repo |
 | AC-14 | **"Could not verify" ≠ "fresh"**: an unparseable file yields `cannot_verify` and exit 2, not a green run; two different unparseable items do **not** get the same hash | test (regression for the `is_extra()` trap on ERROR) |

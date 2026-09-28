@@ -14,5 +14,8 @@
       "Bash(git diff)",
       "Bash(./scripts/sync-saving-agents.sh --check)"
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-opus-5-5"
   }
 }

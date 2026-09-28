@@ -1,0 +1,89 @@
+(
+    schedules: [
+        (
+            name: "First",
+            systems: [
+                (
+                    name: "bevy_ecs::message::update::message_update_system",
+                    apply_deferred: false,
+                    exclusive: true,
+                    deferred: false,
+                ),
+            ],
+            system_sets: [
+                (
+                    name: "MessageUpdateSystems",
+                    conditions: [],
+                ),
+                (
+                    name: "SystemTypeSet:message_update_system",
+                    conditions: [],
+                ),
+            ],
+            hierarchy: [
+                ((0), System(0)),
+                ((1), System(0)),
+            ],
+            dependency: [],
+            components: [],
+            conflicts: [],
+        ),
+        (
+            name: "Update",
+            systems: [
+                (
+                    name: "bevy_mini::tick",
+                    apply_deferred: false,
+                    exclusive: false,
+                    deferred: false,
+                ),
+                (
+                    name: "bevy_ecs::schedule::executor::ApplyDeferred",
+                    apply_deferred: true,
+                    exclusive: true,
+                    deferred: false,
+                ),
+                (
+                    name: "bevy_time::time_system",
+                    apply_deferred: false,
+                    exclusive: false,
+                    deferred: false,
+                ),
+            ],
+            system_sets: [
+                (
+                    name: "SystemTypeSet:bevy_mini::tick",
+                    conditions: [
+                        (
+                            name: "bevy_ecs::schedule::condition::run_once",
+                        ),
+                    ],
+                ),
+            ],
+            hierarchy: [
+                ((0), System(0)),
+            ],
+            dependency: [
+                (System(0), System(1)),
+                (SystemSet(0), System(2)),
+            ],
+            components: [
+                (
+                    name: "bevy_ecs::name::Name",
+                ),
+            ],
+            conflicts: [
+                (
+                    system_1: 0,
+                    system_2: 2,
+                    conflicting_access: World,
+                ),
+                (
+                    system_1: 0,
+                    system_2: 2,
+                    conflicting_access: Components([0]),
+                ),
+            ],
+        ),
+    ],
+)

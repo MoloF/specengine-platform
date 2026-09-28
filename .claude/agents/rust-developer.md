@@ -2,7 +2,7 @@
 name: rust-developer
 description: Implements a SpecEngine task in Rust from a spec in docs/features/ — code in crates/*/src, xtask/src, Cargo manifests. Follows the rules of docs/canon/architecture.md and the pinned dependency versions. Drives cargo check to green. Also fixes review findings and failing tests.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: claude-fable-5-1
+model: claude-opus-5-5
 effort: xhigh
 color: green
 ---

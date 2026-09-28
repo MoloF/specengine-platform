@@ -1,0 +1,11 @@
+# Stub manifest: marks this directory as a package root for the qpath part of the
+# `ast-hash` measurement. The corpus is parsed, never built (`broken.rs` and
+# `macro_error.rs` carry deliberate parse errors). `[workspace]` keeps it out of
+# the repository workspace.
+[package]
+name = "ast-hash-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

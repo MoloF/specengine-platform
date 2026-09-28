@@ -17,9 +17,11 @@ use frontmatter::FrontMatter;
 
 /// Directories without documents: build output, dependencies, agent configuration.
 /// `.claude/` holds role and command prompts, not documentation: they carry Claude Code front-matter.
+/// `fixtures/` holds test corpora with foreign conventions, not documents of this repository.
 const SKIP_DIRS: &[&str] = &[
     ".git",
     ".claude",
+    "fixtures",
     ".github",
     "target",
     "target.noindex",

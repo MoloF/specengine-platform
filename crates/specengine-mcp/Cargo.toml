@@ -1,0 +1,25 @@
+[package]
+name = "specengine-mcp"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "MCP server of SpecEngine over stdio: both protocol eras, the review_proposal consent tool"
+
+[[bin]]
+name = "specengine-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rmcp.workspace = true
+tokio.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+
+[features]
+# Probe tools `probe_output` and `probe_sleep` for the interactive MCP checks of
+# docs/features/phase-0-spikes.md ("Owner checklist").
+probes = []

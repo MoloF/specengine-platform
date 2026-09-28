@@ -3,7 +3,7 @@ name: code-reviewer
 description: Reviews an implementation against the task spec, the rules of docs/canon/architecture.md and the documentation convention — divergences from the acceptance criteria, breaches of the one writing door, blocking, domain logic in the core, tree-sitter traps, unpinned dependencies, Rust defects, a decision without an ADR and a canon diff. Returns findings with a severity level and a verdict; does not edit code.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit
-model: claude-fable-5-1
+model: claude-opus-5-5
 effort: xhigh
 color: orange
 ---

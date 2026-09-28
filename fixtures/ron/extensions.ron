@@ -1,0 +1,8 @@
+#![enable(implicit_some)]
+// RON extensions and a raw string: the lexer accepts them, the grammar reports
+// `extension_attribute` and `raw_string` (docs/features/phase-0-spikes.md, group 2).
+Settings(
+    title: r#"quoted "title""#,
+    subtitle: "plain",
+    limit: 3,
+)

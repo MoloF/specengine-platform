@@ -1,0 +1,30 @@
+{
+  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (docs/features/phase-0-spikes.md, Data and AC-07). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file.",
+  "files": 2,
+  "files_with_comments": 2,
+  "parse_clean": { "lexer": 2, "grammar": null },
+  "parse_clean_pct": { "lexer": 100.0, "grammar": null },
+  "rejected_categories": {
+    "lexer": [],
+    "grammar": null
+  },
+  "comment_byte_ranges": { "lexer": true, "grammar": null, "files_agreeing_pct": null },
+  "markers": {
+    "total": 3,
+    "by_relation": { "implements": 3 },
+    "anchored": { "lexer": 2, "grammar": null },
+    "unanchored": { "lexer": 1, "grammar": null },
+    "cannot_verify": { "lexer": 0, "grammar": null },
+    "nested": 2,
+    "agree_pct": null,
+    "id_not_latin": 0
+  },
+  "nested_marker_resolves": { "lexer": true, "grammar": null },
+  "recommendation": "lexer",
+  "anchors": [
+    { "path": "config.ron", "line": 7, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.player.speed", "depth": 2 },
+    { "path": "config.ron", "line": 14, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.waves[2]", "depth": 2 },
+    { "path": "config.ron", "line": 19, "relation": "implements", "id": "X", "rev": 1, "anchor": "unanchored", "depth": null }
+  ],
+  "comments": { "config.ron": 6, "extensions.ron": 2 }
+}

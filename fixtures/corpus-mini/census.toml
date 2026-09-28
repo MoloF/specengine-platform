@@ -1,0 +1,10 @@
+[corpus]
+roots = ["design"]                # relative to --pilot
+[front_matter]
+class_key = "kind"                # value → per_class bucket
+[ids]
+regex = '^[A-Z]{2}-[0-9]{3}$'     # checked after confusable normalization
+[tables]
+id_column = 0                     # 0-based column holding the ID
+[sections]
+id_attr = true                    # {#ID} on headings

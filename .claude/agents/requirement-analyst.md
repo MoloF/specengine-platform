@@ -2,7 +2,7 @@
 name: requirement-analyst
 description: Breaks down a raw SpecEngine requirement before the task is framed — works out the real problem the owner or an agent has, checks it against the accepted decisions (ADRs) and the canon, determines whether a new ADR is needed, names risks, assumptions and verifiable acceptance criteria. The first step of any task, before specification and code.
 tools: Read, Grep, Glob
-model: claude-fable-5-1
+model: claude-opus-5-5
 effort: max
 color: purple
 ---

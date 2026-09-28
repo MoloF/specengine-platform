@@ -1,0 +1,16 @@
+{
+  "_comment": "Expected `result` of `specengine-eval ast-hash` on this fixture (docs/features/phase-0-spikes.md, Data). `files_changed_min` is a lower bound because rustfmt's exact output depends on its version; everything else is exact.",
+  "files": 8,
+  "items": 69,
+  "items_error": 3,
+  "files_with_errors": 2,
+  "stable_pct": { "fmt_default": 100.0, "fmt_contrast": 100.0, "comments": 100.0 },
+  "files_changed_min": { "fmt_default": 1, "fmt_contrast": 2 },
+  "cannot_verify": 3,
+  "cannot_verify_distinct": true,
+  "error_categories": ["macro_punct", "other"],
+  "path_attrs": 1,
+  "orphan_error_regions": 0,
+  "qpath_ambiguity": { "path_attribute": 2 },
+  "syn": { "files_failed": 1 }
+}

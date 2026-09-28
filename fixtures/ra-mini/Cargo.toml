@@ -1,0 +1,10 @@
+# Fixture of `specengine-eval ra` (spike group 6, `rust-analyzer-library`): a small
+# Cargo workspace with its own `Cargo.lock`, a build script (`arena/build.rs`), a path
+# proc-macro crate (`arena-derive`) whose derive the main crate uses, a `#[cfg]`-gated
+# function, a file outside the module tree (`arena/src/stray.rs`) and a file outside
+# every package (`tools/probe.rs`). Its own `[workspace]` keeps it out of the
+# repository workspace, so it never enters the workspace build. The measurement is
+# read-only: a run leaves this directory byte-identical and creates no `target/`.
+[workspace]
+members = ["arena", "arena-derive"]
+resolver = "3"

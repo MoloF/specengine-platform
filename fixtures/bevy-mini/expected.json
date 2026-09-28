@@ -1,0 +1,80 @@
+{
+  "_comment": "Expected output of `specengine-eval bevy-detector` on this fixture (docs/features/phase-0-spikes.md, Data and AC-10). `result` is the stdout `result` without `--dump`, except the timing `detail.detector_ms` and `detail.bytes` (checked against the size of src/main.rs); `dump` is `result.dump` with `--dump fixtures/bevy-mini/app_data.ron`. `out` lists the files under `--out/bevy/fixtures/`: the four hand-listed registrations are the `tick` system (read from the `macro_rules!` transcriber), the `on_spawn` observer and the two plugins `setup_plugin` (`fn(&mut App)`) and `MiniPlugin` (`impl Plugin for`). The project is parsed only, never built; `app_data.ron` is a hand-written Bevy 0.19 `schedule_data` dump of it.",
+  "result": {
+    "files": 1,
+    "files_with_errors": 0,
+    "detected": { "systems": 1, "observers": 1, "plugins": 2 },
+    "dump": null,
+    "detail": {
+      "files_skipped": 0,
+      "crates": 1,
+      "manifests_unreadable": 0,
+      "call_sites": { "add_systems": 1, "add_observer": 1, "add_plugins": 2, "in_macros": 1 },
+      "systems_by": { "path": 0, "closure": 0, "factory": 0, "macro_rules": 1, "macro_call": 0 },
+      "observers_by": { "path": 1, "closure": 0, "factory": 0, "macro_rules": 0, "macro_call": 0 },
+      "plugins_by": { "impl_plugin": 1, "fn_app": 1, "in_macros": 0 },
+      "plugin_uses": 3,
+      "adapters": { "pipe": 0, "map": 0, "with_input": 0, "with_input_from": 0 },
+      "schedules_distinct": 0,
+      "schedule_not_literal": 0,
+      "uncertain": {
+        "macro_in_arguments": 0,
+        "metavariable": 0,
+        "unknown_method": 0,
+        "expression": 0,
+        "arguments": 0,
+        "nesting_too_deep": 0,
+        "parse_error": 0
+      }
+    }
+  },
+  "dump": {
+    "schema": { "expected": "bevy_dev_tools 0.19 schedule_data", "unknown_fields": 0, "missing_fields": 0 },
+    "schedules": 2,
+    "systems_total": 4,
+    "apply_deferred": 1,
+    "systems": 1,
+    "observers": null,
+    "plugins": null,
+    "matched": 0,
+    "matched_schedule_exact": 0,
+    "matched_schedule_unverified": 0,
+    "match_pct": 0.0,
+    "name_found_pct": 0.0,
+    "name_found_incl_macros_pct": 100.0,
+    "misses": 1,
+    "miss_categories": {
+      "generic_instance": 0,
+      "repeated_site": 0,
+      "other_schedule": 0,
+      "macro_rules": 1,
+      "macro_call": 0,
+      "closure": 0,
+      "indirect": 0,
+      "not_in_source": 0
+    },
+    "detected_unmatched": 0,
+    "match_basis": "schedule+name"
+  },
+  "out": {
+    "registrations.json": [
+      { "path": "src/main.rs", "line": 7, "target": "system", "origin": "macro_rules", "form": "path", "schedule": "Update", "text": "tick", "name": "tick", "enclosing_fn": null, "adapters": [], "piped": [] },
+      { "path": "src/main.rs", "line": 17, "target": "observer", "origin": "code", "form": "path", "schedule": null, "text": "on_spawn", "name": "on_spawn", "enclosing_fn": "setup_plugin", "adapters": [], "piped": [] }
+    ],
+    "plugins.json": [
+      { "path": "src/main.rs", "line": 15, "kind": "fn_app", "origin": "code", "name": "setup_plugin" },
+      { "path": "src/main.rs", "line": 22, "kind": "impl_plugin", "origin": "code", "name": "MiniPlugin" }
+    ],
+    "plugin_uses.json": [
+      { "path": "src/main.rs", "line": 24, "origin": "code", "name": "setup_plugin", "text": "setup_plugin" },
+      { "path": "src/main.rs", "line": 29, "origin": "code", "name": "DefaultPlugins", "text": "DefaultPlugins" },
+      { "path": "src/main.rs", "line": 29, "origin": "code", "name": "MiniPlugin", "text": "MiniPlugin" }
+    ],
+    "uncertain.json": [],
+    "crates.json": ["bevy_mini"],
+    "dump_match.json": [
+      { "schedule": "Update", "name": "bevy_mini::tick", "status": "miss", "category": "macro_rules", "registration": null }
+    ],
+    "dump_schema.json": { "unknown_fields": [], "missing_fields": [] }
+  }
+}

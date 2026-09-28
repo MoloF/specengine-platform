@@ -1,0 +1,22 @@
+// Fixture of spike group 2 (docs/features/phase-0-spikes.md, AC-07):
+// a marker inside a nested struct, a marker inside a list, and a marker
+// adjacent to no field (the last line of an inner struct, before its `)`).
+Config(
+    player: Player(
+        name: "hero",
+        // @implements X@1
+        speed: 4.5,
+        health: 100,
+    ),
+    waves: [
+        1,
+        2,
+        // @implements X@1
+        3,
+    ],
+    arena: Arena(
+        width: 10,
+        // @implements X@1
+    ),
+    volume: 0.5,
+)

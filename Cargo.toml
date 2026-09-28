@@ -1,8 +1,74 @@
 [workspace]
 resolver = "3"
-members = ["xtask"]
+members = ["xtask", "crates/*"]
+# The core build graph: `specengine-ra` (rust-analyzer as a library) stays outside
+# so `ra_ap_*` never enters it; `fixtures/bevy-mini` and `fixtures/ra-mini` are Cargo
+# projects of their own so Bevy and the fixture crates never enter the workspace
+# build (docs/features/phase-0-spikes.md, "Data").
+default-members = [
+    "xtask",
+    "crates/specengine-code",
+    "crates/specengine-mcp",
+    "crates/specengine-import",
+    "crates/specengine-eval",
+]
+exclude = ["fixtures/bevy-mini", "fixtures/ra-mini"]
 
 [workspace.package]
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"
+
+# Versions are pinned exactly as in docs/specs/specengine-platform/04-prior-art-and-stack.md §6.
+# A new dependency or a version change is an owner decision, not a silent edit.
+[workspace.dependencies]
+tree-sitter = "=0.27.0"
+tree-sitter-rust = "=0.24.2"
+blake3 = "=1.8.7"
+clap = { version = "=4.6.7", features = ["derive"] }
+syn = { version = "=3.0.6", default-features = false, features = ["full", "parsing", "printing", "extra-traits"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+# Census config and ID patterns of `specengine-import` (spike group 3); approved by the owner 2026-09-29.
+# `regex` is already in the graph through `tree-sitter` with the same features.
+toml = { version = "=1.1.4", default-features = false, features = ["std", "parse", "serde"] }
+regex = { version = "=1.13.1", default-features = false, features = ["std", "unicode"] }
+# Comparison-only companions of `syn` 3 (ADR-0021); never in the product graph.
+quote = { version = "=1.0.47", default-features = false }
+proc-macro2 = { version = "=1.0.107", default-features = false }
+# MCP server over stdio (spike group 4; 04 §6, 07 §1.1). Stdio-only features: no
+# `server-side-http`, no `transport-streamable-http-*`, so no HTTP stack enters the
+# core graph; no `elicitation` feature (it only adds typed helpers and pulls `url`):
+# the legacy `elicitation/create` request goes through `Peer::send_request`.
+rmcp = { version = "=3.5.0", default-features = false, features = ["server", "macros", "transport-io", "request-state"] }
+# Already in the graph through `rmcp` (tokio; getrandom via `uuid` v4); direct and pinned
+# for the runtime and the per-process `requestState` HMAC key. `schemars` is used through
+# the `rmcp::schemars` re-export (1.2.2, as in 04 §6). Approved by the owner 2026-09-29.
+tokio = { version = "=1.53.1", default-features = false, features = ["rt", "macros", "io-std", "time"] }
+getrandom = { version = "=0.4.3", default-features = false }
+# rust-analyzer as a library (spike group 6, layer C of 05 §5.1, ADR-0020): one
+# release of the `ra_ap_*` set, pinned exactly. Used only by `specengine-ra`, which
+# is not a default member, so none of these enters the core build graph (AC-01).
+# The set needs rustc >= 1.98. Approved by the owner 2026-09-29.
+ra_ap_load-cargo = "=0.0.352"
+ra_ap_project_model = "=0.0.352"
+ra_ap_ide = "=0.0.352"
+ra_ap_ide_db = "=0.0.352"
+ra_ap_hir_expand = "=0.0.352"
+ra_ap_vfs = "=0.0.352"
+ra_ap_paths = "=0.0.352"
+ra_ap_syntax = "=0.0.352"
+ra_ap_proc_macro_api = "=0.0.352"
+# Exact pins the `ra_ap_*` =0.0.352 manifests do not express (they ask for `^`),
+# direct dependencies of `specengine-ra` so `cargo update` cannot move them (owner's
+# decision 2026-09-29; the reasons are in crates/specengine-ra/Cargo.toml). No
+# default features: the pins add nothing to the feature set `ra_ap_*` enables.
+# `unicode-ident` is also in the core graph (through `proc-macro2`): one lock file,
+# so this pin governs it there too.
+salsa = { version = "=0.28.2", default-features = false }
+salsa-macros = { version = "=0.28.2", default-features = false }
+salsa-macro-rules = { version = "=0.28.2", default-features = false }
+unicode-ident = "=1.0.24"
+# The POSIX calls of `specengine-eval ra` (peak RSS, process groups); already in the
+# `ra` graph (and the core graph) at this version; direct only behind the `ra` feature.
+libc = { version = "=0.2.189", default-features = false }

@@ -21,7 +21,7 @@ Enforces §11 of `docs/canon/documentation-system.md` in this repository until S
 
 ## What counts as a document
 
-Every `*.md` in the repository, except the directories `.git`, `.claude` (role prompts), `.github`, `target*`, `node_modules`, `dist`, and files starting with `_` (templates).
+Every `*.md` in the repository, except the directories `.git`, `.claude` (role prompts), `fixtures` (test corpora with foreign conventions), `.github`, `target*`, `node_modules`, `dist` (`SKIP_DIRS` in `src/docs/mod.rs`, matched by name at any depth), and files starting with `_` (templates).
 
 ## Modules
 

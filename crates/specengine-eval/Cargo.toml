@@ -1,0 +1,30 @@
+[package]
+name = "specengine-eval"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Permanent measurement harness of SpecEngine over pilot corpora: paths at run time, read-only, JSON aggregates"
+
+[features]
+default = []
+# Comparison-only digest candidate (ADR-0021): `syn` 3 never enters the product graph.
+syn = ["dep:syn", "dep:quote", "dep:proc-macro2"]
+# Subcommand `ra` (spike group 6, `rust-analyzer-library`): `ra_ap_*` =0.0.352 through
+# `specengine-ra`, which needs rustc >= 1.98; `libc` for peak RSS and process groups.
+ra = ["dep:specengine-ra", "dep:libc"]
+
+[dependencies]
+specengine-code = { path = "../specengine-code" }
+specengine-import = { path = "../specengine-import" }
+specengine-ra = { path = "../specengine-ra", optional = true }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Crate names of the corpus's manifests (`bevy-detector`); already pinned for `specengine-import`.
+toml.workspace = true
+syn = { workspace = true, optional = true }
+quote = { workspace = true, optional = true }
+proc-macro2 = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }

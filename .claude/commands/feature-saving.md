@@ -16,7 +16,7 @@ The difference from `/feature` is the second set of roles: the `*-saving` twins
 (`requirement-analyst-saving`, `spec-writer-saving`, `rust-developer-saving`,
 `code-reviewer-saving`, `test-engineer-saving`) plus `ui-developer`. The twins run on
 **Claude Opus 5.5** (`claude-opus-5-5`, effort taken from the originals: the analyst max,
-the rest xhigh), the `/feature` originals on `claude-fable-5-1`. The set is switched to
+the rest xhigh), the `/feature` originals on `claude-opus-5-5` too (owner's decision 2026-09-28: no role runs on Fable). The set is switched to
 another model with a single command (see "The roles' model" below), and that same command is
 how the work continues when the limits of the main set are squeezed dry. The role is
 expensive, which means **pass a digest, not a bedsheet**: the path to the spec, the list of
