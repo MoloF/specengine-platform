@@ -1,0 +1,9 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# std only: the documentation check must build in seconds and pull no dependencies.
+[dependencies]

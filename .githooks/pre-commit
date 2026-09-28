@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Enforcement of the documentation convention (docs/canon/documentation-system.md §11):
+# any commit touching documents passes cargo xtask docs check.
+# Enabled by scripts/hooks-install.sh (core.hooksPath=.githooks).
+set -euo pipefail
+
+if git diff --cached --name-only --diff-filter=ACMRD | grep -qE '\.md$'; then
+  if ! cargo xtask docs check; then
+    printf '\nCommit stopped: cargo xtask docs check is red.\n' >&2
+    printf 'Rebuild the index with: cargo xtask docs index --write\n' >&2
+    exit 1
+  fi
+fi
+
+if git diff --cached --name-only | grep -qE '^\.claude/agents/'; then
+  ./scripts/sync-saving-agents.sh --check >/dev/null || {
+    printf 'Commit stopped: the *-saving twins have fallen behind — ./scripts/sync-saving-agents.sh\n' >&2
+    exit 1
+  }
+fi

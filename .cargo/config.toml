@@ -1,0 +1,6 @@
+[alias]
+xtask = "run --quiet --package xtask --"
+
+[build]
+# Spotlight skips *.noindex directories: the build is not indexed and does not heat the laptop.
+target-dir = "target.noindex"

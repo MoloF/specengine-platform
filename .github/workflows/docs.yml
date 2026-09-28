@@ -1,0 +1,13 @@
+# The only documentation check, §11 of docs/canon/documentation-system.md.
+name: docs
+on:
+  push:
+  pull_request:
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo xtask docs check
+      - run: ./scripts/sync-saving-agents.sh --check
