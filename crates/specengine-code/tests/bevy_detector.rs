@@ -1,6 +1,6 @@
-//! Spike group 5 `bevy-schedule` (docs/features/phase-0-spikes.md, AC-10 and
-//! "Rules and edge cases"): the syntactic Bevy registration detector of
-//! `specengine-code` on hand-written sources.
+//! AC-10 of docs/features/phase-0-spikes.md and the detector rules of 05 §5.1
+//! (`crates/specengine-code/README.md`, `bevy`): the syntactic Bevy
+//! registration detector of `specengine-code` on hand-written sources.
 //!
 //! Covered: nested tuples with every combinator of `COMBINATORS` and every
 //! adapter of `ADAPTERS` (the `pipe` target recorded); comments inside

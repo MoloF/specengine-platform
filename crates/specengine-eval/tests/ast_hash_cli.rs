@@ -144,7 +144,7 @@ fn count(value: &Value, what: &str) -> u64 {
         .unwrap_or_else(|| panic!("{what} must be a count, got {value}"))
 }
 
-/// Every row of the "Results" table for the ast-hash group must be a number
+/// Every measured row of the `ast-hash` result must be a number
 /// (rustfmt rows are `null` only when no rustfmt is installed, which fails here).
 fn assert_all_rows_numeric(result: &Value) {
     for key in [

@@ -173,10 +173,11 @@ fn core_tree_has_no_rust_analyzer_syn3_or_bevy() {
 }
 
 // ---------------------------------------------------------------------------
-// AC-01, the `--features ra` part (spike group 6): `ra_ap_*` enters only through
-// feature `ra` of `specengine-eval` → `specengine-ra`, at the one pinned release,
-// and never the core graph, the default `specengine-eval` graph or the default
-// members' graph. `cargo tree` resolves without compiling, so these run on the
+// AC-01, the `--features ra` part (layer C of 05 §5.1,
+// `crates/specengine-ra/README.md`): `ra_ap_*` enters only through feature `ra`
+// of `specengine-eval` → `specengine-ra`, at the one pinned release, and never
+// the core graph, the default `specengine-eval` graph or the default members'
+// graph. `cargo tree` resolves without compiling, so these run on the
 // stable toolchain too (the `ra_ap_*` set itself needs rustc >= 1.98 to build).
 // ---------------------------------------------------------------------------
 
@@ -385,7 +386,7 @@ fn default_members_graph_has_no_rust_analyzer() {
 }
 
 // ---------------------------------------------------------------------------
-// Exact pins of group 6 (owner's decision 2026-09-29): `salsa`, `salsa-macros`,
+// Exact pins of 04 §6 (owner's decision 2026-09-29): `salsa`, `salsa-macros`,
 // `salsa-macro-rules` =0.28.2 and `unicode-ident` =1.0.24 as direct exact
 // dependencies of `specengine-ra`; `libc` =0.2.189 direct in `specengine-eval`
 // only behind feature `ra`; `fixtures/ra-mini` outside the workspace.

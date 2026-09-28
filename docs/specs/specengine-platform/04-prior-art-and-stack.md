@@ -92,10 +92,10 @@ Others: `spec-drift-mcp` (TypeScript, checks fields only, inactive). **Swimm lef
 
 | Approach | Verdict |
 |---|---|
-| **`ra_ap_ide::StaticIndex::compute`** (rust-analyzer as a library, `ra_ap_*` 0.0.352 of 2026-09-14) | **best source of resolved identity**: one pass yields `moniker`, `signature`, `definition` (name span) and **`definition_body`** (span of the whole item, for the AST hash). Cost: no stability guarantees, weekly releases, **pin `=0.0.352` for all `ra_ap_*` at once**; static loading, incrementality is ours. Memory and time: rust-analyzer on itself (~400 kLOC + deps) — 1.35 GB / 90 s, of which 60 s is type inference, **not needed** for monikers (item tree + def map suffice, ~18 s). On a large Bevy project ⚠ estimate 1.5–4 GB and 1–5 min cold start — **measure**. Without a proc-macro server `#[derive(Component)]` and other derives are lost |
+| **`ra_ap_ide::StaticIndex::compute`** (rust-analyzer as a library, `ra_ap_*` 0.0.352 of 2026-09-14) | **best source of resolved identity**: one pass yields `moniker`, `signature`, `definition` (name span) and **`definition_body`** (span of the whole item, for the AST hash). Cost: no stability guarantees, weekly releases, **pin `=0.0.352` for all `ra_ap_*` at once**; static loading, incrementality is ours. Memory and time: type inference (60 of 90 s on rust-analyzer itself) is **not needed** for monikers (item tree + def map suffice); on the Bevy pilots, through `MonikerResult::from_def`, measured affordable on a laptop (05 §5.1 layer C). Without a proc-macro server `#[derive(Component)]` and other derives are lost |
 | `rust-analyzer scip` (subprocess) | weaker: **single-threaded** (issue #18140, mozilla-central about 20 min), no item bodies. But we take the **SCIP symbol grammar** as the on-disk ID format |
 | LSP client to rust-analyzer | ⚠ **trap**: LSP has no `textDocument/moniker`, `documentSymbol` returns text as written (`"impl fmt::Debug for E"`). Building identity via LSP is a dead end |
-| `syn` 3.0 / tree-sitter | do not resolve names: an `impl` has no resolved self type or trait, adjacent impls are indistinguishable. Fine **for hashing and markers**, not for identity |
+| `syn` 3.0 / tree-sitter | do not resolve names: an `impl` has no resolved self type or trait, adjacent impls are indistinguishable. tree-sitter is fine **for hashing and markers** (05 §5.2), neither for identity |
 | rustdoc JSON | nightly only, format broke 4 times in 5 weeks, **`Id`s unstable**, impls unnamed, no bodies. A secondary source at most |
 | stack-graphs | archived 2025-09-09, never supported Rust |
 | Aider repo-map | **blind to Bevy registration**: `add_systems(Update, move_player)` matches no capture in `rust-tags.scm`, so a system that is only registered gets near-zero rank. The upstream tags query knows no `impl_item`, const/static, variants or fields |
@@ -159,15 +159,15 @@ For SpecEngine this means: the context bundle is identifiers plus minimal text, 
 
 ## 4. Claude Code: what can be used (v2.1.283)
 
-**MCP client** (docs: code.claude.com/docs/en/mcp):
+**MCP client** (docs: code.claude.com/docs/en/mcp; the era, elicitation, output-cap and background rows are verified on 2.1.283 by script and by hand — re-verify on upgrade):
 - transports `stdio | http | ws` (`sse` deprecated); project scope — **`.mcp.json` in the repository** (read at session start);
 - **resources via `@server:uri`**: `@specengine:spec://node/R-12` — ⚠ content is inserted **without a tool call**, so `PreToolUse` hooks do not fire;
 - **MCP prompts = slash commands**: `/specengine:prepare-task T-0107`;
-- **elicitation is supported** (since 2.1.76, form and URL). The form is a flat object of primitives and enums; answers `accept | decline | cancel`; URL ≤ ~8,000 characters;
+- **elicitation is supported** (since 2.1.76, form and URL) **in both protocol eras**; with permission prompts bypassed the form still appears, so bypass mode cannot skip it. The form is a flat object of primitives and enums; answers `accept | decline | cancel`; URL ≤ ~8,000 characters;
 - sampling — no data on support; the Tasks extension — unsupported;
-- a stdio server gets the **legacy handshake** by default; for 2026-07-28 it needs `MCP_PROTOCOL_NEGOTIATION=auto` → **support both eras** (in rmcp: `ClientLifecycleMode::Auto`);
-- output limits: warning from 10 k tokens, hard limit 25 k (`MAX_MCP_OUTPUT_TOKENS`); **tool descriptions and server `instructions` are truncated at 2,048 characters**. Tool search is on by default, so `instructions` is the server's most important text;
-- **an MCP call longer than 2 minutes goes to the background** — except a call waiting on an open elicitation form. **Do not design a long-blocking "wait for approval"**;
+- a stdio server gets the **legacy handshake** (`2025-11-25`) by default; `MCP_PROTOCOL_NEGOTIATION=auto` negotiates 2026-07-28 → **support both eras**. rmcp has no server-side lifecycle mode (`ClientLifecycleMode::Auto` is client-only): the server detects the era from the first message (`initialize` → legacy; a request with complete 2026-07-28 `_meta` → stateless) and bounds it with `supported_protocol_versions`;
+- **the output cap counts characters**: 48,000 pass inline with no warning reaching the model, 104,000 are rejected, and `MAX_MCP_OUTPUT_TOKENS` does not raise it. **Tool descriptions and server `instructions` are truncated at 2,048 characters**. Tool search is on by default, so `instructions` is the server's most important text;
+- **an MCP call longer than 120 s goes to the background**, runs to completion and returns its result as a notification; a call held by an open elicitation form is exempt (≥ 11 min observed, no timeout). **Do not design a long-blocking "wait for approval"**;
 - ⭐ **`_meta["anthropic/requiresUserInteraction"]: true`** on a tool (≥ 2.1.199): a permission prompt **on every call, even in `bypassPermissions`**, no "don't ask again", allow rules ignored, a `PreToolUse` hook cannot approve it. **The strongest primitive of human consent.**
 
 **Hooks** (~33 events): `PreToolUse`, `PostToolUse`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, `SubagentStart/Stop`, `SessionStart`, `WorktreeCreate/Remove`, `FileChanged`, **`Elicitation`/`ElicitationResult`**, `TaskCreated/Completed` and more. Handler types: `command`, **`http`**, `mcp_tool`, `prompt`, `agent`. Exit 2 blocks; priority `deny > defer > ask > allow`; `if: "Edit(src/**)"` narrows the trigger.
@@ -187,31 +187,38 @@ Result: the split by write frequency and owner (05 §1) is the Beads lesson, not
 
 ## 6. Stack (crates.io versions as of 2026-09-28)
 
+A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependencies]`, approved by the owner and in use; the rest are planned and pinned on adoption. A new dependency or a version change is an owner decision. **Toolchain**: edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc ≥ 1.98 (the `ra_ap_*` set); no `rust-toolchain.toml`.
+
 | Crate | Version | Role / note |
 |---|---|---|
-| `rmcp` | **3.5.0** (released 2026-09-28; 1.0 → 3.5 in 7 months — **pin exactly**) | official SDK: `#[tool]`/`#[tool_router]`/`#[prompt]`, stdio, **Streamable HTTP as a Tower service → mounts in axum**, MRTR, elicitation, `request-state`, Tasks (`TaskManager`), `subscriptions/listen`; supports 2026-07-28 and older revisions. ⚠ check the SDK tier |
+| `rmcp` | **=3.5.0** (released 2026-09-28; 1.0 → 3.5 in 7 months) | official SDK: `#[tool]`/`#[tool_router]`/`#[prompt]`, stdio, **Streamable HTTP as a Tower service → mounts in axum**, MRTR, elicitation, `request-state`, Tasks (`TaskManager`), `subscriptions/listen`; supports 2026-07-28 and older revisions. Features in use: `server`, `macros`, `transport-io`, `request-state` — stdio only, no HTTP stack in the graph; the `elicitation` feature is skipped (it pulls `url`), `elicitation/create` goes through `send_request`. ⚠ check the SDK tier |
+| `tokio` / `getrandom` | =1.53.1 (`rt`, `macros`, `io-std`, `time`) / =0.4.3 | MCP server runtime / per-process `requestState` HMAC key; both already in the graph through `rmcp` |
 | `axum` | 0.8.9 | HTTP, SSE; the next release is a breaking **0.9**, plan the migration |
-| `tree-sitter` | 0.27.0 | Rust ≥ 1.90 |
-| `tree-sitter-rust` | 0.24.2 | **compatible with 0.27** (ABI 15, built and run); errs on about 0.9 % of valid code → `has_error()` check per item. In 0.26+ `set_timeout_micros` is removed, cancellation via `ParseOptions { progress_callback }`; in 0.27 `child_count()` → `u32`, `kind()` → `&'tree str` |
-| `tree-sitter-ron` | 0.2.0 (**2023**) | ⚠ **risk**: old grammar; plan B — rebuild the grammar with the CLI or a light RON lexer of our own for markers + `ron` for values |
+| `tree-sitter` | =0.27.0 | Rust ≥ 1.90 |
+| `tree-sitter-rust` | =0.24.2 | **compatible with 0.27** (ABI 15); `has_error()` check per item (05 §5.2). In 0.26+ `set_timeout_micros` is removed, cancellation via `ParseOptions { progress_callback }`; in 0.27 `child_count()` → `u32`, `kind()` → `&'tree str` |
+| own RON lexer | — (`specengine-code`) | `.ron` markers, field paths, the Bevy dump reader; replaces `tree-sitter-ron` 0.2.0 (05 §9) |
 | `rusqlite` | 0.40.2 | `bundled`, FTS5; preferable to `sqlx` for local single-user |
 | `pulldown-cmark` | 0.13.4 | heading attributes `{#ID}`, offset iterator for precise patches |
 | `serde-saphyr` | 1.3.0 | YAML front-matter (`serde_yaml` deprecated, `serde_yaml_ng`/`serde_norway` unchanged since 2024) |
-| `blake3` | 1.8.7 | node and AST hashes |
+| `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 | serialization; JSON output of tools and `specengine-eval` |
+| `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer) / importer ID patterns; `regex` is already in the graph through tree-sitter |
+| `blake3` | =1.8.7 | node and AST hashes |
 | `notify` + `notify-debouncer-full` | 8.2.0 + 0.7.0 | file watching; **not** 9.0-rc; debouncer-full coalesces atomic saves |
 | `rusqlite_migration` | 2.6.0 | schema migrations (`refinery` and `sqlx` conflict with rusqlite 0.40 over `libsqlite3-sys`) |
 | `similar` | 3.2.0 | proposal diffs |
 | `petgraph` | 0.8.3 | graph, cycles, toposort |
 | `gix` | 0.88.0 | later; system `git` at the start |
 | `rust-embed` | 8.12.0 | UI inside the binary |
-| `schemars` | 1.2.2 | JSON Schema 2020-12 for tools |
-| `clap` | 4.6.7 | CLI |
-| `ra_ap_ide` / `ra_ap_hir` / `ra_ap_load-cargo` | **=0.0.352** (2026-09-14), pin all together (`ra_ap_edition` is already 0.0.354 — the set is skewed) | `MonikerResult::from_def` for resolved identity (layer C); API without guarantees; cargo-modules lags head by ~7 weeks — a realistic update pace |
+| `schemars` | 1.2.2 | JSON Schema 2020-12 for tools, through the `rmcp::schemars` re-export |
+| `clap` | =4.6.7 (`derive`) | CLI |
+| `ra_ap_*` (nine direct: `load-cargo`, `project_model`, `ide`, `ide_db`, `hir_expand`, `vfs`, `paths`, `syntax`, `proc_macro_api`) | **=0.0.352** (2026-09-14), all together (`ra_ap_edition` is already 0.0.354 — the set is skewed) | `MonikerResult::from_def` for resolved identity (layer C); only in `specengine-ra`, outside `default-members`, so none enters the core graph; needs rustc ≥ 1.98; API without guarantees; cargo-modules lags head by ~7 weeks — a realistic update pace |
+| `salsa`, `salsa-macros`, `salsa-macro-rules` / `unicode-ident` | =0.28.2 / =1.0.24 | direct exact pins of `specengine-ra`: the `ra_ap` manifests ask `^`, and newer versions break the 0.0.352 build (salsa 0.28.5 changed `HashEqLike`; unicode-ident 1.0.26 is Unicode 18 against `unicode-properties` 0.1.4's 17). One lock file, so the `unicode-ident` pin governs the core graph too |
+| `libc` | =0.2.189 | `specengine-eval` feature `ra` only: peak RSS and process groups |
 | `scip` | 0.10.0 | symbol format, index reading |
 | `ast-grep-core` | 0.45.3 (pin exactly) | anchor DSL for user binding rules |
-| `bevy_mod_debugdump` | 0.16.0 | schedule oracle: `print_schedule_graph(&mut app, Update)`, needs only a built `App` |
+| `bevy_mod_debugdump` | 0.16.0 | schedule fallback: `print_schedule_graph(&mut app, Update)`, needs only a built `App`; not needed on the pilots |
 | (Bevy) `bevy_dev_tools::schedule_data` | in 0.19 | **built-in dump of all schedules in RON** (features `debug` + `schedule_data`); the truth for system registrations (05 §5.1, layer B) |
-| `syn` | 3.0.6 (+ `extra-traits`) | not an identity source (no name resolution); **digest candidate** for Rust files without parse errors (ADR-0021) |
+| `syn` / `quote` / `proc-macro2` | =3.0.6 (+ `extra-traits`) / =1.0.47 / =1.0.107 | comparison only, behind `specengine-eval`'s `syn` feature: not an identity source (no name resolution) and not the digest (05 §5.2, ADR-0021) |
 | `limpet`, `sem-core`, `mago-fingerprint` | 0.17.0 / 0.25.0 / 1.50.0 | **read the sources**: anchors, rename following, fingerprint rules |
 | `syndiff` | 0.2.0 | structural diff for explaining drift in the UI |
 | `bevy` | 0.19.1; 0.20.0-rc.1 released 2026-09-15 | target of the system detector; ⚠ the 0.20 schedule API may affect it |

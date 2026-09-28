@@ -21,7 +21,8 @@
 //! permissions: layer C runs them only when proc macros are requested.
 //!
 //! This crate is not a default workspace member, so `ra_ap_*` never enters the
-//! core build graph (AC-01 of `docs/features/phase-0-spikes.md`).
+//! core build graph (`crates/specengine-ra/README.md`, "Placement and pins";
+//! asserted by `specengine-eval` `tests/build_graph.rs`).
 
 mod load;
 mod scan;

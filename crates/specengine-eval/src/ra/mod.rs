@@ -1,7 +1,8 @@
-//! Measurement `ra` (spike group 6 `rust-analyzer-library`, layer C of
-//! 05 §5.1, ADR-0020): `specengine-ra` loads the corpus with and without the
-//! proc-macro server; per load: cold time, peak RSS, warm re-analysis after
-//! an in-memory edit, and the share of source items with a moniker.
+//! Measurement `ra` (layer C of 05 §5.1, ADR-0020; loader:
+//! `crates/specengine-ra/README.md`): `specengine-ra` loads the corpus with
+//! and without the proc-macro server; per load: cold time, peak RSS, warm
+//! re-analysis after an in-memory edit, and the share of source items with a
+//! moniker.
 //!
 //! Each load runs in a worker process of its own (`ra-worker`, hidden), in
 //! its own process group, under the per-load budget `--timeout`: on overrun

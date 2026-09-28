@@ -1,6 +1,6 @@
-// Fixture of spike group 2 (docs/features/phase-0-spikes.md, AC-07):
+// Fixture of AC-07 (docs/features/phase-0-spikes.md; rules: spec 05, section 5.3):
 // a marker inside a nested struct, a marker inside a list, and a marker
-// adjacent to no field (the last line of an inner struct, before its `)`).
+// adjacent to no field (own line before the `)` of an inner struct: rule 5).
 Config(
     player: Player(
         name: "hero",

@@ -398,6 +398,7 @@ impl<'tree> Frame<'tree> {
 /// Iterative pre-order over a `TreeCursor`; the cursor never leaves `node`.
 /// Returns `false` when a use run nested past [`MAX_USE_RUN_NESTING`] stopped
 /// the walk: the stream in `sink` is then incomplete and must not be hashed.
+#[must_use = "`false` means the stream in `sink` is incomplete and must not be hashed"]
 pub fn normalize(node: Node, source: &[u8], skip: Option<Node>, sink: &mut impl Sink) -> bool {
     normalize_nested(node, source, skip, sink, 0)
 }

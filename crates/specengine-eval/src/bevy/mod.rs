@@ -1,4 +1,4 @@
-//! Measurement `bevy-detector` (spike group 5 `bevy-schedule`): the syntactic
+//! Measurement `bevy-detector` (05 §5.1): the syntactic
 //! Bevy registration detector of `specengine-code` over a corpus, and —
 //! with `--dump <app_data.ron>` — its comparison against the schedule dump of
 //! an instrumented build (05 §5.1 layer B).

@@ -1,4 +1,4 @@
-//! Parsed only, never built: the four registrations of the bevy-schedule spike.
+//! Parsed only, never built: the four hand-listed registrations of AC-10 (05 §5.1).
 
 use bevy::prelude::*;
 

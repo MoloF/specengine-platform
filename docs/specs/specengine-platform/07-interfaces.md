@@ -15,10 +15,11 @@ ref: research-2026-09-28
 
 - **Few tools, good `instructions`** (≤ 2,048 characters: Claude Code truncates, and tool search defers definitions). Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
 - Responses are **prose for the model** with a status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); the machine part lives in `structuredContent`.
-- All reading tools carry `readOnlyHint`; each has `compact: bool` (detail levels in the spirit of code-graph-mcp); a response is ≤ 10k tokens, then pagination.
+- All reading tools carry `readOnlyHint`; each has `compact: bool` (detail levels in the spirit of code-graph-mcp); a response stays well under ~48,000 characters and paginates beyond that — Claude Code's cap counts characters and `MAX_MCP_OUTPUT_TOKENS` does not raise it (04 §4).
 - Input schemas are flat JSON Schema 2020-12, no root `anyOf/oneOf`; there is `outputSchema` + `structuredContent`, and `content` holds Markdown for the model.
 - **Primary transport is stdio** (`spec mcp` in `.mcp.json`, a bridge to the daemon). Reason: Claude Code (≥ 2.1.84) issues a GET to the MCP HTTP endpoint to open an SSE stream, and a purely stateless 2026-07-28 server answers 405, so the connection drops (claude-code#39790 closed as "not planned"). Besides, Claude Code still sends the legacy `initialize`. HTTP `/mcp` is added later, with GET/SSE and `legacy_session_mode`. A stdio-only build does not pull the HTTP stack into rmcp.
-- Both protocol eras are supported (legacy `initialize` and 2026-07-28 stateless). State is passed only via explicit handles (`task_id`, `proposal_id`).
+- Both protocol eras are supported (legacy `initialize` and 2026-07-28 stateless); the server detects the era from the client's first message (04 §4). State is passed only via explicit handles (`task_id`, `proposal_id`).
+- **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call and delivers its result as a notification (04 §4), so there is no polling tool and no "call again" protocol. A long-blocking "wait for approval" stays excluded.
 - `rmcp` is pinned exactly (3 major versions in 7 months). Output schemas are generated from `Json<T>`/`Parameters<T>` + schemars. If Tasks are needed, the TTL is set explicitly: the default is 5 minutes, and a full reindex will not fit.
 - **All tools are deterministic**: one state gives one response, no LLM inside (as in cgr, stated in every tool description).
 - **No agent tool writes to spec files** (the "one door" test on a temporary repository).
@@ -51,6 +52,8 @@ ref: research-2026-09-28
 |---|---|
 | `review_proposal` | MRTR/elicitation: an "option / comment / decision" form or URL mode to the UI card. The human writes the decision |
 | `approve_task` | same, for moving a task to `ready` |
+
+The MCP server remembers nothing between calls: the owner's decision is stored by the proposal queue when given, never assumed remembered by the server; a `cancel` records nothing and leaves the proposal pending (the agent does not re-open the form on its own). **A consent tool must** (none of this is in the Phase 0 `review_proposal` skeleton yet): bind the sealed `requestState`'s associated data to the proposal revision / patch hash; carry a single-use nonce persisted in the queue; expire (TTL); share one `requestState` key across processes once a multi-process HTTP server exists; on cancellation send `notifications/cancelled` for the outstanding `elicitation/create`.
 
 ### 1.3. Resources (for `@`-mentions)
 

@@ -1,11 +1,12 @@
 //! AC-13 of docs/features/phase-0-spikes.md: `docs/`, `crates/` and
 //! `fixtures/` carry no absolute paths, no pilot names and no non-English text.
-//! The ID prefixes of a runtime census config (spike group 3) are not grepped
-//! here: such a config may name single letters or prefixes this repository
-//! uses itself, so a repository-wide grep cannot tell a leak from a
-//! coincidence. `census_cli.rs` checks instead that the census stdout carries
-//! no corpus string at all (fixture and `#[ignore]` pilot runs) and that the
-//! label mapping lands only under `--out`.
+//! The ID prefixes of a runtime census config (08 §4.3;
+//! `crates/specengine-import/README.md`) are not grepped here: such a
+//! config may name single letters or prefixes this repository uses itself,
+//! so a repository-wide grep cannot tell a leak from a coincidence.
+//! `census_cli.rs` checks instead that the census stdout carries no corpus
+//! string at all (fixture and `#[ignore]` pilot runs) and that the label
+//! mapping lands only under `--out`.
 
 use std::fs;
 use std::path::{Path, PathBuf};

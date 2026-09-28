@@ -38,7 +38,7 @@ pub struct RonResult {
     /// Every marker anchored at depth ≥ 2 resolves to such a path; `null`
     /// when the corpus has no such marker.
     pub nested_marker_resolves: ByApproach<Option<bool>>,
-    /// Always `lexer`: the verdict of spike group 2.
+    /// Always `lexer`: the Phase 0 verdict (05 §9 "AST" row).
     pub recommendation: &'static str,
     pub detail: Detail,
 }

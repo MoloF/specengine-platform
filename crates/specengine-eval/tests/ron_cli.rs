@@ -164,10 +164,10 @@ fn assert_envelope_shape(envelope: &Value, label: &str) {
     count(&envelope["wall_ms"], "wall_ms");
 }
 
-/// Every row of the "Results" table for the `ron` group is present: the
-/// lexer side always as a value; the removed grammar side (spike verdict
-/// `lexer`) keeps its keys, every one `null`, and `grammar.built/loads` are
-/// `false`.
+/// Every row of the `ron` result is present (shape: `crates/specengine-eval/
+/// README.md`, "CLI contract"): the lexer side always as a value; the removed
+/// grammar side (spike verdict `lexer`) keeps its keys, every one `null`, and
+/// `grammar.built/loads` are `false`.
 fn assert_all_rows_present(result: &Value) {
     let grammar = &result["grammar"];
     assert_eq!(grammar["built"], Value::Bool(false), "grammar.built");

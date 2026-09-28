@@ -1,4 +1,5 @@
-//! `specengine-eval`: the permanent measurement harness (`docs/features/phase-0-spikes.md`).
+//! `specengine-eval`: the permanent measurement harness (contract:
+//! `crates/specengine-eval/README.md`).
 //!
 //! One subcommand per measurement over a corpus whose path enters at run time.
 //! The corpus is read-only; stdout carries exactly one JSON envelope of
@@ -37,21 +38,21 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Measurement {
-    /// Stability of the normalized AST hash under rustfmt and comment stripping (spike group 1).
+    /// Stability of the normalized AST hash under rustfmt and comment stripping (05 §5.2).
     AstHash(CommonArgs),
-    /// `.ron` marker extraction by the own lexer (spike group 2; verdict `lexer`).
+    /// `.ron` marker extraction by the own lexer (05 §5.3; verdict `lexer`, 05 §9).
     Ron(CommonArgs),
     /// Dry-run census of a spec corpus by `specengine-import`; the convention
-    /// comes from `--config` (default: `census.toml` at the corpus root) (spike group 3).
+    /// comes from `--config` (default: `census.toml` at the corpus root) (08 §4.3).
     Census(CommonArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
-    /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (spike group 5).
+    /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
     BevyDetector(BevyArgs),
     /// rust-analyzer as a library (`ra_ap_*` 0.0.352), each load with and
     /// without the proc-macro server in a worker process of its own: cold
     /// load, peak RSS, warm re-analysis, share of items with a moniker
-    /// (spike group 6). `--timeout` is the budget of each load.
+    /// (layer C, 05 §5.1). `--timeout` is the budget of each load.
     #[cfg(all(feature = "ra", unix))]
     Ra(RaArgs),
     /// One load of `ra`, started by `ra` itself.
@@ -88,7 +89,7 @@ pub struct BevyArgs {
     pub dump: Option<PathBuf>,
 }
 
-/// Arguments shared by every measurement: the CLI contract of the spike spec.
+/// Arguments shared by every measurement: the CLI contract of the crate README.
 #[derive(Args, Clone)]
 pub struct CommonArgs {
     /// Corpus root, read-only. Without it: `SPECENGINE_PILOT_A` / `_B` when

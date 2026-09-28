@@ -67,8 +67,8 @@ pub enum Lifecycle {
     #[default]
     Auto,
     /// Legacy only: versions up to 2025-11-25. A stateless 2026-07-28 request is
-    /// refused with `UNSUPPORTED_PROTOCOL_VERSION`; exists so the scripted check
-    /// can show that check (b) of AC-08 discriminates.
+    /// refused with `UNSUPPORTED_PROTOCOL_VERSION`; exists so the scripted
+    /// stateless-era check (`tests/mcp_stdio.rs`) can show it discriminates.
     Legacy,
 }
 

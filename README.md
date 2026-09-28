@@ -22,7 +22,7 @@ Rust comes first (including Bevy ECS and RON data); other languages via tree-sit
 
 ## Status
 
-**Phase 0.** Architectural decisions are made; the engine code is not written yet. Only the documentation-convention enforcement (`xtask`) works today.
+**Phase 0 done** (2026-09-29): architectural decisions are made and the engine's key claims are measured on two pilot corpora. What exists: layer A parsing and hashing (`specengine-code`), a corpus census (`specengine-import`), a stdio MCP server skeleton (`specengine-mcp`), rust-analyzer loading (`specengine-ra`), the measurement harness (`specengine-eval`) and the documentation enforcement (`xtask`). No `spec` CLI yet. **Next: Phase 1**, the reading core ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
 
 ## Where to start
 
@@ -45,7 +45,7 @@ cargo xtask docs index --write && cargo xtask docs check    # before handing in 
 cargo xtask docs budget                                     # document sizes and the working set W
 ```
 
-Requires Rust ≥ 1.90 and `cargo-nextest`.
+Requires Rust ≥ 1.90 (≥ 1.98 for `specengine-eval --features ra`) and `cargo-nextest`.
 
 ## License
 

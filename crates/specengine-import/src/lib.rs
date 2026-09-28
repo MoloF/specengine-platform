@@ -1,7 +1,8 @@
 //! Importers of existing spec corpora (08 §4).
 //!
 //! Phase 0 increment: the census, a read-only dry-run counter over an existing
-//! corpus (`docs/features/phase-0-spikes.md`, spike group 3). Nothing
+//! corpus (config schema and counts: `crates/specengine-import/README.md`;
+//! findings on the pilots: 08 §4.3). Nothing
 //! corpus-specific lives here: every convention — roots, document extensions,
 //! the front-matter class key, the ID pattern, the table ID column, `{#ID}`
 //! sections — comes from a [`CensusConfig`] read at run time (ADR-0008).

@@ -1,4 +1,4 @@
-# Fixture of `specengine-eval ra` (spike group 6, `rust-analyzer-library`): a small
+# Fixture of `specengine-eval ra` (AC-11; layer C of 05 §5.1, `specengine-ra`): a small
 # Cargo workspace with its own `Cargo.lock`, a build script (`arena/build.rs`), a path
 # proc-macro crate (`arena-derive`) whose derive the main crate uses, a `#[cfg]`-gated
 # function, a file outside the module tree (`arena/src/stray.rs`) and a file outside

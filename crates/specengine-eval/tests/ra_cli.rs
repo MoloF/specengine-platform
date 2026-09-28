@@ -1,7 +1,7 @@
-//! `specengine-eval ra` end to end (docs/features/phase-0-spikes.md, spike
-//! group 6 `rust-analyzer-library`: AC-11 on `fixtures/ra-mini`, the read-only
-//! guard of "Rules and edge cases", the self-terminating per-load timeout,
-//! anonymous stdout, determinism) on the real binary.
+//! `specengine-eval ra` end to end (AC-11 of docs/features/phase-0-spikes.md on
+//! `fixtures/ra-mini`, layer C of 05 §5.1; the read-only guard and the
+//! self-terminating per-load timeout of `crates/specengine-eval/README.md`,
+//! "Rules"; anonymous stdout, determinism) on the real binary.
 //!
 //! Compiled only with feature `ra`, whose `ra_ap_*` set needs rustc >= 1.98
 //! (stable 1.98.1): `cargo nextest run -p specengine-eval --features ra --test ra_cli`.

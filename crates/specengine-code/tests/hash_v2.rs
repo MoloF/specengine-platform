@@ -472,11 +472,14 @@ fn unattributed_use_run_stream_is_pinned() {
     let items = top_level_items(tree.root_node());
     assert_eq!(items.len(), 1);
     let mut stream: Vec<u8> = Vec::new();
-    hash::normalize(
-        items[0],
-        source.as_bytes(),
-        hash::name_node(items[0]),
-        &mut stream,
+    assert!(
+        hash::normalize(
+            items[0],
+            source.as_bytes(),
+            hash::name_node(items[0]),
+            &mut stream,
+        ),
+        "one flat use run: the walk must be complete"
     );
     // One line per node frame; `\` at the end of a line joins the next one.
     const PINNED: &[u8] = b"(\x08\x00\x00\x00mod_item\x03\x00\x00\x00mod\x03\x00\x00\x00mod\

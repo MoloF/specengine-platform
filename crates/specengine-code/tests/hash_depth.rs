@@ -1,5 +1,5 @@
-//! Depth bounds of the hash layer (docs/features/phase-0-spikes.md, group
-//! `ast-hash`; `hash.rs` module docs, "Depth"; `items.rs` `collect`):
+//! Depth bounds of the hash layer (05 §5.2, N4 and `MAX_USE_RUN_NESTING`;
+//! `hash.rs` module docs, "Depth"; `items.rs` `collect`):
 //!
 //! - use runs nested through the attribute values of run members are followed
 //!   `hash::MAX_USE_RUN_NESTING` deep; one more makes the item

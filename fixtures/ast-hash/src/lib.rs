@@ -1,4 +1,4 @@
-//! Fixture corpus for the `ast-hash` measurement (docs/features/phase-0-spikes.md, "Data").
+//! Fixture corpus for the `ast-hash` measurement (recipe: 05 §5.2; AC-03, AC-04).
 //! Parsed only, never built.
 
 pub mod blocks;

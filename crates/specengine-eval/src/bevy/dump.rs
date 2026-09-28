@@ -16,7 +16,7 @@
 //! the schema is counted (the schema is unstable across Bevy minors). There
 //! are no observers and no plugins in this schema.
 //!
-//! The file is tokenised by the RON lexer of `specengine-code` (spike group 2)
+//! The file is tokenised by the RON lexer of `specengine-code` (05 §9)
 //! and parsed into a generic value tree on an explicit stack capped at
 //! [`MAX_DEPTH`]: no recursion over the file, no `ron` or `bevy` crate in the
 //! workspace graph. An error names the line.

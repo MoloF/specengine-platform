@@ -58,11 +58,16 @@ fn stream(source: &str) -> Vec<u8> {
     let items = top_level_items(tree.root_node());
     assert_eq!(items.len(), 1, "exactly one item expected in {source:?}");
     let mut sink: Vec<u8> = Vec::new();
-    normalize(
-        items[0],
-        source.as_bytes(),
-        hash::name_node(items[0]),
-        &mut sink,
+    // No use run nests here, so the walk is complete; `false` would mean an
+    // incomplete stream that must not be compared.
+    assert!(
+        normalize(
+            items[0],
+            source.as_bytes(),
+            hash::name_node(items[0]),
+            &mut sink,
+        ),
+        "incomplete stream for {source:?}"
     );
     sink
 }

@@ -23,7 +23,7 @@ ref: research-2026-09-28
 │ specengine (one Rust binary)                                                                             │
 │                                                                                                          │
 │  core:  parser(md+yaml) · refs · records · graph · checks · budget · bundle · proposals · tasks          │
-│  code:  tree-sitter(rust, ron) · module resolver · symbol index · AST canonical hash · bevy detector     │
+│  code:  tree-sitter · RON lexer · module resolver · symbol index · AST canonical hash · bevy detector    │
 │  store: SQLite (WAL) = index (rebuildable) + operational state (queue, tasks, runs)                      │
 │                                                                                                          │
 │  adapters:  CLI (clap) │ MCP stdio │ HTTP daemon: REST + SSE + MCP Streamable HTTP + static Web UI       │
@@ -252,38 +252,53 @@ One diagnostic set for CLI, CI, pre-commit and UI. The initial set is the six ch
 
 **Layer A (always, MVP) — tree-sitter.** Fast, incremental, no build: markers, item spans, canonical AST hash, heuristic `qpath`. If `qpath` is ambiguous (adjacent `impl`s, `#[path]`, macros), the state is `cannot_verify`, not a guess. This is enough because **link identity comes from the marker in code**, not from the symbol path.
 
-**Layer B (Phase 3) — Bevy's own schedule graph.** Bevy 0.19 has `bevy_dev_tools::schedule_data` (features `debug` + `schedule_data`, not mentioned in release notes): `SerializeSchedulesPlugin` writes `app_data.ron` with all schedules — systems with full `type_name` paths, sets, ordering edges, conditions, access conflicts. It is **the only mechanism that sees systems from macros, loops and third-party plugins**. SpecEngine runs an instrumented build of the project (separate `CARGO_TARGET_DIR`, so the developer's `cargo build` is not blocked) and uses the dump as the truth for registrations, reconciling layer A against it. The RON schema is unstable across Bevy minors. Fallback — `bevy_mod_debugdump::print_schedule_graph(&mut app, Update)`: needs only a built `App`, no window or loop.
+**Layer B (Phase 3) — Bevy's own schedule graph.** Bevy 0.19 `bevy_dev_tools::schedule_data` (features `debug` + `schedule_data`): `SerializeSchedulesPlugin` writes `app_data.ron` — schedules with their systems (full `type_name` paths), sets, ordering edges, conditions, access conflicts, `apply_deferred` sync points; **no observers and no plugins**. It is **the only mechanism that sees systems from macros, loops, generic instances and third-party plugins**, so it is the truth for registrations and layer A is reconciled against it. Obtaining it (verified on both pilots): a 6-line patch in 2 files (the two features, winit off, `ScheduleRunnerPlugin::run_once()`, `SerializeSchedulesPlugin`) on a scratch copy with its own `CARGO_TARGET_DIR`; a headless run of seconds writes the dump before the first frame, so assets may be left out; `HOME` points at a scratch directory so the game cannot touch the user's settings. The typed reader runs over the RON lexer; fields outside the pinned Bevy schema are counted, not fatal — the schema is unstable across minors, re-check on every Bevy upgrade. `bevy_mod_debugdump` stays a fallback (not needed so far). Reconciliation is one-to-one by schedule and terminal name (generic arguments dropped, a closure → its `fn`, `Pipe(a, b)` → `a`); every other dumped own-crate system is a miss with a named category.
 
-**Layer C (ADR-0020) — rust-analyzer as a library** (04 §1.7): for what layer B does not cover (components, plain functions, methods). Preferred entry point — **`MonikerResult::from_def`** for the needed definitions only, not `StaticIndex::compute`, which builds hover and docs for every token. Type inference is not needed to resolve paths, and it is ~68 % of analysis time. All `ra_ap_*` are pinned to one **`=0.0.352`**: `ra_ap_edition` is already at 0.0.354, the rest are not. Result: a resolved moniker in SCIP grammar with two amendments (package version → `.`, `disambiguator` for adjacent inherent impls) and Bevy system registration by resolved types via HIR (`Semantics::resolve_method_call`). The layer runs in the daemon background with debounce and its own `CARGO_TARGET_DIR`; memory and time are measured in the Phase 0 spike. **An LSP client is not used for identity**: LSP has no monikers.
+**Layer A alone covers 93.4–100 %** of dumped own-crate systems on the pilots (threshold 95 %, counted per system, not per registration site); every miss was a `generic_instance` — instances of one generic system from a single site. Layer A cannot enumerate them, so layer B or C stays required (ADR-0020).
+
+**Layer C (ADR-0020) — rust-analyzer as a library** (04 §1.7), crate `specengine-ra`, outside the core build graph: for what layer B does not cover (components, plain functions, methods). Entry point **`MonikerResult::from_def`** for the needed definitions only, not `StaticIndex::compute`, which builds hover and docs for every token; type inference (~68 % of analysis time) is not needed. The `ra_ap_*` set is pinned to one **`=0.0.352`** and needs rustc ≥ 1.98 (04 §6). Result: a resolved moniker in SCIP grammar with two amendments (package version → `.`, `disambiguator` for adjacent inherent impls) and Bevy system registration by resolved types via HIR (`Semantics::resolve_method_call`). A load: `cargo metadata` (`--locked --offline`) → build scripts and proc-macro dylibs (`cargo check --compile-time-deps`) → database + proc-macro server, in its own `CARGO_TARGET_DIR`; it runs the project's own build scripts and proc macros. **Measured on both pilots** (release, proc-macro server on): cold load 33–65 s (8–10 s without the server), warm full pass ≈ 0.2 s, whole-process-group peak ≤ 3.76 GiB on the heavier pilot (≈ 6 % under the 4 GiB threshold), no crash, timeout or panic, monikers on 99.7–100 % of items. **Open for Phase 3**: items under attribute proc macros (`#[tokio::main]`-style) lose their moniker with the server — the scan does not map an item through its attribute expansion. In the daemon the layer runs in the background with debounce. **An LSP client is not used for identity**: LSP has no monikers.
 
 Layer A details:
 
 - Items: `function_item`, `struct_item`, `enum_item`, `union_item`, `trait_item`, `impl_item` (+ methods), `const_item`, `static_item`, `type_item`, `mod_item`, `macro_definition`.
-- **Module resolver**: crate roots from `cargo metadata --no-deps`, the `mod x;` tree → `x.rs | x/mod.rs`, `#[path]`, inline `mod {}`. Methods: `Type::method`, trait impls: `<Type as Trait>::method`. Macro-generated items are invisible, and this limitation is stated explicitly.
-- **Bevy detector** (the node layer is inferred, not written by hand):
-  - `#[derive(Component)]`, `#[derive(Resource)]`, `#[derive(Message)]`, `#[derive(Event)]`/`EntityEvent`, `#[derive(Reflect)]`;
-  - `.add_systems(Schedule, …)` calls → functions in the tuple are tagged `system` with the schedule; `.add_observer(f)` → `observer`; `impl Plugin for X` → `plugin`; `.add_message::<T>()` → message registration.
+- **Module resolver**: crate roots from `cargo metadata --no-deps`, the `mod x;` tree → `x.rs | x/mod.rs`, `#[path]`, inline `mod {}`. Methods: `Type::method`, trait impls: `<Type as Trait>::method`. Macro-generated items are invisible, and this limitation is stated explicitly. **`qpath` carries a target discriminator** (Phase 1): `src/bin`, `examples` and `tests` targets share an empty root module path, so without it 16.5–32.2 % of pilot items were ambiguous, almost all such duplicates.
+- **Bevy detector** (`specengine-code`; the node layer is inferred, not written by hand):
+  - `#[derive(Component)]`, `#[derive(Resource)]` (in 0.19 also a `Component`), `#[derive(Message)]`, `#[derive(Event)]`/`EntityEvent`, `#[derive(Reflect)]`; `.add_message::<T>()` → message registration;
+  - systems of `.add_systems(Schedule, …)` and of the one-argument `Schedule::add_systems(…)`: tuples nest (explicit stack, cap 256), combinators `.in_set/.before/.after/*_ignore_deferred/.run_if/.distributive_run_if/.ambiguous_with*/.chain*` are peeled, adapters `pipe/map/with_input/with_input_from` recorded; a leaf is a path (`tick`, `a::b`, `f::<T>`), a closure (named by its innermost enclosing `fn`) or a factory call (named by its callee); `.add_observer(…)` → `observer`; `.add_plugins(…)` → plugin uses;
+  - plugins: every `impl Plugin for X` and **every function whose only parameter is `&mut App`** (qualified or generic; not a `self` method, not `-> &mut App`);
+  - the same calls inside `macro_rules!` transcribers and macro arguments are read from tokens: names only, never resolved or matched against a dump; the token reader is approximate (a comma in a type position or closure parameters splits an element; trailing tokens after a path → `expression`), ordinary code is read exactly from the syntax tree;
+  - what it cannot read is `uncertain` with a category (`macro_in_arguments`, `metavariable`, `unknown_method`, `expression`, `arguments`, `nesting_too_deep`, `parse_error`), never a guessed name; texts capped at 128 bytes; cost linear, no recursion over input.
 - **Signature** — the text before the body (`fn regen_system(q: Query<…>, time: Res<Time>)`) goes into the context bundle instead of the body. It is a targeted "repo map": unlike Aider's, it sees systems that are merely registered.
-- Detector boundaries: registrations inside `macro_rules` and function plugins occur in real code and must be recognized; registration via `inventory`/`linkme`/`bevy_auto_plugin` is unsupported in the MVP and declared a limitation. Completeness of coverage is checked by layer B.
-- Parse surface: **any `fn(&mut App)` is a plugin** (do not look only for `impl Plugin for`); system tuples are capped at arity 20 and nest, so recursion of arbitrary depth; combinators `.in_set/.before/.after/*_ignore_deferred/.run_if/.distributive_run_if/.ambiguous_with*/.chain*` and adapters `.pipe/.map/.with_input*`. The `add_systems` signature has not changed from 0.16 to 0.19.1. In 0.20-rc observers change again (`On<Add<A>>`), so observer reading goes through a Bevy-version gate. In 0.19 `#[derive(Resource)]` also implements `Component`. Hierarchies inside the `bsn!` macro are syntactically invisible.
+- Detector boundaries: registration via `inventory`/`linkme`/`bevy_auto_plugin` and hierarchies inside `bsn!` are invisible (declared limitations); completeness is checked by layer B. The `add_systems` signature is unchanged from 0.16 to 0.19.1; in 0.20-rc observers change again (`On<Add<A>>`), so observer reading goes through a Bevy-version gate.
 - **User anchors** (option): instead of a marker a node may reference an ast-grep rule (`anchor: { rule: "...", inside: "mod player" }`). Needed for code where a marker cannot be placed, e.g. macros.
 
 ### 5.2. Canonical AST hash
 
-The recipe is assembled from limpet (`src/memory/anchor.rs`), mago-fingerprint and the research measurements (04 §1.8):
+Recipe **`specengine-hash/v2`** (`specengine-code`), assembled from limpet (`src/memory/anchor.rs`), mago-fingerprint and the research (04 §1.8), then amended by measurement:
 
 ```
-hash(symbol) = BLAKE3( recipe_header ‖ walk(item, skip = name_node(item)) )
-recipe_header = "specengine-hash/v1" ‖ tree-sitter-rust version ‖ abi_version()
-walk(n) = if n.kind() ∈ {line_comment, block_comment} and !n.is_error() → ""      // ⚠ see trap 1
-          else if n is anonymous "," → ""                                         // rustfmt trailing commas
-          else if n is leaf → len‖kind(n) ‖ len‖text(n)                          // length prefix on every string
+hash(item) = BLAKE3( header ‖ walk(attrs(item)) ‖ walk(item, skip = name_node(item)) )
+header     = "specengine-hash/v2" ‖ tree-sitter-rust version ‖ abi_version()
+walk(n) = if n.kind() ∈ {line_comment, block_comment} → ""   // by kind(), never is_extra(): trap 1
+          else if n is anonymous "," → ""                     // rustfmt trailing commas
+          else if n matches N1–N4 → walk(normal form of n)
+          else if n is leaf → len‖kind(n) ‖ len‖text(n)       // len = u32 little-endian
           else → "(" ‖ len‖kind(n) ‖ concat(walk(c) for c in children) ‖ ")"
+item.has_error() → cannot_verify, no hash
 ```
+
+`attrs(item)` is the attached attribute run: tree-sitter-rust exposes attributes as siblings of the item. The walk is iterative (explicit stack). **Normalisations** — exactly the four constructs rustfmt toggles:
+
+- **N1** a `;` after an absent or diverging tail is transparent (edition 2024 adds it after diverging tails);
+- **N2** a label-free single-expression block in a closure body or a match-arm value is unwrapped (`|x| { x + 1 }` = `|x| x + 1`);
+- **N3** `{…}` token trees after `|`, `||` or `=>` inside `(`/`[`-delimited expression macros are transparent;
+- **N4** a run of adjacent `use` items is sorted, each member = its attached attributes ‖ its `use`, so attributes travel with their `use`; the member walk is bounded at `MAX_USE_RUN_NESTING = 64` runs, past it → `cannot_verify` (`nesting_too_deep`), no hash.
+
+**Measured** (`specengine-eval ast-hash`, both pilots, 11 852 + 7 599 items): v2 is 100.0 % stable under default rustfmt, a contrasting rustfmt (`max_width = 60`, rewrites almost every file) and comment stripping including `///`; broken items never share a hash. The v1 formula (no N1–N4) is refuted: 84.9–85.4 % under the contrasting format. **Known limits**: N3 hashes token-level DSL macros the same with and without their significant `| {` / `=> {` braces (rustfmt never formats such macros; remedy — a per-project opt-out list of macro names in `specengine.toml`, not built yet), and a nested brace-delimited macro inside an expression macro inherits N3; `mod x;` and `extern crate` runs reordered by rustfmt are not sorted (v3 candidate).
 
 - **The symbol's own name is not hashed** (limpet technique): a pure rename does not change the body hash, and a renamed symbol can be found by body match. Identifiers inside the body do count.
 - **Fingerprint levels** (lockwire idea): a symbol has four independent hashes — `path` (location), `sig` (name-independent signature: parameters, types, return, modifiers, attributes), `body` (normalized body via the `body` field of `function_item`/`impl_item`/`trait_item`), `deps` (sorted set of outgoing calls). **A binding declares which levels it depends on**: an interface requirement — `sig`, an invariant — `body` + `deps`, a "lives here" note — `path`. Marker: `// @implements RULE-X@3 [sig]`, default `[sig, body]`. This is the main way to keep every refactor from becoming an alarm the owner learns to ignore.
-- Whitespace is not a node in the Rust grammar at all, so formatting insensitivity comes for free. Trailing commas added by `cargo fmt` are dropped explicitly. Acceptance check: **hashes of all symbols in the project are identical before and after `cargo fmt`**.
+- Whitespace is not a node in the Rust grammar at all; together with the dropped `,` and N1–N4 this gives formatting insensitivity. Acceptance check: **hashes of all symbols in the project are identical before and after `cargo fmt`** — re-run with `specengine-eval ast-hash` on every grammar bump.
 - **Doc comments** (`line_comment` with the `doc` field) are prose and are not hashed; they are structurally distinguishable. **Attributes** (`#[derive]`, `#[cfg]`, `#[require(..)]`) are real nodes and **are hashed**: they change behaviour.
 - Only `kind()` strings are used, **never `kind_id()`/`grammar_id()`**: these are indices into generated tables and would show drift everywhere after a grammar update. The grammar version is written into the recipe header, so a grammar change is a deliberate rebase, not false drift.
 - `to_sexp()` as hash input **does not work**: it drops anonymous nodes and leaf text (`a+b` = `a-b`). `Node` hashes by pointer; do not use `#[derive(Hash)]`.
@@ -292,7 +307,7 @@ walk(n) = if n.kind() ∈ {line_comment, block_comment} and !n.is_error() → ""
 **Five traps that silently break a naive implementation** (trap 1 reproduced, the rest are research measurements):
 
 1. **`is_extra()` returns true for ERROR nodes.** The filter `if node.is_extra() { skip }` drops the whole erroneous subtree, and every unparsed file gets **the same hash**: the detector goes blind for good. Correct: filter comments by `kind()` (or `is_extra() && !is_error()`) and **check `has_error()` at item level**. If an item has a parse error, the state is `cannot_verify` ("hash unreliable").
-2. **tree-sitter-rust 0.24.2 fails on roughly 1 % of valid code** (macro punctuation `$`/`~`, multi-line `where`). Recovery is local, so the remaining items of the file hash normally.
+2. **tree-sitter-rust 0.24.2 fails on some valid code** (macro punctuation `$`/`~`, multi-line `where`; research estimate ≈ 1 %, 0 items on both pilots). Recovery is local, so the remaining items of the file hash normally.
 3. `to_sexp()` is unusable (above).
 4. `kind_id()` is unstable across grammar versions (above).
 5. Aliases: `kind()` returns the public name, `grammar_name()` the raw one. Use `kind()`.
@@ -321,7 +336,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 
 **Performance is not a concern** (research measurement on a corpus of several hundred thousand lines, 14 cores): parse + hash runs at ~112 MB/s with rayon and one `Parser` per thread (`thread_local!`); half a million lines hash in a fraction of a second. Caching and incremental parsing are unnecessary for the hash layer; all the complexity goes into correctness.
 
-**Alternative on `syn` 3 + `extra-traits`** (ADR-0021): structural `Hash`, spans cannot leak into the hash (`Span` has no `Hash`), measured about 1.5× faster and with no intermediate buffer. Downsides: no error recovery (whole file or nothing), **a trailing comma changes the hash**, `///` becomes `#[doc]` and changes the hash too. The same normalization is needed, and the decision is made after a `cargo fmt` run over a real code corpus.
+**`syn` 3 + `extra-traits` is not the digest** (ADR-0021 stands): structural `Hash` and no span leakage, but no error recovery (whole file or nothing), a trailing comma and `///` → `#[doc]` change the hash, and even after normalisation it reached only 94.5–94.9 % stability on the pilots; its speed (time ratio ≈ 0.55) does not decide. It stays only as the comparison behind `specengine-eval`'s `syn` feature.
 
 - Acceptance test (from the initial spec, kept): editing a comment, whitespace or a neighbouring function in the same file does **not** change the hash.
 
@@ -342,7 +357,17 @@ fn zero_stamina_applies_exhausted_immediately() { ... }
 regen_per_second: 10.0,
 ```
 
-A marker applies to the next item. For RON it applies to the next entry or field, and the field path becomes the `qpath`: `data/movement.ron#stamina.regen_per_second`.
+**Marker grammar** (`.rs` and `.ron` comments alike; canon form `// @implements ID@rev [tiers]`, `docs/canon/architecture.md#markers`): `@implements|@verifies|@configures|@assumes`, then `ID`, an optional `@rev` (omitted only for weak bindings and in adoption mode), an optional `[tiers]` — a literal bracketed list of the §5.2 fingerprint levels (`path`, `sig`, `body`, `deps`; default `[sig, body]`) — and an optional free-text note; several markers per comment; an ID outside the Latin script is counted, never fatal (ADR-0009). **Phase 1 item**: the Phase 0 parser (`specengine-code` `markers.rs`) does not parse `[tiers]` yet and keeps everything after `ID[@rev]` as the note. In Rust a marker applies to the next item; Rust binding (Phase 3) follows the same principles as RON below.
+
+**RON binding** (own lexer, §9). The field path is the `qpath`: `data/movement.ron#root.stamina.regen_per_second`. Segments: `root` = the file's value, `.name` a struct field, `[i]` a list element, `.i` a tuple element (tuple structs such as `Some(x)` too), `{key}` a map entry (the key's source text: string keys keep their quotes, whitespace runs collapse to one space, inside strings too); each capped at `MAX_SEGMENT_BYTES = 128` source bytes plus `…`, so two keys sharing their first 128 bytes render one path — Phase 1 flags such paths as ambiguous, never merges them. A *value* is an entry, an element or the root value. A comment binds by the first rule that applies; positions count, not the comment kind, except that `//` never leads:
+
+1. **leading** — a block comment followed on its `*/` line by the start of a value binds to it: `pos: (/* @A */ 10, /* @B */ 20)` → `root.pos.0`, `root.pos.1`; `speed: /* m */ 4.5` → `root.speed`, also with `speed:` alone on the line above;
+2. **trailing a value** — a comment starting on the line of a value's last token (`,` on either side; of several values closing there, the one right before it): `speed: 1, // m` → `root.speed`; `[1, 2, 3 /* m */]` → `…[2]`; `Config(..) // m` → `root`;
+3. **trailing an opener** — right after `(`, `[`, `{` on its line → the container's value: `player: Player( // m` → `root.player`;
+4. **own line** — no token before it on its line → the value starting at the next token; extension attributes before the root are transparent (`#![enable(..)] // m` → `root`);
+5. otherwise **`unanchored`**: own line before a closer or `,`; after a map key or a `:` (a `//` under `speed:`, or a block comment whose value starts below its `*/` line); between a type name and its `(`; after trailing content.
+
+A multi-line block comment trails by its `/*` line and leads by its `*/` line; LF and CRLF alike. Fallback: when error recovery consumes the token a block comment leads, it binds to the value it trails (`a: 1 /* m */ 2` → `root.a`). Past `MAX_DEPTH = 512` open containers the container is skipped through its closer (`nesting_too_deep`) and its markers are `cannot_verify`. Cost is linear in tokens.
 
 **Revision in the marker** (`@3`, ADR-0018) — tracey discipline. First the code is brought to the new rule text, **then** the marker is raised, and the raise is visible in the code diff as a review record. Marker `@2` on a node with `rev: 3` means `spec_ahead` even without a lock. Marker `@4` on a node with `rev: 3` means `predated` (reference to a non-existent revision; OpenFastTrace reports this error separately). A marker without a revision is allowed for weak bindings and in adoption mode.
 
@@ -443,7 +468,7 @@ The full scenario is in `06-workflows.md`. Here are the engine invariants:
 | DB | SQLite (`rusqlite` bundled, FTS5) | local, no server |
 | Markdown | `pulldown-cmark` (heading attributes, offsets) | `{#ID}` sections and exact spans for patches |
 | YAML | `serde-saphyr` | `serde_yaml` is deprecated, forks unmaintained since 2024 |
-| AST | `tree-sitter` 0.27 + `tree-sitter-rust`; RON — spike (2023 grammar or a custom lexer) | optionally `rust-analyzer scip` for resolved paths |
+| AST | `tree-sitter` 0.27 + `tree-sitter-rust`; RON — own lexer | `tree-sitter-ron` 0.2.0 has no crate API for 0.27 (loads only beside a second C runtime: undefined behaviour that broke Rust parsing), rejects `#![enable(..)]` and raw strings, 5–6× slower; the lexer is parse-clean on 97.5–100 % of pilot files (the rest malformed). Resolved identity — layer C (§5.1) |
 | Hash | `blake3` | fast, stable |
 | Git | system `git` via `std::process` (at first), later `gix` | worktrees, diff, show without bindings |
 | Watch | `notify` | live drift in the daemon |

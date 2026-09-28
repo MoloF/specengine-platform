@@ -1,4 +1,4 @@
-//! Spike group 2 (docs/features/phase-0-spikes.md, "Rules and edge cases":
+//! RON depth cap (05 §5.3; `crates/specengine-code/README.md`, "Rules":
 //! broken or hostile input yields a category or `cannot_verify`, never a
 //! panic): the lexer path's structure walk is capped at `ron::MAX_DEPTH` open
 //! containers. A container past the cap is a `nesting_too_deep` rejection,

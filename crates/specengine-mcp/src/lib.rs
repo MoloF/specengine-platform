@@ -1,5 +1,5 @@
-//! MCP server of SpecEngine over stdio (`docs/features/phase-0-spikes.md`, group 4
-//! `mcp-stdio`; 07 §1.1–1.2; 04 §3–4).
+//! MCP server of SpecEngine over stdio (`crates/specengine-mcp/README.md`;
+//! 07 §1.1–1.2; 04 §3–4).
 //!
 //! One process serves one client over stdin/stdout in either protocol era, chosen
 //! by the client's first message (rmcp 3.5.0 `serve_server`):

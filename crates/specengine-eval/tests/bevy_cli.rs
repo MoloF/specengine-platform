@@ -1,5 +1,5 @@
 //! `specengine-eval bevy-detector` end to end (docs/features/phase-0-spikes.md,
-//! spike group 5 `bevy-schedule`: AC-10 detector counts and dump comparison,
+//! layers A and B of 05 §5.1: AC-10 detector counts and dump comparison,
 //! AC-02 read-only guard, AC-13 aggregates only on stdout) on the real binary
 //! over `fixtures/bevy-mini` and over generated corpora and dumps.
 //!

@@ -1,6 +1,8 @@
-//! The census of `specengine-import` on real files (docs/features/phase-0-spikes.md,
-//! spike group 3, AC-12): config validation with file and line, ID scripts and
-//! look-alike normalization, what the Markdown scanner hides, front-matter
+//! The census of `specengine-import` on real files (AC-12 of
+//! docs/features/phase-0-spikes.md; findings: 08 §4.3; config:
+//! `crates/specengine-import/README.md`):
+//! config validation with file and line, ID scripts and look-alike
+//! normalization, what the Markdown scanner hides, front-matter
 //! variants, record tables, wiki links, excludes, section extent, and
 //! robustness on generated pathological Markdown.
 //!

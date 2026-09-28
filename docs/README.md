@@ -28,7 +28,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 ## Tiers
 
 - **Tier 0** — `CLAUDE.md`, always read.
-- **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `xtask/README.md`, later `crates/<crate>/README.md` and `ui/README.md`. Canon lives next to the code it describes.
+- **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `xtask/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), later `ui/README.md`. Canon lives next to the code it describes.
 - **Tier 2** — the index and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
 - **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document.
 

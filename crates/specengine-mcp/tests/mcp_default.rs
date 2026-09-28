@@ -1,7 +1,7 @@
 #![cfg(not(feature = "probes"))]
-//! The default build of `specengine-mcp` (no feature `probes`,
-//! docs/features/phase-0-spikes.md group 4): the probe tools are absent in
-//! both protocol eras and `instructions` do not mention them.
+//! The default build of `specengine-mcp` (no feature `probes`;
+//! `crates/specengine-mcp/README.md`, "Feature `probes`"): the probe tools
+//! are absent in both protocol eras and `instructions` do not mention them.
 //!
 //! Runs under `cargo nextest run --workspace` (default features); compiles to
 //! nothing with `--features probes`, where `mcp_stdio.rs` runs instead.

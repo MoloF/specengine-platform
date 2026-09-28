@@ -1,5 +1,5 @@
 {
-  "_comment": "Expected `result` of `specengine-eval ast-hash` on this fixture (docs/features/phase-0-spikes.md, Data). `files_changed_min` is a lower bound because rustfmt's exact output depends on its version; everything else is exact.",
+  "_comment": "Expected `result` of `specengine-eval ast-hash` on this fixture (AC-03 and AC-04 of docs/features/phase-0-spikes.md; recipe in 05 §5.2, output shape in crates/specengine-eval/README.md). `files_changed_min` is a lower bound because rustfmt's exact output depends on its version; everything else is exact.",
   "files": 8,
   "items": 69,
   "items_error": 3,

@@ -1,5 +1,5 @@
 {
-  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (docs/features/phase-0-spikes.md, Data and AC-07). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file.",
+  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (AC-07 of docs/features/phase-0-spikes.md; binding rules in 05 §5.3, output shape in crates/specengine-eval/README.md). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file.",
   "files": 2,
   "files_with_comments": 2,
   "parse_clean": { "lexer": 2, "grammar": null },

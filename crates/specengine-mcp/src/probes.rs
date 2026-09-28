@@ -1,6 +1,9 @@
-//! Probe tools for the interactive MCP checks (feature `probes`; owner checklist
-//! of `docs/features/phase-0-spikes.md`): output size limits (10 k warning,
-//! 25 k hard cap, `MAX_MCP_OUTPUT_TOKENS`) and 2-minute backgrounding (04 §4).
+//! Probe tools for the interactive MCP checks of 04 §4 (feature `probes`;
+//! re-run on a Claude Code upgrade): the output cap and 2-minute backgrounding.
+//! Measured on Claude Code 2.1.283: the output cap counts characters, not
+//! tokens — 48 000 pass inline, 104 000 are rejected (48 000 < cap < 104 000)
+//! — and `MAX_MCP_OUTPUT_TOKENS` does not raise it; a call longer than 120 s
+//! goes to the background.
 //! Both are read-only and deterministic; neither is part of the product surface.
 
 use std::time::Duration;
@@ -13,7 +16,9 @@ use serde::Deserialize;
 
 use crate::server::SpecEngineServer;
 
-/// Bytes per token of the rough estimate clients apply to tool output.
+/// Bytes per token of the conventional rough estimate; `probe_output` sizes
+/// its ASCII filler in these units, so bytes equal characters (the cap itself
+/// counts characters: module docs).
 const BYTES_PER_TOKEN: usize = 4;
 
 /// The filler unit: one estimated token.

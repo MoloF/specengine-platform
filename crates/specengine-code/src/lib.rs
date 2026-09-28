@@ -1,7 +1,9 @@
 //! Code side of SpecEngine: parsing Rust with tree-sitter, the normalized AST
 //! hash of spec 05 §5.2, item collection and heuristic module paths (`qpath`).
 //!
-//! Phase 0 increment (`docs/features/phase-0-spikes.md`, group `ast-hash`):
+//! Module map, rules and known limits: `crates/specengine-code/README.md`.
+//!
+//! Phase 0 increment `ast-hash` (recipe and measured stability: 05 §5.2):
 //!
 //! - [`grammar`] — the pinned grammar, its ABI and a ready parser;
 //! - [`hash`] — the recipe: name node excluded, comments filtered by `kind()`,
@@ -13,13 +15,14 @@
 //! - [`qpath`] — module path from the file's place in a Cargo package; every
 //!   ambiguity is reported, never guessed.
 //!
-//! Phase 0 increment, group `ron`:
+//! Phase 0 increment `ron` (marker grammar and RON binding: 05 §5.3):
 //!
 //! - [`markers`] — the marker syntax shared by `.rs` and `.ron` comments;
 //! - [`ron`] — markers in `.ron` files resolved to field paths by an own
-//!   lexer and a tolerant structure walk (the spike verdict: `lexer`).
+//!   lexer and a tolerant structure walk (the Phase 0 verdict `lexer`,
+//!   05 §9 "AST" row).
 //!
-//! Phase 0 increment, group `bevy-schedule`:
+//! Phase 0 increment `bevy-schedule` (the Bevy detector of 05 §5.1):
 //!
 //! - [`bevy`] — the syntactic Bevy registration detector: systems of
 //!   `add_systems` through nested tuples, combinators and adapters, observers,

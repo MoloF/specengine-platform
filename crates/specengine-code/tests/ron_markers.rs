@@ -1,5 +1,5 @@
-//! Spike group 2 (docs/features/phase-0-spikes.md, AC-07): a marker in a
-//! `.ron` comment resolves to a field path through the own lexer
+//! AC-07 of docs/features/phase-0-spikes.md, binding rules 1-5 of 05 §5.3: a
+//! marker in a `.ron` comment resolves to a field path through the own lexer
 //! (`ron::analyze`), on `fixtures/ron` and on inline edge data. Nothing here
 //! writes into the fixture.
 //!
@@ -68,7 +68,7 @@ fn assert_comment_ranges(source: &str, analysis: &RonAnalysis) {
     }
 }
 
-/// The three markers of `fixtures/ron/config.ron` (spec fixture table): the
+/// The three markers of `fixtures/ron/config.ron` (its `expected.json`): the
 /// two nested anchors and the one adjacent to no field.
 const CONFIG_ANCHORS: [(usize, &str, Option<usize>); 3] = [
     (7, "root.player.speed", Some(2)),
@@ -219,6 +219,37 @@ fn several_markers_in_one_comment_share_the_anchor() {
     assert_eq!(analysis.markers[1].marker.note.as_deref(), Some("the note"));
 }
 
+/// A `{key}` segment is the key's source text (05 §5.3): a string key keeps
+/// its quotes, and whitespace runs collapse to one space — across lines and
+/// inside strings too. Named mutation: `segment_text` returning the raw slice
+/// instead of `collapse_whitespace(..)` turns this red.
+#[test]
+fn map_key_segment_keeps_quotes_and_collapses_whitespace() {
+    const SOURCE: &str = "{\n    // @implements TUPLE@1\n    (1,\n      2): \"a\",\n    \
+        // @implements SPACED@1\n    \"fire  ice\": 3,\n}\n";
+    for source in [SOURCE.to_owned(), SOURCE.replace('\n', "\r\n")] {
+        let analysis = ron::analyze(&source);
+        assert!(
+            !analysis.has_error,
+            "{source:?}: {:?}",
+            analysis.error_categories
+        );
+        let got: Vec<(&str, &str, Option<usize>)> = analysis
+            .markers
+            .iter()
+            .map(|m| (m.marker.id.as_str(), m.anchor.as_str(), depth(&m.anchor)))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("TUPLE", "root{(1, 2)}", Some(1)),
+                ("SPACED", "root{\"fire ice\"}", Some(1)),
+            ],
+            "{source:?}"
+        );
+    }
+}
+
 #[test]
 fn analysis_is_deterministic() {
     for source in [
@@ -336,7 +367,7 @@ fn mixed_script_id_is_reported_and_still_resolves() {
 
 // ------------------------------------------- adjacency (owner decision)
 
-/// One adjacency case of the owner's same-line rule (spec "RON markers"):
+/// One adjacency case of the owner's binding rules 1-5 (05 §5.3):
 /// `source` with every `@` expanded to `@implements ` (so `// @M` is the
 /// marker `M`), the `(id, anchor)` of every marker in source order, and
 /// whether the file must lex and walk clean.

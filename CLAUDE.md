@@ -10,7 +10,7 @@ reviewed: 2026-09-28
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP (for Claude Code agents), later a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: **Phase 0** — decisions are made, no engine code yet. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: **Phase 0 done** (2026-09-29): decisions made, claims measured on two pilot corpora, first increments of five crates built. Next: **Phase 1**, the reading core. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
@@ -25,7 +25,7 @@ Full list with reasons: `docs/canon/architecture.md`; every rule changes only th
 - **Nothing is blocked by a discrepancy.** The only control point is the owner approving a task; the hook is closed when the daemon is unavailable (ADR-0006, ADR-0012).
 - The core knows no subject domain: project specifics live in its `specengine.toml` and importer (ADR-0008).
 - IDs are Latin-only, no mixed scripts; legacy IDs are aliases (ADR-0009).
-- Markers `// @implements ID@rev`; legacy citations become `mentions` (ADR-0010, ADR-0016, ADR-0018).
+- Markers `// @implements ID@rev [tiers]`; legacy citations become `mentions` (ADR-0010, ADR-0016, ADR-0018).
 - MVP: tree-sitter + markers; rust-analyzer in Phase 3 (ADR-0020, ADR-0021).
 - UI: React 19 + Vite + `@xyflow/react`, English interface (ADR-0011, ADR-0014).
 - The documentation convention is mandatory here and in every project under SpecEngine (ADR-0022).
@@ -61,8 +61,10 @@ The pre-commit hook (`scripts/hooks-install.sh`) and CI (`.github/workflows/docs
 
 - `docs/` — canon (`docs/canon/`), decisions (`docs/decisions/`), specs (`docs/features/`, `docs/specs/`), index, archive.
 - `xtask/` — documentation check and index.
+- `crates/specengine-{code,eval,import,mcp,ra}` — layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, layer C (outside `default-members`); each has a Tier 1 `README.md`.
+- `fixtures/` — test corpora with `expected.json`; `bevy-mini` and `ra-mini` are workspace-excluded.
 - `.claude/` — pipeline roles and commands.
-- Planned (Phase 1+): `crates/specengine-{model,core,code,store,mcp,http,import,cli}`, `ui/`, `plugin/`, `fixtures/`.
+- Planned (Phase 1+): `crates/specengine-{model,core,store,http,cli}`, `ui/`, `plugin/`.
 
 ## Owner's machine
 

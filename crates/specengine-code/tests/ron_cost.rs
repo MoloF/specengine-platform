@@ -1,4 +1,4 @@
-//! Spike group 2 (docs/features/phase-0-spikes.md, "Rules and edge cases":
+//! RON cost bounds (05 §5.3; `crates/specengine-code/README.md`, "Rules":
 //! broken or hostile input yields a category or `cannot_verify`, never a
 //! panic and never a hang): the cost of `ron::analyze` stays linear in the
 //! input on broken RON, and every path a marker resolves to stays bounded.

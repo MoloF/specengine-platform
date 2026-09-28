@@ -1,8 +1,8 @@
 //! Tolerant structure walk over the lexer's tokens: enough of RON's shape
 //! (struct bodies, tuples, lists, maps) to name the entry a marker belongs to.
 //!
-//! Adjacency (`docs/features/phase-0-spikes.md`, "RON markers", owner
-//! decisions 2026-09-28). The markers of the comments crossed on the way to a
+//! Adjacency (05 §5.3 "RON binding", rules 1–5; owner decisions
+//! 2026-09-28). The markers of the comments crossed on the way to a
 //! token are *pending*; each resolves by where its comment ends, relative to
 //! the token after it, else by where it starts, relative to the last token
 //! before it. "Value" below is an entry, an element or the root value; the

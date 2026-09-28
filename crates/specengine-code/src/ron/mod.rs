@@ -1,6 +1,6 @@
 //! RON support (05 §5.3, 05 §9 "AST" row): a marker in a `.ron` comment
 //! attaches to an entry, element or root value; its path becomes the
-//! `qpath`, e.g. `data/movement.ron#stamina.regen_per_second`. Only the
+//! `qpath`, e.g. `data/movement.ron#root.stamina.regen_per_second`. Only the
 //! comment's position counts, and the first rule that applies decides: a
 //! block comment attaches to the value that starts on the line of its `*/`
 //! (`pos: (/* m */ 10, 20)`); else a comment that starts on the line where a
@@ -11,14 +11,14 @@
 //! files are on [`Anchor`]; every edge case is in the `structure` module.
 //!
 //! [`analyze`] is the own lexer ([`lexer`]) plus a tolerant structure walker,
-//! with no dependencies: the verdict of spike group 2
-//! (`docs/features/phase-0-spikes.md`, "Verdict thresholds") is `lexer`, and
-//! the `tree-sitter-ron` comparison path was removed after it.
+//! with no dependencies: the Phase 0 verdict (05 §9 "AST" row, 04 §6) is
+//! `lexer`, and the `tree-sitter-ron` comparison path was removed after it.
 //!
 //! **Path format.** `root` is the file's value; a struct field appends
 //! `.name`, a list element `[index]`, a tuple element `.index` (a tuple struct
 //! such as `Some(x)` counts as a tuple), a map entry `{key}` with the key's
-//! text verbatim (strings keep their quotes). Depth is the number of segments
+//! source text (string keys keep their quotes; whitespace runs collapse to
+//! one space, inside strings too). Depth is the number of segments
 //! after `root`: `root.player.speed` and `root.waves[2]` are both depth 2.
 //! A field name or a map key longer than [`MAX_SEGMENT_BYTES`] source bytes
 //! (an unbalanced key runs to the end of input) keeps its first bytes, cut at

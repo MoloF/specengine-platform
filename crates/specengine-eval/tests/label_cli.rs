@@ -1,7 +1,8 @@
 //! `--label` names the detail directory `<out>/<measurement>/<label>`, so every
 //! subcommand refuses a label that is not exactly one plain path component
-//! (docs/features/phase-0-spikes.md, CLI contract: exit 2 = refused, nothing
-//! written) — before resolving the corpus, reading a config or creating `--out`.
+//! (`crates/specengine-eval/README.md`, "CLI contract": exit 2 = refused,
+//! nothing written) — before resolving the corpus, reading a config or
+//! creating `--out`.
 //!
 //! `ra` exists only with feature `ra`; its cases run under
 //! `cargo nextest run -p specengine-eval --features ra --test label_cli`.
