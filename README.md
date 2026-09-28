@@ -46,3 +46,7 @@ cargo xtask docs budget                                     # document sizes and
 ```
 
 Requires Rust ≥ 1.90 and `cargo-nextest`.
+
+## License
+
+[MIT](LICENSE), copyright (c) 2026 MoloF. Free to use, modify and distribute; copies must keep the copyright notice and the license text (ADR-0025).

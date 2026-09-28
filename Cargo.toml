@@ -5,3 +5,4 @@ members = ["xtask"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.90"
+license = "MIT"

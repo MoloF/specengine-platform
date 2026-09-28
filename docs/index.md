@@ -45,6 +45,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0022](decisions/ADR-0022.md) The documentation convention is mandatory here and in every project · docs · accepted
 - [ADR-0023](decisions/ADR-0023.md) Development only through the /feature role pipeline · process · accepted
 - [ADR-0024](decisions/ADR-0024.md) All repository content is in English · docs · accepted
+- [ADR-0025](decisions/ADR-0025.md) The repository is licensed under MIT · root · accepted
 
 ## Specs
 
