@@ -2,7 +2,7 @@
 class: spec
 status: shipped
 scope: [spikes]
-ref: owner request "Phase 0: spikes" 2026-09-28
+ref: 'owner request "Phase 0: spikes" 2026-09-28'
 shipped: 2026-09-29
 adrs: [ADR-0008, ADR-0012, ADR-0016, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024]
 ---

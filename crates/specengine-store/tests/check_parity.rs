@@ -1,19 +1,24 @@
-//! AC-19 and AC-20 of docs/features/spec-check.md: parity with
-//! `cargo xtask docs check` on this repository's own documents.
+//! AC-19 and AC-20 of docs/features/spec-check.md, extended by AC-02, AC-06
+//! and AC-07 of docs/features/spec-check-graph.md: parity with `cargo xtask
+//! docs check` and `cargo xtask docs index` on this repository's own
+//! documents.
 //!
 //! The parity config is built here (Q-7): the Data example of the spec with
 //! `roots` = the top-level `.md` files and the directories not `.`-named nor
 //! in `xtask`'s `SKIP_DIRS` (read from `xtask/src/docs/mod.rs`), `exclude` =
-//! `**/_*.md` plus `**/<name>/**` per `SKIP_DIRS`, and `[classes]` all four
-//! closed as `docs/README.md` "Front-matter contract" (= `xtask`'s schema).
-//! The A4 baseline: the four invalid-YAML front-matters and the three
-//! `ref-dangling` from `docs/specs/specengine-platform/README.md`.
+//! `**/_*.md` plus `**/<name>/**` per `SKIP_DIRS`, `[classes]` all four
+//! closed as `docs/README.md` "Front-matter contract" (= `xtask`'s schema),
+//! and the generator registry of spec-check-graph's Data (the index entry).
+//! No baseline: since the owner's Q-2 edit every front-matter parses.
 //!
-//! AC-19: the walk equals `cargo xtask docs budget`'s list; `enforce` + A4
-//! → `clean`, debt = the seven. AC-20: per seed, on a scratch copy of the
-//! documents, the files with a blocking finding from `xtask docs check
-//! --root` (§11.5–6 aside) equal the new check's, among files whose
-//! front-matter parses.
+//! AC-19/AC-07: the walk equals `cargo xtask docs budget`'s list; `enforce`
+//! → `clean`, no debt, the seven new codes give exactly the one
+//! `mention-dangling` of the spec's Findings. AC-02: the core render equals
+//! `xtask docs index --root` stdout and the committed `docs/index.md`, byte
+//! for byte. AC-20/AC-06: per seed, on a scratch copy of the documents, the
+//! files with a blocking finding from `xtask docs check --root` equal the
+//! new check's, symmetrically, with nothing set aside (§11.5–6 and failed
+//! front-matter included), and the seeded file blocks with its code.
 //!
 //! The repository is only read; seeds are applied to scratch copies. The
 //! `xtask` binary is built once and run directly (no racing `cargo run`s).
@@ -27,68 +32,34 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use common::{Scratch, repository_root};
-use specengine_core::check::{Report, Verdict};
+use specengine_core::check::{CheckConfig, CheckInput, Report, Verdict, render_index};
 use specengine_core::{IdSchemeToml, Paths};
-use specengine_model::IdScheme;
+use specengine_model::{IdScheme, Severity};
 use specengine_store::{WorkingTree, check_input, check_worktree};
 
-/// Fixed so that the A4 baseline (expires 2026-12-31) stays live.
 const TODAY: &str = "2026-09-29";
 
-/// The A4 baseline (spec, Q-2).
-const A4: &str = "\
-[[debt]]
-code    = \"frontmatter-yaml\"
-path    = \"docs/decisions/ADR-0015.md\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
+/// The index path of the parity config.
+const INDEX: &str = "docs/index.md";
 
-[[debt]]
-code    = \"frontmatter-yaml\"
-path    = \"docs/decisions/ADR-0018.md\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
-
-[[debt]]
-code    = \"frontmatter-yaml\"
-path    = \"docs/decisions/ADR-0020.md\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
-
-[[debt]]
-code    = \"frontmatter-yaml\"
-path    = \"docs/features/phase-0-spikes.md\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
-
-[[debt]]
-code    = \"ref-dangling\"
-path    = \"docs/specs/specengine-platform/README.md\"
-subject = \"ADR-0015\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
-
-[[debt]]
-code    = \"ref-dangling\"
-path    = \"docs/specs/specengine-platform/README.md\"
-subject = \"ADR-0018\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
-
-[[debt]]
-code    = \"ref-dangling\"
-path    = \"docs/specs/specengine-platform/README.md\"
-subject = \"ADR-0020\"
-reason  = \"core Q6\"
-expires = \"2026-12-31\"
+/// The generator registry of the parity config (spec-check-graph, Data).
+const REGISTRY: &str = "\
+[[generators]]
+command = \"cargo xtask docs index --write\"
+writes  = [\"docs/index.md\"]
+index   = true
+gate    = \"cargo xtask docs check\"
 ";
 
-/// Parser codes after which a front-matter is not read.
-const FRONT_MATTER_FAILED: [&str; 4] = [
-    "not-utf8",
-    "frontmatter-unclosed",
-    "frontmatter-yaml",
-    "frontmatter-not-mapping",
+/// The codes increment 2 adds (spec-check-graph, Findings).
+const NEW_CODES: [&str; 7] = [
+    "index-missing",
+    "index-drift",
+    "generator-unknown",
+    "generator-path",
+    "mention-dangling",
+    "depends-cycle",
+    "ref-superseded",
 ];
 
 // ------------------------------------------------------------------ xtask
@@ -170,19 +141,14 @@ fn budget_documents(root: &Path) -> BTreeSet<String> {
         .collect()
 }
 
-/// Files with a finding of `xtask docs check --root`, §11.5–6 aside (the
-/// index and generated documents, the generator registry: increment 2).
+/// Files with a finding of `xtask docs check --root`, every check included
+/// (§11.5–6 too: nothing is set aside since increment 2).
 fn xtask_blocking(root: &Path) -> BTreeSet<String> {
     let (_, stdout) = run_xtask(&["docs", "check", "--root", root.to_str().unwrap()]);
     assert!(stdout.contains("docs check: "), "no summary:\n{stdout}");
     stdout
         .lines()
         .filter_map(|line| line.strip_prefix("error  "))
-        .filter(|finding| {
-            !(finding.contains("drifted from front-matter")
-                || finding.contains("index is missing")
-                || finding.contains(": generator `"))
-        })
         .map(|finding| finding.split(": ").next().unwrap().to_owned())
         .collect()
 }
@@ -237,75 +203,108 @@ generated = {{ required = [\"class\", \"generator\", \"source\"], closed = true 
 
 [check]
 mode = \"enforce\"
-",
+
+{REGISTRY}",
         roots = roots.join(", "),
         exclude = exclude.join(", ")
     )
 }
 
-/// Writes the config and the A4 baseline to `dir` (outside every walked root).
-fn write_config(dir: &Path, toml: &str) -> (PathBuf, PathBuf) {
+/// Writes the config to `dir` (outside every walked root).
+fn write_config(dir: &Path, toml: &str) -> PathBuf {
     fs::create_dir_all(dir).unwrap();
     let config = dir.join("specengine.toml");
-    let baseline = dir.join("a4.toml");
     fs::write(&config, toml).unwrap();
-    fs::write(&baseline, A4).unwrap();
-    (config, baseline)
+    config
 }
 
-fn walked(root: &Path, toml: &str) -> BTreeSet<String> {
-    let scheme = IdScheme::from_toml(toml).expect("[ids]");
-    let paths = Paths::from_toml(toml).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+fn tables(toml: &str) -> (IdScheme, Paths, CheckConfig) {
+    (
+        IdScheme::from_toml(toml).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml"))),
+        Paths::from_toml(toml).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml"))),
+        CheckConfig::from_toml(toml).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml"))),
+    )
+}
+
+fn input_of(root: &Path, toml: &str) -> CheckInput {
+    let (scheme, paths, _) = tables(toml);
     let tree = WorkingTree::new(root, &paths).expect("working tree");
     let input = check_input(&tree, &scheme);
     assert!(input.problems.is_empty(), "{:?}", input.problems);
-    input.files.into_iter().map(|file| file.path).collect()
+    input
 }
 
-/// The files whose front-matter the new check could not read (the parser's
-/// front-matter failures): outside the comparison on both sides (Rules'
-/// divergence: `xtask` reads such YAML leniently).
-fn front_matter_failed(report: &Report) -> BTreeSet<String> {
-    report
-        .findings
-        .iter()
-        .filter(|f| FRONT_MATTER_FAILED.contains(&f.code.as_str()))
-        .map(|f| f.path.clone())
+fn walked(root: &Path, toml: &str) -> BTreeSet<String> {
+    input_of(root, toml)
+        .files
+        .into_iter()
+        .map(|file| file.path)
         .collect()
 }
 
-/// Files blocking under `enforce` among those whose front-matter parses.
+/// Files blocking under `enforce`: every finding counts, nothing aside.
 fn new_blocking(report: &Report) -> BTreeSet<String> {
     assert!(
         report.cannot_check.is_empty(),
         "cannot check: {:?}",
         report.cannot_check
     );
-    let failed = front_matter_failed(report);
     report
         .findings
         .iter()
-        .filter(|f| report.blocks(f) && !failed.contains(&f.path))
+        .filter(|f| report.blocks(f))
         .map(|f| f.path.clone())
         .collect()
 }
 
-fn a4_paths() -> BTreeSet<String> {
-    [
-        "docs/decisions/ADR-0015.md",
-        "docs/decisions/ADR-0018.md",
-        "docs/decisions/ADR-0020.md",
-        "docs/features/phase-0-spikes.md",
-    ]
-    .iter()
-    .map(|p| (*p).to_owned())
-    .collect()
+/// Every file under `root` with its bytes (AC-15: the check writes nothing).
+fn snapshot(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                files.insert(path.clone(), fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
 }
 
-// ------------------------------------------------------------------ AC-19
+fn git_status(root: &Path) -> String {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .output()
+        .expect("git runs");
+    assert!(output.status.success(), "git status");
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+/// The first line where `a` and `b` differ, for assertion messages.
+fn first_difference(a: &str, b: &str) -> String {
+    let line = a
+        .lines()
+        .zip(b.lines())
+        .position(|(x, y)| x != y)
+        .unwrap_or_else(|| a.lines().count().min(b.lines().count()));
+    format!(
+        "line {}:\n  left:  {:?}\n  right: {:?}\n(len {} vs {})",
+        line + 1,
+        a.lines().nth(line),
+        b.lines().nth(line),
+        a.len(),
+        b.len()
+    )
+}
+
+// ------------------------------------------------------------------ AC-19, AC-07
 
 #[test]
-fn the_parity_config_walks_the_budget_documents_and_is_clean_with_the_a4_baseline() {
+fn the_parity_config_walks_the_budget_documents_and_is_clean() {
     let repository = repository_root();
     let budget = budget_documents(&repository);
     assert!(budget.len() >= 45, "{} documents", budget.len());
@@ -329,8 +328,17 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean_with_the_a4_baselin
     );
 
     let scratch = Scratch::new("parity-clean");
-    let (config, baseline) = write_config(&scratch.join("config"), &toml);
-    let report = check_worktree(&repository, &config, Some(&baseline), TODAY);
+    let config = write_config(&scratch.join("config"), &toml);
+    // AC-15: the repository is only read.
+    let status = git_status(&repository);
+    let index_bytes = fs::read(repository.join(INDEX)).expect("the index");
+    let report = check_worktree(&repository, &config, None, TODAY);
+    assert_eq!(
+        git_status(&repository),
+        status,
+        "the check wrote into the repository"
+    );
+    assert_eq!(fs::read(repository.join(INDEX)).unwrap(), index_bytes);
     assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
     assert_eq!(report.counts.documents, budget.len());
     assert_eq!(
@@ -340,30 +348,89 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean_with_the_a4_baselin
             report.counts.stale,
             report.counts.expired
         ),
-        (7, 0, 0, 0),
+        (0, 0, 0, 0),
         "{:#?}",
         report.lines(true)
     );
-    let in_debt: BTreeSet<(String, String, String)> = report
+    // The seven new codes: exactly the one finding of the spec's Findings
+    // (the file-name example of docs/canon/spec-check.md).
+    let new: Vec<(String, Severity, String, usize, String)> = report
         .findings
         .iter()
-        .filter(|f| f.is_live_debt())
-        .map(|f| (f.code.clone(), f.path.clone(), f.subject.clone()))
+        .filter(|f| NEW_CODES.contains(&f.code.as_str()))
+        .map(|f| {
+            (
+                f.code.clone(),
+                f.severity,
+                f.path.clone(),
+                f.line,
+                f.subject.clone(),
+            )
+        })
         .collect();
-    let mut want = BTreeSet::new();
-    for path in a4_paths() {
-        want.insert(("frontmatter-yaml".to_owned(), path, String::new()));
+    assert_eq!(
+        new,
+        [(
+            "mention-dangling".to_owned(),
+            Severity::Warning,
+            "docs/canon/spec-check.md".to_owned(),
+            50,
+            "ADR-00011".to_owned()
+        )],
+        "{:#?}",
+        report.lines(true)
+    );
+    assert!(
+        report
+            .findings
+            .iter()
+            .all(|f| f.severity != Severity::Error),
+        "{:#?}",
+        report.lines(true)
+    );
+    // xtask agrees: it blocks nothing, §11.5–6 included.
+    let (code, stdout) = run_xtask(&["docs", "check", "--root", repository.to_str().unwrap()]);
+    assert_eq!(code, Some(0), "{stdout}");
+    assert!(xtask_blocking(&repository).is_empty(), "{stdout}");
+}
+
+// ------------------------------------------------------------------ AC-02
+
+#[test]
+fn the_core_render_is_xtask_s_index_and_the_committed_one() {
+    let repository = repository_root();
+    let toml = parity_toml(&repository, true);
+    let (_, paths, check) = tables(&toml);
+    assert_eq!(paths.index.as_deref(), Some(INDEX));
+    let generator = check.index_generator().expect("the index entry");
+    let mut input = input_of(&repository, &toml);
+    let render = render_index(&input, INDEX, generator);
+
+    let (code, stdout) = run_xtask(&["docs", "index", "--root", repository.to_str().unwrap()]);
+    assert_eq!(code, Some(0), "xtask docs index");
+    assert!(
+        render == stdout,
+        "core render vs xtask docs index stdout, {}",
+        first_difference(&render, &stdout)
+    );
+    let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
+    assert!(
+        render == committed,
+        "core render vs the committed {INDEX}, {}",
+        first_difference(&render, &committed)
+    );
+    // Every section is exercised here but `No class — fix`.
+    for section in [
+        "\n## Canon\n\n",
+        "\n## Decisions\n\n",
+        "\n## Specs\n\n",
+        "\n## Archive — Tier 3, by id only\n\n",
+    ] {
+        assert!(render.contains(section), "{section:?}");
     }
-    for id in ["ADR-0015", "ADR-0018", "ADR-0020"] {
-        want.insert((
-            "ref-dangling".to_owned(),
-            "docs/specs/specengine-platform/README.md".to_owned(),
-            id.to_owned(),
-        ));
-    }
-    assert_eq!(in_debt, want);
-    // xtask agrees: nothing but the index/generated checks may speak.
-    assert!(xtask_blocking(&repository).is_empty());
+    // Independent of the walk's order.
+    input.files.reverse();
+    assert_eq!(render_index(&input, INDEX, generator), render);
 }
 
 // ------------------------------------------------------------------ AC-20
@@ -662,42 +729,117 @@ const SEEDS: &[Seed] = &[
         "scope-empty",
         |r| set_key(r, "xtask/README.md", "scope", Some("scope: []")),
     ),
+    // Increment 2 (spec-check-graph AC-06): §11.5–6.
+    ("docs/index.md hand-edited", INDEX, "index-drift", |r| {
+        replace_once(
+            r,
+            INDEX,
+            "# Documentation index\n",
+            "# Documentation Index\n",
+        )
+    }),
+    (
+        "a new canon document, not rendered",
+        INDEX,
+        "index-drift",
+        |r| {
+            write_new(
+                r,
+                "docs/canon/zz-seed.md",
+                "---\nclass: canon\ntier: 2\nscope: [seed]\nowner: owner\nreviewed: 2026-09-29\n---\n\n# A seeded canon document\n\nText.\n",
+            )
+        },
+    ),
+    (
+        "ADR-0010 superseded-by ADR-0001, not rendered",
+        INDEX,
+        "index-drift",
+        |r| {
+            set_key(
+                r,
+                "docs/decisions/ADR-0010.md",
+                "status",
+                Some("status: superseded-by ADR-0001"),
+            )
+        },
+    ),
+    ("docs/index.md deleted", INDEX, "index-missing", |r| {
+        fs::remove_file(r.join(INDEX)).unwrap()
+    }),
+    (
+        "a generated document by `foo`",
+        "docs/zz-generated-foo.md",
+        "generator-unknown",
+        |r| {
+            write_new(
+                r,
+                "docs/zz-generated-foo.md",
+                "---\nclass: generated\ngenerator: foo\nsource: a seed\n---\n\n# Generated by foo\n",
+            )
+        },
+    ),
+    (
+        "a generated document naming the index command",
+        "docs/zz-generated-index.md",
+        "generator-path",
+        |r| {
+            write_new(
+                r,
+                "docs/zz-generated-index.md",
+                "---\nclass: generated\ngenerator: cargo xtask docs index --write\nsource: a seed\n---\n\n# Not the index\n",
+            )
+        },
+    ),
 ];
+
+/// Replaces the one occurrence of `from` in `path`.
+fn replace_once(root: &Path, path: &str, from: &str, to: &str) {
+    let file = root.join(path);
+    let text = fs::read_to_string(&file).unwrap();
+    assert_eq!(text.matches(from).count(), 1, "{path}: {from:?} once");
+    fs::write(&file, text.replacen(from, to, 1)).unwrap();
+}
+
+/// Writes a file that must not exist yet.
+fn write_new(root: &Path, path: &str, text: &str) {
+    let file = root.join(path);
+    assert!(!file.exists(), "{path} exists");
+    fs::write(&file, text).unwrap();
+}
 
 #[test]
 fn per_seed_xtask_and_the_new_check_block_the_same_files() {
+    assert_eq!(SEEDS.len(), 24 + 6, "the 24 old seeds and the six new");
     let documents = budget_documents(&repository_root());
     let scratch = Scratch::new("parity-seeds");
 
-    // The unseeded copy: both clean (A4 in debt, its four files aside).
+    // The unseeded copy: both clean, nothing set aside.
     let clean = scratch_copy(&scratch, &documents, "clean");
     let toml = parity_toml(&clean, true);
-    let (config, baseline) = write_config(&scratch.join("config-clean"), &toml);
+    let config = write_config(&scratch.join("config-clean"), &toml);
     assert_eq!(walked(&clean, &toml), documents, "the copy walks the same");
-    let report = check_worktree(&clean, &config, Some(&baseline), TODAY);
+    let report = check_worktree(&clean, &config, None, TODAY);
     assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
+    assert!(new_blocking(&report).is_empty());
     assert!(xtask_blocking(&clean).is_empty());
 
-    let a4 = a4_paths();
     let mut failures = Vec::new();
     for (index, (name, target, code, apply)) in SEEDS.iter().enumerate() {
         let root = scratch_copy(&scratch, &documents, &format!("seed-{index:02}"));
         apply(&root);
-        let (config, baseline) = write_config(
+        let config = write_config(
             &scratch.join(&format!("config-{index:02}")),
             &parity_toml(&root, true),
         );
-        let report = check_worktree(&root, &config, Some(&baseline), TODAY);
-        let ours = new_blocking(&report);
-        let failed = front_matter_failed(&report);
+        // AC-15: nothing is written, a drifted index included.
+        let before = snapshot(&root);
+        let report = check_worktree(&root, &config, None, TODAY);
         assert!(
-            failed.is_superset(&a4),
-            "seed {name}: the A4 four still fail"
+            snapshot(&root) == before,
+            "seed {name}: the check wrote a file"
         );
-        let theirs: BTreeSet<String> = xtask_blocking(&root)
-            .into_iter()
-            .filter(|path| !failed.contains(path))
-            .collect();
+        let ours = new_blocking(&report);
+        let theirs = xtask_blocking(&root);
         eprintln!("seed {name}: xtask {theirs:?}, spec check {ours:?}");
         let coded = report
             .findings

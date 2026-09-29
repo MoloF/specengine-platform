@@ -1,0 +1,194 @@
+//! §11.5–6 of the documentation convention, over the generator registry of
+//! `specengine.toml` (`[[generators]]`), errors both:
+//!
+//! - `index-drift`, `index-missing`: with an `index = true` entry, the
+//!   render of the index is compared byte for byte with the walked bytes of
+//!   `[paths] index`. Nothing is written; bytes not supplied → cannot check;
+//!   an incomplete walk (an unreadable file or directory, a missing written
+//!   root: each a cause of "cannot check") → not compared. A skipped
+//!   non-UTF-8 name does not stop the comparison.
+//! - `generator-unknown`, `generator-path`: with the table (even empty),
+//!   every `class: generated` document names a registered `command` in
+//!   `generator:`, and its path is in that entry's `writes`.
+//!
+//! Without the table, or without an `index = true` entry, the rules are off.
+
+use specengine_model::Severity;
+
+use super::config::{CheckConfig, DocClass, Generator};
+use super::engine::Corpus;
+use super::input::{CheckInput, ProblemKind};
+use super::render::{readable_fields, render_index};
+use super::report::{Cause, Finding};
+use crate::Paths;
+
+/// Both rules; causes when the index bytes were not supplied or the index
+/// entry has no `[paths] index` to compare (a config built in code: the TOML
+/// reader rejects it).
+pub(crate) fn run(
+    input: &CheckInput,
+    corpus: &Corpus<'_>,
+    paths: &Paths,
+    config: &CheckConfig,
+    findings: &mut Vec<Finding>,
+    causes: &mut Vec<Cause>,
+) {
+    if let Some(generators) = &config.generators {
+        registry(corpus, generators, findings);
+    }
+    let Some(generator) = config.index_generator() else {
+        return;
+    };
+    let Some(index_path) = &paths.index else {
+        causes.push(Cause {
+            path: String::new(),
+            message: format!(
+                "the `[[generators]]` entry `{}` (line {}) has `index = true`, but `[paths] index` is not set: the index cannot be compared with its render",
+                generator.command, generator.line
+            ),
+        });
+        return;
+    };
+    if walk_incomplete(input, paths) {
+        return;
+    }
+    index(input, corpus, index_path, generator, findings, causes);
+}
+
+/// The render would not list every document, so a comparison would report
+/// drift the generator cannot fix: a file that could not be read (its
+/// `read_error`), a directory that could not be listed, a written root that
+/// is missing — each already a cause of "cannot check", so the run cannot
+/// vouch for the index either way. A directory or `.md` name that is not
+/// UTF-8 (the warning `name-skipped`) does not stop the comparison: a lossy
+/// generator line for such a file shows as `index-drift`, and renaming the
+/// file, which `name-skipped` already asks for, fixes both.
+fn walk_incomplete(input: &CheckInput, paths: &Paths) -> bool {
+    input.files.iter().any(|file| file.read_error.is_some())
+        || input.problems.iter().any(|problem| match problem.kind {
+            ProblemKind::UnreadableDir => true,
+            ProblemKind::MissingRoot => paths.roots_written,
+            ProblemKind::SkippedName => false,
+        })
+}
+
+/// `generator-unknown`, `generator-path` on every generated document whose
+/// front-matter was read.
+fn registry(corpus: &Corpus<'_>, generators: &[Generator], findings: &mut Vec<Finding>) {
+    for (index, parsed) in corpus.parses.iter().enumerate() {
+        let Some(fields) = parsed.and_then(readable_fields) else {
+            continue;
+        };
+        if fields.class.as_deref() != Some(DocClass::Generated.as_str()) {
+            continue;
+        }
+        let path = corpus.paths[index];
+        let line = corpus.texts[index].key_line("generator").unwrap_or(1);
+        let value = fields.generator.as_deref();
+        let registered =
+            value.and_then(|value| generators.iter().find(|entry| entry.command == value));
+        match (value, registered) {
+            (_, None) => {
+                let message = match value {
+                    Some(value) => format!(
+                        "`generator: {value}` names no registered `[[generators]]` command"
+                    ),
+                    None => "a generated document without `generator:`: name a registered `[[generators]]` command".to_owned(),
+                };
+                findings.push(error(
+                    "generator-unknown",
+                    path,
+                    line,
+                    value.unwrap_or_default(),
+                    message,
+                ));
+            }
+            (Some(value), Some(entry)) if !entry.writes.iter().any(|written| written == path) => {
+                findings.push(error(
+                    "generator-path",
+                    path,
+                    line,
+                    value,
+                    format!(
+                        "`{value}` writes {}, not this file",
+                        entry.writes.join(", ")
+                    ),
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `index-missing` when `[paths] index` was not walked; `index-drift` when
+/// its bytes differ from the render, on the line of the first differing
+/// byte.
+fn index(
+    input: &CheckInput,
+    corpus: &Corpus<'_>,
+    index_path: &str,
+    generator: &Generator,
+    findings: &mut Vec<Finding>,
+    causes: &mut Vec<Cause>,
+) {
+    let command = &generator.command;
+    let Some(&at) = corpus.by_path.get(index_path) else {
+        findings.push(error(
+            "index-missing",
+            index_path,
+            1,
+            "",
+            format!(
+                "the `[paths] index` file is not walked (absent, outside the roots or excluded); `{command}` writes it"
+            ),
+        ));
+        return;
+    };
+    let file = corpus.files[at];
+    if file.size > 0 && file.bytes.is_empty() {
+        causes.push(Cause {
+            path: index_path.to_owned(),
+            message: format!(
+                "the index bytes were not supplied: it cannot be compared with the render of `{command}`"
+            ),
+        });
+        return;
+    }
+    let render = render_index(input, index_path, generator);
+    let walked = file.bytes.as_slice();
+    let rendered = render.as_bytes();
+    let first_difference = walked
+        .iter()
+        .zip(rendered)
+        .position(|(a, b)| a != b)
+        .or_else(|| (walked.len() != rendered.len()).then(|| walked.len().min(rendered.len())));
+    let Some(offset) = first_difference else {
+        return;
+    };
+    let line = 1 + walked[..offset]
+        .iter()
+        .filter(|&&byte| byte == b'\n')
+        .count();
+    findings.push(error(
+        "index-drift",
+        index_path,
+        line,
+        "",
+        format!(
+            "differs from the render of `{command}` from this line on: rebuild it with `{command}`; manual edits are overwritten"
+        ),
+    ));
+}
+
+fn error(code: &str, path: &str, line: usize, subject: &str, message: String) -> Finding {
+    Finding {
+        code: code.to_owned(),
+        severity: Severity::Error,
+        path: path.to_owned(),
+        line,
+        subject: subject.to_owned(),
+        message,
+        fix: None,
+        debt: None,
+    }
+}

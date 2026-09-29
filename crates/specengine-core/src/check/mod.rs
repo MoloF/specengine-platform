@@ -14,36 +14,47 @@
 //! live debt, and exit 2 means the check could not vouch for the corpus.
 //!
 //! - [`config`] — `[budgets]` (caps in bytes), `[classes]` (contracts),
-//!   `[check]` (mode);
+//!   `[check]` (mode), `[[generators]]` (the generator registry);
 //! - [`baseline`] — `.spec-debt.toml`: expiring debt entries;
 //! - [`input`] — what the check runs over;
 //! - [`report`] — findings, verdict, lines and JSON;
+//! - [`resolve`] — the one reference resolution ([`Resolver`]);
+//! - [`render_index`] — the generated index, rendered in memory;
 //! - the rules: parser diagnostics through [`PARSER_SEVERITY`], class
 //!   contracts, budgets, ID definitions (`id-width`, `id-taken`,
-//!   `file-name`), `canon:` and front-matter references.
+//!   `file-name`), `canon:` and front-matter references; the index drift
+//!   and the generator registry (§11.5–6, errors); the graph warnings
+//!   (`mention-dangling`, `depends-cycle`, `ref-superseded`).
 
 pub mod baseline;
 pub mod config;
 mod engine;
+mod generated;
+mod graph;
 pub mod input;
+mod render;
 pub mod report;
+pub mod resolve;
 mod text;
 
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use config::{
-    Budgets, CheckConfig, ClassContract, Classes, ConfigError, DocClass, Mode,
-    check_config_from_toml,
+    Budgets, CheckConfig, ClassContract, Classes, ConfigError, DEFAULT_GATE, DocClass, Generator,
+    Mode, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
+pub use render::render_index;
 pub use report::{Cause, Counts, Debt, Finding, Fix, Report, Verdict};
+pub use resolve::{Resolution, Resolver};
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
 
 /// The codes of the findings the check itself emits (parser codes come
-/// through [`PARSER_SEVERITY`]): errors, then the warning. A stale baseline
-/// entry is no finding: it goes to [`Report::stale`], labelled `debt-stale`
-/// only in the detail lines.
-pub const CHECK_CODES: [&str; 19] = [
+/// through [`PARSER_SEVERITY`]): increment 1 (errors, then the warning
+/// `name-skipped`), then increment 2 (the §11.5–6 errors, then the graph
+/// warnings). A stale baseline entry is no finding: it goes to
+/// [`Report::stale`], labelled `debt-stale` only in the detail lines.
+pub const CHECK_CODES: [&str; 26] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -63,4 +74,11 @@ pub const CHECK_CODES: [&str; 19] = [
     "canon-anchor",
     "ref-dangling",
     "name-skipped",
+    "index-missing",
+    "index-drift",
+    "generator-unknown",
+    "generator-path",
+    "mention-dangling",
+    "depends-cycle",
+    "ref-superseded",
 ];

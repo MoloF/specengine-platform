@@ -191,7 +191,7 @@ A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependen
 
 | Crate | Version | Role / note |
 |---|---|---|
-| `rmcp` | **=3.5.0** (released 2026-09-28; 1.0 → 3.5 in 7 months) | official SDK: `#[tool]`/`#[tool_router]`/`#[prompt]`, stdio, **Streamable HTTP as a Tower service → mounts in axum**, MRTR, elicitation, `request-state`, Tasks (`TaskManager`), `subscriptions/listen`; supports 2026-07-28 and older revisions. Features in use: `server`, `macros`, `transport-io`, `request-state` — stdio only, no HTTP stack in the graph; the `elicitation` feature is skipped (it pulls `url`), `elicitation/create` goes through `send_request`. ⚠ check the SDK tier |
+| `rmcp` | **=3.5.0** (1.0 → 3.5 in 7 months) | official SDK: `#[tool]`/`#[tool_router]`/`#[prompt]`, stdio, **Streamable HTTP as a Tower service → mounts in axum**, MRTR, elicitation, `request-state`, Tasks (`TaskManager`), `subscriptions/listen`; supports 2026-07-28 and older revisions. Features in use: `server`, `macros`, `transport-io`, `request-state` — stdio only, no HTTP stack in the graph; the `elicitation` feature is skipped (it pulls `url`), `elicitation/create` goes through `send_request`. ⚠ check the SDK tier |
 | `tokio` / `getrandom` | =1.53.1 (`rt`, `macros`, `io-std`, `time`) / =0.4.3 | MCP server runtime / per-process `requestState` HMAC key; both already in the graph through `rmcp` |
 | `axum` | 0.8.9 | HTTP, SSE; the next release is a breaking **0.9**, plan the migration |
 | `tree-sitter` | =0.27.0 | Rust ≥ 1.90 |
@@ -199,14 +199,14 @@ A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependen
 | own RON lexer | — (`specengine-code`) | `.ron` markers, field paths, the Bevy dump reader; replaces `tree-sitter-ron` 0.2.0 (05 §9) |
 | `rusqlite` | **=0.40.2** (`bundled`: SQLite 3.53.2, FTS5) | the index; not `sqlx`. Transitive, pending the owner (Q1, store README): `libsqlite3-sys` 0.38.2, `fallible-iterator` 0.3.0, `fallible-streaming-iterator` 0.1.9; build: `pkg-config` 0.3.34, `vcpkg` 0.2.15 (unused) |
 | `pulldown-cmark` | =0.13.4 (no default features) | heading attributes `{#ID}`, offset iterator for precise patches |
-| `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (`serde_yaml` deprecated, `serde_yaml_ng`/`serde_norway` unchanged since 2024). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86) — pending the owner (Q1, core README) |
+| `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (why: 05 §9). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86) — pending the owner (Q1, core README) |
 | `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 | serialization; JSON output of tools and `specengine-eval`; `float_roundtrip` in `specengine-store` |
 | `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer) / importer ID patterns; `regex` is already in the graph through tree-sitter |
 | `blake3` | =1.8.7 | node and AST hashes |
 | `notify` + `notify-debouncer-full` | 8.2.0 + 0.7.0 | file watching; **not** 9.0-rc; debouncer-full coalesces atomic saves |
 | `rusqlite_migration` | 2.6.0 | schema migrations (`refinery` and `sqlx` conflict with rusqlite 0.40 over `libsqlite3-sys`) |
 | `similar` | 3.2.0 | proposal diffs |
-| `petgraph` | 0.8.3 | graph, cycles, toposort |
+| `petgraph` | =0.8.3 (no default features) | `depends-cycle` (`tarjan_scc`; owner, Q-C); new to the default members: `fixedbitset` 0.5.7, `hashbrown` 0.15.5, `foldhash` 0.1.5 |
 | `gix` | 0.88.0 | later; system `git` at the start |
 | `rust-embed` | 8.12.0 | UI inside the binary |
 | `schemars` | 1.2.2 | JSON Schema 2020-12 for tools, through the `rmcp::schemars` re-export |

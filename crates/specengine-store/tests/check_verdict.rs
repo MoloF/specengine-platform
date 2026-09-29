@@ -10,6 +10,11 @@
 //! AC-21: the check writes nothing: `git status --porcelain -- fixtures/`
 //! is the same before and after a check of the fixtures in place, and every
 //! scratch file keeps its bytes and mtime.
+//!
+//! docs/features/spec-check-graph.md AC-04/AC-05 through the loader: an
+//! invalid `[[generators]]` table is `specengine.toml:<line>: message`,
+//! exit 2; the `[paths] index` file absent, outside the roots or excluded is
+//! `index-missing`, the walked render is clean, and nothing is written.
 
 mod common;
 
@@ -331,5 +336,209 @@ fn the_check_writes_nothing() {
         let (after_bytes, after_modified) = &snapshot_after[path];
         assert!(bytes == after_bytes, "{path}: bytes changed");
         assert_eq!(modified, after_modified, "{path}: mtime changed");
+    }
+}
+
+// ------------------------------------------------------------------ spec-check-graph
+
+#[test]
+fn an_invalid_generator_registry_exits_2_with_file_line() {
+    let scratch = Scratch::new("check-verdict-generators");
+    for (case, extra, line) in [
+        (
+            "command missing",
+            "[[generators]]\nwrites = [\"docs/a.md\"]\n",
+            1,
+        ),
+        (
+            "gate without index",
+            "[[generators]]\ncommand = \"a\"\nwrites = [\"docs/a.md\"]\ngate = \"g\"\n",
+            4,
+        ),
+        (
+            "index = true without [paths] index",
+            "[[generators]]\ncommand = \"a\"\nwrites = [\"docs/a.md\"]\nindex = true\n",
+            4,
+        ),
+        (
+            "unknown key, observe",
+            "[check]\nmode = \"observe\"\n\n[[generators]]\ncommand = \"a\"\nwrites = [\"docs/a.md\"]\nrun = 1\n",
+            7,
+        ),
+    ] {
+        let root = copy(&scratch, "spec-b", case, extra);
+        let base = fs::read_to_string(fixture("spec-b").join("specengine.toml"))
+            .unwrap()
+            .lines()
+            .count()
+            + 1;
+        let report = check(&root);
+        assert_eq!(report.verdict, Verdict::CannotCheck, "{case}");
+        assert_eq!(exit(&report), 2, "{case}");
+        let cause = &report.cannot_check[0];
+        assert!(
+            cause
+                .path
+                .ends_with(&format!("specengine.toml:{}", base + line)),
+            "{case}: file:line: {cause:?}"
+        );
+    }
+}
+
+/// spec-b with `[paths] index` = `index` and `exclude` added, and an index
+/// registry entry.
+fn with_index(scratch: &Scratch, dir: &str, index: &str, exclude: &str) -> PathBuf {
+    let root = copy(
+        scratch,
+        "spec-b",
+        dir,
+        &format!(
+            "[[generators]]\ncommand = \"make index\"\nwrites = [\"{index}\"]\nindex = true\n"
+        ),
+    );
+    let config = root.join("specengine.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    assert_eq!(text.matches("[paths]\n").count(), 1);
+    let text = text.replacen(
+        "[paths]\n",
+        &format!("[paths]\nindex = \"{index}\"\nexclude = [{exclude}]\n"),
+        1,
+    );
+    fs::write(&config, text).unwrap();
+    root
+}
+
+fn index_codes(report: &Report) -> Vec<(String, String)> {
+    report
+        .findings
+        .iter()
+        .filter(|f| f.code.starts_with("index-"))
+        .map(|f| (f.code.clone(), f.path.clone()))
+        .collect()
+}
+
+/// The render of the walked tree, as the check makes it.
+fn render_of(root: &Path) -> String {
+    use specengine_core::{IdSchemeToml, Paths};
+    let text = fs::read_to_string(root.join("specengine.toml")).unwrap();
+    let scheme = specengine_model::IdScheme::from_toml(&text).unwrap();
+    let paths = Paths::from_toml(&text).unwrap();
+    let config = specengine_core::check::CheckConfig::from_toml(&text).unwrap();
+    let tree = specengine_store::WorkingTree::new(root, &paths).unwrap();
+    let input = specengine_store::check_input(&tree, &scheme);
+    specengine_core::check::render_index(
+        &input,
+        paths.index.as_deref().unwrap(),
+        config.index_generator().unwrap(),
+    )
+}
+
+#[test]
+fn an_index_not_walked_is_index_missing_and_the_walked_render_is_clean() {
+    let scratch = Scratch::new("check-verdict-index");
+    let missing = |code: &str, path: &str| vec![(code.to_owned(), path.to_owned())];
+
+    // Absent.
+    let root = with_index(&scratch, "absent", "docs/index.md", "");
+    assert_eq!(
+        index_codes(&check(&root)),
+        missing("index-missing", "docs/index.md")
+    );
+
+    // Walked, the render: no index finding, and the render itself is stable.
+    let root = with_index(&scratch, "walked", "docs/index.md", "");
+    let render = render_of(&root);
+    write(&root, "docs/index.md", &render);
+    assert_eq!(
+        render_of(&root),
+        render,
+        "the index is not listed in itself"
+    );
+    let before = fs::read(root.join("docs/index.md")).unwrap();
+    let report = check(&root);
+    assert!(index_codes(&report).is_empty(), "{:?}", report.lines(true));
+    assert_eq!(fs::read(root.join("docs/index.md")).unwrap(), before);
+
+    // Walked, hand-edited: drift, and the file keeps its bytes.
+    write(&root, "docs/index.md", format!("{render}x\n"));
+    let report = check(&root);
+    assert_eq!(
+        index_codes(&report),
+        missing("index-drift", "docs/index.md")
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("docs/index.md")).unwrap(),
+        format!("{render}x\n"),
+        "nothing is written"
+    );
+
+    // Outside the roots (`roots = ["docs"]`): present but not walked.
+    let root = with_index(&scratch, "outside", "site/index.md", "");
+    write(&root, "site/index.md", "whatever\n");
+    assert_eq!(
+        index_codes(&check(&root)),
+        missing("index-missing", "site/index.md")
+    );
+
+    // Excluded.
+    let root = with_index(&scratch, "excluded", "docs/index.md", "\"docs/index.md\"");
+    write(&root, "docs/index.md", "whatever\n");
+    assert_eq!(
+        index_codes(&check(&root)),
+        missing("index-missing", "docs/index.md")
+    );
+}
+
+/// Iteration 2: an incomplete walk (a mode-000 file or directory, a written
+/// root missing) is "cannot check" and the index is neither compared nor
+/// reported missing: the render would not list every document.
+#[test]
+fn an_incomplete_walk_gives_no_index_finding() {
+    let scratch = Scratch::new("check-verdict-index-walk");
+    type Break = fn(&Path);
+    let cases: [(&str, Break, Break); 3] = [
+        (
+            "mode-000 file",
+            |root| chmod(root, "docs/spec/cli.md", 0o000),
+            |root| chmod(root, "docs/spec/cli.md", 0o644),
+        ),
+        (
+            "mode-000 directory",
+            |root| chmod(root, "docs/records/QN", 0o000),
+            |root| chmod(root, "docs/records/QN", 0o755),
+        ),
+        (
+            "a written root missing",
+            |root| {
+                let config = root.join("specengine.toml");
+                let text = fs::read_to_string(&config).unwrap();
+                assert_eq!(text.matches("roots = [\"docs\"]").count(), 1);
+                fs::write(
+                    &config,
+                    text.replace("roots = [\"docs\"]", "roots = [\"docs\", \"notes\"]"),
+                )
+                .unwrap();
+            },
+            |_| {},
+        ),
+    ];
+    for (case, break_walk, repair) in cases {
+        for (state, index) in [("drifted", Some("stale\n")), ("absent", None)] {
+            let root = with_index(&scratch, &format!("{case}-{state}"), "docs/index.md", "");
+            if let Some(bytes) = index {
+                write(&root, "docs/index.md", bytes);
+            }
+            // Complete: the rule speaks.
+            assert_eq!(index_codes(&check(&root)).len(), 1, "{case}, {state}");
+            break_walk(&root);
+            let report = check(&root);
+            repair(&root);
+            assert_eq!(report.verdict, Verdict::CannotCheck, "{case}, {state}");
+            assert!(
+                index_codes(&report).is_empty(),
+                "{case}, {state}: {:#?}",
+                report.lines(true)
+            );
+        }
     }
 }

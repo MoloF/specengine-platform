@@ -375,3 +375,42 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
         missing.join("\n")
     );
 }
+
+/// AC-16 of docs/features/spec-check-graph.md: increment 2 of `spec check`
+/// changes neither the parser nor what the store keeps (the name-shape
+/// fallback lives only in the check): `INDEX_FORMAT` stays 3, and the
+/// format history and both fixtures' `expected.json` are unchanged against
+/// the last commit.
+#[test]
+fn spec_check_increment_2_keeps_the_format() {
+    assert_eq!(INDEX_FORMAT, 3);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = std::process::Command::new("git")
+        .current_dir(&root)
+        .args([
+            "status",
+            "--porcelain",
+            "--",
+            "crates/specengine-store/tests/format_history.txt",
+            "fixtures/spec-a/expected.json",
+            "fixtures/spec-b/expected.json",
+        ])
+        .output()
+        .expect("git runs");
+    assert!(output.status.success(), "git status");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "",
+        "the format history and the expected parses are unchanged"
+    );
+    let history =
+        std::fs::read_to_string(root.join("crates/specengine-store/tests/format_history.txt"))
+            .expect("format_history.txt");
+    assert!(
+        history
+            .lines()
+            .last()
+            .is_some_and(|line| line.starts_with("3 ")),
+        "{history}"
+    );
+}

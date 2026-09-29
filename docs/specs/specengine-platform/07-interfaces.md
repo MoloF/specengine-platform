@@ -183,7 +183,8 @@ index = "docs/index.md"     # the index, capped by index_bytes
 [ids]                       # prefix → kind, shape, width, aliases_from: crates/specengine-model/README.md
 R    = { kind = "requirement", width = 2, immutable_text = true }
 
-[budgets]                   # document caps in bytes (tier0_bytes …), [classes], [check]: docs/canon/spec-check.md
+[budgets]                   # document caps in bytes (tier0_bytes …), [classes], [check]: docs/canon/spec-check.md;
+                            # [[generators]] (the generated-document registry): docs/canon/spec-check-graph.md
 bundle_node = 2000          # bundle budgets in tokens, multilingual estimator
 bundle_task = 10000
 

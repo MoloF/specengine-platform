@@ -1,15 +1,11 @@
-//! AC-19 of docs/features/spec-parser.md: this repository's own
-//! documentation parses. Every file listed by `cargo xtask docs budget`
-//! parses under the scheme {ADR, width 4} with no front-matter diagnostic,
-//! except exactly the four files whose front-matter is not valid YAML (Q6:
-//! accepted ADRs stay unedited) — one `frontmatter-yaml` each; every ADR's
-//! `id` equals its file stem; every `canon:` is a path with an anchor.
-//!
-//! Discrepancy kept visible (not smoothed over): three of the four
-//! allowlisted files are ADRs (0015, 0018, 0020). Their YAML fails, so the
-//! parser keeps no ID for them (AC-06: no guessed ID) and "every ADR's `id`
-//! = its stem" cannot hold for them; they are exempted from that clause here
-//! by name, and the criterion's text needs the same exemption.
+//! AC-19 of docs/features/spec-parser.md, as amended by AC-17 of
+//! docs/features/spec-check-graph.md (the owner's Q-2 answer: the four
+//! invalid YAML scalars quoted): this repository's own documentation parses.
+//! Every file listed by `cargo xtask docs budget` parses under the scheme
+//! {ADR, width 4} with no front-matter diagnostic and no exception
+//! (`INVALID_YAML` is empty); every ADR's `id` equals its file stem, with no
+//! exemption; every `canon:` is a path with an anchor. The four files the
+//! Q-2 edit quoted parse strictly and keep their quoted scalar.
 //!
 //! docs/features/spec-check.md AC-03: every parsing ADR's `canon:` anchor
 //! is among its target's anchors (ADR-0023 through an `html` anchor,
@@ -29,12 +25,16 @@ use specengine_model::{
 
 use common::repository_root;
 
-/// The files whose front-matter is not valid YAML (Q6).
-const INVALID_YAML: [&str; 4] = [
-    "docs/decisions/ADR-0015.md",
-    "docs/decisions/ADR-0018.md",
-    "docs/decisions/ADR-0020.md",
-    "docs/features/phase-0-spikes.md",
+/// The files whose front-matter is not valid YAML: none since the Q-2 edit
+/// (docs/features/spec-check-graph.md AC-17).
+const INVALID_YAML: [&str; 0] = [];
+
+/// The four files the Q-2 edit quoted, with the key it quoted.
+const QUOTED_BY_Q2: [(&str, &str); 4] = [
+    ("docs/decisions/ADR-0015.md", "title"),
+    ("docs/decisions/ADR-0018.md", "title"),
+    ("docs/decisions/ADR-0020.md", "title"),
+    ("docs/features/phase-0-spikes.md", "ref"),
 ];
 
 fn adr_scheme() -> IdScheme {
@@ -105,7 +105,7 @@ fn is_front_matter_diagnostic(file: &Parsed, code: DiagnosticCode, line: usize) 
         || line <= front_matter_last_line(file)
 }
 
-fn every_listed_file_parses_without_front_matter_diagnostics_but_the_four(files: &[Parsed]) {
+fn every_listed_file_parses_without_front_matter_diagnostics(files: &[Parsed]) {
     let mut unexpected = Vec::new();
     let mut invalid_seen = Vec::new();
     for file in files {
@@ -118,27 +118,70 @@ fn every_listed_file_parses_without_front_matter_diagnostics_but_the_four(files:
             .collect();
         if INVALID_YAML.contains(&file.path.as_str()) {
             invalid_seen.push(file.path.clone());
-            let codes: Vec<DiagnosticCode> = front.iter().map(|(c, _)| *c).collect();
-            if codes != [DiagnosticCode::FrontmatterYaml] {
-                unexpected.push(format!(
-                    "{}: want exactly one frontmatter-yaml, got {front:?}",
-                    file.path
-                ));
-            }
-            assert!(
-                file.parsed.document().is_some(),
-                "{}: body still read",
-                file.path
-            );
         } else if !front.is_empty() {
             unexpected.push(format!("{}: {:?}", file.path, file.parsed.diagnostics));
         }
     }
-    assert_eq!(
-        invalid_seen, INVALID_YAML,
-        "the four files are listed by docs budget"
-    );
+    assert_eq!(invalid_seen, INVALID_YAML, "no file is excepted any more");
     assert!(unexpected.is_empty(), "{}", unexpected.join("\n"));
+}
+
+/// The Q-2 edit: the four files are listed by `docs budget`, their
+/// front-matter is read strictly, and the quoted scalar is the key's value
+/// (a `: ` inside it, which made the YAML invalid).
+fn the_four_quoted_files_parse_strictly(files: &[Parsed]) {
+    for (path, key) in QUOTED_BY_Q2 {
+        let file = files
+            .iter()
+            .find(|file| file.path == path)
+            .unwrap_or_else(|| panic!("{path}: listed by docs budget"));
+        let codes: Vec<&str> = file
+            .parsed
+            .diagnostics
+            .iter()
+            .map(|d| d.code.as_str())
+            .filter(|code| code.starts_with("frontmatter-"))
+            .collect();
+        assert!(codes.is_empty(), "{path}: {codes:?}");
+        let fields = file
+            .parsed
+            .document()
+            .and_then(|d| d.fields.as_ref())
+            .unwrap_or_else(|| panic!("{path}: front-matter read"));
+        let front = file
+            .parsed
+            .front_matter
+            .map(|span| String::from_utf8_lossy(&file.bytes[span.range()]).into_owned())
+            .unwrap_or_default();
+        let raw = front
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{key}: ")))
+            .unwrap_or_else(|| panic!("{path}: `{key}:` written"));
+        let quoted = |quote: char| raw.len() > 1 && raw.starts_with(quote) && raw.ends_with(quote);
+        assert!(
+            quoted('"') || quoted('\''),
+            "{path}: `{key}:` quoted, got {raw}"
+        );
+        assert!(raw.contains(": "), "{path}: the quoted `{key}` holds `: `");
+        if key == "title" {
+            let title = file.parsed.document().and_then(|d| d.title.as_deref());
+            assert!(
+                title.is_some_and(|title| title.contains(": ") && !title.starts_with('"')),
+                "{path}: title read unquoted, got {title:?}"
+            );
+            assert_eq!(
+                file.parsed.document().and_then(|d| d.id.as_deref()),
+                Path::new(path).file_stem().and_then(|s| s.to_str()),
+                "{path}: the ID is read"
+            );
+        } else {
+            let value = fields.reference.as_deref();
+            assert!(
+                value.is_some_and(|value| value.contains(": ") && !value.starts_with(['"', '\''])),
+                "{path}: `{key}` read unquoted, got {value:?}"
+            );
+        }
+    }
 }
 
 fn every_adr_id_is_its_file_stem(files: &[Parsed]) {
@@ -151,11 +194,7 @@ fn every_adr_id_is_its_file_stem(files: &[Parsed]) {
         }
         adrs += 1;
         let id = file.parsed.document().and_then(|d| d.id.clone());
-        if INVALID_YAML.contains(&file.path.as_str()) {
-            // Exempt: invalid YAML keeps no ID (see the module comment).
-            assert_eq!(id, None, "{}: no guessed ID", file.path);
-            continue;
-        }
+        // No exemption since the Q-2 edit (AC-17 of spec-check-graph).
         assert_eq!(id.as_deref(), Some(stem.as_str()), "{}", file.path);
         assert_eq!(
             file.parsed.document().unwrap().kind.as_deref(),
@@ -181,14 +220,6 @@ fn every_canon_is_a_path_with_an_anchor(files: &[Parsed]) {
             .document()
             .and_then(|d| d.fields.as_ref())
             .and_then(|f| f.canon.as_ref());
-        if INVALID_YAML.contains(&file.path.as_str()) {
-            assert!(
-                canon.is_none(),
-                "{}: nothing read from invalid YAML",
-                file.path
-            );
-            continue;
-        }
         assert_eq!(declares, canon.is_some(), "{}: canon: read", file.path);
         let Some(canon) = canon else { continue };
         canons += 1;
@@ -286,10 +317,14 @@ type Check = fn(&[Parsed]);
 #[test]
 fn repository_docs_parse_under_the_adr_scheme() {
     let files = parse_all();
-    let checks: [(&str, Check); 4] = [
+    let checks: [(&str, Check); 5] = [
         (
-            "no front-matter diagnostic but the four",
-            every_listed_file_parses_without_front_matter_diagnostics_but_the_four,
+            "no front-matter diagnostic, no exception",
+            every_listed_file_parses_without_front_matter_diagnostics,
+        ),
+        (
+            "the four Q-2 files parse strictly",
+            the_four_quoted_files_parse_strictly,
         ),
         ("every ADR id is its stem", every_adr_id_is_its_file_stem),
         (

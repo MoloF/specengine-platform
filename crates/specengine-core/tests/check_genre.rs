@@ -9,6 +9,12 @@
 //! Data rule "Class per record kind").
 //! The check source names no prefix, path or file of this repository or a
 //! fixture.
+//!
+//! AC-13 of docs/features/spec-check-graph.md: the blocking sets above are
+//! unchanged (no registry in either fixture: §11.5–6 off); the new warnings
+//! are exactly spec-a's `depends-cycle` and spec-b's `mention-dangling`; the
+//! new sources (renderer, registry, resolution, graph rules) are scanned
+//! with the old, and name no `cargo xtask` either.
 
 mod common;
 
@@ -66,6 +72,52 @@ fn spec_b_blocks_exactly_on_its_homoglyphs_yaml_and_dangling_aliases() {
     assert_eq!(verdict, Verdict::Blocked);
 }
 
+/// `(code, path, line, subject)` of the findings of increment 2's codes.
+fn increment_2(corpus: &str) -> Vec<(String, String, usize, String)> {
+    let (config, input) = fixture_input(&fixture(corpus));
+    let report = config.run(&input);
+    report
+        .findings
+        .iter()
+        .filter(|f| {
+            [
+                "index-missing",
+                "index-drift",
+                "generator-unknown",
+                "generator-path",
+                "mention-dangling",
+                "depends-cycle",
+                "ref-superseded",
+            ]
+            .contains(&f.code.as_str())
+        })
+        .inspect(|f| assert_eq!(f.severity, specengine_model::Severity::Warning))
+        .map(|f| (f.code.clone(), f.path.clone(), f.line, f.subject.clone()))
+        .collect()
+}
+
+#[test]
+fn the_new_warnings_are_one_per_fixture() {
+    assert_eq!(
+        increment_2("spec-a"),
+        [(
+            "depends-cycle".to_owned(),
+            "docs/spec/movement/sprint.md".to_owned(),
+            9,
+            "MEC-SPRINT, MEC-STAMINA".to_owned()
+        )]
+    );
+    assert_eq!(
+        increment_2("spec-b"),
+        [(
+            "mention-dangling".to_owned(),
+            "docs/spec/cli.md".to_owned(),
+            25,
+            "R\u{0415}Q-003".to_owned()
+        )]
+    );
+}
+
 /// Every string literal of a Rust line outside comments (naive: the text
 /// between pairs of `"`; enough for the check sources).
 fn literals(line: &str) -> Vec<&str> {
@@ -90,8 +142,11 @@ fn check_sources() -> Vec<std::path::PathBuf> {
     sources
 }
 
-/// Paths and file names of this repository and of the fixtures.
+/// Paths and file names of this repository and of the fixtures, and this
+/// repository's generator command.
 const PROJECT_NAMES: &[&str] = &[
+    "cargo xtask",
+    "xtask",
     "CLAUDE.md",
     "README.md",
     "index.md",
@@ -118,7 +173,13 @@ fn the_check_source_names_no_prefix_path_or_file_of_a_project() {
     prefixes.insert("ADR".to_owned());
     let mut offenders = Vec::new();
     let sources = check_sources();
-    assert!(sources.len() >= 7, "{sources:?}");
+    assert!(sources.len() >= 11, "{sources:?}");
+    for new in ["render.rs", "generated.rs", "graph.rs", "resolve.rs"] {
+        assert!(
+            sources.iter().any(|path| path.ends_with(new)),
+            "{new} is scanned: {sources:?}"
+        );
+    }
     for path in &sources {
         let text = fs::read_to_string(path).unwrap();
         for (number, line) in text.lines().enumerate() {

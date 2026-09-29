@@ -2565,6 +2565,7 @@ dependencies = [
 name = "specengine-core"
 version = "0.1.0"
 dependencies = [
+ "petgraph",
  "pulldown-cmark 0.13.4",
  "serde",
  "serde-saphyr",

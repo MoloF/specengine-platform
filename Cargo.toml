@@ -56,6 +56,11 @@ serde-saphyr = { version = "=1.3.0", default-features = false, features = ["dese
 # `sqlx` or `refinery` beside it (`libsqlite3-sys` has `links = "sqlite3"`). The
 # pin is the working answer Q1 of the spec, pending the owner.
 rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+# Cycles of `links.depends_on` in `spec check` (strongly connected components;
+# docs/canon/spec-check-graph.md, owner's answer Q-C 2026-09-29). Default
+# features off: `Graph` and `tarjan_scc` need none (no `std`, `graphmap`,
+# `stable_graph`, `matrix_graph`). Already locked at this version through `ra_ap_*`.
+petgraph = { version = "=0.8.3", default-features = false }
 # MCP server over stdio (spike group 4; 04 §6, 07 §1.1). Stdio-only features: no
 # `server-side-http`, no `transport-streamable-http-*`, so no HTTP stack enters the
 # core graph; no `elicitation` feature (it only adds typed helpers and pulls `url`):

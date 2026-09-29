@@ -10,7 +10,7 @@ reviewed: 2026-09-29
 
 Enforces §11 of `docs/canon/documentation-system.md` in this repository until SpecEngine's own `spec check` replaces it (ADR-0013, ADR-0022). No dependencies — std only, builds in seconds.
 
-`spec check` increment 1 (`docs/canon/spec-check.md`) covers §11.1–4 plus the ADR-0009 ID checks, at parity (`crates/specengine-store/tests/check_parity.rs`); §11.5–6 come in increment 2, the switch of hook and CI and this crate's retirement in increment 3. Until then this crate is the gate.
+`spec check` (`docs/canon/spec-check.md`, `docs/canon/spec-check-graph.md`) covers all six §11 checks plus the ADR-0009 ID checks and graph warnings, at parity (`crates/specengine-store/tests/check_parity.rs`, its index render byte for byte against `docs index`). Increment 3 moves this crate onto the core renderer, switches hook and CI, and retires it. Until then this crate is the gate.
 
 ## Commands
 
@@ -40,4 +40,4 @@ Every `*.md` in the repository, except the directories `.git`, `.claude` (role p
 
 - A new check comes only from §11 or an ADR. A noisy check is worse than none: one line per finding and one summary line.
 - Caps are constants in `budget.rs` with their source in a comment; they are never raised (§4).
-- A new generator is registered in `GENERATORS` (`check.rs`): its output is then checked for drift the same way as the index.
+- A new generator is registered in `GENERATORS` (`check.rs`): its output is then checked for drift the same way as the index. For `spec check` parity it also goes into `[[generators]]` of the parity config (`check_parity.rs`).

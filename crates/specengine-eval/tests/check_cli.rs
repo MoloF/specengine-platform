@@ -218,6 +218,12 @@ fn assert_anonymous(output: &Output, envelope: &Value, label: &str, corpus: &Pat
         "MOD-",
         "QN-",
         "\u{0422}\u{0420}\u{0411}",
+        // docs/features/spec-check-graph.md AC-14: the subjects of the new
+        // warnings (spec-a's cycle, spec-b's mixed-script mention).
+        "SPRINT",
+        "STAMINA",
+        "Q-003",
+        "R\u{0415}Q",
     ] {
         assert!(
             !stdout.contains(leak),
@@ -278,10 +284,34 @@ fn spec_a_by_default_gives_one_anonymous_envelope_and_the_report_under_out() {
         "spec-a blocks only on its type error (AC-18): {codes:?}"
     );
 
+    // docs/features/spec-check-graph.md AC-14: the cycle, a warning; no
+    // registry in the fixture, so no §11.5–6 code.
+    assert_eq!(codes.get("depends-cycle"), Some(&(0, 1, 0)), "{codes:?}");
+    for code in [
+        "mention-dangling",
+        "ref-superseded",
+        "index-missing",
+        "index-drift",
+        "generator-unknown",
+        "generator-path",
+    ] {
+        assert!(!codes.contains_key(code), "{code}: {codes:?}");
+    }
+
     // The detail: the report's JSON, with the names stdout must not carry.
     let detail = out.join("check").join("fixtures").join("findings.json");
     let report: Value =
         serde_json::from_str(&fs::read_to_string(&detail).expect("findings.json")).unwrap();
+    assert!(
+        report["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["code"] == "depends-cycle"
+                && f["severity"] == "warning"
+                && f["subject"] == "MEC-SPRINT, MEC-STAMINA"),
+        "the cycle's subject stays in the detail"
+    );
     assert_eq!(report["mode"], "enforce");
     assert_eq!(report["verdict"], "blocked");
     assert_eq!(report["counts"]["documents"], 14);
@@ -332,6 +362,13 @@ fn spec_b_with_a_baseline_moves_its_errors_into_debt() {
     assert_eq!(counts.get("homoglyph"), Some(&(2, 0, 0)), "{counts:?}");
     assert_eq!(counts.get("ref-dangling"), Some(&(2, 0, 0)), "{counts:?}");
     assert!(!counts.contains_key("class-missing"), "{counts:?}");
+    // docs/features/spec-check-graph.md AC-13/14: the mixed-script mention.
+    assert_eq!(
+        counts.get("mention-dangling"),
+        Some(&(0, 1, 0)),
+        "{counts:?}"
+    );
+    assert!(!counts.contains_key("depends-cycle"), "{counts:?}");
     assert_eq!(now["result"]["stale"], 1);
     assert_eq!(now["result"]["verdicts"]["enforce"], "blocked");
     // Past the expiry the debt is an error again.

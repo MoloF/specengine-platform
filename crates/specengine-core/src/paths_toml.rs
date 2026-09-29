@@ -210,7 +210,7 @@ pub fn paths_from_toml(text: &str) -> Result<Paths, PathsError> {
 
 /// A root-relative `/` path: no leading `/`, no `..`, no `.` or empty
 /// component. `directory`: one trailing `/` is dropped.
-fn checked_path(value: &str, directory: bool) -> Result<String, String> {
+pub(crate) fn checked_path(value: &str, directory: bool) -> Result<String, String> {
     let trimmed = if directory {
         value.strip_suffix('/').unwrap_or(value)
     } else {

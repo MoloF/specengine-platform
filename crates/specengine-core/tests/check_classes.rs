@@ -5,7 +5,8 @@
 //! without one, or without front-matter) is `class-missing` at line 1 with
 //! no contract finding and no class cap, its IDs, references and `canon:`
 //! still checked (Q-4, owner's answer); a front-matter failure gives only
-//! its parser finding.
+//! its parser finding among the errors (a graph warning of increment 2 may
+//! join it: the document stays a live source).
 
 mod common;
 
@@ -220,8 +221,31 @@ fn a_front_matter_failure_gives_only_its_parser_finding() {
     ];
     for (code, text) in failures {
         let report = check_one(&config, "docs/decisions/ADR-0003.md", text);
-        assert_eq!(codes(&report), [code], "{}", show(&report));
-        assert_eq!(report.findings[0].severity, Severity::Error);
+        let errors: Vec<&str> = report
+            .findings
+            .iter()
+            .filter(|f| f.severity == Severity::Error)
+            .map(|f| f.code.as_str())
+            .collect();
+        assert_eq!(errors, [code], "{}", show(&report));
+        // The only other finding a failed front-matter can bring is a graph
+        // warning of increment 2 (docs/features/spec-check-graph.md): such a
+        // document stays a live source. With `frontmatter-unclosed` the whole
+        // file is body, so the `id: ADR-0003` line is an inline mention of an
+        // ID nothing defines (the front-matter was not read). Pinned as the
+        // code behaves; flagged for review.
+        let warnings: Vec<(usize, &str, &str)> = report
+            .findings
+            .iter()
+            .filter(|f| f.severity != Severity::Error)
+            .map(|f| (f.line, f.code.as_str(), f.subject.as_str()))
+            .collect();
+        let want: &[(usize, &str, &str)] = if code == "frontmatter-unclosed" {
+            &[(2, "mention-dangling", "ADR-0003")]
+        } else {
+            &[]
+        };
+        assert_eq!(warnings, want, "{code}:\n{}", show(&report));
     }
     let mut not_utf8 = b"---\nclass: decision\n---\n# D ".to_vec();
     not_utf8.extend_from_slice(&[0xff, 0xfe, b'\n']);

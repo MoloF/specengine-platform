@@ -375,8 +375,10 @@ fn the_one_table_covers_every_parser_code() {
         assert_eq!(entries, [want], "{}", code.as_str());
         assert_eq!(check::parser_severity(code), want);
     }
-    // The check's own codes are the spec's (Data, "Finding"): 18 errors and
-    // the warning `name-skipped`; a stale entry is no finding.
+    // The check's own codes are the spec's (Data, "Finding"): increment 1's
+    // 18 errors and the warning `name-skipped`, then increment 2's four
+    // §11.5–6 errors and three graph warnings (docs/features/
+    // spec-check-graph.md AC-12); a stale entry is no finding.
     assert_eq!(
         check::CHECK_CODES,
         [
@@ -399,6 +401,13 @@ fn the_one_table_covers_every_parser_code() {
             "canon-anchor",
             "ref-dangling",
             "name-skipped",
+            "index-missing",
+            "index-drift",
+            "generator-unknown",
+            "generator-path",
+            "mention-dangling",
+            "depends-cycle",
+            "ref-superseded",
         ]
     );
     // No check code shadows a parser code.
@@ -617,4 +626,179 @@ fn skipped_names_are_one_finding_per_path_with_the_count() {
     );
     assert_eq!(report.counts.warnings, 2);
     assert_eq!(report.verdict, Verdict::Clean);
+}
+
+// ------------------------------------------------------------------ increment 2
+// AC-12 of docs/features/spec-check-graph.md: the new warnings in the
+// output, in debt, and independent of input order; the §11.5–6 errors block.
+
+const GRAPH_TOML: &str = "\
+[paths]
+index = \"docs/index.md\"
+
+[ids]
+R   = { kind = \"requirement\", width = 2 }
+ADR = { kind = \"decision\", width = 4 }
+
+[[generators]]
+command = \"make index\"
+writes  = [\"docs/index.md\"]
+index   = true
+";
+
+/// A 2-cycle, a dangling mention, a superseded reference, an unknown
+/// generator and a drifted index.
+const GRAPH: &[(&str, &str)] = &[
+    (
+        "docs/b.md",
+        "---\nid: R-02\nclass: generated\ngenerator: make index\nsource: s\n---\n# B\n",
+    ),
+    (
+        "docs/r1.md",
+        "---\nid: R-01\nclass: canon\nowner: o\nreviewed: 2026-09-01\nlinks:\n  depends_on: [R-03]\n---\n# One\n\nCites R-99 and ADR-0001.\n",
+    ),
+    (
+        "docs/r3.md",
+        "---\nid: R-03\nclass: canon\nowner: o\nreviewed: 2026-09-01\nlinks:\n  depends_on: [R-01]\n---\n# Three\n",
+    ),
+    (
+        "docs/decisions/ADR-0001.md",
+        "---\nid: ADR-0001\nclass: decision\nstatus: superseded-by ADR-0002\nscope: [x]\n---\n# Old\n",
+    ),
+    (
+        "docs/decisions/ADR-0002.md",
+        "---\nid: ADR-0002\nclass: decision\nstatus: rejected\nscope: [x]\n---\n# New\n",
+    ),
+    (
+        "docs/gen.md",
+        "---\nclass: generated\ngenerator: foo\nsource: s\n---\n# G\n",
+    ),
+    (
+        "docs/index.md",
+        "---\nclass: generated\ngenerator: make index\nsource: s\n---\nnot the render\n",
+    ),
+];
+
+#[test]
+fn the_new_warnings_show_only_in_detail_and_are_counted() {
+    let config = Config::from_toml(&format!("{GRAPH_TOML}\n[check]\nmode = \"observe\"\n"));
+    let report = config.run(&config.input(GRAPH));
+    let warnings: Vec<(&str, &str, &str)> = report
+        .findings
+        .iter()
+        .filter(|f| f.severity == Severity::Warning)
+        .map(|f| (f.code.as_str(), f.path.as_str(), f.subject.as_str()))
+        .collect();
+    assert_eq!(
+        warnings,
+        [
+            ("depends-cycle", "docs/r1.md", "R-01, R-03"),
+            ("mention-dangling", "docs/r1.md", "R-99"),
+            ("ref-superseded", "docs/r1.md", "ADR-0001"),
+        ],
+        "{}",
+        show(&report)
+    );
+    let errors: Vec<(&str, &str)> = report
+        .findings
+        .iter()
+        .filter(|f| f.severity == Severity::Error)
+        .map(|f| (f.code.as_str(), f.path.as_str()))
+        .collect();
+    assert_eq!(
+        errors,
+        [
+            ("generator-path", "docs/b.md"),
+            ("generator-unknown", "docs/gen.md"),
+            ("index-drift", "docs/index.md"),
+        ],
+        "{}",
+        show(&report)
+    );
+    assert_eq!(report.counts.warnings, 3);
+    assert_eq!(report.counts.errors, 3);
+    assert_eq!(report.verdict, Verdict::Observed);
+    // `lines(false)`: the summary alone under `observe`; `lines(true)`: the
+    // warnings too.
+    let short = report.lines(false).join("\n");
+    let long = report.lines(true).join("\n");
+    for code in ["ref-superseded", "mention-dangling", "depends-cycle"] {
+        assert!(!short.contains(code), "{short}");
+        assert!(long.contains(code), "{long}");
+    }
+    // Under `enforce` the errors block and are listed; the warnings are not.
+    let enforce = Config::from_toml(GRAPH_TOML);
+    let report = enforce.run(&enforce.input(GRAPH));
+    assert_eq!(report.verdict, Verdict::Blocked);
+    let short = report.lines(false).join("\n");
+    for code in ["generator-path", "generator-unknown", "index-drift"] {
+        assert!(short.contains(code), "{short}");
+    }
+    for code in ["ref-superseded", "mention-dangling", "depends-cycle"] {
+        assert!(!short.contains(code), "{short}");
+    }
+    // The JSON carries every finding with its severity.
+    let json: serde_json::Value = serde_json::from_str(&report.to_json()).unwrap();
+    let text = json.to_string();
+    for code in [
+        "ref-superseded",
+        "mention-dangling",
+        "depends-cycle",
+        "generator-path",
+        "generator-unknown",
+        "index-drift",
+    ] {
+        assert!(text.contains(code), "{code} in the JSON");
+    }
+}
+
+#[test]
+fn a_baseline_entry_makes_a_cycle_or_a_mention_debt() {
+    let config = Config::from_toml(GRAPH_TOML);
+    let input = config.input(GRAPH);
+    let baseline = Baseline::from_toml(
+        "[[debt]]\ncode = \"depends-cycle\"\npath = \"docs/r1.md\"\nsubject = \"R-01, R-03\"\nreason = \"later\"\nexpires = \"2026-12-31\"\n\n[[debt]]\ncode = \"mention-dangling\"\npath = \"docs/r1.md\"\nsubject = \"R-99\"\nreason = \"later\"\nexpires = \"2026-12-31\"\n\n[[debt]]\ncode = \"mention-dangling\"\npath = \"docs/r1.md\"\nsubject = \"R-98\"\nreason = \"no such finding\"\nexpires = \"2026-12-31\"\n",
+    )
+    .unwrap();
+    let report = config.run_with(&input, &baseline, "2026-09-29");
+    let in_debt: Vec<(&str, &str)> = report
+        .findings
+        .iter()
+        .filter(|f| f.is_live_debt())
+        .map(|f| (f.code.as_str(), f.subject.as_str()))
+        .collect();
+    assert_eq!(
+        in_debt,
+        [
+            ("depends-cycle", "R-01, R-03"),
+            ("mention-dangling", "R-99")
+        ],
+        "{}",
+        show(&report)
+    );
+    assert_eq!(
+        (
+            report.counts.warnings,
+            report.counts.debt,
+            report.counts.stale
+        ),
+        (1, 2, 1),
+        "{}",
+        show(&report)
+    );
+}
+
+#[test]
+fn increment_2_output_is_independent_of_input_order() {
+    let config = Config::from_toml(GRAPH_TOML);
+    let forward = config.input(GRAPH);
+    let mut reversed = forward.clone();
+    reversed.files.reverse();
+    let a = config.run(&forward);
+    let b = config.run(&reversed);
+    assert_same(&a, &b, "reversed");
+    let mut rotated = forward.clone();
+    rotated.files.rotate_left(3);
+    assert_same(&a, &config.run(&rotated), "rotated");
+    assert_eq!(a.findings.len(), 6, "{}", show(&a));
 }

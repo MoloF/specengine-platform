@@ -725,6 +725,14 @@ fn model_and_core_sources_do_no_file_io() {
         .map(|entry| entry.expect("entry").path())
         .collect();
     assert!(check_sources.len() >= 5, "{check_sources:?}");
+    // docs/features/spec-check-graph.md AC-01: the renderer and the rules of
+    // increment 2 are among them.
+    for name in ["render.rs", "generated.rs", "graph.rs", "resolve.rs"] {
+        assert!(
+            check_sources.iter().any(|path| path.ends_with(name)),
+            "{name} in the check module: {check_sources:?}"
+        );
+    }
     for source in check_sources {
         assert!(
             scanned.contains(&source),
@@ -734,11 +742,92 @@ fn model_and_core_sources_do_no_file_io() {
     }
 }
 
-/// docs/features/spec-check.md AC-01: the increment adds no
-/// `[workspace.dependencies]` entry against `main` (a new edge of the core
-/// uses an existing pin).
+/// docs/features/spec-check.md AC-01, amended by AC-01 of
+/// docs/features/spec-check-graph.md (owner's answer Q-C): against `main`,
+/// the only `[workspace.dependencies]` key that may be added is `petgraph`,
+/// pinned `=0.8.3` with default features off; it is a normal dependency of
+/// `specengine-core` alone among the workspace members, and no feature of it
+/// is enabled in the default members' graph.
 #[test]
 fn no_workspace_dependency_is_added_against_main() {
+    let now_text =
+        std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest");
+    let now_manifest: toml::Table = toml::from_str(&now_text).expect("a TOML manifest");
+    let now_dependencies = now_manifest["workspace"]["dependencies"]
+        .as_table()
+        .expect("[workspace.dependencies]");
+
+    // The pin itself, whatever `main` holds.
+    let petgraph = now_dependencies
+        .get("petgraph")
+        .and_then(toml::Value::as_table)
+        .expect("petgraph = { version = .., default-features = false }");
+    assert_eq!(
+        petgraph.get("version").and_then(toml::Value::as_str),
+        Some("=0.8.3"),
+        "petgraph is `=`-pinned at 0.8.3"
+    );
+    assert_eq!(
+        petgraph
+            .get("default-features")
+            .and_then(toml::Value::as_bool),
+        Some(false),
+        "petgraph's default features are off"
+    );
+    assert!(
+        petgraph
+            .get("features")
+            .and_then(toml::Value::as_array)
+            .is_none_or(Vec::is_empty),
+        "petgraph enables no feature: {petgraph:?}"
+    );
+    let unexpected: Vec<&String> = petgraph
+        .keys()
+        .filter(|key| !["version", "default-features"].contains(&key.as_str()))
+        .collect();
+    assert!(unexpected.is_empty(), "petgraph: {unexpected:?}");
+
+    // Only `specengine-core` depends on it directly, as a normal dependency.
+    let output = cargo()
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .output()
+        .expect("cargo metadata runs");
+    assert!(output.status.success(), "cargo metadata failed");
+    let metadata: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    let mut direct: Vec<(String, String)> = Vec::new();
+    for package in metadata["packages"].as_array().expect("packages") {
+        for dependency in package["dependencies"].as_array().expect("dependencies") {
+            if dependency["name"] == "petgraph" {
+                direct.push((
+                    package["name"].as_str().unwrap().to_owned(),
+                    dependency["kind"].as_str().unwrap_or("normal").to_owned(),
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        direct,
+        [("specengine-core".to_owned(), "normal".to_owned())],
+        "direct dependents of petgraph"
+    );
+
+    // No feature of petgraph is on in the default members' graph.
+    let features = cargo_tree(&["-e", "features", "-i", "petgraph"]);
+    let on: Vec<&str> = features
+        .lines()
+        .filter(|line| line.contains("petgraph feature"))
+        .collect();
+    assert!(
+        on.is_empty(),
+        "petgraph features enabled: {on:?}\n{features}"
+    );
+    assert!(
+        tree_crates(features.lines().next().unwrap_or_default())
+            .contains(&("petgraph".to_owned(), "0.8.3".to_owned())),
+        "petgraph resolves at 0.8.3:\n{features}"
+    );
+
+    // Against `main`: nothing else is added.
     let output = Command::new("git")
         .current_dir(workspace_root())
         .args(["show", "main:Cargo.toml"])
@@ -764,12 +853,11 @@ fn no_workspace_dependency_is_added_against_main() {
         keys
     };
     let on_main = keys(&String::from_utf8_lossy(&output.stdout));
-    let now =
-        keys(&std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest"));
+    let now = keys(&now_text);
     let added: Vec<&String> = now.iter().filter(|key| !on_main.contains(key)).collect();
     assert!(
-        added.is_empty(),
-        "[workspace.dependencies] entries added against main: {added:?}"
+        added.iter().all(|key| *key == "petgraph"),
+        "[workspace.dependencies] entries added against main beyond petgraph: {added:?}"
     );
     assert!(
         now.iter().any(|key| key == "serde_json"),

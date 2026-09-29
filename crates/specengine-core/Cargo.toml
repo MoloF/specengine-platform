@@ -18,6 +18,9 @@ toml.workspace = true
 # `spec check`'s JSON report (docs/canon/spec-check.md, "Findings, debt,
 # verdict"); already in the workspace graph at this pin (store, eval, mcp).
 serde_json.workspace = true
+# `depends-cycle`: strongly connected components (`tarjan_scc`) of the
+# `depends_on` graph; owner-approved (Q-C, docs/canon/spec-check-graph.md).
+petgraph.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

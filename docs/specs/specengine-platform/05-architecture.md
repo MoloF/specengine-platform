@@ -78,7 +78,7 @@ A kind is project vocabulary, named per prefix in `[ids]` (a free string, core R
 
 ### 3.2. Link types
 
-Link types with meanings, and the one grammar for text, markers and search: `crates/specengine-model/README.md`; declaring keys: `crates/specengine-core/README.md`. Declared links are strong, inline `mentions` weak; the index graph drives impact analysis and cycle detection; `parent` is containment (§8).
+Link types with meanings, and the one grammar for text, markers and search: `crates/specengine-model/README.md`; declaring keys: `crates/specengine-core/README.md`. Declared links are strong, inline `mentions` weak; the index graph drives impact analysis; `parent` is containment (§8).
 
 **Front-matter input caps**, beside `MAX_USE_RUN_NESTING = 64` (§5.2) and the RON `MAX_DEPTH = 512` (§5.3): nesting 32 (the root mapping is depth 1) and alias expansion 10 000 replayed events; past either, one `frontmatter-yaml`, never a crash.
 
@@ -160,7 +160,7 @@ A separate project `shared`: Bevy 0.19 conventions, test rules (probes, named mu
 
 ## 4. Checks (`spec check`)
 
-Increment 1 shipped: `docs/canon/spec-check.md` (structure, budgets, references, `canon:`, expiring debt baseline, `observe` / `enforce`, one-line summary). Pending groups, increments 2–4 (08 Phase 1): graph, the CLI gate, process; queue state → Phase 2; code → Phase 3.
+Canon: `docs/canon/spec-check.md`, `docs/canon/spec-check-graph.md`; pending: 08 Phase 1; queue state → Phase 2; code → Phase 3.
 
 ## 5. Code: symbol index, bindings, drift
 

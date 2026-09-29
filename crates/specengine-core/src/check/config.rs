@@ -1,9 +1,11 @@
-//! `CheckConfig::from_toml`: the `[budgets]`, `[classes]` and `[check]`
-//! tables of `specengine.toml`, and only those (docs/canon/spec-check.md,
-//! "Configuration"). Pure and strict: an unknown key or class, a wrong type, a cap
-//! below 1 or an unknown mode is an error `file:line: message` through
-//! [`ConfigError::at`]; other tables are ignored, so editing these tables
-//! leaves the `[ids]` fingerprint (and every stored parse) alone.
+//! `CheckConfig::from_toml`: the `[budgets]`, `[classes]`, `[check]` and
+//! `[[generators]]` tables of `specengine.toml`, and only those
+//! (docs/canon/spec-check.md, "Configuration"). Pure and strict: an unknown
+//! key or class, a wrong type, a cap below 1, an unknown mode or an invalid
+//! generator entry is an error `file:line: message` through
+//! [`ConfigError::at`]; other tables are ignored (`[paths] index` is read
+//! only to cross-check the index generator), so editing these tables leaves
+//! the `[ids]` fingerprint (and every stored parse) alone.
 
 use std::fmt;
 use std::ops::Range;
@@ -186,18 +188,57 @@ impl fmt::Display for Mode {
     }
 }
 
-/// `[budgets]`, `[classes]` and `[check]`, defaults applied.
+/// `[budgets]`, `[classes]`, `[check]` and `[[generators]]`, defaults
+/// applied.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheckConfig {
     pub budgets: Budgets,
     pub classes: Classes,
     pub mode: Mode,
+    /// The generator registry, in the order written; `None` without a
+    /// `[[generators]]` table: the generator rules are off.
+    pub generators: Option<Vec<Generator>>,
 }
 
 impl CheckConfig {
-    /// Reads the three tables; absent tables give the defaults.
+    /// Reads the four tables; absent tables give the defaults.
     pub fn from_toml(text: &str) -> Result<Self, ConfigError> {
         check_config_from_toml(text)
+    }
+
+    /// The entry with `index = true`: SpecEngine renders its output itself
+    /// and compares it with the walked `[paths] index`.
+    pub fn index_generator(&self) -> Option<&Generator> {
+        self.generators
+            .as_deref()
+            .and_then(|generators| generators.iter().find(|generator| generator.index))
+    }
+}
+
+/// The default gate named in the index header: the check itself.
+pub const DEFAULT_GATE: &str = "spec check";
+
+/// One `[[generators]]` entry: a command that writes generated documents.
+/// Registered only: the check never runs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Generator {
+    /// Compared byte for byte with a generated document's `generator:`.
+    pub command: String,
+    /// The root-relative files the command writes (the `[paths]` path
+    /// rules), in the order written, repeats dropped.
+    pub writes: Vec<String>,
+    /// SpecEngine renders this output itself (the index).
+    pub index: bool,
+    /// The gate the index header names; only with `index = true`.
+    pub gate: Option<String>,
+    /// The 1-based line of the entry.
+    pub line: usize,
+}
+
+impl Generator {
+    /// The gate the index header names: `gate`, else [`DEFAULT_GATE`].
+    pub fn gate(&self) -> &str {
+        self.gate.as_deref().unwrap_or(DEFAULT_GATE)
     }
 }
 
@@ -320,10 +361,262 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
             }
         };
     }
+
+    if let Some(generators) = raw.generators {
+        config.generators = Some(generators_from(text, generators)?);
+    }
     Ok(config)
 }
 
-/// The file: only the three tables are read; every other table is ignored.
+/// The `[[generators]]` entries, checked: `command` present, not blank, a
+/// plain YAML scalar ([`not_plain_scalar`]), not repeated; `writes` present,
+/// not empty, root-relative paths no other entry writes; one `index = true`
+/// at most, and only for an entry that writes the `[paths] index` file;
+/// `gate` only beside `index = true`, not blank, a plain YAML scalar.
+fn generators_from(
+    text: &str,
+    raw: Vec<Spanned<RawGenerator>>,
+) -> Result<Vec<Generator>, ConfigError> {
+    let error_at = |span: Range<usize>, message: String| ConfigError {
+        line: Some(super::text::line_of_str(text, span.start)),
+        message,
+    };
+    // `[paths] index` as `Paths` reads it; a `[paths]` error is reported by
+    // `Paths::from_toml`, and the cross-check waits for it.
+    let index_path = crate::paths_from_toml(text).ok().map(|paths| paths.index);
+    let mut generators: Vec<Generator> = Vec::with_capacity(raw.len());
+    for entry in raw {
+        let span = entry.span();
+        let line = super::text::line_of_str(text, span.start);
+        let entry = entry.into_inner();
+        let Some(command) = entry.command else {
+            return Err(error_at(
+                span,
+                "generator entry without `command`".to_owned(),
+            ));
+        };
+        if command.get_ref().trim().is_empty() {
+            return Err(error_at(
+                command.span(),
+                "generator `command` is blank".to_owned(),
+            ));
+        }
+        if let Some(problem) = not_plain_scalar(command.get_ref()) {
+            return Err(error_at(
+                command.span(),
+                format!(
+                    "generator `command` {:?} {problem}: the index header carries it as written (`generator:` and the build comment)",
+                    command.get_ref()
+                ),
+            ));
+        }
+        if let Some(first) = generators
+            .iter()
+            .find(|known| known.command == *command.get_ref())
+        {
+            return Err(error_at(
+                command.span(),
+                format!(
+                    "generator `command` `{}` is repeated (first on line {})",
+                    command.get_ref(),
+                    first.line
+                ),
+            ));
+        }
+        let Some(writes) = entry.writes else {
+            return Err(error_at(
+                span,
+                "generator entry without `writes`".to_owned(),
+            ));
+        };
+        let writes_span = writes.span();
+        let mut paths: Vec<String> = Vec::new();
+        for path in writes.into_inner() {
+            let checked = crate::paths_toml::checked_path(path.get_ref(), false)
+                .map_err(|problem| error_at(path.span(), format!("`writes`: {problem}")))?;
+            if let Some(other) = generators
+                .iter()
+                .find(|known| known.writes.contains(&checked))
+            {
+                return Err(error_at(
+                    path.span(),
+                    format!(
+                        "`writes`: {checked} is also written by `{}` (line {})",
+                        other.command, other.line
+                    ),
+                ));
+            }
+            if !paths.contains(&checked) {
+                paths.push(checked);
+            }
+        }
+        if paths.is_empty() {
+            return Err(error_at(
+                writes_span,
+                "generator `writes` is empty".to_owned(),
+            ));
+        }
+        let index = match entry.index {
+            Some(index) if *index.get_ref() => {
+                if let Some(first) = generators.iter().find(|known| known.index) {
+                    return Err(error_at(
+                        index.span(),
+                        format!(
+                            "`index = true` twice: `{}` (line {}) already renders the index",
+                            first.command, first.line
+                        ),
+                    ));
+                }
+                match &index_path {
+                    Some(None) => {
+                        return Err(error_at(
+                            index.span(),
+                            "`index = true` without a `[paths] index`".to_owned(),
+                        ));
+                    }
+                    Some(Some(path)) if !paths.contains(path) => {
+                        return Err(error_at(
+                            index.span(),
+                            format!(
+                                "`index = true`, but `writes` lacks the `[paths] index` {path}"
+                            ),
+                        ));
+                    }
+                    _ => {}
+                }
+                true
+            }
+            _ => false,
+        };
+        let gate = match entry.gate {
+            Some(gate) if !index => {
+                return Err(error_at(
+                    gate.span(),
+                    "`gate` is only for the entry with `index = true`".to_owned(),
+                ));
+            }
+            Some(gate) if gate.get_ref().trim().is_empty() => {
+                return Err(error_at(
+                    gate.span(),
+                    "generator `gate` is blank".to_owned(),
+                ));
+            }
+            Some(gate) => {
+                if let Some(problem) = not_plain_scalar(gate.get_ref()) {
+                    return Err(error_at(
+                        gate.span(),
+                        format!(
+                            "generator `gate` {:?} {problem}: the index header names it as written",
+                            gate.get_ref()
+                        ),
+                    ));
+                }
+                Some(gate.into_inner())
+            }
+            None => None,
+        };
+        generators.push(Generator {
+            command: command.into_inner(),
+            writes: paths,
+            index,
+            gate,
+            line,
+        });
+    }
+    Ok(generators)
+}
+
+/// Characters that cannot start a plain YAML scalar.
+const YAML_INDICATORS: [char; 19] = [
+    '-', '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '\'', '"', '%', '@', '`', '#', '?', ':',
+];
+
+/// Why `value` would not read back as itself, a string, from a plain YAML
+/// scalar (`generator: <value>` in the rendered header), or would break the
+/// header's HTML comment, if so: a newline or control character, leading or
+/// trailing whitespace, a YAML indicator first, `: ` or ` #` inside, `:`
+/// last; then the round trip through the front-matter reader
+/// ([`read_back`]): a value it reads as null, a boolean or a number (or as
+/// another string), or not as a scalar; then `-->` inside.
+fn not_plain_scalar(value: &str) -> Option<String> {
+    if value.chars().any(char::is_control) {
+        return Some("contains a newline or a control character".to_owned());
+    }
+    if value.trim() != value {
+        return Some("has leading or trailing whitespace".to_owned());
+    }
+    if let Some(first) = value.chars().next()
+        && YAML_INDICATORS.contains(&first)
+    {
+        return Some(format!("starts with the YAML indicator `{first}`"));
+    }
+    if value.contains(": ") || value.contains(" #") {
+        return Some("contains `: ` or ` #`".to_owned());
+    }
+    if value.ends_with(':') {
+        return Some("ends with `:`".to_owned());
+    }
+    match read_back(value) {
+        ReadBack::Same => {}
+        ReadBack::NotAString => {
+            return Some(
+                "is read by YAML as a null, a boolean or a number, not a string".to_owned(),
+            );
+        }
+        ReadBack::Broken => {
+            return Some("is not read back by YAML as a plain scalar".to_owned());
+        }
+    }
+    if value.contains("-->") {
+        return Some("contains `-->`, which would close the index header's comment".to_owned());
+    }
+    None
+}
+
+/// The text the front-matter reader gives a non-finite float (any YAML
+/// spelling of an infinity or a NaN): a string equal to it cannot be told
+/// from that number by reading it back.
+const NON_FINITE_TEXTS: [&str; 3] = [".inf", "-.inf", ".nan"];
+
+/// How `value` reads back through the front-matter reader (`crate::yaml`,
+/// the options every parse uses) as the plain scalar of `generator:`.
+enum ReadBack {
+    /// The same string.
+    Same,
+    /// Null, a boolean or a number — or a string that is not the value (a
+    /// non-finite float normalised to `.inf`, `-.inf`, `.nan`), or one of
+    /// those three texts themselves.
+    NotAString,
+    /// No scalar at all (a YAML error, a collection).
+    Broken,
+}
+
+/// Round trip of `generator: <value>` through the one YAML reader. Pure: the
+/// text is built here, nothing is read.
+fn read_back(value: &str) -> ReadBack {
+    use crate::yaml::{self, YValue};
+    let Ok(root) = yaml::parse(&format!("generator: {value}\n")) else {
+        return ReadBack::Broken;
+    };
+    let YValue::Map(entries) = root.value else {
+        return ReadBack::Broken;
+    };
+    let [(_, read)] = entries.as_slice() else {
+        return ReadBack::Broken;
+    };
+    match &read.value {
+        YValue::Str(text) if text == value && !NON_FINITE_TEXTS.contains(&value) => ReadBack::Same,
+        YValue::Str(_)
+        | YValue::Null
+        | YValue::Bool(_)
+        | YValue::Int(_)
+        | YValue::UInt(_)
+        | YValue::Float(_) => ReadBack::NotAString,
+        YValue::Seq(_) | YValue::Map(_) => ReadBack::Broken,
+    }
+}
+
+/// The file: only the check tables are read; every other table is ignored.
 #[derive(Deserialize)]
 struct RawFile {
     #[serde(default)]
@@ -332,6 +625,22 @@ struct RawFile {
     classes: Option<RawClasses>,
     #[serde(default)]
     check: Option<RawCheck>,
+    #[serde(default)]
+    generators: Option<Vec<Spanned<RawGenerator>>>,
+}
+
+/// One `[[generators]]` entry as written.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawGenerator {
+    #[serde(default)]
+    command: Option<Spanned<String>>,
+    #[serde(default)]
+    writes: Option<Spanned<Vec<Spanned<String>>>>,
+    #[serde(default)]
+    index: Option<Spanned<bool>>,
+    #[serde(default)]
+    gate: Option<Spanned<String>>,
 }
 
 #[derive(Deserialize)]

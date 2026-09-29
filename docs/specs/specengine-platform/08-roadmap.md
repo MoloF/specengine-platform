@@ -29,7 +29,7 @@ specengine-platform/
   docs/                            # this research, later the SpecEngine canon (SpecEngine is managed by SpecEngine)
 ```
 
-Built in Phase 0: `specengine-{code,eval,import,mcp,ra}` (each with its Tier 1 `README.md`) and `fixtures/`; the rest is planned.
+Built crates and `fixtures/`: `CLAUDE.md` "Layout"; the rest is planned.
 
 ## 2. Phases
 
@@ -38,15 +38,15 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 ### Phase 0. Decisions and spikes — done 2026-09-29
 
 - Decisions ADR-0001…ADR-0025 (`docs/decisions/`), each with its canon diff.
-- Spikes (`docs/features/phase-0-spikes.md`, shipped): six measurement groups on two pilot corpora, delivered as production increments of `specengine-code`, `-mcp`, `-import`, `-ra` and the permanent harness `specengine-eval` (each with a Tier 1 `README.md`). **12 verdicts: 9 confirmed, 3 refuted.** The hash walk is confirmed after amendment: recipe v1 was refuted under rustfmt, v2 adds four normalisations (05 §5.2). Refuted: `qpath` uniqueness (→ a target discriminator, Phase 1), `tree-sitter-ron` 0.2.0 (→ own RON lexer, 05 §9, 04 §6), the MCP output-cap claim (→ a character-based cap, 04 §4, 07 §1.1). No new ADR: ADR-0020 and ADR-0021 stand.
+- Spikes (`docs/features/phase-0-spikes.md`, shipped): six measurement groups on two pilot corpora, delivered as production increments of `specengine-code`, `-mcp`, `-import`, `-ra` and the permanent harness `specengine-eval`. **12 verdicts: 9 confirmed, 3 refuted.** The hash walk is confirmed after amendment: recipe v1 was refuted under rustfmt, v2 adds four normalisations (05 §5.2). Refuted: `qpath` uniqueness (→ a target discriminator, Phase 1), `tree-sitter-ron` 0.2.0 (→ own RON lexer, 05 §9, 04 §6), the MCP output-cap claim (→ a character-based cap, 04 §4, 07 §1.1). No new ADR: ADR-0020 and ADR-0021 stand.
 - Not part of the spikes, carried to the start of Phase 1: the pre-code reading (tracey sources and a tracey run on one pilot crate — input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift and amiss, `/speckit.converge`).
 - **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W on 2026-09-29 ≈ 118 KB against ≤ 40 KB, driven by 05, 04 and 08 (`cargo xtask docs budget`).
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Parser — shipped 2026-09-29: `crates/specengine-{model,core}/README.md`; owner questions Q1–Q6 open there.
+- Parser — shipped 2026-09-29: `crates/specengine-{model,core}/README.md`; owner questions Q1–Q5 open there.
 - SQLite index + FTS5, incremental by BLAKE3 — shipped 2026-09-29: `crates/specengine-store/README.md`; owner questions Q1–Q7 open there.
-- `spec check` increment 1 — shipped 2026-09-29: `docs/canon/spec-check.md` (what is not checked yet, owner questions Q-1–Q-8). Next: 2 `spec-check-graph` (§11.5–6, the graph rules); 3 with the CLI — `check`, `--staged`, `enforce-introduced`, the root `specengine.toml` (an ADR amending ADR-0023's role table, Q-7), hook and CI switched, `xtask` retired; 4 `spec-check-process` (process rules from config).
+- `spec check` increments 1 and 2 part 1 — shipped 2026-09-29: `docs/canon/spec-check.md`, `docs/canon/spec-check-graph.md`. Next: 2 part 2 `spec-check-links` (owner Q-D); 3 with the CLI, `xtask` retired; 4 `spec-check-process`.
 - CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.
 - MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.

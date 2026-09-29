@@ -73,4 +73,4 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 - The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment; `specengine-code` `markers.rs` `is_latin_id` rejects `/`, `#` → the marker-parser increment: both then use this crate.
 - `see:R-12` in prose reads as project `see` → the `project:` increment.
-- A name-shape body is greedy (`MEC-STAMINA-based` is one ID) → `spec-check-graph`, which resolves inline mentions.
+- A name-shape body is greedy (`MEC-STAMINA-based` is one ID); `spec check` resolves inline mentions with a fallback, `check::Resolver` (`docs/canon/spec-check-graph.md`).

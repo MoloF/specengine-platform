@@ -8,11 +8,11 @@ reviewed: 2026-09-29
 
 # specengine-core — the spec parser and the check
 
-The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and `check` (parses → `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (over the default members; `specengine-ra` gets 0.9.6 through `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`. Callers: `specengine-store`, `specengine-eval parse`, `check`.
+The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and `check` (parses → `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (`specengine-ra` gets 0.9.6 via `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`, `petgraph =0.8.3` (default features off) for `depends-cycle`. Callers: `specengine-store`, `specengine-eval parse`, `check`.
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order; its types, tables, rules and output: `docs/canon/spec-check.md`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order; its types, tables, rules and output: `docs/canon/spec-check.md`; `render_index`, `CheckConfig.generators` (`[[generators]]`), public `check::resolve` (`Resolver`, reused by `spec refs`, `get_impact`): `docs/canon/spec-check-graph.md`.
 
 ## `[paths]`
 
@@ -59,14 +59,14 @@ Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both
 
 ## Open owner questions
 
-Working answers are what the code does now; the owner's answer triggers the step named.
+Working answer: what the code does now; the owner's answer triggers the step named.
 
 - Q1 (parser libraries): the pins above, default features off, gaps reported, never swapped silently; `serde-saphyr`'s unpinned transitive crates (04 §6) and `serde_json` as a normal dependency await acknowledgement.
 - Q2 (kind vocabulary): a free string, not validated. Settled → an ADR amending `docs/canon/architecture.md#universal`.
 - Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0002 / ADR-0018 with a `#layout` diff.
 - Q4 (reference token counts): filled → AC-15 un-ignored.
-- Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/`, `fixtures/token-calibration/`: what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → the exemption list empties and the text becomes escapes generated at test time.
-- Q6 (editing accepted ADRs): no, so ADR-0015, -0018, -0020 and `docs/features/phase-0-spikes.md` keep one invalid YAML scalar each (`frontmatter-yaml`, allowlisted in `dogfood.rs`, baselined for the check: its Q-2). Edits allowed → quote the four scalars, empty the allowlist and the baseline.
+- Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/`, `fixtures/token-calibration/`: what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → no exemptions, the text becomes escapes built at test time.
+- Q6 answered (owner, 2026-09-29): invalid YAML scalars quoted; every document here parses strictly (`dogfood.rs`, no allowlist).
 
 ## Tests
 

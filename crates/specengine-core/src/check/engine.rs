@@ -1,6 +1,8 @@
 //! The rules of increment 1 (docs/canon/spec-check.md, "Rules"): parser
 //! diagnostics through one table, class contracts, budgets,
-//! ID definitions, `canon:` and front-matter references. Everything the
+//! ID definitions, `canon:` and front-matter references; then the rules of
+//! increment 2 over the whole corpus: the generated index and the generator
+//! registry (`generated`), the graph warnings (`graph`). Everything the
 //! rules know about a project comes from its `[ids]`, `[paths]` and check
 //! tables (`#universal`): no prefix, path or file name is written here.
 
@@ -8,15 +10,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_model::grammar;
 use specengine_model::{
-    CanonTarget, Diagnostic, DiagnosticCode, IdScheme, IdScope, Node, ParsedFile, Reference,
-    Severity, Shape,
+    CanonTarget, Diagnostic, DiagnosticCode, IdScheme, IdScope, Node, ParsedFile, Severity, Shape,
 };
 
 use super::baseline::{Baseline, DebtEntry};
 use super::config::{CheckConfig, DocClass};
 use super::input::{CheckFile, CheckInput, ProblemKind};
 use super::report::{Cause, Debt, Finding, Fix, Report};
+use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
 use super::text::{FileText, front_matter_failed, is_calendar_date, is_date_shaped};
+use super::{generated, graph};
 use crate::Paths;
 
 /// The one table: how a parser diagnostic reaches the report. Every code
@@ -143,6 +146,8 @@ pub fn run(
         .run();
     }
     corpus.id_taken(&mut findings);
+    generated::run(input, &corpus, paths, config, &mut findings, &mut causes);
+    graph::run(&corpus, scheme, &mut findings);
 
     let stale = apply_baseline(&mut findings, baseline, today, today_valid);
     Report::assemble(config.mode, input.files.len(), findings, stale, causes)
@@ -192,18 +197,15 @@ fn apply_baseline(
 
 /// What the rules need to know across files; every per-file vector is in
 /// path order.
-struct Corpus<'a> {
-    paths: Vec<&'a str>,
-    parses: Vec<Option<&'a ParsedFile>>,
-    texts: Vec<FileText<'a>>,
+pub(crate) struct Corpus<'a> {
+    pub(crate) files: Vec<&'a CheckFile>,
+    pub(crate) paths: Vec<&'a str>,
+    pub(crate) parses: Vec<Option<&'a ParsedFile>>,
+    pub(crate) texts: Vec<FileText<'a>>,
     /// Path → file index.
-    by_path: BTreeMap<&'a str, usize>,
-    /// Latin ID → the files defining it (document or section), path order.
-    defined: BTreeMap<String, Vec<usize>>,
-    /// Legacy ID as written in `aliases:` → the files declaring it.
-    aliases: BTreeMap<String, Vec<usize>>,
-    /// Per file: its section IDs.
-    sections: Vec<BTreeSet<String>>,
+    pub(crate) by_path: BTreeMap<&'a str, usize>,
+    /// Defined IDs, aliases, sections: the one resolution.
+    pub(crate) resolver: Resolver<'a>,
     /// Per file: its definitions (ID, line), document first.
     definitions: Vec<Vec<(String, usize)>>,
     /// Per file: the front-matter was read.
@@ -216,6 +218,7 @@ struct Corpus<'a> {
 impl<'a> Corpus<'a> {
     fn new(files: &[&'a CheckFile], scheme: &'a IdScheme) -> Self {
         let mut corpus = Corpus {
+            files: files.to_vec(),
             paths: files.iter().map(|file| file.path.as_str()).collect(),
             parses: files.iter().map(|file| file.parsed.as_ref()).collect(),
             feature_prefixes: scheme
@@ -226,45 +229,29 @@ impl<'a> Corpus<'a> {
                 .collect(),
             texts: Vec::with_capacity(files.len()),
             by_path: BTreeMap::new(),
-            defined: BTreeMap::new(),
-            aliases: BTreeMap::new(),
-            sections: Vec::with_capacity(files.len()),
+            resolver: Resolver::of_sorted(files, scheme),
             definitions: Vec::with_capacity(files.len()),
             readable: Vec::with_capacity(files.len()),
         };
         for (index, file) in files.iter().enumerate() {
             let text = FileText::new(&file.bytes);
             corpus.by_path.entry(file.path.as_str()).or_insert(index);
-            let mut sections = BTreeSet::new();
             let mut definitions = Vec::new();
             let mut readable = false;
             if let Some(parsed) = &file.parsed {
                 readable = !front_matter_failed(parsed);
-                if let Some(document) = parsed.document() {
-                    if let Some(id) = &document.id {
-                        let line = text.key_line("id").unwrap_or(1);
-                        definitions.push((id.clone(), line));
-                    }
-                    if let Some(aliases) = document.fields.as_ref().and_then(|f| f.aliases.as_ref())
-                    {
-                        for alias in aliases {
-                            push_unique(corpus.aliases.entry(alias.clone()).or_default(), index);
-                        }
-                    }
+                if let Some(id) = parsed.document().and_then(|document| document.id.as_ref()) {
+                    let line = text.key_line("id").unwrap_or(1);
+                    definitions.push((id.clone(), line));
                 }
                 for section in parsed.sections() {
                     if let Some(id) = &section.id {
-                        sections.insert(id.clone());
                         let line = section.heading.map_or(1, |span| text.line(span.start));
                         definitions.push((id.clone(), line));
                     }
                 }
             }
-            for (id, _) in &definitions {
-                push_unique(corpus.defined.entry(id.clone()).or_default(), index);
-            }
             corpus.texts.push(text);
-            corpus.sections.push(sections);
             corpus.definitions.push(definitions);
             corpus.readable.push(readable);
         }
@@ -274,7 +261,7 @@ impl<'a> Corpus<'a> {
     /// `id-taken`: an ID of a project-scoped prefix defined in two files,
     /// reported on each later file (by path), naming the first.
     fn id_taken(&self, findings: &mut Vec<Finding>) {
-        for (id, holders) in &self.defined {
+        for (id, holders) in &self.resolver.defined {
             let Some((&first, later)) = holders.split_first() else {
                 continue;
             };
@@ -307,20 +294,6 @@ impl<'a> Corpus<'a> {
         id.split_once('-')
             .is_some_and(|(prefix, _)| self.feature_prefixes.contains(prefix))
     }
-}
-
-fn push_unique(holders: &mut Vec<usize>, index: usize) {
-    if holders.last() != Some(&index) {
-        holders.push(index);
-    }
-}
-
-/// How a front-matter reference fared.
-enum Resolution {
-    Resolved,
-    /// `project:` or `slug/`: resolved in a later increment.
-    Skipped,
-    Dangling(String),
 }
 
 /// The class a document declares.
@@ -819,7 +792,7 @@ impl FileCheck<'_, '_> {
             return;
         }
         let found = parsed.anchors.iter().any(|known| known.name == *anchor)
-            || self.corpus.sections[index].contains(anchor);
+            || self.corpus.resolver.sections[index].contains(anchor);
         if !found {
             self.push(
                 "canon-anchor",
@@ -838,74 +811,15 @@ impl FileCheck<'_, '_> {
     /// `aliases:` entry, or through `aliases_from`; `#Y` names a section of
     /// the ID's file.
     fn references(&mut self, document: &Node) {
-        let mut references: Vec<(&str, Reference)> = Vec::new();
-        let fields = document.fields.clone().unwrap_or_default();
-        for (key, list) in [
-            ("supersedes", &fields.supersedes),
-            ("adrs", &fields.adrs),
-            ("refs", &fields.refs),
-        ] {
-            for reference in list.iter().flatten() {
-                references.push((key, reference.clone()));
-            }
-        }
-        if let Some(status) = &fields.status
-            && let Some((_, target)) = grammar::split_superseded_by(status)
-            && let Some(found) = grammar::parse_reference(target, 0, self.scheme)
-        {
-            let mut reference = found.reference;
-            reference.span = None;
-            references.push(("status", reference));
-        }
-        if let Some(reference) = &fields.working_answer {
-            references.push(("working_answer", reference.clone()));
-        }
-        if let Some(parent) = &document.parent {
-            // `ParentRef` keeps no `alias_of`: the ID is read again.
-            let reference = grammar::parse_reference(&parent.id, 0, self.scheme).map_or_else(
-                || Reference {
-                    id: parent.id.clone(),
-                    alias_of: None,
-                    script: specengine_model::IdScript::of(&parent.id),
-                    project: None,
-                    scope: None,
-                    section: None,
-                    rev: None,
-                    form: Default::default(),
-                    label: None,
-                    span: None,
-                },
-                |found| found.reference,
-            );
-            references.push((
-                "parent",
-                Reference {
-                    span: parent.span,
-                    ..reference
-                },
-            ));
-        }
-        if let Some(links) = &fields.links {
-            for (_, list) in links.iter() {
-                for reference in list {
-                    references.push(("links", reference.clone()));
-                }
-            }
-        }
-        if let Some(CanonTarget::Reference(reference)) = &fields.canon {
-            references.push(("canon", reference.clone()));
-        }
-
-        for (key, reference) in references {
-            let written = self.written(&reference);
-            let reason = match self.resolve(&reference, &written) {
-                Resolution::Resolved | Resolution::Skipped => continue,
+        for declared in declared_references(document, self.scheme) {
+            let reference = &declared.reference;
+            let written = written(self.text, reference);
+            let reason = match self.corpus.resolver.resolve(reference, &written) {
+                Resolution::Resolved(_) | Resolution::Skipped => continue,
                 Resolution::Dangling(reason) => reason,
             };
-            let line = reference
-                .span
-                .filter(|_| !self.text.is_empty())
-                .map_or_else(|| self.key_line(key), |span| self.text.line(span.start));
+            let key = declared.key;
+            let line = reference_line(self.text, reference, key);
             self.push(
                 "ref-dangling",
                 line,
@@ -913,57 +827,6 @@ impl FileCheck<'_, '_> {
                 format!("`{key}`: `{written}` {reason}"),
             );
         }
-    }
-
-    /// The reference as written: the text under its span, else rebuilt.
-    fn written(&self, reference: &Reference) -> String {
-        if let Some(span) = reference.span
-            && !self.text.is_empty()
-        {
-            let text = self.text.text(span);
-            if !text.is_empty() {
-                return text;
-            }
-        }
-        match &reference.section {
-            Some(section) => format!("{}#{section}", reference.id),
-            None => reference.id.clone(),
-        }
-    }
-
-    fn resolve(&self, reference: &Reference, written: &str) -> Resolution {
-        if reference.project.is_some() || reference.scope.is_some() {
-            return Resolution::Skipped;
-        }
-        let corpus = self.corpus;
-        let mut holders: Option<&Vec<usize>> = None;
-        if reference.alias_of.is_none() {
-            holders = corpus.defined.get(&reference.id);
-        }
-        if holders.is_none() {
-            let bare = written.split(['#', '@']).next().unwrap_or(written);
-            holders = corpus
-                .aliases
-                .get(&reference.id)
-                .or_else(|| corpus.aliases.get(bare));
-        }
-        if holders.is_none()
-            && let Some(prefix) = &reference.alias_of
-            && let Some((_, body)) = reference.id.split_once('-')
-        {
-            holders = corpus.defined.get(&format!("{prefix}-{body}"));
-        }
-        let Some(holders) = holders else {
-            return Resolution::Dangling("resolves to no ID and no alias".to_owned());
-        };
-        if let Some(section) = &reference.section
-            && !holders
-                .iter()
-                .any(|&index| corpus.sections[index].contains(section))
-        {
-            return Resolution::Dangling(format!("has no section `#{section}` in its file"));
-        }
-        Resolution::Resolved
     }
 }
 
