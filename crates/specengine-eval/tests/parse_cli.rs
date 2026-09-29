@@ -185,11 +185,12 @@ const CODES: [&str; 13] = [
 fn expected_result_keys() -> BTreeSet<String> {
     let mut keys: BTreeSet<String> = [
         "files",
+        "unreadable",
         "panics",
         "not_utf8",
         "front_matter",
         "front_matter.present",
-        "front_matter.diagnostics",
+        "diagnostics",
         "sections",
         "sections.parsed",
         "sections.census_id_sections",
@@ -207,10 +208,23 @@ fn expected_result_keys() -> BTreeSet<String> {
     .into_iter()
     .map(str::to_owned)
     .collect();
+    // Every parser code at the top level (E2 of
+    // docs/features/phase1-cleanup.md), zeros included.
     for code in CODES {
-        keys.insert(format!("front_matter.diagnostics.{code}"));
+        keys.insert(format!("diagnostics.{code}"));
     }
     keys
+}
+
+#[test]
+fn codes_are_every_parser_code() {
+    assert_eq!(
+        CODES.iter().copied().collect::<BTreeSet<_>>(),
+        specengine_model::DiagnosticCode::ALL
+            .iter()
+            .map(|code| code.as_str())
+            .collect::<BTreeSet<_>>()
+    );
 }
 
 /// Keys from the fixed schema; values counts, the label, or versions.
@@ -267,6 +281,7 @@ fn corpus_mini_parses_into_one_anonymous_envelope() {
     assert_anonymous(&output, &envelope, "fixtures", &corpus_mini());
     let result = &envelope["result"];
     assert_eq!(result["files"], 3);
+    assert_eq!(result["unreadable"], 0);
     assert_eq!(result["panics"], 0);
     assert_eq!(result["not_utf8"], 0);
     assert_eq!(result["front_matter"]["present"], 3);
@@ -274,14 +289,15 @@ fn corpus_mini_parses_into_one_anonymous_envelope() {
     assert_eq!(result["sections"]["census_id_sections"], 1);
     assert_eq!(result["sections"]["differ"], 0);
     assert_eq!(result["heading_attrs_not_section"], 0);
-    // rules.md cites ZR-001, ZR-002, ZN-001 and a Greek-Zeta ZR-003.
+    // rules.md cites ZR-001, ZR-002, ZN-001 and a Greek-Zeta ZR-003: one
+    // look-alike reference and its one `homoglyph` diagnostic.
     assert_eq!(result["references"]["inline"], 4);
     assert_eq!(result["references"]["declared"], 0);
     assert_eq!(result["references"]["homoglyph"], 1);
     assert_eq!(result["references"]["alias"], 0);
     for code in CODES {
         let want = u64::from(code == "homoglyph");
-        assert_eq!(result["front_matter"]["diagnostics"][code], want, "{code}");
+        assert_eq!(result["diagnostics"][code], want, "{code}");
     }
 
     // tokens_est agrees with the library over the same files.
@@ -590,4 +606,128 @@ fn pilot_b_parse_prints_anonymous_counts() {
         "SPECENGINE_CENSUS_CONFIG_B",
         "pilot-b",
     );
+}
+
+// ------------------------------------------ docs/features/phase1-cleanup.md
+
+/// A scratch corpus: corpus-mini's census convention with IDs of `digits`
+/// digits, the scheme `ZR`, `ZN` of that width, and `files` under `design/`.
+fn scratch_corpus(scratch: &Scratch, digits: usize, files: &[(&str, &str)]) -> PathBuf {
+    let corpus = scratch.join("corpus");
+    fs::create_dir_all(corpus.join("design")).unwrap();
+    let census = fs::read_to_string(corpus_mini().join("census.toml")).unwrap();
+    assert!(census.contains("[0-9]{3}"), "corpus-mini census regex");
+    fs::write(
+        corpus.join("census.toml"),
+        census.replace("[0-9]{3}", &format!("[0-9]{{{digits}}}")),
+    )
+    .unwrap();
+    fs::write(
+        corpus.join("specengine.toml"),
+        format!(
+            "[ids]\nZR = {{ kind = \"rule\", width = {digits} }}\nZN = {{ kind = \"note\", width = {digits} }}\n"
+        ),
+    )
+    .unwrap();
+    for (relative, text) in files {
+        fs::write(corpus.join("design").join(relative), text).unwrap();
+    }
+    corpus
+}
+
+fn parse_scratch(corpus: &Path, out: &Path, timeout: &str) -> Value {
+    let output = eval()
+        .args([
+            "parse",
+            "--pilot",
+            corpus.to_str().unwrap(),
+            "--label",
+            "scratch",
+            "--out",
+            out.to_str().unwrap(),
+            "--timeout",
+            timeout,
+        ])
+        .output()
+        .expect("specengine-eval runs");
+    envelope(&output)
+}
+
+/// AC-17 (E1): one file of 50 000 ID sections is measured within the
+/// budget (heading lines by one line index per file), and the census
+/// agrees on every section.
+#[test]
+fn fifty_thousand_sections_in_one_file_are_measured_within_the_budget() {
+    const SECTIONS: usize = 50_000;
+    let scratch = Scratch::new("big");
+    let mut text = String::from("---\nkind: rule\n---\n\n# Rules\n\n");
+    for n in 1..=SECTIONS {
+        text.push_str(&format!(
+            "## Rule {n} {{#ZR-{n:05}}}\n\nThe text of rule {n}, a sentence of ordinary length.\n\n"
+        ));
+    }
+    let corpus = scratch_corpus(&scratch, 5, &[("big.md", &text)]);
+    let started = std::time::Instant::now();
+    let envelope = parse_scratch(&corpus, &scratch.join("out"), "60");
+    let result = &envelope["result"];
+    assert!(
+        result.is_object(),
+        "result is {result} after {:?}",
+        started.elapsed()
+    );
+    eprintln!(
+        "parse of {} bytes, {SECTIONS} sections: wall {} ms (run {:?})",
+        text.len(),
+        envelope["wall_ms"],
+        started.elapsed()
+    );
+    assert_eq!(result["files"], 1);
+    assert_eq!(result["sections"]["parsed"], SECTIONS);
+    assert_eq!(result["sections"]["census_id_sections"], SECTIONS);
+    assert_eq!(result["sections"]["differ"], 0);
+}
+
+/// AC-18 (E3): a look-alike only in `id:` is a `homoglyph` diagnostic of
+/// a definition, not a look-alike reference.
+#[test]
+fn a_look_alike_definition_is_a_diagnostic_but_no_reference() {
+    let scratch = Scratch::new("lookalike-id");
+    // `ZR-005` with a Greek capital Zeta.
+    let corpus = scratch_corpus(
+        &scratch,
+        3,
+        &[(
+            "defined.md",
+            "---\nid: \u{0396}R-005\nkind: rule\n---\n\n# Defined\n\nPlain text, no reference.\n",
+        )],
+    );
+    let envelope = parse_scratch(&corpus, &scratch.join("out"), "60");
+    let result = &envelope["result"];
+    assert_eq!(result["diagnostics"]["homoglyph"], 1, "{result}");
+    assert_eq!(result["references"]["homoglyph"], 0, "{result}");
+    assert_eq!(result["references"]["inline"], 0, "{result}");
+    assert_eq!(result["references"]["declared"], 0, "{result}");
+}
+
+/// AC-19 (E4): a document that cannot be read is counted `unreadable`;
+/// `files` still counts every document walked.
+#[test]
+fn an_unreadable_document_is_counted_and_still_walked() {
+    use std::os::unix::fs::PermissionsExt;
+    let scratch = Scratch::new("unreadable");
+    let corpus = scratch.join("corpus");
+    copy_dir(&corpus_mini(), &corpus, &[]);
+    let locked = corpus.join("design").join("notes.md");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&locked).is_ok() {
+        // Running as root: mode 000 does not stop reads, nothing to measure.
+        eprintln!("mode 000 is readable here (root?); skipped");
+        return;
+    }
+    let envelope = parse_scratch(&corpus, &scratch.join("out"), "60");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+    let result = &envelope["result"];
+    assert_eq!(result["files"], 3, "{result}");
+    assert_eq!(result["unreadable"], 1, "{result}");
+    assert_eq!(result["panics"], 0, "{result}");
 }

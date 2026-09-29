@@ -1,5 +1,5 @@
 //! The one reference grammar: text, front-matter scalars and `{#ID}`
-//! definitions are read by the same lexer (docs/features/spec-parser.md,
+//! definitions are read by the same lexer (`crates/specengine-model/README.md`,
 //! "Reference grammar").
 //!
 //! ```text
@@ -13,8 +13,9 @@
 //!
 //! Recognition: (1) a candidate is a maximal letter-digit run followed by
 //! `-` and not preceded by `_` or `-`; (2) the run matches an alias verbatim
-//! first, else run and body match after look-alike normalisation, and any
-//! normalised char is a [`Homoglyph`]; (3) `#` and `@` join only before an ID
+//! first (no [`Homoglyph`], the body still normalised), else run and body
+//! match after look-alike normalisation, and any normalised char is a
+//! [`Homoglyph`]; (3) `#` and `@` join only before an ID
 //! or 1–9 digits; (4) the right boundary is the end, or a char that is no
 //! letter, digit, `_`, nor a `-` before a letter or digit; (5) qualifiers are
 //! read by look-back, `slug/` then `slug:`, and kept only when the char before
@@ -331,6 +332,8 @@ fn match_id<'s>(
         return None;
     }
     let mut changed = false;
+    // An alias match is never a homoglyph (model README, Recognition (2)):
+    // its body is normalised into `id` without being reported.
     let (spec, alias_of, mut id) = match allow_alias.then(|| scheme.alias(run)).flatten() {
         Some(spec) => (spec, Some(spec.prefix.clone()), run.to_owned()),
         None => {
@@ -365,7 +368,7 @@ fn match_id<'s>(
     if body_end == body_start {
         return None;
     }
-    let homoglyph = changed.then(|| Homoglyph {
+    let homoglyph = (changed && alias_of.is_none()).then(|| Homoglyph {
         span: Span::new(base + run_start, base + body_end),
         fix: id.clone(),
     });

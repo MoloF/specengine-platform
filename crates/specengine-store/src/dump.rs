@@ -1,5 +1,5 @@
-//! The canonical dump (docs/features/spec-index.md, "Data"): every index
-//! table in column order with its surrogate keys (`wt`, `file_id`,
+//! The canonical dump (`crates/specengine-store/README.md`, "Rows"): every
+//! index table in column order with its surrogate keys (`wt`, `file_id`,
 //! `node_id`) replaced by `(project, root)`, `path`, `(path, ord)`, rows
 //! sorted, plus the FTS5 vocabulary. Two DBs with equal dumps hold the same
 //! index; storage order and rowids never show.

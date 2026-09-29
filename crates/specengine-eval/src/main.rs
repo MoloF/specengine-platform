@@ -170,7 +170,8 @@ pub struct CommonArgs {
     #[arg(long, value_name = "LABEL")]
     pub label: Option<String>,
     /// Measurement-specific configuration (TOML): the corpus convention of
-    /// `census` and `parse`; `ast-hash`, `ron`, `bevy-detector` and `ra` take none.
+    /// `census` and `parse`; `ast-hash`, `ron`, `bevy-detector` and `ra` take none;
+    /// `index` and `check` refuse it (exit 2): their configuration is `--scheme`.
     #[arg(long, value_name = "TOML")]
     pub config: Option<PathBuf>,
     /// Wall-clock budget in seconds; on overrun `result` is the string "timeout" (exit 0).
@@ -209,6 +210,9 @@ fn main() -> ExitCode {
             )
         }
         Measurement::Index(args) => {
+            if let Some(refused) = refuse_config("index", &args.common) {
+                return refused;
+            }
             let scheme = args.scheme.clone();
             let label = args.common.label.clone();
             measure_with(
@@ -220,6 +224,9 @@ fn main() -> ExitCode {
             )
         }
         Measurement::Check(args) => {
+            if let Some(refused) = refuse_config("check", &args.common) {
+                return refused;
+            }
             let scheme = args.scheme.clone();
             let baseline = args.baseline.clone();
             let today = args.today.clone();
@@ -270,6 +277,18 @@ fn main() -> ExitCode {
         #[cfg(all(feature = "ra", unix))]
         Measurement::RaWorker(args) => ra::worker_main(args),
     }
+}
+
+/// `index` and `check` take their whole configuration from `--scheme`: a
+/// `--config` is refused (exit 2) before anything is resolved or written,
+/// never silently ignored.
+fn refuse_config(name: &'static str, args: &CommonArgs) -> Option<ExitCode> {
+    let config = args.config.as_ref()?;
+    eprintln!(
+        "{name}: refused: --config {} is not read by `{name}` (its configuration is --scheme); nothing written",
+        config.display()
+    );
+    Some(ExitCode::from(2))
 }
 
 /// The one JSON object on stdout.

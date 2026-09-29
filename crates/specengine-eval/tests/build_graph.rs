@@ -944,3 +944,77 @@ fn rusqlite_is_pinned_exactly_with_bundled_and_sqlite_resolves_once() {
     }
     assert_eq!(locked_versions("rusqlite"), ["0.40.2"]);
 }
+
+/// AC-12 of docs/features/phase1-cleanup.md (S2): `float_roundtrip` is set
+/// once, on the root `serde_json` pin, so every build of any member parses
+/// floats the same; no member manifest sets a `serde_json` feature.
+#[test]
+fn serde_json_float_roundtrip_is_set_on_the_workspace_pin_only() {
+    let root: toml::Table = toml::from_str(
+        &std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest"),
+    )
+    .expect("root manifest is TOML");
+    let pin = &root["workspace"]["dependencies"]["serde_json"];
+    let features: Vec<&str> = pin
+        .get("features")
+        .and_then(|features| features.as_array())
+        .map(|features| features.iter().filter_map(|f| f.as_str()).collect())
+        .unwrap_or_default();
+    assert!(
+        features.contains(&"float_roundtrip"),
+        "root serde_json pin: {pin:?}"
+    );
+    assert_eq!(
+        pin.get("version").and_then(|v| v.as_str()),
+        Some("=1.0.151"),
+        "the pin itself is unchanged: {pin:?}"
+    );
+
+    /// Every `serde_json` entry of a manifest table and its `target.*`
+    /// tables, as `(table, entry)`.
+    fn serde_json_entries(manifest: &toml::Table) -> Vec<(String, toml::Value)> {
+        let mut out = Vec::new();
+        let mut tables: Vec<(String, &toml::Table)> = vec![("".to_owned(), manifest)];
+        if let Some(targets) = manifest.get("target").and_then(|t| t.as_table()) {
+            for (name, target) in targets {
+                if let Some(target) = target.as_table() {
+                    tables.push((format!("target.{name}."), target));
+                }
+            }
+        }
+        for (prefix, table) in tables {
+            for kind in ["dependencies", "dev-dependencies", "build-dependencies"] {
+                if let Some(entry) = table
+                    .get(kind)
+                    .and_then(|deps| deps.as_table())
+                    .and_then(|deps| deps.get("serde_json"))
+                {
+                    out.push((format!("{prefix}{kind}"), entry.clone()));
+                }
+            }
+        }
+        out
+    }
+
+    let metadata = workspace_metadata();
+    let mut checked = 0;
+    for package in metadata["packages"].as_array().expect("packages") {
+        let manifest_path = package["manifest_path"].as_str().expect("manifest_path");
+        let manifest: toml::Table =
+            toml::from_str(&std::fs::read_to_string(manifest_path).expect("member manifest"))
+                .expect("member manifest is TOML");
+        for (table, entry) in serde_json_entries(&manifest) {
+            checked += 1;
+            assert!(
+                entry.get("features").is_none() && entry.get("default-features").is_none(),
+                "{manifest_path} [{table}] sets serde_json features: {entry:?}"
+            );
+            assert_eq!(
+                entry.get("workspace").and_then(|w| w.as_bool()),
+                Some(true),
+                "{manifest_path} [{table}] serde_json is the workspace pin: {entry:?}"
+            );
+        }
+    }
+    assert!(checked >= 4, "serde_json entries checked: {checked}");
+}

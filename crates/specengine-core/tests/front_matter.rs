@@ -414,3 +414,219 @@ fn empty_file_is_a_document_without_anything() {
     assert_eq!(document.id, None);
     assert_eq!(document.summary, None);
 }
+
+// ------------------------------------------ docs/features/phase1-cleanup.md
+
+/// Every JSON object in `json`, at any depth, as its key lists in written
+/// order (a repeated key stays visible, unlike `serde_json::Value`).
+fn object_keys(json: &str) -> Vec<Vec<String>> {
+    use serde::de::{DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
+
+    struct Walk<'a>(&'a mut Vec<Vec<String>>);
+
+    impl<'de> DeserializeSeed<'de> for Walk<'_> {
+        type Value = ();
+        fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+            deserializer.deserialize_any(self)
+        }
+    }
+
+    impl<'de> Visitor<'de> for Walk<'_> {
+        type Value = ();
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("any JSON value")
+        }
+        fn visit_bool<E>(self, _: bool) -> Result<(), E> {
+            Ok(())
+        }
+        fn visit_i64<E>(self, _: i64) -> Result<(), E> {
+            Ok(())
+        }
+        fn visit_u64<E>(self, _: u64) -> Result<(), E> {
+            Ok(())
+        }
+        fn visit_f64<E>(self, _: f64) -> Result<(), E> {
+            Ok(())
+        }
+        fn visit_str<E>(self, _: &str) -> Result<(), E> {
+            Ok(())
+        }
+        fn visit_unit<E>(self) -> Result<(), E> {
+            Ok(())
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+            while seq.next_element_seed(Walk(&mut *self.0))?.is_some() {}
+            Ok(())
+        }
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+            let mut keys = Vec::new();
+            while let Some(key) = map.next_key::<String>()? {
+                keys.push(key);
+                map.next_value_seed(Walk(&mut *self.0))?;
+            }
+            self.0.push(keys);
+            Ok(())
+        }
+    }
+
+    let mut out = Vec::new();
+    let mut deserializer = serde_json::Deserializer::from_str(json);
+    Walk(&mut out)
+        .deserialize(&mut deserializer)
+        .expect("valid JSON");
+    out
+}
+
+/// No JSON object of the parse repeats a key.
+fn assert_no_repeated_json_key(case: &str, parsed: &ParsedFile) {
+    // The walk sees a repeated key (`serde_json::Value` would hide it).
+    assert_eq!(
+        object_keys(r#"{"a":1,"a":{"b":[{"c":2}]}}"#),
+        [vec!["c"], vec!["b"], vec!["a", "a"]]
+    );
+    for keys in object_keys(&common::json(parsed)) {
+        let unique: std::collections::BTreeSet<&String> = keys.iter().collect();
+        assert_eq!(unique.len(), keys.len(), "{case}: repeated key in {keys:?}");
+    }
+}
+
+fn extra_value<'p>(parsed: &'p ParsedFile, key: &str) -> &'p FmValue {
+    &parsed
+        .document()
+        .and_then(|d| d.extra.as_ref())
+        .and_then(|extra| extra.iter().find(|e| e.key == key))
+        .unwrap_or_else(|| panic!("`{key}` in extra: {parsed:#?}"))
+        .value
+}
+
+/// AC-04 (P3): NaN and infinities, in any YAML spelling or as an
+/// overflowing literal, are the strings `.nan`, `.inf`, `-.inf`; every
+/// float left is finite, and the parse survives a JSON round trip.
+#[test]
+fn non_finite_floats_are_strings_and_round_trip_through_json() {
+    let cases = [
+        ("a_nan", ".nan", ".nan"),
+        ("a_nan_cap", ".NaN", ".nan"),
+        ("a_inf", ".inf", ".inf"),
+        ("a_inf_plus", "+.inf", ".inf"),
+        ("a_inf_upper", ".INF", ".inf"),
+        ("a_neg_inf", "-.inf", "-.inf"),
+        ("a_neg_inf_cap", "-.Inf", "-.inf"),
+        ("a_big", "1e999", ".inf"),
+        ("a_neg_big", "-1e999", "-.inf"),
+    ];
+    let mut text = String::from("---\nid: R-12\n");
+    for (key, written, _) in cases {
+        text.push_str(&format!("{key}: {written}\n"));
+    }
+    text.push_str("a_seq: [.nan, 1.5, -.inf]\na_map: {k: .inf}\nrev: .nan\n---\n# R\n");
+    let parsed = parse_str(&text, &spec_a());
+    for (key, written, want) in cases {
+        assert_eq!(
+            extra_value(&parsed, key),
+            &FmValue::Str(want.to_owned()),
+            "{key}: {written}"
+        );
+    }
+    let s = |text: &str| FmValue::Str(text.to_owned());
+    assert_eq!(
+        extra_value(&parsed, "a_seq"),
+        &FmValue::Seq(vec![s(".nan"), FmValue::Float(1.5), s("-.inf")])
+    );
+    match extra_value(&parsed, "a_map") {
+        FmValue::Map(map) => assert_eq!(map.get("k"), Some(&s(".inf"))),
+        other => panic!("a_map: {other:?}"),
+    }
+    // A mistyped typed key is kept in `extra` the same way.
+    assert_eq!(extra_value(&parsed, "rev"), &s(".nan"));
+    let json = common::json(&parsed);
+    let back: ParsedFile = serde_json::from_str(&json).expect("the parse reads back");
+    assert_eq!(back, parsed, "JSON round trip");
+    assert_eq!(common::json(&back), json);
+}
+
+/// AC-05 (P4): every map the parser builds holds each key text once; an
+/// entry repeating a key text, or with a collection as its key, is dropped
+/// with one `frontmatter-type` at its line, the first entry stays. The
+/// top-level `extra` is a list: `1:` and `"1":` both stay.
+#[test]
+fn repeated_or_collection_keys_are_dropped_once_each_and_the_first_stays() {
+    let text = "---\nid: R-12\nx: {1: a, \"1\": b}\nraised_by: {1: a, \"1\": b}\nlinks: {1: [R-01], \"1\": [R-02]}\nz:\n  ? [k]\n  : a\n  c: d\nw: {m: {2: p, \"2\": q, 3: r}}\n---\n# R\n";
+    let parsed = parse_str(text, &spec_a());
+    let s = |text: &str| FmValue::Str(text.to_owned());
+    let one = |key: &str, value: FmValue| {
+        let mut map = specengine_model::OrderedMap::new();
+        map.push(key, value);
+        FmValue::Map(map)
+    };
+    assert_eq!(extra_value(&parsed, "x"), &one("1", s("a")));
+    assert_eq!(extra_value(&parsed, "z"), &one("c", s("d")));
+    assert_eq!(
+        extra_value(&parsed, "w"),
+        &one("m", {
+            let mut map = specengine_model::OrderedMap::new();
+            map.push("2", s("p"));
+            map.push("3", s("r"));
+            FmValue::Map(map)
+        })
+    );
+    let fields = parsed.document().unwrap().fields.as_ref().unwrap();
+    let raised_by = fields.raised_by.as_ref().expect("raised_by typed");
+    assert_eq!(
+        raised_by.iter().collect::<Vec<_>>(),
+        [("1", &s("a"))],
+        "raised_by: the first entry stays"
+    );
+    // `links` with a non-string key is mistyped, kept in `extra`, and its
+    // repeated key is dropped there.
+    assert_eq!(fields.links, None);
+    assert_eq!(
+        extra_value(&parsed, "links"),
+        &one("1", FmValue::Seq(vec![s("R-01")]))
+    );
+    let dropped: Vec<(usize, &str)> = parsed
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == DiagnosticCode::FrontmatterType && d.message.contains("dropped"))
+        .map(|d| (d.line, d.message.as_str()))
+        .collect();
+    assert_eq!(
+        dropped.iter().map(|(line, _)| *line).collect::<Vec<_>>(),
+        [3, 4, 5, 7, 10],
+        "one per dropped entry at its line: {:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        codes(&parsed),
+        [
+            ("unknown-key".to_owned(), 3),
+            ("frontmatter-type".to_owned(), 3),
+            ("frontmatter-type".to_owned(), 4),
+            ("frontmatter-type".to_owned(), 5),
+            ("frontmatter-type".to_owned(), 5),
+            ("unknown-key".to_owned(), 6),
+            ("frontmatter-type".to_owned(), 7),
+            ("unknown-key".to_owned(), 10),
+            ("frontmatter-type".to_owned(), 10),
+        ],
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_no_repeated_json_key("nested", &parsed);
+
+    // The top level is a list: both entries stay, `unknown-key` each.
+    let parsed = parse_str("---\n1: a\n\"1\": b\n---\n", &spec_a());
+    let extra = parsed.document().unwrap().extra.as_ref().expect("extra");
+    assert_eq!(
+        extra
+            .iter()
+            .map(|e| (e.key.as_str(), &e.value))
+            .collect::<Vec<_>>(),
+        [("1", &s("a")), ("1", &s("b"))]
+    );
+    assert_eq!(
+        codes(&parsed),
+        [("unknown-key".to_owned(), 2), ("unknown-key".to_owned(), 3)]
+    );
+    assert_no_repeated_json_key("top level", &parsed);
+}

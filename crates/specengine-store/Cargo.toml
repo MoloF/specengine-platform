@@ -17,6 +17,6 @@ rusqlite.workspace = true
 blake3.workspace = true
 serde.workspace = true
 # The model value of each row (`node`, `link`, …) is stored as JSON and read
-# back into the same `ParsedFile`; `float_roundtrip` makes a front-matter float
-# read back bit for bit (the default parser may be one ULP off).
-serde_json = { workspace = true, features = ["float_roundtrip"] }
+# back into the same `ParsedFile`; `float_roundtrip`, set on the workspace
+# entry, makes a front-matter float read back bit for bit.
+serde_json.workspace = true

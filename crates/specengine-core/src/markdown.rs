@@ -257,8 +257,10 @@ fn scan_html(source: &str, base: usize, in_comment: &mut bool, out: &mut Vec<Htm
         let start = at + open;
         let rest = &source[start..];
         if rest.starts_with("<!--") {
+            // The `-->` scan resumes after `<!`, so `<!-->` and `<!--->` are
+            // complete comments (CommonMark 0.31).
             *in_comment = true;
-            at = start + 4;
+            at = start + 2;
             continue;
         }
         match a_tag(rest) {

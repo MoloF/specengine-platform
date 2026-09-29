@@ -2,8 +2,8 @@
 //! so `spec check --staged` (07 §2) can feed staged blobs through the same
 //! writer. [`WorkingTree`] reads the working tree by the `[paths]` rules.
 //!
-//! **Walk** (docs/features/spec-index.md, "Data"): regular files whose name
-//! ends exactly in `.md` under the roots, minus `exclude`; symlinks and
+//! **Walk** (`crates/specengine-store/README.md`, "Walk"): regular files
+//! whose name ends exactly in `.md` under the roots, minus `exclude`; symlinks and
 //! names starting with `.` are skipped below a root (the census rule, plus
 //! dot-files); no `.gitignore`; names that are not UTF-8 are skipped and
 //! counted; a root that names no directory and no `.md` file (missing, a
@@ -50,6 +50,13 @@ pub trait Source {
     fn probe(&self, path: &str) -> bool;
     /// The bytes of a listed file.
     fn read(&self, path: &str) -> io::Result<Vec<u8>>;
+    /// Whether `path` (root-relative, `/`) is now a directory the walk could
+    /// reach files through; `update_paths` then walks everything. The default
+    /// answers "not a directory", for a source without directories.
+    fn is_dir(&self, path: &str) -> bool {
+        let _ = path;
+        false
+    }
 }
 
 /// The working tree under `root`, walked by `[paths]`.
@@ -77,7 +84,8 @@ impl WorkingTree {
         self.exclude.iter().any(|glob| glob.matches(path))
     }
 
-    /// The kind of a configured root, looked up by exact name component by
+    /// The kind of a root-relative path (a configured root, or a directory
+    /// for [`Source::is_dir`]), looked up by exact name component by
     /// component: `None` when a component is missing, a symlink, or a
     /// non-directory before the end.
     fn root_kind(&self, root: &str) -> Option<FileType> {
@@ -221,15 +229,52 @@ impl Source for WorkingTree {
                 "not a root-relative path",
             ));
         }
-        let absolute = self.root.join(path);
-        let metadata = fs::symlink_metadata(&absolute)?;
-        if !metadata.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "not a regular file",
-            ));
+        // No component below the root may be a symlink, as for `probe`:
+        // every directory on the way, and the file itself.
+        let mut absolute = self.root.clone();
+        let mut components = path.split('/').peekable();
+        while let Some(component) = components.next() {
+            absolute.push(component);
+            let kind = fs::symlink_metadata(&absolute)?.file_type();
+            let last = components.peek().is_none();
+            if kind.is_symlink() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "a symlink on the path",
+                ));
+            }
+            if last && !kind.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "not a regular file",
+                ));
+            }
+            if !last && !kind.is_dir() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "not a directory on the path",
+                ));
+            }
         }
         fs::read(&absolute)
+    }
+
+    fn is_dir(&self, path: &str) -> bool {
+        if !is_clean_relative(path) {
+            return false;
+        }
+        // A root, a directory under one (no dot-name below the root, as the
+        // walk skips them), or a directory containing one.
+        let related = self.roots.iter().any(|root| {
+            path == root.as_str()
+                || under(root, path)
+                || (under(path, root)
+                    && path
+                        .split('/')
+                        .skip(root.split('/').count())
+                        .all(|component| !component.starts_with('.')))
+        });
+        related && self.root_kind(path).is_some_and(|kind| kind.is_dir())
     }
 }
 
@@ -240,7 +285,7 @@ fn under(path: &str, root: &str) -> bool {
 }
 
 /// Non-empty, relative, `/`-separated, no empty, `.` or `..` component.
-fn is_clean_relative(path: &str) -> bool {
+pub(crate) fn is_clean_relative(path: &str) -> bool {
     !path.is_empty()
         && !path.starts_with('/')
         && path

@@ -18,12 +18,17 @@ pub enum StoreError {
     NotIndexed,
     /// The source walks another directory than the handle's worktree.
     RootMismatch { expected: PathBuf, found: PathBuf },
-    /// Another connection held the database longer than `busy_timeout`.
+    /// SQLite answered `SQLITE_BUSY` (another connection held the database
+    /// longer than `busy_timeout`) or `SQLITE_LOCKED` (a table lock held on
+    /// a shared connection or cache).
     Busy,
     /// A file-system call on `path` failed (worktree root, DB location,
     /// listing the worktree).
     Io { path: PathBuf, source: io::Error },
-    /// SQLite reported an error, or a stored value did not decode.
+    /// SQLite reported another error, a stored value did not decode, a value
+    /// could not be encoded as JSON, or an internal invariant of the writer
+    /// broke (a full walk asked to escalate). The taxonomy is split with the
+    /// CLI increment.
     Sqlite(String),
 }
 

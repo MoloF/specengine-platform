@@ -21,18 +21,26 @@ pub(crate) fn line_of_str(text: &str, offset: usize) -> usize {
 pub(crate) struct FileText<'a> {
     bytes: &'a [u8],
     lines: LineIndex,
-    /// Top-level front-matter keys as written, with their 1-based lines,
-    /// in source order.
-    keys: Vec<(String, usize)>,
+    /// Top-level front-matter entries as written: the key (`None` for a key
+    /// that is no scalar on its line: `? [a]`, `[a]:`, `*x :`) and the
+    /// 1-based line the entry starts on, in source order.
+    entries: Vec<(Option<String>, usize)>,
+    /// The last line of the front-matter YAML; 0 without one.
+    yaml_last_line: usize,
 }
 
 impl<'a> FileText<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
         let lines = LineIndex::new(bytes);
-        let keys = std::str::from_utf8(bytes)
-            .map(|text| top_level_keys(text, &lines))
+        let (entries, yaml_last_line) = std::str::from_utf8(bytes)
+            .map(|text| top_level_entries(text, &lines))
             .unwrap_or_default();
-        Self { bytes, lines, keys }
+        Self {
+            bytes,
+            lines,
+            entries,
+            yaml_last_line,
+        }
     }
 
     /// The line of a byte offset; 1 without bytes.
@@ -55,15 +63,27 @@ impl<'a> FileText<'a> {
 
     /// The line of top-level key `key`, when written.
     pub fn key_line(&self, key: &str) -> Option<usize> {
-        self.keys
-            .iter()
-            .find(|(name, _)| name == key)
-            .map(|&(_, line)| line)
+        self.keys()
+            .find(|&(name, _)| name == key)
+            .map(|(_, line)| line)
     }
 
     /// Top-level keys as written, in source order.
     pub fn keys(&self) -> impl Iterator<Item = (&str, usize)> {
-        self.keys.iter().map(|(name, line)| (name.as_str(), *line))
+        self.entries
+            .iter()
+            .filter_map(|(name, line)| name.as_deref().map(|name| (name, *line)))
+    }
+
+    /// The written top-level key whose entry holds `line`; `None` outside
+    /// the front-matter, before its first entry, in an entry whose key is no
+    /// scalar (`? [a]`, `[a]:`, `*x :`), or without bytes.
+    pub fn key_at(&self, line: usize) -> Option<&str> {
+        if line > self.yaml_last_line {
+            return None;
+        }
+        let after = self.entries.partition_point(|&(_, start)| start <= line);
+        self.entries.get(after.checked_sub(1)?)?.0.as_deref()
     }
 
     /// Bytes were given.
@@ -72,17 +92,26 @@ impl<'a> FileText<'a> {
     }
 }
 
-/// The top-level keys of the front-matter block: lines at the indentation
-/// of the block's first entry holding `key:` (a plain or quoted key before
-/// `:` followed by a space or the line end). Only meaningful when the block
-/// parsed as a mapping.
-fn top_level_keys(text: &str, lines: &LineIndex) -> Vec<(String, usize)> {
+/// The top-level entries of the front-matter block and its last YAML line:
+/// an entry starts on a line at the indentation of the block's first entry
+/// holding `key:` (a plain or quoted key before `:` followed by a space or
+/// the line end, after any `!tag` and `&anchor`), an explicit key `?` (its
+/// key when it is a scalar on that line, else `None`), or a flow or alias
+/// key (`[`, `{`, `*`: `None`); other lines at that indentation
+/// (`- item`, `: value`) continue the entry before. Only meaningful when the
+/// block parsed as a mapping.
+fn top_level_entries(text: &str, lines: &LineIndex) -> (Vec<(Option<String>, usize)>, usize) {
     let layout = front_matter::split(text);
     let Some(block) = layout.block else {
-        return Vec::new();
+        return (Vec::new(), 0);
     };
     let yaml = &text[block.yaml.clone()];
-    let mut keys = Vec::new();
+    let last_line = if yaml.is_empty() {
+        0
+    } else {
+        lines.line(block.yaml.end - 1)
+    };
+    let mut entries = Vec::new();
     let mut indent: Option<usize> = None;
     let mut offset = block.yaml.start;
     for raw in yaml.split_inclusive('\n') {
@@ -98,11 +127,74 @@ fn top_level_keys(text: &str, lines: &LineIndex) -> Vec<(String, usize)> {
         if this_indent != top {
             continue;
         }
-        if let Some(key) = key_of(content) {
-            keys.push((key, lines.line(line_start)));
+        let content = without_properties(content);
+        let entry = if let Some(key) = key_of(content) {
+            Some(Some(key))
+        } else if let Some(explicit) = explicit_key(content) {
+            Some(explicit_scalar(explicit))
+        } else if content.starts_with(['[', '{', '*']) {
+            Some(None)
+        } else {
+            None
+        };
+        if let Some(key) = entry {
+            entries.push((key, lines.line(line_start)));
         }
     }
-    keys
+    (entries, last_line)
+}
+
+/// `content` without its leading node properties: a `!tag` and an
+/// `&anchor`, in either order, each followed by whitespace; empty when the
+/// line holds nothing else.
+fn without_properties(content: &str) -> &str {
+    let mut rest = content;
+    for _ in 0..2 {
+        if !rest.starts_with(['!', '&']) {
+            break;
+        }
+        rest = match rest.find([' ', '\t']) {
+            Some(end) => rest[end..].trim_start_matches([' ', '\t']),
+            None => "",
+        };
+    }
+    rest
+}
+
+/// The text after `?` when `content` is an explicit mapping key (`?`
+/// followed by whitespace or the line end).
+fn explicit_key(content: &str) -> Option<&str> {
+    let after = content.strip_prefix('?')?;
+    (after.is_empty() || after.starts_with([' ', '\t']))
+        .then(|| after.trim_start_matches([' ', '\t']))
+}
+
+/// The key of an explicit `? key` when it is a scalar written on that line
+/// (plain or quoted, after any properties, a comment allowed); `None` for a
+/// collection (`[a]`, `{a: 1}`, `- a`, `a: b`), an alias, a block scalar or
+/// a key on the lines below.
+fn explicit_scalar(after: &str) -> Option<String> {
+    let text = without_properties(after);
+    let rest_is_comment = |rest: &str| {
+        let rest = rest.trim_start_matches([' ', '\t']);
+        rest.is_empty() || rest.starts_with('#')
+    };
+    match text.as_bytes().first()? {
+        quote @ (b'"' | b'\'') => {
+            let close = text[1..].find(*quote as char)? + 1;
+            rest_is_comment(&text[close + 1..]).then(|| text[1..close].to_owned())
+        }
+        b'[' | b'{' | b'*' | b'|' | b'>' | b'!' | b'&' | b'#' => None,
+        b'-' if text[1..].is_empty() || text[1..].starts_with([' ', '\t']) => None,
+        _ => {
+            let end = text
+                .char_indices()
+                .find(|&(at, c)| c == '#' && text[..at].ends_with([' ', '\t']))
+                .map_or(text.len(), |(at, _)| at);
+            let key = text[..end].trim_end_matches([' ', '\t']);
+            (!key.is_empty() && find_key_colon(key).is_none()).then(|| key.to_owned())
+        }
+    }
 }
 
 /// `key` of a `key: value` / `key:` line; quoted keys unquoted.

@@ -1,6 +1,7 @@
 //! `Paths::from_toml`: the `[paths]` table of `specengine.toml`, and only
-//! that table (docs/features/spec-index.md, "Data"). Pure: the text in, the
-//! checked values out; which of them exist on disk is the walker's business.
+//! that table (`crates/specengine-core/README.md`, "`[paths]`"). Pure: the
+//! text in, the checked values out; which of them exist on disk is the
+//! walker's business.
 //!
 //! Role keys `spec`, `records`, `features`, `generated`, `archive` (07 §5,
 //! defaults 05 §2); `roots`, the walked directories or `.md` files (default:

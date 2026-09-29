@@ -1,6 +1,7 @@
 //! The front-matter block: where it is (BOM, `---` fences, CRLF kept) and
 //! what its typed keys say.
 
+use std::collections::BTreeSet;
 use std::ops::Range;
 
 use specengine_model::grammar::{self, Canon, Found};
@@ -269,7 +270,7 @@ impl Reader<'_> {
             "links" => self.links(&name, &value, line),
             "raised_by" => match &value.value {
                 YValue::Map(entries) => {
-                    self.out.fields.raised_by = Some(ordered_map(entries));
+                    self.out.fields.raised_by = Some(self.ordered_map(&name, entries, line));
                 }
                 _ => self.mistyped(&name, &value, line, "a mapping"),
             },
@@ -279,16 +280,16 @@ impl Reader<'_> {
                     self.file_line(key.line),
                     format!("front-matter key `{name}` is not a typed key; kept in `extra`"),
                 ));
-                self.keep(name, &value);
+                self.keep(name, &value, line);
             }
         }
     }
 
-    fn keep(&mut self, key: String, value: &YNode) {
-        self.out.extra.push(ExtraEntry {
-            key,
-            value: fm_value(value),
-        });
+    /// Keeps a top-level entry in `extra`. The top level is a list, so a
+    /// repeated key text stays (`1:` and `"1":` are two entries).
+    fn keep(&mut self, key: String, value: &YNode, line: usize) {
+        let value = self.fm_value(&key, value, line);
+        self.out.extra.push(ExtraEntry { key, value });
     }
 
     fn mistyped(&mut self, name: &str, value: &YNode, line: usize, expected: &str) {
@@ -300,7 +301,7 @@ impl Reader<'_> {
                 value.value.type_name()
             ),
         ));
-        self.keep(name.to_owned(), value);
+        self.keep(name.to_owned(), value, line);
     }
 
     fn string(&mut self, name: &str, value: &YNode, line: usize) -> Option<String> {
@@ -387,7 +388,7 @@ impl Reader<'_> {
                     line,
                     "front-matter `rev` is not 1-9 digits; kept in `extra`",
                 ));
-                self.keep(name.to_owned(), value);
+                self.keep(name.to_owned(), value, line);
             }
             _ => self.mistyped(name, value, line, "an integer"),
         }
@@ -562,6 +563,10 @@ impl Reader<'_> {
                 continue;
             };
             let key_line = self.file_line(key.line);
+            if map.get(link_type).is_some() {
+                self.dropped_entry(name, &repeated_key(link_type), key_line);
+                continue;
+            }
             if !is_link_type(link_type) {
                 self.out.diagnostics.push(
                     Diagnostic::new(
@@ -651,31 +656,142 @@ fn is_typed(name: &str) -> bool {
     )
 }
 
-fn fm_value(node: &YNode) -> FmValue {
-    match &node.value {
-        YValue::Null => FmValue::Null,
-        YValue::Bool(value) => FmValue::Bool(*value),
-        YValue::Int(value) => FmValue::Int(*value),
-        YValue::UInt(value) => FmValue::UInt(*value),
-        YValue::Float(value) => FmValue::Float(*value),
-        YValue::Str(value) => FmValue::Str(value.clone()),
-        YValue::Seq(items) => FmValue::Seq(items.iter().map(fm_value).collect()),
-        YValue::Map(entries) => FmValue::Map(ordered_map(entries)),
+fn repeated_key(text: &str) -> String {
+    format!("key `{text}` repeats an earlier key of the same mapping")
+}
+
+/// A float as a front-matter value: finite as itself, NaN and ±infinity
+/// (any YAML spelling, an overflowing literal) as the YAML text `.nan`,
+/// `.inf`, `-.inf`, so every [`FmValue::Float`] is finite and survives a
+/// JSON round trip.
+fn float_value(value: f64) -> FmValue {
+    // Defensive: serde-saphyr 1.3.0 as `yaml.rs` sets it up already gives these strings.
+    if value.is_nan() {
+        FmValue::Str(".nan".to_owned())
+    } else if value.is_infinite() {
+        FmValue::Str(if value > 0.0 { ".inf" } else { "-.inf" }.to_owned())
+    } else {
+        FmValue::Float(value)
     }
 }
 
-/// Keys in source order; a collection as a key is kept as `?`.
-fn ordered_map(entries: &[(YNode, YNode)]) -> OrderedMap<FmValue> {
-    OrderedMap(
-        entries
-            .iter()
-            .map(|(key, value)| {
-                let key = key
-                    .value
-                    .scalar_text()
-                    .map_or_else(|| "?".to_owned(), |text| text.into_owned());
-                (key, fm_value(value))
-            })
-            .collect(),
-    )
+impl Reader<'_> {
+    /// `node` as a front-matter value of the top-level key `name`; `line` is
+    /// the file line of the nearest enclosing node that has one.
+    fn fm_value(&mut self, name: &str, node: &YNode, line: usize) -> FmValue {
+        match &node.value {
+            YValue::Null => FmValue::Null,
+            YValue::Bool(value) => FmValue::Bool(*value),
+            YValue::Int(value) => FmValue::Int(*value),
+            YValue::UInt(value) => FmValue::UInt(*value),
+            YValue::Float(value) => float_value(*value),
+            YValue::Str(value) => FmValue::Str(value.clone()),
+            YValue::Seq(items) => FmValue::Seq(
+                items
+                    .iter()
+                    .map(|item| {
+                        let line = self.line_or(item, line);
+                        self.fm_value(name, item, line)
+                    })
+                    .collect(),
+            ),
+            YValue::Map(entries) => FmValue::Map(self.ordered_map(name, entries, line)),
+        }
+    }
+
+    /// Keys in source order, each key text once: an entry whose key is a
+    /// collection, or whose key text repeats an earlier key of this map
+    /// (`1` and `"1"`), is dropped with one `frontmatter-type` at its line;
+    /// the first stays.
+    fn ordered_map(
+        &mut self,
+        name: &str,
+        entries: &[(YNode, YNode)],
+        line: usize,
+    ) -> OrderedMap<FmValue> {
+        let mut map = OrderedMap::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        for (key, value) in entries {
+            let key_line = self.line_or(key, line);
+            let Some(text) = key.value.scalar_text() else {
+                self.dropped_entry(name, "a nested key is not a scalar", key_line);
+                continue;
+            };
+            if seen.contains(text.as_ref()) {
+                self.dropped_entry(name, &repeated_key(&text), key_line);
+                continue;
+            }
+            let text = text.into_owned();
+            seen.insert(text.clone());
+            let value_line = self.line_or(value, key_line);
+            let value = self.fm_value(name, value, value_line);
+            map.push(text, value);
+        }
+        map
+    }
+
+    /// One `frontmatter-type` for an entry dropped from a mapping under the
+    /// top-level key `name`.
+    fn dropped_entry(&mut self, name: &str, why: &str, line: usize) {
+        self.out.diagnostics.push(Diagnostic::new(
+            DiagnosticCode::FrontmatterType,
+            line,
+            format!("front-matter `{name}`: {why}; the entry is dropped"),
+        ));
+    }
+
+    /// The file line of `node`, or `fallback` below the spanned levels.
+    fn line_or(&self, node: &YNode, fallback: usize) -> usize {
+        if node.line == 0 {
+            fallback
+        } else {
+            self.file_line(node.line)
+        }
+    }
+}
+
+/// AC-04 of docs/features/phase1-cleanup.md (P3), at the unit: every float
+/// the reader keeps is finite; NaN and the infinities become the YAML text.
+/// (End to end, serde-saphyr as `yaml.rs` sets it up already delivers these
+/// as strings, so only this test observes `float_value`.)
+#[cfg(test)]
+mod float_value_tests {
+    use super::*;
+
+    #[test]
+    fn non_finite_floats_are_their_canonical_yaml_text() {
+        let s = |text: &str| FmValue::Str(text.to_owned());
+        for (value, want) in [
+            (f64::NAN, s(".nan")),
+            (-f64::NAN, s(".nan")),
+            (f64::INFINITY, s(".inf")),
+            (f64::NEG_INFINITY, s("-.inf")),
+            (1.5, FmValue::Float(1.5)),
+            (-0.0, FmValue::Float(-0.0)),
+            (f64::MAX, FmValue::Float(f64::MAX)),
+            (f64::MIN_POSITIVE, FmValue::Float(f64::MIN_POSITIVE)),
+        ] {
+            assert_eq!(float_value(value), want, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_kept_float_survives_a_json_round_trip() {
+        for value in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            0.1,
+            0.300_000_000_000_000_04,
+            2.5e-308,
+        ] {
+            let kept = float_value(value);
+            if let FmValue::Float(float) = kept {
+                assert!(float.is_finite(), "{value:?} kept as a non-finite Float");
+            }
+            let json = serde_json::to_string(&kept).expect("serialises");
+            let back: FmValue = serde_json::from_str(&json).expect("reads back");
+            assert_eq!(back, kept, "{value:?} as {json}");
+        }
+    }
 }

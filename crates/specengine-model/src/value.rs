@@ -16,10 +16,15 @@ pub enum FmValue {
     Int(i64),
     /// An integer above `i64::MAX`.
     UInt(u64),
+    /// Always finite: the parser gives NaN and ±infinity as the [`Str`]
+    /// `.nan`, `.inf`, `-.inf`.
+    ///
+    /// [`Str`]: FmValue::Str
     Float(f64),
     Str(String),
     Seq(Vec<FmValue>),
-    /// Keys in source order; a non-string key is kept as its scalar text.
+    /// Keys in source order, each key text once; a non-string key is kept as
+    /// its scalar text.
     Map(OrderedMap<FmValue>),
 }
 

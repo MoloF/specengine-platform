@@ -47,7 +47,7 @@ project   = slug ; scope = slug ; slug = [a-z][a-z0-9-]* ; rev = digit{1,9}
 
 Examples: `R-12@3`, `slug/AC-07`, `shared:PAT-PROBES@3`, `MEC-STAMINA#RULE-STAM-REGEN`, `[[R-12|label]]`. One grammar for text, front-matter and markers.
 
-Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph`), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0002#layout` → `ADR-0002`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. A `rev` out of `0..=999999999`, a `rev=` attribute that is not 1–9 digits, or `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one.
+Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph` even for a look-alike body digit; `id` = the written prefix + the normalised body), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0002#layout` → `ADR-0002`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. A `rev` out of `0..=999999999`, a `rev=` attribute that is not 1–9 digits, or `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one.
 
 Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an alias. A reference-carrying front-matter scalar is exactly one reference; `canon:` tries a reference, else `path[#anchor]`. Nothing is resolved here (existence, aliases, `slug/`, `project:`, anchors): that is `spec check` (`docs/canon/spec-check.md`).
 
@@ -57,7 +57,7 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 ## Anchors
 
-`Anchor {name, origin: AnchorOrigin, level?, span}`: where a `path#name` link can land, e.g. `{"name":"license","origin":"slug","level":2,"span":[1402,1412]}`. `ParsedFile.anchors` holds them in source order, a heading's `slug` before its `attr`. Origins: `slug` — every heading's GitHub slug; `attr` — a `{#…}` that is no definable ID (a section's own ID is its node); `html` — `<a id="…">`, `<a name="…">` outside code and HTML comments. `slug`, `attr`: `level` and span = the heading line(s); `html`: span = the start tag `<`…`>`, no level.
+`Anchor {name, origin: AnchorOrigin, level?, span}`: where a `path#name` link can land, e.g. `{"name":"license","origin":"slug","level":2,"span":[1402,1412]}`. `ParsedFile.anchors` holds them in source order, a heading's `slug` before its `attr`. Origins: `slug` — every heading's GitHub slug; `attr` — a `{#…}` that is no definable ID (a section's own ID is its node); `html` — `<a id="…">`, `<a name="…">` outside code and HTML comments (`<!-->`, `<!--->` are whole comments, CommonMark 0.31). `slug`, `attr`: `level` and span = the heading line(s); `html`: span = the start tag `<`…`>`, no level.
 
 **Slug** (github-slugger; computed by core): the heading's inline text (text, code, link text; no destination, image, HTML), `{#…}` removed, lowercased; letters and digits of any script, `-`, `_` kept; whitespace → `-`; the rest dropped; a repeated base gets `-1`, `-2`, … skipping slugs already given; empty → no anchor. Accepted divergences: `xtask` slugs the raw line (links, HTML); GitHub differs on two-line setext headings, NBSP and tab (`-` here), combining marks (dropped here), non-`#` `{…}` blocks (pulldown-cmark strips them).
 
@@ -71,6 +71,6 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 ## Open minors
 
-- The look-alike table exists twice (here and `specengine-import` `script.rs`), and `specengine-code` `markers.rs` `is_latin_id` rejects `/`, `#`; census and markers switch to this crate in their own increments.
-- An alias match containing a fullwidth digit still emits `homoglyph`.
-- `OrderedMap` can emit duplicate JSON keys (`1` and `"1"`; `?` for collection keys).
+- The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment; `specengine-code` `markers.rs` `is_latin_id` rejects `/`, `#` → the marker-parser increment: both then use this crate.
+- `see:R-12` in prose reads as project `see` → the `project:` increment.
+- A name-shape body is greedy (`MEC-STAMINA-based` is one ID) → `spec-check-graph`, which resolves inline mentions.

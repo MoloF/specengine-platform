@@ -134,9 +134,9 @@ fn no_pilot_names_in_docs_crates_or_fixtures() {
 }
 
 /// The only places allowed to hold raw Cyrillic: self-written Russian test
-/// text. Working answer to Q5 of docs/features/spec-parser.md ("Working
-/// answers pending owner"): these two fixture directories are exempt from
-/// the ADR-0024 check, everything else (including `docs/`) stays scanned.
+/// text. Working answer to Q5 of `crates/specengine-core/README.md` ("Open
+/// owner questions"): these two fixture directories are exempt from the
+/// ADR-0024 check, everything else (including `docs/`) stays scanned.
 /// If the owner answers "no", this list becomes empty and that text turns
 /// into escapes generated at test time.
 const RUSSIAN_TEST_TEXT: [&str; 2] = ["fixtures/spec-b", "fixtures/token-calibration"];

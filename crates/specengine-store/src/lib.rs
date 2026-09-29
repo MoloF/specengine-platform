@@ -59,7 +59,10 @@ pub use source::{Listing, Source, WorkingTree};
 ///
 /// 2: anchors carry an origin (`slug`, `attr`, `html`) and a span, and every
 /// heading slug and HTML anchor is stored (docs/features/spec-check.md).
-pub const INDEX_FORMAT: u32 = 2;
+///
+/// 3: alias matches emit no `homoglyph`; non-finite floats are strings; map
+/// keys are unique; `<!-->`, `<!--->` close a comment.
+pub const INDEX_FORMAT: u32 = 3;
 
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;
@@ -198,8 +201,12 @@ pub trait IndexWriter {
     ) -> Result<UpdateReport, StoreError>;
     /// Probes each named path by the walk rules: listed → as `update`;
     /// unlisted → its rows (and those of stored files under it, for a
-    /// directory) are deleted. Escalates to [`Self::update`] when the
-    /// worktree is not indexed yet or the stamp or the fingerprint changed.
+    /// directory gone from disk) are deleted. Escalates to [`Self::update`]
+    /// when the worktree is not indexed yet, the stamp or the fingerprint
+    /// changed, or a named path is not clean root-relative (`""`, `docs/`,
+    /// `./x.md`, absolute) or is a directory by [`Source::is_dir`] (new or
+    /// stored: a rename). A `[paths]` change needs [`Self::update`]: the
+    /// named paths alone cannot show what the new walk admits or drops.
     fn update_paths(
         &mut self,
         source: &dyn Source,

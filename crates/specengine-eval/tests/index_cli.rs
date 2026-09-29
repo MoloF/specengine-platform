@@ -476,3 +476,86 @@ fn pilot_a_index_meets_the_budgets() {
 fn pilot_b_index_meets_the_budgets() {
     pilot_run("SPECENGINE_PILOT_B", "SPECENGINE_SCHEME_B", "pilot-b");
 }
+
+// ------------------------------------------ docs/features/phase1-cleanup.md
+
+/// AC-20 (E5): a corpus `.md` that cannot be read is left out of the copy
+/// and counted `unreadable`.
+#[test]
+fn an_unreadable_corpus_file_is_counted_unreadable() {
+    use std::os::unix::fs::PermissionsExt;
+    let scratch = Scratch::new("unreadable");
+    let corpus = scratch.join("corpus");
+    copy_dir(&fixture("spec-b"), &corpus);
+    let files = md_count(&corpus.join("docs"));
+    let locked = snapshot(&corpus.join("docs"))
+        .into_keys()
+        .find(|path| path.extension().is_some_and(|ext| ext == "md"))
+        .map(|path| corpus.join("docs").join(path))
+        .expect("a spec-b document");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&locked).is_ok() {
+        eprintln!("mode 000 is readable here (root?); skipped");
+        return;
+    }
+    let out = scratch.join("out");
+    let output = eval()
+        .args([
+            "index",
+            "--pilot",
+            corpus.to_str().unwrap(),
+            "--label",
+            "locked",
+            "--out",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("specengine-eval runs");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+    let envelope = envelope(&output);
+    let result = &envelope["result"];
+    assert_eq!(result["unreadable"], 1, "{result}");
+    assert_eq!(result["files"], files - 1, "the rest is indexed: {result}");
+}
+
+/// AC-21 (E6): `index` takes its configuration from `--scheme` only; a
+/// `--config` is refused (exit 2) before anything is written.
+#[test]
+fn index_refuses_config() {
+    let scratch = Scratch::new("config");
+    let corpus = scratch.join("corpus");
+    copy_dir(&fixture("spec-b"), &corpus);
+    let before = snapshot(&corpus);
+    let config = scratch.join("census.toml");
+    fs::write(&config, "[corpus]\nroots = [\"docs\"]\n").unwrap();
+    for pilot in [None, Some(&corpus)] {
+        let out = scratch.join("out");
+        let mut command = eval();
+        command.arg("index");
+        if let Some(pilot) = pilot {
+            command.args(["--pilot", pilot.to_str().unwrap(), "--label", "copy"]);
+        }
+        let output = command
+            .args([
+                "--config",
+                config.to_str().unwrap(),
+                "--out",
+                out.to_str().unwrap(),
+            ])
+            .output()
+            .expect("specengine-eval runs");
+        let message = assert_refused(&output, &out, "--config");
+        assert!(
+            message.contains("--config"),
+            "stderr names --config:\n{message}"
+        );
+        assert_eq!(
+            message.trim_end(),
+            format!(
+                "index: refused: --config {} is not read by `index` (its configuration is --scheme); nothing written",
+                config.display()
+            )
+        );
+    }
+    assert_eq!(snapshot(&corpus), before, "the corpus is untouched");
+}

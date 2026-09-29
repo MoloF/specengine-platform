@@ -41,24 +41,24 @@ decision = { required = ["class", "id", "title", "status", "date", "scope"], opt
 mode = "enforce"             # observe | enforce (default)
 ```
 
-Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_task` accepted (tokens, 07 §5). Default contracts, open: canon `owner`, `reviewed`; decision `id`, `status`, `scope`; spec `status`, `scope`; generated nothing; each plus `class`. `closed = true` admits only `class`, `required`, `optional`. An unknown key or class, a wrong type, a cap < 1, an unknown mode → `specengine.toml:<line>: message`, and the run cannot check. The index fingerprint reads `[ids]` only: editing the check tables re-parses nothing.
+Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_task` accepted (tokens, 07 §5). Default contracts, open: canon `owner`, `reviewed`; decision `id`, `status`, `scope`; spec `status`, `scope`; generated nothing; each plus `class`. `closed = true` admits only `class`, `required`, `optional`. A written class replaces its default whole: an omitted `required` or `optional` is empty, `closed` false, so `canon = { closed = true }` admits only `class`. An unknown key or class, a wrong type, a cap < 1, an unknown mode → `specengine.toml:<line>: message`, and the run cannot check. The index fingerprint reads `[ids]` only: editing the check tables re-parses nothing.
 
 ## Rules
 
 - **Front-matter fails** (`not-utf8`, `frontmatter-unclosed`, `-yaml`, `-not-mapping`): the file gives only its parser findings. `xtask` reads such YAML leniently and judges the file: an accepted divergence.
-- **Class.** Every document declares one (owner, Q-4): none, or no front-matter → `class-missing`, no contract and no class cap, while IDs, references and `canon:` are still checked; not one of the four → `class-unknown`. Per class: `key-missing`, `key-extra` (closed), `scope-empty`, `date-invalid` (`reviewed`, `date`, `shipped` not shaped `YYYY-MM-DD`), `status-invalid` (spec draft | in-progress | shipped | abandoned; decision accepted | rejected | `superseded-by <ID>`), `shipped-missing`, `canon-missing` (accepted decision), `tier-invalid` (canon tier not 0–2; `tier: 0` off `tier0`; `tier0` not tier 0; `tier: 1` on a file not named `tier1_name`).
+- **Class.** Every document declares one (owner, Q-4): none, or no front-matter → `class-missing`, no contract and no class cap, while IDs, references and `canon:` are still checked; not one of the four → `class-unknown`. Per class: `key-missing`, `key-extra` (closed), `scope-empty`, `date-invalid` (`reviewed`, `date`, `shipped` not shaped `YYYY-MM-DD`), `status-invalid` (spec draft | in-progress | shipped | abandoned; decision accepted | rejected | `superseded-by <ID>`), `shipped-missing`, `canon-missing` (accepted decision: absent or blank → "has no `canon:`"; a value the parser could not read → "… is unreadable"), `tier-invalid` (canon tier not 0–2; `tier: 0` off `tier0`; `tier0` not tier 0, the only rule on `tier0`; `tier: 1` on a file not named `tier1_name`).
 - **IDs.** A number-shape definition (`id:`, `{#ID}`; references never) has `width` digits, else `id-width`. Mixed script → `homoglyph`, an error with its Latin `fix`. An ID defined in two files → `id-taken` on each later file by path, naming the first; feature-scoped prefixes exempt until `slug/` is checked. Under `records`, `id: X` names its file `X` + `.` or `-`, else `file-name` (`xtask`'s `starts_with` passes `ADR-00011.md` for `ADR-0001`).
 - **References** — `supersedes`, `status: superseded-by`, `adrs`, `refs`, `working_answer`, `parent`, `links.*`, a reference-form `canon:` — resolve: the ID is defined; or the text is in a document's `aliases:`; or, through `aliases_from`, the configured prefix + the written body is defined (no re-padding); `#Y` is defined in the ID's file. Else `ref-dangling`. An alias `parent` is re-read through the scheme. Not yet: `project:`, `slug/`, `@rev`, inline mentions.
-- **Path-form `canon:`**, on any document: has `#` (`canon-form`), names a walked canon document (`canon-file`), and one of its anchors or section IDs (`canon-anchor`). Anchors: heading slugs, `{#…}`, `<a id>`, `<a name>` (`crates/specengine-model/README.md`).
+- **Path-form `canon:`**, on any document: has `#` (`canon-form`), names a walked canon document (`canon-file`), and one of its anchors or section IDs (`canon-anchor`). Anchors: heading slugs, `{#…}`, `<a id>`, `<a name>` (`crates/specengine-model/README.md`); a start tag split over lines in an HTML block or a blockquote is missed, as by `xtask`: an accepted divergence.
 - **Budgets** (`budget`, subject = the slot): whole-file bytes > cap. `index` by path; canon tier 0 → `tier0_bytes`, tier 1 → `tier1_bytes`, else `canon_bytes`; decision → `decision_bytes`; spec, generated, class-less: none.
-- **Walk.** A non-UTF-8 name → the warning `name-skipped`; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
+- **Walk.** Non-UTF-8 names → one warning `name-skipped` per problem path, its message counting them; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
 - **Parser codes** pass as themselves through one table, `PARSER_SEVERITY`, with the parser's severity but `homoglyph`, `duplicate-id` (errors).
 
 The check's own codes (`CHECK_CODES`, 19) are the errors named above plus `name-skipped`.
 
 ## Findings, debt, verdict
 
-`Finding {code, severity, path, line, subject, message, fix?: {span, text}, debt?: {reason, expires, expired}}`; `subject` = the object as written (ID, key, `canon:` value, budget slot `tier0|tier1|index|decision|canon`, a parser diagnostic's span text), `""` for the whole file (line 1).
+`Finding {code, severity, path, line, subject, message, fix?: {span, text}, debt?: {reason, expires, expired}}`; `subject` = the object as written (ID, key, `canon:` value, budget slot `tier0|tier1|index|decision|canon`, a parser diagnostic's span text), `""` for the whole file (line 1). A spanless `unknown-key` or `frontmatter-type` takes the written top-level key whose entry holds its line: after `!tag` / `&anchor` (`!!str k:`), and `a` for `? a`; a flow key (`[a, b]:`), an `*alias` line, a non-scalar `? [q]`, or no bytes → `""`, as for every other spanless finding (`frontmatter-yaml`, `-not-mapping`, `-unclosed`, `not-utf8`). The class contract reads the same keys. A finding identical in every field is reported once.
 
 **Baseline** `.spec-debt.toml` (the root's unless one is passed; read only):
 
@@ -102,8 +102,5 @@ Working answer (the code) → what the other answer triggers.
 
 ## Open minors
 
-- Parser findings without a span (`frontmatter-yaml`, `frontmatter-type`, `unknown-key`) have subject `""`: one baseline entry covers every such finding in the file.
-- `CLAUDE.md` with `tier: 1` gives two `tier-invalid`; a malformed `canon:` on a decision also reports "has no `canon:`".
-- `findings.dedup()` merges N identical findings (repeated `name-skipped`, a duplicate `adrs` entry) into one.
-- HTML anchor scan: `<!-->` and `<!--->` leave a comment open; a start tag split over lines inside an HTML block, and one inside a blockquote, are missed.
-- `CheckFile.bytes` empty (a future index feed) → line 1 and keys from the parse: a required `title` then fails falsely.
+- `CheckFile.bytes` empty (a future index feed) → line 1 and keys from the parse: a required `title` then fails falsely → the first index-fed check.
+- Accepted, not fixed (diminishing returns): a quoted key with an escaped quote (`'it''s':`, `"a\"b":`) is not seen, so a finding on it takes the previous key; an alias key (`*v : y`) gets the anchor's line from serde-saphyr, so line and subject are the anchor line's; `canon: "\t"` (escaped blank) reads as unreadable; a block-scalar key (`? |`) gives `""`, its finding on the `: v` line.

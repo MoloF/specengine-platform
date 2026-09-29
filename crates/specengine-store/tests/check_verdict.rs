@@ -259,7 +259,9 @@ fn a_valid_baseline_at_the_root_is_read_by_default() {
     write(
         &root,
         BASELINE_FILE,
-        "[[debt]]\ncode = \"frontmatter-type\"\npath = \"docs/features/stamina-tuning.md\"\nreason = \"fixture\"\nexpires = \"2026-12-31\"\n",
+        // `tier: two`: a spanless `frontmatter-type` has its written key as
+        // the subject (K1 of docs/features/phase1-cleanup.md).
+        "[[debt]]\ncode = \"frontmatter-type\"\npath = \"docs/features/stamina-tuning.md\"\nsubject = \"tier\"\nreason = \"fixture\"\nexpires = \"2026-12-31\"\n",
     );
     let report = check(&root);
     assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));

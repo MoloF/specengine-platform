@@ -337,10 +337,11 @@ fn canon_tiers() {
         1,
         "1 off README"
     );
-    // Two rules: tier 1 off a README, and the tier0 file not at tier 0.
+    // The tier0 file gets only its own rule (K2 of
+    // docs/features/phase1-cleanup.md): one wrong tier is one finding.
     assert_eq!(
         tier_findings("CLAUDE.md", &canon("tier: 1\n")),
-        2,
+        1,
         "tier0 at 1"
     );
     assert_eq!(
@@ -364,6 +365,129 @@ fn canon_tiers() {
             report.findings.is_empty(),
             "{path} {tier}: {}",
             show(&report)
+        );
+    }
+}
+
+// ------------------------------------------ docs/features/phase1-cleanup.md
+
+/// AC-07 (K2): the `[paths] tier0` file gets only its own tier rule, so
+/// one wrong tier is one `tier-invalid`, whatever other rule it breaks.
+#[test]
+fn the_tier0_file_gets_one_tier_invalid_per_wrong_tier() {
+    let config = Config::from_toml(&format!(
+        "{DEFAULT}\n[paths]\ntier0 = \"CLAUDE.md\"\ntier1_name = \"README.md\"\n"
+    ));
+    let canon =
+        |tier: &str| format!("---\nclass: canon\nowner: o\nreviewed: 2026-09-01\n{tier}---\n# C\n");
+    for (tier, want) in [("tier: 0\n", 0), ("tier: 1\n", 1), ("tier: 5\n", 1)] {
+        let report = check_one(&config, "CLAUDE.md", &canon(tier));
+        let found = with_code(&report, "tier-invalid");
+        assert_eq!(found.len(), want, "{tier}: {}", show(&report));
+        for finding in found {
+            assert_eq!(
+                finding.message, "CLAUDE.md is the tier 0 file: tier: 0",
+                "{tier}: the tier0 rule speaks"
+            );
+            assert_eq!((finding.line, finding.subject.as_str()), (5, "tier"));
+        }
+    }
+}
+
+/// `canon-missing` of an accepted decision with the given `canon:` lines.
+fn canon_missing(canon: &str) -> Vec<String> {
+    let text = format!(
+        "---\nid: ADR-0001\nclass: decision\nstatus: accepted\nscope: [x]\n{canon}---\n# D\n"
+    );
+    let report = check_one(&default_config(), "docs/decisions/ADR-0001.md", &text);
+    with_code(&report, "canon-missing")
+        .into_iter()
+        .map(|f| {
+            assert_eq!(
+                (f.line, f.subject.as_str()),
+                (4, "canon"),
+                "{canon:?}: line and subject unchanged"
+            );
+            f.message.clone()
+        })
+        .collect()
+}
+
+/// AC-08 (K3): a `canon:` the parser could not read is "unreadable", not
+/// "has no `canon:`"; an absent, null, empty or blank `canon:` has none.
+#[test]
+fn an_unreadable_canon_is_not_reported_as_absent() {
+    const ABSENT: &str = "an accepted decision has no `canon:` (the promotion rule)";
+    const UNREADABLE: &str =
+        "the written `canon:` of an accepted decision is unreadable (the promotion rule)";
+    for canon in [
+        "canon: docs/x.md#\n",
+        "canon: \"#\"\n",
+        "canon: [a]\n",
+        "canon: {a: b}\n",
+    ] {
+        assert_eq!(canon_missing(canon), [UNREADABLE], "{canon:?}");
+    }
+    for canon in [
+        "",
+        "canon:\n",
+        "canon: ~\n",
+        "canon: null\n",
+        "canon: \"\"\n",
+        "canon: ''\n",
+        "canon: '  '\n",
+        "canon: \" \"\n",
+    ] {
+        assert_eq!(canon_missing(canon), [ABSENT], "{canon:?}");
+    }
+    // Known limit: an escaped all-whitespace string has no span to judge
+    // the written text by, so it stays unreadable.
+    assert_eq!(canon_missing("canon: \"\\t\"\n"), [UNREADABLE]);
+    // A readable `canon:` has no finding.
+    assert!(canon_missing("canon: docs/x.md#layout\n").is_empty());
+}
+
+/// K1 of docs/features/phase1-cleanup.md: a top-level key after a tag or an
+/// anchor, or an explicit scalar key, is a written key for the class
+/// contract too: it meets `required` and is judged by `closed`.
+#[test]
+fn tagged_anchored_and_explicit_keys_are_seen_by_the_class_contract() {
+    let config = Config::from_toml(&format!(
+        "{DEFAULT}\n[classes]\ngenerated = {{ required = [\"owner\"], closed = true }}\n"
+    ));
+    let t = |code: &str, line: usize, subject: &str| (code.to_owned(), line, subject.to_owned());
+    let run = |text: &str| -> Vec<(String, usize, String)> {
+        check_one(&config, "docs/g.md", text)
+            .findings
+            .iter()
+            .filter(|f| f.code.starts_with("key-"))
+            .map(|f| (f.code.clone(), f.line, f.subject.clone()))
+            .collect()
+    };
+    // The plain form, for contrast.
+    assert_eq!(
+        run("---\nclass: generated\nx_extra: 1\n---\n"),
+        [t("key-missing", 1, "owner"), t("key-extra", 3, "x_extra")]
+    );
+    for (case, text) in [
+        (
+            "tagged required, anchored extra",
+            "---\nclass: generated\n!!str owner: me\n&a x_extra: 1\n---\n",
+        ),
+        (
+            "anchored and tagged required, tagged and anchored extra",
+            "---\nclass: generated\n&o !!str owner: me\n!!str &a x_extra: 1\n---\n",
+        ),
+        (
+            "explicit required, explicit extra",
+            "---\nclass: generated\n? owner\n: me\n? x_extra\n: 1\n---\n",
+        ),
+    ] {
+        let extra_line = if case.starts_with("explicit") { 5 } else { 4 };
+        assert_eq!(
+            run(text),
+            [t("key-extra", extra_line, "x_extra")],
+            "{case}: `owner` is written, `x_extra` is extra"
         );
     }
 }

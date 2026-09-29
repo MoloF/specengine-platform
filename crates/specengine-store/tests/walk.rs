@@ -257,3 +257,52 @@ fn an_unreadable_directory_is_reported_and_the_rest_is_walked() {
     assert_eq!(index.files().expect("files"), listing.paths);
     common::chmod(&corpus.root, "docs/spec/locked", 0o755);
 }
+
+/// AC-14 of docs/features/phase1-cleanup.md (S4): `read` refuses a symlink
+/// in any component below the root, as `probe` does: a directory listed
+/// once and then swapped for a symlink to a copy of itself is no way in.
+#[test]
+fn a_listed_directory_swapped_for_a_symlink_is_neither_read_nor_probed() {
+    let scratch = Scratch::new("walk-swapped-dir");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let tree = corpus.tree();
+    let listing = tree.list().expect("list");
+    let under: Vec<String> = listing
+        .paths
+        .iter()
+        .filter(|path| path.starts_with("docs/records/Q/"))
+        .cloned()
+        .collect();
+    assert!(!under.is_empty(), "spec-a lists files under docs/records/Q");
+    for path in &under {
+        assert!(tree.read(path).is_ok(), "{path}: readable before the swap");
+        assert!(tree.probe(path), "{path}: probed before the swap");
+    }
+    // The same bytes, one symlink away: a copy outside the worktree.
+    let outside = scratch.join("outside-q");
+    common::copy_dir(&corpus.root.join("docs/records/Q"), &outside);
+    std::fs::remove_dir_all(corpus.root.join("docs/records/Q")).expect("remove Q");
+    symlink(&outside, corpus.root.join("docs/records/Q")).expect("symlink Q");
+    for path in &under {
+        let target = outside.join(path.strip_prefix("docs/records/Q/").unwrap());
+        assert!(target.is_file(), "{}: the copy exists", target.display());
+        assert!(
+            tree.read(path).is_err(),
+            "{path}: read through a symlinked directory"
+        );
+        assert!(!tree.probe(path), "{path}: probed through a symlink");
+    }
+    // A symlinked file (the last component) is refused as before.
+    let file = listing
+        .paths
+        .iter()
+        .find(|path| path.starts_with("docs/records/R/"))
+        .expect("a file under docs/records/R")
+        .as_str();
+    let copy = scratch.join("outside-r.md");
+    std::fs::copy(corpus.root.join(file), &copy).expect("copy");
+    std::fs::remove_file(corpus.root.join(file)).expect("remove");
+    symlink(&copy, corpus.root.join(file)).expect("symlink");
+    assert!(tree.read(file).is_err(), "a symlinked file is not read");
+    assert!(!tree.probe(file));
+}

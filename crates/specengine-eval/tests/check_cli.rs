@@ -501,3 +501,38 @@ fn pilot_a_check_runs_read_only() {
 fn pilot_b_check_runs_read_only() {
     pilot_run("SPECENGINE_PILOT_B", "SPECENGINE_SCHEME_B", "pilot-b");
 }
+
+/// AC-21 of docs/features/phase1-cleanup.md (E6): `check` takes its
+/// configuration from `--scheme` only; a `--config` is refused (exit 2)
+/// before anything is written.
+#[test]
+fn check_refuses_config() {
+    let scratch = Scratch::new("config");
+    let corpus = scratch.join("corpus");
+    copy_dir(&fixture("spec-a"), &corpus);
+    let before = snapshot(&corpus);
+    let config = scratch.join("census.toml");
+    fs::write(&config, "[corpus]\nroots = [\"docs\"]\n").unwrap();
+    let out = scratch.join("out");
+    let output = run(&[
+        "check",
+        "--pilot",
+        corpus.to_str().unwrap(),
+        "--config",
+        config.to_str().unwrap(),
+        "--out",
+        out.to_str().unwrap(),
+        "--today",
+        TODAY,
+    ]);
+    assert_refused("--config", &output, &out, &corpus, &before);
+    assert!(!out.exists(), "--out was created");
+    let message = stderr(&output);
+    assert_eq!(
+        message.trim_end(),
+        format!(
+            "check: refused: --config {} is not read by `check` (its configuration is --scheme); nothing written",
+            config.display()
+        )
+    );
+}

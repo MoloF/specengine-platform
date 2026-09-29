@@ -257,6 +257,16 @@ fn nesting(value: &FmValue) -> usize {
 /// reported (`unknown-key`), the ID is read and, when `kept` is given, the
 /// value in `extra` still holds that many nested collections.
 fn assert_parses_at_cap(name: &str, build: fn(usize) -> String, kept: Option<usize>) {
+    assert_parses_at_cap_with(name, build, kept, &[DiagnosticCode::UnknownKey]);
+}
+
+/// [`assert_parses_at_cap`] with the diagnostics expected at the cap.
+fn assert_parses_at_cap_with(
+    name: &str,
+    build: fn(usize) -> String,
+    kept: Option<usize>,
+    codes: &[DiagnosticCode],
+) {
     let n = under_root(MAX_DEPTH);
     let (parsed, _) = parse_within_limit(name, wrap(&build(n)));
     assert_eq!(
@@ -265,7 +275,7 @@ fn assert_parses_at_cap(name: &str, build: fn(usize) -> String, kept: Option<usi
             .iter()
             .map(|d| d.code)
             .collect::<Vec<_>>(),
-        [DiagnosticCode::UnknownKey],
+        codes,
         "{name}: nesting {MAX_DEPTH} (root + {n}) is within the cap: {:?}",
         parsed.diagnostics
     );
@@ -308,8 +318,15 @@ fn flow_mix_at_the_depth_cap_parses_and_one_more_level_is_one_yaml_error() {
 
 #[test]
 fn mappings_as_keys_at_the_depth_cap_parse_and_one_more_level_is_one_yaml_error() {
-    // A collection key is kept as `?`, so only the outer mapping is left.
-    assert_parses_at_cap("keys-at-cap", mappings_as_keys, Some(1));
+    // An entry whose key is a collection is dropped with one
+    // `frontmatter-type` (P4 of docs/features/phase1-cleanup.md), so only
+    // the outer mapping is left, empty.
+    assert_parses_at_cap_with(
+        "keys-at-cap",
+        mappings_as_keys,
+        Some(1),
+        &[DiagnosticCode::UnknownKey, DiagnosticCode::FrontmatterType],
+    );
     assert_rejected_over_cap("keys-over-cap", mappings_as_keys);
 }
 

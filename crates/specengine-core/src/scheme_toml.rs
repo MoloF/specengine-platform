@@ -34,6 +34,11 @@ pub fn scheme_from_toml(text: &str) -> Result<IdScheme, SchemeError> {
         return IdScheme::new(Vec::new()).map_err(|problem| error_at(None, problem.message));
     };
 
+    // Validated in source order, so of two bad entries the first written is
+    // reported; `IdScheme::new` sorts by prefix, so the scheme and its
+    // fingerprint do not depend on this order.
+    let mut ids: Vec<(String, Spanned<RawPrefix>)> = ids.into_iter().collect();
+    ids.sort_by_key(|(_, raw)| raw.span().start);
     let mut entries = Vec::with_capacity(ids.len());
     let mut spans = Vec::with_capacity(ids.len());
     for (prefix, raw) in ids {

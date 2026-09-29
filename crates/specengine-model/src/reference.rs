@@ -30,8 +30,9 @@ impl RefForm {
 /// `spec check`'s job.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Reference {
-    /// The Latin ID after look-alike normalisation; for an alias, the ID as
-    /// written (`alias_of` names the prefix it stands for).
+    /// The Latin ID after look-alike normalisation; for an alias, the prefix
+    /// as written and the body normalised (`alias_of` names the prefix it
+    /// stands for).
     pub id: String,
     /// The configured prefix whose `aliases_from` matched the written prefix.
     #[serde(default, skip_serializing_if = "Option::is_none")]

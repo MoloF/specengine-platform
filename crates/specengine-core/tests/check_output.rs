@@ -566,3 +566,55 @@ fn the_fixture_reports_are_deterministic() {
         assert_same(&config.run(&input), &config.run(&reversed), corpus);
     }
 }
+
+/// AC-09 of docs/features/phase1-cleanup.md (K4): skipped names are one
+/// `name-skipped` per problem path, its message counting them (singular
+/// for one); other paths get their own finding.
+#[test]
+fn skipped_names_are_one_finding_per_path_with_the_count() {
+    let config = config_in("enforce");
+    let mut input = config.input(&[("docs/a.md", "---\nclass: generated\nid: R-01\n---\n")]);
+    for path in ["", "docs", "", ""] {
+        input.problems.push(Problem {
+            kind: ProblemKind::SkippedName,
+            path: path.to_owned(),
+        });
+    }
+    let report = config.run(&input);
+    let skipped: Vec<(&str, usize, &str, Severity, &str)> = report
+        .findings
+        .iter()
+        .map(|f| {
+            (
+                f.path.as_str(),
+                f.line,
+                f.code.as_str(),
+                f.severity,
+                f.message.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        skipped,
+        [
+            (
+                "",
+                1,
+                "name-skipped",
+                Severity::Warning,
+                "3 directory or `.md` names that are not UTF-8 were skipped"
+            ),
+            (
+                "docs",
+                1,
+                "name-skipped",
+                Severity::Warning,
+                "1 directory or `.md` name that is not UTF-8 was skipped"
+            ),
+        ],
+        "{}",
+        show(&report)
+    );
+    assert_eq!(report.counts.warnings, 2);
+    assert_eq!(report.verdict, Verdict::Clean);
+}

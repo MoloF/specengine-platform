@@ -85,8 +85,8 @@ pub struct ExtraEntry {
     pub value: FmValue,
 }
 
-/// Typed front-matter keys (docs/features/spec-parser.md, "Front-matter keys
-/// and links"). Absent keys are omitted.
+/// Typed front-matter keys (`crates/specengine-core/README.md`,
+/// "Front-matter"). Absent keys are omitted.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Fields {
     #[serde(default, skip_serializing_if = "Option::is_none")]

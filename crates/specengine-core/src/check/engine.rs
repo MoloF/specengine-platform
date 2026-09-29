@@ -46,6 +46,15 @@ pub fn parser_severity(code: DiagnosticCode) -> Severity {
         .map_or(code.severity(), |&(_, severity)| severity)
 }
 
+/// Parser codes about one top-level front-matter entry: without a span,
+/// their subject is that entry's written key.
+fn is_key_level(code: DiagnosticCode) -> bool {
+    matches!(
+        code,
+        DiagnosticCode::UnknownKey | DiagnosticCode::FrontmatterType
+    )
+}
+
 /// Statuses of a spec, by the convention.
 const SPEC_STATUS: [&str; 4] = ["draft", "in-progress", "shipped", "abandoned"];
 
@@ -69,6 +78,8 @@ pub fn run(
             message: format!("today `{today}` is not a YYYY-MM-DD date"),
         });
     }
+    // Skipped names per problem path: one `name-skipped` each, with the count.
+    let mut skipped: BTreeMap<&str, usize> = BTreeMap::new();
     for problem in &input.problems {
         match problem.kind {
             ProblemKind::MissingRoot if paths.roots_written => causes.push(Cause {
@@ -81,17 +92,25 @@ pub fn run(
                 path: problem.path.clone(),
                 message: "directory cannot be listed; its files are unchecked".to_owned(),
             }),
-            ProblemKind::SkippedName => findings.push(Finding {
-                code: "name-skipped".to_owned(),
-                severity: Severity::Warning,
-                path: problem.path.clone(),
-                line: 1,
-                subject: String::new(),
-                message: "a directory or `.md` name that is not UTF-8 was skipped".to_owned(),
-                fix: None,
-                debt: None,
-            }),
+            ProblemKind::SkippedName => *skipped.entry(&problem.path).or_default() += 1,
         }
+    }
+    for (path, count) in skipped {
+        let message = if count == 1 {
+            "1 directory or `.md` name that is not UTF-8 was skipped".to_owned()
+        } else {
+            format!("{count} directory or `.md` names that are not UTF-8 were skipped")
+        };
+        findings.push(Finding {
+            code: "name-skipped".to_owned(),
+            severity: Severity::Warning,
+            path: path.to_owned(),
+            line: 1,
+            subject: String::new(),
+            message,
+            fix: None,
+            debt: None,
+        });
     }
 
     let mut files: Vec<&CheckFile> = input.files.iter().collect();
@@ -384,11 +403,19 @@ impl FileCheck<'_, '_> {
         });
     }
 
+    /// A parser diagnostic as a finding. `subject`: the span text; without a
+    /// span, for a key-level finding (`unknown-key`, `frontmatter-type`) the
+    /// written top-level key whose entry holds its line, else `""`.
     fn parser_finding(&self, diagnostic: &Diagnostic) -> Finding {
-        let subject = diagnostic
-            .span
-            .map(|span| self.text.text(span))
-            .unwrap_or_default();
+        let subject = match diagnostic.span {
+            Some(span) => self.text.text(span),
+            None if is_key_level(diagnostic.code) => self
+                .text
+                .key_at(diagnostic.line)
+                .unwrap_or_default()
+                .to_owned(),
+            None => String::new(),
+        };
         Finding {
             code: diagnostic.code.as_str().to_owned(),
             severity: parser_severity(diagnostic.code),
@@ -561,12 +588,12 @@ impl FileCheck<'_, '_> {
                         );
                     }
                     if status == "accepted" && fields.canon.is_none() {
-                        self.push(
-                            "canon-missing",
-                            status_line,
-                            "canon",
-                            "an accepted decision has no `canon:` (the promotion rule)".to_owned(),
-                        );
+                        let message = if self.canon_unreadable(document) {
+                            "the written `canon:` of an accepted decision is unreadable (the promotion rule)"
+                        } else {
+                            "an accepted decision has no `canon:` (the promotion rule)"
+                        };
+                        self.push("canon-missing", status_line, "canon", message.to_owned());
                     }
                 }
             }
@@ -587,10 +614,40 @@ impl FileCheck<'_, '_> {
         }
     }
 
+    /// `canon:` was written but the parser could not read it: kept in
+    /// `extra`, or a `frontmatter-type` or `unparsed-reference` lies in its
+    /// entry. An absent or empty `canon:` is not: null, or a string that is
+    /// empty or whitespace (its `unparsed-reference` spans that text).
+    fn canon_unreadable(&self, document: &Node) -> bool {
+        self.in_extra(document, "canon")
+            || self.parsed.diagnostics.iter().any(|diagnostic| {
+                let in_canon = || self.text.key_at(diagnostic.line) == Some("canon");
+                match diagnostic.code {
+                    DiagnosticCode::FrontmatterType => in_canon(),
+                    DiagnosticCode::UnparsedReference => {
+                        let empty = diagnostic
+                            .span
+                            .is_some_and(|span| self.text.text(span).trim().is_empty());
+                        !empty && in_canon()
+                    }
+                    _ => false,
+                }
+            })
+    }
+
+    /// The tier rules; the `[paths] tier0` file gets only its own rule, so
+    /// one wrong tier is one finding.
     fn tier_rules(&mut self, tier: Option<i64>) {
         let line = self.key_line("tier");
         let path = self.file.path.clone();
         let is_tier0_file = self.paths.tier0.as_deref() == Some(path.as_str());
+        if is_tier0_file {
+            if tier != Some(0) {
+                let message = format!("{path} is the tier 0 file: tier: 0");
+                self.push("tier-invalid", line, "tier", message);
+            }
+            return;
+        }
         match tier {
             Some(0..=2) | None => {}
             Some(other) => self.push(
@@ -602,7 +659,6 @@ impl FileCheck<'_, '_> {
         }
         if tier == Some(0)
             && let Some(tier0) = &self.paths.tier0
-            && !is_tier0_file
         {
             let message = format!("tier 0 is only {tier0}");
             self.push("tier-invalid", line, "tier", message);
@@ -612,10 +668,6 @@ impl FileCheck<'_, '_> {
             && file_name(&path) != name
         {
             let message = format!("tier 1 is only a file named {name}");
-            self.push("tier-invalid", line, "tier", message);
-        }
-        if is_tier0_file && tier != Some(0) {
-            let message = format!("{path} is the tier 0 file: tier: 0");
             self.push("tier-invalid", line, "tier", message);
         }
     }

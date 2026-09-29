@@ -1,5 +1,5 @@
 //! Measurement `index`: the spec index of `specengine-store` over a corpus
-//! (docs/features/spec-index.md, "Description and interactions", Harness).
+//! (`crates/specengine-eval/README.md`, "CLI contract").
 //!
 //! The walked files are copied under `--out/index/<label>/corpus`, and the
 //! copy is indexed into `--out/index/<label>/index.db`: a full index, an
@@ -86,7 +86,8 @@ pub struct IndexResult {
     pub nodes: usize,
     pub links: usize,
     pub diagnostics: usize,
-    /// Files stored with a `read_error`.
+    /// Corpus files left out of the copy as unreadable, plus files the full
+    /// index stored with a `read_error` (a parser panic).
     pub unreadable: usize,
     /// Configured roots that name no directory and no `.md` file.
     pub missing_roots: usize,
@@ -124,10 +125,12 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<IndexResult, String> {
     let listing = tree
         .list()
         .map_err(|error| format!("cannot list the corpus: {error}"))?;
+    let mut left_out = 0;
     for path in &listing.paths {
-        // An unreadable file is left out of the copy; the index of the copy
-        // cannot see it either way.
+        // An unreadable file is left out of the copy (the index of the copy
+        // cannot see it either way) and counted as `unreadable`.
         let Ok(bytes) = tree.read(path) else {
+            left_out += 1;
             continue;
         };
         let target = copy.join(path);
@@ -159,7 +162,7 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<IndexResult, String> {
         nodes: 0,
         links: 0,
         diagnostics: 0,
-        unreadable: full.unreadable,
+        unreadable: left_out + full.unreadable,
         missing_roots: listing.missing_roots.len(),
         full_ms,
         noop_ms,

@@ -69,6 +69,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) Technical Specification: SpecEngine Platform · specengine · abandoned
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) Phase 0 spikes: turn the engine's unverified claims into numbers on the two pilot corpora · spikes · shipped
+- [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) Phase 1 cleanup: the open minors of the parser, index and check · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
 - [docs/features/spec-check.md](features/spec-check.md) spec check, increment 1: a config-driven check engine at xtask parity · crates/specengine-core, crates/specengine-model, crates/specengine-store, crates/specengine-eval, xtask · shipped
 - [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped

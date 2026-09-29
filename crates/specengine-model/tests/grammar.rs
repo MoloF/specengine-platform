@@ -483,7 +483,7 @@ roots = [\"docs\"]
 
 #[test]
 fn from_toml_errors_name_the_line_and_load_nothing() {
-    let cases: [(&str, usize); 9] = [
+    let cases: [(&str, usize); 11] = [
         (
             "[ids]\nR = { kind = \"r\", width = 2 }\nQ = { kind = \"q\", width = 2, script = \"latin\" }\n",
             3,
@@ -508,6 +508,13 @@ fn from_toml_errors_name_the_line_and_load_nothing() {
             "[ids]\nR = { kind = \"r\", width = 2, scope = \"team\" }\n",
             2,
         ),
+        // Two bad entries: the first written is reported, not the first by
+        // name (P1 of docs/features/phase1-cleanup.md).
+        (
+            "[ids]\nZ = { kind = \"z\", width = 2, shape = \"blob\" }\nA = { kind = \"a\", width = 2, shape = \"blob\" }\n",
+            2,
+        ),
+        ("[ids]\nZ = { kind = \"z\" }\nA = { kind = \"a\" }\n", 2),
     ];
     for (text, line) in cases {
         let error = IdScheme::from_toml(text).expect_err(text);
@@ -521,4 +528,44 @@ fn from_toml_errors_name_the_line_and_load_nothing() {
     // Broken TOML syntax names its line too.
     let error = IdScheme::from_toml("[ids]\nR = { kind = \n").expect_err("syntax");
     assert!(error.line.is_some(), "{error}");
+}
+
+/// AC-01 of docs/features/phase1-cleanup.md (M1): an alias match is never a
+/// `homoglyph`, even when its body holds look-alike digits; the body is
+/// still normalised into `id`. A configured prefix with look-alike digits
+/// still is one.
+#[test]
+fn an_alias_with_look_alike_digits_is_no_homoglyph() {
+    let scheme = scheme();
+    let body = "-\u{FF10}\u{FF13}\u{FF11}";
+    for alias in ["QST", "\u{0412}\u{041E}\u{041F}"] {
+        let text = format!("See {alias}{body}.");
+        let found = scan(&text, 0, &scheme);
+        assert_eq!(found.len(), 1, "{alias}: one reference");
+        let reference = &found[0].reference;
+        assert_eq!(reference.alias_of.as_deref(), Some("Q"), "{alias}");
+        assert_eq!(reference.id, format!("{alias}-031"), "{alias}: id");
+        assert!(
+            found[0].homoglyphs.is_empty(),
+            "{alias}: no homoglyph: {:?}",
+            found[0].homoglyphs
+        );
+        // Through the parser: no `homoglyph` diagnostic either.
+        let parsed = specengine_core::parse("a.md", format!("{text}\n").as_bytes(), &scheme);
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .all(|d| d.code != specengine_model::DiagnosticCode::Homoglyph),
+            "{alias}: {:?}",
+            parsed.diagnostics
+        );
+    }
+    // The configured prefix with a look-alike digit is still a homoglyph.
+    let found = scan("See Q-\u{FF10}31.", 0, &scheme);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].reference.id, "Q-031");
+    assert_eq!(found[0].reference.alias_of, None);
+    assert_eq!(found[0].homoglyphs.len(), 1);
+    assert_eq!(found[0].homoglyphs[0].fix, "Q-031");
 }

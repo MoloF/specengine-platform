@@ -34,9 +34,10 @@ pub const MAX_DEPTH: usize = 32;
 pub const MAX_ALIAS_EXPANSION: usize = 10_000;
 
 /// The tree as deserialized: the four levels the reader takes a line or a
-/// span from are [`Located`] — the root (0), its keys and values (1), list
-/// items and `links` entries (2), `links` list items (3). Deeper nodes are
-/// only kept as values (`extra`, `raised_by`), so they are [`Plain`].
+/// span from are [`Located`] — the root (1), its keys and values (2), list
+/// items and `links` entries (3), `links` list items (4), counted as
+/// [`MAX_DEPTH`] counts. Deeper nodes are only kept as values (`extra`,
+/// `raised_by`), so they are [`Plain`].
 type Root = Located<Located<Located<Located<Plain>>>>;
 
 /// A YAML node with where it was written.

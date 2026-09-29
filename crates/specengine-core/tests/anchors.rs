@@ -251,3 +251,38 @@ fn the_fixture_canon_targets_resolve_through_slugs() {
         );
     }
 }
+
+/// AC-10 of docs/features/phase1-cleanup.md (K5): `<!-->` and `<!--->` are
+/// complete comments (CommonMark 0.31), so an `<a id>` after one is an
+/// anchor; one inside `<!-- … -->` still is not.
+#[test]
+fn empty_comments_close_themselves() {
+    for comment in ["<!-->", "<!--->"] {
+        for text in [
+            format!("<div>\n{comment}\n<a id=\"after\"></a>\n</div>\n"),
+            format!("Text {comment} and <a id=\"after\"></a> here.\n"),
+        ] {
+            let parsed = parse(&text);
+            assert_eq!(
+                names(&parsed),
+                [(Html, "after")],
+                "{text:?}: {:?}",
+                parsed.anchors
+            );
+            let anchor = &parsed.anchors[0];
+            assert_eq!(text_of(text.as_bytes(), anchor.span), "<a id=\"after\">");
+        }
+    }
+    for text in [
+        "<div>\n<!-- <a id=\"inside\"></a> -->\n<a id=\"after\"></a>\n</div>\n",
+        "<div>\n<!--\n<a id=\"inside\"></a>\n--->\n<a id=\"after\"></a>\n</div>\n",
+    ] {
+        let parsed = parse(text);
+        assert_eq!(
+            names(&parsed),
+            [(Html, "after")],
+            "{text:?}: {:?}",
+            parsed.anchors
+        );
+    }
+}

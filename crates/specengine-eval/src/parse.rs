@@ -1,5 +1,5 @@
 //! Measurement `parse`: the spec parser of `specengine-core` over a corpus
-//! (docs/features/spec-parser.md, "`specengine-eval parse`").
+//! (`crates/specengine-eval/README.md`, "CLI contract").
 //!
 //! Files are the census's documents: the same `--config` (default
 //! `census.toml` at the corpus root), the same walk. The ID scheme comes from
@@ -19,7 +19,7 @@ use serde::Serialize;
 use specengine_core::IdSchemeToml;
 use specengine_import::{CensusConfig, RecordKind};
 use specengine_model::{
-    AnchorOrigin, DiagnosticCode, IdScheme, LinkOrigin, LinkTarget, ParsedFile,
+    AnchorOrigin, DiagnosticCode, IdScheme, IdScript, LinkOrigin, LinkTarget, ParsedFile,
 };
 
 use crate::census;
@@ -83,11 +83,17 @@ pub fn prepare(
 /// The `result` object.
 #[derive(Serialize)]
 pub struct ParseResult {
+    /// Documents walked.
     pub files: usize,
+    /// Documents walked that could not be read (not parsed).
+    pub unreadable: usize,
     /// Files whose parse panicked (caught per file).
     pub panics: usize,
     pub not_utf8: usize,
     pub front_matter: FrontMatterCounts,
+    /// Every diagnostic code of the parser (all files, front-matter and
+    /// body), including the zeros.
+    pub diagnostics: BTreeMap<&'static str, usize>,
     pub sections: SectionCounts,
     /// `{#…}` heading anchors that are not IDs of the scheme.
     pub heading_attrs_not_section: usize,
@@ -99,9 +105,6 @@ pub struct ParseResult {
 pub struct FrontMatterCounts {
     /// Files with a closed front-matter block.
     pub present: usize,
-    /// Every diagnostic code of the parser (all files, front-matter and
-    /// body), including the zeros.
-    pub diagnostics: BTreeMap<&'static str, usize>,
 }
 
 #[derive(Serialize)]
@@ -119,7 +122,9 @@ pub struct ReferenceCounts {
     pub inline: usize,
     /// Links declared in front-matter.
     pub declared: usize,
-    /// `homoglyph` findings.
+    /// References (links) whose ID is not written in Latin script and is
+    /// not an alias: look-alikes. Definitions are counted only in
+    /// `diagnostics.homoglyph`.
     pub homoglyph: usize,
     /// References through an `aliases_from` prefix, inline and declared.
     pub alias: usize,
@@ -187,15 +192,14 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
     let paths = documents(&corpus.root, &config, &mut problems);
     let mut result = ParseResult {
         files: paths.len(),
+        unreadable: 0,
         panics: 0,
         not_utf8: 0,
-        front_matter: FrontMatterCounts {
-            present: 0,
-            diagnostics: DiagnosticCode::ALL
-                .iter()
-                .map(|code| (code.as_str(), 0))
-                .collect(),
-        },
+        front_matter: FrontMatterCounts { present: 0 },
+        diagnostics: DiagnosticCode::ALL
+            .iter()
+            .map(|code| (code.as_str(), 0))
+            .collect(),
         sections: SectionCounts {
             parsed: 0,
             census_id_sections: census.id_sections(),
@@ -222,6 +226,7 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
         let bytes = match fs::read(corpus.root.join(relative)) {
             Ok(bytes) => bytes,
             Err(error) => {
+                result.unreadable += 1;
                 problems.push(format!("{relative}: skipped: {error}"));
                 continue;
             }
@@ -242,14 +247,11 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
         }
         for diagnostic in &parsed.diagnostics {
             *result
-                .front_matter
                 .diagnostics
                 .entry(diagnostic.code.as_str())
                 .or_default() += 1;
-            match diagnostic.code {
-                DiagnosticCode::NotUtf8 => result.not_utf8 += 1,
-                DiagnosticCode::Homoglyph => result.references.homoglyph += 1,
-                _ => {}
+            if diagnostic.code == DiagnosticCode::NotUtf8 {
+                result.not_utf8 += 1;
             }
         }
         result.sections.parsed += parsed.sections().len();
@@ -259,10 +261,12 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
                 LinkOrigin::Inline => result.references.inline += 1,
                 LinkOrigin::Frontmatter => result.references.declared += 1,
             }
-            if let LinkTarget::Reference(reference) = &link.dst
-                && reference.alias_of.is_some()
-            {
-                result.references.alias += 1;
+            if let LinkTarget::Reference(reference) = &link.dst {
+                if reference.alias_of.is_some() {
+                    result.references.alias += 1;
+                } else if reference.script != IdScript::Latin {
+                    result.references.homoglyph += 1;
+                }
             }
         }
         if let Some(document) = parsed.document() {
@@ -272,11 +276,14 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
             result.tokens_est.max_node = result.tokens_est.max_node.max(node.tokens_est);
         }
 
+        // One line index per file: heading lines by binary search, never a
+        // rescan of the bytes per section.
+        let newlines = newline_offsets(&bytes);
         let parser_lines: BTreeSet<usize> = parsed
             .sections()
             .iter()
             .filter_map(|node| node.heading)
-            .map(|heading| line_of(&bytes, heading.start))
+            .map(|heading| line_of(&newlines, heading.start))
             .collect();
         let empty = BTreeSet::new();
         let census_lines = census_sections.get(relative.as_str()).unwrap_or(&empty);
@@ -418,13 +425,18 @@ fn relative_string(path: &Path) -> String {
     parts.join("/")
 }
 
-/// 1-based line of a byte offset.
-fn line_of(bytes: &[u8], offset: usize) -> usize {
-    bytes[..offset.min(bytes.len())]
+/// Offsets of every `\n` in `bytes`: the line index of one file.
+fn newline_offsets(bytes: &[u8]) -> Vec<usize> {
+    bytes
         .iter()
-        .filter(|&&byte| byte == b'\n')
-        .count()
-        + 1
+        .enumerate()
+        .filter_map(|(offset, &byte)| (byte == b'\n').then_some(offset))
+        .collect()
+}
+
+/// 1-based line of a byte offset, by the file's [`newline_offsets`].
+fn line_of(newlines: &[usize], offset: usize) -> usize {
+    newlines.partition_point(|&newline| newline < offset) + 1
 }
 
 fn summarize(
@@ -435,8 +447,12 @@ fn summarize(
     parse_ms: u128,
 ) {
     eprintln!(
-        "parse [{label}]: {} files, {} with front-matter, {} not UTF-8, {} panics ({parse_ms} ms)",
-        result.files, result.front_matter.present, result.not_utf8, result.panics
+        "parse [{label}]: {} files ({} unreadable), {} with front-matter, {} not UTF-8, {} panics ({parse_ms} ms)",
+        result.files,
+        result.unreadable,
+        result.front_matter.present,
+        result.not_utf8,
+        result.panics
     );
     eprintln!(
         "  sections {} (census {}, differ {}), heading anchors that are no ID {}",

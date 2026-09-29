@@ -1,5 +1,6 @@
 //! The schema, the connection PRAGMAs and the format stamp
-//! (docs/features/spec-index.md, "Data"; 05 §8).
+//! (`crates/specengine-store/README.md`, "Rows", "Cache key and format
+//! stamp", "Connection, location, concurrency"; 05 §8).
 //!
 //! Every table is `STRICT`; kinds are free strings (no `CHECK`); no key on
 //! `id` (a node is keyed by `(file, ord)`, uniqueness is `spec check`'s).

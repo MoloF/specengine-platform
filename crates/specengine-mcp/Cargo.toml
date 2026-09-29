@@ -20,6 +20,6 @@ serde_json.workspace = true
 clap.workspace = true
 
 [features]
-# Probe tools `probe_output` and `probe_sleep` for the interactive MCP checks of
-# docs/features/phase-0-spikes.md ("Owner checklist").
+# Probe tools `probe_output` and `probe_sleep` for the interactive MCP checks
+# (crates/specengine-mcp/README.md, "Feature `probes`").
 probes = []

@@ -209,3 +209,33 @@ fn an_id_defined_in_two_files_and_twice_in_a_third_is_stored_four_times() {
     );
     assert_projection(&corpus, &index, "spec-a + duplicates");
 }
+
+/// AC-04 of docs/features/phase1-cleanup.md (P3), with the other parser
+/// changes of that spec (M1, P4): a file with non-finite floats in any
+/// spelling, a float that needs `float_roundtrip`, repeated and collection
+/// map keys, and an alias with look-alike digits reads back from the index
+/// exactly as `parse()` gives it.
+#[test]
+fn non_finite_floats_repeated_keys_and_aliases_read_back_as_parsed() {
+    let scratch = Scratch::new("projection-cleanup");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let path = "docs/spec/odd-values.md";
+    corpus.write(
+        path,
+        "---\nclass: spec\nx_nan: .nan\nx_inf: .Inf\nx_neg: -.inf\nx_big: 1e999\n\
+         x_fine: 0.30000000000000004\nx_seq: [.nan, 2.5e-308, -.inf]\n\
+         x_map: {1: a, \"1\": b, k: {? [q] : r, s: .nan}}\nraised_by: {1: a, \"1\": b}\n\
+         1: top\n\"1\": again\n---\n\
+         # Odd values\n\nSee QST-\u{FF10}\u{FF13}\u{FF11} and Q-\u{FF10}31.\n",
+    );
+    let parsed = specengine_core::parse(path, &corpus.bytes(path), &corpus.scheme);
+    let extra = parsed.nodes[0].extra.as_ref().expect("extra");
+    assert!(
+        extra.iter().any(|entry| entry.key == "x_nan"
+            && entry.value == specengine_model::FmValue::Str(".nan".to_owned())),
+        "{extra:?}"
+    );
+    let mut index = corpus.open(&scratch.db("index"));
+    corpus.update(&mut index);
+    assert_projection(&corpus, &index, "spec-a + odd values");
+}

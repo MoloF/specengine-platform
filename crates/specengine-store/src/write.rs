@@ -4,8 +4,10 @@
 //!
 //! A file is re-parsed iff its `(path, BLAKE3)` differs from its row, or the
 //! worktree's `[ids]` fingerprint or the DB's format stamp changed. A changed
-//! file's rows are deleted and inserted again, never replaced in place
-//! (`INSERT OR REPLACE` would skip the FTS delete trigger). A row that moved
+//! file's rows are deleted and inserted again, never replaced in place:
+//! `INSERT OR REPLACE` on `nodes`, under `recursive_triggers=OFF`, deletes
+//! the old row without firing `nodes_fts_delete` and leaves the FTS index
+//! malformed. A row that moved
 //! between the snapshot and the transaction (another writer) is decided
 //! again inside it, parsing in place when needed; a file edited after it was
 //! read is caught by the next update.
@@ -20,7 +22,7 @@ use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
 use crate::read::worktree_id;
 use crate::rows::{FileRows, hash_bytes, size_of};
-use crate::source::Source;
+use crate::source::{Source, is_clean_relative};
 use crate::{UpdateReport, schema};
 
 /// Which update.
@@ -69,6 +71,18 @@ pub(crate) fn run(
 ) -> Result<UpdateReport, StoreError> {
     index.check_root(source)?;
     let fingerprint = fingerprint(scheme)?;
+    // A named path that is no clean root-relative path, or a directory (new
+    // or stored: a rename), cannot be probed file by file: walk.
+    let mode = match mode {
+        Mode::Paths(paths)
+            if paths
+                .iter()
+                .any(|path| !is_clean_relative(path) || source.is_dir(path)) =>
+        {
+            Mode::Walk
+        }
+        other => other,
+    };
     match attempt(index, source, scheme, &fingerprint, mode)? {
         Some(report) => Ok(report),
         // The stamp or the fingerprint moved under `update_paths`: walk.
@@ -309,7 +323,8 @@ fn stored_files(
 }
 
 /// The named paths, deduplicated and sorted, split by the walk rules; a
-/// named path that is a stored directory brings the stored files under it.
+/// named path that was a stored directory (gone from disk: an existing one
+/// escalates to a walk) brings the stored files under it.
 fn probe_targets(source: &dyn Source, paths: &[&str], snapshot: &Snapshot) -> Targets {
     let mut named: BTreeSet<String> = BTreeSet::new();
     for path in paths {

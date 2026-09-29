@@ -16,7 +16,7 @@ The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and 
 
 ## `[paths]`
 
-What the index and the check walk (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude, tier0?, tier1_name?, index?, roots_written}`: role keys default to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/spec`, `docs/records`, `docs/features`, `docs/generated`, `docs/archive`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output; `roots_written` when written); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths; `tier0`, `tier1_name`, `index`: the check's slots. Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or empty component; one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business.
+What the index and the check walk (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude, tier0?, tier1_name?, index?, roots_written}`: role key `k` defaults to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/<k>`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output; `roots_written` when written); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths; `tier0`, `tier1_name`, `index`: the check's slots. Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or empty component; one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business.
 
 ```toml
 [paths]
@@ -41,7 +41,7 @@ exclude = ["docs/archive/old/**"]
 
 ## Front-matter
 
-Optional UTF-8 BOM, then front-matter iff the next line is exactly `---`, closed by the next exact `---`. Typed keys (wrong type, or a bare string for a list → `frontmatter-type`, raw kept in `extra`): strings `kind`, `class`, `title`, `status`, `owner`, `reviewed`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`; integers `tier`, `rev`; string lists `scope`, `aliases` (not lexed); `id`; references `parent`, `working_answer`, `canon`; reference lists `supersedes`, `adrs`, `refs`; `links` (type → reference list); `raised_by` (map). Other keys → `extra` in source order + one `unknown-key`. Declared links (origin `frontmatter`): each `links` item, `supersedes`, `working_answer`, `canon`; `refs`, `adrs` → `mentions`; `status: superseded-by X` → X `supersedes` this document, `src_span` at X. Failed YAML: one `frontmatter-yaml` at its line, no guessed ID, the body still parsed; no lax re-parse (the importer's job).
+Optional UTF-8 BOM, then front-matter iff the next line is exactly `---`, closed by the next exact `---`. Typed keys (wrong type, or a bare string for a list → `frontmatter-type`, raw kept in `extra`): strings `kind`, `class`, `title`, `status`, `owner`, `reviewed`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`; integers `tier`, `rev`; string lists `scope`, `aliases` (not lexed); `id`; references `parent`, `working_answer`, `canon`; reference lists `supersedes`, `adrs`, `refs`; `links` (type → reference list); `raised_by` (map). Other keys → `extra` in source order + one `unknown-key`. Declared links (origin `frontmatter`): each `links` item, `supersedes`, `working_answer`, `canon`; `refs`, `adrs` → `mentions`; `status: superseded-by X` → X `supersedes` this document, `src_span` at X. Floats are finite (NaN, ±inf → strings `.nan`, `.inf`, `-.inf`). Each map built (`extra` values, `raised_by`, `links`) holds a key text once: a repeat or a collection key drops its entry with one `frontmatter-type`; top-level repeats stay (`extra` is a list). Limit: a float key's text is Rust `Display` (`{1.0: a, 1: b}` drops `b`). Failed YAML: one `frontmatter-yaml` at its line, no guessed ID, the body still parsed; no lax re-parse (the importer's job).
 
 ## Body references
 
@@ -55,7 +55,7 @@ Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both
 
 ## Token estimator
 
-`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other letters 1000, rest 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` (English, Russian, mixed, code block, table) has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) is `#[ignore]` until the owner fills them (Q4). Document budgets are bytes (check Q-1).
+`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other letters 1000, rest 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) is `#[ignore]` until the owner fills them (Q4). Document budgets are bytes (check Q-1).
 
 ## Open owner questions
 
@@ -65,14 +65,9 @@ Working answers are what the code does now; the owner's answer triggers the step
 - Q2 (kind vocabulary): a free string, not validated. Settled → an ADR amending `docs/canon/architecture.md#universal`.
 - Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0002 / ADR-0018 with a `#layout` diff.
 - Q4 (reference token counts): filled → AC-15 un-ignored.
-- Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/` and `fixtures/token-calibration/`, exactly what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → the exemption list empties and the text becomes escapes generated at test time.
+- Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/`, `fixtures/token-calibration/`: what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → the exemption list empties and the text becomes escapes generated at test time.
 - Q6 (editing accepted ADRs): no, so ADR-0015, -0018, -0020 and `docs/features/phase-0-spikes.md` keep one invalid YAML scalar each (`frontmatter-yaml`, allowlisted in `dogfood.rs`, baselined for the check: its Q-2). Edits allowed → quote the four scalars, empty the allowlist and the baseline.
 
 ## Tests
 
-`tests/`: `spans.rs`, `front_matter.rs`, `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread; no free-stack margin is claimed), `sections.rs`, `references.rs`, `links.rs`, `records.rs`, `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `tokens.rs`, `determinism.rs`, `cost.rs`, `dogfood.rs` (every document of this repository; ADR `canon:` anchors), `anchors.rs`, `check_*.rs`.
-
-## Open minors
-
-- `scheme_toml` validates entries alphabetically: of two bad entries the alphabetically first line is reported.
-- The `yaml.rs` `Root` doc numbers levels 0–3 while `MAX_DEPTH` counts from 1.
+`tests/`, one file per concern; of note: `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread; no free-stack margin is claimed), `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document here; ADR `canon:` anchors), `check_*.rs`.

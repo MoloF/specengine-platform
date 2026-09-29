@@ -181,6 +181,10 @@ pub(crate) fn size_of(bytes: &[u8]) -> i64 {
 /// file's `body`) minus every ID section inside it, the remaining non-empty
 /// pieces joined by `\n`. Nested sections are indexed on their own, so a
 /// word belongs to exactly one node.
+///
+/// Sections come in source order, so only those after `index` can lie in
+/// its range, and the scan stops at the first starting at or after the
+/// range's end: linear in the node's descendants, not in the file's nodes.
 fn own_text(bytes: &[u8], parsed: &ParsedFile, index: usize) -> String {
     let Some(node) = parsed.nodes.get(index) else {
         return String::new();
@@ -199,8 +203,11 @@ fn own_text(bytes: &[u8], parsed: &ParsedFile, index: usize) -> String {
         }
     };
     let mut cursor = range.start;
-    for (position, section) in parsed.nodes.iter().enumerate().skip(1) {
-        if position == index || !range.contains(section.span) || section.span.start < cursor {
+    for section in parsed.nodes.iter().skip(index + 1) {
+        if section.span.start >= range.end {
+            break;
+        }
+        if !range.contains(section.span) || section.span.start < cursor {
             continue;
         }
         push(cursor, section.span.start);
@@ -253,4 +260,212 @@ pub(crate) fn rebuild_parsed(
             .map(|diagnostic| from_json::<Diagnostic>(diagnostic, "diagnostic"))
             .collect::<Result<_, _>>()?,
     })
+}
+
+/// AC-13 of docs/features/phase1-cleanup.md (S3): `own_text` gives what the
+/// full scan over every section gave, on every node of the two fixture
+/// corpora and a crafted nested file, and stays linear on one file of
+/// 50 000 top-level ID sections.
+#[cfg(test)]
+mod own_text_oracle {
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
+
+    use specengine_core::IdSchemeToml;
+    use specengine_model::{IdScheme, PrefixSpec};
+
+    use super::*;
+
+    /// The algorithm before S3, kept as the oracle: every section of the
+    /// file is looked at for every node.
+    fn full_scan(bytes: &[u8], parsed: &ParsedFile, index: usize) -> String {
+        let Some(node) = parsed.nodes.get(index) else {
+            return String::new();
+        };
+        let range = if index == 0 {
+            parsed.body
+        } else {
+            node.body.unwrap_or(Span::new(node.span.end, node.span.end))
+        };
+        let mut pieces: Vec<Cow<'_, str>> = Vec::new();
+        let mut push = |start: usize, end: usize| {
+            if start < end
+                && let Some(slice) = bytes.get(start..end)
+            {
+                pieces.push(String::from_utf8_lossy(slice));
+            }
+        };
+        let mut cursor = range.start;
+        for (position, section) in parsed.nodes.iter().enumerate().skip(1) {
+            if position == index || !range.contains(section.span) || section.span.start < cursor {
+                continue;
+            }
+            push(cursor, section.span.start);
+            cursor = section.span.end;
+        }
+        push(cursor, range.end);
+        pieces.retain(|piece| !piece.is_empty());
+        pieces.join("\n")
+    }
+
+    fn md_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
+            .map(|entry| entry.expect("entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                md_files(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "md") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Asserts `own_text` equals the oracle on every node (and one past the
+    /// last); returns the number of nodes that own a nested section.
+    fn assert_same(context: &str, bytes: &[u8], parsed: &ParsedFile) -> usize {
+        let mut with_nested = 0;
+        for index in 0..=parsed.nodes.len() {
+            assert_eq!(
+                own_text(bytes, parsed, index),
+                full_scan(bytes, parsed, index),
+                "{context}: node {index}"
+            );
+            let Some(node) = parsed.nodes.get(index) else {
+                continue;
+            };
+            let range = if index == 0 {
+                parsed.body
+            } else {
+                node.body.unwrap_or(Span::new(node.span.end, node.span.end))
+            };
+            if parsed.nodes[index + 1..]
+                .iter()
+                .any(|section| range.contains(section.span))
+            {
+                with_nested += 1;
+            }
+        }
+        with_nested
+    }
+
+    /// The fixture corpora with a scheme and a `docs/` tree (spec-a and
+    /// spec-b), found on disk: `src` names no fixture (`tests/genre.rs`).
+    fn scheme_corpora() -> Vec<PathBuf> {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+        let mut corpora: Vec<PathBuf> = std::fs::read_dir(&fixtures)
+            .expect("fixtures")
+            .map(|entry| entry.expect("entry").path())
+            .filter(|dir| dir.join("specengine.toml").is_file() && dir.join("docs").is_dir())
+            .collect();
+        corpora.sort();
+        corpora
+    }
+
+    #[test]
+    fn own_text_equals_the_full_scan_on_both_fixture_corpora() {
+        let corpora = scheme_corpora();
+        assert_eq!(corpora.len(), 2, "{corpora:?}");
+        for root in corpora {
+            let corpus = root.display().to_string();
+            let toml = std::fs::read_to_string(root.join("specengine.toml")).expect("scheme");
+            let scheme = IdScheme::from_toml(&toml).expect("fixture scheme");
+            let mut files = Vec::new();
+            md_files(&root.join("docs"), &mut files);
+            let count = files.len();
+            assert!(count > 5, "{corpus}: {count} files");
+            let mut nodes = 0;
+            let mut with_nested = 0;
+            for file in files {
+                let bytes = std::fs::read(&file).expect("fixture file");
+                let parsed = specengine_core::parse("f.md", &bytes, &scheme);
+                nodes += parsed.nodes.len();
+                with_nested += assert_same(&file.display().to_string(), &bytes, &parsed);
+            }
+            assert!(nodes > count, "{corpus}: {nodes} nodes, sections too");
+            assert!(with_nested > 0, "{corpus}: no node holds a section");
+        }
+    }
+
+    fn x_scheme() -> IdScheme {
+        IdScheme::new(vec![PrefixSpec::number("X", "x", 5)]).expect("scheme")
+    }
+
+    /// Nesting three deep, siblings, a non-ID heading between sections, an
+    /// empty section right before its sibling, text before the first
+    /// section, and a section running to the end of the file.
+    const NESTED: &str = "---\nid: X-00001\n---\nIntro text.\n\n# A {#X-00002}\n\nalpha\n\n## A1 {#X-00003}\n\nbravo\n\n### A1a {#X-00004}\n\ncharlie\n\n## Plain heading\n\ndelta\n\n## A2 {#X-00005}\n## A3 {#X-00006}\n\necho\n\n# Plain top\n\nfoxtrot\n\n# B {#X-00007}\n\ngolf\n\n#### B deep {#X-00008}\n\nhotel";
+
+    #[test]
+    fn own_text_equals_the_full_scan_on_a_crafted_nested_file() {
+        let scheme = x_scheme();
+        let crlf = NESTED.replace('\n', "\r\n");
+        for (case, text) in [("lf", NESTED.to_owned()), ("crlf", crlf)] {
+            let parsed = specengine_core::parse("nested.md", text.as_bytes(), &scheme);
+            assert_eq!(parsed.sections().len(), 7, "{case}: {:?}", parsed.nodes);
+            let with_nested = assert_same(case, text.as_bytes(), &parsed);
+            assert!(
+                with_nested >= 4,
+                "{case}: {with_nested} nodes hold sections"
+            );
+            // Each word belongs to exactly one node.
+            let texts: Vec<String> = (0..parsed.nodes.len())
+                .map(|index| own_text(text.as_bytes(), &parsed, index))
+                .collect();
+            for word in [
+                "Intro", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
+            ] {
+                let owners = texts.iter().filter(|own| own.contains(word)).count();
+                assert_eq!(owners, 1, "{case}: {word:?} in {texts:#?}");
+            }
+        }
+        // Degenerate inputs: nothing, and no section at all.
+        for text in ["", "just text\n", "---\nid: X-00001\n---\n"] {
+            let parsed = specengine_core::parse("d.md", text.as_bytes(), &scheme);
+            assert_same(text, text.as_bytes(), &parsed);
+        }
+    }
+
+    /// 50 000 top-level ID sections: `own_text` of every node, the loop
+    /// alone (the parse is not timed), within 2 s in a debug build. The
+    /// loop gives up at the bound, so a quadratic scan fails fast.
+    #[test]
+    fn own_text_of_fifty_thousand_sections_is_linear() {
+        const SECTIONS: usize = 50_000;
+        const BOUND: Duration = Duration::from_secs(2);
+        let mut text = String::from("# Top\n\nIntro.\n\n");
+        for n in 1..=SECTIONS {
+            text.push_str(&format!("# Section {n} {{#X-{n:05}}}\n\nword{n}\n\n"));
+        }
+        let parsed = specengine_core::parse("big.md", text.as_bytes(), &x_scheme());
+        assert_eq!(parsed.sections().len(), SECTIONS);
+        let bytes = text.as_bytes();
+        let started = Instant::now();
+        let mut total = 0;
+        for index in 0..parsed.nodes.len() {
+            total += own_text(bytes, &parsed, index).len();
+            if index % 1_000 == 0 {
+                assert!(
+                    started.elapsed() <= BOUND,
+                    "own_text of {index} of {} nodes took {:?} (> {BOUND:?})",
+                    parsed.nodes.len(),
+                    started.elapsed()
+                );
+            }
+        }
+        let elapsed = started.elapsed();
+        eprintln!("own_text of {} nodes: {elapsed:?}", parsed.nodes.len());
+        assert!(elapsed <= BOUND, "own_text loop: {elapsed:?} (> {BOUND:?})");
+        assert!(total > SECTIONS * 5, "texts were built: {total} bytes");
+        // Spot checks against the oracle: the first, a middle and the last node.
+        for index in [0, 1, SECTIONS / 2, SECTIONS] {
+            assert_eq!(
+                own_text(bytes, &parsed, index),
+                full_scan(bytes, &parsed, index),
+                "node {index}"
+            );
+        }
+    }
 }

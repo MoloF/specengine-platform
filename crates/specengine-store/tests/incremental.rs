@@ -162,3 +162,79 @@ fn update_paths_of_a_never_indexed_worktree_walks_everything() {
     assert_eq!(report.walked, corpus.listing().paths.len(), "{report:?}");
     assert_equals_fresh(&index, &corpus, &scratch, "the first update_paths");
 }
+
+/// AC-11 of docs/features/phase1-cleanup.md (S1): `update_paths` walks
+/// everything when a named path is a directory the walk reaches (new or
+/// stored: a rename), a directory holding a root, or no clean root-relative
+/// path (`./x`, absolute, `""`, a trailing `/`); the index then equals a
+/// fresh one. A clean `.md` path is probed alone.
+#[test]
+fn update_paths_escalates_on_directories_and_unclean_paths() {
+    let scratch = Scratch::new("incremental-escalate");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let mut index = corpus.open(&scratch.db("index"));
+    corpus.update(&mut index);
+    let everything = |corpus: &Corpus| corpus.listing().paths.len();
+    let update_paths = |index: &mut specengine_store::SqliteIndex, path: &str| {
+        index
+            .update_paths(&corpus.tree(), &corpus.scheme, &[path])
+            .unwrap_or_else(|error| panic!("update_paths({path:?}): {error}"))
+    };
+
+    // A clean `.md` path: that one file.
+    let edited = "docs/records/DEC/DEC-0007.md";
+    let text = corpus.read_text(edited);
+    corpus.write(edited, format!("{text}\nAmended once.\n"));
+    let report = update_paths(&mut index, edited);
+    assert_eq!((report.walked, report.parsed), (1, 1), "{report:?}");
+    assert!(!report.reparsed_all);
+    assert_equals_fresh(&index, &corpus, &scratch, "a clean .md path");
+
+    // A new directory under a root, named alone.
+    corpus.write(
+        "docs/spec/newdir/a.md",
+        "---\nclass: spec\n---\n# New\n\nSee RULE-CORE-LOOP.\n",
+    );
+    let report = update_paths(&mut index, "docs/spec/newdir");
+    assert_equals_fresh(&index, &corpus, &scratch, "a new directory");
+    assert_eq!(report.walked, everything(&corpus), "new dir: {report:?}");
+
+    // A stored directory renamed: the new name alone.
+    std::fs::rename(
+        corpus.root.join("docs/spec/newdir"),
+        corpus.root.join("docs/spec/renamed"),
+    )
+    .expect("rename");
+    let report = update_paths(&mut index, "docs/spec/renamed");
+    assert_equals_fresh(&index, &corpus, &scratch, "a renamed directory");
+    assert_eq!(report.walked, everything(&corpus), "renamed: {report:?}");
+
+    // A directory holding roots.
+    corpus.write("docs/records/R/R-77.md", "---\nid: R-77\n---\n# R-77\n");
+    let report = update_paths(&mut index, "docs");
+    assert_equals_fresh(&index, &corpus, &scratch, "a directory holding roots");
+    assert_eq!(report.walked, everything(&corpus), "docs: {report:?}");
+
+    // An edited file named by no clean root-relative path.
+    let absolute = corpus.root.join(edited).to_str().unwrap().to_owned();
+    for (step, named) in [
+        ("./path", format!("./{edited}")),
+        ("absolute", absolute),
+        ("empty", String::new()),
+        ("parent/", "docs/records/DEC/".to_owned()),
+    ] {
+        let text = corpus.read_text(edited);
+        corpus.write(edited, format!("{text}\nAmended by {step}.\n"));
+        let report = update_paths(&mut index, &named);
+        assert_equals_fresh(&index, &corpus, &scratch, step);
+        assert_eq!(report.walked, everything(&corpus), "{step}: {report:?}");
+        assert_eq!(report.parsed, 1, "{step}: {report:?}");
+    }
+
+    // A dot-directory under a root is none the walk reaches: no walk, and
+    // the index still equals a fresh one (the walk skips it too).
+    corpus.write("docs/spec/.hidden/a.md", "# Hidden\n");
+    let report = update_paths(&mut index, "docs/spec/.hidden");
+    assert_eq!(report.walked, 0, ".hidden: {report:?}");
+    assert_equals_fresh(&index, &corpus, &scratch, "a dot-directory");
+}
