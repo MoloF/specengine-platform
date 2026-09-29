@@ -20,7 +20,7 @@ Types and pure functions, `serde` only: no I/O, no parser library, no other Spec
 | `script` | the look-alike table (fullwidth ASCII, Cyrillic and Greek letters identical to a Latin one); `IdScript` `latin` / `mixed` / `non-latin` (ADR-0009) |
 | `scheme` | `IdScheme::new(vec![PrefixSpec::number(..), PrefixSpec::name(..).with_aliases(..)])`, `Shape`, `IdScope`, `SchemeProblem` / `SchemeError` |
 | `grammar` | `scan` (text), `parse_reference` (one front-matter scalar), `parse_definition` (`id:`, `{#…}`), `parse_canon`, `split_superseded_by` |
-| `reference`, `link`, `node`, `value`, `diagnostic`, `parsed` | what a parsed file is made of; `LINK_TYPES`, `MENTIONS`, `DiagnosticCode::ALL` (13 codes) |
+| `reference`, `link`, `node`, `value`, `diagnostic`, `parsed` | what a parsed file is made of; `Anchor`, `AnchorOrigin`, `LINK_TYPES`, `MENTIONS`, `DiagnosticCode::ALL` (13 codes) |
 
 ## `[ids]` in `specengine.toml`
 
@@ -49,11 +49,17 @@ Examples: `R-12@3`, `slug/AC-07`, `shared:PAT-PROBES@3`, `MEC-STAMINA#RULE-STAM-
 
 Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph`), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0002#layout` → `ADR-0002`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. A `rev` out of `0..=999999999`, a `rev=` attribute that is not 1–9 digits, or `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one.
 
-Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an alias. A reference-carrying front-matter scalar is exactly one reference; `canon:` tries a reference, else `path[#anchor]`. Nothing is resolved here (existence, aliases, `slug/`, `project:`, anchors): that is `spec check`.
+Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an alias. A reference-carrying front-matter scalar is exactly one reference; `canon:` tries a reference, else `path[#anchor]`. Nothing is resolved here (existence, aliases, `slug/`, `project:`, anchors): that is `spec check` (`docs/canon/spec-check.md`).
 
 ## Links
 
 `LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (lives until applied), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6). Another declared type is kept with `unknown-link-type`. `MENTIONS` is the weak link of `refs`, `adrs` and every body reference; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a `canon:` path, unresolved. `parent` is containment, not a link (05 §8).
+
+## Anchors
+
+`Anchor {name, origin: AnchorOrigin, level?, span}`: where a `path#name` link can land, e.g. `{"name":"license","origin":"slug","level":2,"span":[1402,1412]}`. `ParsedFile.anchors` holds them in source order, a heading's `slug` before its `attr`. Origins: `slug` — every heading's GitHub slug; `attr` — a `{#…}` that is no definable ID (a section's own ID is its node); `html` — `<a id="…">`, `<a name="…">` outside code and HTML comments. `slug`, `attr`: `level` and span = the heading line(s); `html`: span = the start tag `<`…`>`, no level.
+
+**Slug** (github-slugger; computed by core): the heading's inline text (text, code, link text; no destination, image, HTML), `{#…}` removed, lowercased; letters and digits of any script, `-`, `_` kept; whitespace → `-`; the rest dropped; a repeated base gets `-1`, `-2`, … skipping slugs already given; empty → no anchor. Accepted divergences: `xtask` slugs the raw line (links, HTML); GitHub differs on two-line setext headings, NBSP and tab (`-` here), combining marks (dropped here), non-`#` `{…}` blocks (pulldown-cmark strips them).
 
 ## Diagnostics
 

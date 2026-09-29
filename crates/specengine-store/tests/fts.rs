@@ -3,12 +3,12 @@
 //! - AC-10: a word removed by an edit, or only in a deleted file, has no hit;
 //!   FTS5 `integrity-check` (rank 1) passes after every step of the AC-07
 //!   script.
-//! - AC-11: a word of `fixtures/spec-b/docs/spec/cli.md` line 23 found
+//! - AC-11: a word of `fixtures/spec-b/docs/spec/cli.md` line 25 found
 //!   nowhere else has one hit, `FLAG-DRY-RUN` (a node's own text excludes the
 //!   ID sections inside it).
 //! - AC-12: a capitalised Cyrillic word is found by its lower-case form; the
-//!   four-letter stem `\u{043a}\u{043e}\u{043f}\u{0438}` hits `MOD-CLI` (line 13) and `CMD-SYNC`
-//!   (line 18) — trigram substrings, no stemmer. Queries are `\u{…}` escapes
+//!   four-letter stem `\u{043a}\u{043e}\u{043f}\u{0438}` hits `MOD-CLI` (line 15) and `CMD-SYNC`
+//!   (line 20) — trigram substrings, no stemmer. Queries are `\u{…}` escapes
 //!   (ADR-0024).
 //! - AC-13: IDs, paths and FTS5 syntax characters are searched as text,
 //!   never as syntax; `RULE-STAM` finds `RULE-STAM-REGEN`; a query without a
@@ -113,7 +113,7 @@ fn fts_integrity_check_passes_after_every_step_of_the_edit_script() {
 
 // ------------------------------------------------------------------ AC-11
 
-/// Two words of cli.md line 23 ("nothing", "writes") found nowhere else in spec-b.
+/// Two words of cli.md line 25 ("nothing", "writes") found nowhere else in spec-b.
 const NICHEGO: &str = "\u{043d}\u{0438}\u{0447}\u{0435}\u{0433}\u{043e}";
 const PISHET: &str = "\u{043f}\u{0438}\u{0448}\u{0435}\u{0442}";
 
@@ -124,13 +124,13 @@ fn a_word_of_a_nested_section_has_one_hit_its_own_section() {
     let line = corpus
         .read_text("docs/spec/cli.md")
         .lines()
-        .nth(22)
-        .expect("cli.md line 23")
+        .nth(24)
+        .expect("cli.md line 25")
         .to_owned();
     let mut index = corpus.open(&scratch.db("index"));
     corpus.update(&mut index);
     for word in [NICHEGO, PISHET] {
-        assert!(line.contains(word), "cli.md line 23 holds the query word");
+        assert!(line.contains(word), "cli.md line 25 holds the query word");
         let elsewhere: Vec<String> = corpus
             .listing()
             .paths
@@ -165,12 +165,12 @@ fn a_word_of_a_nested_section_has_one_hit_its_own_section() {
 
 // ------------------------------------------------------------------ AC-12
 
-/// "Tool", capitalised on cli.md line 13, and its lower-case form.
+/// "Tool", capitalised on cli.md line 15, and its lower-case form.
 const INSTRUMENT_CAPITAL: &str =
     "\u{0418}\u{043d}\u{0441}\u{0442}\u{0440}\u{0443}\u{043c}\u{0435}\u{043d}\u{0442}";
 const INSTRUMENT_LOWER: &str =
     "\u{0438}\u{043d}\u{0441}\u{0442}\u{0440}\u{0443}\u{043c}\u{0435}\u{043d}\u{0442}";
-/// The stem "cop-" (of "copies" on line 13, "copy" on line 18).
+/// The stem "cop-" (of "copies" on line 15, "copy" on line 20).
 const KOPI: &str = "\u{043a}\u{043e}\u{043f}\u{0438}";
 
 #[test]
@@ -179,10 +179,10 @@ fn cyrillic_is_case_folded_and_a_stem_matches_as_a_substring() {
     let corpus = Corpus::copy_of("spec-b", &scratch, "wt");
     let cli = corpus.read_text("docs/spec/cli.md");
     let lines: Vec<&str> = cli.lines().collect();
-    assert!(lines[12].contains(INSTRUMENT_CAPITAL), "cli.md line 13");
+    assert!(lines[14].contains(INSTRUMENT_CAPITAL), "cli.md line 15");
     assert!(
-        lines[12].contains(KOPI) && lines[17].contains(KOPI),
-        "cli.md lines 13, 18"
+        lines[14].contains(KOPI) && lines[19].contains(KOPI),
+        "cli.md lines 15, 20"
     );
     for path in corpus.listing().paths {
         assert!(

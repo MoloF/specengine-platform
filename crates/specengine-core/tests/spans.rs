@@ -12,7 +12,8 @@ mod common;
 
 use specengine_model::script::normalize_char;
 use specengine_model::{
-    CanonTarget, IdScheme, LinkTarget, Node, ParsedFile, PathTarget, PrefixSpec, Reference, Span,
+    AnchorOrigin, CanonTarget, IdScheme, LinkTarget, Node, ParsedFile, PathTarget, PrefixSpec,
+    Reference, Span,
 };
 
 use common::{BOM, corpus_scheme, fixture, md_files, render_reference, text_of, variants};
@@ -194,7 +195,7 @@ impl Shift {
             }
         }
         for anchor in &mut out.anchors {
-            anchor.heading = self.span(anchor.heading);
+            anchor.span = self.span(anchor.span);
         }
         for diagnostic in &mut out.diagnostics {
             diagnostic.span = self.opt(diagnostic.span);
@@ -325,12 +326,38 @@ fn assert_verbatim(name: &str, bytes: &[u8], parsed: &ParsedFile) {
         );
     }
     for anchor in &parsed.anchors {
-        let text = text_of(bytes, anchor.heading);
-        assert!(
-            text.contains(&format!("{{#{}", anchor.name)),
-            "{name}: anchor heading {text:?} holds {{#{}",
-            anchor.name
-        );
+        let text = text_of(bytes, anchor.span);
+        match anchor.origin {
+            AnchorOrigin::Attr => assert!(
+                text.contains(&format!("{{#{}", anchor.name)),
+                "{name}: attr anchor heading {text:?} holds {{#{}",
+                anchor.name
+            ),
+            AnchorOrigin::Slug => {
+                // An ATX heading line, or a setext heading through its underline.
+                let atx = text.trim_start().starts_with('#');
+                let setext = text.lines().count() >= 2
+                    && text.lines().last().is_some_and(|underline| {
+                        let underline = underline.trim();
+                        !underline.is_empty()
+                            && (underline.chars().all(|c| c == '=')
+                                || underline.chars().all(|c| c == '-'))
+                    });
+                assert!(
+                    (atx || setext) && anchor.level.is_some_and(|level| (1..=6).contains(&level)),
+                    "{name}: slug anchor {:?} spans {text:?}, which is no heading",
+                    anchor.name
+                );
+            }
+            AnchorOrigin::Html => {
+                assert!(
+                    text.starts_with('<') && text.ends_with('>') && text.contains(&anchor.name),
+                    "{name}: html anchor {:?} spans {text:?}, not its start tag",
+                    anchor.name
+                );
+                assert!(anchor.level.is_none(), "{name}: html anchors have no level");
+            }
+        }
     }
     let check_reference = |what: &str, reference: &Reference| {
         if let Some(span) = reference.span {

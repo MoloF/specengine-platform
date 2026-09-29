@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-09-28
+reviewed: 2026-09-29
 ---
 
 # Documentation: how the convention is applied
@@ -77,7 +77,7 @@ generator: command
 source: what it is built from
 ```
 
-Extra keys are errors. Files starting with `_` are templates, not documents. A `canon:` anchor is a GitHub heading slug, `{#id}` in a heading, or `<a id="…">`.
+Extra keys are errors. Files starting with `_` are templates, not documents. A `canon:` anchor is a GitHub heading slug, `{#id}` in a heading, `<a id="…">` or `<a name="…">`.
 
 ## Promotion rule
 
@@ -103,6 +103,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 - `cargo xtask docs check` — the six checks of §11: budgets, front-matter schema, `canon:` resolves, `superseded-by`/`supersedes`/`adrs` targets exist, index and generated documents have not drifted.
 - The pre-commit hook (`scripts/hooks-install.sh` enables `.githooks/`) runs the check whenever a `.md` file changes.
 - CI: `.github/workflows/docs.yml`.
+- `spec check` (increment 1, `docs/canon/spec-check.md`) matches §11.1–4 and adds the ID checks and a debt baseline; it replaces `xtask` in increment 3.
 - Pipeline roles must run the check before handing in (`CLAUDE.md`, "Process").
 
 ## Compaction

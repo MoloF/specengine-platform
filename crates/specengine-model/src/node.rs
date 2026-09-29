@@ -137,12 +137,31 @@ pub struct Fields {
     pub raised_by: Option<OrderedMap<FmValue>>,
 }
 
-/// A `{#…}` heading anchor that is not an ID of the scheme.
+/// A place a `path#name` link can land on: a heading's GitHub slug, a
+/// heading's `{#…}` attribute that is not an ID of the scheme, or an HTML
+/// `<a id>` / `<a name>` tag. A section's own ID is its node, not an anchor.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Anchor {
-    /// The text after `#`.
+    /// The slug, the text after `#`, or the attribute value.
     pub name: String,
-    pub level: u8,
-    /// The heading line(s), line ending excluded.
-    pub heading: Span,
+    pub origin: AnchorOrigin,
+    /// `slug`, `attr`: the heading level, 1–6.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u8>,
+    /// `slug`, `attr`: the heading line(s), line ending excluded. `html`:
+    /// the start tag, `<` through `>`.
+    pub span: Span,
+}
+
+/// Where an [`Anchor`] comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AnchorOrigin {
+    /// GitHub's slug of the heading's inline text: every heading has one
+    /// unless it slugs to nothing; repeats get `-1`, `-2`, ….
+    Slug,
+    /// A heading `{#…}` attribute that is not an ID of the scheme.
+    Attr,
+    /// `<a id="…">` or `<a name="…">` outside code and HTML comments.
+    Html,
 }

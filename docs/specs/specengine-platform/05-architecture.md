@@ -74,7 +74,7 @@ docs/
 
 ### 3.1. Node kinds (`kind`)
 
-A kind is project vocabulary, named per prefix in `[ids]` (a free string, core README Q2): the core knows none (ADR-0008). Usual kinds: `game`, `domain`, `mechanic`, `rule`, `invariant`, `edge_case`, `data_contract`, `requirement`, `assumption`, `decision`, `principle`, `term`, `question`, `feature`, `criterion`, `check`, `generated`. IDs are Latin (ADR-0009): a look-alike letter gives `homoglyph` with the Latin fix (`spec check` applies it); legacy IDs resolve through `aliases_from` / `aliases`; `spec new` issues numbers. `[ids]` and the grammar: `crates/specengine-model/README.md`; the parser: `crates/specengine-core/README.md`.
+A kind is project vocabulary, named per prefix in `[ids]` (a free string, core README Q2): the core knows none (ADR-0008). Usual kinds: `game`, `domain`, `mechanic`, `rule`, `invariant`, `edge_case`, `data_contract`, `requirement`, `assumption`, `decision`, `principle`, `term`, `question`, `feature`, `criterion`, `check`, `generated`. IDs are Latin (ADR-0009): a look-alike letter gives `homoglyph` with the Latin fix as data (`spec check` rejects; only `apply_proposal` writes, ADR-0004); legacy IDs resolve through `aliases_from` / `aliases`; `spec new` issues numbers. `[ids]` and the grammar: `crates/specengine-model/README.md`; the parser: `crates/specengine-core/README.md`.
 
 ### 3.2. Link types
 
@@ -160,18 +160,7 @@ A separate project `shared`: Bevy 0.19 conventions, test rules (probes, named mu
 
 ## 4. Checks (`spec check`)
 
-One diagnostic set for CLI, CI, pre-commit and UI. The initial set is the six checks of §11 of the documentation convention plus the graph and code checks accumulated in the existing corpus of consumer projects:
-
-| Group | Checks |
-|---|---|
-| Structure | front-matter matches the schema of its `kind`/`class`; ID is unique and issued by the registry; no homoglyphs; file named after its ID |
-| Graph | references resolve; `canon:` of an accepted decision resolves (promotion rule); `supersedes` target exists; no `depends_on` cycles; nothing live references a superseded node |
-| Process | decision without `cost`; question without `to` or without a working answer; `@assumes` on a closed proposal decided otherwise; amendment not applied; accepted feature with an empty "Implementation"; **a numbered record carries its own text**, not just a pointer to where it once was |
-| Budgets | Tier 0/1/index/canon/decision within limits (bilingual estimator); overflow pushes content a tier down, the limit is never raised |
-| Code | marker references an existing node; node with `impl_status ≥ implemented` has a binding; glossary term found in code as an identifier; drift per `spec.lock` |
-| Generated | regeneration matches the file; generation marker forbids manual edits |
-
-**Acknowledged debt (baseline)**: `spec check --baseline .spec-debt.toml` downgrades an error to a warning with a stated reason. New violations cannot be added to the baseline. Every debt entry has an **expiry** (amiss: no ignore file, only debt and waivers with expiry). **Adoption path** is a project mode: `observe` (everything counted, nothing blocks) → `enforce-introduced` (only new violations block) → `enforce`. A mass "fix everything" PR is not planned: it cannot be reviewed. The summary prints as one line (`--debt` prints details), because a gate that prints dozens of lines on every commit gets switched off quickly.
+Increment 1 shipped: `docs/canon/spec-check.md` (structure, budgets, references, `canon:`, expiring debt baseline, `observe` / `enforce`, one-line summary). Pending groups, increments 2–4 (08 Phase 1): graph, the CLI gate, process; queue state → Phase 2; code → Phase 3.
 
 ## 5. Code: symbol index, bindings, drift
 

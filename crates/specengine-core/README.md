@@ -6,17 +6,17 @@ owner: owner
 reviewed: 2026-09-29
 ---
 
-# specengine-core — the spec parser
+# specengine-core — the spec parser and the check
 
-The reading core of Phase 1; today the parser: one file's bytes → `ParsedFile`. No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on (path, bytes, scheme), maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (over the default members; `specengine-ra` gets 0.9.6 through `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `[ids]` and `[paths]`. Callers: `specengine-store`, `specengine-eval parse`.
+The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and `check` (parses → `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (over the default members; `specengine-ra` gets 0.9.6 through `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`. Callers: `specengine-store`, `specengine-eval parse`, `check`.
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order; its types, tables, rules and output: `docs/canon/spec-check.md`.
 
 ## `[paths]`
 
-What the index walks (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude}`: role keys default to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/spec`, `docs/records`, `docs/features`, `docs/generated`, `docs/archive`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths. Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or empty component; one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business.
+What the index and the check walk (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude, tier0?, tier1_name?, index?, roots_written}`: role keys default to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/spec`, `docs/records`, `docs/features`, `docs/generated`, `docs/archive`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output; `roots_written` when written); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths; `tier0`, `tier1_name`, `index`: the check's slots. Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or empty component; one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business.
 
 ```toml
 [paths]
@@ -27,13 +27,14 @@ exclude = ["docs/archive/old/**"]
 
 ## Output
 
-`ParsedFile = {path, bom, front_matter?, body, nodes, links, anchors, diagnostics}`; BOM + front-matter + body = the file, even when it is not UTF-8. `nodes[0]` is the document (`document()`), sections follow in source order (`sections()`); absent optional fields are omitted. Nodes cover 05 §3.3 `nodes` except `project`, `worktree`, `norm_hash`. `diagnostics` come in line order; the codes: model README.
+`ParsedFile = {path, bom, front_matter?, body, nodes, links, anchors, diagnostics}`; BOM + front-matter + body = the file, even when it is not UTF-8. `anchors`: heading slugs, non-ID `{#…}`, `<a id|name>` (model README). `nodes[0]` is the document (`document()`), sections follow in source order (`sections()`); absent optional fields are omitted. Nodes cover 05 §3.3 `nodes` except `project`, `worktree`, `norm_hash`. `diagnostics` come in line order; the codes: model README.
 
 ```json
 {"path":"spec/stamina.md","bom":false,"front_matter":[0,236],"body":[236,512],"nodes":[
  {"id":"MEC-STAMINA","kind":"mechanic","title":"Stamina","summary":[247,312],"parent":{"id":"DOM-MOVEMENT","span":[81,93]},"span":[0,512],"tokens_est":131,"fields":{"tier":2},"extra":[]},
  {"id":"RULE-STAM-REGEN","kind":"rule","title":"Regeneration","level":2,"heading":[326,366],"body":[366,440],"attrs":[["rev","3"]],"rev":3,"parent":{"id":"MEC-STAMINA"},"span":[326,440],"tokens_est":29}],
- "links":[{"src":"MEC-STAMINA","type":"derived_from","origin":"frontmatter","dst":{"id":"R-12","script":"latin","span":[118,122]}}],"anchors":[],"diagnostics":[]}
+ "links":[{"src":"MEC-STAMINA","type":"derived_from","origin":"frontmatter","dst":{"id":"R-12","script":"latin","span":[118,122]}}],
+ "anchors":[{"name":"stamina","origin":"slug","level":1,"span":[236,245]},{"name":"regeneration","origin":"slug","level":2,"span":[326,366]}],"diagnostics":[]}
 ```
 
 **Spans** `[start, end)` are file byte offsets, BOM included; lines are 1-based; CRLF is never normalised. Document `span` = the whole file. A **section** is a heading whose `id` attribute is a definable ID (other `{#…}` → `anchors`); it ends at the next heading of the same or higher level, trailing whitespace trimmed, nested sections included (the census rule). `heading` = the heading line without its line ending; `body` = from the line after it to the section end; disjoint, so a rename leaves the body hash alone (05 §3.5). Section fields: `title` (heading text), `level`, `attrs` (`key=value`, bare key → null), `classes`, `rev` (`rev=N`, Q3), `parent` (nearest enclosing ID section, else the document), `kind` (prefix kind); `script` only when the ID as written is not Latin. **Document:** `kind` declared, else the prefix kind (another declared → `kind-mismatch`, declared kept); `title` from `title:`, else the first H1; `summary` = first paragraph after the first H1 (no H1: before the first heading).
@@ -54,22 +55,22 @@ Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both
 
 ## Token estimator
 
-`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other letters 1000, rest 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` (English, Russian, mixed, code block, table) has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) is `#[ignore]` until the owner fills them (Q4). Budgets stay in bytes until an ADR amending ADR-0022 moves them to tokens, due before `spec check`.
+`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other letters 1000, rest 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` (English, Russian, mixed, code block, table) has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) is `#[ignore]` until the owner fills them (Q4). Document budgets are bytes (check Q-1).
 
 ## Open owner questions
 
 Working answers are what the code does now; the owner's answer triggers the step named.
 
-- Q1 (parser libraries): the pins above, default features off, gaps reported, never swapped silently; `serde-saphyr`'s unpinned transitive crates (04 §6) await acknowledgement.
+- Q1 (parser libraries): the pins above, default features off, gaps reported, never swapped silently; `serde-saphyr`'s unpinned transitive crates (04 §6) and `serde_json` as a normal dependency await acknowledgement.
 - Q2 (kind vocabulary): a free string, not validated. Settled → an ADR amending `docs/canon/architecture.md#universal`.
 - Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0002 / ADR-0018 with a `#layout` diff.
 - Q4 (reference token counts): filled → AC-15 un-ignored.
 - Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/` and `fixtures/token-calibration/`, exactly what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → the exemption list empties and the text becomes escapes generated at test time.
-- Q6 (editing accepted ADRs): no, so ADR-0015, -0018, -0020 and `docs/features/phase-0-spikes.md` keep one invalid YAML scalar each (`frontmatter-yaml`, allowlisted in `dogfood.rs`). Edits allowed → quote the four scalars, empty the allowlist.
+- Q6 (editing accepted ADRs): no, so ADR-0015, -0018, -0020 and `docs/features/phase-0-spikes.md` keep one invalid YAML scalar each (`frontmatter-yaml`, allowlisted in `dogfood.rs`, baselined for the check: its Q-2). Edits allowed → quote the four scalars, empty the allowlist and the baseline.
 
 ## Tests
 
-`tests/`: `spans.rs`, `front_matter.rs`, `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread; no free-stack margin is claimed), `sections.rs`, `references.rs`, `links.rs`, `records.rs`, `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `tokens.rs`, `determinism.rs`, `cost.rs`, `dogfood.rs` (every document of this repository).
+`tests/`: `spans.rs`, `front_matter.rs`, `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread; no free-stack margin is claimed), `sections.rs`, `references.rs`, `links.rs`, `records.rs`, `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `tokens.rs`, `determinism.rs`, `cost.rs`, `dogfood.rs` (every document of this repository; ADR `canon:` anchors), `anchors.rs`, `check_*.rs`.
 
 ## Open minors
 

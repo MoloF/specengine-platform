@@ -79,7 +79,7 @@ fn unknown_key_stays_in_extra_with_one_warning_and_no_error() {
         .filter(|d| d.code == DiagnosticCode::UnknownKey)
         .collect();
     assert_eq!(unknown.len(), 1, "{:?}", parsed.diagnostics);
-    assert_eq!(unknown[0].line, 6, "the x_custom line");
+    assert_eq!(unknown[0].line, 7, "the x_custom line");
     assert_eq!(unknown[0].severity, Severity::Warning);
     assert_eq!(parsed.diagnostics.len(), 1, "{:?}", parsed.diagnostics);
     let document = parsed.document().unwrap();

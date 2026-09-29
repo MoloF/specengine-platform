@@ -1,6 +1,9 @@
 ---
 id: TERM-exhausted
+class: canon
 aliases: [TERM-tired]
+owner: owner
+reviewed: 2026-09-20
 ---
 
 # Exhausted

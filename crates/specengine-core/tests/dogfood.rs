@@ -11,6 +11,10 @@
 //! = its stem" cannot hold for them; they are exempted from that clause here
 //! by name, and the criterion's text needs the same exemption.
 //!
+//! docs/features/spec-check.md AC-03: every parsing ADR's `canon:` anchor
+//! is among its target's anchors (ADR-0023 through an `html` anchor,
+//! ADR-0025 through a heading slug).
+//!
 //! Read-only: the repository's files are read, never written.
 
 mod common;
@@ -19,7 +23,9 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use specengine_model::{CanonTarget, DiagnosticCode, IdScheme, ParsedFile, PrefixSpec};
+use specengine_model::{
+    AnchorOrigin, CanonTarget, DiagnosticCode, IdScheme, ParsedFile, PrefixSpec,
+};
 
 use common::repository_root;
 
@@ -209,6 +215,69 @@ fn every_canon_is_a_path_with_an_anchor(files: &[Parsed]) {
     assert!(canons >= 20, "only {canons} canon: values");
 }
 
+/// docs/features/spec-check.md AC-03: the anchor of every parsed ADR's
+/// `canon:` is among its target's anchors; ADR-0023's (`CLAUDE.md#process`)
+/// is an `html` anchor, ADR-0025's (`README.md#license`) a heading `slug`.
+fn every_canon_anchor_is_among_its_targets(files: &[Parsed]) {
+    let scheme = adr_scheme();
+    let mut resolved = 0;
+    let mut origins = std::collections::BTreeMap::new();
+    for file in files {
+        if !file.path.starts_with("docs/decisions/ADR-") {
+            continue;
+        }
+        let Some(CanonTarget::Path(target)) = file
+            .parsed
+            .document()
+            .and_then(|d| d.fields.as_ref())
+            .and_then(|f| f.canon.as_ref())
+        else {
+            continue;
+        };
+        let anchor = target.anchor.as_deref().unwrap_or_default();
+        let parsed_target = match files.iter().find(|other| other.path == target.path) {
+            Some(other) => other.parsed.clone(),
+            None => {
+                let bytes = fs::read(repository_root().join(&target.path))
+                    .unwrap_or_else(|e| panic!("{}: canon {}: {e}", file.path, target.path));
+                specengine_core::parse(&target.path, &bytes, &scheme)
+            }
+        };
+        let found = parsed_target
+            .anchors
+            .iter()
+            .find(|known| known.name == anchor)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: canon {}#{anchor} is none of its anchors {:?}",
+                    file.path,
+                    target.path,
+                    parsed_target
+                        .anchors
+                        .iter()
+                        .map(|a| a.name.as_str())
+                        .collect::<Vec<_>>()
+                )
+            });
+        origins.insert(file.path.clone(), found.origin);
+        resolved += 1;
+    }
+    assert!(
+        resolved >= 20,
+        "only {resolved} ADR canon: anchors resolved"
+    );
+    assert_eq!(
+        origins.get("docs/decisions/ADR-0023.md"),
+        Some(&AnchorOrigin::Html),
+        "ADR-0023 lands on CLAUDE.md's <a id=\"process\">"
+    );
+    assert_eq!(
+        origins.get("docs/decisions/ADR-0025.md"),
+        Some(&AnchorOrigin::Slug),
+        "ADR-0025 lands on README.md's `## License` slug"
+    );
+}
+
 type Check = fn(&[Parsed]);
 
 /// One test, one `cargo xtask docs budget`: parallel test processes each
@@ -217,7 +286,7 @@ type Check = fn(&[Parsed]);
 #[test]
 fn repository_docs_parse_under_the_adr_scheme() {
     let files = parse_all();
-    let checks: [(&str, Check); 3] = [
+    let checks: [(&str, Check); 4] = [
         (
             "no front-matter diagnostic but the four",
             every_listed_file_parses_without_front_matter_diagnostics_but_the_four,
@@ -226,6 +295,10 @@ fn repository_docs_parse_under_the_adr_scheme() {
         (
             "every canon: is path + anchor",
             every_canon_is_a_path_with_an_anchor,
+        ),
+        (
+            "every ADR canon: anchor is among its target's (spec-check AC-03)",
+            every_canon_anchor_is_among_its_targets,
         ),
     ];
     let mut failed = Vec::new();

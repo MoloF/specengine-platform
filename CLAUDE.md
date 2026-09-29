@@ -10,7 +10,7 @@ reviewed: 2026-09-28
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP (for Claude Code agents), later a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: **Phase 0 done** (2026-09-29): decisions made, claims measured on two pilot corpora, first increments of five crates built. **Phase 1**, the reading core, in progress: the spec parser and the spec index shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: **Phase 0 done** (2026-09-29): decisions made, claims measured on two pilot corpora, first increments of five crates built. **Phase 1**, the reading core, in progress: the spec parser, the spec index and `spec check` increment 1 shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
@@ -61,7 +61,7 @@ The pre-commit hook (`scripts/hooks-install.sh`) and CI (`.github/workflows/docs
 
 - `docs/` — canon (`docs/canon/`), decisions (`docs/decisions/`), specs (`docs/features/`, `docs/specs/`), index, archive.
 - `xtask/` — documentation check and index.
-- `crates/specengine-{model,core,store,code,eval,import,mcp,ra}` — the corpus model and reference grammar, the spec parser, the spec index (SQLite + FTS5), layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, layer C (outside `default-members`); each has a Tier 1 `README.md`.
+- `crates/specengine-{model,core,store,code,eval,import,mcp,ra}` — the corpus model and reference grammar, the spec parser and check, the spec index (SQLite + FTS5), layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, layer C (outside `default-members`); each has a Tier 1 `README.md`.
 - `fixtures/` — test corpora with `expected.json`; `bevy-mini` and `ra-mini` are workspace-excluded.
 - `.claude/` — pipeline roles and commands.
 - Planned (Phase 1+): `crates/specengine-{http,cli}`, `ui/`, `plugin/`.

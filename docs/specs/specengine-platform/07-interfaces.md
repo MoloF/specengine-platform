@@ -176,17 +176,15 @@ language = "en"
 
 [paths]                     # role keys, roots, exclude: crates/specengine-core/README.md
 roots = ["docs", "CLAUDE.md"]
+tier0 = "CLAUDE.md"          # spec check slots: the only canon tier 0,
+tier1_name = "README.md"    # the only canon tier 1 name,
+index = "docs/index.md"     # the index, capped by index_bytes
 
 [ids]                       # prefix → kind, shape, width, aliases_from: crates/specengine-model/README.md
 R    = { kind = "requirement", width = 2, immutable_text = true }
 
-[budgets]                   # in tokens, multilingual estimator
-tier0 = 2800
-tier1 = 2300
-index = 4100
-canon = 11000
-decision = 850
-bundle_node = 2000
+[budgets]                   # document caps in bytes (tier0_bytes …), [classes], [check]: docs/canon/spec-check.md
+bundle_node = 2000          # bundle budgets in tokens, multilingual estimator
 bundle_task = 10000
 
 [zones]                     # for the gate and role write rules

@@ -3,6 +3,8 @@ id: MEC-SPRINT
 class: canon
 tier: 2
 parent: DOM-MOVEMENT
+owner: owner
+reviewed: 2026-09-20
 links:
   depends_on: [MEC-STAMINA]
   constrains: [RULE-STAM-REGEN]

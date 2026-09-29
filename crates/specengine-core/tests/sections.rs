@@ -6,7 +6,9 @@
 
 mod common;
 
-use specengine_model::{DiagnosticCode, IdScheme, Node, ParsedFile, PrefixSpec, Span};
+use specengine_model::{
+    AnchorOrigin, DiagnosticCode, IdScheme, Node, ParsedFile, PrefixSpec, Span,
+};
 
 use common::{corpus_scheme, fixture, md_files, text_of};
 
@@ -68,7 +70,24 @@ fn only_heading_attributes_define_sections() {
         .map(|s| s.id.as_deref().unwrap())
         .collect();
     assert_eq!(ids, ["X-1", "X-2"], "exactly X-1 and X-2");
-    assert!(parsed.anchors.is_empty(), "{:?}", parsed.anchors);
+    // An ID attribute is its section, not an anchor; every heading still has
+    // its slug, and nothing comes from the fence, the comment or the paragraph.
+    let anchors: Vec<(&str, AnchorOrigin)> = parsed
+        .anchors
+        .iter()
+        .map(|a| (a.name.as_str(), a.origin))
+        .collect();
+    assert_eq!(
+        anchors,
+        [
+            ("doc", AnchorOrigin::Slug),
+            ("a", AnchorOrigin::Slug),
+            ("b", AnchorOrigin::Slug),
+            ("c", AnchorOrigin::Slug),
+        ],
+        "{:?}",
+        parsed.anchors
+    );
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
 }
 
@@ -203,8 +222,23 @@ fn a_repeated_id_is_duplicate_id_and_both_are_kept() {
 fn non_id_attributes_are_anchors_and_do_not_close_or_parent_sections() {
     let text = "---\nid: X-9\n---\n\n## A {#X-1}\n\n### Notes {#notes}\n\nsee X-4\n\n## B {#b-anchor}\n\nsee X-5\n";
     let parsed = parse(text);
-    let names: Vec<&str> = parsed.anchors.iter().map(|a| a.name.as_str()).collect();
-    assert_eq!(names, ["notes", "b-anchor"]);
+    let anchors: Vec<(&str, AnchorOrigin, Option<u8>)> = parsed
+        .anchors
+        .iter()
+        .map(|a| (a.name.as_str(), a.origin, a.level))
+        .collect();
+    // A heading's slug before its non-ID attribute; the ID attribute `X-1`
+    // is a section, not an anchor.
+    assert_eq!(
+        anchors,
+        [
+            ("a", AnchorOrigin::Slug, Some(2)),
+            ("notes", AnchorOrigin::Slug, Some(3)),
+            ("notes", AnchorOrigin::Attr, Some(3)),
+            ("b", AnchorOrigin::Slug, Some(2)),
+            ("b-anchor", AnchorOrigin::Attr, Some(2)),
+        ]
+    );
     let a = section(&parsed, "X-1");
     assert!(text_of(text.as_bytes(), a.span).contains("see X-4"));
     assert_eq!(a.parent.as_ref().map(|p| p.id.as_str()), Some("X-9"));

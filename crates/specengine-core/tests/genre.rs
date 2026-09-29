@@ -14,7 +14,7 @@ use std::fs;
 use std::path::Path;
 
 use serde_json::Value;
-use specengine_model::{IdScheme, ParsedFile};
+use specengine_model::{AnchorOrigin, IdScheme, ParsedFile};
 
 use common::{
     corpus_scheme, fixture, md_files, render_diagnostics, render_link, repository_root, text_of,
@@ -67,7 +67,8 @@ fn scheme_is_read_from_the_corpus(name: &str) {
 }
 
 /// Every file of the corpus matches `expected.json`: document ID, kind,
-/// title, summary, parent, sections, anchors, links, diagnostics.
+/// title, summary, parent, sections, anchors (`origin:name`), links,
+/// diagnostics.
 fn corpus_matches_expected(name: &str) {
     let corpus = fixture(name);
     let scheme = corpus_scheme(&corpus);
@@ -147,7 +148,19 @@ fn corpus_matches_expected(name: &str) {
             serde_json::to_string(&sections).unwrap(),
             serde_json::to_string(&want["sections"]).unwrap(),
         );
-        let anchors: Vec<&str> = parsed.anchors.iter().map(|a| a.name.as_str()).collect();
+        // `origin:name`, in source order (a heading's slug before its attribute).
+        let anchors: Vec<String> = parsed
+            .anchors
+            .iter()
+            .map(|a| {
+                let origin = match a.origin {
+                    AnchorOrigin::Slug => "slug",
+                    AnchorOrigin::Attr => "attr",
+                    AnchorOrigin::Html => "html",
+                };
+                format!("{origin}:{}", a.name)
+            })
+            .collect();
         check(
             "anchors",
             format!("{anchors:?}"),

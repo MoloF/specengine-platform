@@ -4,6 +4,8 @@ class: canon
 tier: 1
 title: Командная строка
 status: accepted
+owner: owner
+reviewed: 2026-09-20
 links:
   derived_from: [REQ-001, ТРБ-002]
 ---

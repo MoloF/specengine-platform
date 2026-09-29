@@ -18,7 +18,9 @@ use std::time::Instant;
 use serde::Serialize;
 use specengine_core::IdSchemeToml;
 use specengine_import::{CensusConfig, RecordKind};
-use specengine_model::{DiagnosticCode, IdScheme, LinkOrigin, LinkTarget, ParsedFile};
+use specengine_model::{
+    AnchorOrigin, DiagnosticCode, IdScheme, LinkOrigin, LinkTarget, ParsedFile,
+};
 
 use crate::census;
 use crate::harness::Corpus;
@@ -251,7 +253,7 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
             }
         }
         result.sections.parsed += parsed.sections().len();
-        result.heading_attrs_not_section += parsed.anchors.len();
+        result.heading_attrs_not_section += attr_anchors(&parsed);
         for link in &parsed.links {
             match link.origin {
                 LinkOrigin::Inline => result.references.inline += 1,
@@ -297,7 +299,7 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
             bytes,
             front_matter: parsed.front_matter.is_some(),
             sections: parsed.sections().len(),
-            anchors: parsed.anchors.len(),
+            anchors: attr_anchors(parsed),
             links: parsed.links.len(),
             diagnostics: parsed.diagnostics.len(),
             tokens_est: parsed.document().map_or(0, |document| document.tokens_est),
@@ -467,6 +469,15 @@ fn summarize(
         );
     }
     eprintln!("  detail: {}", out_dir.display());
+}
+
+/// `{#…}` heading attributes that are no ID (slugs and HTML anchors aside).
+fn attr_anchors(parsed: &ParsedFile) -> usize {
+    parsed
+        .anchors
+        .iter()
+        .filter(|anchor| anchor.origin == AnchorOrigin::Attr)
+        .count()
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {

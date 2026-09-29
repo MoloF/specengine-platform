@@ -20,7 +20,9 @@
 //!   [`IndexWriter::rebuild`] (`spec index --full`), each giving an
 //!   [`UpdateReport`];
 //! - [`SpecIndex`]: [`SpecIndex::files`], [`SpecIndex::file`],
-//!   [`SpecIndex::lookup_id`], [`SpecIndex::search`].
+//!   [`SpecIndex::lookup_id`], [`SpecIndex::search`];
+//! - [`check_input`], [`check_worktree`]: `spec check` over a fresh parse
+//!   of a [`Source`], no database (docs/features/spec-check.md).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -28,6 +30,7 @@
 //! number of handles, in any processes, may write: WAL, `Immediate` write
 //! transactions and `busy_timeout`, no lock file and no global state.
 
+mod check;
 mod dump;
 mod error;
 mod glob;
@@ -42,17 +45,21 @@ mod write;
 use serde::Serialize;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
+pub use check::{BASELINE_FILE, check_input, check_worktree, today_utc};
 pub use error::StoreError;
 pub use index::{DbSettings, SqliteIndex};
 pub use source::{Listing, Source, WorkingTree};
 
-/// The format stamp stored in `index_meta` (`('format', '1')`). Any change
+/// The format stamp stored in `index_meta` (`('format', '2')`). Any change
 /// of what a fresh index stores for the same corpus — schema, row
 /// projection, JSON of a model value — needs a new number, and a new line
 /// `<INDEX_FORMAT> <dump hash>` in `tests/format_history.txt`. A DB with
 /// another stamp is recreated by its first write; until then its worktrees
 /// read [`StoreError::NotIndexed`].
-pub const INDEX_FORMAT: u32 = 1;
+///
+/// 2: anchors carry an origin (`slug`, `attr`, `html`) and a span, and every
+/// heading slug and HTML anchor is stored (docs/features/spec-check.md).
+pub const INDEX_FORMAT: u32 = 2;
 
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;

@@ -8,6 +8,8 @@
 //! and writes none; the output depends only on (path, bytes, scheme), and a
 //! broken file is reported, never fatal (ADR-0012).
 //!
+//! - [`check`] — `spec check` increment 1: the config-driven check over a
+//!   set of parses (docs/features/spec-check.md);
 //! - [`scheme_toml`] — `IdScheme::from_toml`: the `[ids]` table;
 //! - [`paths_toml`] — `Paths::from_toml`: the `[paths]` table (role
 //!   directories, walked roots, exclude globs; docs/features/spec-index.md);
@@ -19,6 +21,7 @@
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
+pub mod check;
 mod front_matter;
 mod lines;
 mod markdown;
@@ -31,8 +34,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_model::grammar::{self, Definition};
 use specengine_model::{
-    Anchor, Diagnostic, DiagnosticCode, IdScheme, IdScript, Link, LinkOrigin, LinkTarget, Node,
-    ParentRef, ParsedFile, Reference, Span,
+    Anchor, AnchorOrigin, Diagnostic, DiagnosticCode, IdScheme, IdScript, Link, LinkOrigin,
+    LinkTarget, Node, ParentRef, ParsedFile, Reference, Span,
 };
 
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
@@ -159,7 +162,6 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
     if let Some(id) = &id {
         seen.insert(id.id.clone());
     }
-    let mut anchors = Vec::new();
     let definitions: Vec<Option<Definition>> = body
         .headings
         .iter()
@@ -169,6 +171,7 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
         })
         .collect();
     let extents = extents(text, &body.headings, &definitions, layout.body.end);
+    let anchors = anchors(&body, &definitions);
     // Heading index → section ID, for the parents of nested sections.
     let mut section_ids: BTreeMap<usize, String> = BTreeMap::new();
     for (index, (extent, definition)) in extents.iter().zip(definitions).enumerate() {
@@ -178,11 +181,6 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
         };
         let line = lines.line(heading.span.start);
         let Some(definition) = definition else {
-            anchors.push(Anchor {
-                name: raw_id.clone(),
-                level: heading.level,
-                heading: heading.span,
-            });
             continue;
         };
         let id_span = offset.map(|_| definition.span);
@@ -343,6 +341,51 @@ fn not_utf8(path: &str, bytes: &[u8], bom: bool, error: &std::str::Utf8Error) ->
             )
             .with_span(Some(Span::new(at, at + bad_len))),
         ],
+    }
+}
+
+/// Every anchor of the body in source order: per heading its slug, then its
+/// `{#…}` attribute when that is no definable ID; HTML anchors by position
+/// (after the heading they sit in).
+fn anchors(body: &markdown::Body, definitions: &[Option<Definition>]) -> Vec<Anchor> {
+    let mut slugger = markdown::Slugger::default();
+    let mut from_headings = Vec::new();
+    for (heading, definition) in body.headings.iter().zip(definitions) {
+        if let Some(name) = slugger.next(&heading.slug_text) {
+            from_headings.push(Anchor {
+                name,
+                origin: AnchorOrigin::Slug,
+                level: Some(heading.level),
+                span: heading.span,
+            });
+        }
+        if let (Some((raw_id, _)), None) = (&heading.id, definition) {
+            from_headings.push(Anchor {
+                name: raw_id.clone(),
+                origin: AnchorOrigin::Attr,
+                level: Some(heading.level),
+                span: heading.span,
+            });
+        }
+    }
+    let mut merged = Vec::with_capacity(from_headings.len() + body.html_anchors.len());
+    let mut html = body.html_anchors.iter().peekable();
+    for anchor in from_headings {
+        while let Some(next) = html.next_if(|next| next.span.start < anchor.span.start) {
+            merged.push(html_anchor(next));
+        }
+        merged.push(anchor);
+    }
+    merged.extend(html.map(html_anchor));
+    merged
+}
+
+fn html_anchor(anchor: &markdown::HtmlAnchor) -> Anchor {
+    Anchor {
+        name: anchor.name.clone(),
+        origin: AnchorOrigin::Html,
+        level: None,
+        span: anchor.span,
     }
 }
 

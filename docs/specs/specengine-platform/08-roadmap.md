@@ -46,7 +46,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 - Parser — shipped 2026-09-29: `crates/specengine-{model,core}/README.md`; owner questions Q1–Q6 open there.
 - SQLite index + FTS5, incremental by BLAKE3 — shipped 2026-09-29: `crates/specengine-store/README.md`; owner questions Q1–Q7 open there.
-- `spec check`: port of the pilot projects' documentation checks, debt baseline, one-line summary.
+- `spec check` increment 1 — shipped 2026-09-29: `docs/canon/spec-check.md` (what is not checked yet, owner questions Q-1–Q-8). Next: 2 `spec-check-graph` (§11.5–6, the graph rules); 3 with the CLI — `check`, `--staged`, `enforce-introduced`, the root `specengine.toml` (an ADR amending ADR-0023's role table, Q-7), hook and CI switched, `xtask` retired; 4 `spec-check-process` (process rules from config).
 - CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.
 - MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
@@ -102,7 +102,7 @@ Screens per 07 §3: Tree, Node, Graph, Queue (with diff and in-place editing), T
 | AC-8 | **Machine-verified**: `verified` is set only after SpecEngine itself runs the `@verifies` tests | test |
 | AC-9 | **Staleness**: editing a node from the `spec_snapshot` of a `ready` task makes it `stale`, the bundle shows the diff | test |
 | AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects. **`ra_ap_ide` layer measured in Phase 0** (`specengine-eval ra`, 05 §5.1): cold 33–65 s, warm pass ≈ 0.2 s, group peak ≤ 3.76 GiB. Index: `specengine-eval index`, pilot run pending |
-| AC-11 | **Homoglyphs**: IDs with mixed scripts are rejected with an auto-fix | test on IDs where a Latin letter is swapped for its Cyrillic look-alike (U+0420 for `P`, U+0415 for `E`) |
+| AC-11 | **Homoglyphs**: IDs with mixed scripts are rejected with an auto-fix | test on IDs where a Latin letter is swapped for its Cyrillic look-alike (U+0420 for `P`, U+0415 for `E`). **Rejection met** (`spec check`, `check_ids.rs`); applying the fix: Phase 2 (`apply_proposal`) |
 | AC-12 | **Responsiveness**: an MCP event is visible in the UI ≤ 1 s | e2e |
 | AC-13 | **Meaning change without revision fails**: pre-commit fails if a node's `norm_hash` changed without a `rev` bump and without `--editorial` | test on a temp repo |
 | AC-14 | **"Could not verify" ≠ "fresh"**: an unparseable file yields `cannot_verify` and exit 2, not a green run; two different unparseable items do **not** get the same hash | test (regression for the `is_extra()` trap on ERROR). **Hash half met in Phase 0** (`specengine-code` `tests/hash_traps.rs`); exit 2 of `spec verify` is Phase 3 |

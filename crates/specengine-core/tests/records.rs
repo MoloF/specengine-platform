@@ -99,7 +99,7 @@ fn a_declared_kind_that_differs_is_kept_with_a_kind_mismatch() {
         .filter(|d| d.code == DiagnosticCode::KindMismatch)
         .collect();
     assert_eq!(mismatches.len(), 1, "{:?}", parsed.diagnostics);
-    assert_eq!(mismatches[0].line, 3, "the kind: line");
+    assert_eq!(mismatches[0].line, 4, "the kind: line");
     assert_eq!(mismatches[0].severity, Severity::Warning);
     assert_eq!(parsed.diagnostics.len(), 1);
 }

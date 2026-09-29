@@ -10,6 +10,7 @@
 mod ast_hash;
 mod bevy;
 mod census;
+mod check;
 mod harness;
 mod index;
 mod parse;
@@ -56,6 +57,11 @@ enum Measurement {
     /// update by walk and by path, and the stored counts. `[ids]` and
     /// `[paths]` from `--scheme`.
     Index(IndexArgs),
+    /// `spec check` (increment 1) over the `[paths]` walk, read-only:
+    /// counts per code and severity, the verdict under `observe` and
+    /// `enforce`; paths, IDs and messages only in
+    /// `--out/check/<label>/findings.json`. Config from `--scheme`.
+    Check(CheckArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -114,6 +120,27 @@ pub struct IndexArgs {
     /// (exit 2) with `file:line: message`.
     #[arg(long, value_name = "TOML")]
     pub scheme: Option<PathBuf>,
+}
+
+/// `check`: the shared arguments plus the config, the baseline and the date.
+#[derive(Args, Clone)]
+pub struct CheckArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// `specengine.toml` giving `[ids]`, `[paths]`, `[budgets]`,
+    /// `[classes]` and `[check]`; read-only. Default: `SPECENGINE_SCHEME_A` /
+    /// `_B` for `--label pilot-a` / `pilot-b` when set, else
+    /// `specengine.toml` at the corpus root. Missing or invalid: refused
+    /// (exit 2) with `file:line: message`.
+    #[arg(long, value_name = "TOML")]
+    pub scheme: Option<PathBuf>,
+    /// The debt baseline; default `.spec-debt.toml` at the corpus root when
+    /// present. Missing or invalid when given: refused (exit 2).
+    #[arg(long, value_name = "TOML")]
+    pub baseline: Option<PathBuf>,
+    /// Today as `YYYY-MM-DD` (debt expiry); default the UTC date.
+    #[arg(long, value_name = "DATE")]
+    pub today: Option<String>,
 }
 
 /// `bevy-detector`: the shared arguments plus the optional schedule dump.
@@ -190,6 +217,27 @@ fn main() -> ExitCode {
                 index::FIXTURE,
                 move |root: &Path| index::prepare(root, scheme.as_deref(), label.as_deref()),
                 index::run,
+            )
+        }
+        Measurement::Check(args) => {
+            let scheme = args.scheme.clone();
+            let baseline = args.baseline.clone();
+            let today = args.today.clone();
+            let label = args.common.label.clone();
+            measure_with(
+                "check",
+                &args.common,
+                check::FIXTURE,
+                move |root: &Path| {
+                    check::prepare(
+                        root,
+                        scheme.as_deref(),
+                        baseline.as_deref(),
+                        today.as_deref(),
+                        label.as_deref(),
+                    )
+                },
+                check::run,
             )
         }
         Measurement::BevyDetector(args) => {

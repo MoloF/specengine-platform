@@ -40,7 +40,7 @@
           "title": "Команда status"
         }
       ],
-      "anchors": [],
+      "anchors": ["slug:командная-строка", "slug:команда-sync", "slug:флаг---dry-run", "slug:команда-status"],
       "links": [
         "MOD-CLI derived_from frontmatter REQ-001",
         "MOD-CLI derived_from frontmatter ТРБ-002 (alias of REQ) {non-latin}",
@@ -52,7 +52,7 @@
         "CMD-STATUS mentions inline ADR-0001"
       ],
       "diagnostics": [
-        "homoglyph:23"
+        "homoglyph:25"
       ]
     },
     "docs/records/REQ/REQ-001.md": {
@@ -61,7 +61,7 @@
       "title": "Синхронизация не теряет локальных правок",
       "summary": "Команда синхронизации никогда не перезаписывает незакоммиченные изменения.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:синхронизация-не-теряет-локальных-правок"],
       "links": [],
       "diagnostics": []
     },
@@ -72,7 +72,7 @@
       "title": "Сухой прогон печатает план",
       "summary": "Флаг `--dry-run` показывает план действий и не меняет файлов.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:сухой-прогон-печатает-план"],
       "links": [],
       "diagnostics": []
     },
@@ -82,7 +82,7 @@
       "title": "Пользователь работает в одной ветке",
       "summary": "Допущение до ответа на QN-07.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:пользователь-работает-в-одной-ветке"],
       "links": [
         "ASM-01 mentions inline QN-07"
       ],
@@ -112,13 +112,13 @@
           "title": "Варианты"
         }
       ],
-      "anchors": [],
+      "anchors": ["slug:ветка-задачи", "slug:варианты"],
       "links": [
         "FLAG-ANY-BRANCH mentions inline QN-07"
       ],
       "diagnostics": [
-        "frontmatter-yaml:3",
-        "homoglyph:9"
+        "frontmatter-yaml:4",
+        "homoglyph:12"
       ]
     },
     "docs/records/ADR/ADR-0001.md": {
@@ -127,7 +127,7 @@
       "title": "Синхронизация через рабочие копии",
       "summary": "Каждая задача получает свою рабочую копию (GLS-worktree).",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:синхронизация-через-рабочие-копии"],
       "links": [
         "ADR-0001 canon frontmatter docs/spec/cli.md#команда-sync",
         "ADR-0001 mentions frontmatter ADR-0002",
@@ -141,7 +141,7 @@
       "title": "Синхронизация через клоны",
       "summary": "Заменено решением ADR-0001.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:синхронизация-через-клоны"],
       "links": [
         "ADR-0001 supersedes frontmatter ADR-0002",
         "ADR-0002 canon frontmatter MOD-CLI#CMD-SYNC",
@@ -155,7 +155,7 @@
       "title": "Сухой прогон не меняет файлов",
       "summary": "После `sync --dry-run` дерево рабочей копии побайтно совпадает с исходным.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:сухой-прогон-не-меняет-файлов"],
       "links": [
         "CRIT-01 verifies frontmatter REQ-002",
         "CRIT-01 uses_term frontmatter GLS-worktree"
@@ -169,10 +169,10 @@
       "title": "Рабочая копия",
       "summary": "Отдельный каталог git worktree, привязанный к ветке задачи.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:рабочая-копия"],
       "links": [],
       "diagnostics": [
-        "kind-mismatch:3"
+        "kind-mismatch:4"
       ]
     },
     "docs/records/GLS/GLS-task-branch.md": {
@@ -181,7 +181,7 @@
       "title": "Ветка задачи",
       "summary": "Ветка, в которой живёт рабочая копия одной задачи; см. GLS-worktree.",
       "sections": [],
-      "anchors": [],
+      "anchors": ["slug:ветка-задачи"],
       "links": [
         "GLS-task-branch mentions inline GLS-worktree"
       ],
@@ -191,9 +191,7 @@
       "title": "Сухой прогон",
       "summary": "Фича закрывает dry-run/CRIT-01 и уточняет [[REQ-002]].",
       "sections": [],
-      "anchors": [
-        "критерии"
-      ],
+      "anchors": ["slug:сухой-прогон", "slug:критерии", "attr:критерии"],
       "links": [
         "- mentions frontmatter REQ-002",
         "- mentions frontmatter ТРБ-003 (alias of REQ) {non-latin}",

@@ -8,7 +8,9 @@
 //! member, SQLite stays out of the model's and the core's graphs, the store
 //! depends on no measurement crate, no `sqlx`, and `rusqlite` is pinned
 //! exactly with `bundled`, one version each of `rusqlite`, `libsqlite3-sys`
-//! and `blake3`.
+//! and `blake3`; AC-01 of docs/features/spec-check.md: the file-access scan
+//! reaches the check module, and no `[workspace.dependencies]` entry is
+//! added against `main`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -681,6 +683,7 @@ fn core_normal_graph_has_no_other_specengine_crate_but_the_model() {
 fn model_and_core_sources_do_no_file_io() {
     let pattern = ["std::fs", "File::", "OpenOptions"];
     let mut offenders = Vec::new();
+    let mut scanned: Vec<PathBuf> = Vec::new();
     for krate in ["specengine-model", "specengine-core"] {
         let src = workspace_root().join("crates").join(krate).join("src");
         let mut stack = vec![src];
@@ -694,6 +697,7 @@ fn model_and_core_sources_do_no_file_io() {
                 }
                 files += 1;
                 let text = std::fs::read_to_string(&path).expect("UTF-8 source");
+                scanned.push(path.clone());
                 for (number, line) in text.lines().enumerate() {
                     if pattern.iter().any(|p| line.contains(p)) {
                         offenders.push(format!(
@@ -712,6 +716,64 @@ fn model_and_core_sources_do_no_file_io() {
         offenders.is_empty(),
         "file access in model/core:\n{}",
         offenders.join("\n")
+    );
+    // docs/features/spec-check.md AC-01: the scan reaches every source of
+    // the check module.
+    let check_dir = workspace_root().join("crates/specengine-core/src/check");
+    let check_sources: Vec<PathBuf> = std::fs::read_dir(&check_dir)
+        .expect("the check module is a directory")
+        .map(|entry| entry.expect("entry").path())
+        .collect();
+    assert!(check_sources.len() >= 5, "{check_sources:?}");
+    for source in check_sources {
+        assert!(
+            scanned.contains(&source),
+            "{} is not scanned for file access",
+            source.display()
+        );
+    }
+}
+
+/// docs/features/spec-check.md AC-01: the increment adds no
+/// `[workspace.dependencies]` entry against `main` (a new edge of the core
+/// uses an existing pin).
+#[test]
+fn no_workspace_dependency_is_added_against_main() {
+    let output = Command::new("git")
+        .current_dir(workspace_root())
+        .args(["show", "main:Cargo.toml"])
+        .output()
+        .expect("git runs");
+    if !output.status.success() {
+        // No `main` here (a shallow or detached clone): nothing to compare.
+        eprintln!(
+            "no main:Cargo.toml: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let keys = |text: &str| -> Vec<String> {
+        let manifest: toml::Table = toml::from_str(text).expect("a TOML manifest");
+        let mut keys: Vec<String> = manifest["workspace"]["dependencies"]
+            .as_table()
+            .expect("[workspace.dependencies]")
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort();
+        keys
+    };
+    let on_main = keys(&String::from_utf8_lossy(&output.stdout));
+    let now =
+        keys(&std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest"));
+    let added: Vec<&String> = now.iter().filter(|key| !on_main.contains(key)).collect();
+    assert!(
+        added.is_empty(),
+        "[workspace.dependencies] entries added against main: {added:?}"
+    );
+    assert!(
+        now.iter().any(|key| key == "serde_json"),
+        "serde_json is pinned"
     );
 }
 

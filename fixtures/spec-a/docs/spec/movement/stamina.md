@@ -7,6 +7,7 @@ title: Stamina
 parent: DOM-MOVEMENT
 status: accepted
 owner: owner
+reviewed: 2026-09-20
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]

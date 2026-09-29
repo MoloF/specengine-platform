@@ -8,6 +8,8 @@
 
 #![allow(dead_code)]
 
+pub mod check;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

@@ -268,8 +268,12 @@ const SERIALISED: &[&str] = &[
     "links[].dst.path",
     "links[].dst.anchor",
     "anchors[].name",
+    "anchors[].origin",
+    "anchors[].origin: slug",
+    "anchors[].origin: attr",
+    "anchors[].origin: html",
     "anchors[].level",
-    "anchors[].heading",
+    "anchors[].span",
     "diagnostics[].code",
     "diagnostics[].severity",
     "diagnostics[].line",
@@ -288,7 +292,8 @@ const SERIALISED: &[&str] = &[
 
 /// Key paths of a serialised `ParsedFile`: array items as `[]`, the
 /// dynamic keys of `fields.links`, `fields.raised_by` and front-matter
-/// mappings as `*`, and the kind of every front-matter value.
+/// mappings as `*`, the kind of every front-matter value, and every anchor
+/// origin.
 fn key_paths(value: &serde_json::Value, path: &str, in_value: bool, out: &mut BTreeSet<String>) {
     use serde_json::Value;
     if in_value {
@@ -318,6 +323,13 @@ fn key_paths(value: &serde_json::Value, path: &str, in_value: bool, out: &mut BT
                     format!("{path}.{key}")
                 };
                 out.insert(child_path.clone());
+                // Each anchor origin is its own shape of the row: slug and
+                // attr carry a level, html does not.
+                if child_path == "anchors[].origin"
+                    && let Value::String(origin) = child
+                {
+                    out.insert(format!("{child_path}: {origin}"));
+                }
                 let child_in_value = in_value
                     || child_path.ends_with("extra[].value")
                     || child_path.ends_with("fields.raised_by.*");

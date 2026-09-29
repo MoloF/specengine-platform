@@ -1,5 +1,6 @@
 ---
 id: GLS-task-branch
+class: generated
 generator: zerkalo glossary
 source: docs/spec/cli.md
 ---

@@ -3,12 +3,14 @@ class: canon
 tier: 1
 scope: [xtask]
 owner: owner
-reviewed: 2026-09-28
+reviewed: 2026-09-29
 ---
 
 # xtask — enforcement of the documentation convention
 
 Enforces §11 of `docs/canon/documentation-system.md` in this repository until SpecEngine's own `spec check` replaces it (ADR-0013, ADR-0022). No dependencies — std only, builds in seconds.
+
+`spec check` increment 1 (`docs/canon/spec-check.md`) covers §11.1–4 plus the ADR-0009 ID checks, at parity (`crates/specengine-store/tests/check_parity.rs`); §11.5–6 come in increment 2, the switch of hook and CI and this crate's retirement in increment 3. Until then this crate is the gate.
 
 ## Commands
 
@@ -18,6 +20,7 @@ Enforces §11 of `docs/canon/documentation-system.md` in this repository until S
 | `cargo xtask docs index --write` | rebuilds `docs/index.md` from front-matter | 0 |
 | `cargo xtask docs index` | prints the index to stdout, leaves the file alone | 0 |
 | `cargo xtask docs budget` | sizes against caps and the worst-case working set W | 0 |
+| `… docs <command> --root DIR` | the same over `DIR` instead of this repository (the parity test's differential run) | as the command; `--root` without `DIR`: usage, 2 |
 
 ## What counts as a document
 

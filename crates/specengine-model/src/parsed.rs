@@ -26,7 +26,8 @@ pub struct ParsedFile {
     pub nodes: Vec<Node>,
     /// Declared links in front-matter order, then inline mentions in text order.
     pub links: Vec<Link>,
-    /// `{#…}` heading anchors that are not IDs, in source order.
+    /// Heading slugs, non-ID `{#…}` attributes and HTML `<a id|name>`
+    /// tags, in source order (a heading's slug before its attribute).
     pub anchors: Vec<Anchor>,
     /// In line order.
     pub diagnostics: Vec<Diagnostic>,

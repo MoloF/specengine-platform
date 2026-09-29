@@ -151,7 +151,7 @@ fn unknown_link_type_is_a_warning_and_the_link_is_kept() {
         .collect();
     assert_eq!(unknown.len(), 1, "{:?}", parsed.diagnostics);
     assert_eq!(unknown[0].severity, Severity::Warning);
-    assert_eq!(unknown[0].line, 13, "the uses_terms line");
+    assert_eq!(unknown[0].line, 14, "the uses_terms line");
     assert!(
         parsed
             .links

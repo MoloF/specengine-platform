@@ -5,7 +5,10 @@
 //! Role keys `spec`, `records`, `features`, `generated`, `archive` (07 §5,
 //! defaults 05 §2); `roots`, the walked directories or `.md` files (default:
 //! the role directories but `generated`, SpecEngine's own output);
-//! `exclude`, census globs (`*`, `**`, `?`) over root-relative file paths.
+//! `exclude`, census globs (`*`, `**`, `?`) over root-relative file paths;
+//! for `spec check` (docs/features/spec-check.md): `tier0` (the one file
+//! canon tier 0 may be), `tier1_name` (the file name canon tier 1 is
+//! restricted to), `index` (the generated index, capped by `index_bytes`).
 //! Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or
 //! empty component (one trailing `/` of a directory is dropped). An unknown
 //! key, a wrong type or a bad path is an error `file:line: message`
@@ -45,6 +48,16 @@ pub struct Paths {
     /// `**` any run, `**/` any directories (also none), `?` one character
     /// but `/`; anchored at both ends.
     pub exclude: Vec<String>,
+    /// `roots` was written: a missing root is then a cause of "cannot
+    /// check"; a missing default role root is not.
+    pub roots_written: bool,
+    /// The one file that may be canon tier 0 (`spec check`); absent: no
+    /// such rule.
+    pub tier0: Option<String>,
+    /// The file name canon tier 1 is restricted to; absent: no such rule.
+    pub tier1_name: Option<String>,
+    /// The generated index, capped by `index_bytes`; absent: no index cap.
+    pub index: Option<String>,
 }
 
 impl Default for Paths {
@@ -86,6 +99,10 @@ impl Paths {
             archive,
             roots,
             exclude: Vec::new(),
+            roots_written: false,
+            tier0: None,
+            tier1_name: None,
+            index: None,
         }
     }
 }
@@ -147,6 +164,7 @@ pub fn paths_from_toml(text: &str) -> Result<Paths, PathsError> {
 
     if let Some(roots) = raw.roots {
         paths.roots.clear();
+        paths.roots_written = true;
         for root in roots {
             let span = root.span();
             let checked = checked_path(root.get_ref(), true)
@@ -163,6 +181,28 @@ pub fn paths_from_toml(text: &str) -> Result<Paths, PathsError> {
                 .map_err(|problem| error_at(Some(span), format!("`exclude`: {problem}")))?;
             paths.exclude.push(checked);
         }
+    }
+    let file = |key: &str, value: Option<Spanned<String>>| match value {
+        None => Ok(None),
+        Some(value) => {
+            let span = value.span();
+            checked_path(value.get_ref(), false)
+                .map(Some)
+                .map_err(|problem| error_at(Some(span), format!("`{key}`: {problem}")))
+        }
+    };
+    paths.tier0 = file("tier0", raw.tier0)?;
+    paths.index = file("index", raw.index)?;
+    if let Some(name) = raw.tier1_name {
+        let span = name.span();
+        let value = name.into_inner();
+        if value.is_empty() || value.contains('/') || value == "." || value == ".." {
+            return Err(error_at(
+                Some(span),
+                format!("`tier1_name`: {value:?} is not a single file name"),
+            ));
+        }
+        paths.tier1_name = Some(value);
     }
     Ok(paths)
 }
@@ -217,6 +257,12 @@ struct RawPaths {
     roots: Option<Vec<Spanned<String>>>,
     #[serde(default)]
     exclude: Option<Vec<Spanned<String>>>,
+    #[serde(default)]
+    tier0: Option<Spanned<String>>,
+    #[serde(default)]
+    tier1_name: Option<Spanned<String>>,
+    #[serde(default)]
+    index: Option<Spanned<String>>,
 }
 
 fn line_of(text: &str, offset: usize) -> usize {

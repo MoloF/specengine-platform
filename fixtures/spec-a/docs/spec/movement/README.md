@@ -4,6 +4,8 @@ class: canon
 tier: 1
 parent: DOM-GAME
 status: accepted
+owner: owner
+reviewed: 2026-09-20
 ---
 
 # Movement
