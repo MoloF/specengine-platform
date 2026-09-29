@@ -38,7 +38,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 ### Phase 0. Decisions and spikes — done 2026-09-29
 
 - Decisions ADR-0001…ADR-0025 (`docs/decisions/`), each with its canon diff.
-- Spikes (`docs/features/phase-0-spikes.md`, shipped): six measurement groups on two pilot corpora, delivered as production increments of `specengine-code`, `-mcp`, `-import`, `-ra` and the permanent harness `specengine-eval`. **12 verdicts: 9 confirmed, 3 refuted.** The hash walk is confirmed after amendment: recipe v1 was refuted under rustfmt, v2 adds four normalisations (05 §5.2). Refuted: `qpath` uniqueness (→ a target discriminator, Phase 1), `tree-sitter-ron` 0.2.0 (→ own RON lexer, 05 §9, 04 §6), the MCP output-cap claim (→ a character-based cap, 04 §4, 07 §1.1). No new ADR: ADR-0020 and ADR-0021 stand.
+- Spikes (`docs/features/phase-0-spikes.md`, shipped): 12 verdicts, 9 confirmed, 3 refuted, each routed to its section; ADR-0020 and ADR-0021 stand.
 - Not part of the spikes, carried to the start of Phase 1: the pre-code reading (tracey sources and a tracey run on one pilot crate — input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift and amiss, `/speckit.converge`).
 - **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W on 2026-09-29 ≈ 118 KB against ≤ 40 KB, driven by 05, 04 and 08 (`cargo xtask docs budget`).
 
@@ -83,7 +83,11 @@ Screens per 07 §3: Tree, Node, Graph, Queue (with diff and in-place editing), T
 - Metrics and compaction, notifications, URL-mode elicitation onto UI cards.
 - Optional: queue export to Beads/Task Master, spec digest into `AGENTS.md`/`CLAUDE.md` for external reviewers. No vector search (04 §2.1).
 
-**Total**: MVP in ~5-6 weeks, full scope in ~11-14 weeks.
+### Phase 6. Planning: roadmap and pool — ~2-3 weeks (after the main work)
+
+Releases, priority, a `depends_on` chain, range estimates, a computed position, the pool of unplaced work: `docs/features/roadmap.md` (draft). Needs the Phase 1 CLI, Phase 2 tasks and `apply_proposal`; the screen, Phase 4.
+
+**Total**: MVP in ~5-6 weeks, full scope in ~11-14 weeks + Phase 6 ~2-3.
 
 ## 3. Product acceptance criteria
 
