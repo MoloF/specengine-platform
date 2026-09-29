@@ -11,6 +11,7 @@ mod ast_hash;
 mod bevy;
 mod census;
 mod harness;
+mod index;
 mod parse;
 #[cfg(all(feature = "ra", unix))]
 mod ra;
@@ -50,6 +51,11 @@ enum Measurement {
     /// front-matter, `{#ID}` sections, references, token estimates. Files
     /// from `--config` as `census`; IDs from `--scheme`.
     Parse(ParseArgs),
+    /// The spec index of `specengine-store` over a scratch copy of the files
+    /// the `[paths]` walk finds: full index, unchanged update, one-file
+    /// update by walk and by path, and the stored counts. `[ids]` and
+    /// `[paths]` from `--scheme`.
+    Index(IndexArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -92,6 +98,20 @@ pub struct ParseArgs {
     /// Default: `SPECENGINE_SCHEME_A` / `_B` for `--label pilot-a` /
     /// `pilot-b` when set, else `specengine.toml` at the corpus root.
     /// Missing or invalid: refused (exit 2) with `file:line: message`.
+    #[arg(long, value_name = "TOML")]
+    pub scheme: Option<PathBuf>,
+}
+
+/// `index`: the shared arguments plus the scheme of the index.
+#[derive(Args, Clone)]
+pub struct IndexArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// `specengine.toml` whose `[ids]` table is the ID scheme and whose
+    /// `[paths]` table is the walk; read-only. Default: `SPECENGINE_SCHEME_A`
+    /// / `_B` for `--label pilot-a` / `pilot-b` when set, else
+    /// `specengine.toml` at the corpus root. Missing or invalid: refused
+    /// (exit 2) with `file:line: message`.
     #[arg(long, value_name = "TOML")]
     pub scheme: Option<PathBuf>,
 }
@@ -159,6 +179,17 @@ fn main() -> ExitCode {
                     parse::prepare(root, config.as_deref(), scheme.as_deref(), label.as_deref())
                 },
                 parse::run,
+            )
+        }
+        Measurement::Index(args) => {
+            let scheme = args.scheme.clone();
+            let label = args.common.label.clone();
+            measure_with(
+                "index",
+                &args.common,
+                index::FIXTURE,
+                move |root: &Path| index::prepare(root, scheme.as_deref(), label.as_deref()),
+                index::run,
             )
         }
         Measurement::BevyDetector(args) => {

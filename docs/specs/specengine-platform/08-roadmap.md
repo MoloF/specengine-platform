@@ -45,7 +45,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 ### Phase 1. Reading core — ~2-3 weeks
 
 - Parser — shipped 2026-09-29: `crates/specengine-{model,core}/README.md`; owner questions Q1–Q6 open there.
-- SQLite index + FTS5, incremental by BLAKE3.
+- SQLite index + FTS5, incremental by BLAKE3 — shipped 2026-09-29: `crates/specengine-store/README.md`; owner questions Q1–Q7 open there.
 - `spec check`: port of the pilot projects' documentation checks, debt baseline, one-line summary.
 - CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.
 - MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources.
@@ -101,7 +101,7 @@ Screens per 07 §3: Tree, Node, Graph, Queue (with diff and in-place editing), T
 | AC-7 | **Bundle determinism**: one state → one `bundle_hash` | test |
 | AC-8 | **Machine-verified**: `verified` is set only after SpecEngine itself runs the `@verifies` tests | test |
 | AC-9 | **Staleness**: editing a node from the `spec_snapshot` of a `ready` task makes it `stale`, the bundle shows the diff | test |
-| AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects. **`ra_ap_ide` layer measured in Phase 0** (`specengine-eval ra`, 05 §5.1): cold 33–65 s, warm pass ≈ 0.2 s, group peak ≤ 3.76 GiB |
+| AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects. **`ra_ap_ide` layer measured in Phase 0** (`specengine-eval ra`, 05 §5.1): cold 33–65 s, warm pass ≈ 0.2 s, group peak ≤ 3.76 GiB. Index: `specengine-eval index`, pilot run pending |
 | AC-11 | **Homoglyphs**: IDs with mixed scripts are rejected with an auto-fix | test on IDs where a Latin letter is swapped for its Cyrillic look-alike (U+0420 for `P`, U+0415 for `E`) |
 | AC-12 | **Responsiveness**: an MCP event is visible in the UI ≤ 1 s | e2e |
 | AC-13 | **Meaning change without revision fails**: pre-commit fails if a node's `norm_hash` changed without a `rev` bump and without `--editorial` | test on a temp repo |

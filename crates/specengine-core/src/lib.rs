@@ -9,6 +9,8 @@
 //! broken file is reported, never fatal (ADR-0012).
 //!
 //! - [`scheme_toml`] — `IdScheme::from_toml`: the `[ids]` table;
+//! - [`paths_toml`] — `Paths::from_toml`: the `[paths]` table (role
+//!   directories, walked roots, exclude globs; docs/features/spec-index.md);
 //! - [`tokens`] — the per-script token estimator;
 //! - `front_matter` — the block and its typed keys (`serde-saphyr`, with
 //!   depth and alias budgets);
@@ -20,6 +22,7 @@
 mod front_matter;
 mod lines;
 mod markdown;
+pub mod paths_toml;
 pub mod scheme_toml;
 pub mod tokens;
 mod yaml;
@@ -32,6 +35,7 @@ use specengine_model::{
     ParentRef, ParsedFile, Reference, Span,
 };
 
+pub use paths_toml::{Paths, PathsError, paths_from_toml};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};
 pub use tokens::tokens_est;
 pub use yaml::{MAX_ALIAS_EXPANSION, MAX_DEPTH};

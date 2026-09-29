@@ -3,7 +3,12 @@
 //! docs/features/spec-parser.md: `specengine-model` and `specengine-core`
 //! join the default members and the core graph, the model's normal graph is
 //! `serde` only, neither crate touches the file system, and the two parser
-//! libraries are pinned exactly.
+//! libraries are pinned exactly; AC-01 and AC-02 of
+//! docs/features/spec-index.md: `specengine-store` is the eighth default
+//! member, SQLite stays out of the model's and the core's graphs, the store
+//! depends on no measurement crate, no `sqlx`, and `rusqlite` is pinned
+//! exactly with `bundled`, one version each of `rusqlite`, `libsqlite3-sys`
+//! and `blake3`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -26,7 +31,7 @@ fn cargo() -> Command {
 }
 
 #[test]
-fn default_members_are_exactly_the_seven_core_packages() {
+fn default_members_are_exactly_the_eight_core_packages() {
     let output = cargo()
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .output()
@@ -59,6 +64,7 @@ fn default_members_are_exactly_the_seven_core_packages() {
             "specengine-import",
             "specengine-mcp",
             "specengine-model",
+            "specengine-store",
             "xtask",
         ]
     );
@@ -748,4 +754,131 @@ fn parser_libraries_are_pinned_exactly_and_resolve_at_the_pin() {
             "Cargo.lock lacks {name} {version}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// docs/features/spec-index.md AC-01 (layering) and AC-02 (pins).
+// ---------------------------------------------------------------------------
+
+/// The SQLite side of the store: never in the model's or the core's graph.
+const SQLITE_CRATES: [&str; 3] = ["rusqlite", "libsqlite3-sys", "specengine-store"];
+
+#[test]
+fn model_and_core_normal_graphs_have_no_sqlite() {
+    for package in ["specengine-model", "specengine-core"] {
+        let graph = normal_graph(package);
+        let offenders: Vec<&(String, String)> = graph
+            .iter()
+            .filter(|(name, _)| SQLITE_CRATES.contains(&name.as_str()) || name == "sqlx")
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "{package}'s normal graph reaches SQLite: {offenders:?}"
+        );
+    }
+}
+
+#[test]
+fn store_depends_on_model_core_and_sqlite_but_no_measurement_crate() {
+    let graph = normal_graph("specengine-store");
+    let offenders: Vec<&(String, String)> = graph
+        .iter()
+        .filter(|(name, _)| {
+            [
+                "specengine-code",
+                "specengine-import",
+                "specengine-mcp",
+                "specengine-eval",
+                "specengine-ra",
+            ]
+            .contains(&name.as_str())
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "specengine-store depends on {offenders:?}"
+    );
+    for wanted in [
+        "specengine-model",
+        "specengine-core",
+        "rusqlite",
+        "libsqlite3-sys",
+        "blake3",
+        "serde_json",
+    ] {
+        assert!(
+            graph.iter().any(|(name, _)| name == wanted),
+            "{wanted} missing from specengine-store's graph: {graph:?}"
+        );
+    }
+}
+
+#[test]
+fn no_sqlx_anywhere() {
+    for args in [
+        &[][..],
+        &["--workspace"][..],
+        &["--workspace", "-e", "all"][..],
+    ] {
+        let crates = tree_crates(&cargo_tree(args));
+        let sqlx: Vec<&(String, String)> = crates
+            .iter()
+            .filter(|(name, _)| name == "sqlx" || name.starts_with("sqlx-"))
+            .collect();
+        assert!(sqlx.is_empty(), "cargo tree {args:?} lists {sqlx:?}");
+    }
+    let lock = std::fs::read_to_string(workspace_root().join("Cargo.lock")).expect("Cargo.lock");
+    assert!(
+        !lock.contains("name = \"sqlx"),
+        "Cargo.lock locks a sqlx crate"
+    );
+}
+
+#[test]
+fn rusqlite_is_pinned_exactly_with_bundled_and_sqlite_resolves_once() {
+    let manifest =
+        std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest");
+    let section = manifest
+        .split("[workspace.dependencies]")
+        .nth(1)
+        .expect("[workspace.dependencies] in the root manifest");
+    let section = section.split("\n[").next().unwrap_or(section);
+    let line = section
+        .lines()
+        .find(|line| line.trim_start().starts_with("rusqlite "))
+        .expect("rusqlite in [workspace.dependencies]");
+    assert!(
+        line.contains("version = \"=0.40.2\""),
+        "rusqlite is not `=`-pinned at 0.40.2: {line}"
+    );
+    assert!(
+        line.contains("default-features = false"),
+        "rusqlite's default features are not off: {line}"
+    );
+    assert!(
+        line.contains("features = [\"bundled\"]"),
+        "rusqlite is not built with exactly `bundled`: {line}"
+    );
+    let metadata = workspace_metadata();
+    let declared = declared_dependency(&metadata, "specengine-store", "rusqlite");
+    assert_eq!(
+        declared["req"], "=0.40.2",
+        "specengine-store's rusqlite requirement"
+    );
+    for name in ["rusqlite", "libsqlite3-sys", "blake3"] {
+        let locked = locked_versions(name);
+        assert_eq!(locked.len(), 1, "Cargo.lock holds {name} at {locked:?}");
+        let versions: std::collections::BTreeSet<String> =
+            tree_crates(&cargo_tree(&["--workspace"]))
+                .into_iter()
+                .filter(|(n, _)| n == name)
+                .map(|(_, v)| v)
+                .collect();
+        assert_eq!(
+            versions.len(),
+            1,
+            "cargo tree --workspace: {name} at {versions:?}"
+        );
+    }
+    assert_eq!(locked_versions("rusqlite"), ["0.40.2"]);
 }

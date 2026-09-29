@@ -21,6 +21,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [crates/specengine-mcp/README.md](../crates/specengine-mcp/README.md) specengine-mcp — the MCP server over stdio · crates/specengine-mcp · tier 1
 - [crates/specengine-model/README.md](../crates/specengine-model/README.md) specengine-model — the corpus model and the reference grammar · crates/specengine-model · tier 1
 - [crates/specengine-ra/README.md](../crates/specengine-ra/README.md) specengine-ra — layer C: rust-analyzer as a library · crates/specengine-ra · tier 1
+- [crates/specengine-store/README.md](../crates/specengine-store/README.md) specengine-store — the spec index · crates/specengine-store · tier 1
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
@@ -67,5 +68,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) Technical Specification: SpecEngine Platform · specengine · abandoned
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) Phase 0 spikes: turn the engine's unverified claims into numbers on the two pilot corpora · spikes · shipped
+- [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) 03. Critique of the initial specification · specengine · shipped

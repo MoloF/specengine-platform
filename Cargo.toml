@@ -9,6 +9,7 @@ default-members = [
     "xtask",
     "crates/specengine-model",
     "crates/specengine-core",
+    "crates/specengine-store",
     "crates/specengine-code",
     "crates/specengine-mcp",
     "crates/specengine-import",
@@ -45,6 +46,12 @@ proc-macro2 = { version = "=1.0.107", default-features = false }
 # working answer Q1 of the spec, pending the owner.
 pulldown-cmark = { version = "=0.13.4", default-features = false }
 serde-saphyr = { version = "=1.3.0", default-features = false, features = ["deserialize"] }
+# The spec index of `specengine-store` (docs/features/spec-index.md; 04 §6, 05 §8):
+# SQLite compiled in (`bundled`: SQLite 3.53.2 with FTS5 and the trigram
+# tokenizer). Default features off: no `cache` (`hashlink`), no wasm FFI. Never
+# `sqlx` or `refinery` beside it (`libsqlite3-sys` has `links = "sqlite3"`). The
+# pin is the working answer Q1 of the spec, pending the owner.
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
 # MCP server over stdio (spike group 4; 04 §6, 07 §1.1). Stdio-only features: no
 # `server-side-http`, no `transport-streamable-http-*`, so no HTTP stack enters the
 # core graph; no `elicitation` feature (it only adds typed helpers and pulls `url`):

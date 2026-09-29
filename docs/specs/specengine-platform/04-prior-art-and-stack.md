@@ -197,10 +197,10 @@ A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependen
 | `tree-sitter` | =0.27.0 | Rust ≥ 1.90 |
 | `tree-sitter-rust` | =0.24.2 | **compatible with 0.27** (ABI 15); `has_error()` check per item (05 §5.2). In 0.26+ `set_timeout_micros` is removed, cancellation via `ParseOptions { progress_callback }`; in 0.27 `child_count()` → `u32`, `kind()` → `&'tree str` |
 | own RON lexer | — (`specengine-code`) | `.ron` markers, field paths, the Bevy dump reader; replaces `tree-sitter-ron` 0.2.0 (05 §9) |
-| `rusqlite` | 0.40.2 | `bundled`, FTS5; preferable to `sqlx` for local single-user |
+| `rusqlite` | **=0.40.2** (`bundled`: SQLite 3.53.2, FTS5) | the index; not `sqlx`. Transitive, pending the owner (Q1, store README): `libsqlite3-sys` 0.38.2, `fallible-iterator` 0.3.0, `fallible-streaming-iterator` 0.1.9; build: `pkg-config` 0.3.34, `vcpkg` 0.2.15 (unused) |
 | `pulldown-cmark` | =0.13.4 (no default features) | heading attributes `{#ID}`, offset iterator for precise patches |
 | `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (`serde_yaml` deprecated, `serde_yaml_ng`/`serde_norway` unchanged since 2024). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86) — pending the owner (Q1, core README) |
-| `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 | serialization; JSON output of tools and `specengine-eval` |
+| `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 | serialization; JSON output of tools and `specengine-eval`; `float_roundtrip` in `specengine-store` |
 | `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer) / importer ID patterns; `regex` is already in the graph through tree-sitter |
 | `blake3` | =1.8.7 | node and AST hashes |
 | `notify` + `notify-debouncer-full` | 8.2.0 + 0.7.0 | file watching; **not** 9.0-rc; debouncer-full coalesces atomic saves |

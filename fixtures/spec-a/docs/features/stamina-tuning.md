@@ -7,6 +7,9 @@ tier: two
 adrs: [DEC-0023]
 refs: [R-12, QST-031]
 priority: high
+shipped: 2026-09-28
+acceptance: owner playtest on the reference machine
+playtest: {ratio: 0.1, passed: true, notes: null, maps: [keep, cellar], seed: 18446744073709551615}
 ---
 
 # Stamina tuning

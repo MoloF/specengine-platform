@@ -174,12 +174,8 @@ slug = "example"
 name = "Example"
 language = "en"
 
-[paths]
-spec = "docs/spec"
-records = "docs/records"
-features = "docs/features"
-generated = "docs/generated"
-archive = "docs/archive"
+[paths]                     # role keys, roots, exclude: crates/specengine-core/README.md
+roots = ["docs", "CLAUDE.md"]
 
 [ids]                       # prefix → kind, shape, width, aliases_from: crates/specengine-model/README.md
 R    = { kind = "requirement", width = 2, immutable_text = true }

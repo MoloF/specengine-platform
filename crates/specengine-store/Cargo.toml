@@ -1,0 +1,22 @@
+[package]
+name = "specengine-store"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "The spec index of SpecEngine: a rebuildable SQLite + FTS5 projection of the spec parser over one worktree, updated incrementally"
+
+# On `specengine-model` and `specengine-core`, never the reverse; never
+# `specengine-{code,import,mcp,eval,ra}` (docs/features/spec-index.md, AC-01).
+# No `rusqlite` type in a public signature (docs/canon/architecture.md#distribution).
+[dependencies]
+specengine-model = { path = "../specengine-model" }
+specengine-core = { path = "../specengine-core" }
+rusqlite.workspace = true
+blake3.workspace = true
+serde.workspace = true
+# The model value of each row (`node`, `link`, …) is stored as JSON and read
+# back into the same `ParsedFile`; `float_roundtrip` makes a front-matter float
+# read back bit for bit (the default parser may be one ULP off).
+serde_json = { workspace = true, features = ["float_roundtrip"] }

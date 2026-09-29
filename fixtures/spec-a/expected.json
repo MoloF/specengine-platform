@@ -60,7 +60,7 @@
       "summary": "Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMINA#RULE-STAM-REGEN|regeneration]]).",
       "sections": [
         {"id": "RULE-SPRINT-COST", "kind": "rule", "level": 2, "parent": "MEC-SPRINT", "title": "Cost", "rev": 3},
-        {"id": "EDGE-SPRINT-EMPTY", "kind": "edge-case", "level": 3, "parent": "RULE-SPRINT-COST", "title": "Empty tank"}
+        {"id": "EDGE-SPRINT-EMPTY", "kind": "edge-case", "level": 3, "parent": "RULE-SPRINT-COST", "title": "Empty tank", "classes": ["playtest"]}
       ],
       "anchors": [],
       "links": [
@@ -201,7 +201,7 @@
         "- mentions inline AC-07",
         "- mentions inline AC-07"
       ],
-      "diagnostics": ["frontmatter-type:6", "unknown-key:9"]
+      "diagnostics": ["frontmatter-type:6", "unknown-key:9", "unknown-key:12"]
     }
   }
 }

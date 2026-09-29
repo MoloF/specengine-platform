@@ -21,6 +21,8 @@ specengine-import = { path = "../specengine-import" }
 # Subcommand `parse`: the spec parser (docs/features/spec-parser.md).
 specengine-model = { path = "../specengine-model" }
 specengine-core = { path = "../specengine-core" }
+# Subcommand `index`: the spec index (docs/features/spec-index.md).
+specengine-store = { path = "../specengine-store" }
 specengine-ra = { path = "../specengine-ra", optional = true }
 clap.workspace = true
 serde.workspace = true

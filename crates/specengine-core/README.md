@@ -8,11 +8,22 @@ reviewed: 2026-09-29
 
 # specengine-core — the spec parser
 
-The reading core of Phase 1; today the parser: one file's bytes → `ParsedFile`. No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on (path, bytes, scheme), maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (over the default members; `specengine-ra` gets 0.9.6 through `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `[ids]`. Caller today: `specengine-eval parse`.
+The reading core of Phase 1; today the parser: one file's bytes → `ParsedFile`. No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on (path, bytes, scheme), maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (over the default members; `specengine-ra` gets 0.9.6 through `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `[ids]` and `[paths]`. Callers: `specengine-store`, `specengine-eval parse`.
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`.
+
+## `[paths]`
+
+What the index walks (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude}`: role keys default to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/spec`, `docs/records`, `docs/features`, `docs/generated`, `docs/archive`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths. Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or empty component; one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business.
+
+```toml
+[paths]
+spec = "docs/spec"
+roots = ["docs", "crates", "CLAUDE.md"]
+exclude = ["docs/archive/old/**"]
+```
 
 ## Output
 
@@ -62,6 +73,5 @@ Working answers are what the code does now; the owner's answer triggers the step
 
 ## Open minors
 
-- `src` omitted (no enclosing ID section, no document ID) conflicts with the `links` key `(src, dst, type)` of 05 §3.3: the index increment decides.
 - `scheme_toml` validates entries alphabetically: of two bad entries the alphabetically first line is reported.
 - The `yaml.rs` `Root` doc numbers levels 0–3 while `MAX_DEPTH` counts from 1.

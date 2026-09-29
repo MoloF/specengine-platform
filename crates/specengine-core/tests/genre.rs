@@ -136,6 +136,9 @@ fn corpus_matches_expected(name: &str) {
                 if let Some(rev) = s.rev {
                     object.insert("rev".into(), rev.into());
                 }
+                if !s.classes.is_empty() {
+                    object.insert("classes".into(), s.classes.clone().into());
+                }
                 Value::Object(object)
             })
             .collect();

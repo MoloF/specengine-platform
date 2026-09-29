@@ -17,7 +17,7 @@ Hold the sprint key to run; each second drains stamina (see
 
 Sprinting costs 12 units/s, set by R-12@2 and bounded by A-101.
 
-### Empty tank {#EDGE-SPRINT-EMPTY}
+### Empty tank {#EDGE-SPRINT-EMPTY .playtest}
 
 At zero stamina the sprint ends; see `EDGE-STAM-ZERO` and Q-031.
 

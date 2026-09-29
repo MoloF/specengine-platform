@@ -1,5 +1,7 @@
 ---
 id: GLS-task-branch
+generator: zerkalo glossary
+source: docs/spec/cli.md
 ---
 
 # Ветка задачи

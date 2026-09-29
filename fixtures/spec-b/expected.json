@@ -117,7 +117,8 @@
         "FLAG-ANY-BRANCH mentions inline QN-07"
       ],
       "diagnostics": [
-        "frontmatter-yaml:3"
+        "frontmatter-yaml:3",
+        "homoglyph:9"
       ]
     },
     "docs/records/ADR/ADR-0001.md": {
@@ -143,6 +144,7 @@
       "anchors": [],
       "links": [
         "ADR-0001 supersedes frontmatter ADR-0002",
+        "ADR-0002 canon frontmatter MOD-CLI#CMD-SYNC",
         "ADR-0002 mentions inline ADR-0001"
       ],
       "diagnostics": []
