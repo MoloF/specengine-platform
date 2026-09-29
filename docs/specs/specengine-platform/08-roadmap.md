@@ -44,9 +44,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Parser — shipped 2026-09-29: `crates/specengine-{model,core}/README.md`; owner questions Q1–Q5 open there.
-- SQLite index + FTS5, incremental by BLAKE3 — shipped 2026-09-29: `crates/specengine-store/README.md`; owner questions Q1–Q7 open there.
-- `spec check` increments 1 and 2 part 1 — shipped 2026-09-29: `docs/canon/spec-check.md`, `docs/canon/spec-check-graph.md`. Next: 2 part 2 `spec-check-links` (owner Q-D); 3 with the CLI, `xtask` retired; 4 `spec-check-process`.
+- Shipped 2026-09-29/30, owner questions open in the canon named: the parser (`crates/specengine-{model,core}/README.md`); the SQLite + FTS5 index, incremental by BLAKE3 (`crates/specengine-store/README.md`); `spec check` increments 1, 2 part 1 and 2 part 2 pass A (`docs/canon/spec-check*.md`). Next: pass B `spec-check-links`; 3 with the CLI, `xtask` retired; 4 `spec-check-process`.
 - CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.
 - MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
@@ -116,13 +114,13 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 
 | Source in the corpus | → | Notes |
 |---|---|---|
-| Documents with front-matter (requirements, decisions, features) | nodes and records, header normalization | `canon:` on decisions is kept; feature criteria → `{#AC-..}` sections; locally unique IDs get a scope: `<slug>/AC-07` |
-| Records as table rows (assumptions, questions, terms), including rows without an ID | one record per row, `immutable_text`; missing IDs are issued (agent proposes, owner confirms) | status prefixes in cells ("closed …", "implemented in code …") → status + events; text verbatim |
+| Documents with front-matter (requirements, decisions, features) | nodes and records, header normalization | `canon:` on decisions is kept; feature criteria → `{#AC-..}` sections (ADR-0026) |
+| Records as table rows (assumptions, questions, terms), also rows without an ID | one record per row, `immutable_text`; missing IDs issued (agent proposes, owner confirms) | status prefixes in cells ("closed …", "implemented in code …") → status + events; text verbatim |
 | Table-style headers and journals (registry, decisions, trade-offs, blockers, milestones) | registry → computed; journal → `DEC-NNN` with `cost`; blockers → blocking questions; milestones → tasks | decisions without `cost` → debt baseline |
 | Principles and check codes | `principle`, `check`; code constants → markers | old designations → aliases (ADR-0009) |
 | README files of code subtrees (Tier 1) | domain nodes | stay in place (locality), indexed as `domain` |
 | Roadmap state and queue | SpecEngine tasks | the markdown becomes generated |
-| An existing tree of mechanics or domains | `mechanic` + rings → domains | if there is no tree, it is built **through the queue itself**: the analyst proposes a clustering, the owner approves (SpecEngine's first test on its own cycle) |
+| An existing tree of mechanics or domains | `mechanic` + rings → domains | no tree → built **through the queue**: the analyst proposes a clustering, the owner approves (SpecEngine's first test of its own cycle) |
 | Homoglyphs, links to deleted files, numbers without files | fixes or baseline | importer report |
 | Project generators (`gen` commands) | stay in the project | their output is the `generated` class |
 | Project test harness that reads docs | moves to `spec show --json` / the new layout | adapter first, then file moves |
@@ -138,13 +136,13 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 
 ### 4.3. Census findings (Phase 0, both pilots)
 
-A census config alone described each pilot corpus (ADR-0008 confirmed; schema and counts: `crates/specengine-import/README.md`); it took three capabilities beyond the first sample — headerless `|` blocks, an ID-column header regex for record tables, wiki links. Each finding below is a per-corpus importer setting or rule, not core code:
+A census config alone described each pilot corpus (ADR-0008; schema and counts: `crates/specengine-import/README.md`) once it read headerless `|` blocks, ID-column header regexes and wiki links. Each finding is a per-corpus importer setting or rule, not core code:
 
-- (a) **Link base**: 57 of one pilot's 58 "broken" links point to existing files, written relative to the docs root rather than to the linking file → a per-corpus link-base setting.
-- (b) **Genuine debt**: the other pilot's broken wiki links target 8 names that exist nowhere → the debt baseline (§4.2 item 3).
-- (c) **Legacy prefixes**: both pilots keep non-Latin prefixes (20 / 287 IDs; one pilot's whole decision register) → ADR-0009 aliases at import (§4.2 item 4).
-- (d) **Definition vs reference**: IDs recur across index and reference tables (1 407 / 110 duplicates) → a per-corpus rule telling a record's definition from a reference to it.
-- (e) **Locally numbered tables**: a numero-sign (U+2116) column accounts for most of one pilot's 185 rows without an ID → a per-corpus setting naming local-number columns (candidates for the scoped IDs of §4.1).
+- (a) **Link base**: 57 of one pilot's 58 "broken" links resolve from the docs root, not the linking file → a per-corpus link base.
+- (b) **Genuine debt**: the other pilot's broken wiki links name 8 targets that exist nowhere → the baseline (§4.2 item 3).
+- (c) **Legacy prefixes**: both pilots keep non-Latin prefixes (20 / 287 IDs; one whole decision register) → aliases (§4.2 item 4).
+- (d) **Definition vs reference**: IDs recur across index and reference tables (1 407 / 110 duplicates) → a per-corpus rule telling a definition from a reference.
+- (e) **Locally numbered tables**: a numero-sign (U+2116) column holds most of one pilot's 185 rows without an ID → a per-corpus local-number column setting (candidates for §4.1's feature-scoped IDs).
 
 ## 5. Risks
 

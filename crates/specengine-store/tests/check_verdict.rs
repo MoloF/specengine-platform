@@ -73,7 +73,9 @@ fn a_blocking_finding_exits_0_under_observe_and_1_under_enforce() {
         report.lines(true)
     );
     assert_eq!(exit(&report), 0);
-    assert_eq!(report.counts.documents, 14);
+    // 13: `docs/records/AC/AC-07.md` became a section of its feature
+    // document (docs/features/spec-check-scopes.md AC-09).
+    assert_eq!(report.counts.documents, 13);
 }
 
 #[test]
@@ -541,4 +543,109 @@ fn an_incomplete_walk_gives_no_index_finding() {
             );
         }
     }
+}
+
+// ------------------------------------------------------------------ scopes
+// AC-09 of docs/features/spec-check-scopes.md through the loader: spec-a
+// walks 13 documents, spec-b 11, neither has an `id-scope`; the two named
+// reds, applied to scratch copies, give exactly their finding.
+
+fn scope_findings(report: &Report) -> Vec<(String, String, usize, String, String)> {
+    report
+        .findings
+        .iter()
+        .filter(|f| ["id-scope", "ref-dangling", "mention-dangling"].contains(&f.code.as_str()))
+        .map(|f| {
+            (
+                f.code.clone(),
+                f.path.clone(),
+                f.line,
+                f.subject.clone(),
+                f.message.clone(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn the_fixtures_walk_13_and_11_documents_and_define_no_misplaced_id() {
+    let scratch = Scratch::new("check-verdict-scopes");
+    for (name, documents) in [("spec-a", 13), ("spec-b", 11)] {
+        let root = copy(&scratch, name, name, "");
+        let report = check(&root);
+        assert_eq!(report.counts.documents, documents, "{name}");
+        assert!(
+            report.findings.iter().all(|f| f.code != "id-scope"),
+            "{name}: {:#?}",
+            report.lines(true)
+        );
+    }
+}
+
+#[test]
+fn the_criterion_record_kept_is_one_id_scope() {
+    let scratch = Scratch::new("check-verdict-scope-record");
+    let root = copy(&scratch, "spec-a", "wt", "");
+    let before = scope_findings(&check(&root));
+    assert!(before.is_empty(), "{before:#?}");
+    // The record file as it was before the move.
+    write(
+        &root,
+        "docs/records/AC/AC-07.md",
+        "---\nid: AC-07\nclass: canon\nstatus: open\nlinks:\n  verifies: [R-12]\nowner: owner\nreviewed: 2026-09-20\n---\n\n# Regeneration starts 1.5 s after the last sprint\n\nMeasured in the stamina test: a sprint followed by rest shows the first\nregeneration tick 1.5 s later.\n",
+    );
+    let report = check(&root);
+    assert_eq!(
+        scope_findings(&report),
+        [(
+            "id-scope".to_owned(),
+            "docs/records/AC/AC-07.md".to_owned(),
+            2,
+            "AC-07".to_owned(),
+            "`AC-07` is feature-scoped: define it as a `{#AC-07}` section of a document \
+             directly under `docs/features`"
+                .to_owned()
+        )],
+        "{:#?}",
+        report.lines(true)
+    );
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.code == "id-scope")
+        .unwrap();
+    assert!(report.blocks(finding), "an error blocks under enforce");
+}
+
+#[test]
+fn the_bare_criterion_left_in_the_cli_spec_dangles() {
+    let scratch = Scratch::new("check-verdict-scope-bare");
+    let root = copy(&scratch, "spec-b", "wt", "");
+    let cli = root.join("docs/spec/cli.md");
+    let text = fs::read_to_string(&cli).unwrap();
+    assert_eq!(text.matches("dry-run/CRIT-01").count(), 1);
+    fs::write(&cli, text.replace("dry-run/CRIT-01", "CRIT-01")).unwrap();
+    let report = check(&root);
+    let dangling: Vec<_> = scope_findings(&report)
+        .into_iter()
+        .filter(|(code, path, ..)| code == "mention-dangling" && path == "docs/spec/cli.md")
+        .map(|(_, _, line, subject, message)| (line, subject, message))
+        .collect();
+    assert_eq!(
+        dangling,
+        [
+            (
+                25,
+                "CRIT-01".to_owned(),
+                "`mentions`: `CRIT-01` is feature-scoped: cite it as `dry-run/CRIT-01`".to_owned()
+            ),
+            (
+                25,
+                "R\u{0415}Q-003".to_owned(),
+                "`mentions`: `R\u{0415}Q-003` resolves to no ID and no alias".to_owned()
+            ),
+        ],
+        "{:#?}",
+        report.lines(true)
+    );
 }

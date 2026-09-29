@@ -57,7 +57,10 @@ fn one_record_per_prefix_takes_its_kind_from_ids() {
         );
         by_prefix.entry(prefix).or_default().push(path.clone());
     }
-    let record_prefixes = ["A", "AC", "DEC", "Q", "R", "TERM"];
+    // No `AC`: a feature-scoped criterion is a `{#ID}` section of its
+    // feature document, not a record (ADR-0026, docs/features/
+    // spec-check-scopes.md AC-09).
+    let record_prefixes = ["A", "DEC", "Q", "R", "TERM"];
     assert_eq!(
         by_prefix.keys().map(String::as_str).collect::<Vec<_>>(),
         record_prefixes,
@@ -69,14 +72,7 @@ fn one_record_per_prefix_takes_its_kind_from_ids() {
         .collect();
     assert_eq!(
         kinds,
-        [
-            "assumption",
-            "criterion",
-            "decision",
-            "question",
-            "requirement",
-            "term"
-        ]
+        ["assumption", "decision", "question", "requirement", "term"]
     );
 }
 

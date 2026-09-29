@@ -3,7 +3,9 @@
 //! `class: generated` nor Tier 3; a failed front-matter counts as live) that
 //! resolves to nothing, on its line, the subject as written. Resolution is
 //! increment 1's (a defined ID, an `aliases:` entry, `aliases_from` + the
-//! written body, `#Y` in the ID's file); `project:` and `slug/` are skipped.
+//! written body, `#Y` in the ID's file); `project:` is skipped, `slug/`
+//! resolves in its feature document only (docs/features/spec-check-scopes.md,
+//! AC-13).
 //! An inline mention of a `shape = "name"` prefix that does not resolve drops
 //! its last `-segment` and retries while the prefix and one segment remain;
 //! never for front-matter (which keeps `ref-dangling`) or number shapes.
@@ -140,12 +142,35 @@ A five-digit number is a real mention: R-00001. No re-padding: R-001, QST-31.
     assert!(!report.lines(false).join("\n").contains("R-99"));
 }
 
+/// AC-13 of docs/features/spec-check-scopes.md: `project:` is skipped (with
+/// or without `slug/`); a `slug/` mention resolves only in its feature
+/// document, for any prefix, so `feat/AC-99` and `feat/R-97` dangle when
+/// there is no `docs/features/feat.md`.
 #[test]
-fn qualified_mentions_are_skipped() {
+fn project_mentions_are_skipped_and_slug_mentions_resolve_in_their_feature() {
     let body = "Elsewhere: other:R-99, feat/AC-99, other:feat/AC-98 and feat/R-97.\n";
     let text = source(body);
     let report = check_with(&[("docs/s.md", &text)]);
-    assert!(dangling(&report).is_empty(), "{}", show(&report));
+    assert_eq!(
+        dangling(&report),
+        [
+            at("docs/s.md", 7, "feat/AC-99"),
+            at("docs/s.md", 7, "feat/R-97")
+        ],
+        "{}",
+        show(&report)
+    );
+    for finding in with_code(&report, "mention-dangling") {
+        assert_eq!(finding.severity, Severity::Warning);
+        assert!(
+            finding
+                .message
+                .ends_with("resolves to no feature document `docs/features/feat.md`"),
+            "{}",
+            finding.message
+        );
+    }
+    assert_eq!(report.verdict, Verdict::Clean, "{}", show(&report));
 }
 
 #[test]
@@ -296,7 +321,7 @@ fn the_fallback_stops_at_the_prefix_and_one_segment() {
     files.push(("docs/m/fast.md", longer));
     let config = config();
     let input = config.input(&files);
-    let resolver = Resolver::new(&input, &config.scheme);
+    let resolver = Resolver::new(&input, &config.scheme, &config.paths);
     let probe = config.input(&[("docs/probe.md", "MEC-STAMINA-fast-regen\n")]);
     let reference = probe.files[0]
         .parsed
@@ -315,12 +340,12 @@ fn the_fallback_stops_at_the_prefix_and_one_segment() {
         .position(|path| *path == "docs/m/fast.md")
         .unwrap();
     assert_eq!(
-        resolver.resolve_mention(&reference, "MEC-STAMINA-fast-regen"),
+        resolver.resolve_mention("docs/probe.md", &reference, "MEC-STAMINA-fast-regen"),
         Resolution::Resolved(vec![fast])
     );
     // A declared reference never falls back.
     assert!(matches!(
-        resolver.resolve(&reference, "MEC-STAMINA-fast-regen"),
+        resolver.resolve("docs/probe.md", &reference, "MEC-STAMINA-fast-regen"),
         Resolution::Dangling(_)
     ));
 }

@@ -10,7 +10,7 @@
 
 use specengine_core::IdSchemeToml;
 use specengine_model::grammar::{
-    Canon, parse_canon, parse_definition, parse_reference, scan, split_superseded_by,
+    Canon, is_slug, parse_canon, parse_definition, parse_reference, scan, split_superseded_by,
 };
 use specengine_model::{
     IdScheme, IdScope, IdScript, LinkTarget, PrefixSpec, RefForm, SchemeField, Shape, Span,
@@ -568,4 +568,85 @@ fn an_alias_with_look_alike_digits_is_no_homoglyph() {
     assert_eq!(found[0].reference.alias_of, None);
     assert_eq!(found[0].homoglyphs.len(), 1);
     assert_eq!(found[0].homoglyphs[0].fix, "Q-031");
+}
+
+// ------------------------------------------------------------ is_slug
+// docs/features/spec-check-scopes.md, "API": `is_slug` is the grammar's
+// `slug`, `[a-z][a-z0-9-]*`, one rule for the `project:` and `slug/`
+// qualifiers and for the stem of a feature document (ADR-0026).
+
+/// Candidate slugs: the grammar's, and every way to miss it.
+const SLUG_CANDIDATES: &[(&str, bool)] = &[
+    ("a", true),
+    ("feat", true),
+    ("stamina-tuning", true),
+    ("dry-run", true),
+    ("s-2", true),
+    ("a1", true),
+    ("a-", true),
+    ("a--b", true),
+    ("", false),
+    ("Feat", false),
+    ("fEat", false),
+    ("README", false),
+    ("1a", false),
+    ("9slug", false),
+    ("-a", false),
+    ("a_b", false),
+    ("a.b", false),
+    ("a b", false),
+    ("\u{00E9}t\u{00E9}", false),
+    ("f\u{0435}at", false),
+];
+
+#[test]
+fn is_slug_is_the_grammar_slug() {
+    for &(text, want) in SLUG_CANDIDATES {
+        assert_eq!(is_slug(text), want, "{text:?}");
+    }
+    assert!(!is_slug("a/b"), "one segment");
+    assert!(!is_slug("a.md"), "a stem, not a file name");
+}
+
+/// The lexer's qualifiers are unchanged: after a clean boundary, `c/ID`
+/// carries the scope `c` and `c:ID` the project `c` exactly when `c` is a
+/// slug; otherwise the ID is read without the qualifier.
+#[test]
+fn qualifier_recognition_agrees_with_is_slug() {
+    let scheme = scheme();
+    for &(candidate, slug) in SLUG_CANDIDATES {
+        // A space is a clean boundary: `a b/R-12` is the qualifier `b`.
+        if candidate.is_empty() || candidate.contains(' ') {
+            continue;
+        }
+        for (separator, project) in [('/', false), (':', true)] {
+            let text = format!("({candidate}{separator}R-12)");
+            let found = scan(&text, 0, &scheme);
+            assert_eq!(found.len(), 1, "{text:?}");
+            let reference = &found[0].reference;
+            assert_eq!(reference.id, "R-12", "{text:?}");
+            let (got, other) = if project {
+                (&reference.project, &reference.scope)
+            } else {
+                (&reference.scope, &reference.project)
+            };
+            let want = slug.then(|| candidate.to_owned());
+            assert_eq!(got, &want, "{text:?}");
+            assert_eq!(other, &None, "{text:?}");
+        }
+    }
+    // Both qualifiers, as before: `project:` then `slug/`.
+    let found = scan("(shared:stamina-tuning/AC-07#AC-08@2)", 0, &scheme);
+    let reference = &found[0].reference;
+    assert_eq!(reference.project.as_deref(), Some("shared"));
+    assert_eq!(reference.scope.as_deref(), Some("stamina-tuning"));
+    assert_eq!(reference.id, "AC-07");
+    assert_eq!(reference.section.as_deref(), Some("AC-08"));
+    assert_eq!(reference.rev, Some(2));
+    // A qualifier after a letter, digit, `_ - . / :` is no qualifier.
+    for text in ["Xfeat/R-12", "_feat/R-12", "a.feat/R-12", "a/feat/R-12"] {
+        let found = scan(text, 0, &scheme);
+        assert_eq!(found.len(), 1, "{text:?}");
+        assert_eq!(found[0].reference.scope, None, "{text:?}");
+    }
 }

@@ -263,7 +263,9 @@ fn spec_a_by_default_gives_one_anonymous_envelope_and_the_report_under_out() {
     let envelope = envelope(&output);
     assert_anonymous(&output, &envelope, "fixtures", &fixture("spec-a"));
     let result = &envelope["result"];
-    assert_eq!(result["files"], 14);
+    // 13 since docs/features/spec-check-scopes.md moved AC-07 into its
+    // feature document (AC-09).
+    assert_eq!(result["files"], 13);
     assert_eq!(result["verdicts"]["observe"], "observed");
     assert_eq!(result["verdicts"]["enforce"], "blocked");
     assert_eq!(
@@ -314,7 +316,9 @@ fn spec_a_by_default_gives_one_anonymous_envelope_and_the_report_under_out() {
     );
     assert_eq!(report["mode"], "enforce");
     assert_eq!(report["verdict"], "blocked");
-    assert_eq!(report["counts"]["documents"], 14);
+    // 13: spec-a's criterion is a section of its feature document since
+    // docs/features/spec-check-scopes.md (AC-09).
+    assert_eq!(report["counts"]["documents"], 13);
     assert!(
         report["findings"]
             .as_array()

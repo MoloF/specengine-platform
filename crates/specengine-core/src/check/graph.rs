@@ -76,7 +76,9 @@ fn mention_dangling(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
         for reference in inline_mentions(parsed) {
             let written = written(text, reference);
             if let Resolution::Dangling(reason) =
-                corpus.resolver.resolve_mention(reference, &written)
+                corpus
+                    .resolver
+                    .resolve_mention(corpus.paths[index], reference, &written)
             {
                 findings.push(warning(
                     "mention-dangling",
@@ -91,21 +93,17 @@ fn mention_dangling(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
 }
 
 /// Per file: `X` as written in its `status: superseded-by X`, and the files
-/// holding `X`.
+/// holding `X` as cited from that file.
 fn supersessions(corpus: &Corpus<'_>, scheme: &IdScheme) -> Vec<Option<(String, Vec<usize>)>> {
     corpus
         .parses
         .iter()
-        .map(|parsed| {
+        .zip(&corpus.paths)
+        .map(|(parsed, &path)| {
             let status = parsed.and_then(readable_fields)?.status.as_deref()?;
             let (_, target) = grammar::split_superseded_by(status)?;
             let holders = grammar::parse_reference(target, 0, scheme)
-                .and_then(|found| {
-                    corpus
-                        .resolver
-                        .holders_of(&found.reference, target)
-                        .map(<[usize]>::to_vec)
-                })
+                .and_then(|found| corpus.resolver.holders_of(path, &found.reference, target))
                 .unwrap_or_default();
             Some((target.to_owned(), holders))
         })
@@ -119,10 +117,13 @@ fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Fin
     }
     for (index, parsed) in live_sources(corpus) {
         let text = &corpus.texts[index];
+        let from = corpus.paths[index];
         // (line, as written, resolution) per reference.
         let mut cited: Vec<(usize, String, Resolution)> = Vec::new();
         let declared = match parsed.document() {
-            Some(document) if !front_matter_failed(parsed) => declared_references(document, scheme),
+            Some(document) if !front_matter_failed(parsed) => {
+                declared_references(document, scheme, text)
+            }
             _ => Vec::new(),
         };
         for item in &declared {
@@ -132,13 +133,13 @@ fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Fin
                 continue;
             }
             let written = written(text, &item.reference);
-            let resolution = corpus.resolver.resolve(&item.reference, &written);
+            let resolution = corpus.resolver.resolve(from, &item.reference, &written);
             let line = reference_line(text, &item.reference, item.key);
             cited.push((line, written, resolution));
         }
         for reference in inline_mentions(parsed) {
             let written = written(text, reference);
-            let resolution = corpus.resolver.resolve_mention(reference, &written);
+            let resolution = corpus.resolver.resolve_mention(from, reference, &written);
             cited.push((mention_line(text, reference), written, resolution));
         }
         for (line, written, resolution) in cited {
@@ -181,16 +182,17 @@ fn depends_cycle(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
             continue;
         };
         let text = &corpus.texts[index];
+        let from = corpus.paths[index];
         for reference in list {
             let written = written(text, reference);
-            let Some(holders) = resolver.holders_of(reference, &written) else {
+            let Some(holders) = resolver.holders_of(from, reference, &written) else {
                 continue;
             };
-            for &holder in holders {
+            for &holder in &holders {
                 graph.add_edge(nodes[index], nodes[holder], ());
             }
             let line = reference_line(text, reference, "links");
-            items[index].push((line, holders.to_vec()));
+            items[index].push((line, holders));
         }
     }
     for component in tarjan_scc(&graph) {

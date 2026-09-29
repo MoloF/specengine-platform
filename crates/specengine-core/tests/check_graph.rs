@@ -510,3 +510,115 @@ fn superseded_findings_are_independent_of_input_order() {
         show(&forward)
     );
 }
+
+// ------------------------------------------------------------------ scopes
+// AC-07 of docs/features/spec-check-scopes.md (S8): a scoped `depends_on`
+// item gives an edge to the feature document; a bare feature-scoped item
+// outside its feature gives none; `ref-superseded` resolves by scope.
+
+const SCOPED_TOML: &str = "\
+[ids]
+MEC = { kind = \"mechanic\", shape = \"name\" }
+AC  = { kind = \"criterion\", width = 2, scope = \"feature\" }
+";
+
+/// A feature document without an `id:`, depending on `on`, defining `{#AC-01}`.
+fn feature(on: &[&str]) -> String {
+    format!(
+        "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\nlinks:\n  depends_on: [{}]\n---\n\n# Feat\n\n## One {{#AC-01}}\n",
+        on.join(", ")
+    )
+}
+
+#[test]
+fn a_cycle_through_a_scoped_depends_on_is_one_finding() {
+    let config = Config::from_toml(SCOPED_TOML);
+    let a = node("MEC-A", &["feat/AC-01"]);
+    let files = [
+        ("docs/m/a.md", a.as_str()),
+        ("docs/features/feat.md", &feature(&["MEC-A"])),
+    ];
+    let report = config.check(&files);
+    assert_eq!(
+        found(&report, "depends-cycle"),
+        [at("docs/m/a.md", 7, "MEC-A, docs/features/feat.md")],
+        "{}",
+        show(&report)
+    );
+    assert!(
+        report.findings.iter().all(|f| f.code == "depends-cycle"),
+        "{}",
+        show(&report)
+    );
+    // Whatever the input order.
+    let mut reversed = files;
+    reversed.reverse();
+    assert_eq!(config.check(&reversed).findings, report.findings);
+}
+
+#[test]
+fn a_scoped_depends_on_resolving_elsewhere_gives_no_edge() {
+    let config = Config::from_toml(SCOPED_TOML);
+    // Bare `AC-01` from a non-feature file, and `feat/AC-01` of a feature
+    // lacking it (`other.md` defines it): neither is an edge.
+    for target in ["AC-01", "other/AC-01"] {
+        let a = node("MEC-A", &[target]);
+        let report = config.check(&[
+            ("docs/m/a.md", a.as_str()),
+            ("docs/features/feat.md", &feature(&["MEC-A"])),
+            (
+                "docs/features/other.md",
+                "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\n---\n\n# Other\n\n## Two {#AC-02}\n",
+            ),
+        ]);
+        assert!(
+            found(&report, "depends-cycle").is_empty(),
+            "{target}:\n{}",
+            show(&report)
+        );
+        assert_eq!(
+            found(&report, "ref-dangling"),
+            [at("docs/m/a.md", 7, target)],
+            "{}",
+            show(&report)
+        );
+    }
+}
+
+#[test]
+fn a_superseded_feature_cited_by_its_slug_warns() {
+    let config = Config::from_toml(SCOPED_TOML);
+    let report = config.check(&[
+        (
+            "docs/features/old.md",
+            "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\nstatus: superseded-by MEC-NEW\n---\n\n# Old\n\n## One {#AC-01}\n",
+        ),
+        (
+            "docs/m/new.md",
+            "---\nid: MEC-NEW\nclass: canon\nowner: o\nreviewed: 2026-09-01\n---\n\n# New\n",
+        ),
+        (
+            "docs/s.md",
+            "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\nrefs: [old/AC-01]\n---\n\nInline old/AC-01; bare AC-01 is not old's.\n",
+        ),
+    ]);
+    assert_eq!(
+        found(&report, "ref-superseded"),
+        [
+            at("docs/s.md", 5, "old/AC-01"),
+            at("docs/s.md", 8, "old/AC-01")
+        ],
+        "{}",
+        show(&report)
+    );
+    for finding in with_code(&report, "ref-superseded") {
+        assert_eq!(finding.message, "`old/AC-01` is superseded by MEC-NEW");
+    }
+    // The bare `AC-01` of `docs/s.md` dangles instead of warning.
+    assert_eq!(
+        found(&report, "mention-dangling"),
+        [at("docs/s.md", 8, "AC-01")],
+        "{}",
+        show(&report)
+    );
+}

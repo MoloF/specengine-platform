@@ -19,5 +19,9 @@ MEC-STAMINA#RULE-STAM-REGEN@3 and record the result in AC-07.
 
 ## Acceptance criteria {#acceptance}
 
-- [ ] AC-07 holds on the reference machine.
 - [ ] No mention of R-12abc, FOO-R-12 or R-12-3 counts as a citation.
+
+### Regeneration starts 1.5 s after the last sprint {#AC-07}
+
+Verifies R-12. Measured in the stamina test: a sprint followed by rest shows the
+first regeneration tick 1.5 s later.

@@ -1,16 +1,17 @@
 //! The rules of increment 1 (docs/canon/spec-check.md, "Rules"): parser
 //! diagnostics through one table, class contracts, budgets,
-//! ID definitions, `canon:` and front-matter references; then the rules of
-//! increment 2 over the whole corpus: the generated index and the generator
-//! registry (`generated`), the graph warnings (`graph`). Everything the
+//! ID definitions (with `id-scope`, ADR-0026), `canon:` and front-matter
+//! references, resolved by scope; then the rules of increment 2 over the
+//! whole corpus: the generated index and the generator registry
+//! (`generated`), the graph warnings (`graph`). Everything the
 //! rules know about a project comes from its `[ids]`, `[paths]` and check
 //! tables (`#universal`): no prefix, path or file name is written here.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use specengine_model::grammar;
 use specengine_model::{
-    CanonTarget, Diagnostic, DiagnosticCode, IdScheme, IdScope, Node, ParsedFile, Severity, Shape,
+    CanonTarget, Diagnostic, DiagnosticCode, IdScheme, Node, ParsedFile, Severity, Shape,
 };
 
 use super::baseline::{Baseline, DebtEntry};
@@ -127,7 +128,7 @@ pub fn run(
         }
     }
 
-    let corpus = Corpus::new(&files, scheme);
+    let corpus = Corpus::new(&files, scheme, &paths.features);
     for (index, file) in files.iter().enumerate() {
         let Some(parsed) = &file.parsed else {
             continue;
@@ -210,26 +211,17 @@ pub(crate) struct Corpus<'a> {
     definitions: Vec<Vec<(String, usize)>>,
     /// Per file: the front-matter was read.
     readable: Vec<bool>,
-    /// Prefixes unique only within a feature: exempt from `id-taken` until
-    /// `slug/` scopes are checked.
-    feature_prefixes: BTreeSet<&'a str>,
 }
 
 impl<'a> Corpus<'a> {
-    fn new(files: &[&'a CheckFile], scheme: &'a IdScheme) -> Self {
+    fn new(files: &[&'a CheckFile], scheme: &'a IdScheme, features: &'a str) -> Self {
         let mut corpus = Corpus {
             files: files.to_vec(),
             paths: files.iter().map(|file| file.path.as_str()).collect(),
             parses: files.iter().map(|file| file.parsed.as_ref()).collect(),
-            feature_prefixes: scheme
-                .prefixes()
-                .iter()
-                .filter(|spec| spec.scope == IdScope::Feature)
-                .map(|spec| spec.prefix.as_str())
-                .collect(),
             texts: Vec::with_capacity(files.len()),
             by_path: BTreeMap::new(),
-            resolver: Resolver::of_sorted(files, scheme),
+            resolver: Resolver::of_sorted(files, scheme, features),
             definitions: Vec::with_capacity(files.len()),
             readable: Vec::with_capacity(files.len()),
         };
@@ -259,13 +251,16 @@ impl<'a> Corpus<'a> {
     }
 
     /// `id-taken`: an ID of a project-scoped prefix defined in two files,
-    /// reported on each later file (by path), naming the first.
+    /// reported on each later file (by path), naming the first. A
+    /// feature-scoped ID never: it is unique within its feature document
+    /// (a repeat there is the parser's `duplicate-id`), and a misplaced
+    /// definition is `id-scope`'s (ADR-0026).
     fn id_taken(&self, findings: &mut Vec<Finding>) {
         for (id, holders) in &self.resolver.defined {
             let Some((&first, later)) = holders.split_first() else {
                 continue;
             };
-            if later.is_empty() || self.feature_scoped(id) {
+            if later.is_empty() || self.resolver.feature_scoped_id(id) {
                 continue;
             }
             for &index in later {
@@ -288,11 +283,6 @@ impl<'a> Corpus<'a> {
                 });
             }
         }
-    }
-
-    fn feature_scoped(&self, id: &str) -> bool {
-        id.split_once('-')
-            .is_some_and(|(prefix, _)| self.feature_prefixes.contains(prefix))
     }
 }
 
@@ -673,19 +663,43 @@ impl FileCheck<'_, '_> {
         }
     }
 
-    /// `id-width` on number-shape definitions; `file-name` under `records`.
+    /// `id-scope` on a feature-scoped definition that is a document `id:`
+    /// or a `{#ID}` section outside a feature document (ADR-0026);
+    /// `id-width` on number-shape definitions; `file-name` under `records`,
+    /// unless the document `id:` is already `id-scope`'s (one finding per
+    /// defect).
     fn ids(&mut self, document: &Node) {
-        let mut definitions: Vec<(String, usize)> = Vec::new();
+        // (ID, line, the document `id:`), the document first.
+        let mut definitions: Vec<(String, usize, bool)> = Vec::new();
         if let Some(id) = &document.id {
-            definitions.push((id.clone(), self.key_line("id")));
+            definitions.push((id.clone(), self.key_line("id"), true));
         }
         for section in self.parsed.sections() {
             if let Some(id) = &section.id {
                 let line = section.heading.map_or(1, |span| self.text.line(span.start));
-                definitions.push((id.clone(), line));
+                definitions.push((id.clone(), line, false));
             }
         }
-        for (id, line) in &definitions {
+        let corpus = self.corpus;
+        let resolver = &corpus.resolver;
+        let in_feature = resolver.feature_slug(&self.file.path).is_some();
+        let mut misplaced_document = false;
+        for (id, line, is_document) in &definitions {
+            if resolver.feature_scoped_id(id) && (*is_document || !in_feature) {
+                misplaced_document |= *is_document;
+                self.push(
+                    "id-scope",
+                    *line,
+                    id,
+                    format!(
+                        "`{id}` is feature-scoped: define it as a `{{#{id}}}` section of a \
+                         document directly under `{}`",
+                        self.paths.features
+                    ),
+                );
+            }
+        }
+        for (id, line, _) in &definitions {
             let Some((prefix, body)) = id.split_once('-') else {
                 continue;
             };
@@ -710,6 +724,7 @@ impl FileCheck<'_, '_> {
             }
         }
         if let Some(id) = &document.id
+            && !misplaced_document
             && under(&self.file.path, &self.paths.records)
         {
             let name = file_name(&self.file.path);
@@ -811,10 +826,14 @@ impl FileCheck<'_, '_> {
     /// `aliases:` entry, or through `aliases_from`; `#Y` names a section of
     /// the ID's file.
     fn references(&mut self, document: &Node) {
-        for declared in declared_references(document, self.scheme) {
+        for declared in declared_references(document, self.scheme, self.text) {
             let reference = &declared.reference;
             let written = written(self.text, reference);
-            let reason = match self.corpus.resolver.resolve(reference, &written) {
+            let reason = match self
+                .corpus
+                .resolver
+                .resolve(&self.file.path, reference, &written)
+            {
                 Resolution::Resolved(_) | Resolution::Skipped => continue,
                 Resolution::Dangling(reason) => reason,
             };

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval, xtask]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-09-30
 ---
 
 # spec check: what the documentation check enforces
@@ -14,7 +14,7 @@ Increment 1 of 4 (pending groups: 05 §4, 08 Phase 1): one check of the conventi
 
 - `CheckInput {files: [CheckFile {path, size, parsed?, read_error?, bytes}], problems: [Problem {kind: MissingRoot | UnreadableDir | SkippedName, path}]}`, `CheckFile::{parse, parsed, unreadable}`. `bytes` (the parsed text) give real lines, a parser diagnostic's subject and the written keys (`title`, `kind`, `id` are not in `fields`).
 - `CheckConfig::from_toml` → `{budgets: Budgets {tier0_bytes, tier1_bytes, index_bytes, decision_bytes, canon_bytes?, bundle_node?, bundle_task?}, classes: Classes {canon, decision, spec, generated: ClassContract {required, optional, closed}}, mode: Mode}`; `Baseline::from_toml` → `[DebtEntry {code, path, subject, reason, expires, line}]`; both errors `{line?, message}`, `at(file)` → `file:line: message`.
-- `Report {mode, verdict, counts, findings, stale, cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `Report::cannot(mode, causes)`; `CHECK_CODES` (26), `PARSER_SEVERITY` (13 rows).
+- `Report {mode, verdict, counts, findings, stale, cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `Report::cannot(mode, causes)`; `CHECK_CODES` (27), `PARSER_SEVERITY` (13 rows).
 
 ## Configuration
 
@@ -47,14 +47,14 @@ Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_ta
 
 - **Front-matter fails** (`not-utf8`, `frontmatter-unclosed`, `-yaml`, `-not-mapping`): the file gives only its parser findings, and its body the graph warnings (with `frontmatter-unclosed`, the whole file: `docs/canon/spec-check-graph.md`). `xtask` reads such YAML leniently and judges the file: an accepted divergence.
 - **Class.** Every document declares one (owner, Q-4): none, or no front-matter → `class-missing`, no contract and no class cap, while IDs, references and `canon:` are still checked; not one of the four → `class-unknown`. Per class: `key-missing`, `key-extra` (closed), `scope-empty`, `date-invalid` (`reviewed`, `date`, `shipped` not shaped `YYYY-MM-DD`), `status-invalid` (spec draft | in-progress | shipped | abandoned; decision accepted | rejected | `superseded-by <ID>`), `shipped-missing`, `canon-missing` (accepted decision: absent or blank → "has no `canon:`"; a value the parser could not read → "… is unreadable"), `tier-invalid` (canon tier not 0–2; `tier: 0` off `tier0`; `tier0` not tier 0, the only rule on `tier0`; `tier: 1` on a file not named `tier1_name`).
-- **IDs.** A number-shape definition (`id:`, `{#ID}`; references never) has `width` digits, else `id-width`. Mixed script → `homoglyph`, an error with its Latin `fix`. An ID defined in two files → `id-taken` on each later file by path, naming the first; feature-scoped prefixes exempt until `slug/` is checked. Under `records`, `id: X` names its file `X` + `.` or `-`, else `file-name` (`xtask`'s `starts_with` passes `ADR-00011.md` for `ADR-0001`).
-- **References** — `supersedes`, `status: superseded-by`, `adrs`, `refs`, `working_answer`, `parent`, `links.*`, a reference-form `canon:` — resolve: the ID is defined; or the text is in a document's `aliases:`; or, through `aliases_from`, the configured prefix + the written body is defined (no re-padding); `#Y` is defined in the ID's file. Else `ref-dangling`. An alias `parent` is re-read through the scheme. Not yet: `project:`, `slug/`, `@rev`.
+- **IDs.** A number-shape definition (`id:`, `{#ID}`; references never) has `width` digits, else `id-width`. Mixed script → `homoglyph`, an error with its Latin `fix`. An ID defined in two files → `id-taken` on each later file by path, naming the first; a feature-scoped ID is unique per feature, misplaced → `id-scope` (`docs/canon/spec-check-links.md`). Under `records`, `id: X` names its file `X` + `.` or `-`, else `file-name` (`xtask`'s `starts_with` passes `ADR-00011.md` for `ADR-0001`).
+- **References** — `supersedes`, `status: superseded-by`, `adrs`, `refs`, `working_answer`, `parent`, `links.*`, a reference-form `canon:` — resolve: the ID is defined; or the text is in a document's `aliases:`; or, through `aliases_from`, the configured prefix + the written body is defined (no re-padding); `#Y` is defined in the ID's file. Else `ref-dangling`. An alias `parent` is re-read through the scheme. Where an ID may resolve (`slug/`, bare feature-scoped IDs): `docs/canon/spec-check-links.md`. Not yet: `project:`, `@rev`.
 - **Path-form `canon:`**, on any document: has `#` (`canon-form`), names a walked canon document (`canon-file`), and one of its anchors or section IDs (`canon-anchor`). Anchors: heading slugs, `{#…}`, `<a id>`, `<a name>` (`crates/specengine-model/README.md`); a start tag split over lines in an HTML block or a blockquote is missed, as by `xtask`: an accepted divergence.
 - **Budgets** (`budget`, subject = the slot): whole-file bytes > cap. `index` by path; canon tier 0 → `tier0_bytes`, tier 1 → `tier1_bytes`, else `canon_bytes`; decision → `decision_bytes`; spec, generated, class-less: none.
 - **Walk.** Non-UTF-8 names → one warning `name-skipped` per problem path, its message counting them; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
 - **Parser codes** pass as themselves through one table, `PARSER_SEVERITY`, with the parser's severity but `homoglyph`, `duplicate-id` (errors).
 
-The check's own codes (`CHECK_CODES`, 26) are the errors named above, `name-skipped`, and the seven of `docs/canon/spec-check-graph.md` (§11.5–6, inline mentions, graph).
+The check's own codes (`CHECK_CODES`, 27) are the errors named above, `name-skipped`, and the seven of `docs/canon/spec-check-graph.md` (§11.5–6, inline mentions, graph).
 
 ## Findings, debt, verdict
 
@@ -85,7 +85,7 @@ This repository under the parity config, no baseline (Q-2): every document walke
 
 ## Not checked yet
 
-- Increment 2 part 2, `spec-check-links` (part 1 shipped: `docs/canon/spec-check-graph.md`, which holds owner Q-D): `slug/` scopes and feature-scoped uniqueness, file links with a per-corpus base (08 §4.3 (a)).
+- Increment 2 part 2 pass B, `spec-check-links`: file links with a per-corpus base (`docs/canon/spec-check-links.md`, "Pass B").
 - Increment 3, with the CLI: 07 §2 flags + `--json`; `--staged` over a git-blob `Source`; `enforce-introduced`, no new baseline entries (Q-5); the root `specengine.toml` (Q-7); hook (also on both TOML files) and CI switched; `xtask` retired (`#documentation-convention`, `docs/README.md` rewritten).
 - Increment 4, `spec-check-process`, from config: decision without cost, question without `to` or working answer, accepted feature with an empty "Implementation" (heading from config), numbered record with its own text; per-kind schemas (core Q2). Queue state (`@assumes`, an unapplied amendment) → Phase 2, non-blocking. Code (marker → node, `impl_status` bound, glossary term in code, `spec.lock` drift) and 08 AC-13 → Phase 3.
 

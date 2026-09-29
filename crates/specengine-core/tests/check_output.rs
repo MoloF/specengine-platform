@@ -378,7 +378,9 @@ fn the_one_table_covers_every_parser_code() {
     // The check's own codes are the spec's (Data, "Finding"): increment 1's
     // 18 errors and the warning `name-skipped`, then increment 2's four
     // §11.5–6 errors and three graph warnings (docs/features/
-    // spec-check-graph.md AC-12); a stale entry is no finding.
+    // spec-check-graph.md AC-12), then part 2's error `id-scope`
+    // (docs/features/spec-check-scopes.md AC-08); a stale entry is no
+    // finding.
     assert_eq!(
         check::CHECK_CODES,
         [
@@ -408,6 +410,7 @@ fn the_one_table_covers_every_parser_code() {
             "mention-dangling",
             "depends-cycle",
             "ref-superseded",
+            "id-scope",
         ]
     );
     // No check code shadows a parser code.
@@ -801,4 +804,115 @@ fn increment_2_output_is_independent_of_input_order() {
     rotated.files.rotate_left(3);
     assert_same(&a, &config.run(&rotated), "rotated");
     assert_eq!(a.findings.len(), 6, "{}", show(&a));
+}
+
+// ------------------------------------------------------------------ scopes
+// AC-08 of docs/features/spec-check-scopes.md: the scoped findings and
+// their reasons are independent of input order; `id-scope` goes into debt
+// like any finding.
+
+const SCOPED_TOML: &str = "\
+[ids]
+R  = { kind = \"requirement\", width = 2 }
+AC = { kind = \"criterion\",   width = 2, scope = \"feature\" }
+
+[check]
+mode = \"enforce\"
+";
+
+/// Three features defining `AC-01` (path order `alpha`, `mid`, `zeta`,
+/// given out of it), a misplaced record, and a source citing bare and
+/// scoped IDs that dangle.
+const SCOPED: &[(&str, &str)] = &[
+    (
+        "docs/features/zeta.md",
+        "---\nclass: generated\n---\n# Z\n\n## One {#AC-01}\n",
+    ),
+    (
+        "docs/records/AC/AC-07.md",
+        "---\nid: AC-07\nclass: generated\n---\n# Seven\n",
+    ),
+    (
+        "docs/features/alpha.md",
+        "---\nclass: generated\n---\n# A\n\n## One {#AC-01}\n",
+    ),
+    (
+        "docs/spec/x.md",
+        "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\nrefs: [AC-01, nope/AC-01]\n---\n\nInline AC-01, AC-07, mid/AC-02 and mid/AC-01#AC-03.\n",
+    ),
+    (
+        "docs/features/mid.md",
+        "---\nclass: generated\n---\n# M\n\n## One {#AC-01}\n",
+    ),
+];
+
+#[test]
+fn scoped_output_is_independent_of_input_order() {
+    let config = Config::from_toml(SCOPED_TOML);
+    let forward = config.input(SCOPED);
+    let a = config.run(&forward);
+    let mut reversed = forward.clone();
+    reversed.files.reverse();
+    assert_same(&a, &config.run(&reversed), "reversed");
+    for turn in 1..SCOPED.len() {
+        let mut rotated = forward.clone();
+        rotated.files.rotate_left(turn);
+        assert_same(&a, &config.run(&rotated), &format!("rotated {turn}"));
+    }
+    let lines = a.lines(true).join("\n");
+    for want in [
+        "`AC-01` is feature-scoped: cite it as `alpha/AC-01` or `mid/AC-01` or `zeta/AC-01`",
+        "`nope/AC-01` resolves to no feature document `docs/features/nope.md`",
+        "`mid/AC-02` is not defined in `docs/features/mid.md`",
+        "`mid/AC-01#AC-03` has no section `#AC-03` in `docs/features/mid.md`",
+        "`AC-07` is feature-scoped and no feature document defines it",
+        "docs/records/AC/AC-07.md:2: id-scope:",
+    ] {
+        assert!(lines.contains(want), "{want}\n{lines}");
+    }
+    let codes: Vec<&str> = a.findings.iter().map(|f| f.code.as_str()).collect();
+    assert_eq!(
+        codes,
+        [
+            "id-scope",
+            "ref-dangling",
+            "ref-dangling",
+            "mention-dangling",
+            "mention-dangling",
+            "mention-dangling",
+            "mention-dangling",
+        ],
+        "{}",
+        show(&a)
+    );
+}
+
+#[test]
+fn a_baseline_entry_makes_id_scope_debt() {
+    let config = Config::from_toml(SCOPED_TOML);
+    let files = &[(
+        "docs/records/AC/AC-07.md",
+        "---\nid: AC-07\nclass: generated\n---\n# Seven\n",
+    )];
+    let input = config.input(files);
+    let report = config.run(&input);
+    assert_eq!(report.verdict, Verdict::Blocked, "{}", show(&report));
+    assert_eq!(report.findings.len(), 1, "{}", show(&report));
+    let baseline = Baseline::from_toml(
+        "[[debt]]\ncode = \"id-scope\"\npath = \"docs/records/AC/AC-07.md\"\nsubject = \"AC-07\"\nreason = \"moves with the feature\"\nexpires = \"2026-12-31\"\n",
+    )
+    .unwrap();
+    let report = config.run_with(&input, &baseline, "2026-09-29");
+    assert_eq!(report.verdict, Verdict::Clean, "{}", show(&report));
+    assert!(report.findings[0].is_live_debt(), "{}", show(&report));
+    assert_eq!(
+        (
+            report.counts.errors,
+            report.counts.debt,
+            report.counts.stale
+        ),
+        (0, 1, 0),
+        "{}",
+        show(&report)
+    );
 }

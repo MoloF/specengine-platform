@@ -376,41 +376,48 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// AC-16 of docs/features/spec-check-graph.md: increment 2 of `spec check`
-/// changes neither the parser nor what the store keeps (the name-shape
-/// fallback lives only in the check): `INDEX_FORMAT` stays 3, and the
-/// format history and both fixtures' `expected.json` are unchanged against
-/// the last commit.
+/// AC-11 of docs/features/spec-check-scopes.md: pass A moves the fixtures'
+/// feature criteria into `{#ID}` sections of their feature documents
+/// (ADR-0026), so the dump changes while the store code does not:
+/// `INDEX_FORMAT` is 4, and the history is part 1's three lines, verbatim,
+/// followed by exactly one `4 <hash>` line (no earlier `4`). Replaces part
+/// 1's "increment 2 keeps the format" pin.
 #[test]
-fn spec_check_increment_2_keeps_the_format() {
-    assert_eq!(INDEX_FORMAT, 3);
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = std::process::Command::new("git")
-        .current_dir(&root)
-        .args([
-            "status",
-            "--porcelain",
-            "--",
-            "crates/specengine-store/tests/format_history.txt",
-            "fixtures/spec-a/expected.json",
-            "fixtures/spec-b/expected.json",
-        ])
-        .output()
-        .expect("git runs");
-    assert!(output.status.success(), "git status");
+fn spec_check_scopes_pins_format_4_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 4);
+    let history = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
+    )
+    .expect("format_history.txt");
+    let lines: Vec<&str> = history
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .collect();
+    let earlier = [
+        "1 4fd55fa4cf7716f7acc45556ab7c831f1f67d7decdf2f0829ad0a7da5e52a906",
+        "2 2cfc299da177807c83d246aea934a73ab8509021386568a0b2011a31de66c9aa",
+        "3 d63c06dc03ed97243ff25dfb14a165cfec059582eee05dc72d9fba05b3c5f55f",
+    ];
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "",
-        "the format history and the expected parses are unchanged"
+        lines.len(),
+        earlier.len() + 1,
+        "part 1's history plus exactly one new line:\n{history}"
     );
-    let history =
-        std::fs::read_to_string(root.join("crates/specengine-store/tests/format_history.txt"))
-            .expect("format_history.txt");
+    assert_eq!(
+        &lines[..earlier.len()],
+        &earlier[..],
+        "the earlier lines stay verbatim"
+    );
+    let last = lines[earlier.len()];
+    let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
+    assert_eq!(format, "4", "the new line is format 4: {last}");
     assert!(
-        history
-            .lines()
-            .last()
-            .is_some_and(|line| line.starts_with("3 ")),
-        "{history}"
+        hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
+        "a BLAKE3 hex: {last}"
+    );
+    assert_eq!(
+        lines.iter().filter(|line| line.starts_with("4 ")).count(),
+        1,
+        "no earlier `4` line"
     );
 }

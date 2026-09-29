@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-09-28
+reviewed: 2026-09-30
 ---
 
 # SpecEngine architecture rules
@@ -19,7 +19,7 @@ The rules all code is written by. Each rule was introduced by a decision (ADR) a
 <a id="layout"></a>
 ## Spec layout in a project
 
-A record (R, A, Q, DEC, AC, TERM) is a separate file. A node document (mechanic, feature) is one file; its rules are sections with `{#ID}`. ADR-0002.
+A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file. A node document (mechanic, feature) is one file; its rules are sections with `{#ID}`. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is defined only as a `{#ID}` section of a feature document: a file `<slug>.md` directly under `[paths] features`, slug = the file stem, `[a-z][a-z0-9-]*`. It is unique within that file, has no record file, and is cited `<slug>/ID` from other files, bare inside its own. ADR-0026.
 
 <a id="apply"></a>
 ## Applying proposals

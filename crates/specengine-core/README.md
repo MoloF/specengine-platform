@@ -12,7 +12,7 @@ The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and 
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order; its types, tables, rules and output: `docs/canon/spec-check.md`; `render_index`, `CheckConfig.generators` (`[[generators]]`), public `check::resolve` (`Resolver`, reused by `spec refs`, `get_impact`): `docs/canon/spec-check-graph.md`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order; its types, tables, rules and output: `docs/canon/spec-check.md`; `render_index`, `CheckConfig.generators`: `docs/canon/spec-check-graph.md`; public `check::resolve` (`Resolver`, scopes; reused by `spec refs`, `get_impact`): `docs/canon/spec-check-links.md`.
 
 ## `[paths]`
 
@@ -59,15 +59,15 @@ Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both
 
 ## Open owner questions
 
-Working answer: what the code does now; the owner's answer triggers the step named.
+Working answer (the code) → what the other answer triggers.
 
 - Q1 (parser libraries): the pins above, default features off, gaps reported, never swapped silently; `serde-saphyr`'s unpinned transitive crates (04 §6) and `serde_json` as a normal dependency await acknowledgement.
 - Q2 (kind vocabulary): a free string, not validated. Settled → an ADR amending `docs/canon/architecture.md#universal`.
-- Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0002 / ADR-0018 with a `#layout` diff.
+- Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0026 / ADR-0018 with a `#layout` diff.
 - Q4 (reference token counts): filled → AC-15 un-ignored.
 - Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/`, `fixtures/token-calibration/`: what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → no exemptions, the text becomes escapes built at test time.
 - Q6 answered (owner, 2026-09-29): invalid YAML scalars quoted; every document here parses strictly (`dogfood.rs`, no allowlist).
 
 ## Tests
 
-`tests/`, one file per concern; of note: `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread; no free-stack margin is claimed), `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document here; ADR `canon:` anchors), `check_*.rs`.
+`tests/`, one file per concern; of note: `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread, no free-stack margin claimed), `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document here; ADR `canon:` anchors), `check_*.rs`.

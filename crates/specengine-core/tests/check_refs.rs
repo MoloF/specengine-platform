@@ -1,8 +1,9 @@
 //! AC-10 and AC-11 of docs/features/spec-check.md: front-matter references
 //! and `canon:`. A reference resolves to a defined ID, to a document's
 //! `aliases:` entry, or through `aliases_from` (prefix + written body, no
-//! re-padding); `#Y` names a section of the ID's file; inline mentions,
-//! `project:` and `slug/` are not judged here. A path-form `canon:`, on any
+//! re-padding); `#Y` names a section of the ID's file; inline mentions and
+//! `project:` are not judged here, `slug/` resolves only in its feature
+//! document (docs/features/spec-check-scopes.md AC-13). A path-form `canon:`, on any
 //! document, is `path#anchor` naming a walked canon document and one of its
 //! anchors or section IDs.
 //!
@@ -179,18 +180,46 @@ fn every_reference_key_is_judged() {
     assert_eq!(got, want, "{}", show(&report));
 }
 
+/// AC-13 of docs/features/spec-check-scopes.md: a front-matter
+/// `stamina-tuning/AC-07` without its feature document is `ref-dangling`
+/// naming the missing file; with `docs/features/stamina-tuning.md` defining
+/// `{#AC-07}` it resolves. `shared:R-77` stays skipped; inline mentions are
+/// not `ref-dangling`.
 #[test]
-fn an_alias_parent_resolves_and_inline_mentions_project_and_slug_are_not_judged() {
-    // spec-a's own scheme: `QST` is a legacy prefix of `Q`.
+fn an_alias_parent_resolves_project_is_skipped_and_a_slug_needs_its_feature() {
+    // spec-a's own scheme: `QST` is a legacy prefix of `Q`, `AC` is
+    // feature-scoped, `[paths] features` is the default `docs/features`.
     let text = std::fs::read_to_string(fixture("spec-a").join("specengine.toml")).unwrap();
     let config = Config::from_toml(&text);
-    let report = config.check(&[
-        ("docs/records/Q/Q-031.md", "---\nid: Q-031\n---\n# Q\n"),
-        (
-            "docs/records/A/A-103.md",
-            "---\nid: A-103\nparent: QST-031\nrefs: [shared:R-77, stamina-tuning/AC-07]\n---\n# A\n\nSee R-55 and QST-099 inline.\n",
-        ),
-    ]);
+    let question = ("docs/records/Q/Q-031.md", "---\nid: Q-031\n---\n# Q\n");
+    let record = (
+        "docs/records/A/A-103.md",
+        "---\nid: A-103\nparent: QST-031\nrefs: [shared:R-77, stamina-tuning/AC-07]\n---\n# A\n\nSee R-55 and QST-099 inline.\n",
+    );
+    let report = config.check(&[question, record]);
+    assert_eq!(
+        dangling(&report),
+        [(
+            "docs/records/A/A-103.md".to_owned(),
+            "stamina-tuning/AC-07".to_owned()
+        )],
+        "{}",
+        show(&report)
+    );
+    let finding = with_code(&report, "ref-dangling")[0];
+    assert_eq!(finding.line, 4, "{}", show(&report));
+    assert_eq!(
+        finding.message,
+        "`refs`: `stamina-tuning/AC-07` resolves to no feature document \
+         `docs/features/stamina-tuning.md`"
+    );
+    assert!(finding.blocks_when_enforced(), "ref-dangling is an error");
+    // The feature document defines `{#AC-07}`: the citation resolves.
+    let feature = (
+        "docs/features/stamina-tuning.md",
+        "---\nclass: spec\nstatus: draft\nscope: [movement]\nref: owner\n---\n# Stamina tuning\n\n## Acceptance criteria\n\n### Regen after 1.5 s {#AC-07}\n\nVerifies R-12.\n",
+    );
+    let report = config.check(&[question, record, feature]);
     assert!(dangling(&report).is_empty(), "{}", show(&report));
     // The same parent without its target dangles: the alias is really read.
     let report = config.check(&[(

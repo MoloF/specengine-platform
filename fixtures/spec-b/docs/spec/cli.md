@@ -22,7 +22,7 @@ links:
 
 ### Флаг --dry-run {#FLAG-DRY-RUN rev=2}
 
-Печатает план и ничего не пишет; см. CRIT-01 и RЕQ-003.
+Печатает план и ничего не пишет; см. dry-run/CRIT-01 и RЕQ-003.
 
 ## Команда status {#CMD-STATUS}
 

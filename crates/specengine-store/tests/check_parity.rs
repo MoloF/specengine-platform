@@ -1,5 +1,6 @@
 //! AC-19 and AC-20 of docs/features/spec-check.md, extended by AC-02, AC-06
-//! and AC-07 of docs/features/spec-check-graph.md: parity with `cargo xtask
+//! and AC-07 of docs/features/spec-check-graph.md and AC-12 of
+//! docs/features/spec-check-scopes.md: parity with `cargo xtask
 //! docs check` and `cargo xtask docs index` on this repository's own
 //! documents.
 //!
@@ -11,9 +12,10 @@
 //! and the generator registry of spec-check-graph's Data (the index entry).
 //! No baseline: since the owner's Q-2 edit every front-matter parses.
 //!
-//! AC-19/AC-07: the walk equals `cargo xtask docs budget`'s list; `enforce`
-//! → `clean`, no debt, the seven new codes give exactly the one
-//! `mention-dangling` of the spec's Findings. AC-02: the core render equals
+//! AC-19/AC-07/AC-12: the walk equals `cargo xtask docs budget`'s list;
+//! `enforce` → `clean`, no debt, the seven codes of increment 2 part 1 plus
+//! `id-scope` give exactly the one `mention-dangling` of the spec's
+//! Findings; citing the superseded ADR-0002 adds one `ref-superseded`. AC-02: the core render equals
 //! `xtask docs index --root` stdout and the committed `docs/index.md`, byte
 //! for byte. AC-20/AC-06: per seed, on a scratch copy of the documents, the
 //! files with a blocking finding from `xtask docs check --root` equal the
@@ -31,7 +33,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use common::{Scratch, repository_root};
+use common::{Scratch, blake3_hex, repository_root};
 use specengine_core::check::{CheckConfig, CheckInput, Report, Verdict, render_index};
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::{IdScheme, Severity};
@@ -51,8 +53,9 @@ index   = true
 gate    = \"cargo xtask docs check\"
 ";
 
-/// The codes increment 2 adds (spec-check-graph, Findings).
-const NEW_CODES: [&str; 7] = [
+/// The codes increment 2 adds (spec-check-graph, Findings; part 2's
+/// `id-scope`, spec-check-scopes AC-12).
+const NEW_CODES: [&str; 8] = [
     "index-missing",
     "index-drift",
     "generator-unknown",
@@ -60,11 +63,15 @@ const NEW_CODES: [&str; 7] = [
     "mention-dangling",
     "depends-cycle",
     "ref-superseded",
+    "id-scope",
 ];
 
 // ------------------------------------------------------------------ xtask
 
-/// The `xtask` binary, built once per test process.
+/// The `xtask` binary, built once per test process, run from a private
+/// copy: every `cargo build` (fresh or not) and `cargo xtask` of another
+/// test process re-links `target/debug/xtask`, so spawning that path races
+/// with them (`NotFound`, seen under a full `nextest` run).
 fn xtask() -> &'static Path {
     static BINARY: OnceLock<PathBuf> = OnceLock::new();
     BINARY.get_or_init(|| {
@@ -89,8 +96,37 @@ fn xtask() -> &'static Path {
             .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
             .filter(|message| message["target"]["name"] == "xtask")
             .find_map(|message| message["executable"].as_str().map(PathBuf::from))
+            .map(|built| private_copy(&built))
             .expect("the xtask executable in cargo's messages")
     })
+}
+
+/// `built` copied to `CARGO_TARGET_TMPDIR` under its content hash (written
+/// to a per-process name, then renamed: every process sees a whole file);
+/// read again while a concurrent re-link has it missing.
+fn private_copy(built: &Path) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    for _ in 0..100 {
+        let bytes = match fs::read(built) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                continue;
+            }
+            Err(error) => panic!("{}: {error}", built.display()),
+        };
+        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
+        fs::create_dir_all(dir).expect("CARGO_TARGET_TMPDIR");
+        let copy = dir.join(format!("xtask-parity-{}", &blake3_hex(&bytes)[..16]));
+        if !copy.exists() {
+            let partial = dir.join(format!("xtask-parity.{}.partial", std::process::id()));
+            fs::write(&partial, &bytes).expect("the copy is written");
+            fs::set_permissions(&partial, fs::Permissions::from_mode(0o755)).expect("chmod");
+            fs::rename(&partial, &copy).expect("the copy is renamed into place");
+        }
+        return copy;
+    }
+    panic!("{} stayed missing for 2 s", built.display());
 }
 
 fn run_xtask(args: &[&str]) -> (Option<i32>, String) {
@@ -352,8 +388,8 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean() {
         "{:#?}",
         report.lines(true)
     );
-    // The seven new codes: exactly the one finding of the spec's Findings
-    // (the file-name example of docs/canon/spec-check.md).
+    // The new codes, `id-scope` included: exactly the one finding of the
+    // spec's Findings (the file-name example of docs/canon/spec-check.md).
     let new: Vec<(String, Severity, String, usize, String)> = report
         .findings
         .iter()
@@ -388,10 +424,74 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean() {
         "{:#?}",
         report.lines(true)
     );
+    // spec-check-scopes AC-12: that warning is the only finding of any code,
+    // and the canon document the pass shipped is walked and clean.
+    let all: Vec<(&str, &str, usize, &str)> = report
+        .findings
+        .iter()
+        .map(|f| (f.code.as_str(), f.path.as_str(), f.line, f.subject.as_str()))
+        .collect();
+    assert_eq!(
+        all,
+        [(
+            "mention-dangling",
+            "docs/canon/spec-check.md",
+            50,
+            "ADR-00011"
+        )],
+        "{:#?}",
+        report.lines(true)
+    );
+    assert_eq!(report.counts.warnings, 1, "{:#?}", report.lines(true));
+    assert!(
+        budget.contains("docs/canon/spec-check-links.md"),
+        "the scope canon is walked"
+    );
     // xtask agrees: it blocks nothing, §11.5–6 included.
     let (code, stdout) = run_xtask(&["docs", "check", "--root", repository.to_str().unwrap()]);
     assert_eq!(code, Some(0), "{stdout}");
     assert!(xtask_blocking(&repository).is_empty(), "{stdout}");
+}
+
+/// AC-12 of docs/features/spec-check-scopes.md, its named red: the
+/// superseded ADR-0002 put back into the `adrs:` of
+/// `docs/specs/specengine-platform/README.md` (on a scratch copy) gives
+/// exactly one `ref-superseded` there, so the clean pin above would fail.
+#[test]
+fn citing_the_superseded_layout_decision_is_one_ref_superseded() {
+    let documents = budget_documents(&repository_root());
+    let scratch = Scratch::new("parity-superseded");
+    let root = scratch_copy(&scratch, &documents, "copy");
+    let readme = "docs/specs/specengine-platform/README.md";
+    let text = fs::read_to_string(root.join(readme)).unwrap();
+    let adrs = text
+        .lines()
+        .find(|line| line.starts_with("adrs: [ADR-0001, "))
+        .expect("the README cites its ADRs")
+        .to_owned();
+    assert!(!adrs.contains("ADR-0002"), "{adrs}");
+    set_key(
+        &root,
+        readme,
+        "adrs",
+        Some(&adrs.replacen("ADR-0001, ", "ADR-0001, ADR-0002, ", 1)),
+    );
+    let config = write_config(&scratch.join("config"), &parity_toml(&root, true));
+    let report = check_worktree(&root, &config, None, TODAY);
+    let superseded: Vec<(&str, &str, &str)> = report
+        .findings
+        .iter()
+        .filter(|f| f.code == "ref-superseded")
+        .map(|f| (f.path.as_str(), f.subject.as_str(), f.message.as_str()))
+        .collect();
+    assert_eq!(
+        superseded,
+        [(readme, "ADR-0002", "`ADR-0002` is superseded by ADR-0026")],
+        "{:#?}",
+        report.lines(true)
+    );
+    // A warning: the verdict stays clean.
+    assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
 }
 
 // ------------------------------------------------------------------ AC-02
@@ -582,11 +682,13 @@ const SEEDS: &[Seed] = &[
         "shipped-missing",
         |r| set_key(r, "docs/features/spec-index.md", "shipped", None),
     ),
+    // ADR-0002 is superseded by ADR-0026 (spec-check-scopes AC-12): the
+    // accepted decision to strip is ADR-0026.
     (
         "accepted ADR without canon:",
-        "docs/decisions/ADR-0002.md",
+        "docs/decisions/ADR-0026.md",
         "canon-missing",
-        |r| set_key(r, "docs/decisions/ADR-0002.md", "canon", None),
+        |r| set_key(r, "docs/decisions/ADR-0026.md", "canon", None),
     ),
     (
         "canon: without #",

@@ -20,7 +20,8 @@
 //! letter, digit, `_`, nor a `-` before a letter or digit; (5) qualifiers are
 //! read by look-back, `slug/` then `slug:`, and kept only when the char before
 //! them is none of letter, digit, `_ - . / :`; (6) the script class is that
-//! of the ID as written.
+//! of the ID as written. [`is_slug`] is the `slug` rule, also the stem of a
+//! feature document (ADR-0026).
 //!
 //! Every scan is one pass: each byte is visited a bounded number of times,
 //! whatever the input (no rescan from a line start per `[[`, `#`, `@`, `-`).
@@ -429,14 +430,33 @@ fn is_boundary(text: &str, at: usize) -> bool {
     }
 }
 
-/// Start of the slug `[a-z][a-z0-9-]*` that ends right before `separator`:
-/// the maximal run of `[a-z0-9-]`, which must start with a letter.
+/// `text` is a `slug`, `[a-z][a-z0-9-]*`: the one rule for the `project:`
+/// and `slug/` qualifiers and for the stem of a feature document
+/// (ADR-0026).
+pub fn is_slug(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes.first().is_some_and(|&first| is_slug_start(first))
+        && bytes.iter().all(|&byte| is_slug_byte(byte))
+}
+
+/// The first byte of a slug.
+fn is_slug_start(byte: u8) -> bool {
+    byte.is_ascii_lowercase()
+}
+
+/// Any byte of a slug.
+fn is_slug_byte(byte: u8) -> bool {
+    matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'-')
+}
+
+/// Start of the slug that ends right before `separator`: the maximal run of
+/// slug bytes, which must start as a slug does ([`is_slug`]).
 fn slug_before(bytes: &[u8], separator: usize) -> Option<usize> {
     let mut start = separator;
-    while start > 0 && matches!(bytes[start - 1], b'a'..=b'z' | b'0'..=b'9' | b'-') {
+    while start > 0 && is_slug_byte(bytes[start - 1]) {
         start -= 1;
     }
-    (start < separator && bytes[start].is_ascii_lowercase()).then_some(start)
+    (start < separator && is_slug_start(bytes[start])).then_some(start)
 }
 
 /// End of the maximal letter-digit run starting at `start`.

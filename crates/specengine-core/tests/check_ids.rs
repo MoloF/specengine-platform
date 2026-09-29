@@ -196,6 +196,57 @@ fn a_feature_scoped_id_in_two_files_is_no_finding() {
     );
 }
 
+/// AC-06 of docs/features/spec-check-scopes.md: a feature-scoped ID is
+/// unique within its feature document only. Two features may both define
+/// it; a repeat inside one is the parser's `duplicate-id` alone; a
+/// project-scoped ID in two features is still `id-taken`.
+#[test]
+fn feature_scoped_uniqueness_is_per_feature_document() {
+    let config = config();
+    let files = [
+        (
+            "docs/features/one.md",
+            "---\nclass: generated\n---\n# One\n\n## Crit {#AC-01}\n\n## Req {#R-03}\n",
+        ),
+        (
+            "docs/features/two.md",
+            "---\nclass: generated\n---\n# Two\n\n## Crit {#AC-01}\n\n## Req {#R-03}\n",
+        ),
+        (
+            "docs/features/three.md",
+            "---\nclass: generated\n---\n# Three\n\n## Crit {#AC-02}\n\n## Again {#AC-02}\n",
+        ),
+    ];
+    let report = config.check(&files);
+    assert_eq!(
+        triples(&report),
+        [
+            (
+                "docs/features/three.md".into(),
+                "duplicate-id".into(),
+                "AC-02".into()
+            ),
+            (
+                "docs/features/two.md".into(),
+                "id-taken".into(),
+                "R-03".into()
+            ),
+        ],
+        "{}",
+        show(&report)
+    );
+    assert!(
+        with_code(&report, "id-taken")[0]
+            .message
+            .contains("docs/features/one.md"),
+        "{}",
+        show(&report)
+    );
+    let mut reversed = files;
+    reversed.reverse();
+    assert_eq!(config.check(&reversed).findings, report.findings);
+}
+
 #[test]
 fn a_repeat_inside_one_file_is_the_parser_duplicate_id_error() {
     let report = config().check(&[(
@@ -217,6 +268,8 @@ fn a_repeat_inside_one_file_is_the_parser_duplicate_id_error() {
 
 // ------------------------------------------------------------------ AC-09
 
+/// spec-a has 8 records, spec-b 9: their feature criteria are sections of
+/// the feature documents since docs/features/spec-check-scopes.md.
 #[test]
 fn the_fixture_records_are_named_after_their_ids() {
     for corpus in ["spec-a", "spec-b"] {
@@ -233,7 +286,7 @@ fn the_fixture_records_are_named_after_their_ids() {
                 .iter()
                 .filter(|f| f.path.starts_with("docs/records/"))
                 .count()
-                >= 9,
+                >= 8,
             "{corpus}: the records role is walked"
         );
     }

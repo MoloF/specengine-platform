@@ -62,7 +62,11 @@ pub use source::{Listing, Source, WorkingTree};
 ///
 /// 3: alias matches emit no `homoglyph`; non-finite floats are strings; map
 /// keys are unique; `<!-->`, `<!--->` close a comment.
-pub const INDEX_FORMAT: u32 = 3;
+///
+/// 4: the fixtures define feature-scoped criteria as `{#ID}` sections of
+/// their feature documents (ADR-0026); the store code is unchanged
+/// (docs/features/spec-check-scopes.md).
+pub const INDEX_FORMAT: u32 = 4;
 
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;

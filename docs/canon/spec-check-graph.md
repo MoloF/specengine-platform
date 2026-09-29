@@ -3,19 +3,19 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, xtask]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-09-30
 ---
 
 # spec check: index render, generators, graph warnings
 
-Increment 2 part 1 of `spec check`. Engine, config, debt, verdict and output: `docs/canon/spec-check.md`; this document adds §11.5–6 of `docs/canon/documentation-system.md` over a generator registry, and three warnings over the parse the check already has: seven of the 26 `CHECK_CODES`. Pure and read-only like the rest: the render stays in memory, no generator is run (ADR-0013), nothing is written. Errors where the convention says "fail" (§11.5–6), warnings where recognition is heuristic or the finding is a content discrepancy (owner, Q-A; `#control`).
+Increment 2 part 1 of `spec check`. Engine, config, debt, verdict and output: `docs/canon/spec-check.md`; this document adds §11.5–6 of `docs/canon/documentation-system.md` over a generator registry, and three warnings over the parse the check already has: seven of the 27 `CHECK_CODES`. Pure and read-only like the rest: the render stays in memory, no generator is run (ADR-0013), nothing is written. Errors where the convention says "fail" (§11.5–6), warnings where recognition is heuristic or the finding is a content discrepancy (owner, Q-A; `#control`).
 
 ## API (`specengine_core::check`)
 
 - `render_index(&CheckInput, index_path: &str, &Generator) -> String`: pure, blind to input order.
 - `CheckConfig.generators: Option<Vec<Generator {command, writes, index, gate?, line}>>` (`None`: no table, the rules are off); `CheckConfig::index_generator()` → the `index = true` entry; `Generator::gate()` → `gate`, else `DEFAULT_GATE` = `spec check`.
-- Module `check::resolve`, public: `Resolver::new(&CheckInput, &IdScheme)`, `resolve(&Reference, written)`, `resolve_mention` (with the fallback below), `holders_of`, `paths()`; `Resolution::{Resolved(Vec<usize>), Skipped, Dangling(reason)}`, indexes into `paths()`. The store keeps `dst` as written, so `spec refs` and `get_impact` reuse this resolver rather than resolving again.
-- Unchanged: the parser, the model, the store and eval APIs, `INDEX_FORMAT` 3. New normal dependency: `petgraph =0.8.3`, default features off (`Graph`, `tarjan_scc`; owner, Q-C).
+- Module `check::resolve`, public: `Resolver`, `Resolution`, scope-aware and taking the citing file (`docs/canon/spec-check-links.md`, "API"). The store keeps `dst` as written, so `spec refs` and `get_impact` reuse this resolver rather than resolving again.
+- Normal dependency: `petgraph =0.8.3`, default features off (`Graph`, `tarjan_scc`; owner, Q-C).
 
 ## Index render (§9)
 
@@ -67,11 +67,11 @@ WHEN the table is present (even empty), each `class: generated` document whose f
 
 **Live source**, for all three: neither `class: generated` nor Tier 3. A document whose front-matter failed is live; with `frontmatter-unclosed` the whole file is body, so its `id:` line can give `mention-dangling`: accepted noise. Warnings never block; a baseline entry (code, path, subject) turns one into debt.
 
-**Resolution** (`Resolver`), the same as for front-matter references: a defined ID (document or section); an `aliases:` entry; through `aliases_from`, the prefix + the body as written, never re-padded; `#Y` defined in the ID's file. `project:` and `slug/` → `Skipped`, no finding. Width is never checked on recognition: a five-digit number is a real mention.
+**Resolution** (`Resolver`), the same as for front-matter references: a defined ID (document or section); an `aliases:` entry; through `aliases_from`, the prefix + the body as written, never re-padded; `#Y` defined in the ID's file; where it may be defined, `slug/` and bare feature-scoped IDs: `docs/canon/spec-check-links.md`. `project:` → `Skipped`, no finding. Width is never checked on recognition: a five-digit number is a real mention.
 
 **`mention-dangling`**: one per unresolved inline mention (`mentions`, origin `inline`) of a live source, at its line; subject as written, a wiki link's `[[…]]` included; the message as `ref-dangling`'s. Front-matter keeps `ref-dangling` (error). The lexer joins `#Y` to an ID only when `Y` is ID-shaped. Fallback, inline only: WHEN a mention of a `shape = "name"` prefix does not resolve, the check drops its last `-segment` and retries while prefix + one segment remain; the first resolving ID wins, its `#section` checked there (`MEC-STAMINA-based` → `MEC-STAMINA`). Never for front-matter or number shapes; case cannot decide (`TERM-exhausted` is a real ID).
 
-**`depends-cycle`**: nodes are documents; an edge A → B for each `links.depends_on` item of a live A that resolves to an ID B holds (no fallback, `#section` ignored; several holders → an edge to each). `petgraph::algo::tarjan_scc`: one finding per strongly connected component of ≥ 2 documents, or of one with a self-loop. Subject: the member names (ID, else path) sorted by name then path, joined by `, `; placed on the first member's first `depends_on` item into the cycle; message "`depends_on` forms a cycle through <subject>".
+**`depends-cycle`**: nodes are documents; an edge A → B for each `links.depends_on` item of a live A that resolves, from A, to an ID B holds (no fallback, `#section` ignored; several holders → an edge to each). `petgraph::algo::tarjan_scc`: one finding per strongly connected component of ≥ 2 documents, or of one with a self-loop. Subject: the member names (ID, else path) sorted by name then path, joined by `, `; placed on the first member's first `depends_on` item into the cycle; message "`depends_on` forms a cycle through <subject>".
 
 **`ref-superseded`**: WHEN a live source references Y — declared (`refs`, `adrs`, `links.*`, `parent`, `working_answer`, a reference-form `canon:`) or inline (with the fallback) — and Y resolves to a document whose `status:` is `superseded-by X`, the check warns once per occurrence, subject as written: "`Y` is superseded by X". Exempt: `supersedes:` items, `links.supersedes`, the `status:` value, references from X's own files. Several holders of Y: the first superseded one in path order.
 
@@ -81,7 +81,7 @@ This repository (parity config + registry, `enforce`, no baseline): `clean`, one
 
 ## Next
 
-- Part 2, `spec-check-links` (`INDEX_FORMAT` 4): `slug/` scopes and feature-scoped uniqueness (the `id-taken` exemption goes); Markdown file links with a per-corpus base (08 §4.3 (a)), a `ParsedFile` change; prior art: the census resolver (`crates/specengine-import/README.md`). **Q-D, open (owner):** where the IDs `slug/` cites live. The analyst recommends feature criteria as `{#AC-..}` sections of `<features>/<slug>.md`, which needs an ADR amending ADR-0002 (otherwise 08 §4.1 is contradicted).
+- Part 2: pass A, feature scopes, shipped (`docs/canon/spec-check-links.md`); pass B, `spec-check-links` (`INDEX_FORMAT` 5): Markdown file links with a per-corpus base, a `ParsedFile` change (same document, "Pass B").
 - Increment 3: the index writer, the CLI, the root `specengine.toml` (Q-7), hook and CI switched, `xtask` on this renderer, then retired. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 

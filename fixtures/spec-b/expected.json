@@ -47,7 +47,7 @@
         "MOD-CLI mentions inline REQ-001",
         "CMD-SYNC mentions inline [[GLS-worktree|рабочая копия]]",
         "CMD-SYNC mentions inline ВОП-7 (alias of QN) {non-latin}",
-        "FLAG-DRY-RUN mentions inline CRIT-01",
+        "FLAG-DRY-RUN mentions inline dry-run/CRIT-01",
         "FLAG-DRY-RUN mentions inline REQ-003 {mixed}",
         "CMD-STATUS mentions inline ADR-0001"
       ],
@@ -149,19 +149,6 @@
       ],
       "diagnostics": []
     },
-    "docs/records/CRIT/CRIT-01.md": {
-      "id": "CRIT-01",
-      "kind": "criterion",
-      "title": "Сухой прогон не меняет файлов",
-      "summary": "После `sync --dry-run` дерево рабочей копии побайтно совпадает с исходным.",
-      "sections": [],
-      "anchors": ["slug:сухой-прогон-не-меняет-файлов"],
-      "links": [
-        "CRIT-01 verifies frontmatter REQ-002",
-        "CRIT-01 uses_term frontmatter GLS-worktree"
-      ],
-      "diagnostics": []
-    },
     "docs/records/GLS/GLS-worktree.md": {
       "id": "GLS-worktree",
       "kind": "glossary-entry",
@@ -190,14 +177,22 @@
     "docs/features/dry-run.md": {
       "title": "Сухой прогон",
       "summary": "Фича закрывает dry-run/CRIT-01 и уточняет [[REQ-002]].",
-      "sections": [],
-      "anchors": ["slug:сухой-прогон", "slug:критерии", "attr:критерии"],
+      "sections": [
+        {
+          "id": "CRIT-01",
+          "kind": "criterion",
+          "level": 3,
+          "title": "Сухой прогон не меняет файлов"
+        }
+      ],
+      "anchors": ["slug:сухой-прогон", "slug:критерии", "attr:критерии", "slug:сухой-прогон-не-меняет-файлов"],
       "links": [
         "- mentions frontmatter REQ-002",
         "- mentions frontmatter ТРБ-003 (alias of REQ) {non-latin}",
         "- mentions inline dry-run/CRIT-01",
         "- mentions inline [[REQ-002]]",
-        "- mentions inline CRIT-01"
+        "CRIT-01 mentions inline REQ-002",
+        "CRIT-01 mentions inline GLS-worktree"
       ],
       "diagnostics": [
         "unknown-key:7"

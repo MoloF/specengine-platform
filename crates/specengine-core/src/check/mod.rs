@@ -18,11 +18,13 @@
 //! - [`baseline`] — `.spec-debt.toml`: expiring debt entries;
 //! - [`input`] — what the check runs over;
 //! - [`report`] — findings, verdict, lines and JSON;
-//! - [`resolve`] — the one reference resolution ([`Resolver`]);
+//! - [`resolve`] — the one reference resolution ([`Resolver`]), scope-aware:
+//!   `slug/ID` and bare feature-scoped IDs resolve in feature documents
+//!   only (ADR-0026);
 //! - [`render_index`] — the generated index, rendered in memory;
 //! - the rules: parser diagnostics through [`PARSER_SEVERITY`], class
-//!   contracts, budgets, ID definitions (`id-width`, `id-taken`,
-//!   `file-name`), `canon:` and front-matter references; the index drift
+//!   contracts, budgets, ID definitions (`id-scope`, `id-width`,
+//!   `id-taken`, `file-name`), `canon:` and front-matter references; the index drift
 //!   and the generator registry (§11.5–6, errors); the graph warnings
 //!   (`mention-dangling`, `depends-cycle`, `ref-superseded`).
 
@@ -51,10 +53,11 @@ pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
 
 /// The codes of the findings the check itself emits (parser codes come
 /// through [`PARSER_SEVERITY`]): increment 1 (errors, then the warning
-/// `name-skipped`), then increment 2 (the §11.5–6 errors, then the graph
-/// warnings). A stale baseline entry is no finding: it goes to
-/// [`Report::stale`], labelled `debt-stale` only in the detail lines.
-pub const CHECK_CODES: [&str; 26] = [
+/// `name-skipped`), then increment 2 part 1 (the §11.5–6 errors, then the
+/// graph warnings), then part 2 (the error `id-scope`, ADR-0026). A stale
+/// baseline entry is no finding: it goes to [`Report::stale`], labelled
+/// `debt-stale` only in the detail lines.
+pub const CHECK_CODES: [&str; 27] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -81,4 +84,5 @@ pub const CHECK_CODES: [&str; 26] = [
     "mention-dangling",
     "depends-cycle",
     "ref-superseded",
+    "id-scope",
 ];

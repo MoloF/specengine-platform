@@ -165,18 +165,6 @@
       ],
       "diagnostics": []
     },
-    "docs/records/AC/AC-07.md": {
-      "id": "AC-07",
-      "kind": "criterion",
-      "title": "Regeneration starts 1.5 s after the last sprint",
-      "summary": "Measured in the stamina test: a sprint followed by rest shows the first\nregeneration tick 1.5 s later.",
-      "sections": [],
-      "anchors": ["slug:regeneration-starts-15-s-after-the-last-sprint"],
-      "links": [
-        "AC-07 verifies frontmatter R-12"
-      ],
-      "diagnostics": []
-    },
     "docs/records/TERM/TERM-exhausted.md": {
       "id": "TERM-exhausted",
       "kind": "term",
@@ -190,8 +178,15 @@
     "docs/features/stamina-tuning.md": {
       "title": "Stamina tuning",
       "summary": "Tune the regeneration delay of [[R-12|the regen requirement]] against\nMEC-STAMINA#RULE-STAM-REGEN@3 and record the result in AC-07.",
-      "sections": [],
-      "anchors": ["slug:stamina-tuning", "slug:acceptance-criteria", "attr:acceptance"],
+      "sections": [
+        {
+          "id": "AC-07",
+          "kind": "criterion",
+          "level": 3,
+          "title": "Regeneration starts 1.5 s after the last sprint"
+        }
+      ],
+      "anchors": ["slug:stamina-tuning", "slug:acceptance-criteria", "attr:acceptance", "slug:regeneration-starts-15-s-after-the-last-sprint"],
       "links": [
         "- mentions frontmatter DEC-0023",
         "- mentions frontmatter R-12",
@@ -199,7 +194,7 @@
         "- mentions inline [[R-12|the regen requirement]]",
         "- mentions inline MEC-STAMINA#RULE-STAM-REGEN@3",
         "- mentions inline AC-07",
-        "- mentions inline AC-07"
+        "AC-07 mentions inline R-12"
       ],
       "diagnostics": ["frontmatter-type:6", "unknown-key:9", "unknown-key:12"]
     }
