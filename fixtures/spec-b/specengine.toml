@@ -1,0 +1,17 @@
+# Fixture corpus spec-b: a command-line tooling project ("Zerkalo", a worktree
+# synchroniser) with Russian prose and legacy Cyrillic prefixes kept as
+# aliases. The spec parser reads only `[ids]`.
+
+[paths]
+roots = ["docs"]
+
+[ids]
+REQ  = { kind = "requirement", width = 3, aliases_from = ["ТРБ"] }
+ASM  = { kind = "assumption",  width = 2 }
+QN   = { kind = "question",    width = 2, aliases_from = ["ВОП"] }
+ADR  = { kind = "decision",    width = 4 }
+CRIT = { kind = "criterion",   width = 2, scope = "feature" }
+GLS  = { kind = "term",        shape = "name" }
+MOD  = { kind = "module",      shape = "name" }
+CMD  = { kind = "command",     shape = "name" }
+FLAG = { kind = "flag",        shape = "name" }

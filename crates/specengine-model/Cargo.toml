@@ -1,0 +1,20 @@
+[package]
+name = "specengine-model"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "The corpus model of SpecEngine: IDs, references, spans, nodes, links, diagnostics, the [ids] scheme and the one reference grammar"
+
+# `serde` only: no I/O, no parser library, no other SpecEngine crate
+# (docs/features/spec-parser.md, AC-02).
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+# Integration tests check the front-matter half of the grammar (`canon:`,
+# `status: superseded-by`) through the parser; a dev-only edge, never in the
+# normal graph (`cargo tree -e normal`).
+specengine-core = { path = "../specengine-core" }
+serde_json.workspace = true

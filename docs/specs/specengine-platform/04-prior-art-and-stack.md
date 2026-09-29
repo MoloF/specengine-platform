@@ -198,8 +198,8 @@ A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependen
 | `tree-sitter-rust` | =0.24.2 | **compatible with 0.27** (ABI 15); `has_error()` check per item (05 §5.2). In 0.26+ `set_timeout_micros` is removed, cancellation via `ParseOptions { progress_callback }`; in 0.27 `child_count()` → `u32`, `kind()` → `&'tree str` |
 | own RON lexer | — (`specengine-code`) | `.ron` markers, field paths, the Bevy dump reader; replaces `tree-sitter-ron` 0.2.0 (05 §9) |
 | `rusqlite` | 0.40.2 | `bundled`, FTS5; preferable to `sqlx` for local single-user |
-| `pulldown-cmark` | 0.13.4 | heading attributes `{#ID}`, offset iterator for precise patches |
-| `serde-saphyr` | 1.3.0 | YAML front-matter (`serde_yaml` deprecated, `serde_yaml_ng`/`serde_norway` unchanged since 2024) |
+| `pulldown-cmark` | =0.13.4 (no default features) | heading attributes `{#ID}`, offset iterator for precise patches |
+| `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (`serde_yaml` deprecated, `serde_yaml_ng`/`serde_norway` unchanged since 2024). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86) — pending the owner (Q1, core README) |
 | `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 | serialization; JSON output of tools and `specengine-eval` |
 | `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer) / importer ID patterns; `regex` is already in the graph through tree-sitter |
 | `blake3` | =1.8.7 | node and AST hashes |

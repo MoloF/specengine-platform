@@ -18,6 +18,9 @@ ra = ["dep:specengine-ra", "dep:libc"]
 [dependencies]
 specengine-code = { path = "../specengine-code" }
 specengine-import = { path = "../specengine-import" }
+# Subcommand `parse`: the spec parser (docs/features/spec-parser.md).
+specengine-model = { path = "../specengine-model" }
+specengine-core = { path = "../specengine-core" }
 specengine-ra = { path = "../specengine-ra", optional = true }
 clap.workspace = true
 serde.workspace = true

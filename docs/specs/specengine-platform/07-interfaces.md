@@ -181,15 +181,8 @@ features = "docs/features"
 generated = "docs/generated"
 archive = "docs/archive"
 
-[ids]                       # prefixes and script; mixing scripts inside an ID is forbidden
-R    = { kind = "requirement", script = "latin", width = 2, immutable_text = true }
-A    = { kind = "assumption",  script = "latin", width = 3 }
-Q    = { kind = "question",    script = "latin", width = 3 }
-DEC  = { kind = "decision",    script = "latin", width = 4 }
-AC   = { kind = "criterion",   script = "latin", width = 2, scope = "feature" }
-TERM = { kind = "term",        script = "latin", width = 3 }
-# migrating from old prefixes: Q = { kind = "question", width = 3, aliases_from = ["QST", "QUES"] }
-# all IDs are Latin (ADR-0009); aliases_from — old prefixes (possibly in another script), resolved as aliases
+[ids]                       # prefix → kind, shape, width, aliases_from: crates/specengine-model/README.md
+R    = { kind = "requirement", width = 2, immutable_text = true }
 
 [budgets]                   # in tokens, multilingual estimator
 tier0 = 2800

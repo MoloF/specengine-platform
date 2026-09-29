@@ -15,9 +15,11 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [CLAUDE.md](../CLAUDE.md) SpecEngine · root · tier 0
 - [README.md](../README.md) SpecEngine · root · tier 2
 - [crates/specengine-code/README.md](../crates/specengine-code/README.md) specengine-code — layer A: Rust and RON parsing, AST hash, markers, Bevy detector · crates/specengine-code · tier 1
+- [crates/specengine-core/README.md](../crates/specengine-core/README.md) specengine-core — the spec parser · crates/specengine-core · tier 1
 - [crates/specengine-eval/README.md](../crates/specengine-eval/README.md) specengine-eval — the permanent measurement harness · crates/specengine-eval · tier 1
 - [crates/specengine-import/README.md](../crates/specengine-import/README.md) specengine-import — importers of existing spec corpora · crates/specengine-import · tier 1
 - [crates/specengine-mcp/README.md](../crates/specengine-mcp/README.md) specengine-mcp — the MCP server over stdio · crates/specengine-mcp · tier 1
+- [crates/specengine-model/README.md](../crates/specengine-model/README.md) specengine-model — the corpus model and the reference grammar · crates/specengine-model · tier 1
 - [crates/specengine-ra/README.md](../crates/specengine-ra/README.md) specengine-ra — layer C: rust-analyzer as a library · crates/specengine-ra · tier 1
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
@@ -65,4 +67,5 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) Technical Specification: SpecEngine Platform · specengine · abandoned
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) Phase 0 spikes: turn the engine's unverified claims into numbers on the two pilot corpora · spikes · shipped
+- [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) 03. Critique of the initial specification · specengine · shipped

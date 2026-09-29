@@ -1,0 +1,207 @@
+{
+  "prefixes": [
+    "ADR",
+    "ASM",
+    "CMD",
+    "CRIT",
+    "FLAG",
+    "GLS",
+    "MOD",
+    "QN",
+    "REQ"
+  ],
+  "files": {
+    "docs/spec/cli.md": {
+      "id": "MOD-CLI",
+      "kind": "module",
+      "title": "Командная строка",
+      "summary": "Инструмент синхронизирует рабочие копии; каждая команда отвечает одному\nтребованию REQ-001.",
+      "sections": [
+        {
+          "id": "CMD-SYNC",
+          "kind": "command",
+          "level": 2,
+          "parent": "MOD-CLI",
+          "title": "Команда sync"
+        },
+        {
+          "id": "FLAG-DRY-RUN",
+          "kind": "flag",
+          "level": 3,
+          "parent": "CMD-SYNC",
+          "title": "Флаг --dry-run",
+          "rev": 2
+        },
+        {
+          "id": "CMD-STATUS",
+          "kind": "command",
+          "level": 2,
+          "parent": "MOD-CLI",
+          "title": "Команда status"
+        }
+      ],
+      "anchors": [],
+      "links": [
+        "MOD-CLI derived_from frontmatter REQ-001",
+        "MOD-CLI derived_from frontmatter ТРБ-002 (alias of REQ) {non-latin}",
+        "MOD-CLI mentions inline REQ-001",
+        "CMD-SYNC mentions inline [[GLS-worktree|рабочая копия]]",
+        "CMD-SYNC mentions inline ВОП-7 (alias of QN) {non-latin}",
+        "FLAG-DRY-RUN mentions inline CRIT-01",
+        "FLAG-DRY-RUN mentions inline REQ-003 {mixed}",
+        "CMD-STATUS mentions inline ADR-0001"
+      ],
+      "diagnostics": [
+        "homoglyph:23"
+      ]
+    },
+    "docs/records/REQ/REQ-001.md": {
+      "id": "REQ-001",
+      "kind": "requirement",
+      "title": "Синхронизация не теряет локальных правок",
+      "summary": "Команда синхронизации никогда не перезаписывает незакоммиченные изменения.",
+      "sections": [],
+      "anchors": [],
+      "links": [],
+      "diagnostics": []
+    },
+    "docs/records/REQ/REQ-002.md": {
+      "id": "REQ-002",
+      "kind": "requirement",
+      "declared_kind": true,
+      "title": "Сухой прогон печатает план",
+      "summary": "Флаг `--dry-run` показывает план действий и не меняет файлов.",
+      "sections": [],
+      "anchors": [],
+      "links": [],
+      "diagnostics": []
+    },
+    "docs/records/ASM/ASM-01.md": {
+      "id": "ASM-01",
+      "kind": "assumption",
+      "title": "Пользователь работает в одной ветке",
+      "summary": "Допущение до ответа на QN-07.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "ASM-01 mentions inline QN-07"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/QN/QN-07.md": {
+      "id": "QN-07",
+      "kind": "question",
+      "summary": "**Вопрос:** можно ли запускать sync в чужой ветке?\n**Рабочий ответ:** нет, только в своей (ASM-01).",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "QN-07 working_answer frontmatter ASM-01",
+        "QN-07 mentions frontmatter REQ-001",
+        "QN-07 mentions frontmatter ВОП-6 (alias of QN) {non-latin}",
+        "QN-07 mentions inline ASM-01"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/QN/QN-08.md": {
+      "title": "Ветка задачи",
+      "sections": [
+        {
+          "id": "FLAG-ANY-BRANCH",
+          "kind": "flag",
+          "level": 2,
+          "title": "Варианты"
+        }
+      ],
+      "anchors": [],
+      "links": [
+        "FLAG-ANY-BRANCH mentions inline QN-07"
+      ],
+      "diagnostics": [
+        "frontmatter-yaml:3"
+      ]
+    },
+    "docs/records/ADR/ADR-0001.md": {
+      "id": "ADR-0001",
+      "kind": "decision",
+      "title": "Синхронизация через рабочие копии",
+      "summary": "Каждая задача получает свою рабочую копию (GLS-worktree).",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "ADR-0001 canon frontmatter docs/spec/cli.md#команда-sync",
+        "ADR-0001 mentions frontmatter ADR-0002",
+        "ADR-0001 mentions inline GLS-worktree"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/ADR/ADR-0002.md": {
+      "id": "ADR-0002",
+      "kind": "decision",
+      "title": "Синхронизация через клоны",
+      "summary": "Заменено решением ADR-0001.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "ADR-0001 supersedes frontmatter ADR-0002",
+        "ADR-0002 mentions inline ADR-0001"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/CRIT/CRIT-01.md": {
+      "id": "CRIT-01",
+      "kind": "criterion",
+      "title": "Сухой прогон не меняет файлов",
+      "summary": "После `sync --dry-run` дерево рабочей копии побайтно совпадает с исходным.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "CRIT-01 verifies frontmatter REQ-002",
+        "CRIT-01 uses_term frontmatter GLS-worktree"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/GLS/GLS-worktree.md": {
+      "id": "GLS-worktree",
+      "kind": "glossary-entry",
+      "declared_kind": true,
+      "title": "Рабочая копия",
+      "summary": "Отдельный каталог git worktree, привязанный к ветке задачи.",
+      "sections": [],
+      "anchors": [],
+      "links": [],
+      "diagnostics": [
+        "kind-mismatch:3"
+      ]
+    },
+    "docs/records/GLS/GLS-task-branch.md": {
+      "id": "GLS-task-branch",
+      "kind": "term",
+      "title": "Ветка задачи",
+      "summary": "Ветка, в которой живёт рабочая копия одной задачи; см. GLS-worktree.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "GLS-task-branch mentions inline GLS-worktree"
+      ],
+      "diagnostics": []
+    },
+    "docs/features/dry-run.md": {
+      "title": "Сухой прогон",
+      "summary": "Фича закрывает dry-run/CRIT-01 и уточняет [[REQ-002]].",
+      "sections": [],
+      "anchors": [
+        "критерии"
+      ],
+      "links": [
+        "- mentions frontmatter REQ-002",
+        "- mentions frontmatter ТРБ-003 (alias of REQ) {non-latin}",
+        "- mentions inline dry-run/CRIT-01",
+        "- mentions inline [[REQ-002]]",
+        "- mentions inline CRIT-01"
+      ],
+      "diagnostics": [
+        "unknown-key:7"
+      ]
+    }
+  }
+}

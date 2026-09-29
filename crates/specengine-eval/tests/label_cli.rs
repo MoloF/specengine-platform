@@ -35,6 +35,7 @@ fn subcommands() -> Vec<(&'static str, &'static str)> {
         ("ast-hash", "ast-hash"),
         ("ron", "ron"),
         ("census", "corpus-mini"),
+        ("parse", "corpus-mini"),
         ("bevy-detector", "bevy-mini"),
         ("bevy", "bevy-mini"),
     ];

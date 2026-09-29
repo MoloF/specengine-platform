@@ -1,0 +1,5 @@
+# ID scheme of the corpus-mini fixture for `specengine-eval parse`: the same
+# invented convention as census.toml (`ZR` rules, `ZN` notes, three digits).
+[ids]
+ZR = { kind = "rule", width = 3 }
+ZN = { kind = "note", width = 3 }

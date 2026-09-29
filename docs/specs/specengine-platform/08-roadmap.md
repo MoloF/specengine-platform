@@ -44,7 +44,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Parser: front-matter (serde-saphyr), `{#ID}` sections (pulldown-cmark with offsets), records, reference grammar, bilingual token estimator.
+- Parser — shipped 2026-09-29: `crates/specengine-{model,core}/README.md`; owner questions Q1–Q6 open there.
 - SQLite index + FTS5, incremental by BLAKE3.
 - `spec check`: port of the pilot projects' documentation checks, debt baseline, one-line summary.
 - CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.

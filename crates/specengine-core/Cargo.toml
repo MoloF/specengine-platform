@@ -1,0 +1,20 @@
+[package]
+name = "specengine-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Core of SpecEngine: the spec parser (front-matter, {#ID} sections, records, links, token estimate) over one file's bytes"
+
+# Never `specengine-{code,import,mcp,eval,ra}`; no file access (AC-02).
+[dependencies]
+specengine-model = { path = "../specengine-model" }
+pulldown-cmark.workspace = true
+serde-saphyr.workspace = true
+serde.workspace = true
+# The `[ids]` table of `specengine.toml`; already pinned for `specengine-import`.
+toml.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

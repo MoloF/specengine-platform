@@ -1,0 +1,18 @@
+# Fixture corpus spec-a: a small game-design project (English prose, ECS-style
+# game "Lantern Keep"). The spec parser reads only `[ids]`; the other table is
+# here to show it is ignored.
+
+[project]
+name = "lantern-keep"
+
+[ids]
+DOM  = { kind = "domain",      shape = "name" }
+MEC  = { kind = "mechanic",    shape = "name" }
+RULE = { kind = "rule",        shape = "name" }
+EDGE = { kind = "edge-case",   shape = "name" }
+R    = { kind = "requirement", width = 2, immutable_text = true }
+A    = { kind = "assumption",  width = 3 }
+Q    = { kind = "question",    width = 3, aliases_from = ["QST"] }
+DEC  = { kind = "decision",    width = 4 }
+AC   = { kind = "criterion",   width = 2, scope = "feature" }
+TERM = { kind = "term",        shape = "name" }

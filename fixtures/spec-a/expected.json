@@ -1,0 +1,207 @@
+{
+  "prefixes": ["A", "AC", "DEC", "DOM", "EDGE", "MEC", "Q", "R", "RULE", "TERM"],
+  "files": {
+    "docs/spec/game.md": {
+      "id": "DOM-GAME",
+      "kind": "domain",
+      "title": "Lantern Keep",
+      "summary": "A small survival game: keep the lantern lit through the night while the\nstamina economy pushes back.",
+      "sections": [
+        {"id": "RULE-CORE-LOOP", "kind": "rule", "level": 2, "parent": "DOM-GAME", "title": "Core loop"}
+      ],
+      "anchors": ["glossary"],
+      "links": [
+        "DOM-GAME mentions inline [[DOM-MOVEMENT]]",
+        "RULE-CORE-LOOP mentions inline R-12",
+        "DOM-GAME mentions inline TERM-exhausted"
+      ],
+      "diagnostics": []
+    },
+    "docs/spec/movement/README.md": {
+      "id": "DOM-MOVEMENT",
+      "kind": "domain",
+      "title": "Movement",
+      "parent": "DOM-GAME",
+      "summary": "Walking, sprinting and resting. Mechanics: [stamina](stamina.md),\n[sprint](sprint.md).",
+      "sections": [
+        {"id": "RULE-MOVE-SPEEDS", "kind": "rule", "level": 2, "parent": "DOM-MOVEMENT", "title": "Speeds", "rev": 2}
+      ],
+      "anchors": [],
+      "links": [
+        "RULE-MOVE-SPEEDS mentions inline MEC-STAMINA"
+      ],
+      "diagnostics": []
+    },
+    "docs/spec/movement/stamina.md": {
+      "id": "MEC-STAMINA",
+      "kind": "mechanic",
+      "title": "Stamina",
+      "parent": "DOM-MOVEMENT",
+      "summary": "Stamina limits sprinting. Drained while sprinting, restored at rest. <!-- summary: first paragraph, ≤ 3 lines -->",
+      "sections": [
+        {"id": "RULE-STAM-REGEN", "kind": "rule", "level": 2, "parent": "MEC-STAMINA", "title": "Regeneration"},
+        {"id": "EDGE-STAM-ZERO", "kind": "edge-case", "level": 2, "parent": "MEC-STAMINA", "title": "Depletion"}
+      ],
+      "anchors": [],
+      "links": [
+        "MEC-STAMINA derived_from frontmatter R-12",
+        "MEC-STAMINA derived_from frontmatter A-101",
+        "MEC-STAMINA depends_on frontmatter MEC-SPRINT",
+        "MEC-STAMINA uses_term frontmatter TERM-exhausted",
+        "RULE-STAM-REGEN mentions inline R-12"
+      ],
+      "diagnostics": []
+    },
+    "docs/spec/movement/sprint.md": {
+      "id": "MEC-SPRINT",
+      "kind": "mechanic",
+      "title": "Sprint",
+      "parent": "DOM-MOVEMENT",
+      "summary": "Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMINA#RULE-STAM-REGEN|regeneration]]).",
+      "sections": [
+        {"id": "RULE-SPRINT-COST", "kind": "rule", "level": 2, "parent": "MEC-SPRINT", "title": "Cost", "rev": 3},
+        {"id": "EDGE-SPRINT-EMPTY", "kind": "edge-case", "level": 3, "parent": "RULE-SPRINT-COST", "title": "Empty tank"}
+      ],
+      "anchors": [],
+      "links": [
+        "MEC-SPRINT depends_on frontmatter MEC-STAMINA",
+        "MEC-SPRINT constrains frontmatter RULE-STAM-REGEN",
+        "MEC-SPRINT mentions inline [[MEC-STAMINA#RULE-STAM-REGEN|regeneration]]",
+        "RULE-SPRINT-COST mentions inline R-12@2",
+        "RULE-SPRINT-COST mentions inline A-101",
+        "EDGE-SPRINT-EMPTY mentions inline EDGE-STAM-ZERO",
+        "EDGE-SPRINT-EMPTY mentions inline Q-031",
+        "MEC-SPRINT mentions inline stamina-tuning/AC-07",
+        "MEC-SPRINT mentions inline shared:DEC-0023@1"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/R/R-12.md": {
+      "id": "R-12",
+      "kind": "requirement",
+      "title": "Stamina regenerates only at rest",
+      "summary": "Stamina regenerates at a base rate once the player has stopped sprinting for\na short delay; it does not regenerate while sprinting.",
+      "sections": [],
+      "anchors": [],
+      "links": [],
+      "diagnostics": []
+    },
+    "docs/records/A/A-101.md": {
+      "id": "A-101",
+      "kind": "assumption",
+      "title": "Walking does not reset the regeneration delay",
+      "summary": "Assumed until Q-031 is answered.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "A-101 mentions inline Q-031"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/A/A-102.md": {
+      "id": "A-102",
+      "kind": "requirement",
+      "declared_kind": true,
+      "title": "The lantern burns one unit of oil per minute",
+      "summary": "Declared as a requirement in a record whose prefix says assumption.",
+      "sections": [],
+      "anchors": [],
+      "links": [],
+      "diagnostics": ["kind-mismatch:3"]
+    },
+    "docs/records/Q/Q-031.md": {
+      "id": "Q-031",
+      "kind": "question",
+      "declared_kind": true,
+      "summary": "**Question (verbatim for the customer):** Does stamina regenerate while walking, or only at rest?\n**Working answer:** only at rest; walking does not reset the delay (A-101).\n**Cost of the other answer:** a new case in RULE-STAM-REGEN and in the delay test, ~1 work item.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "Q-031 working_answer frontmatter A-101",
+        "Q-031 mentions frontmatter R-12",
+        "Q-031 mentions frontmatter MEC-STAMINA",
+        "Q-031 mentions inline A-101",
+        "Q-031 mentions inline RULE-STAM-REGEN"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/Q/Q-032.md": {
+      "id": "Q-032",
+      "kind": "question",
+      "title": "Does the lantern drain stamina?",
+      "summary": "No: only sprinting drains stamina.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "Q-032 working_answer frontmatter DEC-0023"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/DEC/DEC-0023.md": {
+      "id": "DEC-0023",
+      "kind": "decision",
+      "title": "Regeneration waits for rest",
+      "summary": "Stamina regenerates only at rest (A-101 becomes the rule).",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "DEC-0023 canon frontmatter docs/spec/movement/stamina.md#regeneration",
+        "DEC-0023 supersedes frontmatter DEC-0007",
+        "DEC-0023 answers frontmatter Q-031",
+        "DEC-0023 mentions inline A-101"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/DEC/DEC-0007.md": {
+      "id": "DEC-0007",
+      "kind": "decision",
+      "title": "Stamina regenerates while walking",
+      "summary": "Replaced by DEC-0023.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "DEC-0023 supersedes frontmatter DEC-0007",
+        "DEC-0007 mentions inline DEC-0023"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/AC/AC-07.md": {
+      "id": "AC-07",
+      "kind": "criterion",
+      "title": "Regeneration starts 1.5 s after the last sprint",
+      "summary": "Measured in the stamina test: a sprint followed by rest shows the first\nregeneration tick 1.5 s later.",
+      "sections": [],
+      "anchors": [],
+      "links": [
+        "AC-07 verifies frontmatter R-12"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/TERM/TERM-exhausted.md": {
+      "id": "TERM-exhausted",
+      "kind": "term",
+      "title": "Exhausted",
+      "summary": "The state of a character whose stamina reached zero; sprinting is refused\nuntil stamina recovers to 20 %.",
+      "sections": [],
+      "anchors": [],
+      "links": [],
+      "diagnostics": []
+    },
+    "docs/features/stamina-tuning.md": {
+      "title": "Stamina tuning",
+      "summary": "Tune the regeneration delay of [[R-12|the regen requirement]] against\nMEC-STAMINA#RULE-STAM-REGEN@3 and record the result in AC-07.",
+      "sections": [],
+      "anchors": ["acceptance"],
+      "links": [
+        "- mentions frontmatter DEC-0023",
+        "- mentions frontmatter R-12",
+        "- mentions frontmatter QST-031 (alias of Q)",
+        "- mentions inline [[R-12|the regen requirement]]",
+        "- mentions inline MEC-STAMINA#RULE-STAM-REGEN@3",
+        "- mentions inline AC-07",
+        "- mentions inline AC-07"
+      ],
+      "diagnostics": ["frontmatter-type:6", "unknown-key:9"]
+    }
+  }
+}

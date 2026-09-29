@@ -1,5 +1,9 @@
 //! AC-01 of docs/features/phase-0-spikes.md: the core build graph, read from
-//! `cargo metadata` and `cargo tree` of this workspace.
+//! `cargo metadata` and `cargo tree` of this workspace; AC-01–AC-03 of
+//! docs/features/spec-parser.md: `specengine-model` and `specengine-core`
+//! join the default members and the core graph, the model's normal graph is
+//! `serde` only, neither crate touches the file system, and the two parser
+//! libraries are pinned exactly.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -22,7 +26,7 @@ fn cargo() -> Command {
 }
 
 #[test]
-fn default_members_are_exactly_the_five_core_packages() {
+fn default_members_are_exactly_the_seven_core_packages() {
     let output = cargo()
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .output()
@@ -50,9 +54,11 @@ fn default_members_are_exactly_the_five_core_packages() {
         defaults,
         [
             "specengine-code",
+            "specengine-core",
             "specengine-eval",
             "specengine-import",
             "specengine-mcp",
+            "specengine-model",
             "xtask",
         ]
     );
@@ -128,6 +134,10 @@ fn core_tree_has_no_rust_analyzer_syn3_or_bevy() {
             "specengine-mcp",
             "-p",
             "specengine-import",
+            "-p",
+            "specengine-model",
+            "-p",
+            "specengine-core",
         ])
         .output()
         .expect("cargo tree runs");
@@ -141,6 +151,8 @@ fn core_tree_has_no_rust_analyzer_syn3_or_bevy() {
         "specengine-code v",
         "specengine-mcp v",
         "specengine-import v",
+        "specengine-model v",
+        "specengine-core v",
     ] {
         assert!(
             tree.contains(root),
@@ -159,6 +171,7 @@ fn core_tree_has_no_rust_analyzer_syn3_or_bevy() {
             }
             if token.starts_with("ra_ap_")
                 || token.starts_with("bevy")
+                || *token == "specengine-ra"
                 || (*token == "syn" && version.starts_with("v3."))
             {
                 offenders.push(line.trim().to_owned());
@@ -346,6 +359,10 @@ fn core_graph_with_every_default_edge_kind_has_no_rust_analyzer() {
         "specengine-mcp",
         "-p",
         "specengine-import",
+        "-p",
+        "specengine-model",
+        "-p",
+        "specengine-core",
     ]);
     let offenders = rust_analyzer_lines(&tree);
     assert!(
@@ -365,6 +382,8 @@ fn default_members_graph_has_no_rust_analyzer() {
         "specengine-mcp v",
         "specengine-import v",
         "specengine-eval v",
+        "specengine-model v",
+        "specengine-core v",
     ] {
         assert!(
             tree.contains(root),
@@ -587,4 +606,146 @@ fn ra_mini_fixture_stays_outside_the_workspace() {
             .is_file(),
         "fixtures/ra-mini carries its own Cargo.lock"
     );
+}
+
+// ---------------------------------------------------------------------------
+// docs/features/spec-parser.md AC-02 (layering) and AC-03 (pins).
+// ---------------------------------------------------------------------------
+
+/// `(name, version)` of every crate in the normal-edge graph of `package`,
+/// the package itself excluded.
+fn normal_graph(package: &str) -> Vec<(String, String)> {
+    let tree = cargo_tree(&["-p", package, "-e", "normal"]);
+    let crates = tree_crates(&tree);
+    assert!(
+        crates.first().is_some_and(|(name, _)| name == package),
+        "cargo tree -p {package} lists the package first:\n{tree}"
+    );
+    crates.into_iter().skip(1).collect()
+}
+
+#[test]
+fn model_normal_graph_has_no_specengine_crate_and_no_parser_library() {
+    let graph = normal_graph("specengine-model");
+    let offenders: Vec<&(String, String)> = graph
+        .iter()
+        .filter(|(name, _)| {
+            name.starts_with("specengine-") || name == "pulldown-cmark" || name == "serde-saphyr"
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "specengine-model's normal graph must be serde only: {offenders:?}"
+    );
+    assert!(
+        graph.iter().any(|(name, _)| name == "serde"),
+        "serde in the model graph: {graph:?}"
+    );
+}
+
+#[test]
+fn core_normal_graph_has_no_other_specengine_crate_but_the_model() {
+    let graph = normal_graph("specengine-core");
+    let offenders: Vec<&(String, String)> = graph
+        .iter()
+        .filter(|(name, _)| {
+            [
+                "specengine-code",
+                "specengine-import",
+                "specengine-mcp",
+                "specengine-eval",
+                "specengine-ra",
+            ]
+            .contains(&name.as_str())
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "specengine-core depends on {offenders:?}"
+    );
+    for wanted in ["specengine-model", "pulldown-cmark", "serde-saphyr"] {
+        assert!(
+            graph.iter().any(|(name, _)| name == wanted),
+            "{wanted} missing from specengine-core's graph: {graph:?}"
+        );
+    }
+}
+
+#[test]
+fn model_and_core_sources_do_no_file_io() {
+    let pattern = ["std::fs", "File::", "OpenOptions"];
+    let mut offenders = Vec::new();
+    for krate in ["specengine-model", "specengine-core"] {
+        let src = workspace_root().join("crates").join(krate).join("src");
+        let mut stack = vec![src];
+        let mut files = 0;
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("src readable") {
+                let path = entry.expect("entry").path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                files += 1;
+                let text = std::fs::read_to_string(&path).expect("UTF-8 source");
+                for (number, line) in text.lines().enumerate() {
+                    if pattern.iter().any(|p| line.contains(p)) {
+                        offenders.push(format!(
+                            "{}:{}: {}",
+                            path.display(),
+                            number + 1,
+                            line.trim()
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(files > 0, "{krate}: no sources found");
+    }
+    assert!(
+        offenders.is_empty(),
+        "file access in model/core:\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// The parser libraries of 04 §6 / Q1, exact and resolved at one version.
+const PARSER_PINS: [(&str, &str); 2] = [("pulldown-cmark", "0.13.4"), ("serde-saphyr", "1.3.0")];
+
+#[test]
+fn parser_libraries_are_pinned_exactly_and_resolve_at_the_pin() {
+    let manifest =
+        std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest");
+    for (name, version) in PARSER_PINS {
+        let line = manifest
+            .lines()
+            .find(|line| line.trim_start().starts_with(&format!("{name} ")))
+            .unwrap_or_else(|| panic!("{name} is not in [workspace.dependencies]"));
+        assert!(
+            line.contains(&format!("\"={version}\"")),
+            "{name} is not `=`-pinned at {version} in the root manifest: {line}"
+        );
+        // No `-p`/`--workspace`: the default members, as the criterion runs it.
+        // (`--workspace` adds `specengine-ra`, whose `ra_ap_ide` brings
+        // pulldown-cmark 0.9.6 outside the core graph.)
+        let inverted = cargo_tree(&["-i", name]);
+        let head = tree_crates(inverted.lines().next().unwrap_or_default());
+        assert_eq!(
+            head,
+            [(name.to_owned(), version.to_owned())],
+            "cargo tree -i {name}:\n{inverted}"
+        );
+        let other: Vec<(String, String)> = tree_crates(&cargo_tree(&[]))
+            .into_iter()
+            .filter(|(n, v)| n == name && v != version)
+            .collect();
+        assert!(
+            other.is_empty(),
+            "{name} at another version in the default members: {other:?}"
+        );
+        assert!(
+            locked_versions(name).iter().any(|v| v == version),
+            "Cargo.lock lacks {name} {version}"
+        );
+    }
 }

@@ -11,6 +11,7 @@ mod ast_hash;
 mod bevy;
 mod census;
 mod harness;
+mod parse;
 #[cfg(all(feature = "ra", unix))]
 mod ra;
 mod ron;
@@ -45,6 +46,10 @@ enum Measurement {
     /// Dry-run census of a spec corpus by `specengine-import`; the convention
     /// comes from `--config` (default: `census.toml` at the corpus root) (08 §4.3).
     Census(CommonArgs),
+    /// The spec parser of `specengine-core` over the census's documents:
+    /// front-matter, `{#ID}` sections, references, token estimates. Files
+    /// from `--config` as `census`; IDs from `--scheme`.
+    Parse(ParseArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -78,6 +83,19 @@ pub struct RaArgs {
     pub proc_macros: ra::Modes,
 }
 
+/// `parse`: the shared arguments plus the ID scheme.
+#[derive(Args, Clone)]
+pub struct ParseArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// `specengine.toml` whose `[ids]` table is the ID scheme; read-only.
+    /// Default: `SPECENGINE_SCHEME_A` / `_B` for `--label pilot-a` /
+    /// `pilot-b` when set, else `specengine.toml` at the corpus root.
+    /// Missing or invalid: refused (exit 2) with `file:line: message`.
+    #[arg(long, value_name = "TOML")]
+    pub scheme: Option<PathBuf>,
+}
+
 /// `bevy-detector`: the shared arguments plus the optional schedule dump.
 #[derive(Args, Clone)]
 pub struct BevyArgs {
@@ -105,7 +123,7 @@ pub struct CommonArgs {
     #[arg(long, value_name = "LABEL")]
     pub label: Option<String>,
     /// Measurement-specific configuration (TOML): the corpus convention of
-    /// `census`; `ast-hash`, `ron`, `bevy-detector` and `ra` take none.
+    /// `census` and `parse`; `ast-hash`, `ron`, `bevy-detector` and `ra` take none.
     #[arg(long, value_name = "TOML")]
     pub config: Option<PathBuf>,
     /// Wall-clock budget in seconds; on overrun `result` is the string "timeout" (exit 0).
@@ -127,6 +145,20 @@ fn main() -> ExitCode {
                 census::FIXTURE,
                 move |root: &Path| census::load_config(config.as_deref(), root),
                 census::run,
+            )
+        }
+        Measurement::Parse(args) => {
+            let config = args.common.config.clone();
+            let scheme = args.scheme.clone();
+            let label = args.common.label.clone();
+            measure_with(
+                "parse",
+                &args.common,
+                parse::FIXTURE,
+                move |root: &Path| {
+                    parse::prepare(root, config.as_deref(), scheme.as_deref(), label.as_deref())
+                },
+                parse::run,
             )
         }
         Measurement::BevyDetector(args) => {
