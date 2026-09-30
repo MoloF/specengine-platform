@@ -251,27 +251,54 @@ fn invalid_new_paths_keys_fail_with_file_line_message() {
 // `[[generators]]` table. The rule half is in `check_generated.rs`, the
 // re-parse half in the store's `tests/check_config.rs`.
 
-/// The registry example of spec-check-graph's Data, verbatim.
-const REGISTRY_EXAMPLE: &str = r#"[paths]
-index = "docs/index.md"
+/// The canon holding the registry example (§11.6).
+const REGISTRY_CANON: &str = "docs/canon/spec-check-graph.md";
 
-[[generators]]                              # §11.6; absent → the generator rules are off
-command = "cargo xtask docs index --write"  # a `generator:` value, compared byte for byte
-writes  = ["docs/index.md"]                 # root-relative, the [paths] path rules
-index   = true                              # optional: SpecEngine renders this output itself (§11.5)
-gate    = "cargo xtask docs check"          # optional, index entry only; default "spec check"
-"#;
+/// The `[paths]` the example's `index = true` entry needs; three lines, so
+/// the entry's `[[generators]]` header is line 4 of [`registry_example`].
+const REGISTRY_PATHS: &str = "[paths]\nindex = \"docs/index.md\"\n\n";
+
+/// The registry example of docs/canon/spec-check-graph.md §11.6, verbatim:
+/// read from the canon at test time (its first ```` ```toml ```` block
+/// under the §11.6 heading), so the test and the canon cannot drift apart;
+/// [`REGISTRY_PATHS`] in front of it.
+fn registry_example() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(REGISTRY_CANON);
+    let canon =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let heading = "\n## §11.6: the generator registry\n";
+    let section = &canon[canon
+        .find(heading)
+        .unwrap_or_else(|| panic!("{REGISTRY_CANON}: no {heading:?}"))..];
+    let open = "\n```toml\n";
+    let block = &section[section
+        .find(open)
+        .unwrap_or_else(|| panic!("{REGISTRY_CANON} §11.6: no toml block"))
+        + open.len()..];
+    let block = &block[..block
+        .find("\n```\n")
+        .unwrap_or_else(|| panic!("{REGISTRY_CANON} §11.6: the toml block is unclosed"))
+        + 1];
+    assert!(
+        block.starts_with("[[generators]]"),
+        "{REGISTRY_CANON} §11.6: {block}"
+    );
+    format!("{REGISTRY_PATHS}{block}")
+}
 
 #[test]
 fn the_registry_example_loads() {
     use specengine_core::check::{DEFAULT_GATE, Generator};
-    let config = CheckConfig::from_toml(REGISTRY_EXAMPLE)
-        .unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+    let example = registry_example();
+    let config = CheckConfig::from_toml(&example)
+        .unwrap_or_else(|e| panic!("{}\n{example}", e.at("specengine.toml")));
     let want = Generator {
-        command: "cargo xtask docs index --write".to_owned(),
+        command: "cargo run -q -p specengine-cli -- export index".to_owned(),
         writes: strings(&["docs/index.md"]),
         index: true,
-        gate: Some("cargo xtask docs check".to_owned()),
+        gate: Some("cargo run -q -p specengine-cli -- check".to_owned()),
         line: 4,
     };
     assert_eq!(
@@ -279,7 +306,7 @@ fn the_registry_example_loads() {
         Some(std::slice::from_ref(&want))
     );
     assert_eq!(config.index_generator(), Some(&want));
-    assert_eq!(want.gate(), "cargo xtask docs check");
+    assert_eq!(want.gate(), "cargo run -q -p specengine-cli -- check");
     assert_eq!(DEFAULT_GATE, "spec check");
     // The other tables keep their defaults.
     assert_eq!(config.mode, Mode::Enforce);
@@ -586,8 +613,8 @@ const NOT_PLAIN: &[(&str, &str, &str)] = &[
 
 /// Plain scalars that must be accepted (and read back as themselves).
 const PLAIN: &[&str] = &[
-    "cargo xtask docs index --write",
-    "cargo xtask docs check",
+    "cargo run -q -p specengine-cli -- export index",
+    "cargo run -q -p specengine-cli -- check",
     "make docs",
     "npm run docs:build",
     "a:b",

@@ -1,12 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["xtask", "crates/*"]
+members = ["crates/*"]
 # The core build graph: `specengine-ra` (rust-analyzer as a library) stays outside
 # so `ra_ap_*` never enters it; `fixtures/bevy-mini` and `fixtures/ra-mini` are Cargo
 # projects of their own so Bevy and the fixture crates never enter the workspace
 # build (docs/features/phase-0-spikes.md, "Data").
 default-members = [
-    "xtask",
     "crates/specengine-model",
     "crates/specengine-core",
     "crates/specengine-store",

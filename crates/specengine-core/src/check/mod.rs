@@ -27,6 +27,8 @@
 //!   [`is_tier3`] / [`is_tier3_file`] — the one Tier 3 predicate (the
 //!   index's archive, the store's `tier3` column, `spec search`), and
 //!   [`is_live`], the graph rules' live source;
+//! - [`worst_w`] — the worst-case working set W (§3), reported in the
+//!   summary and `counts.worst_w_bytes`, never a finding;
 //! - the rules: parser diagnostics through [`PARSER_SEVERITY`], class
 //!   contracts, budgets, ID definitions (`id-scope`, `id-width`,
 //!   `id-taken`, `file-name`), `canon:` and front-matter references; the index drift
@@ -46,6 +48,7 @@ mod render;
 pub mod report;
 pub mod resolve;
 mod text;
+mod working_set;
 
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use config::{
@@ -59,6 +62,7 @@ pub use render::{is_live, is_tier3, is_tier3_file, render_index};
 pub use report::{Cause, Counts, Debt, Finding, Fix, Report, Verdict};
 pub use resolve::{Resolution, Resolver};
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
+pub use working_set::worst_w;
 
 /// The codes of the findings the check itself emits (parser codes come
 /// through [`PARSER_SEVERITY`]): increment 1 (errors, then the warning

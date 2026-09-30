@@ -58,7 +58,7 @@ Example: `fixtures/corpus-mini/census.toml` (an invented convention). Configs of
 - Non-Latin IDs whose letters have no Latin look-alike fall into rows without ID.
 - An unclosed fence or HTML comment and skipped symlinks drop records without a diagnostic.
 - `markdown::strip_comments` (HTML comments) ignores backslash escapes; `<…>` destinations and `<!-->` comments deviate from CommonMark; entity references in destinations are not decoded.
-- The front-matter reader is not shared with the std-only `xtask`.
+- The census reads front-matter leniently with its own reader, not the strict parser of `specengine-core` (`spec check`).
 
 What real corpora need beyond this — a per-corpus link base, a definition-versus-reference rule for IDs, aliases for non-Latin prefixes, locally numbered tables — is listed in 08 §4.3.
 

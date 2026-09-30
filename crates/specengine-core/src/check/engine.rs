@@ -21,6 +21,7 @@ use super::input::{CheckFile, CheckInput, ProblemKind};
 use super::report::{Cause, Debt, Finding, Fix, Report};
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
 use super::text::{FileText, front_matter_failed, is_calendar_date, is_date_shaped};
+use super::working_set::worst_w;
 use super::{generated, graph, links};
 use crate::{Paths, is_under};
 
@@ -153,7 +154,15 @@ pub fn run(
     links::run(&corpus, paths, &mut findings);
 
     let stale = apply_baseline(&mut findings, baseline, today, today_valid);
-    Report::assemble(config.mode, input.files.len(), findings, stale, causes)
+    let worst_w_bytes = worst_w(input, paths);
+    Report::assemble(
+        config.mode,
+        input.files.len(),
+        worst_w_bytes,
+        findings,
+        stale,
+        causes,
+    )
 }
 
 /// Marks findings matched by a baseline entry; returns the entries that

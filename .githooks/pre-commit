@@ -1,20 +1,37 @@
 #!/usr/bin/env bash
 # Enforcement of the documentation convention (docs/canon/documentation-system.md §11):
-# any commit touching documents passes cargo xtask docs check.
+# a commit whose staged names include a .md file, the top-level specengine.toml or
+# .spec-debt.toml passes spec check over the staged tree. Any non-zero exit (errors,
+# a check that cannot run, a failed build, no toolchain) refuses the commit; only
+# git commit --no-verify skips it. cargo run builds the checker from the working tree.
 # Enabled by scripts/hooks-install.sh (core.hooksPath=.githooks).
 set -euo pipefail
 
-if git diff --cached --name-only --diff-filter=ACMRD | grep -qE '\.md$'; then
-  if ! cargo xtask docs check; then
-    printf '\nCommit stopped: cargo xtask docs check is red.\n' >&2
-    printf 'Rebuild the index with: cargo xtask docs index --write\n' >&2
-    exit 1
-  fi
+# The staged names, collected whole before matching: a reader that stops early
+# (grep -q) would kill git with SIGPIPE, and pipefail would turn that into a
+# silently skipped check. NUL-separated, so no name is quoted; a newline inside
+# a name can only add a match, never hide one. Renames are split into a
+# deletion and an addition, so an .md renamed to another extension still counts.
+if ! names=$(git diff --cached --name-only --no-renames --diff-filter=ACDMT -z | tr '\0' '\n'); then
+  printf 'Commit stopped: the staged names could not be listed.\n' >&2
+  exit 1
 fi
 
-if git diff --cached --name-only | grep -qE '^\.claude/agents/'; then
-  ./scripts/sync-saving-agents.sh --check >/dev/null || {
-    printf 'Commit stopped: the *-saving twins have fallen behind — ./scripts/sync-saving-agents.sh\n' >&2
+relevant=false
+while IFS= read -r name; do
+  case $name in
+    *.md | specengine.toml | .spec-debt.toml)
+      relevant=true
+      break
+      ;;
+  esac
+done <<EOF
+$names
+EOF
+
+if [ "$relevant" = true ]; then
+  if ! cargo run -q -p specengine-cli -- check --staged --root .; then
+    printf '\nCommit stopped: spec check failed or could not run; rebuild a stale index with: cargo run -q -p specengine-cli -- export index\n' >&2
     exit 1
-  }
+  fi
 fi

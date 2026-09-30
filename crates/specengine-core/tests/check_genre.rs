@@ -14,7 +14,7 @@
 //! unchanged (no registry in either fixture: §11.5–6 off); the new warnings
 //! are exactly spec-a's `depends-cycle` and spec-b's `mention-dangling`; the
 //! new sources (renderer, registry, resolution, graph rules) are scanned
-//! with the old, and name no `cargo xtask` either.
+//! with the old, and name no generator command of this repository either.
 //!
 //! AC-09 and AC-10 of docs/features/spec-check-scopes.md: with the feature
 //! criteria moved into `{#ID}` sections, the pins above hold, no `id-scope`
@@ -285,10 +285,12 @@ fn check_sources() -> Vec<std::path::PathBuf> {
 }
 
 /// Paths and file names of this repository and of the fixtures, and this
-/// repository's generator command.
+/// repository's generator commands (the retired one and the registered
+/// prefix, docs/features/spec-cli-switch.md AC-15).
 const PROJECT_NAMES: &[&str] = &[
     "cargo xtask",
     "xtask",
+    "cargo run -q -p specengine-cli",
     "CLAUDE.md",
     "README.md",
     "index.md",

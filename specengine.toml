@@ -1,0 +1,33 @@
+# This repository's documentation gate: spec check (ADR-0013, ADR-0022; docs/canon/spec-check-cli.md).
+[paths]
+roots      = ["CLAUDE.md", "README.md", "crates", "docs"]
+records    = "docs/decisions"
+tier0      = "CLAUDE.md"
+tier1_name = "README.md"
+index      = "docs/index.md"
+exclude    = ["**/_*.md", "**/fixtures/**", "**/target/**", "**/target.noindex/**", "**/node_modules/**", "**/dist/**"]
+
+[ids]
+ADR = { kind = "decision", width = 4 }
+
+[budgets]
+tier0_bytes    = 16384
+tier1_bytes    = 10240
+index_bytes    = 10240
+decision_bytes = 1536
+canon_bytes    = 12288
+
+[classes]
+canon     = { required = ["class", "tier", "scope", "owner", "reviewed"], closed = true }
+decision  = { required = ["class", "id", "title", "status", "date", "scope"], optional = ["canon", "supersedes", "ref"], closed = true }
+spec      = { required = ["class", "status", "scope"], optional = ["ref", "shipped", "adrs"], closed = true }
+generated = { required = ["class", "generator", "source"], closed = true }
+
+[check]
+mode = "enforce"
+
+[[generators]]
+command = "cargo run -q -p specengine-cli -- export index"
+writes  = ["docs/index.md"]
+index   = true
+gate    = "cargo run -q -p specengine-cli -- check"

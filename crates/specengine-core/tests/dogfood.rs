@@ -1,7 +1,9 @@
 //! AC-19 of docs/features/spec-parser.md, as amended by AC-17 of
 //! docs/features/spec-check-graph.md (the owner's Q-2 answer: the four
 //! invalid YAML scalars quoted): this repository's own documentation parses.
-//! Every file listed by `cargo xtask docs budget` parses under the scheme
+//! Every file the committed root `specengine.toml` walks (a std walk
+//! filtered by its walk scope, no cargo subprocess;
+//! docs/features/spec-cli-switch.md AC-13) parses under the scheme
 //! {ADR, width 4} with no front-matter diagnostic and no exception
 //! (`INVALID_YAML` is empty); every ADR's `id` equals its file stem, with no
 //! exemption; every `canon:` is a path with an anchor. The four files the
@@ -17,13 +19,13 @@ mod common;
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use specengine_model::{
     AnchorOrigin, CanonTarget, DiagnosticCode, IdScheme, ParsedFile, PrefixSpec,
 };
 
 use common::repository_root;
+use specengine_core::Paths;
 
 /// The files whose front-matter is not valid YAML: none since the Q-2 edit
 /// (docs/features/spec-check-graph.md AC-17).
@@ -41,29 +43,99 @@ fn adr_scheme() -> IdScheme {
     IdScheme::new(vec![PrefixSpec::number("ADR", "decision", 4)]).unwrap()
 }
 
-/// The document list of `cargo xtask docs budget`: the first column of the
-/// table between its header and the blank line before the W summary.
-fn budget_files() -> Vec<String> {
-    let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
-        .current_dir(repository_root())
-        .args(["xtask", "docs", "budget"])
-        .output()
-        .expect("cargo xtask docs budget runs");
-    let stdout = String::from_utf8(output.stdout).expect("UTF-8 output");
-    let mut lines = stdout.lines();
-    let header = lines.next().unwrap_or_default();
+/// The committed root `specengine.toml`.
+fn root_toml() -> String {
+    fs::read_to_string(repository_root().join("specengine.toml")).expect("the root specengine.toml")
+}
+
+/// The documents `toml` walks in this repository: a std walk (no cargo
+/// subprocess) kept where `Paths::from_toml(toml).walk_scope().in_walk_scope`
+/// holds. Directories are pruned only where nothing below can be in scope:
+/// a `.`-named one (the scope refuses `.`-named components below a root,
+/// and no root is `.`-named) or one whose every file an `exclude` glob
+/// matches.
+fn walk(toml: &str) -> Vec<String> {
+    let root = repository_root();
+    let paths = Paths::from_toml(toml).expect("the root [paths]");
     assert!(
-        header.starts_with("document") && header.contains("class"),
-        "unexpected budget output (exit {:?}):\n{stdout}\n{}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stderr)
+        paths.roots.iter().all(|r| !r.starts_with('.')),
+        "{:?}",
+        paths.roots
     );
-    let files: Vec<String> = lines
-        .take_while(|line| !line.trim().is_empty())
-        .map(|line| line.split_whitespace().next().unwrap().to_owned())
-        .collect();
-    assert!(files.len() >= 40, "only {} files listed", files.len());
+    let scope = paths.walk_scope();
+    let mut files = Vec::new();
+    let mut stack = vec![String::new()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(root.join(&dir)).expect("a readable directory") {
+            let entry = entry.unwrap();
+            let name = entry.file_name().into_string().expect("a UTF-8 name");
+            let path = if dir.is_empty() {
+                name.clone()
+            } else {
+                format!("{dir}/{name}")
+            };
+            let kind = entry.file_type().unwrap();
+            if kind.is_dir() {
+                let everything_excluded = scope.is_excluded(&format!("{path}/probe.md"))
+                    && scope.is_excluded(&format!("{path}/deeper/probe.md"));
+                if !name.starts_with('.') && !everything_excluded {
+                    stack.push(path);
+                }
+            } else if scope.in_walk_scope(&path) {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
     files
+}
+
+/// The count bound (AC-13): at least 40 files, and the walked files under
+/// `crates/` are exactly the `crates/<name>/README.md` on disk (at least
+/// eight), so `crates` out of `roots` fails it.
+fn count_bound(files: &[String]) -> Result<(), String> {
+    let root = repository_root();
+    if files.len() < 40 {
+        return Err(format!("only {} files walked", files.len()));
+    }
+    let mut expected: Vec<String> = fs::read_dir(root.join("crates"))
+        .expect("crates/")
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| root.join("crates").join(name).join("README.md").is_file())
+        .map(|name| format!("crates/{name}/README.md"))
+        .collect();
+    expected.sort();
+    let walked: Vec<String> = files
+        .iter()
+        .filter(|path| path.starts_with("crates/"))
+        .cloned()
+        .collect();
+    if expected.len() < 8 || walked != expected {
+        return Err(format!(
+            "the walked files under crates/ {walked:?} are not the crate READMEs {expected:?}"
+        ));
+    }
+    Ok(())
+}
+
+/// The documents of the committed root config, within the count bound.
+fn walked_files() -> Vec<String> {
+    let files = walk(&root_toml());
+    if let Err(problem) = count_bound(&files) {
+        panic!("{problem}");
+    }
+    files
+}
+
+/// AC-13's mutation, run on the config text: `crates` out of `roots` fails
+/// the count bound (the committed file is never written).
+#[test]
+fn crates_out_of_roots_fails_the_count_bound() {
+    let toml = root_toml();
+    assert_eq!(toml.matches("\"crates\", ").count(), 1, "{toml}");
+    let without = walk(&toml.replacen("\"crates\", ", "", 1));
+    assert!(count_bound(&without).is_err(), "{without:?}");
+    assert!(count_bound(&walk(&toml)).is_ok());
 }
 
 struct Parsed {
@@ -75,7 +147,7 @@ struct Parsed {
 fn parse_all() -> Vec<Parsed> {
     let root = repository_root();
     let scheme = adr_scheme();
-    budget_files()
+    walked_files()
         .into_iter()
         .map(|path| {
             let bytes = fs::read(root.join(&path)).unwrap_or_else(|e| panic!("{path}: {e}"));
@@ -126,7 +198,7 @@ fn every_listed_file_parses_without_front_matter_diagnostics(files: &[Parsed]) {
     assert!(unexpected.is_empty(), "{}", unexpected.join("\n"));
 }
 
-/// The Q-2 edit: the four files are listed by `docs budget`, their
+/// The Q-2 edit: the four files are walked, their
 /// front-matter is read strictly, and the quoted scalar is the key's value
 /// (a `: ` inside it, which made the YAML invalid).
 fn the_four_quoted_files_parse_strictly(files: &[Parsed]) {
@@ -134,7 +206,7 @@ fn the_four_quoted_files_parse_strictly(files: &[Parsed]) {
         let file = files
             .iter()
             .find(|file| file.path == path)
-            .unwrap_or_else(|| panic!("{path}: listed by docs budget"));
+            .unwrap_or_else(|| panic!("{path}: walked"));
         let codes: Vec<&str> = file
             .parsed
             .diagnostics
@@ -311,9 +383,7 @@ fn every_canon_anchor_is_among_its_targets(files: &[Parsed]) {
 
 type Check = fn(&[Parsed]);
 
-/// One test, one `cargo xtask docs budget`: parallel test processes each
-/// running `cargo run -p xtask` race when the binary is (re)built — one
-/// cargo replaces `target/debug/xtask` while another executes it (ENOENT).
+/// One test over one walk, the checks reported together.
 #[test]
 fn repository_docs_parse_under_the_adr_scheme() {
     let files = parse_all();

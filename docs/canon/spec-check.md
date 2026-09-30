@@ -1,24 +1,24 @@
 ---
 class: canon
 tier: 2
-scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval, xtask]
+scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-01
 ---
 
 # spec check: what the documentation check enforces
 
-Increment 1 of 4 (pending groups: 05 §4, 08 Phase 1): one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::load_check` (fresh parse; no database or daemon), commands `spec check`, `spec export index` (`docs/canon/spec-check-cli.md`), measurement `specengine-eval check` (store and eval APIs: their READMEs). Nothing is written and no status or flag is set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. This repository's gate stays `xtask` until CLI pass 2b.
+Increment 1 of 4 (pending groups: 05 §4, 08 Phase 1): one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::load_check` (fresh parse; no database or daemon), commands `spec check`, `spec export index` (`docs/canon/spec-check-cli.md`), measurement `specengine-eval check` (store and eval APIs: their READMEs). Nothing is written and no status or flag is set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. It gates this repository (`docs/README.md` "Enforcement").
 
 ## Engine types (`specengine_core::check`)
 
 - `CheckInput {files: [CheckFile {path, size, parsed?, read_error?, bytes}], problems: [Problem {kind: MissingRoot | UnreadableDir | SkippedName, path}]}`, `CheckFile::{parse, parsed, unreadable}`. `bytes` (the parsed text) give real lines, a parser diagnostic's subject and the written keys (`title`, `kind`, `id` are not in `fields`).
 - `CheckConfig::from_toml` → `{budgets: Budgets {tier0_bytes, tier1_bytes, index_bytes, decision_bytes, canon_bytes?, bundle_node?, bundle_task?}, classes: Classes {canon, decision, spec, generated: ClassContract {required, optional, closed}}, mode: Mode}`; `Baseline::from_toml` → `[DebtEntry {code, path, subject, reason, expires, line}]`; both errors `{line?, message}`, `at(file)` → `file:line: message`.
-- `Report {mode, verdict, counts, findings, stale, cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `Report::cannot(mode, causes)`; `CHECK_CODES` (29), `PARSER_SEVERITY` (13 rows).
+- `Report {mode, verdict, counts, findings, stale, cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `Report::cannot(mode, causes)`; `CHECK_CODES` (29), `PARSER_SEVERITY` (13 rows); `worst_w(&CheckInput, &Paths) -> u64`.
 
 ## Configuration
 
-`[paths]` gains `tier0` (the one file canon tier 0 may be), `tier1_name` (the only name a canon tier 1 file may have) and `index` (capped by `index_bytes`, whatever its class); each rule is off while its key is absent. This repository's parity config (built by `crates/specengine-store/tests/check_parity.rs`: no root `specengine.toml` yet, Q-7):
+`[paths]` gains `tier0` (the one file canon tier 0 may be), `tier1_name` (the only name a canon tier 1 file may have) and `index` (capped by `index_bytes`, whatever its class); each rule is off while its key is absent. This repository's root `specengine.toml`, abridged (Q-7):
 
 ```toml
 [paths]
@@ -26,7 +26,7 @@ records = "docs/decisions"   # a record is named after its id
 tier0 = "CLAUDE.md"
 tier1_name = "README.md"
 index = "docs/index.md"
-exclude = ["**/_*.md"]       # + "**/<name>/**" per xtask SKIP_DIRS entry
+exclude = ["**/_*.md", "**/fixtures/**"]   # + target, target.noindex, node_modules, dist
 [ids]
 ADR = { kind = "decision", width = 4 }
 [budgets]                    # bytes of the whole file, BOM and front-matter included
@@ -45,11 +45,11 @@ Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_ta
 
 ## Rules
 
-- **Front-matter fails** (`not-utf8`, `frontmatter-unclosed`, `-yaml`, `-not-mapping`): the file gives only its parser findings, and its body the graph warnings (with `frontmatter-unclosed`, the whole file: `docs/canon/spec-check-graph.md`). `xtask` reads such YAML leniently and judges the file: an accepted divergence.
+- **Front-matter fails** (`not-utf8`, `frontmatter-unclosed`, `-yaml`, `-not-mapping`): the file gives only its parser findings, and its body the graph warnings (with `frontmatter-unclosed`, the whole file: `docs/canon/spec-check-graph.md`).
 - **Class.** Every document declares one (owner, Q-4): none, or no front-matter → `class-missing`, no contract and no class cap, while IDs, references and `canon:` are still checked; not one of the four → `class-unknown`. Per class: `key-missing`, `key-extra` (closed), `scope-empty`, `date-invalid` (`reviewed`, `date`, `shipped` not shaped `YYYY-MM-DD`), `status-invalid` (spec draft | in-progress | shipped | abandoned; decision accepted | rejected | `superseded-by <ID>`), `shipped-missing`, `canon-missing` (accepted decision: absent or blank → "has no `canon:`"; a value the parser could not read → "… is unreadable"), `tier-invalid` (canon tier not 0–2; `tier: 0` off `tier0`; `tier0` not tier 0, the only rule on `tier0`; `tier: 1` on a file not named `tier1_name`).
-- **IDs.** A number-shape definition (`id:`, `{#ID}`; references never) has `width` digits, else `id-width`. Mixed script → `homoglyph`, an error with its Latin `fix`. An ID defined in two files → `id-taken` on each later file by path, naming the first; a feature-scoped ID is unique per feature, misplaced → `id-scope` (`docs/canon/spec-check-links.md`). Under `records`, `id: X` names its file `X` + `.` or `-`, else `file-name` (`xtask`'s `starts_with` passes `ADR-00011.md` for `ADR-0001`).
+- **IDs.** A number-shape definition (`id:`, `{#ID}`; references never) has `width` digits, else `id-width`. Mixed script → `homoglyph`, an error with its Latin `fix`. An ID defined in two files → `id-taken` on each later file by path, naming the first; a feature-scoped ID is unique per feature, misplaced → `id-scope` (`docs/canon/spec-check-links.md`). Under `records`, `id: X` names its file `X` + `.` or `-`, else `file-name` (a bare prefix is not enough).
 - **References** — `supersedes`, `status: superseded-by`, `adrs`, `refs`, `working_answer`, `parent`, `links.*`, a reference-form `canon:` — resolve: the ID is defined; or the text is in a document's `aliases:`; or, through `aliases_from`, the configured prefix + the written body is defined (no re-padding); `#Y` is defined in the ID's file. Else `ref-dangling`. An alias `parent` is re-read through the scheme. Where an ID may resolve (`slug/`, bare feature-scoped IDs): `docs/canon/spec-check-links.md`. Not yet: `project:`, `@rev`.
-- **Path-form `canon:`**, on any document: has `#` (`canon-form`), names a walked canon document (`canon-file`), and one of its anchors or section IDs (`canon-anchor`). Anchors: heading slugs, `{#…}`, `<a id>`, `<a name>` (`crates/specengine-model/README.md`); a start tag split over lines in an HTML block or a blockquote is missed, as by `xtask`: an accepted divergence.
+- **Path-form `canon:`**, on any document: has `#` (`canon-form`), names a walked canon document (`canon-file`), and one of its anchors or section IDs (`canon-anchor`). Anchors: heading slugs, `{#…}`, `<a id>`, `<a name>` (`crates/specengine-model/README.md`); a start tag split over lines in an HTML block or a blockquote is missed.
 - **Budgets** (`budget`, subject = the slot): whole-file bytes > cap. `index` by path; canon tier 0 → `tier0_bytes`, tier 1 → `tier1_bytes`, else `canon_bytes`; decision → `decision_bytes`; spec, generated, class-less: none.
 - **Walk.** Non-UTF-8 names → one warning `name-skipped` per problem path, its message counting them; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
 - **Parser codes** pass as themselves through one table, `PARSER_SEVERITY`, with the parser's severity but `homoglyph`, `duplicate-id` (errors).
@@ -77,15 +77,17 @@ An entry matches every finding with its (code, path, subject), never by line. A 
 
 **Output**, sorted by (path, line, code, subject, message) whatever the input order. Lines: `error  path:line: code: message` per finding blocking in the mode, `cannot  path: message` per cause, then one summary line:
 
-    spec check [enforce]: 14 documents, 1 errors, 3 warnings, 0 debt, 0 expired, 0 stale — blocked
+    spec check [enforce]: 14 documents, 1 errors, 3 warnings, 0 debt, 0 expired, 0 stale, worst W 115602 B — blocked
 
-`lines(true)` adds the other findings (`warning`, `debt`, `error` with `(debt until|expired <date>: <reason>)`) and `stale  path: debt-stale: …`. JSON: `{mode, verdict, counts: {documents, errors, warnings, debt, expired, stale}, findings, stale, cannot_check}`.
+`lines(true)` adds the other findings (`warning`, `debt`, `error` with `(debt until|expired <date>: <reason>)`) and `stale  path: debt-stale: …`. JSON: `{mode, verdict, counts: {documents, errors, warnings, debt, expired, stale, worst_w_bytes}, findings, stale, cannot_check}`; `worst_w_bytes` a u64, 0 on `cannot-check`.
 
-This repository under the parity config, no baseline (Q-2): every document walked, `enforce` → `clean`, 0 debt (`check_parity.rs`).
+**Worst W** (`worst_w`, §3; not a check, no cap) over the walked files as read (staged blobs under `--staged`): every canon `tier: 0` + the largest canon `tier: 1` + the `[paths] index` file (0 if not walked) + the 3 largest of the pool — every other file that is not canon tier 0 or 1, not Tier 3, not `class: generated`, failed front-matter included.
+
+This repository, root config, no baseline (Q-2): `enforce` → `clean`, 0 debt (`check_parity.rs`).
 
 ## Not checked yet
 
-- Increment 3: part 1 shipped (CLI 2a.1); 2a.2 `--staged`, `enforce-introduced`, no new baseline entries; 2b the root config (Q-7), hook (also on both TOML files) and CI, `xtask` retired: `docs/canon/spec-check-cli.md`.
+- Increment 3 shipped (CLI 2a.1, 2a.2 `--staged`, 2b the root config, hook and CI) but `enforce-introduced` and no new baseline entries: `spec-cli-introduced` (`docs/canon/spec-check-cli.md`).
 - Increment 4, `spec-check-process`, from config: decision without cost, question without `to` or working answer, accepted feature with an empty "Implementation" (heading from config), numbered record with its own text; per-kind schemas (core Q2). Queue state (`@assumes`, an unapplied amendment) → Phase 2, non-blocking. Code (marker → node, `impl_status` bound, glossary term in code, `spec.lock` drift) and 08 AC-13 → Phase 3.
 
 ## Open owner questions
@@ -96,7 +98,7 @@ Working answer (the code) → what the other answer triggers.
 - Q-2 = core Q6, answered (owner, 2026-09-29): the four invalid YAML scalars quoted; no baseline.
 - Q-3 the fix is data → "`spec check` applies it": an ADR amending ADR-0004 / ADR-0005.
 - Q-4 answered: `class:` in every document. Per record kind in the fixtures (the importer later): decision → `decision` + `scope`; a file with `generator:` → `generated`; others → `canon` + `owner`, `reviewed`, since only decisions are superseded (§2), though `immutable_text` records are not rewritten in place.
-- Q-5 answered (owner's Q4, 2026-09-30): "introduced" is relative to `HEAD`. Q-6 an overflow may be baselined with expiry; caps never move. Q-7 root `specengine.toml`: CLI 2b, an ADR amending ADR-0023's role table. Q-8 the pending groups are the pilots' full check list; per-pilot parity at migration.
+- Q-5 answered (owner's Q4, 2026-09-30): "introduced" is relative to `HEAD`. Q-6 an overflow may be baselined with expiry; caps never move. Q-7 answered: the root `specengine.toml` (CLI 2b, ADR-0029). Q-8 the pending groups are the pilots' full check list; per-pilot parity at migration.
 - `serde_json` as a normal `specengine-core` dependency (`to_json`; `=1.0.151`, locked): awaiting acknowledgement.
 
 ## Open minors

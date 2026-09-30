@@ -120,6 +120,9 @@ pub struct Counts {
     pub expired: usize,
     /// Baseline entries that matched nothing; never counted as warnings.
     pub stale: usize,
+    /// The worst-case working set W in bytes ([`worst_w`](super::worst_w));
+    /// 0 when the check could not vouch for the corpus.
+    pub worst_w_bytes: u64,
 }
 
 /// One run of the check.
@@ -141,13 +144,15 @@ impl Report {
     /// A report of a check that could not start (no root, an invalid config
     /// or baseline): no documents, only causes.
     pub fn cannot(mode: Mode, causes: Vec<Cause>) -> Self {
-        Self::assemble(mode, 0, Vec::new(), Vec::new(), causes)
+        Self::assemble(mode, 0, 0, Vec::new(), Vec::new(), causes)
     }
 
-    /// Sorts, counts and judges.
+    /// Sorts, counts and judges; `worst_w_bytes` is kept only when nothing
+    /// stops the check from vouching for the corpus.
     pub(crate) fn assemble(
         mode: Mode,
         documents: usize,
+        worst_w_bytes: u64,
         mut findings: Vec<Finding>,
         mut stale: Vec<DebtEntry>,
         mut cannot_check: Vec<Cause>,
@@ -166,6 +171,11 @@ impl Report {
         let mut counts = Counts {
             documents,
             stale: stale.len(),
+            worst_w_bytes: if cannot_check.is_empty() {
+                worst_w_bytes
+            } else {
+                0
+            },
             ..Counts::default()
         };
         for finding in &findings {
@@ -272,7 +282,7 @@ impl Report {
         }
         let counts = &self.counts;
         lines.push(format!(
-            "spec check [{}]: {} documents, {} errors, {} warnings, {} debt, {} expired, {} stale — {}",
+            "spec check [{}]: {} documents, {} errors, {} warnings, {} debt, {} expired, {} stale, worst W {} B — {}",
             self.mode,
             counts.documents,
             counts.errors,
@@ -280,6 +290,7 @@ impl Report {
             counts.debt,
             counts.expired,
             counts.stale,
+            counts.worst_w_bytes,
             self.verdict.as_str()
         ));
         lines

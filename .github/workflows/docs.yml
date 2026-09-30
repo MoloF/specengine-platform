@@ -1,4 +1,5 @@
-# The only documentation check, §11 of docs/canon/documentation-system.md.
+# The only documentation check, §11 of docs/canon/documentation-system.md: spec check,
+# configured by the root specengine.toml, over the checkout (HEAD).
 name: docs
 on:
   push:
@@ -9,5 +10,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo xtask docs check
-      - run: ./scripts/sync-saving-agents.sh --check
+      - run: cargo run --locked -q -p specengine-cli -- check --root .

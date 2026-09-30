@@ -15,13 +15,16 @@ use std::path::PathBuf;
 use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, write};
 
 /// The words no CLI source may hold (the spec's list; pass 2a.1 adds
-/// `cargo xtask`, docs/features/spec-cli-check.md AC-13).
-const FORBIDDEN: [&str; 9] = [
+/// `cargo xtask`, docs/features/spec-cli-check.md AC-13; pass 2b this
+/// repository's registered command prefix, docs/features/spec-cli-switch.md
+/// AC-15).
+const FORBIDDEN: [&str; 10] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
     "index.md",
     "cargo xtask",
+    "cargo run -q -p specengine-cli",
     "RULE-",
     "MEC-",
     "REQ-",
@@ -90,6 +93,13 @@ fn the_scan_sees_a_docs_default() {
     assert_eq!(
         offences("w.rs", "let gate = \"cargo xtask docs check\";\n"),
         ["w.rs:1: cargo xtask"]
+    );
+    assert_eq!(
+        offences(
+            "v.rs",
+            "const GATE: &str = \"cargo run -q -p specengine-cli -- check\";\n"
+        ),
+        ["v.rs:1: cargo run -q -p specengine-cli"]
     );
 }
 

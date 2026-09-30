@@ -76,7 +76,7 @@ A project's own generators (schemas, registries, references derived from code) s
 <a id="documentation-convention"></a>
 ## Documentation convention — mandatory for every project
 
-The convention `docs/canon/documentation-system.md` is a built-in part of SpecEngine, not an option: four classes, tiers, budgets, the front-matter contract, the promotion rule, a generated index and the six checks of §11 apply to every project under SpecEngine and to this repository. Here they are enforced by `cargo xtask docs check`, after Phase 1 by `spec check`. ADR-0022.
+The convention `docs/canon/documentation-system.md` is a built-in part of SpecEngine, not an option: four classes, tiers, budgets, the front-matter contract, the promotion rule, a generated index and the six checks of §11 apply to every project under SpecEngine and to this repository. Here they are enforced by `spec check` itself: roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
 
 <a id="language"></a>
 ## Repository language

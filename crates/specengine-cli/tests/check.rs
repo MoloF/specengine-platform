@@ -152,7 +152,10 @@ fn the_baseline_default_override_missing_and_expiry() {
             text(&replaced, false),
             "{fixture} override"
         );
-        assert!(summary(&from_root.stdout).contains(", 1 stale — blocked"));
+        assert!(summary(&from_root.stdout).contains(&format!(
+            ", 1 stale, worst W {} B — blocked",
+            replaced.counts.worst_w_bytes
+        )));
         let root_arg = root.to_str().unwrap();
         let from_outside = spec(
             &home,
@@ -500,7 +503,7 @@ fn an_unreadable_root_is_the_cause_not_a_phantom_baseline() {
             assert_eq!(
                 run.stdout,
                 "cannot  .: directory cannot be listed; its files are unchecked\n\
-                 spec check [enforce]: 0 documents, 0 errors, 0 warnings, 0 debt, 0 expired, 0 stale — cannot-check\n",
+                 spec check [enforce]: 0 documents, 0 errors, 0 warnings, 0 debt, 0 expired, 0 stale, worst W 0 B — cannot-check\n",
                 "{fixture} {name}"
             );
             assert!(!run.stdout.contains(".spec-debt.toml"), "{fixture} {name}");
@@ -544,7 +547,7 @@ fn an_unreadable_root_is_the_cause_not_a_phantom_baseline() {
 
 /// The stdout of a check whose one cause is the unlistable `docs`.
 const DOCS_UNCHECKED: &str = "cannot  docs: directory cannot be listed; its files are unchecked\n\
-    spec check [enforce]: 0 documents, 0 errors, 0 warnings, 0 debt, 0 expired, 0 stale — cannot-check\n";
+    spec check [enforce]: 0 documents, 0 errors, 0 warnings, 0 debt, 0 expired, 0 stale, worst W 0 B — cannot-check\n";
 
 /// `docs` as the JSON report's one cause.
 fn docs_cause() -> serde_json::Value {

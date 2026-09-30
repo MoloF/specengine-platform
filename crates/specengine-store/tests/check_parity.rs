@@ -1,55 +1,48 @@
-//! AC-19 and AC-20 of docs/features/spec-check.md, extended by AC-02, AC-06
-//! and AC-07 of docs/features/spec-check-graph.md and AC-12 of
-//! docs/features/spec-check-scopes.md: parity with `cargo xtask
-//! docs check` and `cargo xtask docs index` on this repository's own
-//! documents.
+//! This repository's own documents under its committed root
+//! `specengine.toml` (docs/features/spec-cli-switch.md, "Migrations": the
+//! criteria that compared `spec check` with the retired second
+//! implementation now hold against the committed files; the config and the
+//! std walk live in `parity_config/mod.rs`, shared with the CLI's
+//! `parity.rs`).
 //!
-//! The parity config is built in `parity_config/mod.rs` (Q-7; shared with
-//! the CLI's `parity.rs` through a `#[path]` module): the Data example of
-//! the spec with `roots` = the top-level `.md` files and the directories
-//! not `.`-named nor in `xtask`'s `SKIP_DIRS` (read from
-//! `xtask/src/docs/mod.rs`), `exclude` =
-//! `**/_*.md` plus `**/<name>/**` per `SKIP_DIRS`, `[classes]` all four
-//! closed as `docs/README.md` "Front-matter contract" (= `xtask`'s schema),
-//! and the generator registry of spec-check-graph's Data (the index entry).
-//! No baseline: since the owner's Q-2 edit every front-matter parses.
+//! AC-03: the walk equals an independent std walk (every `*.md` outside
+//! `.`-named and the frozen skipped directories, not `_*`); its named
+//! mutations are run in the test on the config text or a scratch copy:
+//! `crates` out of `roots`, no `**/_*.md`, a new top-level directory with a
+//! README. AC-02: `enforce` → `clean`, 0 errors, debt, expired and stale;
+//! every finding pinned by (code, path, subject): none, the repository has
+//! no finding; mutations in the test: `mode = "observe"`, an `[ids]` prefix
+//! matching prose, the five-digit mention `ADR-00011` put back into
+//! `docs/canon/spec-check.md` on a scratch copy (exactly that one
+//! `mention-dangling`, the verdict still `clean`). Citing the
+//! superseded ADR-0002 adds one `ref-superseded` (spec-check-scopes AC-12);
+//! the file links resolve (spec-check-links AC-10). AC-04 (the library
+//! half): the core render is the committed `docs/index.md` byte for byte,
+//! its header naming X and G; every walked document but `class: generated`
+//! is listed once, the Archive exactly the Tier 3 files (index-compaction
+//! AC-05); the Tier 3 seeds render as compact Archive lines (AC-04 there).
+//! AC-05: each of the 30 seeds, on a scratch copy, blocks exactly its target
+//! with its code (plus `docs/index.md` with `index-drift` when the seed moves
+//! the render); the unseeded copy is clean; nothing is written. AC-08 (second
+//! half): W by an in-test implementation over the files' bytes and a line
+//! reading of their front-matter equals `counts.worst_w_bytes`.
 //!
-//! AC-19/AC-07/AC-12: the walk equals `cargo xtask docs budget`'s list;
-//! `enforce` → `clean`, no debt, the seven codes of increment 2 part 1 plus
-//! `id-scope` and pass B's `link-dangling` / `link-anchor`
-//! (docs/features/spec-check-links.md AC-10: the parity config has no
-//! `link_base`) give exactly the one `mention-dangling` of the spec's
-//! Findings; citing the superseded ADR-0002 adds one `ref-superseded`. AC-02: the core render equals
-//! `xtask docs index --root` stdout and the committed `docs/index.md`, byte
-//! for byte. AC-20/AC-06: per seed, on a scratch copy of the documents, the
-//! files with a blocking finding from `xtask docs check --root` equal the
-//! new check's, symmetrically, with nothing set aside (§11.5–6 and failed
-//! front-matter included), and the seeded file blocks with its code.
-//!
-//! docs/features/index-compaction.md AC-04: on a scratch copy seeded with a
-//! `rejected` decision, an `abandoned` spec without `scope:` and the Tier 3
-//! cases this repository lacks, the core render equals `xtask docs index
-//! --root` stdout, every seed a compact `## Archive` line. AC-05: the link
-//! targets of the committed index (and of both renders), resolved against
-//! `docs/`, are the walked documents minus `class: generated`, each once,
-//! the `## Archive` ones exactly the Tier 3 files; no Archive line has ` · `.
-//!
-//! The repository is only read; seeds are applied to scratch copies. The
-//! `xtask` binary is built once and run directly (no racing `cargo run`s).
+//! The repository is only read; seeds are applied to scratch copies.
 
 mod common;
 mod parity_config;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::OnceLock;
 
-use common::{Scratch, blake3_hex, repository_root};
-use parity_config::{INDEX, parity_toml};
+use common::{Scratch, repository_root};
+use parity_config::{
+    DANGLING, EXPORT, GATE, INDEX, add_dangling_mention, mutated, root_toml, std_walk,
+};
 use specengine_core::check::{
-    CheckConfig, CheckInput, Report, Verdict, is_tier3_file, render_index,
+    CheckConfig, CheckInput, Mode, Report, Verdict, is_tier3_file, render_index, worst_w,
 };
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::{IdScheme, Severity};
@@ -57,122 +50,11 @@ use specengine_store::{WorkingTree, check_input, check_worktree};
 
 const TODAY: &str = "2026-09-29";
 
-/// The codes increment 2 adds (spec-check-graph, Findings; part 2's
-/// `id-scope`, spec-check-scopes AC-12; pass B's file link warnings,
-/// spec-check-links AC-10).
-const NEW_CODES: [&str; 10] = [
-    "index-missing",
-    "index-drift",
-    "generator-unknown",
-    "generator-path",
-    "mention-dangling",
-    "depends-cycle",
-    "ref-superseded",
-    "id-scope",
-    "link-dangling",
-    "link-anchor",
-];
-
-// ------------------------------------------------------------------ xtask
-
-/// The `xtask` binary, built once per test process, run from a private
-/// copy: every `cargo build` (fresh or not) and `cargo xtask` of another
-/// test process re-links `target/debug/xtask`, so spawning that path races
-/// with them (`NotFound`, seen under a full `nextest` run).
-fn xtask() -> &'static Path {
-    static BINARY: OnceLock<PathBuf> = OnceLock::new();
-    BINARY.get_or_init(|| {
-        let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
-            .current_dir(repository_root())
-            .args([
-                "build",
-                "--quiet",
-                "--package",
-                "xtask",
-                "--message-format=json",
-            ])
-            .output()
-            .expect("cargo build -p xtask runs");
-        assert!(
-            output.status.success(),
-            "cargo build -p xtask: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter(|message| message["target"]["name"] == "xtask")
-            .find_map(|message| message["executable"].as_str().map(PathBuf::from))
-            .map(|built| private_copy(&built))
-            .expect("the xtask executable in cargo's messages")
-    })
-}
-
-/// `built` copied to `CARGO_TARGET_TMPDIR` under its content hash (written
-/// to a per-process name, then renamed: every process sees a whole file);
-/// read again while a concurrent re-link has it missing.
-fn private_copy(built: &Path) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
-    for _ in 0..100 {
-        let bytes = match fs::read(built) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                std::thread::sleep(std::time::Duration::from_millis(20));
-                continue;
-            }
-            Err(error) => panic!("{}: {error}", built.display()),
-        };
-        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"));
-        fs::create_dir_all(dir).expect("CARGO_TARGET_TMPDIR");
-        let copy = dir.join(format!("xtask-parity-{}", &blake3_hex(&bytes)[..16]));
-        if !copy.exists() {
-            let partial = dir.join(format!("xtask-parity.{}.partial", std::process::id()));
-            fs::write(&partial, &bytes).expect("the copy is written");
-            fs::set_permissions(&partial, fs::Permissions::from_mode(0o755)).expect("chmod");
-            fs::rename(&partial, &copy).expect("the copy is renamed into place");
-        }
-        return copy;
-    }
-    panic!("{} stayed missing for 2 s", built.display());
-}
-
-fn run_xtask(args: &[&str]) -> (Option<i32>, String) {
-    let output = Command::new(xtask())
-        .args(args)
-        .output()
-        .expect("xtask runs");
-    (
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout).into_owned(),
-    )
-}
-
-/// The documents `xtask docs budget` lists for `root`.
-fn budget_documents(root: &Path) -> BTreeSet<String> {
-    let (code, stdout) = run_xtask(&["docs", "budget", "--root", root.to_str().unwrap()]);
-    let mut lines = stdout.lines();
-    let header = lines.next().unwrap_or_default();
-    assert!(
-        header.starts_with("document") && header.contains("class"),
-        "unexpected budget output (exit {code:?}):\n{stdout}"
-    );
-    lines
-        .take_while(|line| !line.trim().is_empty())
-        .map(|line| line.split_whitespace().next().unwrap().to_owned())
-        .collect()
-}
-
-/// Files with a finding of `xtask docs check --root`, every check included
-/// (§11.5–6 too: nothing is set aside since increment 2).
-fn xtask_blocking(root: &Path) -> BTreeSet<String> {
-    let (_, stdout) = run_xtask(&["docs", "check", "--root", root.to_str().unwrap()]);
-    assert!(stdout.contains("docs check: "), "no summary:\n{stdout}");
-    stdout
-        .lines()
-        .filter_map(|line| line.strip_prefix("error  "))
-        .map(|finding| finding.split(": ").next().unwrap().to_owned())
-        .collect()
-}
+/// The findings of this repository, by (code, path, subject): none. The
+/// last one, the five-digit mention `ADR-00011` in the file-name example of
+/// docs/canon/spec-check.md "Rules", left at shipping; the clean test puts
+/// it back on a scratch copy to show the pin still bites.
+const PIN: [(&str, &str, &str); 0] = [];
 
 // ------------------------------------------------------------------ the new check
 
@@ -240,6 +122,8 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
     files
 }
 
+/// `git status` of `root` without `.claude/` (the owner's, edited while
+/// Claude Code runs; never written by a check).
 fn git_status(root: &Path) -> String {
     let output = Command::new("git")
         .current_dir(root)
@@ -248,6 +132,9 @@ fn git_status(root: &Path) -> String {
             "status",
             "--porcelain",
             "--untracked-files=all",
+            "--",
+            ".",
+            ":(exclude).claude",
         ])
         .output()
         .expect("git runs");
@@ -272,24 +159,49 @@ fn first_difference(a: &str, b: &str) -> String {
     )
 }
 
-// ------------------------------------------------------------------ AC-19, AC-07
+/// Every finding of `report` by (code, path, subject).
+fn pin_of(report: &Report) -> Vec<(&str, &str, &str)> {
+    report
+        .findings
+        .iter()
+        .map(|f| (f.code.as_str(), f.path.as_str(), f.subject.as_str()))
+        .collect()
+}
+
+/// The files of `files` under the directory `dir`.
+fn under(files: &BTreeSet<String>, dir: &str) -> BTreeSet<String> {
+    let prefix = format!("{dir}/");
+    files
+        .iter()
+        .filter(|path| path.starts_with(&prefix))
+        .cloned()
+        .collect()
+}
+
+// ------------------------------------------------------------------ AC-03
 
 #[test]
-fn the_parity_config_walks_the_budget_documents_and_is_clean() {
+fn the_walk_is_the_std_walk_of_this_repository() {
     let repository = repository_root();
-    let budget = budget_documents(&repository);
-    assert!(budget.len() >= 45, "{} documents", budget.len());
-
-    let toml = parity_toml(&repository, true);
+    let toml = root_toml();
+    let expected = std_walk(&repository);
+    assert!(expected.len() >= 45, "{} documents", expected.len());
     assert_eq!(
         walked(&repository, &toml),
-        budget,
-        "walked set vs xtask docs budget"
+        expected,
+        "the root config's walk vs the std walk"
     );
 
-    // The `_*.md` exclude is load-bearing: without it the templates join.
-    let without = walked(&repository, &parity_toml(&repository, false));
-    let extra: Vec<&String> = without.difference(&budget).collect();
+    // Mutation: `crates` out of `roots` — exactly the crate READMEs leave.
+    let crates = under(&expected, "crates");
+    assert!(crates.len() >= 8, "{crates:?}");
+    let without_crates = walked(&repository, &mutated(&toml, "\"crates\", ", ""));
+    let missing: BTreeSet<String> = expected.difference(&without_crates).cloned().collect();
+    assert_eq!(missing, crates, "`crates` out of `roots`");
+
+    // Mutation: no `**/_*.md` — the templates join, nothing else.
+    let without_templates = walked(&repository, &mutated(&toml, "\"**/_*.md\", ", ""));
+    let extra: Vec<&String> = without_templates.difference(&expected).collect();
     assert!(
         !extra.is_empty()
             && extra
@@ -298,9 +210,36 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean() {
         "without `**/_*.md`: {extra:?}"
     );
 
-    let scratch = Scratch::new("parity-clean");
-    let config = write_config(&scratch.join("config"), &toml);
-    // AC-15: the repository is only read.
+    // Mutation (scratch): a new top-level directory with a README stays
+    // unwalked until listed in `roots` (spec, Rules), so the equality above
+    // turns red by exactly that file.
+    let scratch = Scratch::new("walk-new-top");
+    let copy = scratch_copy(&scratch, &expected, "copy");
+    fs::create_dir_all(copy.join("newtop")).unwrap();
+    write_new(
+        &copy,
+        "newtop/README.md",
+        "---\nclass: canon\ntier: 1\nscope: [newtop]\nowner: owner\nreviewed: 2026-09-29\n---\n\n# A new top-level directory\n",
+    );
+    let std_copy = std_walk(&copy);
+    let walked_copy = walked(&copy, &toml);
+    assert_eq!(
+        std_copy.difference(&walked_copy).collect::<Vec<_>>(),
+        ["newtop/README.md"],
+        "a new top-level README"
+    );
+    assert!(walked_copy.is_subset(&std_copy));
+    let listed = mutated(&toml, "\"docs\"]", "\"docs\", \"newtop\"]");
+    assert_eq!(walked(&copy, &listed), std_copy, "listed in `roots`");
+}
+
+// ------------------------------------------------------------------ AC-02
+
+#[test]
+fn this_repository_is_clean_under_the_root_config() {
+    let repository = repository_root();
+    let config = repository.join("specengine.toml");
+    // The repository is only read.
     let status = git_status(&repository);
     let index_bytes = fs::read(repository.join(INDEX)).expect("the index");
     let report = check_worktree(&repository, &config, None, TODAY);
@@ -310,86 +249,104 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean() {
         "the check wrote into the repository"
     );
     assert_eq!(fs::read(repository.join(INDEX)).unwrap(), index_bytes);
+
     assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
-    assert_eq!(report.counts.documents, budget.len());
+    assert!(report.cannot_check.is_empty(), "{:?}", report.cannot_check);
+    assert_eq!(report.counts.documents, std_walk(&repository).len());
     assert_eq!(
         (
-            report.counts.debt,
             report.counts.errors,
-            report.counts.stale,
-            report.counts.expired
+            report.counts.debt,
+            report.counts.expired,
+            report.counts.stale
         ),
         (0, 0, 0, 0),
         "{:#?}",
         report.lines(true)
     );
-    // The new codes, `id-scope` included: exactly the one finding of the
-    // spec's Findings (the file-name example of docs/canon/spec-check.md).
-    let new: Vec<(String, Severity, String, usize, String)> = report
-        .findings
-        .iter()
-        .filter(|f| NEW_CODES.contains(&f.code.as_str()))
-        .map(|f| {
-            (
-                f.code.clone(),
-                f.severity,
-                f.path.clone(),
-                f.line,
-                f.subject.clone(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        new,
-        [(
-            "mention-dangling".to_owned(),
-            Severity::Warning,
-            "docs/canon/spec-check.md".to_owned(),
-            50,
-            "ADR-00011".to_owned()
-        )],
-        "{:#?}",
-        report.lines(true)
-    );
+    assert_eq!(pin_of(&report), PIN, "{:#?}", report.lines(true));
     assert!(
         report
             .findings
             .iter()
-            .all(|f| f.severity != Severity::Error),
+            .all(|f| f.severity == Severity::Warning),
         "{:#?}",
         report.lines(true)
     );
-    // spec-check-scopes AC-12: that warning is the only finding of any code,
-    // and the canon document the pass shipped is walked and clean.
-    let all: Vec<(&str, &str, usize, &str)> = report
+    assert_eq!(report.counts.warnings, PIN.len());
+    assert_eq!(report.mode, Mode::Enforce);
+    let summary = report.lines(false);
+    assert_eq!(summary.len(), 1, "{summary:#?}");
+    assert!(
+        summary[0].starts_with("spec check [enforce]: ") && summary[0].ends_with(" \u{2014} clean"),
+        "{}",
+        summary[0]
+    );
+
+    // Mutation: `mode = "observe"` — the mode pin above fails (a clean tree
+    // is `clean` in either mode; a seeded error stops blocking: the seeds).
+    let toml = root_toml();
+    let scratch = Scratch::new("clean-mutations");
+    let observe = write_config(
+        &scratch.join("observe"),
+        &mutated(&toml, "mode = \"enforce\"", "mode = \"observe\""),
+    );
+    let observed = check_worktree(&repository, &observe, None, TODAY);
+    assert_eq!(observed.mode, Mode::Observe);
+    assert!(
+        !observed.lines(false)[0].starts_with("spec check [enforce]: "),
+        "{:#?}",
+        observed.lines(false)
+    );
+
+    // Mutation: an `[ids]` prefix matching prose — findings beyond the pin.
+    let prose = write_config(
+        &scratch.join("prose"),
+        &mutated(
+            &toml,
+            "[ids]\n",
+            "[ids]\nAC  = { kind = \"criterion\", width = 2 }\n",
+        ),
+    );
+    let noisy = check_worktree(&repository, &prose, None, TODAY);
+    assert!(noisy.cannot_check.is_empty(), "{:?}", noisy.cannot_check);
+    let beyond: Vec<&str> = noisy
         .findings
         .iter()
-        .map(|f| (f.code.as_str(), f.path.as_str(), f.line, f.subject.as_str()))
+        .filter(|f| f.subject.starts_with("AC-"))
+        .map(|f| f.code.as_str())
         .collect();
-    assert_eq!(
-        all,
-        [(
-            "mention-dangling",
-            "docs/canon/spec-check.md",
-            50,
-            "ADR-00011"
-        )],
-        "{:#?}",
-        report.lines(true)
-    );
-    assert_eq!(report.counts.warnings, 1, "{:#?}", report.lines(true));
+    assert!(beyond.len() > 10, "{:#?}", noisy.lines(true));
+    assert_ne!(pin_of(&noisy), PIN, "{:#?}", noisy.lines(true));
+
+    // Mutation (a scratch copy): the five-digit mention back in
+    // docs/canon/spec-check.md — exactly that one warning, at its line, so
+    // the empty pin above fails while the verdict stays `clean`.
+    let copy = scratch_copy(&scratch, &std_walk(&repository), "dangling");
+    let line = add_dangling_mention(&copy);
+    let config = write_config(&scratch.join("dangling-config"), &toml);
+    let dangling = check_worktree(&copy, &config, None, TODAY);
     assert!(
-        budget.contains("docs/canon/spec-check-links.md"),
-        "the scope canon is walked"
+        dangling.cannot_check.is_empty(),
+        "{:?}",
+        dangling.cannot_check
     );
-    // xtask agrees: it blocks nothing, §11.5–6 included.
-    let (code, stdout) = run_xtask(&["docs", "check", "--root", repository.to_str().unwrap()]);
-    assert_eq!(code, Some(0), "{stdout}");
-    assert!(xtask_blocking(&repository).is_empty(), "{stdout}");
+    assert_eq!(pin_of(&dangling), [DANGLING], "{:#?}", dangling.lines(true));
+    assert_ne!(pin_of(&dangling), PIN);
+    assert_eq!(dangling.findings[0].severity, Severity::Warning);
+    assert_eq!(
+        dangling.findings[0].line,
+        line,
+        "{:#?}",
+        dangling.lines(true)
+    );
+    assert_eq!(dangling.counts.warnings, 1);
+    assert_eq!(dangling.verdict, Verdict::Clean);
+    assert_eq!(git_status(&repository), status, "the mutations wrote");
 }
 
 /// AC-10 of docs/features/spec-check-links.md: this repository's file
-/// links under the parity config (no `link_base`). The root `README.md`
+/// links under the root config (no `link_base`). The root `README.md`
 /// records 9 (7 `.md` targets that resolve; `docs/decisions/` and `LICENSE`
 /// recorded, never checked); the platform spec's `README.md` 6 sibling
 /// links that resolve; no link finding anywhere (the clean pin above).
@@ -397,8 +354,8 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean() {
 fn this_repository_s_file_links_are_recorded_and_resolve() {
     use specengine_model::{LinkOrigin, LinkTarget};
     let repository = repository_root();
-    let toml = parity_toml(&repository, true);
-    assert!(!toml.contains("link_base"), "the parity config has no base");
+    let toml = root_toml();
+    assert!(!toml.contains("link_base"), "the root config has no base");
     let input = input_of(&repository, &toml);
     let file_links = |path: &str| -> Vec<String> {
         let file = input
@@ -462,7 +419,7 @@ fn this_repository_s_file_links_are_recorded_and_resolve() {
 /// exactly one `ref-superseded` there, so the clean pin above would fail.
 #[test]
 fn citing_the_superseded_layout_decision_is_one_ref_superseded() {
-    let documents = budget_documents(&repository_root());
+    let documents = std_walk(&repository_root());
     let scratch = Scratch::new("parity-superseded");
     let root = scratch_copy(&scratch, &documents, "copy");
     let readme = "docs/specs/specengine-platform/README.md";
@@ -479,7 +436,7 @@ fn citing_the_superseded_layout_decision_is_one_ref_superseded() {
         "adrs",
         Some(&adrs.replacen("ADR-0001, ", "ADR-0001, ADR-0002, ", 1)),
     );
-    let config = write_config(&scratch.join("config"), &parity_toml(&root, true));
+    let config = write_config(&scratch.join("config"), &root_toml());
     let report = check_worktree(&root, &config, None, TODAY);
     let superseded: Vec<(&str, &str, &str)> = report
         .findings
@@ -497,31 +454,38 @@ fn citing_the_superseded_layout_decision_is_one_ref_superseded() {
     assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
 }
 
-// ------------------------------------------------------------------ AC-02
+// ------------------------------------------------------------------ AC-04
 
 #[test]
-fn the_core_render_is_xtask_s_index_and_the_committed_one() {
+fn the_core_render_is_the_committed_index() {
     let repository = repository_root();
-    let toml = parity_toml(&repository, true);
+    let toml = root_toml();
     let (_, paths, check) = tables(&toml);
     assert_eq!(paths.index.as_deref(), Some(INDEX));
     let generator = check.index_generator().expect("the index entry");
+    assert_eq!(generator.command, EXPORT);
+    assert_eq!(generator.gate(), GATE);
+    assert_eq!(generator.writes, [INDEX]);
     let mut input = input_of(&repository, &toml);
     let render = render_index(&input, INDEX, generator);
-
-    let (code, stdout) = run_xtask(&["docs", "index", "--root", repository.to_str().unwrap()]);
-    assert_eq!(code, Some(0), "xtask docs index");
-    assert!(
-        render == stdout,
-        "core render vs xtask docs index stdout, {}",
-        first_difference(&render, &stdout)
-    );
     let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
     assert!(
         render == committed,
         "core render vs the committed {INDEX}, {}",
         first_difference(&render, &committed)
     );
+    // The header names X (as `generator:` and in the note) and G.
+    let header = committed.split("\n## ").next().unwrap();
+    assert!(
+        header.starts_with(&format!("---\nclass: generated\ngenerator: {EXPORT}\n")),
+        "{header}"
+    );
+    for command in [EXPORT, GATE] {
+        assert!(
+            header.contains(&format!("`{command}`")),
+            "{command}: {header}"
+        );
+    }
     // Every section is exercised here but `No class — fix`.
     for section in [
         "\n## Canon\n\n",
@@ -645,7 +609,7 @@ fn every_document_listed_once(what: &str, index: &str, input: &CheckInput) -> Ve
 #[test]
 fn every_document_of_this_repository_is_listed_once() {
     let repository = repository_root();
-    let toml = parity_toml(&repository, true);
+    let toml = root_toml();
     let (_, _, check) = tables(&toml);
     let generator = check.index_generator().expect("the index entry");
     let input = input_of(&repository, &toml);
@@ -656,13 +620,10 @@ fn every_document_of_this_repository_is_listed_once() {
     );
     let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
     let render = render_index(&input, INDEX, generator);
-    let (code, stdout) = run_xtask(&["docs", "index", "--root", repository.to_str().unwrap()]);
-    assert_eq!(code, Some(0), "xtask docs index");
     let mut failures = Vec::new();
     for (what, index) in [
         (INDEX, committed.as_str()),
         ("the core render", render.as_str()),
-        ("xtask docs index stdout", stdout.as_str()),
     ] {
         assert!(
             index.contains(&format!("\n{ARCHIVE}\n\n")),
@@ -673,12 +634,13 @@ fn every_document_of_this_repository_is_listed_once() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// The seeds of index-compaction AC-04: `(path, text, the expected line, its section)`.
 /// The seeds of AC-04: `(path, text, the expected line, its section)`.
 const COMPACTION_SEEDS: &[(&str, &str, &str, &str)] = &[
     // The two of the criterion.
     (
         "docs/decisions/ADR-0999.md",
-        "---\nid: ADR-0999\nclass: decision\ntitle: A seeded rejection\nstatus: rejected\nscope: [xtask]\n---\n\n# ADR-0999: a seeded rejection\n",
+        "---\nid: ADR-0999\nclass: decision\ntitle: A seeded rejection\nstatus: rejected\nscope: [core]\n---\n\n# ADR-0999: a seeded rejection\n",
         "- [ADR-0999](decisions/ADR-0999.md) rejected",
         ARCHIVE,
     ),
@@ -704,7 +666,7 @@ const COMPACTION_SEEDS: &[(&str, &str, &str, &str)] = &[
     ),
     // Accepted divergences of the live line that must not reach Tier 3: a
     // decision without `title:` whose H1 has inline markup; `title:` on a
-    // spec with a setext H1, outside `docs/`.
+    // spec with a setext H1, outside `docs/` (under a walked root).
     (
         "docs/decisions/ADR-0998.md",
         "---\nid: ADR-0998\nclass: decision\nstatus: rejected\n---\n\n# A *marked* `heading`\n",
@@ -712,9 +674,9 @@ const COMPACTION_SEEDS: &[(&str, &str, &str, &str)] = &[
         ARCHIVE,
     ),
     (
-        "notes/y.md",
+        "crates/notes/y.md",
         "---\nclass: spec\ntitle: A front-matter title\nstatus: shipped\nshipped: 2026-09-01\nscope: [core]\n---\n\nA setext heading\n================\n",
-        "- [notes/y.md](../notes/y.md) shipped",
+        "- [crates/notes/y.md](../crates/notes/y.md) shipped",
         ARCHIVE,
     ),
     // By status, not folder: a draft under an `archive` directory is live.
@@ -727,27 +689,23 @@ const COMPACTION_SEEDS: &[(&str, &str, &str, &str)] = &[
 ];
 
 #[test]
-fn seeded_tier3_cases_render_as_xtask_does() {
-    let documents = budget_documents(&repository_root());
+fn seeded_tier3_cases_render_as_compact_archive_lines() {
+    let documents = std_walk(&repository_root());
     let scratch = Scratch::new("index-compaction");
     let root = scratch_copy(&scratch, &documents, "seeded");
     for (path, text, _, _) in COMPACTION_SEEDS {
         fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
         write_new(&root, path, text);
     }
-    let toml = parity_toml(&root, true);
+    let toml = root_toml();
     let (_, _, check) = tables(&toml);
     let generator = check.index_generator().expect("the index entry");
     let input = input_of(&root, &toml);
+    let walked: BTreeSet<&str> = input.files.iter().map(|file| file.path.as_str()).collect();
+    for (path, _, _, _) in COMPACTION_SEEDS {
+        assert!(walked.contains(path), "{path} is walked");
+    }
     let render = render_index(&input, INDEX, generator);
-
-    let (code, stdout) = run_xtask(&["docs", "index", "--root", root.to_str().unwrap()]);
-    assert_eq!(code, Some(0), "xtask docs index");
-    assert!(
-        render == stdout,
-        "core render vs xtask docs index stdout on the seeded copy, {}",
-        first_difference(&render, &stdout)
-    );
     for (path, _, line, heading) in COMPACTION_SEEDS {
         assert!(
             section_lines(&render, heading).contains(line),
@@ -783,14 +741,15 @@ fn seeded_tier3_cases_render_as_xtask_does() {
 }
 
 /// The link of a root-relative `path` from `docs/index.md`.
+/// The link of a root-relative `path` from `docs/index.md`.
 fn resolve_relative(path: &str) -> String {
     path.strip_prefix("docs/")
         .map_or_else(|| format!("../{path}"), str::to_owned)
 }
 
-// ------------------------------------------------------------------ AC-20
+// ------------------------------------------------------------------ AC-05
 
-/// A scratch copy of the repository's documents (the budget list).
+/// A scratch copy of the repository's documents (the std walk's list).
 fn scratch_copy(scratch: &Scratch, documents: &BTreeSet<String>, dir: &str) -> PathBuf {
     let root = scratch.join(dir);
     for path in documents {
@@ -799,6 +758,248 @@ fn scratch_copy(scratch: &Scratch, documents: &BTreeSet<String>, dir: &str) -> P
         fs::copy(repository_root().join(path), &to).unwrap();
     }
     root
+}
+
+/// `(seed, file, code)`: what a seed blocks besides its target and the
+/// index. An ID taken off its record leaves the front-matter references to
+/// it dangling (ADR-0026 `supersedes: [ADR-0002]`; the platform spec's
+/// `adrs:` lists ADR-0004); every ADR of this repository is so referenced.
+const COLLATERAL: &[(&str, &str, &str)] = &[
+    (
+        "ADR-0002 as id: ADR-0001",
+        "docs/decisions/ADR-0026.md",
+        "ref-dangling",
+    ),
+    (
+        "id: ADR-001",
+        "docs/specs/specengine-platform/README.md",
+        "ref-dangling",
+    ),
+];
+
+#[test]
+fn each_seed_blocks_exactly_its_target() {
+    assert_eq!(
+        SEEDS.len(),
+        24 + 6,
+        "the 24 front-matter seeds and the six of §11.5–6"
+    );
+    let documents = std_walk(&repository_root());
+    let toml = root_toml();
+    let (_, _, check) = tables(&toml);
+    let generator = check.index_generator().expect("the index entry");
+    let scratch = Scratch::new("parity-seeds");
+    let config = write_config(&scratch.join("config"), &toml);
+
+    // The unseeded copy: clean, nothing set aside, nothing written.
+    let clean = scratch_copy(&scratch, &documents, "clean");
+    assert_eq!(walked(&clean, &toml), documents, "the copy walks the same");
+    let before = snapshot(&clean);
+    let report = check_worktree(&clean, &config, None, TODAY);
+    assert!(snapshot(&clean) == before, "the check wrote a file");
+    assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
+    assert!(new_blocking(&report).is_empty());
+    assert_eq!(pin_of(&report), PIN, "{:#?}", report.lines(true));
+
+    let mut failures = Vec::new();
+    let mut targets = BTreeSet::new();
+    for (index, (name, target, code, apply)) in SEEDS.iter().enumerate() {
+        let root = scratch_copy(&scratch, &documents, &format!("seed-{index:02}"));
+        apply(&root);
+        // Nothing is written, a drifted index included.
+        let before = snapshot(&root);
+        let report = check_worktree(&root, &config, None, TODAY);
+        assert!(
+            snapshot(&root) == before,
+            "seed {name}: the check wrote a file"
+        );
+        let ours = new_blocking(&report);
+        // A seed that moves the render also drifts the copied index.
+        let rendered = render_index(&input_of(&root, &toml), INDEX, generator);
+        let on_disk = fs::read_to_string(root.join(INDEX)).ok();
+        let drifted = on_disk.as_deref() != Some(rendered.as_str());
+        let mut expected = BTreeSet::from([(*target).to_owned()]);
+        if drifted {
+            expected.insert(INDEX.to_owned());
+        }
+        let coded = report
+            .findings
+            .iter()
+            .any(|f| f.path == *target && f.code == *code && report.blocks(f));
+        let mut collateral_coded = true;
+        for (_, path, code) in COLLATERAL.iter().filter(|(seed, _, _)| seed == name) {
+            expected.insert((*path).to_owned());
+            collateral_coded &= report
+                .findings
+                .iter()
+                .any(|f| f.path == *path && f.code == *code && report.blocks(f));
+        }
+        let index_coded = !drifted
+            || report.findings.iter().any(|f| {
+                f.path == INDEX
+                    && report.blocks(f)
+                    && matches!(f.code.as_str(), "index-drift" | "index-missing")
+            });
+        eprintln!("seed {name}: blocking {ours:?}, drifted {drifted}");
+        if ours != expected || !coded || !index_coded || !collateral_coded {
+            failures.push(format!(
+                "seed {name}: blocking {ours:?} (expected {expected:?}, {target} with {code})\n  {}",
+                report.lines(false).join("\n  ")
+            ));
+        }
+        targets.insert(*target);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(targets.len() >= 15, "{targets:?}");
+
+    // Mutation: `mode = "observe"` — the first seed no longer blocks.
+    let (name, target, _, apply) = SEEDS[0];
+    let root = scratch_copy(&scratch, &documents, "seed-observe");
+    apply(&root);
+    let observe = write_config(
+        &scratch.join("config-observe"),
+        &mutated(&toml, "mode = \"enforce\"", "mode = \"observe\""),
+    );
+    let report = check_worktree(&root, &observe, None, TODAY);
+    assert_eq!(report.verdict, Verdict::Observed, "seed {name} observed");
+    assert!(new_blocking(&report).is_empty(), "seed {name}: {target}");
+}
+
+// ------------------------------------------------------------------ AC-08
+
+/// The front-matter keys of `bytes`, read line by line: `key: value` at
+/// column 0 between an opening `---` line and the next `---` line, quotes
+/// trimmed. Empty without a closed front-matter (a failed one is pooled).
+fn front_matter(bytes: &[u8]) -> BTreeMap<String, String> {
+    let mut keys = BTreeMap::new();
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return keys;
+    };
+    let mut lines = text.lines();
+    if lines.next() != Some("---") {
+        return keys;
+    }
+    for line in lines {
+        if line.trim_end() == "---" {
+            return keys;
+        }
+        if let Some((key, value)) = line.split_once(':') {
+            let plain = key
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+            if !key.is_empty() && plain {
+                keys.insert(
+                    key.to_owned(),
+                    value.trim().trim_matches(['"', '\'']).to_owned(),
+                );
+            }
+        }
+    }
+    BTreeMap::new()
+}
+
+/// W over `documents` under `root` (§3; spec-cli-switch "Worst W"),
+/// computed here: every canon `tier: 0` summed, the largest canon `tier:
+/// 1`, the index, the three largest of the rest that are neither Tier 3
+/// (a spec `shipped`/`abandoned`, a decision with a status not `accepted`)
+/// nor `class: generated`.
+fn oracle_w(root: &Path, documents: &BTreeSet<String>) -> u64 {
+    let (mut tier0, mut tier1, mut index) = (0_u64, 0_u64, 0_u64);
+    let mut pool = Vec::new();
+    for path in documents {
+        let bytes = fs::read(root.join(path)).unwrap();
+        let size = bytes.len() as u64;
+        if path == INDEX {
+            index = size;
+            continue;
+        }
+        let keys = front_matter(&bytes);
+        let key = |name: &str| keys.get(name).map(String::as_str);
+        match (key("class"), key("status")) {
+            (Some("canon"), _) if key("tier") == Some("0") => tier0 += size,
+            (Some("canon"), _) if key("tier") == Some("1") => tier1 = tier1.max(size),
+            (Some("generated"), _) => {}
+            (Some("spec"), Some("shipped" | "abandoned")) => {}
+            (Some("decision"), Some(status)) if status != "accepted" => {}
+            _ => pool.push(size),
+        }
+    }
+    pool.sort_unstable_by(|a, b| b.cmp(a));
+    tier0 + tier1 + index + pool.iter().take(3).sum::<u64>()
+}
+
+#[test]
+fn worst_w_is_the_in_test_oracle_s_on_this_repository() {
+    let repository = repository_root();
+    let toml = root_toml();
+    let (_, paths, _) = tables(&toml);
+    let documents = std_walk(&repository);
+    let oracle = oracle_w(&repository, &documents);
+    assert!(oracle > 50_000, "W {oracle}");
+    let report = check_worktree(
+        &repository,
+        &repository.join("specengine.toml"),
+        None,
+        TODAY,
+    );
+    assert_eq!(report.counts.worst_w_bytes, oracle, "counts.worst_w_bytes");
+    assert_eq!(worst_w(&input_of(&repository, &toml), &paths), oracle);
+    let summary = report.lines(false);
+    assert!(
+        summary[0].ends_with(&format!(", worst W {oracle} B \u{2014} clean")),
+        "{}",
+        summary[0]
+    );
+
+    // A copy where the Tier 3 and generated files are the largest and the
+    // compaction seeds are present: the oracle and the library still agree.
+    let scratch = Scratch::new("worst-w");
+    let root = scratch_copy(&scratch, &documents, "copy");
+    for (path, text, _, _) in COMPACTION_SEEDS {
+        fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+        write_new(&root, path, text);
+    }
+    let big = "x".repeat(200_000);
+    for (path, front) in [
+        (
+            "docs/features/zz-shipped.md",
+            "class: spec\nstatus: shipped\nshipped: 2026-09-01\nscope: [core]",
+        ),
+        (
+            "docs/decisions/ADR-0997.md",
+            "id: ADR-0997\nclass: decision\ntitle: Big\nstatus: superseded-by ADR-0001\ndate: 2026-09-01\nscope: [core]",
+        ),
+        (
+            "docs/zz-generated.md",
+            "class: generated\ngenerator: seed\nsource: a seed",
+        ),
+        (
+            "docs/features/zz-live.md",
+            "class: spec\nstatus: draft\nscope: [core]",
+        ),
+    ] {
+        write_new(
+            &root,
+            path,
+            &format!("---\n{front}\n---\n\n# Big\n\n{big}\n"),
+        );
+    }
+    let seeded = std_walk(&root);
+    let oracle = oracle_w(&root, &seeded);
+    let input = input_of(&root, &toml);
+    assert_eq!(
+        input
+            .files
+            .iter()
+            .map(|f| f.path.clone())
+            .collect::<BTreeSet<_>>(),
+        seeded
+    );
+    assert_eq!(worst_w(&input, &paths), oracle, "the seeded copy");
+    assert!(
+        oracle > 200_000 && oracle < 400_000,
+        "one big live file: {oracle}"
+    );
 }
 
 /// Replaces the one line starting with `key:` of the front-matter.
@@ -921,9 +1122,16 @@ const SEEDS: &[Seed] = &[
     ),
     (
         "reviewed: 2026-9-1",
-        "xtask/README.md",
+        "crates/specengine-core/README.md",
         "date-invalid",
-        |r| set_key(r, "xtask/README.md", "reviewed", Some("reviewed: 2026-9-1")),
+        |r| {
+            set_key(
+                r,
+                "crates/specengine-core/README.md",
+                "reviewed",
+                Some("reviewed: 2026-9-1"),
+            )
+        },
     ),
     (
         "tier: 1 on architecture.md",
@@ -1060,7 +1268,7 @@ const SEEDS: &[Seed] = &[
         "id-width",
         |r| set_key(r, "docs/decisions/ADR-0004.md", "id", Some("id: ADR-001")),
     ),
-    // Beyond the spec's list: the other `xtask` checks.
+    // Beyond the spec's list: the other front-matter checks.
     (
         "tier: 0 off CLAUDE.md",
         "docs/README.md",
@@ -1082,9 +1290,16 @@ const SEEDS: &[Seed] = &[
     ),
     (
         "scope: [] on canon",
-        "xtask/README.md",
+        "crates/specengine-store/README.md",
         "scope-empty",
-        |r| set_key(r, "xtask/README.md", "scope", Some("scope: []")),
+        |r| {
+            set_key(
+                r,
+                "crates/specengine-store/README.md",
+                "scope",
+                Some("scope: []"),
+            )
+        },
     ),
     // Increment 2 (spec-check-graph AC-06): §11.5–6.
     ("docs/index.md hand-edited", INDEX, "index-drift", |r| {
@@ -1136,14 +1351,16 @@ const SEEDS: &[Seed] = &[
         },
     ),
     (
-        "a generated document naming the index command",
+        "a generated document naming the registered export command",
         "docs/zz-generated-index.md",
         "generator-path",
         |r| {
             write_new(
                 r,
                 "docs/zz-generated-index.md",
-                "---\nclass: generated\ngenerator: cargo xtask docs index --write\nsource: a seed\n---\n\n# Not the index\n",
+                &format!(
+                    "---\nclass: generated\ngenerator: {EXPORT}\nsource: a seed\n---\n\n# Not the index\n"
+                ),
             )
         },
     ),
@@ -1162,52 +1379,4 @@ fn write_new(root: &Path, path: &str, text: &str) {
     let file = root.join(path);
     assert!(!file.exists(), "{path} exists");
     fs::write(&file, text).unwrap();
-}
-
-#[test]
-fn per_seed_xtask_and_the_new_check_block_the_same_files() {
-    assert_eq!(SEEDS.len(), 24 + 6, "the 24 old seeds and the six new");
-    let documents = budget_documents(&repository_root());
-    let scratch = Scratch::new("parity-seeds");
-
-    // The unseeded copy: both clean, nothing set aside.
-    let clean = scratch_copy(&scratch, &documents, "clean");
-    let toml = parity_toml(&clean, true);
-    let config = write_config(&scratch.join("config-clean"), &toml);
-    assert_eq!(walked(&clean, &toml), documents, "the copy walks the same");
-    let report = check_worktree(&clean, &config, None, TODAY);
-    assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
-    assert!(new_blocking(&report).is_empty());
-    assert!(xtask_blocking(&clean).is_empty());
-
-    let mut failures = Vec::new();
-    for (index, (name, target, code, apply)) in SEEDS.iter().enumerate() {
-        let root = scratch_copy(&scratch, &documents, &format!("seed-{index:02}"));
-        apply(&root);
-        let config = write_config(
-            &scratch.join(&format!("config-{index:02}")),
-            &parity_toml(&root, true),
-        );
-        // AC-15: nothing is written, a drifted index included.
-        let before = snapshot(&root);
-        let report = check_worktree(&root, &config, None, TODAY);
-        assert!(
-            snapshot(&root) == before,
-            "seed {name}: the check wrote a file"
-        );
-        let ours = new_blocking(&report);
-        let theirs = xtask_blocking(&root);
-        eprintln!("seed {name}: xtask {theirs:?}, spec check {ours:?}");
-        let coded = report
-            .findings
-            .iter()
-            .any(|f| f.path == *target && f.code == *code && report.blocks(f));
-        if ours != theirs || !ours.contains(*target) || !coded {
-            failures.push(format!(
-                "seed {name}: xtask {theirs:?}, spec check {ours:?} (expected {target} with {code})\n  {}",
-                report.lines(false).join("\n  ")
-            ));
-        }
-    }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

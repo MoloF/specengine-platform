@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-01
 ---
 
 # Documentation: how the convention is applied
@@ -28,7 +28,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 ## Tiers
 
 - **Tier 0** — `CLAUDE.md`, always read.
-- **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `xtask/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), later `ui/README.md`. Canon lives next to the code it describes.
+- **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), later `ui/README.md`. Canon lives next to the code it describes.
 - **Tier 2** — the index and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
 - **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document. Its index line keeps only the id link and the status (ADR-0028).
 
@@ -43,7 +43,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 | Tier 2 canon | 12 288 | repository calibration (§4 step 2: recompute from the average of five documents actually opened after the first working week; the cap may only go down) |
 | Spec | none; after shipping — intent + summary ≤ 3 KB | §6 |
 
-Overflow moves detail down a tier; the cap is **never raised**. `cargo xtask docs budget` shows sizes and the working set W.
+Overflow moves detail down a tier; the cap is **never raised**. The summary line of `spec check` shows the worst working set W (`docs/canon/spec-check.md` "Output").
 
 ## Front-matter contract
 
@@ -86,7 +86,7 @@ An accepted decision produces a canon diff **in the same change**, and its `cano
 1. copy `docs/decisions/_template.md` to the next free `ADR-NNNN.md`;
 2. change the canon section (`CLAUDE.md`, a Tier 1 README or `docs/canon/*`) and point `canon:` at it;
 3. if the decision replaces an older one — the old one gets `status: superseded-by ADR-NNNN`, the new one `supersedes: [...]`;
-4. `cargo xtask docs index --write`, then `cargo xtask docs check`.
+4. `cargo run -q -p specengine-cli -- export index`, then `cargo run -q -p specengine-cli -- check`.
 
 Self-test: can you answer "how does X work now" without opening a single ADR? If not, the canon is incomplete.
 
@@ -96,15 +96,17 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-`docs/index.md` is written only by `cargo xtask docs index --write`. A manual edit breaks `docs check`. Everything derivable from code is generated, not written.
+`docs/index.md` is written only by `cargo run -q -p specengine-cli -- export index`, the generator the root `specengine.toml` registers. A manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
 
 ## Enforcement
 
-- `cargo xtask docs check` — the six checks of §11: budgets, front-matter schema, `canon:` resolves, `superseded-by`/`supersedes`/`adrs` targets exist, index and generated documents have not drifted.
-- The pre-commit hook (`scripts/hooks-install.sh` enables `.githooks/`) runs the check whenever a `.md` file changes.
-- CI: `.github/workflows/docs.yml`.
-- `spec check` (`docs/canon/spec-check*.md`) matches all six §11 checks and adds the ID and scope checks, graph and file-link warnings and a debt baseline; it replaces `xtask` at CLI pass 2b (`docs/canon/spec-check-cli.md`).
-- Pipeline roles must run the check before handing in (`CLAUDE.md`, "Process").
+`spec check` (`docs/canon/spec-check*.md`, CLI: `docs/canon/spec-check-cli.md`) is the only check: the six of §11 (budgets, front-matter schema, `canon:` resolves, `superseded-by`/`supersedes`/`adrs` targets exist, index and generated documents have not drifted), IDs and scopes, graph and file-link warnings, a debt baseline. The root `specengine.toml` configures it.
+
+- **Walk**: roots `CLAUDE.md`, `README.md`, `crates`, `docs`; `_*.md` and every `fixtures`, `target`, `target.noindex`, `node_modules`, `dist` directory excluded. A new top-level directory or `.md` file (`ui/`, `plugin/`, `AGENTS.md`) stays unwalked until listed in `roots`: the task creating it adds it in the same change.
+- **Roles** run `cargo run -q -p specengine-cli -- export index && cargo run -q -p specengine-cli -- check` before handing in (`CLAUDE.md`, "Process").
+- **Pre-commit hook** (`scripts/hooks-install.sh` enables `.githooks/`): when the staged names (renames split, `--diff-filter=ACDMT`) include a `.md` file or the top-level `specengine.toml` or `.spec-debt.toml`, it runs `cargo run -q -p specengine-cli -- check --staged --root .`. Fail closed: any non-zero exit (errors, cannot check, a failed build, no toolchain) refuses the commit; only `--no-verify` skips. The checker is built from the working tree. Only convention form errors block (ADR-0022); content never does (ADR-0006).
+- **Merges**: a clean `git merge` runs `pre-merge-commit`, not `pre-commit`; merged documents are judged by CI alone.
+- **CI** `.github/workflows/docs.yml`: `cargo run --locked -q -p specengine-cli -- check --root .` on `HEAD`, its only step.
 
 ## Compaction
 

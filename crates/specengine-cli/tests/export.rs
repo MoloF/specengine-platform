@@ -364,7 +364,8 @@ fn a_non_utf8_name_is_written_with_one_warning() {
 }
 
 /// Iteration 2: an index whose bytes differ is rewritten in place — the
-/// same file (device and inode), truncated and written, as `xtask` does;
+/// same file (device and inode), truncated and written, as the retired
+/// generator did;
 /// no temp file, no rename. (A file replaced between the inspection and
 /// the open is refused by a dev+ino comparison inside one process; that
 /// window cannot be hit from outside without a race, so it is not

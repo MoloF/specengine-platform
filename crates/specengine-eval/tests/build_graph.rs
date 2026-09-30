@@ -11,10 +11,13 @@
 //! and `blake3`; AC-01 of docs/features/spec-check.md: the file-access scan
 //! reaches the check module, and no `[workspace.dependencies]` entry is
 //! added against `main`; AC-01 of docs/features/spec-cli.md:
-//! `specengine-cli` is the ninth default member, its normal graph is the
+//! `specengine-cli` a default member, its normal graph is the
 //! model, core and store (SQLite only through the store) and no measurement,
 //! MCP or rust-analyzer crate, and every direct dependency is a workspace
-//! entry.
+//! entry. AC-12 of docs/features/spec-cli-switch.md: the eight specengine
+//! crates are the default members, no second-implementation package is left
+//! in the metadata or `Cargo.lock`, `.cargo/config.toml` holds only the
+//! build directory, and `scripts/` only the hook installer.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -37,7 +40,7 @@ fn cargo() -> Command {
 }
 
 #[test]
-fn default_members_are_exactly_the_nine_core_packages() {
+fn default_members_are_exactly_the_eight_core_packages() {
     let output = cargo()
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .output()
@@ -72,8 +75,13 @@ fn default_members_are_exactly_the_nine_core_packages() {
             "specengine-mcp",
             "specengine-model",
             "specengine-store",
-            "xtask",
         ]
+    );
+    // docs/features/spec-cli-switch.md AC-12: no `xtask` package at all.
+    let packages: Vec<&str> = names.values().copied().collect();
+    assert!(
+        !packages.iter().any(|name| name.contains("xtask")),
+        "{packages:?}"
     );
     let members: Vec<&str> = metadata["workspace_members"]
         .as_array()
@@ -87,6 +95,37 @@ fn default_members_are_exactly_the_nine_core_packages() {
             .any(|m| m.starts_with("bevy") || *m == "bevy-mini"),
         "a Bevy fixture entered the workspace: {members:?}"
     );
+}
+
+/// AC-12 of docs/features/spec-cli-switch.md, the files: `Cargo.lock` has
+/// no retired package, `.cargo/config.toml` keeps only `[build] target-dir`
+/// (no alias), `scripts/` holds only `hooks-install.sh`.
+#[test]
+fn no_retired_package_alias_or_script_is_left() {
+    let root = workspace_root();
+    let lock = std::fs::read_to_string(root.join("Cargo.lock")).expect("Cargo.lock");
+    assert!(!lock.contains("xtask"), "Cargo.lock names xtask");
+    assert!(!root.join("xtask").exists(), "xtask/ exists");
+
+    let config =
+        std::fs::read_to_string(root.join(".cargo/config.toml")).expect(".cargo/config.toml");
+    let settings: Vec<&str> = config
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect();
+    assert_eq!(
+        settings,
+        ["[build]", "target-dir = \"target.noindex\""],
+        "{config}"
+    );
+
+    let mut scripts: Vec<String> = std::fs::read_dir(root.join("scripts"))
+        .expect("scripts/")
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    scripts.sort();
+    assert_eq!(scripts, ["hooks-install.sh"]);
 }
 
 /// The version constants in `specengine_code::grammar` are synced by hand
@@ -390,7 +429,6 @@ fn default_members_graph_has_no_rust_analyzer() {
     // No `-p`: a virtual workspace's commands act on `default-members`.
     let tree = cargo_tree(&[]);
     for root in [
-        "xtask v",
         "specengine-code v",
         "specengine-mcp v",
         "specengine-import v",

@@ -1,9 +1,9 @@
 ---
 class: canon
 tier: 2
-scope: [crates/specengine-core, xtask]
+scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-01
 ---
 
 # spec check: index render, generators, graph warnings
@@ -38,9 +38,7 @@ Then each non-empty section as `\n## <name>\n\n` plus one `\n`-ended line per do
 
 Line `- [<label>](<link>) <title> · <scope> · <status>`; a Tier 3 line is only `- [<label>](<link>) <status>`, title and scope unread, the status whole (`superseded-by ADR-0026`; ADR-0028). Label = a decision's ID, else the path; link relative to the directory of the configured index (`a/b/index.md` → `../../CLAUDE.md`); title = `title:`, else the first H1's inline text, else `?`; scope items joined by `, `; status = canon `tier N` (`tier ?`), else `status:`, else `?`.
 
-**Tier 3** is decided once, by status, never by folder, with `xtask`'s rule (`Doc::is_archived`): a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules.
-
-Accepted divergences from `xtask` (none occurs here; avoid them until 2b retires `xtask`): an H1 with inline markup (`xtask` keeps the raw text, the core the inline text: H1s here stay plain, no code span, link or emphasis) or a setext H1 (`xtask` sees none); `title:` on a non-decision (`xtask` takes the H1); a decision without `title:` (`xtask` prints `?`, the core the H1); YAML escapes in a quoted value (`xtask`'s `unquote` ignores them); front-matter failing strict YAML (core: `No class — fix`); a key of the wrong type (rendered absent).
+**Tier 3** is decided once, by status, never by folder: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules. Front-matter failing strict YAML lists under `No class — fix`; a key of the wrong type renders absent.
 
 ## §11.5: index drift
 
@@ -50,14 +48,14 @@ Not compared when the walk is incomplete (`walk_gap`) — a file with a `read_er
 
 ## §11.6: the generator registry
 
-This repository's parity config (`crates/specengine-store/tests/check_parity.rs`) adds:
+This repository's root `specengine.toml` has:
 
 ```toml
-[[generators]]                              # absent → §11.5–6 off; `generators = []` → §11.6 on
-command = "cargo xtask docs index --write"  # a `generator:` value, compared byte for byte
-writes  = ["docs/index.md"]                 # root-relative, the [paths] path rules
-index   = true                              # optional: SpecEngine renders this output (§11.5)
-gate    = "cargo xtask docs check"          # optional, index entry only; default "spec check"
+[[generators]]                                              # absent → §11.5–6 off; `generators = []` → §11.6 on
+command = "cargo run -q -p specengine-cli -- export index"  # a `generator:` value, compared byte for byte
+writes  = ["docs/index.md"]                                 # root-relative, the [paths] path rules
+index   = true                                              # optional: SpecEngine renders this output (§11.5)
+gate    = "cargo run -q -p specengine-cli -- check"         # optional, index entry only; default "spec check"
 ```
 
 `specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as the same string through the crate's own front-matter reader (`read_back` parses `generator: <value>` as every parse does): null, booleans, numbers, and `.inf`, `-.inf`, `.nan`, the texts the reader gives non-finite floats. The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
@@ -76,14 +74,14 @@ WHEN the table is present (even empty), each `class: generated` document whose f
 
 **`ref-superseded`**: WHEN a live source references Y — declared (`refs`, `adrs`, `links.*`, `parent`, `working_answer`, a reference-form `canon:`) or inline (with the fallback) — and Y resolves to a document whose `status:` is `superseded-by X`, the check warns once per occurrence, subject as written: "`Y` is superseded by X". Exempt: `supersedes:` items, `links.supersedes`, the `status:` value, references from X's own files. Several holders of Y: the first superseded one in path order.
 
-**Determinism**: render, findings and cycle subjects do not depend on input order. **Genre** (ADR-0008): no `cargo xtask`, `docs/`, `ADR` or `index.md` literal in the sources; the ADR-0022 convention text (header, H1, `source:`, protocol line, section names) and `spec check` are literal.
+**Determinism**: render, findings and cycle subjects do not depend on input order. **Genre** (ADR-0008): no project command (`cargo run -q -p specengine-cli`), `docs/`, `ADR` or `index.md` literal in the sources; the ADR-0022 convention text (header, H1, `source:`, protocol line, section names) and `spec check` are literal.
 
-This repository (parity config + registry, `enforce`, no baseline): `clean`, one warning — `mention-dangling` on the `file-name` example of `docs/canon/spec-check.md` "Rules".
+This repository (root config, `enforce`, no baseline): `clean`, no warning.
 
 ## Next
 
 - Increment 2 is complete: part 2 shipped feature scopes and Markdown file links (`docs/canon/spec-check-links.md`).
-- Increment 3 = CLI passes 2a.1 (shipped: `spec check`, the writer `spec export index` on this renderer), 2a.2, 2b (the root `specengine.toml`, Q-7; hook and CI switched; `xtask` retired): `docs/canon/spec-check-cli.md`. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
+- Increment 3 shipped: CLI passes 2a.1 (`spec check`, the writer `spec export index` on this renderer), 2a.2 (`--staged`), 2b (the root `specengine.toml`, Q-7; the gate here): `docs/canon/spec-check-cli.md`. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 
 ## Open nits

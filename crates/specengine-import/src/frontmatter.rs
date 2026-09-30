@@ -1,7 +1,7 @@
 //! Front-matter of a corpus document, read leniently: an imported corpus may
 //! use any YAML, so only the block's extent and one top-level scalar (the
-//! class key) are read. The strict reader of this repository's own documents
-//! lives in `xtask`, which stays dependency-free and is not shared.
+//! class key) are read. The strict reader is the spec parser of
+//! `specengine-core` (`spec check`); the census does not share it.
 
 /// What the start of a document holds.
 #[derive(Debug, Clone, PartialEq, Eq)]

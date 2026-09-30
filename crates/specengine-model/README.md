@@ -59,7 +59,7 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 `Anchor {name, origin: AnchorOrigin, level?, span}`: where a `path#name` link can land, e.g. `{"name":"license","origin":"slug","level":2,"span":[1402,1412]}`. `ParsedFile.anchors` holds them in source order, a heading's `slug` before its `attr`. Origins: `slug` — every heading's GitHub slug; `attr` — a `{#…}` that is no definable ID (a section's own ID is its node); `html` — `<a id="…">`, `<a name="…">` outside code and HTML comments (`<!-->`, `<!--->` are whole comments, CommonMark 0.31). `slug`, `attr`: `level` and span = the heading line(s); `html`: span = the start tag `<`…`>`, no level.
 
-**Slug** (github-slugger; computed by core): the heading's inline text (text, code, link text; no destination, image, HTML), `{#…}` removed, lowercased; letters and digits of any script, `-`, `_` kept; whitespace → `-`; the rest dropped; a repeated base gets `-1`, `-2`, … skipping slugs already given; empty → no anchor. Accepted divergences: `xtask` slugs the raw line (links, HTML); GitHub differs on two-line setext headings, NBSP and tab (`-` here), combining marks (dropped here), non-`#` `{…}` blocks (pulldown-cmark strips them).
+**Slug** (github-slugger; computed by core): the heading's inline text (text, code, link text; no destination, image, HTML), `{#…}` removed, lowercased; letters and digits of any script, `-`, `_` kept; whitespace → `-`; the rest dropped; a repeated base gets `-1`, `-2`, … skipping slugs already given; empty → no anchor. Accepted divergences: GitHub differs on two-line setext headings, NBSP and tab (`-` here), combining marks (dropped here), non-`#` `{…}` blocks (pulldown-cmark strips them).
 
 ## Diagnostics
 

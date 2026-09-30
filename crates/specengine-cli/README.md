@@ -75,7 +75,7 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 MCP stdio follows 3–4.
 
-- 2b `spec-cli-switch` (`xtask` out), `spec-cli-introduced`: `docs/canon/spec-check-cli.md`.
+- `spec-cli-introduced` (2b shipped): `docs/canon/spec-check-cli.md`.
 - 3 `spec-cli-graph`: `tree`, `graph`, `show --links`; default link types.
 - 4 `spec-cli-bundle`: `bundle`, `bundle_hash`; Q7 token calibration, `rusqlite_migration`.
 

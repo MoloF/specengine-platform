@@ -1,12 +1,12 @@
 ---
 class: generated
-generator: cargo xtask docs index --write
+generator: cargo run -q -p specengine-cli -- export index
 source: front-matter of the repository's documents
 ---
 
 # Documentation index
 
-<!-- Built by `cargo xtask docs index --write`. Manual edits are overwritten on rebuild, and `cargo xtask docs check` rejects them. -->
+<!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
 Reading protocol (§9): this index, then at most three documents. Needing a third step means the index is wrong: fix it rather than reading further.
 
@@ -27,10 +27,9 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) The spec CLI: check and export index · crates/specengine-cli, crates/specengine-store · tier 2
-- [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core, xtask · tier 2
+- [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2
 - [docs/canon/spec-check-links.md](canon/spec-check-links.md) spec check: feature scopes and links · crates/specengine-core, crates/specengine-model · tier 2
-- [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval, xtask · tier 2
-- [xtask/README.md](../xtask/README.md) xtask — enforcement of the documentation convention · xtask · tier 1
+- [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
 
 ## Decisions
 
@@ -66,7 +65,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) The spec CLI, pass 2b: spec check as the gate · root, crates/specengine-core · in-progress
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress
@@ -87,6 +85,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/spec-check.md](features/spec-check.md) shipped
 - [docs/features/spec-cli-check.md](features/spec-cli-check.md) shipped
 - [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) shipped
+- [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) shipped
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped
 - [docs/features/spec-index.md](features/spec-index.md) shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped

@@ -58,12 +58,15 @@ fn only_debt_and_warnings_give_the_summary_line_alone() {
         "{}",
         show(&report)
     );
+    // W: the library's (both files are `class: generated`, no index: 0).
+    let w = check::worst_w(&config.input(QUIET), &config.paths);
+    assert_eq!((w, report.counts.worst_w_bytes), (0, 0));
     let lines = report.lines(false);
     assert_eq!(
         lines,
-        [
-            "spec check [enforce]: 2 documents, 0 errors, 2 warnings, 1 debt, 0 expired, 1 stale \u{2014} clean"
-        ]
+        [format!(
+            "spec check [enforce]: 2 documents, 0 errors, 2 warnings, 1 debt, 0 expired, 1 stale, worst W {w} B \u{2014} clean"
+        )]
     );
     // `detail` adds the warnings, the debt and the stale entry.
     let detail = report.lines(true);
@@ -244,14 +247,17 @@ fn the_json_has_the_documented_shape() {
             "errors",
             "expired",
             "stale",
-            "warnings"
+            "warnings",
+            "worst_w_bytes"
         ]
     );
-    // In the documented order; `without_class` is gone (class-missing counts it).
+    // In the documented order, W last (its value the library's);
+    // `without_class` is gone (class-missing counts it).
+    let w = check::worst_w(&config.input(QUIET), &config.paths);
     assert!(
-        json.contains(
-            "\"counts\":{\"documents\":2,\"errors\":0,\"warnings\":2,\"debt\":1,\"expired\":0,\"stale\":1}"
-        ),
+        json.contains(&format!(
+            "\"counts\":{{\"documents\":2,\"errors\":0,\"warnings\":2,\"debt\":1,\"expired\":0,\"stale\":1,\"worst_w_bytes\":{w}}}"
+        )),
         "{json}"
     );
     let debt = value["findings"]
