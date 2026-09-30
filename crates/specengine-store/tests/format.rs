@@ -394,16 +394,14 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// AC-03 of docs/features/spec-check-links.md: pass B records local
-/// Markdown link destinations as `mentions` path links and the fixtures
-/// gain file links (spec-a's two, spec-b's `link_base` one), so the dump
-/// changes while the schema does not: `INDEX_FORMAT` is 5, and the history
-/// is the four earlier lines, verbatim, followed by exactly one `5 <hash>`
-/// line (no earlier `5`). Replaces pass A's format-4 pin
-/// (docs/features/spec-check-scopes.md AC-11), whose line stays verbatim.
+/// AC-19 of docs/features/spec-cli.md: `files.tier3` and `nodes.line`
+/// change the schema, so `INDEX_FORMAT` is 6 and the history is the five
+/// earlier lines, verbatim, followed by exactly one `6 <hash>` line (no
+/// earlier `6`). Replaces pass B's format-5 pin
+/// (docs/features/spec-check-links.md AC-03), whose line stays verbatim.
 #[test]
-fn spec_check_links_pins_format_5_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 5);
+fn spec_cli_pins_format_6_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 6);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -417,11 +415,12 @@ fn spec_check_links_pins_format_5_with_one_new_history_line() {
         "2 2cfc299da177807c83d246aea934a73ab8509021386568a0b2011a31de66c9aa",
         "3 d63c06dc03ed97243ff25dfb14a165cfec059582eee05dc72d9fba05b3c5f55f",
         "4 d958fe30af22feb15f1dbd8fafa67ef1113a8c4ba267c4dd71a8968eb30bf5b5",
+        "5 df99199e747d5d2f16712fd23737a443457140d4bb6e37d59393c78724809be4",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "pass A's history plus exactly one new line:\n{history}"
+        "pass B's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -430,14 +429,14 @@ fn spec_check_links_pins_format_5_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "5", "the new line is format 5: {last}");
+    assert_eq!(format, "6", "the new line is format 6: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("5 ")).count(),
+        lines.iter().filter(|line| line.starts_with("6 ")).count(),
         1,
-        "no earlier `5` line"
+        "no earlier `6` line"
     );
 }

@@ -2553,6 +2553,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "specengine-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+ "specengine-core",
+ "specengine-model",
+ "specengine-store",
+]
+
+[[package]]
 name = "specengine-code"
 version = "0.1.0"
 dependencies = [

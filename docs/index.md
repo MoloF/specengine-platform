@@ -14,6 +14,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [CLAUDE.md](../CLAUDE.md) SpecEngine · root · tier 0
 - [README.md](../README.md) SpecEngine · root · tier 2
+- [crates/specengine-cli/README.md](../crates/specengine-cli/README.md) specengine-cli — the spec binary · crates/specengine-cli · tier 1
 - [crates/specengine-code/README.md](../crates/specengine-code/README.md) specengine-code — layer A: Rust and RON parsing, AST hash, markers, Bevy detector · crates/specengine-code · tier 1
 - [crates/specengine-core/README.md](../crates/specengine-core/README.md) specengine-core — the spec parser and the check · crates/specengine-core · tier 1
 - [crates/specengine-eval/README.md](../crates/specengine-eval/README.md) specengine-eval — the permanent measurement harness · crates/specengine-eval · tier 1
@@ -78,6 +79,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/spec-check-links.md](features/spec-check-links.md) spec check, pass B: file links · crates/specengine-core, crates/specengine-store · shipped
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) spec check, increment 2 part 2, pass A: feature scopes · crates/specengine-core, crates/specengine-model, crates/specengine-store · shipped
 - [docs/features/spec-check.md](features/spec-check.md) spec check, increment 1: a config-driven check engine at xtask parity · crates/specengine-core, crates/specengine-model, crates/specengine-store, crates/specengine-eval, xtask · shipped
+- [docs/features/spec-cli.md](features/spec-cli.md) The spec CLI, pass 1: the agent read loop · crates/specengine-cli, crates/specengine-core, crates/specengine-store · shipped
 - [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) 03. Critique of the initial specification · specengine · shipped

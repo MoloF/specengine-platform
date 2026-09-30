@@ -10,7 +10,11 @@
 //! exactly with `bundled`, one version each of `rusqlite`, `libsqlite3-sys`
 //! and `blake3`; AC-01 of docs/features/spec-check.md: the file-access scan
 //! reaches the check module, and no `[workspace.dependencies]` entry is
-//! added against `main`.
+//! added against `main`; AC-01 of docs/features/spec-cli.md:
+//! `specengine-cli` is the ninth default member, its normal graph is the
+//! model, core and store (SQLite only through the store) and no measurement,
+//! MCP or rust-analyzer crate, and every direct dependency is a workspace
+//! entry.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -33,7 +37,7 @@ fn cargo() -> Command {
 }
 
 #[test]
-fn default_members_are_exactly_the_eight_core_packages() {
+fn default_members_are_exactly_the_nine_core_packages() {
     let output = cargo()
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .output()
@@ -60,6 +64,7 @@ fn default_members_are_exactly_the_eight_core_packages() {
     assert_eq!(
         defaults,
         [
+            "specengine-cli",
             "specengine-code",
             "specengine-core",
             "specengine-eval",
@@ -1105,4 +1110,189 @@ fn serde_json_float_roundtrip_is_set_on_the_workspace_pin_only() {
         }
     }
     assert!(checked >= 4, "serde_json entries checked: {checked}");
+}
+
+// ---------------------------------------------------------------------------
+// docs/features/spec-cli.md AC-01 (the `spec` binary's graph).
+// ---------------------------------------------------------------------------
+
+/// Crates the CLI's normal graph must never reach (by exact name); every
+/// `ra_ap_*` is checked by prefix. `syn` is checked apart: it enters the
+/// compile-time graph through the `clap_derive` and `serde_derive`
+/// proc-macros (as it does the model's and the core's), so the check is on
+/// the linked graph (`-e normal,no-proc-macro`), as
+/// `core_tree_has_no_rust_analyzer_syn3_or_bevy` does.
+const CLI_FORBIDDEN: [&str; 7] = [
+    "specengine-code",
+    "specengine-import",
+    "specengine-mcp",
+    "specengine-eval",
+    "specengine-ra",
+    "tokio",
+    "rmcp",
+];
+
+#[test]
+fn cli_normal_graph_is_model_core_store_without_measurement_mcp_or_rust_analyzer() {
+    let graph = normal_graph("specengine-cli");
+    for wanted in [
+        "specengine-model",
+        "specengine-core",
+        "specengine-store",
+        "clap",
+        "serde",
+        "serde_json",
+    ] {
+        assert!(
+            graph.iter().any(|(name, _)| name == wanted),
+            "{wanted} missing from specengine-cli's normal graph: {graph:?}"
+        );
+    }
+    let offenders: Vec<&(String, String)> = graph
+        .iter()
+        .filter(|(name, _)| CLI_FORBIDDEN.contains(&name.as_str()) || name.starts_with("ra_ap_"))
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "specengine-cli's normal graph reaches {offenders:?}"
+    );
+    let linked = tree_crates(&cargo_tree(&[
+        "-p",
+        "specengine-cli",
+        "-e",
+        "normal,no-proc-macro",
+    ]));
+    assert!(
+        linked
+            .first()
+            .is_some_and(|(name, _)| name == "specengine-cli"),
+        "cargo tree lists specengine-cli first: {linked:?}"
+    );
+    let linked_offenders: Vec<&(String, String)> = linked
+        .iter()
+        .filter(|(name, _)| {
+            name == "syn" || CLI_FORBIDDEN.contains(&name.as_str()) || name.starts_with("ra_ap_")
+        })
+        .collect();
+    assert!(
+        linked_offenders.is_empty(),
+        "specengine-cli's linked graph reaches {linked_offenders:?}"
+    );
+}
+
+/// `rusqlite` reaches the CLI only through the store: it is in the graph,
+/// but not at depth 1, and every path to it runs through `specengine-store`
+/// (`cargo tree -i rusqlite` lists no other dependent inside the CLI graph).
+#[test]
+fn cli_reaches_rusqlite_only_through_the_store() {
+    let direct = cargo_tree(&["-p", "specengine-cli", "-e", "normal", "--depth", "1"]);
+    let direct_crates = tree_crates(&direct);
+    assert!(
+        direct_crates
+            .first()
+            .is_some_and(|(name, _)| name == "specengine-cli"),
+        "cargo tree lists specengine-cli first:\n{direct}"
+    );
+    let direct_names: Vec<&str> = direct_crates
+        .iter()
+        .skip(1)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    assert!(
+        !direct_names
+            .iter()
+            .any(|name| *name == "rusqlite" || *name == "libsqlite3-sys"),
+        "specengine-cli depends on SQLite directly: {direct_names:?}"
+    );
+    assert!(
+        direct_names.contains(&"specengine-store"),
+        "specengine-cli does not depend on the store directly: {direct_names:?}"
+    );
+    // Who depends on rusqlite within the CLI's graph: the store alone.
+    let inverted = cargo_tree(&[
+        "-p",
+        "specengine-cli",
+        "-e",
+        "normal",
+        "-i",
+        "rusqlite",
+        "--depth",
+        "1",
+    ]);
+    let dependents: Vec<String> = tree_crates(&inverted)
+        .into_iter()
+        .skip(1)
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(
+        dependents,
+        ["specengine-store"],
+        "rusqlite's dependents in the CLI graph:\n{inverted}"
+    );
+}
+
+/// Every direct dependency of `specengine-cli` is either a path dependency
+/// on a workspace crate or a `[workspace.dependencies]` entry
+/// (`name.workspace = true`): no version is pinned in the member manifest.
+#[test]
+fn cli_direct_dependencies_are_all_workspace_entries() {
+    let manifest_path = workspace_root().join("crates/specengine-cli/Cargo.toml");
+    let text = std::fs::read_to_string(&manifest_path).expect("crates/specengine-cli/Cargo.toml");
+    let manifest: toml::Table = text.parse().expect("the CLI manifest is TOML");
+    let root: toml::Table = std::fs::read_to_string(workspace_root().join("Cargo.toml"))
+        .expect("Cargo.toml")
+        .parse()
+        .expect("the root manifest is TOML");
+    let pins = root["workspace"]["dependencies"]
+        .as_table()
+        .expect("[workspace.dependencies]");
+    let mut seen = Vec::new();
+    for table in ["dependencies", "build-dependencies"] {
+        let Some(deps) = manifest.get(table).and_then(toml::Value::as_table) else {
+            continue;
+        };
+        for (name, spec) in deps {
+            seen.push(name.clone());
+            let spec = spec
+                .as_table()
+                .unwrap_or_else(|| panic!("{table}.{name} pins a version in the member: {spec:?}"));
+            if let Some(path) = spec.get("path").and_then(toml::Value::as_str) {
+                assert!(
+                    name.starts_with("specengine-") && path == format!("../{name}"),
+                    "{table}.{name}: a path dependency outside the workspace crates: {path}"
+                );
+                assert!(
+                    spec.keys().all(|key| key == "path"),
+                    "{table}.{name}: a path dependency with extra keys: {spec:?}"
+                );
+                continue;
+            }
+            assert_eq!(
+                spec.get("workspace").and_then(toml::Value::as_bool),
+                Some(true),
+                "{table}.{name} is not a workspace entry: {spec:?}"
+            );
+            assert!(
+                spec.get("version").is_none(),
+                "{table}.{name} pins its own version: {spec:?}"
+            );
+            assert!(
+                pins.contains_key(name),
+                "{table}.{name} has no [workspace.dependencies] entry"
+            );
+        }
+    }
+    seen.sort_unstable();
+    assert_eq!(
+        seen,
+        [
+            "clap",
+            "serde",
+            "serde_json",
+            "specengine-core",
+            "specengine-model",
+            "specengine-store",
+        ],
+        "the CLI's direct dependencies (docs/features/spec-cli.md, Crate)"
+    );
 }

@@ -1,0 +1,25 @@
+[package]
+name = "specengine-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "The `spec` command line of SpecEngine: init, index, search and show over the project's spec index"
+
+# `spec`, installed with `cargo install --path crates/specengine-cli`.
+[[bin]]
+name = "spec"
+path = "src/main.rs"
+
+# On `specengine-{model,core,store}` only: never `specengine-{code,import,mcp,eval,ra}`,
+# never `rusqlite` directly (the store owns the database; no `rusqlite` type
+# crosses its API). Every command lives in the library (`src/lib.rs`), the
+# reuse contract of MCP stdio and the Phase 2 daemon bridge.
+[dependencies]
+specengine-model = { path = "../specengine-model" }
+specengine-core = { path = "../specengine-core" }
+specengine-store = { path = "../specengine-store" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

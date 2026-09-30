@@ -25,6 +25,9 @@ pub(crate) struct FileRows {
     pub read_error: Option<String>,
     /// `{bom, front_matter?, body}` of the parse; `None` without one.
     pub shell: Option<String>,
+    /// Tier 3 by core's one predicate (`check::is_tier3_file`); `false`
+    /// without a parse.
+    pub tier3: bool,
     pub nodes: Vec<NodeRow>,
     pub links: Vec<LinkRow>,
     pub anchors: Vec<AnchorRow>,
@@ -33,6 +36,8 @@ pub(crate) struct FileRows {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct NodeRow {
+    /// The 1-based line of the node's span start.
+    pub line: i64,
     pub id: Option<String>,
     pub kind: Option<String>,
     pub title: Option<String>,
@@ -86,12 +91,22 @@ impl FileRows {
             front_matter: parsed.front_matter,
             body: parsed.body,
         };
+        let newlines: Vec<usize> = bytes
+            .iter()
+            .enumerate()
+            .filter_map(|(offset, &byte)| (byte == b'\n').then_some(offset))
+            .collect();
+        let line_of = |offset: usize| {
+            i64::try_from(newlines.partition_point(|&newline| newline < offset) + 1)
+                .unwrap_or(i64::MAX)
+        };
         let nodes = parsed
             .nodes
             .iter()
             .enumerate()
             .map(|(index, node)| {
                 Ok(NodeRow {
+                    line: line_of(node.span.start),
                     id: node.id.clone(),
                     kind: node.kind.clone(),
                     title: node.title.clone(),
@@ -149,6 +164,7 @@ impl FileRows {
             size: size_of(bytes),
             read_error: None,
             shell: Some(to_json(&shell, "shell")?),
+            tier3: specengine_core::check::is_tier3_file(parsed),
             nodes,
             links,
             anchors,
@@ -165,6 +181,7 @@ impl FileRows {
             size,
             read_error: Some(error),
             shell: None,
+            tier3: false,
             nodes: Vec::new(),
             links: Vec::new(),
             anchors: Vec::new(),

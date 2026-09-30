@@ -158,7 +158,7 @@ pub(crate) fn readable_fields(parsed: &ParsedFile) -> Option<&Fields> {
 
 /// Tier 3, by status: a spec `shipped` or `abandoned`, a decision with a
 /// `status:` other than `accepted`.
-pub(crate) fn is_tier3(fields: &Fields) -> bool {
+pub fn is_tier3(fields: &Fields) -> bool {
     let status = fields.status.as_deref();
     match fields.class.as_deref().and_then(DocClass::parse) {
         Some(DocClass::Spec) => matches!(status, Some("shipped" | "abandoned")),
@@ -167,9 +167,17 @@ pub(crate) fn is_tier3(fields: &Fields) -> bool {
     }
 }
 
+/// The file is Tier 3 ([`is_tier3`] of its typed front-matter keys): the
+/// one predicate of the generated index's archive, the index's `tier3`
+/// column and the archive filter of `spec search`. `false` when the
+/// front-matter failed or the file has no document (not UTF-8).
+pub fn is_tier3_file(parsed: &ParsedFile) -> bool {
+    readable_fields(parsed).is_some_and(is_tier3)
+}
+
 /// A live source of the graph rules: neither `class: generated` nor Tier 3.
 /// A document whose front-matter failed is live.
-pub(crate) fn is_live(parsed: &ParsedFile) -> bool {
+pub fn is_live(parsed: &ParsedFile) -> bool {
     readable_fields(parsed).is_none_or(|fields| {
         !is_tier3(fields) && fields.class.as_deref() != Some(DocClass::Generated.as_str())
     })

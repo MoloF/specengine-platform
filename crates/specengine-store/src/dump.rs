@@ -1,8 +1,9 @@
 //! The canonical dump (`crates/specengine-store/README.md`, "Rows"): every
-//! index table in column order with its surrogate keys (`wt`, `file_id`,
-//! `node_id`) replaced by `(project, root)`, `path`, `(path, ord)`, rows
-//! sorted, plus the FTS5 vocabulary. Two DBs with equal dumps hold the same
-//! index; storage order and rowids never show.
+//! index table in column order (every column, read from the schema) with
+//! its surrogate keys (`wt`, `file_id`, `node_id`) replaced by `(project,
+//! root)`, `path`, `(path, ord)`, rows sorted, plus the FTS5 vocabulary.
+//! Two DBs with equal dumps hold the same index; storage order and rowids
+//! never show.
 
 use rusqlite::types::ValueRef;
 use rusqlite::{Transaction, TransactionBehavior};
@@ -14,76 +15,124 @@ use crate::read::with_worktree;
 use crate::schema;
 
 /// The owner of a row, surrogates replaced (LEFT JOINs: an orphan row shows
-/// NULLs instead of vanishing).
-const FILE_OWNER: &str = "LEFT JOIN files f ON f.file_id = x.file_id
-     LEFT JOIN worktrees w ON w.wt = f.wt";
+/// NULLs instead of vanishing). Every index table is named `main.…`, so no
+/// temp object of the connection can shadow it.
+const FILE_OWNER: &str = "LEFT JOIN main.files f ON f.file_id = x.file_id
+     LEFT JOIN main.worktrees w ON w.wt = f.wt";
 
-/// `(table, SELECT … FROM <table> x <joins>)`; `w`, `f`, `n` are the owning
-/// worktree, file and node; `?1`, where present, is the worktree or NULL.
-fn tables() -> Vec<(&'static str, String)> {
-    vec![
-        (
-            "index_meta",
-            "SELECT x.key, x.value FROM index_meta x".to_owned(),
-        ),
-        (
-            "worktrees",
-            "SELECT x.project, x.root, x.scheme_fp FROM worktrees x
-             WHERE ?1 IS NULL OR x.wt = ?1"
-                .to_owned(),
-        ),
-        (
-            "files",
-            "SELECT w.project, w.root, x.path, x.blake3, x.size, x.read_error, x.shell
-             FROM files x LEFT JOIN worktrees w ON w.wt = x.wt
-             WHERE ?1 IS NULL OR x.wt = ?1"
-                .to_owned(),
-        ),
-        (
-            "nodes",
+/// How one index table is dumped: its owner's columns first (`w`, `f`, `n`
+/// are the owning worktree, file and node), then every column of its own in
+/// schema order but the surrogate keys `skip`; `?1`, where the filter has
+/// it, is the worktree or NULL.
+struct TableDump {
+    table: &'static str,
+    owner: &'static str,
+    joins: &'static str,
+    filter: &'static str,
+    skip: &'static [&'static str],
+}
+
+/// Every index table, in dump order.
+const TABLES: &[TableDump] = &[
+    TableDump {
+        table: "index_meta",
+        owner: "",
+        joins: "",
+        filter: "",
+        skip: &[],
+    },
+    TableDump {
+        table: "worktrees",
+        owner: "",
+        joins: "",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["wt"],
+    },
+    TableDump {
+        table: "files",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["file_id", "wt"],
+    },
+    TableDump {
+        table: "nodes",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["node_id", "file_id"],
+    },
+    TableDump {
+        table: "aliases",
+        owner: "w.project, w.root, f.path, n.ord",
+        joins: "LEFT JOIN main.nodes n ON n.node_id = x.node_id
+             LEFT JOIN main.files f ON f.file_id = n.file_id
+             LEFT JOIN main.worktrees w ON w.wt = f.wt",
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["node_id"],
+    },
+    TableDump {
+        table: "links",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
+        table: "anchors",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
+        table: "diagnostics",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+];
+
+/// `(table, SELECT … FROM main.<table> x <joins> <filter>)` for every index
+/// table. A table's own columns are read from the database, never listed
+/// here: `pragma_table_xinfo` of the `main` schema, in schema order, which
+/// (unlike `pragma_table_info`) includes generated columns too. A column
+/// added to the schema always enters the dump, so it always needs a new
+/// format line.
+fn tables(tx: &Transaction<'_>) -> Result<Vec<(&'static str, String)>, StoreError> {
+    let mut statement = tx
+        .prepare("SELECT name FROM pragma_table_xinfo(?1, 'main') ORDER BY cid")
+        .db()?;
+    let mut queries = Vec::with_capacity(TABLES.len());
+    for dump in TABLES {
+        let names = statement
+            .query_map([dump.table], |row| row.get::<_, String>(0))
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        let mut columns: Vec<String> = Vec::new();
+        if !dump.owner.is_empty() {
+            columns.push(dump.owner.to_owned());
+        }
+        columns.extend(
+            names
+                .iter()
+                .filter(|name| !dump.skip.contains(&name.as_str()))
+                .map(|name| format!("x.{}", schema::quoted(name))),
+        );
+        queries.push((
+            dump.table,
             format!(
-                "SELECT w.project, w.root, f.path, x.ord, x.id, x.kind, x.title, x.parent_id,
-                        x.own_text, x.node
-                 FROM nodes x {FILE_OWNER}
-                 WHERE ?1 IS NULL OR f.wt = ?1"
+                "SELECT {} FROM main.{} x {} {}",
+                columns.join(", "),
+                schema::quoted(dump.table),
+                dump.joins,
+                dump.filter
             ),
-        ),
-        (
-            "aliases",
-            "SELECT w.project, w.root, f.path, n.ord, x.ord, x.alias
-             FROM aliases x
-             LEFT JOIN nodes n ON n.node_id = x.node_id
-             LEFT JOIN files f ON f.file_id = n.file_id
-             LEFT JOIN worktrees w ON w.wt = f.wt
-             WHERE ?1 IS NULL OR f.wt = ?1"
-                .to_owned(),
-        ),
-        (
-            "links",
-            format!(
-                "SELECT w.project, w.root, f.path, x.ord, x.src, x.type, x.dst_id, x.dst_path,
-                        x.link
-                 FROM links x {FILE_OWNER}
-                 WHERE ?1 IS NULL OR f.wt = ?1"
-            ),
-        ),
-        (
-            "anchors",
-            format!(
-                "SELECT w.project, w.root, f.path, x.ord, x.name, x.anchor
-                 FROM anchors x {FILE_OWNER}
-                 WHERE ?1 IS NULL OR f.wt = ?1"
-            ),
-        ),
-        (
-            "diagnostics",
-            format!(
-                "SELECT w.project, w.root, f.path, x.ord, x.code, x.diagnostic
-                 FROM diagnostics x {FILE_OWNER}
-                 WHERE ?1 IS NULL OR f.wt = ?1"
-            ),
-        ),
-    ]
+        ));
+    }
+    Ok(queries)
 }
 
 /// Every worktree, and the DB-wide vocabulary (`fts5vocab` `row`).
@@ -94,7 +143,7 @@ pub(crate) fn whole(index: &SqliteIndex) -> Result<String, StoreError> {
         return Err(StoreError::NotIndexed);
     }
     let mut out = String::new();
-    for (table, sql) in tables() {
+    for (table, sql) in tables(&tx)? {
         dump_table(&tx, table, &sql, None, &mut out)?;
     }
     dump_table(
@@ -114,7 +163,7 @@ pub(crate) fn worktree(index: &SqliteIndex) -> Result<String, StoreError> {
     create_vocabularies(index)?;
     with_worktree(index, |tx, wt| {
         let mut out = String::new();
-        for (table, sql) in tables() {
+        for (table, sql) in tables(tx)? {
             dump_table(tx, table, &sql, Some(wt), &mut out)?;
         }
         dump_table(
@@ -122,8 +171,8 @@ pub(crate) fn worktree(index: &SqliteIndex) -> Result<String, StoreError> {
             "fts5vocab_instance",
             "SELECT x.term, f.path, n.ord, x.col, x.offset
              FROM temp.nodes_fts_vocab_instance x
-             JOIN nodes n ON n.node_id = x.doc
-             JOIN files f ON f.file_id = n.file_id
+             JOIN main.nodes n ON n.node_id = x.doc
+             JOIN main.files f ON f.file_id = n.file_id
              WHERE f.wt = ?1",
             Some(wt),
             &mut out,

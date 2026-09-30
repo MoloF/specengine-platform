@@ -6,6 +6,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
+use specengine_core::check::CheckInput;
 use specengine_model::IdScheme;
 
 use crate::error::{Db, StoreError};
@@ -212,6 +213,10 @@ impl SpecIndex for SqliteIndex {
 
     fn search(&self, query: &SearchQuery) -> Result<SearchResults, StoreError> {
         read::search(self, query)
+    }
+
+    fn indexed_input(&self) -> Result<CheckInput, StoreError> {
+        read::indexed_input(self)
     }
 }
 

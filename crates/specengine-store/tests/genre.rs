@@ -33,6 +33,7 @@ fn battery(name: &str) -> BTreeSet<String> {
 
     let mut kinds = BTreeSet::new();
     let mut titled = 0;
+    let mut tier3_nodes = 0;
     for path in index.files().expect("files") {
         let bytes = corpus.bytes(&path);
         let parsed = specengine_core::parse(&path, &bytes, &corpus.scheme);
@@ -59,13 +60,41 @@ fn battery(name: &str) -> BTreeSet<String> {
                 continue;
             }
             titled += 1;
+            // A default search leaves Tier 3 files out (docs/features/spec-cli.md
+            // AC-11, AC-19): a live node is found by its title, an archived one
+            // is not, and is counted as left out; `archive` finds every node.
+            let tier3 = specengine_core::check::is_tier3_file(&parsed);
+            tier3_nodes += usize::from(tier3);
             let mut query = SearchQuery::new(title.clone());
             query.limit = 200;
-            let hits = index.search(&query).expect("search").hits;
-            assert!(
-                hits.iter().any(|hit| hit.path == path && hit.ord == ord),
-                "{name}: {path}#{ord} not found by its title {title:?}"
+            let results = index.search(&query).expect("search");
+            let found = results
+                .hits
+                .iter()
+                .any(|hit| hit.path == path && hit.ord == ord);
+            assert_eq!(
+                found, !tier3,
+                "{name}: {path}#{ord} (tier3 {tier3}) by its title {title:?} in a default search"
             );
+            assert!(
+                results.hits.iter().all(|hit| !hit.tier3),
+                "{name}: a default search returned a Tier 3 hit"
+            );
+            if tier3 {
+                assert!(
+                    results.tier3_left_out >= 1,
+                    "{name}: {path}#{ord} dropped but not counted: {results:?}"
+                );
+            }
+            query.archive = true;
+            let results = index.search(&query).expect("search");
+            assert_eq!(results.tier3_left_out, 0, "{name}: archive drops nothing");
+            let hit = results
+                .hits
+                .iter()
+                .find(|hit| hit.path == path && hit.ord == ord)
+                .unwrap_or_else(|| panic!("{name}: {path}#{ord} not found by its title {title:?}"));
+            assert_eq!(hit.tier3, tier3, "{name}: {path}#{ord} tier3 flag");
             if let Some(kind) = &node.kind {
                 query.kinds = vec![kind.clone()];
                 let hits = index.search(&query).expect("search").hits;
@@ -81,6 +110,10 @@ fn battery(name: &str) -> BTreeSet<String> {
         }
     }
     assert!(titled > 3, "{name}: titled nodes searched: {titled}");
+    assert!(
+        tier3_nodes > 0,
+        "{name}: the battery searched no Tier 3 node, so the archive filter went unexercised"
+    );
 
     // A fresh index, a rebuild and a repeat run dump byte for byte alike.
     assert_equals_fresh(&index, &corpus, &scratch, name);

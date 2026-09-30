@@ -39,12 +39,14 @@ CREATE TABLE files (
   size INTEGER NOT NULL,
   read_error TEXT,
   shell TEXT,
+  tier3 INTEGER NOT NULL,
   UNIQUE (wt, path)
 ) STRICT;
 CREATE TABLE nodes (
   node_id INTEGER PRIMARY KEY,
   file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
   ord INTEGER NOT NULL,
+  line INTEGER NOT NULL,
   id TEXT,
   kind TEXT,
   title TEXT,

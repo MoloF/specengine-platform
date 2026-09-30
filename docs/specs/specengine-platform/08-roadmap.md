@@ -44,9 +44,8 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped 2026-09-29/30, owner questions open in the canon named: the parser (`crates/specengine-{model,core}/README.md`); the SQLite + FTS5 index, incremental by BLAKE3 (`crates/specengine-store/README.md`); `spec check` increments 1 and 2 (`docs/canon/spec-check*.md`). Next: 3 with the CLI, `xtask` retired; 4 `spec-check-process`.
-- CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.
-- MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources.
+- Shipped 2026-09-29/30, open owner questions in each crate's README and `docs/canon/spec-check*.md`: the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI pass 1.
+- Next: CLI 2a, 2b = check increment 3, `xtask` retired; 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").

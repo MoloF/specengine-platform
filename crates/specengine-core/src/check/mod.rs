@@ -22,6 +22,9 @@
 //!   `slug/ID` and bare feature-scoped IDs resolve in feature documents
 //!   only (ADR-0026);
 //! - [`render_index`] — the generated index, rendered in memory;
+//!   [`is_tier3`] / [`is_tier3_file`] — the one Tier 3 predicate (the
+//!   index's archive, the store's `tier3` column, `spec search`), and
+//!   [`is_live`], the graph rules' live source;
 //! - the rules: parser diagnostics through [`PARSER_SEVERITY`], class
 //!   contracts, budgets, ID definitions (`id-scope`, `id-width`,
 //!   `id-taken`, `file-name`), `canon:` and front-matter references; the index drift
@@ -49,7 +52,7 @@ pub use config::{
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
-pub use render::render_index;
+pub use render::{is_live, is_tier3, is_tier3_file, render_index};
 pub use report::{Cause, Counts, Debt, Finding, Fix, Report, Verdict};
 pub use resolve::{Resolution, Resolver};
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};

@@ -35,7 +35,7 @@ ref: research-2026-09-28
 Principles:
 
 1. **One core, four adapters.** CLI, MCP, HTTP and the CI check call the same core functions, so their results cannot diverge: the gate and the editor show the same numbers.
-2. **Git is the truth for specs and bindings; SQLite is the index and the work queue** (see 03 §2.1). Delete `specengine.db` and specs and bindings are rebuilt from the repository by `spec index`. Only open proposals and tasks would be lost; the export protects them (§8).
+2. **Git is the truth for specs and bindings; SQLite is the index and the work queue** (see 03 §2.1; the DB: `crates/specengine-cli/README.md`).
 3. **One writing door** into spec files — `apply_proposal`, triggered by a human (from the UI, the CLI or via MCP `elicitation`). Agents read and propose but never write (ADR-0004).
 4. **Local and native.** The daemon listens on `127.0.0.1` only. Docker is a launch option, not the primary mode.
 5. **Several projects in one daemon**: consumer projects are registered by path. The shared library (§3.6) is a separate project they reference.
@@ -361,9 +361,8 @@ The full scenario is in `06-workflows.md`. Here are the engine invariants:
 
 ## 8. Operational-state reliability
 
-**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk: shipped, `crates/specengine-store/README.md`. Still to come: migrations by `rusqlite_migration` 2.6 (never `sqlx` or `refinery`: `libsqlite3-sys` `links = "sqlite3"`); the tree as `parent_id` + `WITH RECURSIVE`, dependencies in the separate `links` table; `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID).
+**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk: shipped, `crates/specengine-store/README.md`. Still to come: migrations by `rusqlite_migration` 2.6 (never `sqlx` or `refinery`: `libsqlite3-sys` `links = "sqlite3"`); the tree as `parent_id` + `WITH RECURSIVE`, dependencies in the separate `links` table; `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID).
 
-- SQLite in WAL mode, file `~/Library/Application Support/specengine/<project>.db` on macOS (ADR-0003).
 - `spec export` writes `docs/generated/queue.md` (queue and tasks, human-readable, generated, in git) and `state.jsonl` (full queue dump; to a backup directory or into git — ADR-0003).
 - `spec import-state` restores the state from JSONL.
 

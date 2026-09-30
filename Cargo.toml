@@ -10,6 +10,7 @@ default-members = [
     "crates/specengine-model",
     "crates/specengine-core",
     "crates/specengine-store",
+    "crates/specengine-cli",
     "crates/specengine-code",
     "crates/specengine-mcp",
     "crates/specengine-import",

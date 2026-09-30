@@ -8,7 +8,7 @@ reviewed: 2026-09-30
 
 # spec check: feature scopes and links
 
-Increment 2 part 2 of `spec check`, two passes, both shipped 2026-09-30: A, feature scopes (ADR-0026, `docs/canon/architecture.md#layout`); B, Markdown file links ("File links"; 08 §4.3 (a), after the census resolver, `crates/specengine-import/README.md`). Engine, config, verdict, output: `docs/canon/spec-check.md`; index render and graph warnings: `docs/canon/spec-check-graph.md`. A scope comes only from `[paths] features` and `[ids] scope`: no prefix, slug, `features/`, `records/` or `docs/` literal in the sources (ADR-0008, `check_genre.rs`).
+Increment 2 part 2 of `spec check`, two passes, both shipped 2026-09-30: A, feature scopes (ADR-0026, `docs/canon/architecture.md#layout`); B, Markdown file links ("File links"; 08 §4.3 (a), modelled on the census resolver). Engine, config, verdict, output: `docs/canon/spec-check.md`; index render and graph warnings: `docs/canon/spec-check-graph.md`. A scope comes only from `[paths] features` and `[ids] scope`: no prefix, slug, `features/`, `records/` or `docs/` literal in the sources (ADR-0008, `check_genre.rs`).
 
 ## Configuration
 
@@ -55,6 +55,7 @@ Every resolution — front-matter references (`ref-dangling`), inline mentions (
 | `AC-01` (feature-scoped, bare) | feature document F | F defines it |
 | `AC-01` (feature-scoped, bare) | any other | never |
 | `R-12` (project-scoped, bare) | any | defined anywhere, as before |
+| `AC-01` (feature-scoped, bare) | none (`spec show`) | defined anywhere, as `R-12` |
 | `other:feat/AC-98` | any | `Skipped`, no finding (`project:`: a later increment) |
 
 "Defines" = a document `id:` or a `{#ID}` section of that one file. `@rev` is not checked. The inline name-shape fallback (`docs/canon/spec-check-graph.md`) retries in the same place. Unresolved: inline → `mention-dangling` (warning), front-matter → `ref-dangling` (error), message `` `<key>`: `<written>` <reason> ``, the reason computed for the ID as written, never for a fallback candidate:
@@ -75,10 +76,10 @@ A reference without a span gets `<written>` rebuilt as `project:slug/ID#Y` (mess
 
 ## API
 
-- `specengine_core::check::resolve`: `Resolver::new(&CheckInput, &IdScheme, &Paths)`, blind to input order; `resolve(from, &Reference, written)` and `resolve_mention(from, &Reference, written)` (with the name fallback) → `Resolution`; `holders_of(from, &Reference, written) -> Option<Vec<usize>>` (the ID's files, section ignored, no fallback; `None`: dangling or skipped); `from` = the citing file's path (`""` or an unwalked path: no feature document); `feature_slug(path) -> Option<&str>`; `paths()`, what `Resolved` indexes. `Resolution::{Resolved(Vec<usize>), Skipped, Dangling(reason)}`, `Skipped` = `project:` only. The store keeps `dst` as written: `spec refs` and `get_impact` resolve through this, with the citing file.
+- `specengine_core::check::resolve`: `Resolver::new(&CheckInput, &IdScheme, &Paths)`, blind to input order; `resolve(from, &Reference, written)` and `resolve_mention(from, &Reference, written)` (with the name fallback) → `Resolution`; `resolve_detached(&Reference, written)`: no citing file (the table), no fallback; `holders_of(from, &Reference, written) -> Option<Vec<usize>>` (the ID's files, section ignored, no fallback; `None`: dangling or skipped); `from` = the citing file's path (`""` or an unwalked path: no feature document); `feature_slug(path) -> Option<&str>`; `paths()`, what `Resolved` indexes. `Resolution::{Resolved(Vec<usize>), Skipped, Dangling(reason)}`, `Skipped` = `project:` only.
 - `specengine_model::grammar::is_slug(&str) -> bool`: the grammar's `slug`, `[a-z][a-z0-9-]*`, one rule for the lexer's qualifiers and feature stems.
 - `specengine_core` root: `Paths.link_base`; `WalkScope` (`Paths::walk_scope()`, `new(&Paths)`), the walk's rules without the disk, `exclude` compiled once — `roots()`, `is_excluded`, `in_walk_scope` — shared by the store's walker and the link check (`Paths::is_excluded`, `in_walk_scope` compile per call); `is_under(path, dir)`, `is_clean_relative`; `DOCUMENT_EXTENSION` = `.md`.
-- `CHECK_CODES` 29 (`id-scope`, `link-dangling`, `link-anchor` last); `INDEX_FORMAT` 5 (store README).
+- `CHECK_CODES` 29 (`id-scope`, `link-dangling`, `link-anchor` last).
 
 ## This repository and the template
 

@@ -16,7 +16,7 @@ Today the path is hand-written (08 §2: "~N weeks", "done" stamps, a hand-summed
 
 Questions (working answer → cost of the other):
 
-- Q-1 One git file per item; execution in tasks; position computed, survives deleting `specengine.db` (05 §1) → (a) tasks in SQLite (08 §4.1): no ADR, ~0.5 week cheaper, lost with the DB, never in a diff (ADR-0003); (b) one planning file: `{#ID}` items need an ADR on `#layout`; (c) feature specs as items: long drafts rot.
+- Q-1 One git file per item; execution in tasks; position computed, survives deleting `<slug>.db` (05 §1) → (a) tasks in SQLite (08 §4.1): no ADR, ~0.5 week cheaper, lost with the DB, never in a diff (ADR-0003); (b) one planning file: `{#ID}` items need an ADR on `#layout`; (c) feature specs as items: long drafts rot.
 - Q-2 After Phase 5 (the screen needs Phase 4, files need Q-8) → after Phase 2: the pool 6–8 weeks earlier, Phase 3 ~1.5 weeks later.
 - Q-3 A flat ordered release list in `[roadmap]` with an MVP cut, each goal a release document → two levels: ~+0.5 week; a goal in config only cannot be cited.
 - Q-4 Estimates `min-max` in one configured unit, no dates → dates: a scheduler ~+1 week, "late" noise (08 §5); sizes: a mapping table.
@@ -71,7 +71,7 @@ Derived, never written: done at `shipped`/`abandoned`; in progress when a linked
 - [ ] I1-e The generated roadmap equals its render byte for byte. Red: a hand edit → drift error.
 - [ ] I2-a `spec roadmap` leaves `git status` empty.
 - [ ] I2-b An item with an unfinished predecessor can go `ready` and be claimed. Red: a chain gate.
-- [ ] I2-c `rm specengine.db && spec index` restores releases, items, chain, estimates.
+- [ ] I2-c `rm <slug>.db && spec index` restores releases, items, chain, estimates.
 - [ ] I2-d The MCP read over 500 items is < 48 000 characters with a "not included" tail.
 - [ ] I3-a A drag to another lane → one `spec: apply PR-…` commit with provenance, no other write.
 

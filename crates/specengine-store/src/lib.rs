@@ -20,7 +20,9 @@
 //!   [`IndexWriter::rebuild`] (`spec index --full`), each giving an
 //!   [`UpdateReport`];
 //! - [`SpecIndex`]: [`SpecIndex::files`], [`SpecIndex::file`],
-//!   [`SpecIndex::lookup_id`], [`SpecIndex::search`];
+//!   [`SpecIndex::lookup_id`], [`SpecIndex::search`] (Tier 3 files left out
+//!   unless [`SearchQuery::archive`]), [`SpecIndex::indexed_input`] (the
+//!   index-fed [`CheckInput`] of `spec show`);
 //! - [`check_input`], [`check_worktree`]: `spec check` over a fresh parse
 //!   of a [`Source`], no database (docs/features/spec-check.md).
 //!
@@ -42,6 +44,7 @@ mod source;
 mod write;
 
 use serde::Serialize;
+use specengine_core::check::CheckInput;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
 pub use check::{BASELINE_FILE, check_input, check_worktree, today_utc};
@@ -69,7 +72,12 @@ pub use source::{Listing, Source, WorkingTree};
 /// 5: local Markdown link destinations and reference definitions are
 /// `mentions` links with a path target (`dst_path`), and the fixtures gained
 /// a `link_base` link; no schema change (docs/features/spec-check-links.md).
-pub const INDEX_FORMAT: u32 = 5;
+///
+/// 6: `files.tier3` (core's `check::is_tier3_file`, the archive filter of
+/// [`SearchQuery::archive`]) and `nodes.line` (the 1-based line of the
+/// node's span start), both pure functions of the file's bytes
+/// (docs/features/spec-cli.md).
+pub const INDEX_FORMAT: u32 = 6;
 
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;
@@ -139,15 +147,21 @@ pub struct SearchQuery {
     pub kinds: Vec<String>,
     /// Hits at most, clamped to [`SEARCH_LIMIT_MIN`]..=[`SEARCH_LIMIT_MAX`].
     pub limit: usize,
+    /// Keep the nodes of Tier 3 files (`files.tier3`); `false` drops them in
+    /// the query, before the limit, and counts them in
+    /// [`SearchResults::tier3_left_out`].
+    pub archive: bool,
 }
 
 impl SearchQuery {
-    /// `text` over any kind, up to [`SEARCH_LIMIT_DEFAULT`] hits.
+    /// `text` over any kind, up to [`SEARCH_LIMIT_DEFAULT`] hits, Tier 3
+    /// files left out.
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
             kinds: Vec::new(),
             limit: SEARCH_LIMIT_DEFAULT,
+            archive: false,
         }
     }
 }
@@ -157,6 +171,10 @@ impl SearchQuery {
 pub struct SearchHit {
     pub path: String,
     pub ord: usize,
+    /// The 1-based line of the node's span start.
+    pub line: usize,
+    /// The node's file is Tier 3 (`files.tier3`).
+    pub tier3: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -176,6 +194,9 @@ pub struct SearchResults {
     /// No term of at least [`MIN_TERM_CHARS`] characters was left, so
     /// nothing was searched.
     pub short_query: bool,
+    /// Matches of Tier 3 files the query dropped (all of them, not only
+    /// those within the limit); 0 with [`SearchQuery::archive`].
+    pub tier3_left_out: u32,
 }
 
 /// Reading the index of the handle's worktree. Every call reads one
@@ -191,6 +212,10 @@ pub trait SpecIndex {
     fn lookup_id(&self, id: &str) -> Result<Vec<IdHit>, StoreError>;
     /// Full-text search (trigram substrings; exact IDs: [`Self::lookup_id`]).
     fn search(&self, query: &SearchQuery) -> Result<SearchResults, StoreError>;
+    /// The stored worktree as the check's input, from one snapshot: every
+    /// file in path order with its stored `size`, parse and `read_error`;
+    /// `bytes` empty, no walk `problems` (the index keeps none).
+    fn indexed_input(&self) -> Result<CheckInput, StoreError>;
 }
 
 /// Writing the index of the handle's worktree. Parsing runs before the

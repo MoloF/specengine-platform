@@ -4,6 +4,7 @@
 
 [project]
 name = "lantern-keep"
+slug = "lantern-keep"
 
 [ids]
 DOM  = { kind = "domain",      shape = "name" }

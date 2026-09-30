@@ -398,14 +398,15 @@ impl<'t> Writer<'t> {
         Ok(Self {
             insert_file: tx
                 .prepare(
-                    "INSERT INTO files (wt, path, blake3, size, read_error, shell)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    "INSERT INTO files (wt, path, blake3, size, read_error, shell, tier3)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 )
                 .db()?,
             insert_node: tx
                 .prepare(
-                    "INSERT INTO nodes (file_id, ord, id, kind, title, parent_id, own_text, node)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    "INSERT INTO nodes
+                       (file_id, ord, line, id, kind, title, parent_id, own_text, node)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 )
                 .db()?,
             insert_alias: tx
@@ -449,6 +450,7 @@ impl<'t> Writer<'t> {
                 rows.size,
                 rows.read_error.as_deref(),
                 rows.shell.as_deref(),
+                i64::from(rows.tier3),
             ))
             .db()?;
         for (ord, node) in rows.nodes.iter().enumerate() {
@@ -457,6 +459,7 @@ impl<'t> Writer<'t> {
                 .insert((
                     file_id,
                     ord_value(ord),
+                    node.line,
                     node.id.as_deref(),
                     node.kind.as_deref(),
                     node.title.as_deref(),

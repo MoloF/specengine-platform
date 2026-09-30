@@ -16,7 +16,9 @@
 //! never checked on recognition.
 //!
 //! The store keeps a link's `dst` as written; [`Resolver`] is the one
-//! resolution the check, and later `spec refs` and `get_impact`, share.
+//! resolution the check, `spec show` and later `spec refs` and
+//! `get_impact` share. With no citing file ([`Resolver::resolve_detached`],
+//! `spec show`) a bare feature-scoped ID resolves wherever it is defined.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -173,6 +175,23 @@ impl<'a> Resolver<'a> {
         self.resolve_in(from, reference, written, true)
     }
 
+    /// A reference with no citing file (`spec show`, a reader asking by
+    /// ID): [`Resolver::resolve`], except that a bare ID of a
+    /// `scope = "feature"` prefix resolves wherever it is defined, as a
+    /// project-scoped one does (the check resolves it only inside its own
+    /// feature document). `slug/ID` resolves in its feature document,
+    /// `project:` is skipped, no name fallback.
+    pub fn resolve_detached(&self, reference: &Reference, written: &str) -> Resolution {
+        let place = if reference.project.is_some() {
+            None
+        } else if let Some(slug) = reference.scope.as_deref() {
+            Some(Place::Feature(slug, self.by_slug.get(slug).copied()))
+        } else {
+            Some(Place::Anywhere)
+        };
+        self.resolve_at(place, reference, written, false)
+    }
+
     /// The files holding the reference's ID as cited from the file `from`,
     /// its section ignored, without the name fallback; `None` when it
     /// resolves to nothing or is skipped.
@@ -194,7 +213,18 @@ impl<'a> Resolver<'a> {
         written: &str,
         fallback: bool,
     ) -> Resolution {
-        let Some(place) = self.place(from, reference) else {
+        self.resolve_at(self.place(from, reference), reference, written, fallback)
+    }
+
+    /// Resolution in `place` (`None`: `project:`, skipped).
+    fn resolve_at(
+        &self,
+        place: Option<Place<'_>>,
+        reference: &Reference,
+        written: &str,
+        fallback: bool,
+    ) -> Resolution {
+        let Some(place) = place else {
             return Resolution::Skipped;
         };
         let alias_of = reference.alias_of.as_deref();

@@ -1,8 +1,11 @@
 //! The read side: one deferred (read-only) transaction per call, so a call
 //! sees one snapshot even while another connection writes.
 
+use std::collections::BTreeMap;
+
 use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params_from_iter};
+use specengine_core::check::{CheckFile, CheckInput};
 use specengine_model::Node;
 
 use crate::error::{Db, StoreError};
@@ -154,31 +157,50 @@ pub(crate) fn search(
             return Ok(SearchResults {
                 hits: Vec::new(),
                 short_query: true,
+                tier3_left_out: 0,
             });
         };
-        let limit = query.limit.clamp(SEARCH_LIMIT_MIN, SEARCH_LIMIT_MAX);
-        let mut values = vec![
-            Value::Text(matching),
-            Value::Integer(wt),
-            Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)),
-        ];
-        let mut kinds = String::new();
+        // `?1` the match, `?2` the worktree, then the kinds; the limit last.
+        let mut values = vec![Value::Text(matching), Value::Integer(wt)];
+        let mut filter = String::new();
         if !query.kinds.is_empty() {
             let placeholders: Vec<String> = (0..query.kinds.len())
                 .map(|offset| format!("?{}", values.len() + 1 + offset))
                 .collect();
-            kinds = format!(" AND n.kind IN ({})", placeholders.join(", "));
+            filter = format!(" AND n.kind IN ({})", placeholders.join(", "));
             values.extend(query.kinds.iter().cloned().map(Value::Text));
         }
-        let sql = format!(
-            "SELECT f.path, n.ord, n.id, n.kind, n.title,
-                    snippet(nodes_fts, -1, '**', '**', '…', 64)
-             FROM nodes_fts
+        const MATCHES: &str = "FROM nodes_fts
              JOIN nodes n ON n.node_id = nodes_fts.rowid
              JOIN files f ON f.file_id = n.file_id
-             WHERE nodes_fts MATCH ?1 AND f.wt = ?2{kinds}
+             WHERE nodes_fts MATCH ?1 AND f.wt = ?2";
+        // Tier 3 files leave in the query itself, before the limit.
+        let archive = if query.archive {
+            ""
+        } else {
+            " AND f.tier3 = 0"
+        };
+        let tier3_left_out = if query.archive {
+            0
+        } else {
+            let count: i64 = tx
+                .query_row(
+                    &format!("SELECT count(*) {MATCHES}{filter} AND f.tier3 = 1"),
+                    params_from_iter(values.iter()),
+                    |row| row.get(0),
+                )
+                .db()?;
+            u32::try_from(count).unwrap_or(u32::MAX)
+        };
+        let limit = query.limit.clamp(SEARCH_LIMIT_MIN, SEARCH_LIMIT_MAX);
+        let limit_param = values.len() + 1;
+        values.push(Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
+        let sql = format!(
+            "SELECT f.path, n.ord, n.line, f.tier3, n.id, n.kind, n.title,
+                    snippet(nodes_fts, -1, '**', '**', '…', 64)
+             {MATCHES}{filter}{archive}
              ORDER BY bm25(nodes_fts, 10.0, 5.0, 1.0), f.path, n.ord
-             LIMIT ?3"
+             LIMIT ?{limit_param}"
         );
         let mut statement = tx.prepare(&sql).db()?;
         let hits = statement
@@ -186,10 +208,12 @@ pub(crate) fn search(
                 Ok(SearchHit {
                     path: row.get(0)?,
                     ord: ord_of(row.get(1)?),
-                    id: row.get(2)?,
-                    kind: row.get(3)?,
-                    title: row.get(4)?,
-                    snippet: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                    line: ord_of(row.get(2)?),
+                    tier3: row.get::<_, i64>(3)? != 0,
+                    id: row.get(4)?,
+                    kind: row.get(5)?,
+                    title: row.get(6)?,
+                    snippet: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
                 })
             })
             .db()?
@@ -198,7 +222,82 @@ pub(crate) fn search(
         Ok(SearchResults {
             hits,
             short_query: false,
+            tier3_left_out,
         })
+    })
+}
+
+pub(crate) fn indexed_input(index: &SqliteIndex) -> Result<CheckInput, StoreError> {
+    with_worktree(index, |tx, wt| {
+        // file_id → its rows' JSON in `ord` order, for one of the row tables.
+        let rows_of =
+            |table: &str, column: &str| -> Result<BTreeMap<i64, Vec<String>>, StoreError> {
+                let mut statement = tx
+                    .prepare(&format!(
+                        "SELECT x.file_id, x.{column} FROM {table} x
+                     JOIN files f ON f.file_id = x.file_id
+                     WHERE f.wt = ?1
+                     ORDER BY x.file_id, x.ord"
+                    ))
+                    .db()?;
+                let mut grouped: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+                let rows = statement
+                    .query_map([wt], |row| {
+                        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                    })
+                    .db()?;
+                for row in rows {
+                    let (file_id, value) = row.db()?;
+                    grouped.entry(file_id).or_default().push(value);
+                }
+                Ok(grouped)
+            };
+        let mut nodes = rows_of("nodes", "node")?;
+        let mut links = rows_of("links", "link")?;
+        let mut anchors = rows_of("anchors", "anchor")?;
+        let mut diagnostics = rows_of("diagnostics", "diagnostic")?;
+
+        let mut statement = tx
+            .prepare(
+                "SELECT file_id, path, size, read_error, shell FROM files
+                 WHERE wt = ?1 ORDER BY path",
+            )
+            .db()?;
+        let files = statement
+            .query_map([wt], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
+            })
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        let mut input = CheckInput::default();
+        for (file_id, path, size, read_error, shell) in files {
+            let parsed = match shell {
+                None => None,
+                Some(shell) => Some(rebuild_parsed(
+                    &path,
+                    &shell,
+                    &nodes.remove(&file_id).unwrap_or_default(),
+                    &links.remove(&file_id).unwrap_or_default(),
+                    &anchors.remove(&file_id).unwrap_or_default(),
+                    &diagnostics.remove(&file_id).unwrap_or_default(),
+                )?),
+            };
+            input.files.push(CheckFile {
+                path,
+                size: u64::try_from(size).unwrap_or(0),
+                parsed,
+                read_error,
+                bytes: Vec::new(),
+            });
+        }
+        Ok(input)
     })
 }
 

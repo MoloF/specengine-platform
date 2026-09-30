@@ -14,6 +14,10 @@
 //! - [`scheme_toml`] — `IdScheme::from_toml`: the `[ids]` table;
 //! - [`paths_toml`] — `Paths::from_toml`: the `[paths]` table (role
 //!   directories, walked roots, exclude globs; docs/features/spec-index.md);
+//! - [`project_toml`] — `ProjectConfig::from_toml`: the whole
+//!   `specengine.toml` of the `spec` commands (a closed `[project]` with its
+//!   `slug`, `[ids]`, `[paths]`, the known top-level keys;
+//!   docs/features/spec-cli.md);
 //! - [`tokens`] — the per-script token estimator;
 //! - `front_matter` — the block and its typed keys (`serde-saphyr`, with
 //!   depth and alias budgets);
@@ -31,6 +35,7 @@ mod glob;
 mod lines;
 mod markdown;
 pub mod paths_toml;
+pub mod project_toml;
 pub mod scheme_toml;
 pub mod tokens;
 pub mod walk_scope;
@@ -45,6 +50,9 @@ use specengine_model::{
 };
 
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
+pub use project_toml::{
+    MAX_SLUG_BYTES, Project, ProjectConfig, ProjectError, project_from_toml, slug_problem,
+};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};
 pub use tokens::tokens_est;
 pub use walk_scope::{DOCUMENT_EXTENSION, WalkScope, is_clean_relative, is_under};

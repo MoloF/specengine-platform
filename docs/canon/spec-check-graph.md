@@ -37,9 +37,9 @@ Then each non-empty section as `\n## <name>\n\n` plus one `\n`-ended line per do
 
 Line `- [<label>](<link>) <title> · <scope> · <status>`: label = a decision's ID, else the path; link relative to the directory of the configured index (`a/b/index.md` → `../../CLAUDE.md`); title = `title:`, else the first H1's inline text, else `?`; scope items joined by `, `; status = canon `tier N` (`tier ?`), else `status:`, else `?`.
 
-**Tier 3** is decided once, by status, never by folder, with `xtask`'s rule: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). The graph rules read their live sources through the same predicate.
+**Tier 3** is decided once, by status, never by folder, with `xtask`'s rule: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules.
 
-Accepted divergences from `xtask` (none occurs here; avoid them until increment 3 moves `xtask` onto this renderer): an H1 with markup (`xtask` keeps the raw text, the core the inline text) or a setext H1 (`xtask` sees none); `title:` on a non-decision (`xtask` takes the H1); a decision without `title:` (`xtask` prints `?`, the core the H1); YAML escapes in a quoted value (`xtask`'s `unquote` ignores them); front-matter failing strict YAML (core: `No class — fix`); a key of the wrong type (rendered absent).
+Accepted divergences from `xtask` (none occurs here; avoid them until increment 3 moves `xtask` onto this renderer): an H1 with inline markup (`xtask` keeps the raw text, the core the inline text: H1s here stay plain, no code span, link or emphasis) or a setext H1 (`xtask` sees none); `title:` on a non-decision (`xtask` takes the H1); a decision without `title:` (`xtask` prints `?`, the core the H1); YAML escapes in a quoted value (`xtask`'s `unquote` ignores them); front-matter failing strict YAML (core: `No class — fix`); a key of the wrong type (rendered absent).
 
 ## §11.5: index drift
 
@@ -82,7 +82,7 @@ This repository (parity config + registry, `enforce`, no baseline): `clean`, one
 ## Next
 
 - Increment 2 is complete: part 2 shipped feature scopes and Markdown file links (`docs/canon/spec-check-links.md`).
-- Increment 3, the next step: the CLI's `check`, the index writer, the root `specengine.toml` (Q-7), hook and CI switched, `xtask` on this renderer, then retired. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
+- Increment 3, the next step, as CLI passes 2a and 2b (`crates/specengine-cli/README.md`): the CLI's `check`, the index writer, the root `specengine.toml` (Q-7), hook and CI switched, `xtask` on this renderer, then retired. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 
 ## Open nits
