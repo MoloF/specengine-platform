@@ -14,7 +14,9 @@
 //!
 //! AC-19/AC-07/AC-12: the walk equals `cargo xtask docs budget`'s list;
 //! `enforce` → `clean`, no debt, the seven codes of increment 2 part 1 plus
-//! `id-scope` give exactly the one `mention-dangling` of the spec's
+//! `id-scope` and pass B's `link-dangling` / `link-anchor`
+//! (docs/features/spec-check-links.md AC-10: the parity config has no
+//! `link_base`) give exactly the one `mention-dangling` of the spec's
 //! Findings; citing the superseded ADR-0002 adds one `ref-superseded`. AC-02: the core render equals
 //! `xtask docs index --root` stdout and the committed `docs/index.md`, byte
 //! for byte. AC-20/AC-06: per seed, on a scratch copy of the documents, the
@@ -54,8 +56,9 @@ gate    = \"cargo xtask docs check\"
 ";
 
 /// The codes increment 2 adds (spec-check-graph, Findings; part 2's
-/// `id-scope`, spec-check-scopes AC-12).
-const NEW_CODES: [&str; 8] = [
+/// `id-scope`, spec-check-scopes AC-12; pass B's file link warnings,
+/// spec-check-links AC-10).
+const NEW_CODES: [&str; 10] = [
     "index-missing",
     "index-drift",
     "generator-unknown",
@@ -64,6 +67,8 @@ const NEW_CODES: [&str; 8] = [
     "depends-cycle",
     "ref-superseded",
     "id-scope",
+    "link-dangling",
+    "link-anchor",
 ];
 
 // ------------------------------------------------------------------ xtask
@@ -451,6 +456,74 @@ fn the_parity_config_walks_the_budget_documents_and_is_clean() {
     let (code, stdout) = run_xtask(&["docs", "check", "--root", repository.to_str().unwrap()]);
     assert_eq!(code, Some(0), "{stdout}");
     assert!(xtask_blocking(&repository).is_empty(), "{stdout}");
+}
+
+/// AC-10 of docs/features/spec-check-links.md: this repository's file
+/// links under the parity config (no `link_base`). The root `README.md`
+/// records 9 (7 `.md` targets that resolve; `docs/decisions/` and `LICENSE`
+/// recorded, never checked); the platform spec's `README.md` 6 sibling
+/// links that resolve; no link finding anywhere (the clean pin above).
+#[test]
+fn this_repository_s_file_links_are_recorded_and_resolve() {
+    use specengine_model::{LinkOrigin, LinkTarget};
+    let repository = repository_root();
+    let toml = parity_toml(&repository, true);
+    assert!(!toml.contains("link_base"), "the parity config has no base");
+    let input = input_of(&repository, &toml);
+    let file_links = |path: &str| -> Vec<String> {
+        let file = input
+            .files
+            .iter()
+            .find(|file| file.path == path)
+            .unwrap_or_else(|| panic!("{path} is walked"));
+        file.parsed
+            .as_ref()
+            .expect("parsed")
+            .links
+            .iter()
+            .filter(|link| link.origin == LinkOrigin::Inline)
+            .filter_map(|link| match &link.dst {
+                LinkTarget::Path(target) => Some(target.path.clone()),
+                LinkTarget::Reference(_) => None,
+            })
+            .collect()
+    };
+    let walked: BTreeSet<&str> = input.files.iter().map(|file| file.path.as_str()).collect();
+    let readme = file_links("README.md");
+    assert_eq!(readme.len(), 9, "{readme:#?}");
+    let (checked, unchecked): (Vec<&String>, Vec<&String>) =
+        readme.iter().partition(|path| path.ends_with(".md"));
+    assert_eq!(unchecked, ["docs/decisions/", "LICENSE"], "{readme:#?}");
+    for path in &checked {
+        assert!(
+            walked.contains(path.as_str()),
+            "README.md -> {path} is walked"
+        );
+    }
+    let platform = "docs/specs/specengine-platform/README.md";
+    let siblings = file_links(platform);
+    assert_eq!(siblings.len(), 6, "{siblings:#?}");
+    for path in &siblings {
+        assert!(!path.contains('/'), "a sibling: {path}");
+        let target = format!("docs/specs/specengine-platform/{path}");
+        assert!(walked.contains(target.as_str()), "{platform} -> {target}");
+    }
+    let (scheme, paths, config) = tables(&toml);
+    let report = specengine_core::check::run(
+        &input,
+        &scheme,
+        &paths,
+        &config,
+        &specengine_core::check::Baseline::empty(),
+        TODAY,
+    );
+    let links: Vec<String> = report
+        .findings
+        .iter()
+        .filter(|f| f.code.starts_with("link-"))
+        .map(|f| format!("{}:{}: {} {}", f.path, f.line, f.code, f.subject))
+        .collect();
+    assert!(links.is_empty(), "{links:#?}");
 }
 
 /// AC-12 of docs/features/spec-check-scopes.md, its named red: the

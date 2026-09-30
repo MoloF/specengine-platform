@@ -74,13 +74,13 @@ docs/
 
 ### 3.1. Node kinds (`kind`)
 
-A kind is project vocabulary, named per prefix in `[ids]` (a free string, core README Q2): the core knows none (ADR-0008). Usual kinds: `game`, `domain`, `mechanic`, `rule`, `invariant`, `edge_case`, `data_contract`, `requirement`, `assumption`, `decision`, `principle`, `term`, `question`, `feature`, `criterion`, `check`, `generated`. IDs are Latin (ADR-0009): a look-alike letter gives `homoglyph` with the Latin fix as data (`spec check` rejects; only `apply_proposal` writes, ADR-0004); legacy IDs resolve through `aliases_from` / `aliases`; `spec new` issues numbers. `[ids]` and the grammar: `crates/specengine-model/README.md`; the parser: `crates/specengine-core/README.md`.
+A kind is project vocabulary, named per prefix in `[ids]` (a free string, core README Q2): the core knows none (ADR-0008). Usual kinds: `game`, `domain`, `mechanic`, `rule`, `invariant`, `edge_case`, `data_contract`, `requirement`, `assumption`, `decision`, `principle`, `term`, `question`, `feature`, `criterion`, `check`, `generated`. IDs are Latin (ADR-0009): a look-alike letter gives `homoglyph` with the Latin fix as data (`spec check` rejects; only `apply_proposal` writes, ADR-0004); legacy IDs resolve through `aliases_from` / `aliases`; `spec new` issues numbers. `[ids]` and the grammar: `crates/specengine-model/README.md`; the parser: §3.2.
 
 ### 3.2. Link types
 
 Link types with meanings, and the one grammar for text, markers and search: `crates/specengine-model/README.md`; declaring keys: `crates/specengine-core/README.md`. Declared links are strong, inline `mentions` weak; the index graph drives impact analysis; `parent` is containment (§8).
 
-**Front-matter input caps**, beside `MAX_USE_RUN_NESTING = 64` (§5.2) and the RON `MAX_DEPTH = 512` (§5.3): nesting 32 (the root mapping is depth 1) and alias expansion 10 000 replayed events; past either, one `frontmatter-yaml`, never a crash.
+**Front-matter input caps** (nesting 32, alias expansion 10 000: core README) sit beside `MAX_USE_RUN_NESTING = 64` (§5.2) and the RON `MAX_DEPTH = 512` (§5.3).
 
 ### 3.3. Index schema (SQLite)
 

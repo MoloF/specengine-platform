@@ -622,3 +622,34 @@ fn a_superseded_feature_cited_by_its_slug_warns() {
         show(&report)
     );
 }
+
+/// AC-02 of docs/features/spec-check-links.md: a Markdown file link is a
+/// `mentions` link with a path target; the graph rules read ID references
+/// only, so a link to a superseded document's file (by path, by anchor, by
+/// a definition) warns `ref-superseded` never, and gives no edge.
+#[test]
+fn file_links_to_a_superseded_document_are_not_ref_superseded() {
+    let source = "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\n---\n\n\
+                  See [old](decisions/ADR-0001.md), [its heading](decisions/ADR-0001.md#old),\n\
+                  [the mechanic](m/old.md) and [r].\n\n[r]: m/old.md#old-mechanic\n";
+    let report = superseded_with(&[("docs/cites.md", source)]);
+    assert!(
+        found(&report, "ref-superseded").is_empty(),
+        "{}",
+        show(&report)
+    );
+    assert!(
+        report.findings.iter().all(|f| !f.code.starts_with("link-")),
+        "the links resolve:\n{}",
+        show(&report)
+    );
+    // The same targets cited by ID do warn: the fixture is live.
+    let by_id = "---\nclass: canon\nowner: o\nreviewed: 2026-09-01\n---\n\nSee ADR-0001.\n";
+    let report = superseded_with(&[("docs/cites.md", by_id)]);
+    assert_eq!(
+        found(&report, "ref-superseded").len(),
+        1,
+        "{}",
+        show(&report)
+    );
+}

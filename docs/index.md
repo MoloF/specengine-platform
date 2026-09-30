@@ -75,6 +75,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) Phase 0 spikes: turn the engine's unverified claims into numbers on the two pilot corpora · spikes · shipped
 - [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) Phase 1 cleanup: the open minors of the parser, index and check · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) spec check, increment 2 part 1: index, generators, graph warnings · crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
+- [docs/features/spec-check-links.md](features/spec-check-links.md) spec check, pass B: file links · crates/specengine-core, crates/specengine-store · shipped
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) spec check, increment 2 part 2, pass A: feature scopes · crates/specengine-core, crates/specengine-model, crates/specengine-store · shipped
 - [docs/features/spec-check.md](features/spec-check.md) spec check, increment 1: a config-driven check engine at xtask parity · crates/specengine-core, crates/specengine-model, crates/specengine-store, crates/specengine-eval, xtask · shipped
 - [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped

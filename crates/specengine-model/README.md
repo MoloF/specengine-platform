@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-model]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-09-30
 ---
 
 # specengine-model — the corpus model and the reference grammar
@@ -53,7 +53,7 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 ## Links
 
-`LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (lives until applied), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6). Another declared type is kept with `unknown-link-type`. `MENTIONS` is the weak link of `refs`, `adrs` and every body reference; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a `canon:` path, unresolved. `parent` is containment, not a link (05 §8).
+`LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (lives until applied), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6). Another declared type is kept with `unknown-link-type`. `MENTIONS` is the weak link of `refs`, `adrs`, every body reference and every local Markdown link; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a path, unresolved: `PathTarget {path, anchor?, span?}` is a `canon:` value or a Markdown link destination (`path` before the first `#`, cut at the first `?`, `""` for `#h`; a link's `span` always set, the destination as written; `docs/canon/spec-check-links.md`). `parent` is containment, not a link (05 §8).
 
 ## Anchors
 

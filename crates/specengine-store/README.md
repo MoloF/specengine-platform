@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-09-30
 ---
 
 # specengine-store — the spec index
@@ -19,7 +19,7 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `trait IndexWriter {update, update_paths, rebuild}` → `UpdateReport {walked, parsed, unchanged, removed, unreadable, reparsed_all, missing_roots, skipped_names, unreadable_dirs}`. `update` walks all; `update_paths` (the Phase 2 watcher) probes each named path by the walk rules (unlisted → deleted; a directory gone from disk re-probes its stored files); an existing directory (`is_dir`) or a non-clean path (`""`, `docs/`, `./x.md`, absolute) walks, as do no prior index and a stamp or fingerprint change; a `[paths]` change needs `update`. `rebuild` = `spec index --full`.
 - `trait SpecIndex {files, file -> IndexedFile {parsed?, blake3?, size, read_error?}, lookup_id -> [IdHit {path, ord, node}], search(&SearchQuery {text, kinds, limit}) -> SearchResults {hits: [SearchHit {path, ord, id?, kind?, title?, snippet}], short_query}}`; `lookup_id`: every node with exactly that `id`.
 - `spec check`, no database (`docs/canon/spec-check.md`): `check_input(&dyn Source, &IdScheme) -> CheckInput` (a parser panic → a read error), `check_worktree(root, config, baseline?, today) -> Report` (all tables from `config`; no baseline passed → `BASELINE_FILE` `.spec-debt.toml` at the root if present; no root, a bad config or baseline → `cannot-check`, unwalked), `today_utc()`.
-- `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 4`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
+- `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 5`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 
 ## Rows
 
@@ -31,11 +31,11 @@ Tables (`schema.rs`), `STRICT`, no `CHECK`: `index_meta` (`format`); `worktrees 
 
 ## Cache key and format stamp
 
-Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fingerprint (BLAKE3 of the JSON of `IdScheme::prefixes()`; an `[ids]` comment or another table leaves it) or the DB's stamp changed. Stamp = `INDEX_FORMAT` in `index_meta` (`user_version` is for Phase 2's `rusqlite_migration`). WHEN it differs, the first write recreates the tables in its transaction (other worktrees: `NotIndexed` until updated), dropping only the index's objects (append-only lists in `schema.rs`): Phase 2 tables survive. `tests/format_history.txt`: `<INDEX_FORMAT> <BLAKE3 of the spec-a + spec-b dump, root masked>`; a changed dump needs a new line and number (2: anchor origins, spans; 3: alias `homoglyph`, non-finite floats, repeated map keys, `<!-->`; 4: ADR-0026 fixtures).
+Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fingerprint (BLAKE3 of the JSON of `IdScheme::prefixes()`; an `[ids]` comment or another table leaves it) or the DB's stamp changed. Stamp = `INDEX_FORMAT` in `index_meta` (`user_version` is for Phase 2's `rusqlite_migration`). WHEN it differs, the first write recreates the tables in its transaction (other worktrees: `NotIndexed` until updated), dropping only the index's objects (append-only lists in `schema.rs`): Phase 2 tables survive. `tests/format_history.txt`: `<INDEX_FORMAT> <BLAKE3 of the spec-a + spec-b dump, root masked>`; a changed dump needs a new line and number (reasons: `INDEX_FORMAT`'s doc comment; 5: file links as `dst_path` rows, no schema change).
 
 ## Walk
 
-`[paths]`: core README. Regular files ending exactly in `.md` under the roots, minus `exclude`; below a root, symlinks and `.`-names skipped (a dot-name written in a root is kept), `probe`, `read` refuse any symlink component; no `.gitignore`; non-UTF-8 names skipped and counted. A root's components match by exact name: NFC over an NFD directory, or a symlink on its path → `missing_roots`. Paths: root-relative, `/`, as the OS lists them, byte-sorted, repeats dropped. An unlistable directory → `unreadable_dirs`, its files absent.
+`[paths]` and the matcher, core's `WalkScope` (also the link check's): core README. Regular files ending exactly in `.md` under the roots, minus `exclude`; below a root, symlinks and `.`-names skipped (a dot-name written in a root is kept), `probe`, `read` refuse any symlink component; no `.gitignore`; non-UTF-8 names skipped and counted. A root's components match by exact name: NFC over an NFD directory, or a symlink on its path → `missing_roots`. Paths: root-relative, `/`, as the OS lists them, byte-sorted, repeats dropped. An unlistable directory → `unreadable_dirs`, its files absent.
 
 ## Writes, reads, search
 
@@ -46,7 +46,7 @@ Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fin
 
 ## Connection, location, concurrency
 
-At creation, before the first table: `journal_mode=WAL`, `auto_vacuum=INCREMENTAL`; per connection `busy_timeout=5000`, `foreign_keys=ON`, `synchronous=NORMAL`, `journal_size_limit=67108864`, `trusted_schema=OFF` (FTS5 is `SQLITE_VTAB_INNOCUOUS`), `recursive_triggers=OFF`. `open` gives `DbInsideWorktree`, creating nothing, when the DB's canonical parent or file is inside the worktree; no parent → `DbDirMissing`. Until the Phase 2 daemon is the sole writer (05 §1 principle 6), handles in any processes write directly: WAL, `Immediate`, `busy_timeout` (`BUSY`/`LOCKED` → `Busy`), no lock file or global state. Index updates are derived data, not `events` (Phase 2's `events` ADR sharpens `#distribution`).
+At creation, before the first table: `journal_mode=WAL`, `auto_vacuum=INCREMENTAL`; per connection `busy_timeout=5000`, `foreign_keys=ON`, `synchronous=NORMAL`, `journal_size_limit=67108864`, `trusted_schema=OFF` (FTS5 is `SQLITE_VTAB_INNOCUOUS`), `recursive_triggers=OFF`. `open` gives `DbInsideWorktree`, creating nothing, when the DB's canonical parent or file is inside the worktree; no parent → `DbDirMissing`. Until the Phase 2 daemon is the sole writer (05 §1 principle 6), handles in any processes write directly: WAL, `Immediate`, `busy_timeout` (`BUSY`/`LOCKED` → `Busy`), no lock file or global state. Index updates are derived data, not `events`.
 
 ## Open owner questions
 

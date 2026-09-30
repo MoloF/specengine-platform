@@ -12,7 +12,7 @@ mod common;
 use std::os::unix::fs::symlink;
 
 use common::{Corpus, Scratch, md_files_under};
-use specengine_core::Paths;
+use specengine_core::{Paths, WalkScope, is_clean_relative, is_under};
 use specengine_store::{Source, SpecIndex, WorkingTree};
 
 #[test]
@@ -305,4 +305,205 @@ fn a_listed_directory_swapped_for_a_symlink_is_neither_read_nor_probed() {
     symlink(&copy, corpus.root.join(file)).expect("symlink");
     assert!(tree.read(file).is_err(), "a symlinked file is not read");
     assert!(!tree.probe(file));
+}
+
+/// AC-06 of docs/features/spec-check-links.md: the walk and the check's
+/// walk scope share one matcher. For every candidate of the walk rules,
+/// `Paths::in_walk_scope` agrees with the listing, but for what the pure
+/// predicate cannot see (a symlink, a missing root: accepted, Rule 9); the
+/// exclude globs live in core only, the store keeps no second matcher.
+#[test]
+fn the_walk_and_the_link_scope_share_one_matcher() {
+    let scratch = Scratch::new("walk-scope");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    corpus.write(
+        "specengine.toml",
+        format!(
+            "{}\n[paths]\nroots = [\"docs/spec\", \"docs/records/\", \"CLAUDE.md\", \"docs/gone\"]\n\
+             exclude = [\"docs/spec/drafts/**\", \"**/*.draft.md\", \"docs/spec/?.md\"]\n",
+            corpus.read_text("specengine.toml")
+        ),
+    );
+    let corpus = Corpus::load(&corpus.root);
+    let written = [
+        "CLAUDE.md",
+        "docs/spec/deep/er/nested.md",
+        "docs/spec/x.md",
+        "docs/spec/xy.md",
+        "README.md",
+        "notes/outside.md",
+        "docs/features/outside-now.md",
+        "docs/spec/drafts/excluded.md",
+        "docs/spec/drafts/deeper/also.md",
+        "docs/records/R/R-99.draft.md",
+        "docs/spec/.hidden/in-dot-dir.md",
+        "docs/spec/.dot-file.md",
+        "docs/spec/notes.txt",
+        "docs/spec/rule.md.bak",
+        "docs/spec/UPPER.MD",
+    ];
+    for path in written {
+        corpus.write(path, format!("# {path}\n\nText.\n"));
+    }
+    symlink(
+        corpus.root.join("docs/spec/game.md"),
+        corpus.root.join("docs/spec/link-to-game.md"),
+    )
+    .unwrap();
+    let listing = corpus.listing();
+    let tree = corpus.tree();
+    let mut candidates: Vec<String> = listing.paths.clone();
+    candidates.extend(written.iter().map(|path| (*path).to_owned()));
+    candidates.extend(
+        [
+            "docs/gone/x.md",
+            "docs/spec/../spec/game.md",
+            "/docs/spec/game.md",
+            "docs//spec/game.md",
+            "docs/spec",
+            "",
+        ]
+        .map(str::to_owned),
+    );
+    // The compiled scope: once per `[paths]`, equal however it is built,
+    // its roots the configured ones in order.
+    let scope = corpus.paths.walk_scope();
+    assert_eq!(scope, WalkScope::new(&corpus.paths));
+    assert_eq!(scope.roots(), corpus.paths.roots.as_slice());
+    for path in &candidates {
+        let listed = listing.paths.contains(path);
+        let invisible = path.starts_with("docs/gone/");
+        assert_eq!(
+            scope.in_walk_scope(path),
+            listed || invisible,
+            "WalkScope::in_walk_scope({path:?}) disagrees with the walk"
+        );
+        assert_eq!(
+            corpus.paths.in_walk_scope(path),
+            scope.in_walk_scope(path),
+            "Paths::in_walk_scope({path:?}) disagrees with WalkScope"
+        );
+        assert_eq!(
+            corpus.paths.is_excluded(path),
+            scope.is_excluded(path),
+            "Paths::is_excluded({path:?}) disagrees with WalkScope"
+        );
+        assert_eq!(
+            tree.probe(path),
+            listed,
+            "probe({path:?}) disagrees with the walk"
+        );
+        if scope.in_walk_scope(path) {
+            assert!(is_clean_relative(path), "{path:?}");
+            assert!(
+                scope
+                    .roots()
+                    .iter()
+                    .any(|root| path == root || is_under(path, root)),
+                "{path:?} lies in a root"
+            );
+        }
+    }
+    for (path, dir, under) in [
+        ("docs/spec/game.md", "docs/spec", true),
+        ("docs/spec", "docs/spec", false),
+        ("docs/specs/x.md", "docs/spec", false),
+        ("docs/spec/deep/x.md", "docs", true),
+    ] {
+        assert_eq!(is_under(path, dir), under, "is_under({path:?}, {dir:?})");
+    }
+    for (path, clean) in [
+        ("docs/spec/game.md", true),
+        ("", false),
+        ("/docs/x.md", false),
+        ("docs//x.md", false),
+        ("docs/./x.md", false),
+        ("docs/../x.md", false),
+        ("docs/x.md/", false),
+    ] {
+        assert_eq!(
+            is_clean_relative(path),
+            clean,
+            "is_clean_relative({path:?})"
+        );
+    }
+    // What the predicate cannot see: a symlinked `.md` in scope.
+    assert!(
+        !listing
+            .paths
+            .iter()
+            .any(|p| p == "docs/spec/link-to-game.md")
+    );
+    assert!(corpus.paths.in_walk_scope("docs/spec/link-to-game.md"));
+    // The exclude globs are core's matcher.
+    for (path, excluded) in [
+        ("docs/spec/drafts/excluded.md", true),
+        ("docs/spec/drafts/deeper/also.md", true),
+        ("docs/records/R/R-99.draft.md", true),
+        ("docs/spec/x.md", true),
+        ("docs/spec/xy.md", false),
+        ("docs/spec/game.md", false),
+    ] {
+        assert_eq!(scope.is_excluded(path), excluded, "{path}");
+        assert_eq!(corpus.paths.is_excluded(path), excluded, "{path}");
+        assert_eq!(listing.paths.iter().any(|p| p == path), !excluded, "{path}");
+    }
+    // No second matcher in the store.
+    let src = common::repository_root().join("crates/specengine-store/src");
+    let mut offenders = Vec::new();
+    for entry in std::fs::read_dir(&src).expect("store src") {
+        let path = entry.unwrap().path();
+        if path.file_name().is_some_and(|name| name == "glob.rs") {
+            offenders.push(path.display().to_string());
+        }
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            let text = std::fs::read_to_string(&path).unwrap();
+            for needle in ["struct Glob", "Glob::new", "mod glob", "enum Token"] {
+                if text.contains(needle) {
+                    offenders.push(format!("{}: {needle}", path.display()));
+                }
+            }
+        }
+    }
+    assert!(offenders.is_empty(), "{offenders:#?}");
+}
+
+/// docs/features/spec-check-links.md (iteration 3): the walker's `.md` rule
+/// is core's `DOCUMENT_EXTENSION`. No store source outside its
+/// `#[cfg(test)]` module has a `.md` string literal of its own (prose
+/// quoting `` `.md` `` aside), and the walker names the constant.
+#[test]
+fn the_walker_uses_the_core_document_extension() {
+    assert_eq!(specengine_core::DOCUMENT_EXTENSION, ".md");
+    let src = common::repository_root().join("crates/specengine-store/src");
+    let mut offenders = Vec::new();
+    let mut sources = 0;
+    for entry in std::fs::read_dir(&src).expect("store src") {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
+        sources += 1;
+        let text = std::fs::read_to_string(&path).unwrap();
+        for (number, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("#[cfg(test)]") {
+                break;
+            }
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+            for literal in line.split('"').skip(1).step_by(2) {
+                if literal.replace("`.md`", "").contains(".md") {
+                    offenders.push(format!("{}:{}: {literal}", path.display(), number + 1));
+                }
+            }
+        }
+    }
+    assert!(sources >= 5, "{sources} store sources");
+    assert!(offenders.is_empty(), "{offenders:#?}");
+    let walker = std::fs::read_to_string(src.join("source.rs")).expect("source.rs");
+    assert!(
+        walker.matches("DOCUMENT_EXTENSION").count() >= 3,
+        "the walker's file, root and probe rules name the constant"
+    );
 }

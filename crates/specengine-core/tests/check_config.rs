@@ -909,3 +909,67 @@ fn rejected_values_do_not_read_back_but_the_normalised_spellings() {
     reads_back.sort_unstable();
     assert_eq!(reads_back, [".inf", ".nan"]);
 }
+
+// ------------------------------------------------------------------ link_base
+// AC-04 of docs/features/spec-check-links.md (the core half): the optional
+// `[paths] link_base`, checked like a `roots` item; no default. The
+// re-parse and cannot-check halves are in the store's `tests/check_config.rs`.
+
+#[test]
+fn link_base_is_an_optional_root_relative_directory_without_default() {
+    let base = Paths::from_toml("[paths]\nroots = [\"docs\"]\nlink_base = \"docs\"\n")
+        .unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+    assert_eq!(base.link_base.as_deref(), Some("docs"));
+    let slash = Paths::from_toml("[paths]\nroots = [\"docs\"]\nlink_base = \"docs/\"\n")
+        .unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+    assert_eq!(slash, base, "one trailing `/` dropped: equal to `docs`");
+    let nested = Paths::from_toml("[paths]\nlink_base = \"docs/spec\"\n")
+        .unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+    assert_eq!(nested.link_base.as_deref(), Some("docs/spec"));
+    // Existence is not checked: a base outside every root loads.
+    let elsewhere = Paths::from_toml("[paths]\nroots = [\"docs\"]\nlink_base = \"wiki\"\n")
+        .unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+    assert_eq!(elsewhere.link_base.as_deref(), Some("wiki"));
+    // No default anywhere (ADR-0008).
+    assert_eq!(Paths::default().link_base, None);
+    for text in ["", "[paths]\n", "[paths]\nroots = [\"docs\"]\n"] {
+        let paths = Paths::from_toml(text).expect("loads");
+        assert_eq!(paths.link_base, None, "{text:?}");
+    }
+    // The other readers ignore the key: the scheme and the check tables load.
+    let text = "[paths]\nroots = [\"docs\"]\nlink_base = \"docs\"\n\n[ids]\nADR = { kind = \"decision\", width = 4 }\n";
+    let scheme =
+        IdScheme::from_toml(text).unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+    let without = IdScheme::from_toml("[ids]\nADR = { kind = \"decision\", width = 4 }\n")
+        .unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+    assert_eq!(scheme, without);
+    CheckConfig::from_toml(text).unwrap_or_else(|error| panic!("{}", error.at("specengine.toml")));
+}
+
+#[test]
+fn an_invalid_link_base_fails_with_file_line_message() {
+    for (case, value) in [
+        ("absolute", "\"/docs\""),
+        ("parent", "\"../x\""),
+        ("dot component", "\"a/./b\""),
+        ("empty", "\"\""),
+        ("a number", "1"),
+        ("a list", "[\"docs\"]"),
+        ("a bool", "true"),
+        ("an empty component", "\"docs//spec\""),
+        ("a parent inside", "\"docs/../x\""),
+        ("a lone dot", "\".\""),
+        ("a lone slash", "\"/\""),
+    ] {
+        let text = format!("[paths]\nroots = [\"docs\"]\n\nlink_base = {value}\n");
+        let error = Paths::from_toml(&text)
+            .err()
+            .unwrap_or_else(|| panic!("{case}: accepted"));
+        let shown = error.at("specengine.toml");
+        assert!(shown.starts_with("specengine.toml:4: "), "{case}: {shown}");
+        assert!(
+            shown.len() > "specengine.toml:4: ".len(),
+            "{case}: a message: {shown}"
+        );
+    }
+}

@@ -3,11 +3,12 @@
 //! ID definitions (with `id-scope`, ADR-0026), `canon:` and front-matter
 //! references, resolved by scope; then the rules of increment 2 over the
 //! whole corpus: the generated index and the generator registry
-//! (`generated`), the graph warnings (`graph`). Everything the
-//! rules know about a project comes from its `[ids]`, `[paths]` and check
-//! tables (`#universal`): no prefix, path or file name is written here.
+//! (`generated`), the graph warnings (`graph`), the file-link warnings
+//! (`links`). Everything the rules know about a project comes from its
+//! `[ids]`, `[paths]` and check tables (`#universal`): no prefix, path or
+//! file name is written here.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_model::grammar;
 use specengine_model::{
@@ -20,8 +21,8 @@ use super::input::{CheckFile, CheckInput, ProblemKind};
 use super::report::{Cause, Debt, Finding, Fix, Report};
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
 use super::text::{FileText, front_matter_failed, is_calendar_date, is_date_shaped};
-use super::{generated, graph};
-use crate::Paths;
+use super::{generated, graph, links};
+use crate::{Paths, is_under};
 
 /// The one table: how a parser diagnostic reaches the report. Every code
 /// keeps the parser's severity but `homoglyph` and `duplicate-id`, which are
@@ -149,6 +150,7 @@ pub fn run(
     corpus.id_taken(&mut findings);
     generated::run(input, &corpus, paths, config, &mut findings, &mut causes);
     graph::run(&corpus, scheme, &mut findings);
+    links::run(&corpus, paths, &mut findings);
 
     let stale = apply_baseline(&mut findings, baseline, today, today_valid);
     Report::assemble(config.mode, input.files.len(), findings, stale, causes)
@@ -725,7 +727,7 @@ impl FileCheck<'_, '_> {
         }
         if let Some(id) = &document.id
             && !misplaced_document
-            && under(&self.file.path, &self.paths.records)
+            && is_under(&self.file.path, &self.paths.records)
         {
             let name = file_name(&self.file.path);
             let named = name
@@ -806,9 +808,7 @@ impl FileCheck<'_, '_> {
             );
             return;
         }
-        let found = parsed.anchors.iter().any(|known| known.name == *anchor)
-            || self.corpus.resolver.sections[index].contains(anchor);
-        if !found {
+        if !has_anchor(parsed, &self.corpus.resolver.sections[index], anchor) {
             self.push(
                 "canon-anchor",
                 line,
@@ -849,10 +849,11 @@ impl FileCheck<'_, '_> {
     }
 }
 
-/// `path` lies strictly under the directory `dir`.
-fn under(path: &str, dir: &str) -> bool {
-    path.strip_prefix(dir)
-        .is_some_and(|rest| rest.starts_with('/'))
+/// The `canon-anchor` predicate, also the link rules': `anchor` equals, exactly
+/// and case-sensitively, an anchor of `parsed` (slug, attr, html) or one of
+/// its section IDs (`sections`, the resolver's for that file).
+pub(super) fn has_anchor(parsed: &ParsedFile, sections: &BTreeSet<String>, anchor: &str) -> bool {
+    parsed.anchors.iter().any(|known| known.name == anchor) || sections.contains(anchor)
 }
 
 fn file_name(path: &str) -> &str {

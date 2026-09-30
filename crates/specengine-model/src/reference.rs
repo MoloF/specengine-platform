@@ -71,11 +71,19 @@ pub enum CanonTarget {
 }
 
 /// `path[#anchor]`: a file of the corpus and an optional heading anchor.
+///
+/// For a Markdown file link (`[t](dest)`, `[r]: dest`): `path` is the
+/// destination before the first `#`, cut at the first `?` (`""` for
+/// `#anchor` alone), `anchor` what follows the first `#` (absent when
+/// empty), both as CommonMark gives them (backslash escapes and entities
+/// resolved, never percent-decoded); `span` covers the destination as
+/// written (`<…>` and the title excluded, `?query` and `#anchor` included).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PathTarget {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<String>,
+    /// The target as written; always set for a Markdown file link.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 }

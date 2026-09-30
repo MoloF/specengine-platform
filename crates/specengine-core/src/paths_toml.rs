@@ -9,17 +9,26 @@
 //! `exclude`, census globs (`*`, `**`, `?`) over root-relative file paths;
 //! for `spec check` (docs/features/spec-check.md): `tier0` (the one file
 //! canon tier 0 may be), `tier1_name` (the file name canon tier 1 is
-//! restricted to), `index` (the generated index, capped by `index_bytes`).
+//! restricted to), `index` (the generated index, capped by `index_bytes`),
+//! `link_base` (the fallback directory Markdown file links resolve from;
+//! docs/features/spec-check-links.md).
 //! Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or
 //! empty component (one trailing `/` of a directory is dropped). An unknown
 //! key, a wrong type or a bad path is an error `file:line: message`
 //! through [`PathsError::at`]; other tables are ignored.
+//!
+//! The walk's rules as pure predicates over a root-relative path live in
+//! [`WalkScope`] ([`Paths::walk_scope`]; one-off: [`Paths::is_excluded`],
+//! [`Paths::in_walk_scope`]): the store's walker and the check's link rules
+//! share them.
 
 use std::fmt;
 use std::ops::Range;
 
 use serde::Deserialize;
 use toml::Spanned;
+
+use crate::walk_scope::WalkScope;
 
 /// Default of the `spec` role key: the business-logic tree.
 pub const DEFAULT_SPEC: &str = "docs/spec";
@@ -59,6 +68,11 @@ pub struct Paths {
     pub tier1_name: Option<String>,
     /// The generated index, capped by `index_bytes`; absent: no index cap.
     pub index: Option<String>,
+    /// The directory a relative Markdown file link is retried from when it
+    /// names no walked document from the linking file's directory; absent:
+    /// no retry. Read by the check only (outside the index fingerprint);
+    /// its existence is never checked.
+    pub link_base: Option<String>,
 }
 
 impl Default for Paths {
@@ -77,6 +91,22 @@ impl Paths {
     /// Reads the `[paths]` table; no table gives [`Paths::default`].
     pub fn from_toml(text: &str) -> Result<Self, PathsError> {
         paths_from_toml(text)
+    }
+
+    /// The walk's rules with the exclude globs compiled: build it once for
+    /// many paths (the walker, the check).
+    pub fn walk_scope(&self) -> WalkScope {
+        WalkScope::new(self)
+    }
+
+    /// [`WalkScope::is_excluded`] for one path (compiles the globs).
+    pub fn is_excluded(&self, path: &str) -> bool {
+        self.walk_scope().is_excluded(path)
+    }
+
+    /// [`WalkScope::in_walk_scope`] for one path (compiles the globs).
+    pub fn in_walk_scope(&self, path: &str) -> bool {
+        self.walk_scope().in_walk_scope(path)
     }
 
     fn with_roles(
@@ -104,6 +134,7 @@ impl Paths {
             tier0: None,
             tier1_name: None,
             index: None,
+            link_base: None,
         }
     }
 }
@@ -194,6 +225,13 @@ pub fn paths_from_toml(text: &str) -> Result<Paths, PathsError> {
     };
     paths.tier0 = file("tier0", raw.tier0)?;
     paths.index = file("index", raw.index)?;
+    // A directory, under the roots' rules; `""` is an error, not "no base".
+    if let Some(base) = raw.link_base {
+        let span = base.span();
+        let checked = checked_path(base.get_ref(), true)
+            .map_err(|problem| error_at(Some(span), format!("`link_base`: {problem}")))?;
+        paths.link_base = Some(checked);
+    }
     if let Some(name) = raw.tier1_name {
         let span = name.span();
         let value = name.into_inner();
@@ -264,6 +302,8 @@ struct RawPaths {
     tier1_name: Option<Spanned<String>>,
     #[serde(default)]
     index: Option<Spanned<String>>,
+    #[serde(default)]
+    link_base: Option<Spanned<String>>,
 }
 
 fn line_of(text: &str, offset: usize) -> usize {

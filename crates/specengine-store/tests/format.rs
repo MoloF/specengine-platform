@@ -267,6 +267,12 @@ const SERIALISED: &[&str] = &[
     "links[].dst.span",
     "links[].dst.path",
     "links[].dst.anchor",
+    "links[].dst (path, frontmatter).path",
+    "links[].dst (path, frontmatter).anchor",
+    "links[].dst (path, frontmatter).span",
+    "links[].dst (path, inline).path",
+    "links[].dst (path, inline).anchor",
+    "links[].dst (path, inline).span",
     "anchors[].name",
     "anchors[].origin",
     "anchors[].origin: slug",
@@ -292,10 +298,22 @@ const SERIALISED: &[&str] = &[
 
 /// Key paths of a serialised `ParsedFile`: array items as `[]`, the
 /// dynamic keys of `fields.links`, `fields.raised_by` and front-matter
-/// mappings as `*`, the kind of every front-matter value, and every anchor
-/// origin.
+/// mappings as `*`, the kind of every front-matter value, every anchor
+/// origin, and the keys of a path destination by link origin (a `canon:`
+/// path and a Markdown file link share `dst.path` / `dst.span` with an ID
+/// reference's keys; docs/features/spec-check-links.md).
 fn key_paths(value: &serde_json::Value, path: &str, in_value: bool, out: &mut BTreeSet<String>) {
     use serde_json::Value;
+    if path == "links[]"
+        && let Value::Object(link) = value
+        && let (Some(Value::Object(dst)), Some(Value::String(origin))) =
+            (link.get("dst"), link.get("origin"))
+        && dst.contains_key("path")
+    {
+        for key in dst.keys() {
+            out.insert(format!("links[].dst (path, {origin}).{key}"));
+        }
+    }
     if in_value {
         out.insert(
             match value {
@@ -376,15 +394,16 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// AC-11 of docs/features/spec-check-scopes.md: pass A moves the fixtures'
-/// feature criteria into `{#ID}` sections of their feature documents
-/// (ADR-0026), so the dump changes while the store code does not:
-/// `INDEX_FORMAT` is 4, and the history is part 1's three lines, verbatim,
-/// followed by exactly one `4 <hash>` line (no earlier `4`). Replaces part
-/// 1's "increment 2 keeps the format" pin.
+/// AC-03 of docs/features/spec-check-links.md: pass B records local
+/// Markdown link destinations as `mentions` path links and the fixtures
+/// gain file links (spec-a's two, spec-b's `link_base` one), so the dump
+/// changes while the schema does not: `INDEX_FORMAT` is 5, and the history
+/// is the four earlier lines, verbatim, followed by exactly one `5 <hash>`
+/// line (no earlier `5`). Replaces pass A's format-4 pin
+/// (docs/features/spec-check-scopes.md AC-11), whose line stays verbatim.
 #[test]
-fn spec_check_scopes_pins_format_4_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 4);
+fn spec_check_links_pins_format_5_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 5);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -397,11 +416,12 @@ fn spec_check_scopes_pins_format_4_with_one_new_history_line() {
         "1 4fd55fa4cf7716f7acc45556ab7c831f1f67d7decdf2f0829ad0a7da5e52a906",
         "2 2cfc299da177807c83d246aea934a73ab8509021386568a0b2011a31de66c9aa",
         "3 d63c06dc03ed97243ff25dfb14a165cfec059582eee05dc72d9fba05b3c5f55f",
+        "4 d958fe30af22feb15f1dbd8fafa67ef1113a8c4ba267c4dd71a8968eb30bf5b5",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "part 1's history plus exactly one new line:\n{history}"
+        "pass A's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -410,14 +430,14 @@ fn spec_check_scopes_pins_format_4_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "4", "the new line is format 4: {last}");
+    assert_eq!(format, "5", "the new line is format 5: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("4 ")).count(),
+        lines.iter().filter(|line| line.starts_with("5 ")).count(),
         1,
-        "no earlier `4` line"
+        "no earlier `5` line"
     );
 }

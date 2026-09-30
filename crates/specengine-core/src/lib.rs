@@ -2,8 +2,9 @@
 //! (docs/features/spec-parser.md).
 //!
 //! [`parse`] turns one file's bytes into a [`ParsedFile`]: the document
-//! node, its `{#ID}` section nodes, declared and inline links, heading
-//! anchors, byte-exact spans into the original bytes (BOM and CRLF
+//! node, its `{#ID}` section nodes, declared and inline links (ID mentions
+//! and local Markdown file links, docs/features/spec-check-links.md),
+//! heading anchors, byte-exact spans into the original bytes (BOM and CRLF
 //! untouched), a token estimate per node, and diagnostics. It reads no file
 //! and writes none; the output depends only on (path, bytes, scheme), and a
 //! broken file is reported, never fatal (ADR-0012).
@@ -16,18 +17,23 @@
 //! - [`tokens`] — the per-script token estimator;
 //! - `front_matter` — the block and its typed keys (`serde-saphyr`, with
 //!   depth and alias budgets);
-//! - `markdown` — headings, attribute blocks and text regions
-//!   (`pulldown-cmark` with offsets).
+//! - `markdown` — headings, attribute blocks, text regions and local link
+//!   destinations (`pulldown-cmark` with offsets);
+//! - [`walk_scope`] — [`WalkScope`]: the walk's rules as pure predicates,
+//!   shared by the store's walker and the check's link scope;
+//! - `glob` — the `[paths] exclude` matcher behind it.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod check;
 mod front_matter;
+mod glob;
 mod lines;
 mod markdown;
 pub mod paths_toml;
 pub mod scheme_toml;
 pub mod tokens;
+pub mod walk_scope;
 mod yaml;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,12 +41,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use specengine_model::grammar::{self, Definition};
 use specengine_model::{
     Anchor, AnchorOrigin, Diagnostic, DiagnosticCode, IdScheme, IdScript, Link, LinkOrigin,
-    LinkTarget, Node, ParentRef, ParsedFile, Reference, Span,
+    LinkTarget, Node, ParentRef, ParsedFile, PathTarget, Reference, Span,
 };
 
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};
 pub use tokens::tokens_est;
+pub use walk_scope::{DOCUMENT_EXTENSION, WalkScope, is_clean_relative, is_under};
 pub use yaml::{MAX_ALIAS_EXPANSION, MAX_DEPTH};
 
 use crate::front_matter::{FrontMatter, PendingLink};
@@ -240,71 +247,90 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
         });
     }
 
-    // Inline mentions, in text order, from the innermost ID section.
+    // Inline mentions and file links, by span start, from the innermost ID
+    // section. The sort is stable and two never share a start: a
+    // destination is never text.
+    let mut inline: Vec<(usize, InlineLink)> = Vec::new();
+    for region in &body.regions {
+        for found in grammar::scan(&text[region.clone()], region.start, scheme) {
+            if let Some(span) = found.reference.span {
+                inline.push((span.start, InlineLink::Mention(found)));
+            }
+        }
+    }
+    for link in body.file_links {
+        inline.push((link.span.start, InlineLink::File(link)));
+    }
+    inline.sort_by_key(|&(start, _)| start);
     let section_spans: Vec<(Span, String)> = nodes[1..]
         .iter()
         .filter_map(|node| node.id.clone().map(|id| (node.span, id)))
         .collect();
     let mut open: Vec<usize> = Vec::new();
     let mut next = 0;
-    for region in &body.regions {
-        for found in grammar::scan(&text[region.clone()], region.start, scheme) {
-            let Some(span) = found.reference.span else {
-                continue;
-            };
-            while next < section_spans.len() && section_spans[next].0.start <= span.start {
-                while open
-                    .last()
-                    .is_some_and(|&top| section_spans[top].0.end <= section_spans[next].0.start)
-                {
-                    open.pop();
-                }
-                open.push(next);
-                next += 1;
-            }
+    for (start, link) in inline {
+        while next < section_spans.len() && section_spans[next].0.start <= start {
             while open
                 .last()
-                .is_some_and(|&top| section_spans[top].0.end <= span.start)
+                .is_some_and(|&top| section_spans[top].0.end <= section_spans[next].0.start)
             {
                 open.pop();
             }
-            let line = lines.line(span.start);
-            for homoglyph in &found.homoglyphs {
-                diagnostics.push(
-                    Diagnostic::new(
-                        DiagnosticCode::Homoglyph,
-                        line,
-                        format!(
-                            "reference mixes in look-alike characters; the Latin ID is `{}`",
-                            homoglyph.fix
-                        ),
-                    )
-                    .with_span(Some(homoglyph.span))
-                    .with_fix(homoglyph.fix.clone()),
-                );
-            }
-            if let Some(bad) = found.bad_rev {
-                diagnostics.push(
-                    Diagnostic::new(
-                        DiagnosticCode::BadRev,
-                        line,
-                        "`@` is followed by digits that are no 1-9 digit revision",
-                    )
-                    .with_span(Some(bad)),
-                );
-            }
-            let src = open
-                .last()
-                .map(|&index| section_spans[index].1.clone())
-                .or_else(|| document_id.clone());
-            links.push(Link {
-                src,
-                src_span: None,
-                link_type: specengine_model::MENTIONS.to_owned(),
-                origin: LinkOrigin::Inline,
-                dst: LinkTarget::Reference(found.reference),
-            });
+            open.push(next);
+            next += 1;
         }
+        while open
+            .last()
+            .is_some_and(|&top| section_spans[top].0.end <= start)
+        {
+            open.pop();
+        }
+        let src = open
+            .last()
+            .map(|&index| section_spans[index].1.clone())
+            .or_else(|| document_id.clone());
+        let dst = match link {
+            InlineLink::Mention(found) => {
+                let line = lines.line(start);
+                for homoglyph in &found.homoglyphs {
+                    diagnostics.push(
+                        Diagnostic::new(
+                            DiagnosticCode::Homoglyph,
+                            line,
+                            format!(
+                                "reference mixes in look-alike characters; the Latin ID is `{}`",
+                                homoglyph.fix
+                            ),
+                        )
+                        .with_span(Some(homoglyph.span))
+                        .with_fix(homoglyph.fix.clone()),
+                    );
+                }
+                if let Some(bad) = found.bad_rev {
+                    diagnostics.push(
+                        Diagnostic::new(
+                            DiagnosticCode::BadRev,
+                            line,
+                            "`@` is followed by digits that are no 1-9 digit revision",
+                        )
+                        .with_span(Some(bad)),
+                    );
+                }
+                LinkTarget::Reference(found.reference)
+            }
+            InlineLink::File(link) => LinkTarget::Path(PathTarget {
+                path: link.path,
+                anchor: link.anchor,
+                span: Some(link.span),
+            }),
+        };
+        links.push(Link {
+            src,
+            src_span: None,
+            link_type: specengine_model::MENTIONS.to_owned(),
+            origin: LinkOrigin::Inline,
+            dst,
+        });
     }
 
     diagnostics.sort_by_key(|diagnostic| diagnostic.line);
@@ -318,6 +344,14 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
         anchors,
         diagnostics,
     }
+}
+
+/// A body link before its `src` is known.
+enum InlineLink {
+    /// An ID reference in the text.
+    Mention(grammar::Found),
+    /// A local Markdown link destination.
+    File(markdown::FileLink),
 }
 
 /// A file that is not UTF-8: no nodes, one diagnostic at the first bad byte.

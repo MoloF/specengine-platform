@@ -118,7 +118,7 @@ pub struct SectionCounts {
 
 #[derive(Serialize)]
 pub struct ReferenceCounts {
-    /// Mentions in text.
+    /// ID mentions in text; Markdown file links are not counted.
     pub inline: usize,
     /// Links declared in front-matter.
     pub declared: usize,
@@ -257,9 +257,12 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
         result.sections.parsed += parsed.sections().len();
         result.heading_attrs_not_section += attr_anchors(&parsed);
         for link in &parsed.links {
-            match link.origin {
-                LinkOrigin::Inline => result.references.inline += 1,
-                LinkOrigin::Frontmatter => result.references.declared += 1,
+            // Inline: ID references only; a Markdown file link (a path
+            // target) is no reference (docs/features/spec-check-links.md).
+            match (link.origin, &link.dst) {
+                (LinkOrigin::Inline, LinkTarget::Reference(_)) => result.references.inline += 1,
+                (LinkOrigin::Inline, LinkTarget::Path(_)) => {}
+                (LinkOrigin::Frontmatter, _) => result.references.declared += 1,
             }
             if let LinkTarget::Reference(reference) = &link.dst {
                 if reference.alias_of.is_some() {

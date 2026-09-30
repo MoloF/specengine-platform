@@ -62,7 +62,9 @@
       "summary": "Команда синхронизации никогда не перезаписывает незакоммиченные изменения.",
       "sections": [],
       "anchors": ["slug:синхронизация-не-теряет-локальных-правок"],
-      "links": [],
+      "links": [
+        "REQ-001 mentions inline spec/cli.md#CMD-SYNC"
+      ],
       "diagnostics": []
     },
     "docs/records/REQ/REQ-002.md": {

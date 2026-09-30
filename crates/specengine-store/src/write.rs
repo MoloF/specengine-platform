@@ -16,13 +16,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{self, AssertUnwindSafe};
 
 use rusqlite::{Statement, Transaction, TransactionBehavior};
+use specengine_core::is_clean_relative;
 use specengine_model::IdScheme;
 
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
 use crate::read::worktree_id;
 use crate::rows::{FileRows, hash_bytes, size_of};
-use crate::source::{Source, is_clean_relative};
+use crate::source::Source;
 use crate::{UpdateReport, schema};
 
 /// Which update.

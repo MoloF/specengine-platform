@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-09-30
 ---
 
 # specengine-eval — the permanent measurement harness
 
-One subcommand per measurement of the engine's claims over a corpus whose path enters at run time. Re-run on a grammar, Claude Code, Bevy or `ra_ap` upgrade and for AC-1 / AC-10 of 08 §3. A default workspace member; comparison-only dependencies stay behind features: `syn` (`syn =3.0.6` + `extra-traits`, `quote`, `proc-macro2`) and `ra` (`specengine-ra`, `libc`; rustc ≥ 1.98). Default features are empty.
+One subcommand per measurement of the engine's claims over a corpus whose path enters at run time. Re-run on a grammar, Claude Code, Bevy or `ra_ap` upgrade and for AC-1 / AC-10 of 08 §3. A default workspace member; comparison-only dependencies stay behind features: `syn` (`syn =3.0.6` + `extra-traits`, `quote`, `proc-macro2`) and `ra` (`specengine-ra`, `libc`; rustc ≥ 1.98).
 
 ## CLI contract
 
@@ -20,10 +20,10 @@ specengine-eval <ast-hash|ron|census|parse|index|check|bevy-detector|ra> [--pilo
 
 | Subcommand | Measures | Fixture (no `--pilot`) | Detail under `--out/<m>/<label>/` |
 |---|---|---|---|
-| `ast-hash` | stability of `specengine-hash/v2` under default rustfmt, contrasting rustfmt (effectively `max_width = 60`: stable rustfmt rejects `trailing_comma`) and comment stripping; parse errors, `cannot_verify`, `qpath` ambiguity; `syn` 3 comparison (`null` without the feature) | `fixtures/ast-hash` | hash manifest |
+| `ast-hash` | stability of `specengine-hash/v2` under default rustfmt, contrasting rustfmt (effectively `max_width = 60`) and comment stripping; parse errors, `cannot_verify`, `qpath` ambiguity; `syn` 3 comparison (`null` without the feature) | `fixtures/ast-hash` | hash manifest |
 | `ron` | `.ron` markers by the own lexer: parse-clean share, rejected categories, comment ranges, anchors; keeps the removed grammar path's fields (`grammar` `{built: false, loads: false, …}`, per-approach `null`, `recommendation` `lexer`) | `fixtures/ron` | `files.json`, `markers.json`, `rejected.json` (≤ 20 samples per category) |
 | `census` | `specengine-import` dry-run counts; convention from `--config`, default `census.toml` at the corpus root | `fixtures/corpus-mini` | `labels.json`, `records.json`, `documents.json`, `rows_without_id.json`, `broken_links.json`, `diagnostics.json` |
-| `parse` | `specengine-core` over the census's documents (its `--config` and walk): `files` (walked), `unreadable` (of them), `panics` (caught per file), `not_utf8`, `front_matter.present`, `diagnostics.<code>` (every code, zeros too), `sections.{parsed, census_id_sections, differ}` (`differ`: per-file symmetric difference of heading lines), `heading_attrs_not_section` (anchors), `references.{inline, declared, homoglyph, alias}` (`homoglyph`: non-alias references only), `tokens_est.{total, max_node}` | `fixtures/corpus-mini` | `files.json`, `diagnostics.json`, `sections_differ.json`, `panics.json`, `problems.json` |
+| `parse` | `specengine-core` over the census's documents (its `--config` and walk): `files` (walked), `unreadable` (of them), `panics` (caught per file), `not_utf8`, `front_matter.present`, `diagnostics.<code>` (every code, zeros too), `sections.{parsed, census_id_sections, differ}` (`differ`: per-file symmetric difference of heading lines), `heading_attrs_not_section` (anchors), `references.{inline, declared, homoglyph, alias}` (`inline`: ID references only; `homoglyph`: non-alias ones), `tokens_est.{total, max_node}` | `fixtures/corpus-mini` | `files.json`, `diagnostics.json`, `sections_differ.json`, `panics.json`, `problems.json` |
 | `index` | `specengine-store` over a scratch copy of the files the `[paths]` walk finds: `files`, `nodes`, `links`, `diagnostics`, `unreadable` (left out of the copy + stored with `read_error`), `missing_roots`; `full_ms` (first update), `noop_ms` + `noop_parsed`, `one_file_ms` + `one_file_parsed` (a line appended to the first file), `one_path_ms` (again, by `update_paths`) | `fixtures/spec-b` | `corpus/` (the copy, edited there), `index.db`, `reports.json` |
 | `check` | `spec check` (`specengine-store` `check_worktree`), read-only: `files`, `verdicts.{observe, enforce}`, `codes.<code>.{error, warning, debt}`, `expired`, `stale` | `fixtures/spec-a` | `findings.json` (the report: paths, IDs, messages) |
 | `bevy-detector` (alias `bevy`) | the `specengine-code` detector; with `--dump` its match against a Bevy 0.19 `schedule_data` dump (own crates = `[package]`, `[lib]`, `[[bin]]` names), miss categories `generic_instance`, `repeated_site`, `other_schedule`, `macro_rules`, `macro_call`, `closure`, `indirect`, `not_in_source` | `fixtures/bevy-mini` | `registrations.json`, `plugins.json`, `plugin_uses.json`, `uncertain.json`, `crates.json`, `dump_match.json`, `dump_schema.json` |
@@ -47,7 +47,7 @@ specengine-eval <ast-hash|ron|census|parse|index|check|bevy-detector|ra> [--pilo
 
 Pilot paths enter only through the environment: `SPECENGINE_{PILOT,CENSUS_CONFIG,SCHEME}_A` / `_B` (configs live outside the repository), `SPECENGINE_PILOT_A_DUMP` / `_B_DUMP`; `SPECENGINE_RUSTFMT` overrides the rustfmt binary. Pilot tests are `#[ignore]`: `cargo nextest run -p specengine-eval --test <file> --run-ignored only pilot`. `ra` pilot runs are manual, release build, under a self-terminating timeout.
 
-Tests: `ast_hash_cli.rs`, `ron_cli.rs`, `census_cli.rs`, `parse_cli.rs`, `index_cli.rs` (pilot runs check 08 AC-10: `full_ms` ≤ 10 000, `one_file_ms` ≤ 200; skipped until the pilot schemes have `[paths]`), `check_cli.rs` (pilot runs skipped until the schemes gain `[paths]`, `[budgets]`, `[check]`), `bevy_cli.rs`, `ra_cli.rs` (`--features ra`), `label_cli.rs`, `build_graph.rs` (the eight default members, model / core / store layering, the pins; `ra_ap_*`, `libc` only with `--features ra`; no `syn` 3 or Bevy in the core graph), `anonymity.rs` (no absolute path or pilot name in `docs/`, `crates/`, `fixtures/`; raw Cyrillic only in `fixtures/spec-b/`, `fixtures/token-calibration/`: Q5, core README).
+Tests: `ast_hash_cli.rs`, `ron_cli.rs`, `census_cli.rs`, `parse_cli.rs`, `index_cli.rs` (pilot runs check 08 AC-10: `full_ms` ≤ 10 000, `one_file_ms` ≤ 200; skipped until the pilot schemes have `[paths]`), `check_cli.rs` (pilot runs skipped until the schemes gain `[paths]`, `[budgets]`, `[check]`), `bevy_cli.rs`, `ra_cli.rs` (`--features ra`), `label_cli.rs`, `links_census.rs` (`broken_links` = `link-dangling`), `build_graph.rs` (the eight default members, model / core / store layering, the pins; `ra_ap_*`, `libc` only with `--features ra`; no `syn` 3 or Bevy in the core graph), `anonymity.rs` (no absolute path or pilot name in `docs/`, `crates/`, `fixtures/`; raw Cyrillic only in `fixtures/spec-b/`, `fixtures/token-calibration/`: Q5, core README).
 
 ## Open minors
 

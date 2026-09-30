@@ -649,3 +649,93 @@ fn the_bare_criterion_left_in_the_cli_spec_dangles() {
         report.lines(true)
     );
 }
+
+/// AC-09 of docs/features/spec-check-links.md through the loader: both
+/// fixtures walk 13 and 11 documents with no link finding; spec-b's
+/// `spec/cli.md#CMD-SYNC` resolves only through its `link_base`, so without
+/// the key it is the one `link-dangling`, a warning (the verdict's
+/// blocking set is unchanged).
+#[test]
+fn the_fixtures_have_no_link_finding_and_spec_b_needs_its_base() {
+    let links = |report: &Report| -> Vec<(String, String, usize, String)> {
+        report
+            .findings
+            .iter()
+            .filter(|f| f.code.starts_with("link-"))
+            .map(|f| (f.code.clone(), f.path.clone(), f.line, f.subject.clone()))
+            .collect()
+    };
+    let scratch = Scratch::new("check-verdict-links");
+    for (name, documents) in [("spec-a", 13), ("spec-b", 11)] {
+        let root = copy(&scratch, name, name, "");
+        let report = check(&root);
+        assert_eq!(report.counts.documents, documents, "{name}");
+        assert_eq!(links(&report), [], "{name}: {:#?}", report.lines(true));
+    }
+    let root = copy(&scratch, "spec-b", "no-base", "");
+    let config = root.join("specengine.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    assert_eq!(text.matches("link_base = \"docs\"\n").count(), 1);
+    fs::write(&config, text.replace("link_base = \"docs\"\n", "")).unwrap();
+    let with_base = check(&root.parent().unwrap().join("spec-b"));
+    let report = check(&root);
+    assert_eq!(
+        links(&report),
+        [(
+            "link-dangling".to_owned(),
+            "docs/records/REQ/REQ-001.md".to_owned(),
+            14,
+            "spec/cli.md#CMD-SYNC".to_owned()
+        )],
+        "{:#?}",
+        report.lines(true)
+    );
+    assert!(report.lines(true).iter().any(|line| line
+        == "warning  docs/records/REQ/REQ-001.md:14: link-dangling: `spec/cli.md#CMD-SYNC` names no walked document (tried `docs/records/REQ/spec/cli.md`)"));
+    assert_eq!(
+        report.verdict, with_base.verdict,
+        "a warning blocks nothing"
+    );
+    assert_eq!(report.counts.errors, with_base.counts.errors);
+    assert_eq!(report.counts.warnings, with_base.counts.warnings + 1);
+}
+
+/// Rule 9 of docs/features/spec-check-links.md, through the loader: a
+/// symlinked `.md` in the walk scope is invisible to the walk, so a link
+/// to it is `link-dangling` (a warning, accepted); the same link to the
+/// real file resolves.
+#[test]
+fn a_link_to_a_symlinked_document_dangles() {
+    let scratch = Scratch::new("check-verdict-link-symlink");
+    let root = copy(&scratch, "spec-b", "wt", "");
+    std::os::unix::fs::symlink(
+        root.join("docs/spec/cli.md"),
+        root.join("docs/spec/alias.md"),
+    )
+    .unwrap();
+    let req = root.join("docs/records/REQ/REQ-002.md");
+    let text = fs::read_to_string(&req).unwrap();
+    fs::write(
+        &req,
+        format!("{text}\n[a](../../spec/alias.md) and [b](../../spec/cli.md).\n"),
+    )
+    .unwrap();
+    let report = check(&root);
+    let links: Vec<(String, String, String)> = report
+        .findings
+        .iter()
+        .filter(|f| f.code.starts_with("link-"))
+        .map(|f| (f.code.clone(), f.path.clone(), f.subject.clone()))
+        .collect();
+    assert_eq!(
+        links,
+        [(
+            "link-dangling".to_owned(),
+            "docs/records/REQ/REQ-002.md".to_owned(),
+            "../../spec/alias.md".to_owned()
+        )],
+        "{:#?}",
+        report.lines(true)
+    );
+    assert_eq!(report.counts.documents, 11, "the symlink is not walked");
+}

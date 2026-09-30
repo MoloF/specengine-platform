@@ -2,6 +2,9 @@
 //! census, without a regex engine): `*` any run without `/`, `**` any run,
 //! `**/` any directories (also none), `?` one character but `/`; every other
 //! character literal and case-sensitive; anchored at both ends.
+//!
+//! The one matcher of the walk and of the check's walk scope: the store's
+//! walker and `spec check` reach it through [`crate::WalkScope`].
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Token {

@@ -3,20 +3,20 @@ class: canon
 tier: 1
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-09-30
 ---
 
 # specengine-core — the spec parser and the check
 
-The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and `check` (parses → `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4` (`specengine-ra` gets 0.9.6 via `ra_ap_ide`), `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`, `petgraph =0.8.3` (default features off) for `depends-cycle`. Callers: `specengine-store`, `specengine-eval parse`, `check`.
+The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and `check` (parses → `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4`, `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`, `petgraph =0.8.3` for `depends-cycle`. Callers: `specengine-store`, `specengine-eval parse`, `check`.
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order; its types, tables, rules and output: `docs/canon/spec-check.md`; `render_index`, `CheckConfig.generators`: `docs/canon/spec-check-graph.md`; public `check::resolve` (`Resolver`, scopes; reused by `spec refs`, `get_impact`): `docs/canon/spec-check-links.md`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order: types, rules, output in `docs/canon/spec-check.md`; `render_index`, `CheckConfig.generators` in `-graph.md`; `check::resolve` (`Resolver`, reused by `spec refs`, `get_impact`), scopes, file links in `-links.md`.
 
 ## `[paths]`
 
-What the index and the check walk (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude, tier0?, tier1_name?, index?, roots_written}`: role key `k` defaults to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/<k>`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output; `roots_written` when written); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths; `tier0`, `tier1_name`, `index`: the check's slots. Every path is root-relative with `/`: no leading `/`, no `..`, no `.` or empty component; one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business.
+What the index and the check walk (the walk itself: store README). `Paths {spec, records, features, generated, archive, roots, exclude, tier0?, tier1_name?, index?, link_base?, roots_written}`: role key `k` defaults to `DEFAULT_{SPEC,RECORDS,FEATURES,GENERATED,ARCHIVE}` = `docs/<k>`; `roots` are walked directories or single `.md` files, default the role directories but `generated` (SpecEngine's own output; `roots_written` when written); `exclude` holds census globs (`*`, `**`, `?`) over root-relative file paths; `tier0`, `tier1_name`, `index`, `link_base` (file links' fallback base): the check's. Every path is root-relative with `/` (`is_clean_relative`: no leading `/`, no `..`, `.` or empty component); one trailing `/` is dropped. An unknown key, a wrong type or a bad path → `PathsError {line?, message}`, `at(file)` → `file:line: message`; other tables are ignored. Pure: existence is the walker's business. `Paths::walk_scope()` → `WalkScope`: the walk's rules without the disk (`exclude` compiled once; `DOCUMENT_EXTENSION`, `is_under`), for the store's walker and the link check.
 
 ```toml
 [paths]
@@ -45,17 +45,17 @@ Optional UTF-8 BOM, then front-matter iff the next line is exactly `---`, closed
 
 ## Body references
 
-Scanned in text and inline code (tables and link text included), never in fenced or indented code, HTML (comments included), link destinations or attribute blocks; verbatim only (`R\-12` is none); `{#X-3}` in a paragraph is a mention. Each → `mentions`, origin `inline`, `src` = innermost ID section, else the document ID, else omitted. Cost is linear: no rescan from line start per `[[`, `{#`, `@`, `-`.
+Scanned in text and inline code (tables and link text included), never in fenced or indented code, HTML (comments included), link destinations or attribute blocks; verbatim only (`R\-12` is none); `{#X-3}` in a paragraph is a mention. Each → `mentions`, origin `inline`, `src` = innermost ID section, else the document ID, else omitted; so is a local link destination or definition, `dst` a path (`docs/canon/spec-check-links.md`). Cost is linear: no rescan from line start per `[[`, `{#`, `@`, `-`.
 
 ## Input caps and libraries
 
 Nesting cap 32: the root mapping counts as depth 1 (serde-saphyr `enter_depth`), so 32 levels parse and the 33rd is one `frontmatter-yaml`. Why 32, for the current design (only the four top levels spanned), measured with serde-saphyr 1.3.0 in a debug build: its own frames cost ~20–30 KB of stack per YAML level (mappings as keys worst, ~30 KB); 64 levels of mappings-as-keys peak at ~2.0 MiB, ~5 KB short of a 2 MiB spawned thread, while at 32 every shape peaks ≤ 1.05 MiB.
 
-Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both caps are the parser's budgets; the library defaults (depth 64, own alias limits) stay behind them. Verified at adoption: serde-saphyr 1.3.0 — `deserialize_any` into an own value tree with `Spanned<T>`, `Error::location()` gives line and column but syntax errors carry no byte offset, duplicate keys are an error, `strict_booleans`; pulldown-cmark 0.13.4 — heading attributes give id, classes, `key=value`, `into_offset_iter` byte ranges keep CRLF.
+Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both caps are the parser's budgets; the library defaults (depth 64, own alias limits) stay behind them. Verified at adoption: serde-saphyr — `deserialize_any` into an own tree with `Spanned<T>`, `Error::location()` gives line and column, no byte offset, duplicate keys are errors, `strict_booleans`; pulldown-cmark — heading attributes give id, classes, `key=value`, `into_offset_iter` ranges keep CRLF.
 
 ## Token estimator
 
-`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other letters 1000, rest 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) is `#[ignore]` until the owner fills them (Q4). Document budgets are bytes (check Q-1).
+`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) is `#[ignore]` until the owner fills them (Q4).
 
 ## Open owner questions
 
@@ -65,9 +65,9 @@ Working answer (the code) → what the other answer triggers.
 - Q2 (kind vocabulary): a free string, not validated. Settled → an ADR amending `docs/canon/architecture.md#universal`.
 - Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0026 / ADR-0018 with a `#layout` diff.
 - Q4 (reference token counts): filled → AC-15 un-ignored.
-- Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/`, `fixtures/token-calibration/`: what `anonymity.rs` exempts from the ADR-0024 check. "Yes" → an ADR amending ADR-0024 with a `#language` diff; "no" → no exemptions, the text becomes escapes built at test time.
-- Q6 answered (owner, 2026-09-29): invalid YAML scalars quoted; every document here parses strictly (`dogfood.rs`, no allowlist).
+- Q5 (raw Russian test text): self-written, only in `fixtures/spec-b/`, `fixtures/token-calibration/`, which `anonymity.rs` exempts from ADR-0024. "Yes" → an ADR amending ADR-0024 (`#language`); "no" → escapes built at test time.
+- Q6 answered: invalid YAML scalars quoted; `dogfood.rs` parses every document here strictly, no allowlist.
 
 ## Tests
 
-`tests/`, one file per concern; of note: `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread, no free-stack margin claimed), `genre.rs` (`fixtures/spec-a`: game design, English; `fixtures/spec-b`: command-line tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document here; ADR `canon:` anchors), `check_*.rs`.
+`tests/`, one file per concern; of note: `crafted_yaml.rs` (every shape at the cap and cap + 1 on a 2 MiB thread), `genre.rs` (`fixtures/spec-a`: game design, English; `spec-b`: a CLI tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document here; ADR `canon:` anchors), `check_*.rs`.

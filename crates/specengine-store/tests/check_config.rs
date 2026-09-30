@@ -116,3 +116,81 @@ fn editing_only_the_generator_registry_parses_nothing() {
         assert_eq!(report.parsed, 0, "{name}: table removed: {report:?}");
     }
 }
+
+/// AC-04 of docs/features/spec-check-links.md, the store half: `link_base`
+/// is read by the check only, outside the index fingerprint (`[ids]`):
+/// adding, editing and removing it re-parses nothing; an invalid value
+/// makes `check_worktree` unable to check, naming `specengine.toml:<line>`.
+#[test]
+fn editing_only_link_base_parses_nothing() {
+    for name in ["spec-a", "spec-b"] {
+        let scratch = Scratch::new("check-link-base");
+        let mut corpus = Corpus::copy_of(name, &scratch, "wt");
+        let mut index = corpus.open(&scratch.db("index"));
+        let first = corpus.update(&mut index);
+        assert_eq!(first.parsed, first.walked, "{name}: first update");
+        let original = corpus.read_text("specengine.toml");
+        let without = original.replace("link_base = \"docs\"\n", "");
+        let with = |value: &str| {
+            if without.contains("[paths]\n") {
+                without.replacen("[paths]\n", &format!("[paths]\nlink_base = {value}\n"), 1)
+            } else {
+                format!("[paths]\nlink_base = {value}\n\n{without}")
+            }
+        };
+        let steps = [
+            ("link_base removed", without.clone()),
+            ("link_base docs", with("\"docs\"")),
+            ("link_base docs/spec", with("\"docs/spec\"")),
+            ("link_base docs/", with("\"docs/\"")),
+            ("the original", original.clone()),
+        ];
+        for (step, text) in steps {
+            corpus.write("specengine.toml", &text);
+            corpus.reload();
+            let report = corpus.update(&mut index);
+            assert_eq!(report.parsed, 0, "{name}: {step}: {report:?}");
+            assert!(!report.reparsed_all, "{name}: {step}: {report:?}");
+        }
+    }
+}
+
+#[test]
+fn an_invalid_link_base_cannot_check() {
+    use specengine_core::check::Verdict;
+    let scratch = Scratch::new("check-link-base-invalid");
+    for (case, value) in [
+        ("absolute", "\"/docs\""),
+        ("parent", "\"../x\""),
+        ("dot", "\"a/./b\""),
+        ("empty", "\"\""),
+        ("number", "1"),
+    ] {
+        let corpus = Corpus::copy_of("spec-b", &scratch, case);
+        let original = corpus.read_text("specengine.toml");
+        let line = original
+            .lines()
+            .position(|line| line.starts_with("link_base"))
+            .expect("spec-b sets link_base")
+            + 1;
+        corpus.write(
+            "specengine.toml",
+            original.replace("link_base = \"docs\"", &format!("link_base = {value}")),
+        );
+        let report = specengine_store::check_worktree(
+            &corpus.root,
+            &corpus.root.join("specengine.toml"),
+            None,
+            "2026-09-29",
+        );
+        assert_eq!(report.verdict, Verdict::CannotCheck, "{case}");
+        assert_eq!(report.exit_code(), 2, "{case}");
+        assert_eq!(report.counts.documents, 0, "{case}: nothing walked");
+        let cause = &report.cannot_check[0];
+        assert!(
+            cause.path.ends_with(&format!("specengine.toml:{line}")),
+            "{case}: file:line: {cause:?}"
+        );
+        assert!(!cause.message.is_empty(), "{case}: {cause:?}");
+    }
+}

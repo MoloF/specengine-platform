@@ -28,6 +28,8 @@
       ],
       "anchors": ["slug:movement", "slug:speeds"],
       "links": [
+        "DOM-MOVEMENT mentions inline stamina.md",
+        "DOM-MOVEMENT mentions inline sprint.md",
         "RULE-MOVE-SPEEDS mentions inline MEC-STAMINA"
       ],
       "diagnostics": []

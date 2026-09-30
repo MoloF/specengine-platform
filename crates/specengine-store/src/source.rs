@@ -17,10 +17,9 @@ use std::fs::{self, FileType};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use specengine_core::Paths;
+use specengine_core::{DOCUMENT_EXTENSION, Paths, WalkScope, is_clean_relative, is_under};
 
 use crate::error::StoreError;
-use crate::glob::Glob;
 
 /// What a walk found.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -63,8 +62,9 @@ pub trait Source {
 #[derive(Debug, Clone)]
 pub struct WorkingTree {
     root: PathBuf,
-    roots: Vec<String>,
-    exclude: Vec<Glob>,
+    /// The roots and the exclude globs, compiled once: core's
+    /// [`WalkScope`], the matcher `spec check` judges link targets by.
+    scope: WalkScope,
 }
 
 impl WorkingTree {
@@ -75,13 +75,12 @@ impl WorkingTree {
         let root = fs::canonicalize(requested).map_err(|error| StoreError::io(requested, error))?;
         Ok(Self {
             root,
-            roots: paths.roots.clone(),
-            exclude: paths.exclude.iter().map(|glob| Glob::new(glob)).collect(),
+            scope: paths.walk_scope(),
         })
     }
 
     fn excluded(&self, path: &str) -> bool {
-        self.exclude.iter().any(|glob| glob.matches(path))
+        self.scope.is_excluded(path)
     }
 
     /// The kind of a root-relative path (a configured root, or a directory
@@ -138,7 +137,9 @@ impl WorkingTree {
                 continue;
             }
             let Some(text) = name.to_str() else {
-                if kind.is_dir() || (kind.is_file() && bytes.ends_with(b".md")) {
+                if kind.is_dir()
+                    || (kind.is_file() && bytes.ends_with(DOCUMENT_EXTENSION.as_bytes()))
+                {
                     listing.skipped_names += 1;
                 }
                 continue;
@@ -146,7 +147,8 @@ impl WorkingTree {
             let child = format!("{relative}/{text}");
             if kind.is_dir() {
                 self.walk(&absolute.join(&name), &child, found, listing);
-            } else if kind.is_file() && text.ends_with(".md") && !self.excluded(&child) {
+            } else if kind.is_file() && text.ends_with(DOCUMENT_EXTENSION) && !self.excluded(&child)
+            {
                 found.insert(child);
             }
         }
@@ -165,12 +167,12 @@ impl Source for WorkingTree {
         fs::read_dir(&self.root)?;
         let mut listing = Listing::default();
         let mut found = BTreeSet::new();
-        for root in &self.roots {
+        for root in self.scope.roots() {
             match self.root_kind(root) {
                 Some(kind) if kind.is_dir() => {
                     self.walk(&self.root.join(root), root, &mut found, &mut listing);
                 }
-                Some(kind) if kind.is_file() && root.ends_with(".md") => {
+                Some(kind) if kind.is_file() && root.ends_with(DOCUMENT_EXTENSION) => {
                     if !self.excluded(root) {
                         found.insert(root.clone());
                     }
@@ -185,20 +187,10 @@ impl Source for WorkingTree {
     }
 
     fn probe(&self, path: &str) -> bool {
-        if !is_clean_relative(path) || !path.ends_with(".md") || self.excluded(path) {
-            return false;
-        }
-        // Some root admits the path: it lies in (or is) the root, and the
-        // components below the root follow the walk's dot-name rule (the
-        // root's own components do not).
-        let admitted = self.roots.iter().any(|root| {
-            (path == root.as_str() || under(path, root))
-                && path
-                    .split('/')
-                    .skip(root.split('/').count())
-                    .all(|component| !component.starts_with('.'))
-        });
-        if !admitted {
+        // A clean `.md` path some root admits (it lies in, or is, the root;
+        // the components below the root follow the walk's dot-name rule, the
+        // root's own components do not), matching no exclude glob.
+        if !self.scope.in_walk_scope(path) {
             return false;
         }
         let mut dir = self.root.clone();
@@ -265,10 +257,10 @@ impl Source for WorkingTree {
         }
         // A root, a directory under one (no dot-name below the root, as the
         // walk skips them), or a directory containing one.
-        let related = self.roots.iter().any(|root| {
+        let related = self.scope.roots().iter().any(|root| {
             path == root.as_str()
-                || under(root, path)
-                || (under(path, root)
+                || is_under(root, path)
+                || (is_under(path, root)
                     && path
                         .split('/')
                         .skip(root.split('/').count())
@@ -276,21 +268,6 @@ impl Source for WorkingTree {
         });
         related && self.root_kind(path).is_some_and(|kind| kind.is_dir())
     }
-}
-
-/// `path` lies strictly under the directory `root`.
-fn under(path: &str, root: &str) -> bool {
-    path.strip_prefix(root)
-        .is_some_and(|rest| rest.starts_with('/'))
-}
-
-/// Non-empty, relative, `/`-separated, no empty, `.` or `..` component.
-pub(crate) fn is_clean_relative(path: &str) -> bool {
-    !path.is_empty()
-        && !path.starts_with('/')
-        && path
-            .split('/')
-            .all(|component| !matches!(component, "" | "." | ".."))
 }
 
 /// The type of the entry of `dir` named exactly `name` (no normalisation,

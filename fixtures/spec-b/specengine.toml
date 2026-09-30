@@ -4,6 +4,9 @@
 
 [paths]
 roots = ["docs"]
+# Markdown file links written relative to the docs root resolve through the
+# base after the linking file's own directory (docs/features/spec-check-links.md).
+link_base = "docs"
 
 [ids]
 REQ  = { kind = "requirement", width = 3, aliases_from = ["ТРБ"] }

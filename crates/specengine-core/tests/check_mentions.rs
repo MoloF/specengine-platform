@@ -410,3 +410,44 @@ fn mentions_are_independent_of_input_order() {
     assert_eq!(forward.to_json(), backward.to_json());
     assert_eq!(dangling(&forward).len(), 6, "{}", show(&forward));
 }
+
+/// AC-02 of docs/features/spec-check-links.md: a Markdown file link is no
+/// mention: a destination naming no document or an ID-shaped file gives no
+/// `mention-dangling` (it is `link-dangling`'s business); the link text is
+/// still read for mentions. The source lies in a default role root, so the
+/// targets are in the walk scope.
+#[test]
+fn file_links_are_not_mentions() {
+    let body = "\
+[gone](gone.md), [an ID file](R-99.md), [an ID anchor](#R-98), [x][r],
+[R-97](elsewhere.md).
+
+[r]: Q-999.md
+";
+    let text = source(body);
+    let report = check_with(&[("docs/spec/s.md", &text)]);
+    assert_eq!(
+        dangling(&report),
+        [at("docs/spec/s.md", 8, "R-97")],
+        "only the link text's mention:\n{}",
+        show(&report)
+    );
+    let links: Vec<(usize, String)> = report
+        .findings
+        .iter()
+        .filter(|f| f.code.starts_with("link-"))
+        .map(|f| (f.line, f.subject.clone()))
+        .collect();
+    assert_eq!(
+        links,
+        [
+            (7, "#R-98".to_owned()),
+            (7, "R-99.md".to_owned()),
+            (7, "gone.md".to_owned()),
+            (8, "elsewhere.md".to_owned()),
+            (10, "Q-999.md".to_owned()),
+        ],
+        "{}",
+        show(&report)
+    );
+}

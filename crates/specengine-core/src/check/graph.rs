@@ -58,8 +58,8 @@ fn mention_line(text: &FileText<'_>, reference: &Reference) -> usize {
         .map_or(1, |span| text.line(span.start))
 }
 
-/// Live sources in path order: (file index, parse).
-fn live_sources<'c, 'a>(
+/// Live sources in path order: (file index, parse). Also the link rules'.
+pub(super) fn live_sources<'c, 'a>(
     corpus: &'c Corpus<'a>,
 ) -> impl Iterator<Item = (usize, &'a ParsedFile)> + 'c {
     corpus
@@ -241,7 +241,14 @@ fn name(corpus: &Corpus<'_>, index: usize) -> String {
         .unwrap_or_else(|| corpus.paths[index].to_owned())
 }
 
-fn warning(code: &str, path: &str, line: usize, subject: &str, message: String) -> Finding {
+/// A warning finding; also the link rules'.
+pub(super) fn warning(
+    code: &str,
+    path: &str,
+    line: usize,
+    subject: &str,
+    message: String,
+) -> Finding {
     Finding {
         code: code.to_owned(),
         severity: Severity::Warning,

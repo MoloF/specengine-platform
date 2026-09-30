@@ -44,7 +44,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped 2026-09-29/30, owner questions open in the canon named: the parser (`crates/specengine-{model,core}/README.md`); the SQLite + FTS5 index, incremental by BLAKE3 (`crates/specengine-store/README.md`); `spec check` increments 1, 2 part 1 and 2 part 2 pass A (`docs/canon/spec-check*.md`). Next: pass B `spec-check-links`; 3 with the CLI, `xtask` retired; 4 `spec-check-process`.
+- Shipped 2026-09-29/30, owner questions open in the canon named: the parser (`crates/specengine-{model,core}/README.md`); the SQLite + FTS5 index, incremental by BLAKE3 (`crates/specengine-store/README.md`); `spec check` increments 1 and 2 (`docs/canon/spec-check*.md`). Next: 3 with the CLI, `xtask` retired; 4 `spec-check-process`.
 - CLI: `init`, `index`, `tree`, `show`, `search`, `graph --format mermaid|dot`, `bundle`, `check`.
 - MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
@@ -142,7 +142,7 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 
 A census config alone described each pilot corpus (ADR-0008; schema and counts: `crates/specengine-import/README.md`) once it read headerless `|` blocks, ID-column header regexes and wiki links. Each finding is a per-corpus importer setting or rule, not core code:
 
-- (a) **Link base**: 57 of one pilot's 58 "broken" links resolve from the docs root, not the linking file → a per-corpus link base.
+- (a) **Link base**: 57 of one pilot's 58 "broken" links resolve from the docs root, not the linking file → `[paths] link_base`.
 - (b) **Genuine debt**: the other pilot's broken wiki links name 8 targets that exist nowhere → the baseline (§4.2 item 3).
 - (c) **Legacy prefixes**: both pilots keep non-Latin prefixes (20 / 287 IDs; one whole decision register) → aliases (§4.2 item 4).
 - (d) **Definition vs reference**: IDs recur across index and reference tables (1 407 / 110 duplicates) → a per-corpus rule telling a definition from a reference.

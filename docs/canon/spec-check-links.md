@@ -8,7 +8,7 @@ reviewed: 2026-09-30
 
 # spec check: feature scopes and links
 
-Increment 2 part 2 of `spec check`, two passes: A, feature scopes (shipped 2026-09-30; ADR-0026, `docs/canon/architecture.md#layout`); B, file links (next, "Pass B"). Engine, config, verdict, output: `docs/canon/spec-check.md`; index render and graph warnings: `docs/canon/spec-check-graph.md`. A scope comes only from `[paths] features` and `[ids] scope`: no prefix, slug, `features/`, `records/` or `docs/` literal in the sources (ADR-0008, `check_genre.rs`).
+Increment 2 part 2 of `spec check`, two passes, both shipped 2026-09-30: A, feature scopes (ADR-0026, `docs/canon/architecture.md#layout`); B, Markdown file links ("File links"; 08 §4.3 (a), after the census resolver, `crates/specengine-import/README.md`). Engine, config, verdict, output: `docs/canon/spec-check.md`; index render and graph warnings: `docs/canon/spec-check-graph.md`. A scope comes only from `[paths] features` and `[ids] scope`: no prefix, slug, `features/`, `records/` or `docs/` literal in the sources (ADR-0008, `check_genre.rs`).
 
 ## Configuration
 
@@ -77,15 +77,45 @@ A reference without a span gets `<written>` rebuilt as `project:slug/ID#Y` (mess
 
 - `specengine_core::check::resolve`: `Resolver::new(&CheckInput, &IdScheme, &Paths)`, blind to input order; `resolve(from, &Reference, written)` and `resolve_mention(from, &Reference, written)` (with the name fallback) → `Resolution`; `holders_of(from, &Reference, written) -> Option<Vec<usize>>` (the ID's files, section ignored, no fallback; `None`: dangling or skipped); `from` = the citing file's path (`""` or an unwalked path: no feature document); `feature_slug(path) -> Option<&str>`; `paths()`, what `Resolved` indexes. `Resolution::{Resolved(Vec<usize>), Skipped, Dangling(reason)}`, `Skipped` = `project:` only. The store keeps `dst` as written: `spec refs` and `get_impact` resolve through this, with the citing file.
 - `specengine_model::grammar::is_slug(&str) -> bool`: the grammar's `slug`, `[a-z][a-z0-9-]*`, one rule for the lexer's qualifiers and feature stems.
-- `CHECK_CODES` 27 (`id-scope` last); `INDEX_FORMAT` 4 (the fixtures moved their criteria into feature sections; store code unchanged).
+- `specengine_core` root: `Paths.link_base`; `WalkScope` (`Paths::walk_scope()`, `new(&Paths)`), the walk's rules without the disk, `exclude` compiled once — `roots()`, `is_excluded`, `in_walk_scope` — shared by the store's walker and the link check (`Paths::is_excluded`, `in_walk_scope` compile per call); `is_under(path, dir)`, `is_clean_relative`; `DOCUMENT_EXTENSION` = `.md`.
+- `CHECK_CODES` 29 (`id-scope`, `link-dangling`, `link-anchor` last); `INDEX_FORMAT` 5 (store README).
 
 ## This repository and the template
 
-The parity config has only `ADR`, project-scoped: `docs/features/*.md` are feature documents defining nothing scoped; `enforce` stays `clean` with its one pinned warning. `docs/features/_template.md` writes criteria as list items, right while `AC` is unconfigured here. **Open item:** a project configuring a feature-scoped `AC` needs `{#AC-01}` criterion sections, so the template and the Phase 2 role prompts switch first (with the root `specengine.toml`, Q-7); a criterion section has no front-matter (Q-I).
+The parity config has only `ADR`, project-scoped, and no `link_base`: `docs/features/*.md` are feature documents defining nothing scoped; `enforce` stays `clean` with its one pinned warning, no link finding. `docs/features/_template.md` writes criteria as list items, right while `AC` is unconfigured here. **Open item:** a project configuring a feature-scoped `AC` needs `{#AC-01}` criterion sections, so the template and the Phase 2 role prompts switch first (with the root `specengine.toml`, Q-7); a criterion section has no front-matter (Q-I).
 
-## Pass B: `spec-check-links` (next)
+## File links
 
-Its own spec. Local Markdown link destinations and reference definitions become `mentions` path links (span = the destination; local as the census's `local_target`; `?query` dropped; no images, autolinks, HTML, code), stored in `dst_path`: a `ParsedFile` change, `INDEX_FORMAT` 5; eval `references.inline` counts ID references only. `.md` and `#`-only links resolve file-relative, `/` from the root, then through `[paths] link_base` (Q-G); warnings `link-dangling`, `link-anchor`; spec-b `link_base = "docs"`; 0 link findings here. Source: 08 §4.3 (a); prior art: the census resolver (`crates/specengine-import/README.md`).
+**Recorded** by the parser: each inline link and reference definition (used or not; a repeated label: the first) with a local destination — non-empty, not `//`-led, no scheme `[A-Za-z][A-Za-z0-9+.-]*:` — as one `mentions` link, origin `inline`, `dst` a path, `src` as an ID mention's. `path` = before the first `#`, cut at the first `?` (`""` for `#h`); `anchor` = after it, absent when empty; both as pulldown-cmark gives them, never percent-decoded; no path, no anchor → nothing. `span` = the destination's bytes (`<…>`, title excluded; `?query`, `#anchor` included), re-scanned after the `](` or `]:`: blanks include VT, FF; a bare destination ends at a byte ≤ 0x20 (DEL included); unlocatable → not recorded. Never: images and links inside them, autolinks, HTML, reference uses, wiki links, code, front-matter. Order: declared links, then the body's mentions and file links by span start. The store keeps `dst` as written (`dst_path`).
+
+**Config.** `[paths] link_base` (optional): a root-relative directory under the roots' path rules (`"/docs"`, `"../x"`, `"a/./b"`, `""`, a non-string → `specengine.toml:<line>: message`, cannot check). The check's only: outside the index fingerprint; existence unchecked; no default (ADR-0008).
+
+**Resolution.** Checked: a path ending exactly in `.md` after percent-decoding (a malformed `%` stays; a non-UTF-8 result → as written), or an empty path with an anchor (the linking file). Candidates, normalised (`..` pops; popping above the root leaves it): `/`-led → one, from the root; else C1 = the linking file's directory + path, then, only if C1 names no walked document, C2 = `link_base` + path (Q-G). The first naming a walked document (any class, tier, status) resolves. Else, if a candidate lies in the walk scope (`WalkScope::in_walk_scope`; a symlinked `.md` there is not walked: a warning, accepted) → `link-dangling`; else nothing. From `docs/records/REQ/REQ-001.md`, `link_base = "docs"`:
+
+| Written | Outcome |
+|---|---|
+| `REQ-002.md`, `../ASM/ASM-01.md#h` | resolved (C1), `#h` checked there |
+| `spec/cli.md#CMD-SYNC` | C1 missing, C2 `docs/spec/cli.md` resolves |
+| `/docs/spec/cli.md` | `docs/spec/cli.md`, no base |
+| `spec/gone.md`, `a%20b.md` | `link-dangling` |
+| `#h` | checked in the linking file |
+| `../../../README.md` | `README.md`, under no root: nothing |
+| `LICENSE`, `../`, `x.rs`, `x.MD` | recorded, never checked |
+| `https://h/x.md`, `//h/x.md`, `mailto:a` | not recorded |
+
+**Anchors.** A resolved link's anchor, decoded, is one of the target's `anchors` or section IDs — `canon-anchor`'s predicate (`has_anchor`), exact — else `link-anchor`. A target without a parse or not UTF-8: unchecked. Slugs differing from GitHub's (model README "Anchors"): a rare false warning, accepted.
+
+**Findings**: warnings (`#control`, baselineable) from live sources (neither `class: generated` nor Tier 3), at the destination's line, subject the text under its span (`<x y.md>` → `x y.md`), in any input order the same:
+
+    warning  docs/records/REQ/REQ-001.md:14: link-dangling: `spec/gone.md` names no walked document (tried `docs/records/REQ/spec/gone.md`, `docs/spec/gone.md`)
+    warning  design/notes.md:8: link-anchor: `sections.md#nope`: `design/sections.md` has no anchor or section `#nope`
+
+**Accepted deviations and limits.**
+
+- `tried` lists a C2 equal to C1 once, never a candidate leaving the root (C1 included). `link-anchor` shows the decoded anchor, its subject as written.
+- An existing but excluded C1 with a missing in-scope C2 → a false `link-dangling`.
+- Locality is judged on the trimmed destination, `path` kept as given: `[a](<x.md >)` records `"x.md "`, never checked (the census checks it).
+- A `>` on a 4+-indented continuation line is text to pulldown-cmark, skipped by the re-scan: `[a](\n    >)` records nothing; `[a](\n    >x.md)` records path `>x.md` with span `x.md`, so a warning's subject (`x.md`) and candidate (`docs/>x.md`) disagree.
 
 ## Open owner questions
 

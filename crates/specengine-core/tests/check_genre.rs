@@ -361,12 +361,14 @@ fn relative(path: &Path) -> String {
 
 /// The sources the scope pass changed: the resolver, the rules, the graph
 /// warnings, the code table, and the model grammar's `is_slug`.
-const SCOPE_SOURCES: [&str; 5] = [
+const SCOPE_SOURCES: [&str; 6] = [
     "crates/specengine-core/src/check/resolve.rs",
     "crates/specengine-core/src/check/engine.rs",
     "crates/specengine-core/src/check/graph.rs",
     "crates/specengine-core/src/check/mod.rs",
     "crates/specengine-model/src/grammar.rs",
+    // docs/features/spec-check-links.md: the home of `DOCUMENT_EXTENSION`.
+    "crates/specengine-core/src/walk_scope.rs",
 ];
 
 #[test]
@@ -431,11 +433,161 @@ fn the_scope_sources_name_no_prefix_slug_or_role_directory() {
         "project names in the scope sources:\n{}",
         offenders.join("\n")
     );
-    // The one extension literal: `DOCUMENT_EXTENSION` of the resolver.
+    // The one extension literal: core's `DOCUMENT_EXTENSION`, moved from the
+    // resolver to the walk scope (docs/features/spec-check-links.md).
     assert_eq!(extensions.len(), 1, "{extensions:?}");
     assert!(
-        extensions[0].starts_with("crates/specengine-core/src/check/resolve.rs:")
+        extensions[0].starts_with("crates/specengine-core/src/walk_scope.rs:")
             && extensions[0].ends_with(": .md"),
         "{extensions:?}"
     );
+}
+
+/// The `.md` literals of a source outside comments (and outside its
+/// `#[cfg(test)]` module): literals naming the extension as a path part,
+/// not prose quoting it as `` `.md` `` in a message.
+fn md_literals(source: &str) -> Vec<String> {
+    let path = repository_root().join(source);
+    let text = fs::read_to_string(&path).unwrap_or_else(|_| panic!("{source}"));
+    let mut found = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        if line.trim_start().starts_with("#[cfg(test)]") {
+            break;
+        }
+        for literal in literals(line) {
+            if literal.replace("`.md`", "").contains(".md") {
+                found.push(format!("{source}:{}: {literal}", number + 1));
+            }
+        }
+    }
+    found
+}
+
+/// docs/features/spec-check-links.md (iteration 3): one `.md` rule. The
+/// only `.md` literal of the scope sources, the link rule and the store's
+/// walker is `DOCUMENT_EXTENSION` in `walk_scope.rs`, re-exported by core.
+#[test]
+fn the_one_md_literal_is_the_core_document_extension() {
+    assert_eq!(specengine_core::DOCUMENT_EXTENSION, ".md");
+    let mut found = Vec::new();
+    for source in SCOPE_SOURCES.iter().copied().chain([
+        "crates/specengine-core/src/check/links.rs",
+        "crates/specengine-store/src/source.rs",
+    ]) {
+        found.extend(md_literals(source));
+    }
+    assert_eq!(found.len(), 1, "the one `.md` literal: {found:#?}");
+    assert!(
+        found[0].starts_with("crates/specengine-core/src/walk_scope.rs:")
+            && found[0].ends_with(": .md"),
+        "{found:#?}"
+    );
+}
+
+// ------------------------------------------------ docs/features/spec-check-links.md
+
+/// `(code, path, line, subject)` of every file link finding.
+fn link_findings(report: &specengine_core::check::Report) -> Vec<(String, String, usize, String)> {
+    report
+        .findings
+        .iter()
+        .filter(|f| f.code == "link-dangling" || f.code == "link-anchor")
+        .map(|f| (f.code.clone(), f.path.clone(), f.line, f.subject.clone()))
+        .collect()
+}
+
+/// AC-09: both fixtures record file links (spec-a two, spec-b one) and
+/// give no link finding; spec-b's resolves only through its `link_base`.
+#[test]
+fn the_fixtures_links_resolve_and_spec_b_needs_its_base() {
+    for (corpus, links) in [("spec-a", 2), ("spec-b", 1)] {
+        let (config, input) = fixture_input(&fixture(corpus));
+        let recorded = input
+            .files
+            .iter()
+            .filter_map(|file| file.parsed.as_ref())
+            .flat_map(|parsed| &parsed.links)
+            .filter(|link| {
+                link.origin == specengine_model::LinkOrigin::Inline
+                    && matches!(link.dst, LinkTarget::Path(_))
+            })
+            .count();
+        assert_eq!(recorded, links, "{corpus}: file links recorded");
+        let report = config.run(&input);
+        assert_eq!(link_findings(&report), [], "{corpus}:\n{}", show(&report));
+    }
+    let (mut config, input) = fixture_input(&fixture("spec-b"));
+    assert_eq!(config.paths.link_base.as_deref(), Some("docs"));
+    config.paths.link_base = None;
+    let report = config.run(&input);
+    assert_eq!(
+        link_findings(&report),
+        [(
+            "link-dangling".to_owned(),
+            "docs/records/REQ/REQ-001.md".to_owned(),
+            14,
+            "spec/cli.md#CMD-SYNC".to_owned()
+        )],
+        "{}",
+        show(&report)
+    );
+}
+
+/// AC-12 (ADR-0008): the link rule and the shared exclude matcher name no
+/// project path, prefix or default base; the link rule has no extension
+/// literal of its own (the resolver's `DOCUMENT_EXTENSION`); both are
+/// scanned.
+#[test]
+fn the_link_sources_name_no_project_and_no_default_base() {
+    let sources = check_sources();
+    assert!(
+        sources.iter().any(|path| path.ends_with("check/links.rs")),
+        "links.rs is scanned with the check sources: {sources:?}"
+    );
+    let mut prefixes: BTreeSet<String> = BTreeSet::new();
+    for corpus in ["spec-a", "spec-b"] {
+        for spec in corpus_scheme(&fixture(corpus)).prefixes() {
+            prefixes.insert(spec.prefix.clone());
+            prefixes.extend(spec.aliases_from.iter().cloned());
+        }
+    }
+    prefixes.insert("ADR".to_owned());
+    let mut offenders = Vec::new();
+    for source in [
+        "crates/specengine-core/src/check/links.rs",
+        "crates/specengine-core/src/glob.rs",
+    ] {
+        let path = repository_root().join(source);
+        let text = fs::read_to_string(&path).unwrap_or_else(|_| panic!("{source}"));
+        for (number, line) in text.lines().enumerate() {
+            for literal in literals(line) {
+                let names_prefix = prefixes.iter().any(|prefix| {
+                    literal == prefix
+                        || literal.starts_with(&format!("{prefix}-"))
+                        || literal.contains(&format!(" {prefix}-"))
+                        || literal.contains(&format!("`{prefix}-"))
+                });
+                let names_path = PROJECT_NAMES.iter().any(|name| literal.contains(name))
+                    || literal.contains("docs")
+                    || literal.contains("design");
+                let extension = literal.contains(".md");
+                if names_prefix || names_path || extension {
+                    offenders.push(format!("{source}:{}: {literal:?}", number + 1));
+                }
+            }
+            if line.contains("link_base") && line.contains("unwrap_or") {
+                offenders.push(format!(
+                    "{source}:{}: a defaulted base: {}",
+                    number + 1,
+                    line.trim()
+                ));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "project names or defaults in the link sources:\n{}",
+        offenders.join("\n")
+    );
+    assert_eq!(specengine_core::Paths::default().link_base, None);
 }

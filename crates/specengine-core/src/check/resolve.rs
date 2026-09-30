@@ -27,10 +27,7 @@ use specengine_model::{
 
 use super::input::{CheckFile, CheckInput};
 use super::text::FileText;
-use crate::Paths;
-
-/// The extension of a walked document, also of a feature document.
-const DOCUMENT_EXTENSION: &str = ".md";
+use crate::{DOCUMENT_EXTENSION, Paths};
 
 /// The resolution index of one corpus: every file in path order.
 #[derive(Debug, Clone)]

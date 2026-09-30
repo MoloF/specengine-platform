@@ -22,7 +22,7 @@ Rust comes first (including Bevy ECS and RON data); other languages via tree-sit
 
 ## Status
 
-**Phase 0 done** (2026-09-29): architectural decisions are made and the engine's key claims are measured on two pilot corpora. What exists: layer A parsing and hashing (`specengine-code`), a corpus census (`specengine-import`), a stdio MCP server skeleton (`specengine-mcp`), rust-analyzer loading (`specengine-ra`), the measurement harness (`specengine-eval`) and the documentation enforcement (`xtask`). No `spec` CLI yet. **Next: Phase 1**, the reading core ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
+**Phase 0 done** (2026-09-29): architectural decisions are made and the engine's key claims are measured on two pilot corpora. **Phase 1**, the reading core, in progress: the spec parser (`specengine-model`, `specengine-core`), the SQLite index (`specengine-store`) and `spec check` increments 1 and 2 are shipped. Also built: layer A parsing and hashing (`specengine-code`), a corpus census (`specengine-import`), a stdio MCP server skeleton (`specengine-mcp`), rust-analyzer loading (`specengine-ra`), the measurement harness (`specengine-eval`) and the documentation enforcement (`xtask`). No `spec` CLI yet: it comes next, with `spec check` increment 3 ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
 
 ## Where to start
 

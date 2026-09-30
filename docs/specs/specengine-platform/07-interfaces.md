@@ -179,6 +179,7 @@ roots = ["docs", "CLAUDE.md"]
 tier0 = "CLAUDE.md"          # spec check slots: the only canon tier 0,
 tier1_name = "README.md"    # the only canon tier 1 name,
 index = "docs/index.md"     # the index, capped by index_bytes
+link_base = "docs"          # fallback base of relative file links: docs/canon/spec-check-links.md
 
 [ids]                       # prefix → kind, shape, width, aliases_from: crates/specengine-model/README.md
 R    = { kind = "requirement", width = 2, immutable_text = true }

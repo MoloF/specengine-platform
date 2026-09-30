@@ -16,18 +16,20 @@ use specengine_model::{
 
 use common::{numbers, parse_str, text_of};
 
-/// Inline references of a parse: (verbatim text, reference).
+/// Inline ID references of a parse: (verbatim text, reference). A local
+/// Markdown link destination is an inline path link
+/// (docs/features/spec-check-links.md), never a reference: left out here.
 fn inline(text: &str, parsed: &ParsedFile) -> Vec<(String, Reference)> {
     parsed
         .links
         .iter()
         .filter(|l| l.origin == LinkOrigin::Inline)
-        .map(|l| match &l.dst {
+        .filter_map(|l| match &l.dst {
             LinkTarget::Reference(r) => {
                 let span = r.span.expect("an inline reference has a span");
-                (text_of(text.as_bytes(), span).to_owned(), r.clone())
+                Some((text_of(text.as_bytes(), span).to_owned(), r.clone()))
             }
-            LinkTarget::Path(p) => panic!("inline path link {p:?}"),
+            LinkTarget::Path(_) => None,
         })
         .collect()
 }
@@ -138,6 +140,16 @@ A [link to R-7](R-8) and <span>R-9</span> and R\\-10 escaped.
         "prose, inline code, link text, inline text between tags, table cells, heading text"
     );
     let parsed = parse_str(text, &scheme);
+    // The destination `R-8` is a file link as written, not an ID reference.
+    let paths: Vec<&str> = parsed
+        .links
+        .iter()
+        .filter_map(|l| match &l.dst {
+            LinkTarget::Path(p) if l.origin == LinkOrigin::Inline => Some(p.path.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(paths, ["R-8"], "the destination is a path link only");
     assert_eq!(
         parsed
             .sections()

@@ -11,11 +11,19 @@
 //! (text and code, link text included; no destination, image or HTML), and
 //! `<a id>` / `<a name>` start tags are read from HTML events only, so
 //! nothing comes from code blocks or HTML comments.
+//!
+//! File links (docs/features/spec-check-links.md): every inline link
+//! (`[t](dest)`) outside an image description and every reference
+//! definition (`[r]: dest`, used or not) whose destination is local — not
+//! empty, not `//`-led, no URI scheme — with its path (before the first `#`,
+//! cut at the first `?`) and anchor (after the first `#`) as CommonMark
+//! gives them, and the span of the destination as written. Autolinks, raw
+//! HTML, reference uses, images and code give none.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, LinkType, Options, Parser, Tag, TagEnd};
 use specengine_model::Span;
 
 /// One heading of the body.
@@ -41,10 +49,35 @@ pub(crate) struct HtmlAnchor {
     pub span: Span,
 }
 
+/// One local Markdown link destination: an inline link's or a reference
+/// definition's.
+pub(crate) struct FileLink {
+    /// Before the first `#`, cut at the first `?`; `""` for `#h`.
+    pub path: String,
+    /// After the first `#`; `None` when empty.
+    pub anchor: Option<String>,
+    /// The destination as written: `<…>` and the title excluded, `?query`
+    /// and `#anchor` included.
+    pub span: Span,
+}
+
+/// An inline link being read: its destination and where its text ends.
+struct OpenLink {
+    path: String,
+    anchor: Option<String>,
+    /// The link's whole range, `[` to `)`.
+    range: Range<usize>,
+    /// The furthest end of an event inside the link text: the `](` closing
+    /// the text lies at or after it.
+    text_end: usize,
+}
+
 pub(crate) struct Body {
     pub headings: Vec<Heading>,
     /// HTML anchors, in source order.
     pub html_anchors: Vec<HtmlAnchor>,
+    /// Local file links, by span start.
+    pub file_links: Vec<FileLink>,
     /// Merged source ranges to read references from, in order.
     pub regions: Vec<Range<usize>>,
     /// Index of the first level-1 heading.
@@ -75,10 +108,74 @@ pub(crate) fn scan(text: &str, body: Span) -> Body {
     let mut in_heading = false;
     // An HTML comment left open by a line of an HTML block.
     let mut in_comment = false;
+    // Links open around the current event (1 inside a link), and the inline
+    // link being read.
+    let mut link_depth = 0usize;
+    let mut open_link: Option<OpenLink> = None;
 
-    for (event, range) in Parser::new_ext(source, options).into_offset_iter() {
+    let parser = Parser::new_ext(source, options);
+    // Reference definitions, one per label (CommonMark: the first), used or
+    // not; sorted by span below, never in map order.
+    let mut file_links: Vec<FileLink> = parser
+        .reference_definitions()
+        .iter()
+        .filter_map(|(_, definition)| {
+            let (path, anchor) = local_destination(&definition.dest)?;
+            let range = definition.span.start + base..definition.span.end + base;
+            // The re-scan cannot mirror pulldown-cmark's container handling
+            // exactly (a `>` on an indented continuation line is text, not
+            // a blockquote marker): a destination it cannot locate is not
+            // recorded, never a panic on user data.
+            let span = definition_destination(text.as_bytes(), range)?;
+            Some(FileLink { path, anchor, span })
+        })
+        .collect();
+
+    for (event, range) in parser.into_offset_iter() {
         let range = range.start + base..range.end + base;
+        if let Some(link) = &mut open_link {
+            let closing = link_depth == 1 && matches!(event, Event::End(TagEnd::Link));
+            if !closing {
+                link.text_end = link.text_end.max(range.end);
+            }
+        }
         match event {
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                ..
+            }) => {
+                link_depth += 1;
+                if link_depth == 1
+                    && images == 0
+                    && link_type == LinkType::Inline
+                    && let Some((path, anchor)) = local_destination(&dest_url)
+                {
+                    open_link = Some(OpenLink {
+                        path,
+                        anchor,
+                        text_end: range.start + 1,
+                        range,
+                    });
+                }
+            }
+            Event::End(TagEnd::Link) => {
+                link_depth = link_depth.saturating_sub(1);
+                if link_depth == 0
+                    && let Some(link) = open_link.take()
+                {
+                    // As for a definition: a destination the re-scan cannot
+                    // locate is not recorded.
+                    let span = inline_destination(text.as_bytes(), &link.range, link.text_end);
+                    if let Some(span) = span {
+                        file_links.push(FileLink {
+                            path: link.path,
+                            anchor: link.anchor,
+                            span,
+                        });
+                    }
+                }
+            }
             Event::Start(Tag::Heading {
                 level,
                 id,
@@ -188,9 +285,11 @@ pub(crate) fn scan(text: &str, body: Span) -> Body {
         .iter()
         .find(|&&(seen, _)| seen == wanted)
         .map(|&(_, span)| span);
+    file_links.sort_by_key(|link| link.span.start);
     Body {
         headings,
         html_anchors,
+        file_links,
         regions,
         first_h1,
         summary,
@@ -338,6 +437,150 @@ fn a_tag(tag: &str) -> Option<(Vec<String>, usize)> {
             names.push(value.to_owned());
         }
     }
+}
+
+/// The path and anchor of a local destination (the census's
+/// `local_target` rule, judged on the trimmed text): not empty, not
+/// `//`-led, no URI scheme (`[A-Za-z][A-Za-z0-9+.-]*:`). Path = before the
+/// first `#`, cut at the first `?`; anchor = after the first `#`, `None`
+/// when empty; both as given. `None` also for an empty path without an
+/// anchor (`#`, `?q`).
+fn local_destination(dest: &str) -> Option<(String, Option<String>)> {
+    let trimmed = dest.trim();
+    if trimmed.is_empty() || trimmed.starts_with("//") || has_scheme(trimmed) {
+        return None;
+    }
+    let (before, anchor) = match dest.split_once('#') {
+        Some((before, anchor)) => (before, Some(anchor).filter(|anchor| !anchor.is_empty())),
+        None => (dest, None),
+    };
+    let path = before.split('?').next().unwrap_or(before);
+    if path.is_empty() && anchor.is_none() {
+        return None;
+    }
+    Some((path.to_owned(), anchor.map(str::to_owned)))
+}
+
+/// The text before its first `:` is a URI scheme.
+fn has_scheme(dest: &str) -> bool {
+    let Some((scheme, _)) = dest.split_once(':') else {
+        return false;
+    };
+    scheme
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
+/// Where a destination is looked for: an inline link's ends at an
+/// unbalanced `)`, a definition's only at whitespace.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DestinationIn {
+    Link,
+    Definition,
+}
+
+/// The destination of the inline link spanning `link` (`[` to `)`): after
+/// the first `](` at or past `text_end`, the end of the last event inside
+/// the link text (so brackets and code spans in the text are passed over).
+fn inline_destination(bytes: &[u8], link: &Range<usize>, text_end: usize) -> Option<Span> {
+    let end = link.end.min(bytes.len());
+    let mut at = text_end.max(link.start + 1);
+    while at + 1 < end {
+        if bytes[at] == b']' && bytes[at + 1] == b'(' {
+            return destination_at(bytes, at + 2, end, DestinationIn::Link);
+        }
+        at += 1;
+    }
+    None
+}
+
+/// The destination of the reference definition spanning `definition`
+/// (`[` of the label to the end of the destination or title): after the
+/// label's `]:`, on the same line or the next.
+fn definition_destination(bytes: &[u8], definition: Range<usize>) -> Option<Span> {
+    let end = definition.end.min(bytes.len());
+    let mut at = definition.start + 1;
+    while at < end {
+        match bytes[at] {
+            b'\\' => at += 2,
+            b']' => {
+                return (bytes.get(at + 1) == Some(&b':'))
+                    .then(|| destination_at(bytes, at + 2, end, DestinationIn::Definition))
+                    .flatten();
+            }
+            _ => at += 1,
+        }
+    }
+    None
+}
+
+/// Whitespace pulldown-cmark passes before a destination on one line
+/// (`is_ascii_whitespace_no_nl`): space, tab, vertical tab, form feed.
+fn is_blank_no_eol(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | 0x0B | 0x0C)
+}
+
+/// The destination starting after optional blanks ([`is_blank_no_eol`])
+/// and at most one line ending (after which container markers `>` are
+/// passed too) at `from`, before `end`: the text inside `<…>`, else the bare
+/// run up to a byte `0x00..=0x20` (pulldown-cmark's `scan_link_dest`) or
+/// (in a link) an unbalanced `)`.
+fn destination_at(bytes: &[u8], from: usize, end: usize, kind: DestinationIn) -> Option<Span> {
+    let mut at = from;
+    while at < end && is_blank_no_eol(bytes[at]) {
+        at += 1;
+    }
+    if at < end && matches!(bytes[at], b'\r' | b'\n') {
+        if bytes[at] == b'\r' && bytes.get(at + 1) == Some(&b'\n') {
+            at += 1;
+        }
+        at += 1;
+        while at < end && (is_blank_no_eol(bytes[at]) || bytes[at] == b'>') {
+            at += 1;
+        }
+    }
+    if at >= end {
+        return None;
+    }
+    if bytes[at] == b'<' {
+        let start = at + 1;
+        let mut close = start;
+        while close < end {
+            match bytes[close] {
+                b'\\' => close += 2,
+                b'>' => return Some(Span::new(start, close)),
+                b'<' | b'\r' | b'\n' => return None,
+                _ => close += 1,
+            }
+        }
+        return None;
+    }
+    let start = at;
+    let mut depth = 0usize;
+    while at < end {
+        let byte = bytes[at];
+        if byte == b'\\' && bytes.get(at + 1).is_some_and(u8::is_ascii_punctuation) {
+            at += 2;
+            continue;
+        }
+        if byte <= 0x20 {
+            break;
+        }
+        if kind == DestinationIn::Link {
+            match byte {
+                b'(' => depth += 1,
+                b')' if depth == 0 => break,
+                b')' => depth -= 1,
+                _ => {}
+            }
+        }
+        at += 1;
+    }
+    (at > start).then(|| Span::new(start, at.min(end)))
 }
 
 /// Appends a range, merging it into the previous one when they touch.

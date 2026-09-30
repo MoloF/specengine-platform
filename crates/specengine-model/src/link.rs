@@ -21,7 +21,8 @@ pub const LINK_TYPES: [&str; 12] = [
     "adopts",
 ];
 
-/// The weak link of an inline citation and of `refs:` / `adrs:`.
+/// The weak link of an inline citation, of a local Markdown file link and
+/// of `refs:` / `adrs:`.
 pub const MENTIONS: &str = "mentions";
 
 /// `true` for a member of [`LINK_TYPES`].
@@ -41,12 +42,17 @@ pub enum LinkOrigin {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LinkTarget {
+    /// An ID reference: declared, or an inline mention.
     Reference(Reference),
-    /// `canon: path[#anchor]`.
+    /// `canon: path[#anchor]` (origin `frontmatter`), or the local
+    /// destination of a Markdown inline link or reference definition
+    /// (`mentions`, origin `inline`): the path relative to the linking file
+    /// (`/`-led: to the root; `""` for `#anchor` alone), never resolved.
     Path(PathTarget),
 }
 
-/// `src --type--> dst`. Unresolved: `dst` is what the text says.
+/// `src --type--> dst`. Unresolved: `dst` is what the text says: an ID
+/// reference, a `canon:` path, or a Markdown link destination.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Link {
     /// The source node's ID: the document's, or for an inline mention the

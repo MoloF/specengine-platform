@@ -33,7 +33,6 @@
 mod check;
 mod dump;
 mod error;
-mod glob;
 mod index;
 mod read;
 mod rows;
@@ -66,7 +65,11 @@ pub use source::{Listing, Source, WorkingTree};
 /// 4: the fixtures define feature-scoped criteria as `{#ID}` sections of
 /// their feature documents (ADR-0026); the store code is unchanged
 /// (docs/features/spec-check-scopes.md).
-pub const INDEX_FORMAT: u32 = 4;
+///
+/// 5: local Markdown link destinations and reference definitions are
+/// `mentions` links with a path target (`dst_path`), and the fixtures gained
+/// a `link_base` link; no schema change (docs/features/spec-check-links.md).
+pub const INDEX_FORMAT: u32 = 5;
 
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;

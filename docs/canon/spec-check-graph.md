@@ -8,7 +8,7 @@ reviewed: 2026-09-30
 
 # spec check: index render, generators, graph warnings
 
-Increment 2 part 1 of `spec check`. Engine, config, debt, verdict and output: `docs/canon/spec-check.md`; this document adds §11.5–6 of `docs/canon/documentation-system.md` over a generator registry, and three warnings over the parse the check already has: seven of the 27 `CHECK_CODES`. Pure and read-only like the rest: the render stays in memory, no generator is run (ADR-0013), nothing is written. Errors where the convention says "fail" (§11.5–6), warnings where recognition is heuristic or the finding is a content discrepancy (owner, Q-A; `#control`).
+Increment 2 part 1 of `spec check`. Engine, config, debt, verdict and output: `docs/canon/spec-check.md`; this document adds §11.5–6 of `docs/canon/documentation-system.md` over a generator registry, and three warnings over the parse the check already has: seven of the 29 `CHECK_CODES`. Pure and read-only like the rest: the render stays in memory, no generator is run (ADR-0013), nothing is written. Errors where the convention says "fail" (§11.5–6), warnings where recognition is heuristic or the finding is a content discrepancy (owner, Q-A; `#control`).
 
 ## API (`specengine_core::check`)
 
@@ -81,8 +81,8 @@ This repository (parity config + registry, `enforce`, no baseline): `clean`, one
 
 ## Next
 
-- Part 2: pass A, feature scopes, shipped (`docs/canon/spec-check-links.md`); pass B, `spec-check-links` (`INDEX_FORMAT` 5): Markdown file links with a per-corpus base, a `ParsedFile` change (same document, "Pass B").
-- Increment 3: the index writer, the CLI, the root `specengine.toml` (Q-7), hook and CI switched, `xtask` on this renderer, then retired. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
+- Increment 2 is complete: part 2 shipped feature scopes and Markdown file links (`docs/canon/spec-check-links.md`).
+- Increment 3, the next step: the CLI's `check`, the index writer, the root `specengine.toml` (Q-7), hook and CI switched, `xtask` on this renderer, then retired. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 
 ## Open nits
