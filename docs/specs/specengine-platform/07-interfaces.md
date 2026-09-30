@@ -15,12 +15,12 @@ ref: research-2026-09-28
 
 - **Few tools, good `instructions`** (≤ 2,048 characters: Claude Code truncates, and tool search defers definitions). Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
 - Responses are **prose for the model** with a status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); the machine part lives in `structuredContent`.
-- All reading tools carry `readOnlyHint`; each has `compact: bool` (detail levels in the spirit of code-graph-mcp); a response stays well under ~48,000 characters and paginates beyond that — Claude Code's cap counts characters and `MAX_MCP_OUTPUT_TOKENS` does not raise it (04 §4).
+- All reading tools carry `readOnlyHint`; each has `compact: bool` (detail levels in the spirit of code-graph-mcp); a response stays well under ~48,000 characters and paginates beyond that (the cap counts characters, 04 §4).
 - Input schemas are flat JSON Schema 2020-12, no root `anyOf/oneOf`; there is `outputSchema` + `structuredContent`, and `content` holds Markdown for the model.
-- **Primary transport is stdio** (`spec mcp` in `.mcp.json`, a bridge to the daemon). Reason: Claude Code (≥ 2.1.84) issues a GET to the MCP HTTP endpoint to open an SSE stream, and a purely stateless 2026-07-28 server answers 405, so the connection drops (claude-code#39790 closed as "not planned"). Besides, Claude Code still sends the legacy `initialize`. HTTP `/mcp` is added later, with GET/SSE and `legacy_session_mode`. A stdio-only build does not pull the HTTP stack into rmcp.
-- Both protocol eras are supported (legacy `initialize` and 2026-07-28 stateless); the server detects the era from the client's first message (04 §4). State is passed only via explicit handles (`task_id`, `proposal_id`).
+- **Primary transport is stdio** (`spec mcp` in `.mcp.json`, a bridge to the daemon). Reason: Claude Code (≥ 2.1.84) issues a GET to the MCP HTTP endpoint to open an SSE stream, and a purely stateless 2026-07-28 server answers 405, so the connection drops (claude-code#39790 closed as "not planned"). HTTP `/mcp` is added later, with GET/SSE and `legacy_session_mode`.
+- Both protocol eras, detected from the client's first message (04 §4). State is passed only via explicit handles (`task_id`, `proposal_id`).
 - **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call and delivers its result as a notification (04 §4), so there is no polling tool and no "call again" protocol. A long-blocking "wait for approval" stays excluded.
-- `rmcp` is pinned exactly (3 major versions in 7 months). Output schemas are generated from `Json<T>`/`Parameters<T>` + schemars. If Tasks are needed, the TTL is set explicitly: the default is 5 minutes, and a full reindex will not fit.
+- `rmcp` is pinned exactly (04 §6). Output schemas are generated from `Json<T>`/`Parameters<T>` + schemars.
 - **All tools are deterministic**: one state gives one response, no LLM inside (as in cgr, stated in every tool description).
 - **No agent tool writes to spec files** (the "one door" test on a temporary repository).
 
@@ -36,7 +36,7 @@ ref: research-2026-09-28
 | `get_impact` | `node_id` \| `qpath` \| `since: <commit>` | nodes, symbols, tests, tasks within the radius | graph + bindings; `since` = git diff → graph walk (change impact) |
 | `refs` | `node_id` | reverse lookup: all markers, tests, records referring to the node | needed **during** refactoring |
 | `unmapped` | `path?` | source tree with spec coverage percentage | where there is no spec (tracey `query unmapped`) |
-| `get_task` | `task_id` \| `next: true` | brief, status, blockers, owner comments, spec diff against `spec_snapshot` | `next` — first `ready` by priority (as `bd ready` / `next_task`) |
+| `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`; `content` = the neutral brief | `next` — first `ready` by priority (as `bd ready` / `next_task`) |
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | only `ready`; records the run in `runs` |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | analyst; → `review` (waits for the owner) |
 | `report_discrepancy` | `task_id?`, `node_ids[]`, `gap_type`, `severity`, `working_answer`, `summary`, `evidence[]`, `options[]`, `recommendation`, `proposed_patch?` | `proposal_id` \| "already decided: DEC-…" | 06 §3.2 |
@@ -45,6 +45,10 @@ ref: research-2026-09-28
 | `get_proposal` | `proposal_id` | status, decision, owner comment | to continue after the decision |
 | `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only |
 | `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | `verified` is set by `spec verify`, not by this call |
+
+**Task package** (ADR-0027). One type in `specengine-model`; its JSON Schema is generated and pinned by a test. `schema_version`: a new key keeps it; a removed, renamed or re-meant key raises it. Every key is always present, absent = `null`; `compact` shortens only the Markdown `content`, never the key set. `spec task show T --json` emits the same document. The bundle body comes by reference (`bundle_hash` → `get_context_bundle`): a 10k-token bundle collides with the 48,000-character cap. `claim_task.role` is the project's own role name, stored verbatim (no enum). Stack wording, tracker tickets and routing belong to the project's skills (06 §8); a task stores no ticket key.
+
+Phase 2 contract checks (the `task-package` feature spec expands them): P2-1 `get_task` `structuredContent` = `spec task show --json`; P2-2 the pinned schema snapshot fails on a key removed or renamed without a bump; P2-3 a source scan (as `crates/specengine-core/tests/check_genre.rs`) finds no `cargo`, `nextest`, `clippy`, `bevy`, `pnpm`, `npm`, `nest`, `react`, `jira` or this repository's role names in the package and brief sources or `plugin/**`; P2-4 fixtures `spec-a` and `spec-b` give the same key set and `schema_version`; P2-5 a synthetic non-Rust fixture whose records hold no stack words yields none in the JSON or `content`; P2-6 changing `profile` changes only that value; P2-7 `claim_task` with `role = "nest-developer"` succeeds, stored verbatim; P2-8 no key starts with `block` (ADR-0012); P2-9 two projects in one daemon never see each other's tasks, deleting one database leaves the other intact, nothing is written to SpecEngine's repository; P2-10 `get_task` at the 10k budget stays under 48,000 characters; P2-11 the package alone carries the verbatim title, goal, criteria text, target titles and open questions; P2-12 a project without a profile runs `get_task` → `claim_task` → `report_run` → `complete_task` on generic prompts at MCP level.
 
 **Human tools** (`owner` set, `_meta["anthropic/requiresUserInteraction"]: true`):
 
@@ -59,7 +63,7 @@ The MCP server remembers nothing between calls: the owner's decision is stored b
 
 - `spec://{project}/tree` — tree without bodies.
 - `spec://{project}/node/{id}` — node (RFC 6570 template).
-- `spec://{project}/task/{id}` — task brief.
+- `spec://{project}/task/{id}` — task package (§1.2).
 - `spec://{project}/inbox` — open proposals.
 
 ⚠ An `@`-mention inserts content without a tool call, so hooks do not fire. Irrelevant for the gate: resources are read-only.
@@ -154,7 +158,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 {
   "hooks": {
     "SessionStart": [{ "hooks": [{ "type": "command",
-      "command": "specengine hook session-start" }] }],          // short summary: active task, blockers (≤ 300 tok.)
+      "command": "specengine hook session-start" }] }],          // short summary: active task, open proposals (≤ 300 tok.)
     "PreToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command",
       "command": "specengine gate --stdin" }] }],                 // exit 2 = block; daemon down → exit 2
     "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command",
@@ -174,6 +178,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 slug = "example"
 name = "Example"
 language = "en"
+profile = "example-stack"   # optional; opaque, passed through in the task package (ADR-0027)
 
 [paths]                     # role keys, roots, exclude: crates/specengine-core/README.md
 roots = ["docs", "CLAUDE.md"]

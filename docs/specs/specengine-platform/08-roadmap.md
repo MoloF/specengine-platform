@@ -17,10 +17,9 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 0. Decisions and spikes — done 2026-09-29
 
-- Decisions ADR-0001…ADR-0025 (`docs/decisions/`), each with its canon diff.
-- Spikes (`docs/features/phase-0-spikes.md`, shipped): 12 verdicts, 9 confirmed, 3 refuted, each routed to its section; ADR-0020 and ADR-0021 stand.
-- Not part of the spikes, carried to the start of Phase 1: the pre-code reading (tracey sources and a tracey run on one pilot crate — input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift and amiss, `/speckit.converge`).
-- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W on 2026-09-29 ≈ 118 KB against ≤ 40 KB, driven by 05, 04 and 08 (`cargo xtask docs budget`).
+- Decisions ADR-0001…ADR-0025, each with its canon diff; spikes: `docs/features/phase-0-spikes.md` (shipped), ADR-0020 and ADR-0021 stand.
+- Carried to Phase 1, not a spike: the pre-code reading (tracey sources and a tracey run on one pilot crate — input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift and amiss, `/speckit.converge`).
+- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`cargo xtask docs budget`): ≈ 117 KB against ≤ 40 KB, driven by 05, 04 and 08.
 
 ### Phase 1. Reading core — ~2-3 weeks
 
@@ -36,12 +35,12 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 ### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner
 
 - Proposals (all kinds), questions with deduplication, decisions with `cost` and `canon:`, `apply_proposal` (patch by section, optional commit with provenance).
-- Tasks: states, brief, `spec_snapshot`, `stale`, `changes_requested`.
+- Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `inbox`, `review`, `approve/reject`, `task …`, `round new/answer`.
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_discrepancy`, `ask_question`, `propose_change`, `get_proposal`, `report_run`; `review_proposal`/`approve_task` with `requiresUserInteraction` and the consent-tool requirements of 07 §1.2 (the Phase 0 `review_proposal` is a demo skeleton, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE; MCP for agents is the `spec mcp` stdio bridge to the daemon (MCP HTTP transport after MVP, 07 §1.1).
-- **Plugin**: `.mcp.json`, hooks (`gate` fail-closed, session-start, touched, subagent-stop), prompts, updated roles `requirement-analyst`/`rust-developer`/`spec-writer`/`code-reviewer`/`test-engineer` and the `/feature` command (06 §8).
-- Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008).
+- **Plugin**: `.mcp.json`, hooks (`gate` fail-closed, session-start, touched, subagent-stop), prompts, stack-neutral roles and `/feature` (06 §8); stack roles come from a stack-profile plugin or the project (ADR-0027).
+- Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality: a synthetic non-Rust fixture in tests (07 §1.2, P2-5).
 
 ### Phase 3. Code and drift — ~2-3 weeks
 
@@ -136,7 +135,6 @@ A census config alone described each pilot corpus (ADR-0008; schema and counts: 
 | Agents do not add markers | medium | rules in plugin roles; `unbound` on the panel; `SubagentStop` reminder; check in `spec verify` |
 | The tool eats time from the main projects (scope creep) | high | MVP = CLI + MCP; UI only after validation on live tasks; "enforcement first, the bot never first"; multi-user server mode out of plan (ADR-0017) |
 | The core silently bends toward one project | medium | pilot projects of different nature are connected from Phase 1 (ADR-0008); specifics only in `specengine.toml` and the importer; core tests on fixtures of all pilots |
-| Outdated RON grammar | resolved | Phase 0: `tree-sitter-ron` 0.2.0 replaced by the own RON lexer of `specengine-code` (05 §9) |
 | Bevy 0.20 changes the schedule API | medium | tree-sitter detector covered by `fixtures/bevy-mini`; observers behind a Bevy-version gate (05 §5.1); the `schedule_data` dump schema is unstable across minors — re-run `specengine-eval bevy-detector --dump` on every Bevy upgrade |
 | The MCP protocol changes again | medium | rmcp + both eras; logic in core, MCP is a thin adapter; Claude Code behaviour verified on 2.1.283 (04 §4), re-run the checks on upgrade; Streamable HTTP without GET → 405 not measured (stdio-only build) |
 | rust-analyzer memory near the threshold | medium | whole-group peak 3.76 GiB against 4 GiB (≈ 6 % headroom) on the heavier pilot; re-measure with `specengine-eval ra` when a pilot grows or `ra_ap` is bumped; fallback: load without the proc-macro server (≤ 3.2 GiB) |

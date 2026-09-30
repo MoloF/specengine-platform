@@ -15,7 +15,7 @@ ref: research-2026-09-28
 |---|---|---|
 | **Owner** | Web UI, CLI in a terminal, elicitation forms in Claude Code | everything: edit specs, decide proposals, prepare and approve tasks |
 | **Analyst agent** (`requirement-analyst`) | MCP | read; create proposals, questions and a draft plan |
-| **Developer agent** (`rust-developer`) | MCP + code | read; claim a `ready` task; report discrepancies; place `@implements` markers |
+| **Developer agent** (the project's implementer, e.g. `rust-developer`) | MCP + code | read; claim a `ready` task; report discrepancies; place `@implements` markers |
 | **Tester / reviewer agent** | MCP + tests | read; place `@verifies`; report discrepancies |
 | **CI / pre-commit** | CLI | `spec check`, `spec verify` |
 
@@ -58,7 +58,7 @@ Project (project.md: vision, goals, constraints)
 ```
 
 - **"Send back for more detail"**: `changes_requested` with a comment. The task returns to the analyst, who sees the comment in `get_task`, extends the plan or asks questions, and calls `submit_plan` again. As many cycles as the owner needs.
-- The task brief is generated from nodes and the plan: goal, in/out of scope, nodes, criteria, risks, affected modules (via bindings).
+- SpecEngine returns the task as a stack-neutral package with a neutral brief built from nodes and the plan: goal, in/out of scope, nodes, criteria, risks, affected modules (via bindings; 07 §1.2, ADR-0027). The project's skill renders it for its stack or tracker, one way: approval stays here (§3.5).
 - **Task contour** (`--contour`): `content | feature | feature → content`. For `content` no code changes, only data, and the gate is softer.
 - **Open proposals do not hold a task** (ADR-0012). They are visible on its card (`spec task show`), and the owner decides: approve now, first handle some proposals, or send back for more detail. Any number of tasks and documents can run in parallel.
 
@@ -143,7 +143,7 @@ On the next `get_task`/`get_context_bundle` the agent gets a fresh bundle headed
 Discrepancies, questions and proposals **block nothing**. The guarantee "nothing goes into final development without me" rests on one thing: **the developer takes only a task the owner approved**.
 
 1. **In SpecEngine**: `claim_task` returns only `ready`. `ready` is set by the owner (`spec task approve`), and open proposals do not prevent it. If a task node changed after approval, the task is marked `stale`: an informational flag, the agent gets the diff in the bundle.
-2. **Claude Code `PreToolUse` hook** on `Edit|Write|MultiEdit` (and `Bash` with `if:` on writes) for paths in `zones.code`: an edit is allowed if this worktree has a claimed task in `ready`/`in_progress`. The hook is a `command` (`specengine gate --worktree $PWD --path <file>`), not `http`, because an HTTP hook lets the edit through when the service is down. If the daemon is unavailable — **exit 2** (closed) (ADR-0006).
+2. **Claude Code `PreToolUse` hook** on `Edit|Write|MultiEdit` (and `Bash` with `if:` on writes) for paths in `zones.code`: an edit is allowed if this worktree has a claimed task in `ready`/`in_progress`. The hook is a `command` (`specengine gate`, 07 §4), not `http`, which lets the edit through when the service is down (04 §4). If the daemon is unavailable — **exit 2** (closed) (ADR-0006).
 3. **Selectivity**: the hook is on for tasks of the `feature` contour. Bugfixes and small edits go without it, but `spec verify` shows the drift. `gate.mode = "observe"` turns off even this check: everything is computed and shown, nothing stops.
 
 ## 4. The machine found drift
@@ -192,3 +192,5 @@ SpecEngine plugs into the consumer project's role pipeline (analyst, spec writer
 | **Spec** | approved node edits are applied by `apply_proposal`; the spec writer writes only the feature spec and criterion markers |
 | **Implementation ⇄ review + tests** | `claim_task` takes only `ready`; `@implements`/`@verifies` markers; a discrepancy is `report_discrepancy` + `@assumes`, work continues; implementation roles do not touch `docs/`, so the discrepancy stays visible |
 | **Update** | `spec verify --tests` sets `verified` (machine, not self-report); the spec writer fills in "Implementation"; `complete_task` → `done`, the run is recorded in `runs` |
+
+**Three layers** (ADR-0027). SpecEngine's plugin: hooks, prompts, stack-neutral roles (analyst; spec writer, since the ADR-0022 convention is universal; a reviewer for conformance to the spec; a generic implementer and tester taking commands from the project's `CLAUDE.md`) and `/feature` in the stage order above. A stack profile, a plugin hosted outside SpecEngine's repository: implementer and test roles, build/test/lint commands, where tests go, a brief-rendering skill, suggested `[zones]` as text the owner copies. The project: routing and its own rules. Precedence project → profile → generic, chosen by distinct role names and explicit routing in the project layer, not by name shadowing: Claude Code's agent name resolution across project and plugins is unverified (check it on the pinned version in Phase 2). This repository is such a project: under ADR-0023 its `.claude/` is its layer.

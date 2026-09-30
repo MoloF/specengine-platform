@@ -32,6 +32,11 @@ An approved proposal is applied in the task branch's worktree (the spec travels 
 - Discrepancies, questions and proposals block nothing. A node may have several open proposals; they are rebased on `base_hash` when applied. An agent keeps working on a working answer and marks `// @assumes PR-…`. If the decision differs from the working answer, a follow-up task is created. ADR-0012.
 - The only control point is the owner approving a task: `claim_task` returns only `ready` tasks. The `PreToolUse` hook checks only that. When the daemon is unavailable the hook is closed (exit 2). `observe` mode turns this check off too. ADR-0006, ADR-0012.
 
+<a id="tasks"></a>
+## Tasks and stack skills
+
+Tasks live per project: in its database and its exported queue (`#storage`), never in SpecEngine's repository. SpecEngine hands a task out as a stack-neutral package with a schema version: goal, targets, criteria, assumptions, open proposals, bindings, `spec_snapshot`, the bundle (07 §1.2). A new key keeps the version; removing or renaming one raises it. The engine writes no stack-specific text into the package or brief, its plugin has no stack role names, and the core never branches on the optional `profile` of `specengine.toml`. The code layer stays Rust-first (`#markers`, `#code-identity`). Rendering and execution belong to the project's `.claude/` skills and roles, or to a stack-profile plugin hosted outside SpecEngine's repository; the project's layer comes first. A profile adds no control point (`#control`); a tracker ticket is rendered one way and stores nothing back. ADR-0027.
+
 <a id="rules-format"></a>
 ## Rule form
 
@@ -81,7 +86,7 @@ All content of this repository — documentation, decisions, role prompts, code 
 <a id="distribution"></a>
 ## Distribution and mode
 
-`cargo install` + a Claude Code plugin (MCP, hooks, roles, prompts in one version). Single-user mode. A multi-user server mode (initial spec §6.1 Model A) is out of plan, but storage access goes through a trait and changes go through the `events` log. ADR-0015, ADR-0017.
+`cargo install` + a Claude Code plugin (MCP, hooks, stack-neutral roles and prompts in one version; stack roles: `#tasks`). Single-user mode. A multi-user server mode (initial spec §6.1 Model A) is out of plan, but storage access goes through a trait and changes go through the `events` log. ADR-0015, ADR-0017, ADR-0027.
 
 <a id="implementation-base"></a>
 ## Own implementation

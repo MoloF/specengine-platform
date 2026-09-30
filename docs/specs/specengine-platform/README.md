@@ -3,7 +3,7 @@ class: spec
 status: in-progress
 scope: [specengine]
 ref: research-2026-09-28
-adrs: [ADR-0001, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026]
+adrs: [ADR-0001, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027]
 ---
 
 # SpecEngine — research and platform concept
@@ -24,7 +24,7 @@ adrs: [ADR-0001, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR
 4. **The main scenario** is discrepancy → reconciliation → development: the agent calls `report_discrepancy` with evidence and costed options and **keeps working** on the working answer; discrepancies block nothing, the owner processes the queue in the CLI, the UI or a Claude Code form. Only a task approved by the owner goes into development (`06` §3, ADR-0012).
 5. **MVP = CLI + MCP in ~5-6 weeks**, full scope in ~11-14 weeks (`08`). The core knows no genres; pilot projects (at least two of different nature) are connected from the first phase, each with its own tree and `specengine.toml` (ADR-0008).
 6. **Code is indexed in three layers** (`05` §5.1): (A) tree-sitter + markers + normalized AST hash `path/sig/body/deps`, always and in fractions of a second; (B) for Bevy projects, the `schedule_data` schedule dump as the truth about systems; (C) rust-analyzer as a library, only if needed. MCP runs over stdio: on stateless HTTP Claude Code gets 405. No vector search (`04` §1.7, §2.1).
-7. **Decisions are made**: ADR-0001…ADR-0025 in `docs/decisions/`, each with its canon diff. Phase 0 is done (2026-09-29, `docs/features/phase-0-spikes.md`); next is Phase 1 (`08` §2).
+7. **Decisions are made**: ADR-0001…ADR-0027 in `docs/decisions/`, each with its canon diff. Phase 0 is done (2026-09-29, `docs/features/phase-0-spikes.md`); next is Phase 1 (`08` §2).
 
 ## Reading order
 

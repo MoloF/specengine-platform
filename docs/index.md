@@ -59,6 +59,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0024](decisions/ADR-0024.md) All repository content is in English · docs · accepted
 - [ADR-0025](decisions/ADR-0025.md) The repository is licensed under MIT · root · accepted
 - [ADR-0026](decisions/ADR-0026.md) Feature-scoped IDs are {#ID} sections of their feature document · storage · accepted
+- [ADR-0027](decisions/ADR-0027.md) Tasks are stack-neutral packages; skills render them · architecture · accepted
 
 ## Specs
 
