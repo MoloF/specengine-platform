@@ -14,6 +14,7 @@ use specengine_cli::{
     CheckRequest, CliError, Env, Exit, ExportIndexRequest, Globals, IndexRequest, InitRequest,
     Outcome, SearchRequest, ShowRequest, render_json, render_text,
 };
+use specengine_store::GitEnv;
 
 #[derive(Parser)]
 #[command(
@@ -72,6 +73,9 @@ enum Command {
     },
     /// Check the documents against the convention; exit 0 clean or observed, 1 blocked, 2 cannot check.
     Check {
+        /// Check what `git commit` would record: the git index, config and baseline from it unless --config, --baseline.
+        #[arg(long)]
+        staged: bool,
         /// The debt baseline to use instead of the root's .spec-debt.toml (relative to the current directory).
         #[arg(long, value_name = "F")]
         baseline: Option<PathBuf>,
@@ -171,10 +175,17 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &ShowRequest { reference },
         )?),
-        Command::Check { baseline, debt } => Outcome::Check(specengine_cli::check(
+        Command::Check {
+            staged,
+            baseline,
+            debt,
+        } => Outcome::Check(specengine_cli::check(
             env,
             globals,
             &CheckRequest {
+                // Git's children see the process's variables; relative
+                // `GIT_*` paths resolve against the current directory.
+                staged: staged.then(|| GitEnv::new(env.cwd.clone(), std::env::vars_os())),
                 baseline,
                 debt,
                 json,

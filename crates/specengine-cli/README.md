@@ -12,7 +12,7 @@ The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), sear
 
 ## API
 
-`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}` is passed in (bridge, tests). `specengine.toml`: core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
+`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}`, `CheckRequest.staged: Option<GitEnv>` (`main`: the process's) are passed in. `specengine.toml` (`CONFIG_FILE`, the store's): core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
 
 ## Commands
 
@@ -21,7 +21,7 @@ The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), sear
 - `spec init [--slug S]` writes exactly `[project]\nslug = "<slug>"\n` (`create_new`: a file there → exit 2; a partial one is removed), prints `created <path> with slug <slug>`, JSON `{path, slug}`. Slug: `--slug` validated, else the directory name with ASCII letters and digits lower-cased, every other run (non-UTF-8 bytes included) → `-`, trimmed (`My Project_2` → `my-project-2`); not `grammar::is_slug` or over 64 bytes → exit 2 naming `--slug`. Never walks; a config in an ancestor → a `warning:`.
 - `spec index [--full]`: store `update` (`--full`: `rebuild`); `indexed <slug>: walked 13, parsed 13, unchanged 0, removed 0, unreadable 0` (+ `, reparsed all`), then `db <path>`; JSON `project`, `db` + the `UpdateReport` fields.
 - `spec search QUERY… [--kind K]… [--limit N] [--archive]`: the store's FTS5 search in its order. Terms under 3 characters dropped with a `note:`; none left → exit 2 suggesting `spec show`; `--kind` free, repeatable; `--limit` 1..=200, default 20.
-- `spec check [--baseline F] [--debt]`, `spec export index [--stdout]`: `docs/canon/spec-check-cli.md`.
+- `spec check [--staged] [--baseline F] [--debt]`, `spec export index [--stdout]`: `docs/canon/spec-check-cli.md`.
 - `spec show REF`: `REF` is an ID, an `aliases:` entry, an `aliases_from` legacy ID, `slug/ID`, `ID#SECTION` (`@rev` ignored with a `note:`) or a root-relative `.md` path.
 
 **Discovery.** Without `--root` and `--config`, walk up from the canonical current directory to the first holding a `specengine.toml` file; none → exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the current directory (read-only pilots). Config errors: `<config as given>:<line>: message`.
@@ -35,7 +35,7 @@ language = "en"
 
 ## Database
 
-Owner's answer Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; outside macOS (assumed: ADR-0003 names only macOS) `$XDG_DATA_HOME/specengine/` when absolute, else `$HOME/.local/share/specengine/`. `HOME` unset, empty or relative → exit 2 on every host. One DB per project, each worktree's rows keyed `(project, root)` by the store; no refusal by root in Phase 1; a repository-identity check (by git common dir, so task worktrees pass) comes with the Phase 2 queue. A data directory inside the canonical root (nearest existing ancestor; a project at `$HOME`: a limitation) → exit 2, nothing created. The DB is derived: delete it and `spec index` rebuilds specs and bindings from git; only Phase 2's open proposals and tasks would be lost, `spec export` protects them (05 §8).
+Owner's answer Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; outside macOS (assumed: ADR-0003 names only macOS) `$XDG_DATA_HOME/specengine/` when absolute, else `$HOME/.local/share/specengine/`. `HOME` unset, empty or relative → exit 2 on every host. One DB per project, each worktree's rows keyed `(project, root)` by the store; no refusal by root in Phase 1; a repository-identity check (by git common dir, so task worktrees pass) comes with the Phase 2 queue. A data directory inside the canonical root (nearest existing ancestor; a project at `$HOME`: a limitation) → exit 2, nothing created. The DB is derived: `spec index` rebuilds it from git; only Phase 2's open proposals and tasks would be lost, `spec export` protects them (05 §8).
 
 ## Rules
 
@@ -60,7 +60,7 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 `OUTPUT_CAP_CHARS` = 40 000 characters (07 §1.1) before the tail line:
 
 - `show`: on the text (JSON: the sum of `text`), cut at the last line end within it; a longer first line (a header included) at the cap. Tail `[truncated: <path> lines <a>-<b> not shown; sections not shown: <IDs or none>; holders not shown: <path:line, … or none>]`, a section not shown when its heading line is cut; JSON drops the nodes after the cut one.
-- `search`: on the text, cut at a hit boundary, the same hits in text and JSON; a `note:`, `truncated: true`, tail `[truncated: <k> of <n> hits not shown; lower --limit or narrow the query]`; `hits <n>` counts every store hit. The first hit is always printed: alone over the cap, its snippet is kept first, then name (ID, else path), kind and title share the rest, shortest first; cut to nothing → `-` in text, `null` in JSON. **Known limit:** JSON carries the cut values: a cut first hit's `id` is a prefix, not a resolvable ID; only `truncated: true` marks it.
+- `search`: on the text, cut at a hit boundary, the same hits in text and JSON; a `note:`, `truncated: true`, tail `[truncated: <k> of <n> hits not shown; lower --limit or narrow the query]`; `hits <n>` counts every store hit. The first hit is always printed: alone over the cap, its snippet is kept first, then name (ID, else path), kind and title share the rest, shortest first; cut to nothing → `-` in text, `null` in JSON. **Known limit:** a cut first hit's JSON `id` is a prefix, marked only by `truncated: true`.
 
 ## Open
 
@@ -75,7 +75,7 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 MCP stdio follows 3–4.
 
-- 2a.2 `spec-cli-staged` (`--staged`, `enforce-introduced`), 2b `spec-cli-switch` (`xtask` retired): `docs/canon/spec-check-cli.md`.
+- Index compaction, 2b `spec-cli-switch` (`xtask` out), `spec-cli-introduced`: `docs/canon/spec-check-cli.md`.
 - 3 `spec-cli-graph`: `tree`, `graph`, `show --links`; default link types.
 - 4 `spec-cli-bundle`: `bundle`, `bundle_hash`; Q7 token calibration, `rusqlite_migration`.
 

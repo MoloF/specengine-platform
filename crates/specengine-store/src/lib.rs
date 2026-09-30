@@ -12,7 +12,8 @@
 //!
 //! - [`Source`] lists, probes and reads a worktree's spec files;
 //!   [`WorkingTree`] walks the working tree by `[paths]`
-//!   ([`specengine_core::Paths`]);
+//!   ([`specengine_core::Paths`]), [`GitIndex`] the git index by the same
+//!   rules (checks only), its git run with an explicit [`GitEnv`];
 //! - [`SqliteIndex::open`] binds a handle to one worktree `(project,
 //!   canonical root)` of a DB outside it; a DB holds several worktrees;
 //! - [`IndexWriter`]: [`IndexWriter::update`] (full walk),
@@ -27,7 +28,9 @@
 //!   their bytes ([`NamedBytes`]), validated into a [`CheckSetup`] or a
 //!   `cannot-check` report; [`check_input`], [`check_source`],
 //!   [`check_tree`], [`check_worktree`]: `spec check` over a fresh parse of
-//!   a [`Source`], no database (docs/features/spec-check.md).
+//!   a [`Source`], no database (docs/features/spec-check.md);
+//!   [`check_staged`]: over the git index, config and baseline from it
+//!   (docs/features/spec-cli-staged.md).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -38,6 +41,7 @@
 mod check;
 mod dump;
 mod error;
+mod git;
 mod index;
 mod read;
 mod rows;
@@ -51,12 +55,13 @@ use specengine_core::check::CheckInput;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
 pub use check::{
-    BASELINE_FILE, CheckSetup, NamedBytes, check_input, check_source, check_tree, check_worktree,
-    default_baseline, load_check, load_config, today_utc,
+    BASELINE_FILE, CONFIG_FILE, CheckSetup, NamedBytes, check_input, check_source, check_staged,
+    check_tree, check_worktree, default_baseline, load_check, load_config, today_utc,
 };
 pub use error::StoreError;
+pub use git::GitEnv;
 pub use index::{DbSettings, SqliteIndex};
-pub use source::{Listing, Source, WorkingTree};
+pub use source::{GitIndex, Listing, Source, WorkingTree};
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change
 /// of what a fresh index stores for the same corpus — schema, row

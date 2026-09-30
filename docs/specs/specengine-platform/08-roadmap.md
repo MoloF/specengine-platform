@@ -23,8 +23,8 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped 2026-09-29/30, open owner questions in each crate's README and `docs/canon/spec-check*.md`: the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI passes 1 and 2a.1 (`check`, `export index`).
-- Next: CLI 2a.2 `spec-cli-staged`, then 2b `spec-cli-switch`, `xtask` retired (`docs/canon/spec-check-cli.md`); 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
+- Shipped 2026-09-29/30, open owner questions in each crate's README and `docs/canon/spec-check*.md`: the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI passes 1, 2a.1 (`check`, `export index`), 2a.2 (`check --staged`).
+- Next: index compaction, then CLI 2b `spec-cli-switch`, `xtask` retired (`docs/canon/spec-check-cli.md`); 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").
@@ -90,7 +90,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 
 ## 4. Importing existing corpora
 
-One core for all projects (ADR-0008); corpus specifics live only in `specengine.toml` and the importer. The importer is an adapter for the project's convention: documents with front-matter, records as table rows, table-style headers and journals — it translates all of them into SpecEngine nodes, records and links.
+One core for all projects (ADR-0008); corpus specifics live only in `specengine.toml` and the importer, an adapter translating the project's convention (§4.1) into SpecEngine nodes, records and links.
 
 ### 4.1. What the importer carries over
 
@@ -98,7 +98,7 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 |---|---|---|
 | Documents with front-matter (requirements, decisions, features) | nodes and records, header normalization | `canon:` on decisions is kept; feature criteria → `{#AC-..}` sections (ADR-0026) |
 | Records as table rows (assumptions, questions, terms), also rows without an ID | one record per row, `immutable_text`; missing IDs issued (agent proposes, owner confirms) | status prefixes in cells ("closed …", "implemented in code …") → status + events; text verbatim |
-| Table-style headers and journals (registry, decisions, trade-offs, blockers, milestones) | registry → computed; journal → `DEC-NNN` with `cost`; blockers → blocking questions; milestones → tasks | decisions without `cost` → debt baseline |
+| Table-style headers and journals (registry, decisions, trade-offs, blockers, milestones) | registry → computed; journal → `DEC-NNN` with `cost`; blockers → high-severity questions; milestones → tasks | decisions without `cost` → debt baseline |
 | Principles and check codes | `principle`, `check`; code constants → markers | old designations → aliases (ADR-0009) |
 | README files of code subtrees (Tier 1) | domain nodes | stay in place (locality), indexed as `domain` |
 | Roadmap state and queue | SpecEngine tasks | the markdown becomes generated |

@@ -57,7 +57,13 @@ impl Drop for Scratch {
 
 fn git_status_fixtures() -> String {
     let output = Command::new("git")
-        .args(["status", "--porcelain", "--", "fixtures/"])
+        .args([
+            "--no-optional-locks",
+            "status",
+            "--porcelain",
+            "--",
+            "fixtures/",
+        ])
         .current_dir(repository_root())
         .output()
         .expect("git runs");

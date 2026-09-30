@@ -1,6 +1,17 @@
-//! `spec check [--baseline F] [--debt]`: the documentation convention's
-//! check (core's `check::run`) over a fresh parse of the working tree, no
-//! database, data directory, slug or `HOME`; nothing is written.
+//! `spec check [--staged] [--baseline F] [--debt]`: the documentation
+//! convention's check (core's `check::run`) over a fresh parse of the
+//! working tree, no database, data directory, slug or `HOME`; nothing is
+//! written.
+//!
+//! `--staged` checks what `git commit` would record instead: the git index
+//! git names (`GIT_INDEX_FILE`, so `commit -a`, `-o` too), by the store's
+//! `check_staged` (read-only plumbing, no fetch, no `HEAD`). Discovery is
+//! unchanged, on disk; the config is the staged `specengine.toml` unless
+//! `--config`, the baseline the staged `.spec-debt.toml` (when staged)
+//! unless `--baseline`, never the working tree's. Git's failures are causes
+//! of the report (exit 2), with fixed messages; git's own text is never
+//! shown. Exit codes, streams, text and JSON are the plain check's: a fully
+//! staged tree prints the same bytes.
 //!
 //! Root and config come from discovery (`--root`, `--config`); after it,
 //! every failure is a `cannot` cause of the printed report, exit 2: the
@@ -20,7 +31,9 @@
 use std::path::PathBuf;
 
 use specengine_core::check::{Report, Verdict};
-use specengine_store::{NamedBytes, check_tree, default_baseline, load_check, today_utc};
+use specengine_store::{
+    GitEnv, NamedBytes, check_staged, check_tree, default_baseline, load_check, today_utc,
+};
 
 use crate::project::locate;
 use crate::{CliError, Env, Exit, Globals, Message, one_line};
@@ -28,6 +41,10 @@ use crate::{CliError, Env, Exit, Globals, Message, one_line};
 /// `spec check` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheckRequest {
+    /// `--staged`: check the git index instead of the working tree, git run
+    /// with this environment (the caller's current directory and
+    /// variables; `main` passes the process's).
+    pub staged: Option<GitEnv>,
     /// `--baseline F`: replaces the root's baseline; relative to the current
     /// directory, named as typed.
     pub baseline: Option<PathBuf>,
@@ -68,17 +85,26 @@ pub fn check(
 ) -> Result<CheckOutcome, CliError> {
     let today = today_utc();
     let located = locate(env, globals)?;
-    let config = NamedBytes::read(located.config_label.clone(), &located.config_file);
-    let baseline = match &request.baseline {
-        Some(path) => Some(NamedBytes::read(
-            path.display().to_string(),
-            &env.cwd.join(path),
-        )),
-        None => default_baseline(&located.root),
-    };
-    let report = match load_check(&config, baseline.as_ref()) {
-        Ok(setup) => check_tree(&located.root, &setup, &today),
-        Err(report) => *report,
+    let config = || NamedBytes::read(located.config_label.clone(), &located.config_file);
+    let given_baseline = request
+        .baseline
+        .as_ref()
+        .map(|path| NamedBytes::read(path.display().to_string(), &env.cwd.join(path)));
+    let report = match &request.staged {
+        Some(git) => check_staged(
+            &located.root,
+            globals.config.is_some().then(config),
+            given_baseline,
+            git,
+            &today,
+        ),
+        None => {
+            let baseline = given_baseline.or_else(|| default_baseline(&located.root));
+            match load_check(&config(), baseline.as_ref()) {
+                Ok(setup) => check_tree(&located.root, &setup, &today),
+                Err(report) => *report,
+            }
+        }
     };
     let mut messages = Vec::new();
     if request.json && request.debt {

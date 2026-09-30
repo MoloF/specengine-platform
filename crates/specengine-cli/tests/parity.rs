@@ -33,7 +33,12 @@ use specengine_store::{WorkingTree, check_input};
 fn git_status(root: &Path) -> String {
     let output = Command::new("git")
         .current_dir(root)
-        .args(["status", "--porcelain", "--untracked-files=all"])
+        .args([
+            "--no-optional-locks",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+        ])
         .output()
         .expect("git runs");
     assert!(output.status.success(), "git status");

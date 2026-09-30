@@ -119,7 +119,9 @@ fn copy_dir(from: &Path, to: &Path) {
 
 fn git_status(dir: &Path, pathspec: Option<&str>) -> String {
     let mut command = Command::new("git");
-    command.current_dir(dir).args(["status", "--porcelain"]);
+    command
+        .current_dir(dir)
+        .args(["--no-optional-locks", "status", "--porcelain"]);
     if let Some(pathspec) = pathspec {
         command.arg("--").arg(pathspec);
     }

@@ -134,6 +134,7 @@ fn fixtures_git_status() -> String {
     let output = Command::new("git")
         .current_dir(repository_root())
         .args([
+            "--no-optional-locks",
             "status",
             "--porcelain",
             "--untracked-files=all",

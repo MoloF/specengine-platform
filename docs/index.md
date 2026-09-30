@@ -82,6 +82,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) spec check, increment 2 part 2, pass A: feature scopes · crates/specengine-core, crates/specengine-model, crates/specengine-store · shipped
 - [docs/features/spec-check.md](features/spec-check.md) spec check, increment 1: a config-driven check engine at xtask parity · crates/specengine-core, crates/specengine-model, crates/specengine-store, crates/specengine-eval, xtask · shipped
 - [docs/features/spec-cli-check.md](features/spec-cli-check.md) The spec CLI, pass 2a.1: check and export index · crates/specengine-cli, crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
+- [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) The spec CLI, pass 2a.2: check --staged · crates/specengine-cli, crates/specengine-store · shipped
 - [docs/features/spec-cli.md](features/spec-cli.md) The spec CLI, pass 1: the agent read loop · crates/specengine-cli, crates/specengine-core, crates/specengine-store · shipped
 - [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped

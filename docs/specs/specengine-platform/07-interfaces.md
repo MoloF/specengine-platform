@@ -118,7 +118,7 @@ spec lock accept ID [--editorial]                   # accept code changes / an e
 spec gate --worktree DIR --path FILE                 # for the PreToolUse hook; exit 2 = block
 
 # checks, rounds, lifecycle
-spec check [--baseline .spec-debt.toml] [--debt] [--changed] [--staged]
+spec check [--staged] [--baseline F] [--debt] [--changed]
 spec round new | round answer FILE
 spec ship SLUG [--accepted]
 spec compact --dry-run

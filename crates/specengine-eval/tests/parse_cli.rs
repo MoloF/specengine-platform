@@ -132,6 +132,7 @@ fn git_status(dir: &Path, pathspec: &str) -> String {
     let output = Command::new("git")
         .current_dir(dir)
         .args([
+            "--no-optional-locks",
             "status",
             "--porcelain",
             "--untracked-files=all",

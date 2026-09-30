@@ -10,7 +10,7 @@ reviewed: 2026-09-30
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP (for Claude Code agents), later a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phase 0 done (2026-09-29). **Phase 1**, the reading core, in progress: parser, index, `spec check` increments 1–2, the `spec` CLI's read loop, `check` and `export index` shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phase 0 done (2026-09-29). **Phase 1**, the reading core, in progress; shipped: parser, index, `spec check` increments 1–2, the CLI read loop, `check [--staged]`, `export index`. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 

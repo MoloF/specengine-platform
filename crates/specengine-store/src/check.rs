@@ -25,7 +25,12 @@ use specengine_core::{IdSchemeToml, Paths, ProjectConfig};
 use specengine_model::IdScheme;
 
 use crate::error::StoreError;
-use crate::source::{Source, WorkingTree};
+use crate::git::{GitEnv, GitFailure, Staged};
+use crate::source::{GitIndex, Source, WorkingTree};
+
+/// The project's config, at its root (the working tree's for discovery,
+/// the index entry for [`check_staged`]).
+pub const CONFIG_FILE: &str = "specengine.toml";
 
 /// The baseline read from the worktree root when none is passed.
 pub const BASELINE_FILE: &str = ".spec-debt.toml";
@@ -273,6 +278,91 @@ pub fn check_worktree(root: &Path, config: &Path, baseline: Option<&Path>, today
         Ok(setup) => check_tree(root, &setup, today),
         Err(report) => *report,
     }
+}
+
+/// The whole check of what `git commit` would record under `root`
+/// (docs/features/spec-cli-staged.md): the index git names (with `git`'s
+/// environment: `GIT_INDEX_FILE`, `GIT_DIR`), walked by [`GitIndex`]. The
+/// config is `config` when given (read from disk by the caller), else the
+/// index entry [`CONFIG_FILE`] at the root; the baseline `baseline` when
+/// given, else the entry [`BASELINE_FILE`] when staged; never the working
+/// tree's. `today` as `YYYY-MM-DD`.
+///
+/// Every failure is a `cannot-check` report: before the config is read
+/// (no repository, `git` not runnable or failing, `GIT_INDEX_FILE` naming
+/// no file: cause `.`; unmerged paths under the root: a cause each) in
+/// `config`'s mode, else `enforce`; the config not staged or not a regular
+/// blob ([`CONFIG_FILE`]), the baseline not a regular blob
+/// ([`BASELINE_FILE`]), either invalid, as [`load_check`] reports them; a
+/// document's blob missing, at its path.
+pub fn check_staged(
+    root: &Path,
+    config: Option<NamedBytes>,
+    baseline: Option<NamedBytes>,
+    git: &GitEnv,
+    today: &str,
+) -> Report {
+    let mut staged = match Staged::read(root, git) {
+        Ok(staged) => staged,
+        Err(causes) => return Report::cannot(early_mode(config.as_ref()), causes),
+    };
+    let config = match config {
+        Some(config) => config,
+        None => match staged_file(&mut staged, CONFIG_FILE) {
+            Ok(Some(config)) => config,
+            Ok(None) => NamedBytes {
+                name: CONFIG_FILE.to_owned(),
+                bytes: Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "not staged in the git index",
+                )),
+            },
+            Err(failure) => return Report::cannot(Mode::default(), vec![failure.cause()]),
+        },
+    };
+    let baseline = match baseline {
+        Some(baseline) => Some(baseline),
+        None => match staged_file(&mut staged, BASELINE_FILE) {
+            Ok(baseline) => baseline,
+            Err(failure) => {
+                return Report::cannot(early_mode(Some(&config)), vec![failure.cause()]);
+            }
+        },
+    };
+    let setup = match load_check(&config, baseline.as_ref()) {
+        Ok(setup) => setup,
+        Err(report) => return *report,
+    };
+    match GitIndex::from_staged(staged, &setup.project.paths) {
+        Ok(index) => check_source(&index, &setup, today),
+        Err(failure) => Report::cannot(setup.config.mode, vec![failure.cause()]),
+    }
+}
+
+/// The mode of a failure before the config is read: `config`'s when it
+/// can be read, else `enforce`.
+fn early_mode(config: Option<&NamedBytes>) -> Mode {
+    config.map_or(Mode::default(), |config| match load_config(config) {
+        Ok((_, check_config)) => check_config.mode,
+        Err(report) => report.mode,
+    })
+}
+
+/// The index entry `name` at the root as the loader's input: `None` when
+/// not staged; a symlink, a gitlink or a missing blob as a read error.
+fn staged_file(staged: &mut Staged, name: &str) -> Result<Option<NamedBytes>, GitFailure> {
+    let Some(entry) = staged.entry(name.as_bytes()) else {
+        return Ok(None);
+    };
+    let (kind, oid) = (entry.kind, entry.oid.clone());
+    let bytes = match kind.not_regular() {
+        Some(reason) => Err(io::Error::other(reason)),
+        None => staged.blob(&oid)?.bytes(),
+    };
+    Ok(Some(NamedBytes {
+        name: name.to_owned(),
+        bytes,
+    }))
 }
 
 /// The root cannot be read: the cause `.`, the error without its path.

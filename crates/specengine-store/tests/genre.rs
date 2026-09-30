@@ -368,3 +368,23 @@ fn the_literal_scan_sees_a_special_cased_prefix() {
     let found = domain_literals(&[file]);
     assert_eq!(found.len(), 2, "{found:?}");
 }
+
+/// docs/features/spec-cli-staged.md AC-17: the scan covers the new store
+/// module (`src/git.rs`, the git plumbing) and the index source beside
+/// the working tree's (`src/source.rs`), and finds no domain literal in
+/// either.
+#[test]
+fn the_literal_scan_covers_the_git_module() {
+    let sources = store_sources();
+    for module in ["git.rs", "source.rs", "check.rs"] {
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join(module);
+        assert!(
+            sources.contains(&file),
+            "{module} is not scanned: {sources:?}"
+        );
+        let offenders = domain_literals(&[file]);
+        assert!(offenders.is_empty(), "{module}: {offenders:?}");
+    }
+}

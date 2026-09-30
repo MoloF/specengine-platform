@@ -1,6 +1,6 @@
-//! Where the bytes come from: listing and reading kept apart from indexing,
-//! so `spec check --staged` (07 §2) can feed staged blobs through the same
-//! writer. [`WorkingTree`] reads the working tree by the `[paths]` rules.
+//! Where the bytes come from: listing and reading kept apart from indexing
+//! and checking. [`WorkingTree`] reads the working tree by the `[paths]`
+//! rules; [`GitIndex`] the git index, for `spec check --staged` (07 §2).
 //!
 //! **Walk** (`crates/specengine-store/README.md`, "Walk"): regular files
 //! whose name ends exactly in `.md` under the roots, minus `exclude`; symlinks and
@@ -13,16 +13,24 @@
 //! one's is not known). Paths are
 //! root-relative with `/`, built from the names as the OS lists them (a
 //! root's own components included), and byte-sorted.
+//!
+//! [`GitIndex`] walks the git index by the same rules
+//! (docs/features/spec-cli-staged.md, "Walk"): the stage-0 regular entries
+//! (`100644`, `100755`) as the files, symlinks (`120000`) and gitlinks
+//! (`160000`) skipped, a directory existing when an entry lies under it; a
+//! root is a directory only when a regular entry lies under it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fs::{self, FileType};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use specengine_core::check::Cause;
 use specengine_core::{DOCUMENT_EXTENSION, Paths, WalkScope, is_clean_relative, is_under};
 
 use crate::error::StoreError;
+use crate::git::{Blob, Entry, EntryKind, GitEnv, GitFailure, Staged};
 
 /// What a walk found.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -278,17 +286,229 @@ impl Source for WorkingTree {
         }
         // A root, a directory under one (no dot-name below the root, as the
         // walk skips them), or a directory containing one.
-        let related = self.scope.roots().iter().any(|root| {
-            path == root.as_str()
-                || is_under(root, path)
-                || (is_under(path, root)
-                    && path
-                        .split('/')
-                        .skip(root.split('/').count())
-                        .all(|component| !component.starts_with('.')))
-        });
-        related && self.root_kind(path).is_some_and(|kind| kind.is_dir())
+        related_to_a_root(&self.scope, path)
+            && self.root_kind(path).is_some_and(|kind| kind.is_dir())
     }
+}
+
+/// `path` is a root, lies under one, or contains one with no dot-name
+/// below it: a directory [`Source::is_dir`] may answer for.
+fn related_to_a_root(scope: &WalkScope, path: &str) -> bool {
+    scope.roots().iter().any(|root| {
+        path == root.as_str()
+            || is_under(root, path)
+            || (is_under(path, root)
+                && path
+                    .split('/')
+                    .skip(root.split('/').count())
+                    .all(|component| !component.starts_with('.')))
+    })
+}
+
+/// The files the git index stages under the root, walked by `[paths]` with
+/// [`WorkingTree`]'s rules: stage-0 regular entries (`100644`, `100755`)
+/// under a root; below a root the dot-name test before the UTF-8 test,
+/// symlinks and gitlinks skipped, a non-UTF-8 directory counted once per
+/// root, a non-UTF-8 `.md` name once, `exclude` on files only; a root that
+/// is no regular `.md` entry and holds no regular entry is missing. The
+/// bytes are read when it is built (one `cat-file --batch` session) and
+/// kept: [`Source::read`] never touches the working tree.
+///
+/// For checks only: an [`crate::IndexWriter`] would store staged bytes as
+/// the working tree's rows.
+#[derive(Debug, Clone)]
+pub struct GitIndex {
+    /// Canonical.
+    root: PathBuf,
+    scope: WalkScope,
+    listing: Listing,
+    /// Every listed path and its blob's OID.
+    listed: BTreeMap<String, String>,
+    /// The listed OIDs' objects.
+    objects: BTreeMap<String, Blob>,
+    /// Every stage-0 regular entry's path, byte-sorted: the directories.
+    regular: Vec<Vec<u8>>,
+}
+
+impl GitIndex {
+    /// The index of the repository `root` lies in (git runs in `root`,
+    /// with `git`'s environment), walked by `paths`, every listed blob
+    /// read. `Err`: the causes of a check that cannot start (each at `.`,
+    /// or one per unmerged path under the root). A blob missing from the
+    /// object database is no error here: reading its path fails.
+    pub fn open(root: impl AsRef<Path>, paths: &Paths, git: &GitEnv) -> Result<Self, Vec<Cause>> {
+        let staged = Staged::read(root.as_ref(), git)?;
+        Self::from_staged(staged, paths).map_err(|failure| vec![failure.cause()])
+    }
+
+    /// Walks `staged` by `paths`, reads every listed blob through its
+    /// session, each OID once, in path order, and ends the session (a
+    /// session left by a failed read is killed when `staged` drops).
+    pub(crate) fn from_staged(mut staged: Staged, paths: &Paths) -> Result<Self, GitFailure> {
+        let scope = paths.walk_scope();
+        let (listing, listed) = walk_index(&staged.entries, &scope);
+        let mut objects = BTreeMap::new();
+        for oid in listed.values() {
+            if !objects.contains_key(oid) {
+                let blob = staged.blob(oid)?;
+                objects.insert(oid.clone(), blob);
+            }
+        }
+        staged.finish()?;
+        let regular = staged
+            .entries
+            .into_iter()
+            .filter(|entry| entry.kind == EntryKind::Regular)
+            .map(|entry| entry.path)
+            .collect();
+        Ok(Self {
+            root: staged.root,
+            scope,
+            listing,
+            listed,
+            objects,
+            regular,
+        })
+    }
+}
+
+impl Source for GitIndex {
+    fn root(&self) -> &Path {
+        &self.root
+    }
+
+    fn list(&self) -> io::Result<Listing> {
+        Ok(self.listing.clone())
+    }
+
+    fn probe(&self, path: &str) -> bool {
+        self.listed.contains_key(path)
+    }
+
+    fn read(&self, path: &str) -> io::Result<Vec<u8>> {
+        let Some(oid) = self.listed.get(path) else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "not a staged document",
+            ));
+        };
+        self.objects.get(oid).unwrap_or(&Blob::Missing).bytes()
+    }
+
+    fn is_dir(&self, path: &str) -> bool {
+        is_clean_relative(path)
+            && related_to_a_root(&self.scope, path)
+            && holds_an_entry(&self.regular, path.as_bytes())
+    }
+}
+
+/// Some path of the byte-sorted `paths` lies strictly under `dir`.
+fn holds_an_entry(paths: &[Vec<u8>], dir: &[u8]) -> bool {
+    let mut prefix = dir.to_vec();
+    prefix.push(b'/');
+    let at = paths.partition_point(|path| path.as_slice() < prefix.as_slice());
+    paths.get(at).is_some_and(|path| path.starts_with(&prefix))
+}
+
+/// What the walk makes of one entry below a root.
+enum Walked {
+    /// A document to list.
+    Listed,
+    /// Below a non-UTF-8 directory: counted once, by its path below the
+    /// root (this many bytes of the rest).
+    UnderSkippedDir(usize),
+    /// A non-UTF-8 `.md` name: counted.
+    SkippedName,
+    /// Anything else: a dot-name on the way, a symlink, a gitlink, another
+    /// name.
+    Ignored,
+}
+
+/// The walk's verdict on `rest`, an entry's path below a root, WorkingTree's
+/// order per component: the dot-name test, then the kind (only the last
+/// component can be a symlink or a gitlink), then the UTF-8 test.
+fn walk_entry(rest: &[u8], kind: EntryKind) -> Walked {
+    let components: Vec<&[u8]> = rest.split(|&byte| byte == b'/').collect();
+    let mut offset = 0;
+    for (index, component) in components.iter().enumerate() {
+        let last = index + 1 == components.len();
+        if component.starts_with(b".") {
+            return Walked::Ignored;
+        }
+        if last && kind != EntryKind::Regular {
+            return Walked::Ignored;
+        }
+        if std::str::from_utf8(component).is_err() {
+            if !last {
+                return Walked::UnderSkippedDir(offset + component.len());
+            }
+            return if component.ends_with(DOCUMENT_EXTENSION.as_bytes()) {
+                Walked::SkippedName
+            } else {
+                Walked::Ignored
+            };
+        }
+        offset += component.len() + 1;
+    }
+    if rest.ends_with(DOCUMENT_EXTENSION.as_bytes()) {
+        Walked::Listed
+    } else {
+        Walked::Ignored
+    }
+}
+
+/// The listing of `entries` (byte-sorted) by `scope`, and each listed
+/// path's OID.
+fn walk_index(entries: &[Entry], scope: &WalkScope) -> (Listing, BTreeMap<String, String>) {
+    let mut listing = Listing::default();
+    let mut listed = BTreeMap::new();
+    for root in scope.roots() {
+        let exact = entries
+            .binary_search_by(|entry| entry.path.as_slice().cmp(root.as_bytes()))
+            .ok()
+            .map(|at| &entries[at])
+            .filter(|entry| entry.kind == EntryKind::Regular);
+        if let Some(entry) = exact {
+            if !root.ends_with(DOCUMENT_EXTENSION) {
+                listing.missing_roots.push(root.clone());
+            } else if !scope.is_excluded(root) {
+                listed.insert(root.clone(), entry.oid.clone());
+            }
+            continue;
+        }
+        let prefix = format!("{root}/");
+        let start = entries.partition_point(|entry| entry.path.as_slice() < prefix.as_bytes());
+        let under: Vec<&Entry> = entries[start..]
+            .iter()
+            .take_while(|entry| entry.path.starts_with(prefix.as_bytes()))
+            .collect();
+        if !under.iter().any(|entry| entry.kind == EntryKind::Regular) {
+            listing.missing_roots.push(root.clone());
+            continue;
+        }
+        let mut skipped_dirs = BTreeSet::new();
+        for entry in under {
+            let rest = &entry.path[prefix.len()..];
+            match walk_entry(rest, entry.kind) {
+                Walked::Listed => {
+                    // Every component passed the UTF-8 test.
+                    if let Ok(path) = std::str::from_utf8(&entry.path)
+                        && !scope.is_excluded(path)
+                    {
+                        listed.insert(path.to_owned(), entry.oid.clone());
+                    }
+                }
+                Walked::UnderSkippedDir(len) => {
+                    skipped_dirs.insert(&rest[..len]);
+                }
+                Walked::SkippedName => listing.skipped_names += 1,
+                Walked::Ignored => {}
+            }
+        }
+        listing.skipped_names += skipped_dirs.len();
+    }
+    listing.paths = listed.keys().cloned().collect();
+    (listing, listed)
 }
 
 /// The type of the entry of `dir` named exactly `name` (no normalisation,

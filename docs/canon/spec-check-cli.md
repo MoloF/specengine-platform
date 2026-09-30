@@ -8,18 +8,29 @@ reviewed: 2026-09-30
 
 # The spec CLI: check and export index
 
-CLI pass 2a.1 = `spec check` increment 3 part 1 (`docs/features/spec-cli-check.md`). Engine, config, findings, debt, verdict: `docs/canon/spec-check*.md`; discovery, globals, the one-line rule, exit codes: `crates/specengine-cli/README.md`. Both commands parse afresh through the store's check loader (store README): no database, slug or `HOME`. This repository registers nothing until 2b (Q-7): the index keeps `xtask`'s header, hook and CI stay on `xtask`.
+CLI passes 2a.1 and 2a.2 = `spec check` increment 3 (`docs/features/spec-cli-check.md`, `spec-cli-staged.md`). Engine, config, findings, debt, verdict: `docs/canon/spec-check*.md`; discovery, globals, the one-line rule, exit codes: `crates/specengine-cli/README.md`. Both commands parse afresh through the store's check loader (store README): no database, slug or `HOME`. This repository registers nothing until 2b (Q-7): the index keeps `xtask`'s header, hook and CI stay on `xtask`.
 
 ## spec check
 
-`spec check [--baseline F] [--debt]` loads the whole config (`ProjectConfig`, `CheckConfig`) and the baseline, walks the working tree, judges with `check::run` and the UTC date taken at start (no clock flag), prints the report and exits with its verdict. Nothing is written, no index refreshed; the mode comes only from `[check] mode`.
+`spec check [--staged] [--baseline F] [--debt]` loads the whole config (`ProjectConfig`, `CheckConfig`) and the baseline, walks the working tree, judges with `check::run` and the UTC date taken at start (no clock flag), prints the report and exits with its verdict. Nothing is written, no index refreshed; the mode comes only from `[check] mode`.
 
 - **Baseline**: `<root>/.spec-debt.toml` when an entry of that name exists (a directory or a dangling symlink there cannot be read: cannot check); `--baseline F`, relative to the current directory, replaces it and must exist.
-- **Cannot check** (W-2): after discovery every failure is a `cannot` cause of the printed report, exit 2 — the config unreadable (an unreadable `--config` is no discovery failure), not UTF-8 or invalid anywhere (a cause per distinct error, `<config>:<line>`); the baseline missing, unreadable or invalid; the root unreadable (cause `.`); the walk's causes (a directory on the way to a default root that cannot be listed: `cannot  docs: directory cannot be listed…`). A config error stops before the baseline, in mode `enforce` (the mode is read only when all of `CheckConfig` is valid). Only usage and discovery failures leave stdout empty.
+- **Cannot check** (W-2): after discovery every failure is a `cannot` cause of the printed report, exit 2 — the config unreadable (an unreadable `--config` is no discovery failure), not UTF-8 or invalid anywhere (a cause per distinct error, `<config>:<line>`); the baseline missing, unreadable or invalid; the root unreadable (cause `.`); the walk's causes (an unlistable directory, also on the way to a default root). A config error stops before the baseline, in mode `enforce` (the mode is read only when all of `CheckConfig` is valid). Only usage and discovery failures leave stdout empty.
 - **Names**: the config as in pass 1 (`specengine.toml`, or `--config` as typed), `.spec-debt.toml`, `--baseline` as typed, the root `.`; no output holds an absolute path the caller did not type.
 - **Text**: the lines of `Report::lines(--debt)`, one-lined, uncapped (W-4): blocking findings only, and a cut listing would contradict its counts. **JSON** (W-1): `Report::to_json()` + `\n` verbatim, whatever `--debt` (then one `note:`), paths raw — the exception to the CLI's "absent = `null`": an unset `fix`, an absent `debt` are omitted.
 - **Exit**: 0 `clean`, `observed`; 1 `blocked`; 2 `cannot-check`, usage, discovery. No `spec:` line beside a report.
 - **Determinism** ("one tree and one date"): one tree, config, baseline and date → byte-identical stdout and stderr, whatever the absolute root, walk order or starting directory.
+
+### The staged check
+
+`--staged` (2a.2 Q1) judges what `git commit` records: stage-0 regular blobs (`100644`, `100755`) under the root in the index git names (`GIT_INDEX_FILE`: `commit -a`, `-o` too), by `WorkingTree`'s rules; config and baseline staged unless `--config`, `--baseline` (disk). Discovery stays on disk. A fully staged tree prints plain's bytes. A commit setting `mode = "observe"` is judged in `observe` (Q3).
+
+- **Git** (`std::process`, 05 §9) in the root, read-only: `rev-parse`, `ls-files -s -z`, one lockstep `cat-file --batch` (config and baseline, then the listed blobs), `diff-files --diff-filter=A --ita-invisible-in-index` dropping intent-to-add entries (only when an empty blob under the root is a `.md`, config or baseline). Every child: `-c core.fsmonitor=false`, `GIT_OPTIONAL_LOCKS=0`, `GIT_NO_LAZY_FETCH=1`, `GIT_NO_REPLACE_OBJECTS=1`, `GIT_TERMINAL_PROMPT=0`; no `HEAD`, filter or refresh; git's text never shown.
+- **Environment**: `GIT_*` inherited, resolved as git does from the caller's directory: relative `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR` by `rev-parse --git-path index`, `--git-path objects`, `--git-common-dir`; `GIT_DIR`, `GIT_WORK_TREE` against it; `GIT_DIR` alone → `GIT_WORK_TREE` = it (git's rule, `core.worktree` set aside).
+- **Guard**, `GIT_DIR` without `GIT_WORK_TREE` (linked worktree hooks): `rev-parse --show-toplevel`, then `--absolute-git-dir`, minus `GIT_DIR`, `GIT_CEILING_DIRECTORIES`, across file systems; goes on when no top is found, or the top is the caller's directory and its git dir `GIT_DIR`, or `GIT_DIR` its `.git` gitfile (same: canonical paths or device and inode); else cannot check, `GIT_DIR is set without GIT_WORK_TREE below the working tree's top: pass --root from the top` (also a top with a foreign or missing `GIT_DIR`). A `GIT_DIR`-only tree without `.git` in a repository hidden by `GIT_CEILING_DIRECTORIES` is refused: set `GIT_WORK_TREE`.
+- **Hooks** run from the top with `--root`, never `cd` (R11): the guard is complete only for layouts git creates (init, clone, `worktree add`, submodule, `--separate-git-dir`).
+- **Cannot check** also, fixed one-line causes at `.` unless named: no repository or `git`, a git failure, `GIT_INDEX_FILE` empty or naming no file, an unresolvable relative variable (`GIT_OBJECT_DIRECTORY`, `GIT_COMMON_DIR` below the top), the guard; an unmerged path, a missing blob; the config unstaged or not a regular blob, nor the baseline. Before the config is read: mode `enforce` or `--config`'s.
+- **Unlike plain**, by design: untracked, ignored, skip-worktree files; submodule contents; filters; symlinks, gitlinks skipped (a root of only them is missing; a non-UTF-8 gitlink uncounted); NFD names vs `core.precomposeUnicode`; an intent-to-add `.md` deleted on disk is walked empty, one neither `.md` nor TOML stays an empty file unless the detector runs.
 
 ## spec export index
 
@@ -33,32 +44,33 @@ A mode of `spec export` (owner, Q3; its bare form stays Phase 2's queue export, 
 ## Owner's and working answers
 
 - Q3 (2026-09-30): the index writer is `spec export index`; class `generated` documents are written only by their registered generator (`docs/canon/architecture.md#apply`).
-- Q4 (2026-09-30): "introduced" is relative to `HEAD` (2a.2 below); it answers `docs/canon/spec-check.md` Q-5.
+- Q4 (2026-09-30): "introduced" is relative to `HEAD` (spec-cli-introduced below); it answers `docs/canon/spec-check.md` Q-5.
 - Working answers (the code) → the other answer's cost: W-1 JSON verbatim → a second serialiser, or a core change breaking `check_output.rs`; W-2 cannot-check prints its report → no JSON for the failure that matters most; W-3 `--stdout` → previewing means writing, forbidden in pilots; W-4 uncapped → `search`'s cap.
 
-## Next: 2a.2 spec-cli-staged
+## Next: index compaction, then 2b spec-cli-switch
 
-Fixed now (Q4):
-
-- `--staged` checks the root's git index: stage-0 regular blobs of `git ls-files -s -z`, read by one `git cat-file --batch`, under `WorkingTree`'s walk rules (symlinks `120000`, gitlinks `160000` skipped; a written root without tracked entries is missing); config and baseline from the index unless `--config`, `--baseline`. `--changed` checks the working tree.
-- Base: `HEAD`'s tree (`git ls-tree -r -z HEAD`), checked with the checked tree's config, parses shared by (path, blob OID); unborn `HEAD` → empty. **Introduced**, for both flags: (code, path, subject) absent from the base's findings; a rename re-introduces, a second occurrence of a key does not.
-- `mode = "enforce-introduced"` (observe → enforce-introduced → enforce, 04 §1.6) blocks on introduced errors not in live debt and on a baseline entry whose triple `HEAD`'s baseline lacks at that path: new debt needs the owner's `--no-verify`; a baseline outside the repository turns that off with a `note:`. `Mode`: a kebab-case rename.
-- Git by `std::process` (05 §9), inheriting `GIT_INDEX_FILE`, `GIT_DIR` (hooks, `git commit -o`); never fetches; a missing blob, unmerged entries, no repository or `git` → cannot-check; the root may be a worktree subdirectory. JSON findings and counts gain `introduced`; `--debt` labels pre-existing errors.
-- Open, the analyst's recommendations: expired debt on a pre-existing error blocks; a triple whose `expires` moved later is new; the stricter of the staged and `HEAD` mode applies; "no new baseline entries" also under `enforce` with a base; `enforce-introduced` without either flag → `enforce` + a `note:`. Too big → `--staged` first (all 2b needs). Test risks: the owner's git config, a `cat-file` pipe deadlock, intent-to-add, clean filters, submodules.
-
-## Then: 2b spec-cli-switch
-
-Owner's answers (2026-09-30):
+A separate small task compacts the index render first (2a.2 Q10). 2b, owner's answers (2026-09-30):
 
 - Q2: an ADR amending ADR-0023's table — `spec-writer` also `specengine.toml`, `.spec-debt.toml`; `rust-developer` also `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/`. `.claude/**` stays the owner's, who applies by hand the text 2b's spec-writer prepares: the two role prompts, the `*-saving` twins, ~43 `xtask` mentions in 14 files, the `Bash(cargo xtask docs *)` allow entry in `.claude/settings.json`.
 - Q5: `spec check` reports the worst W in its summary and JSON counts (tests compare with the library, not literals). Q6: the hook runs `cargo run -q -p specengine-cli -- check --staged`.
 - One commit: the root config registers `cargo run -q -p specengine-cli -- export index` and its gate; the index regenerated; hook and CI switched; `xtask` removed. CI (`enforce`, a `HEAD` checkout) runs the full check; `--base REF` (05 §5.2) later.
 
-Elsewhere: the queue export, `--state` (Phase 2); applying `fix` data (Q-3); an MCP check tool; path arguments; a clock flag; the `rev` pre-commit rule (05 §3.5, Phase 3); project generators' drift (ADR-0013).
+Elsewhere: queue export, `--state` (Phase 2); applying `fix` (Q-3); an MCP check tool; path arguments; a clock flag; the `rev` rule (05 §3.5, Phase 3); generators' drift (ADR-0013).
+
+## Then (after 2b): spec-cli-introduced
+
+After 2b, before the first pilot with a backlog (2a.2 Q2); decided by 2a.2 Q4–Q9:
+
+- Base: `HEAD`'s tree by `git ls-tree -r -z HEAD` in the root (not `HEAD:<prefix>`, failing for a new root), checked with the checked tree's config, parses shared by (path, blob OID); unborn `HEAD` → empty; its causes ignored, findings kept; git failing on it → cannot-check. **Introduced**, for `--staged` and `--changed` (the working tree): (code, path, subject) absent from the base's findings; a rename (or NFD vs precomposed name) re-introduces, a key's second occurrence does not.
+- `mode = "enforce-introduced"` (observe → enforce-introduced → enforce, 04 §1.6) blocks on introduced errors not in live debt, on expired debt even over a pre-existing error (Q4), and on new debt: a triple `HEAD`'s baseline lacks at that path, or whose `expires` moved later, not earlier nor a changed `reason` (Q5); under `enforce` with a base too (Q7). New debt needs the owner's `--no-verify`; a `--baseline` outside the repository lifts that with a `note:`. No ADR (Q9): ADR-0022 enforcement a project opts into by its config.
+- Mode: the stricter of the staged and `HEAD` configs' (Q6; `HEAD`'s unreadable or invalid → staged + a `note:`); `enforce-introduced` without `--staged`, `--changed` → `enforce` + a `note:` (Q8). Output: without a base 2a.1's bytes; with one an optional `introduced` in findings and counts, omitted when absent like `fix` (`check_output.rs` pins the keys); `--debt` labels pre-existing errors.
+- Impact: `Mode` kebab-case, declared `Observe, EnforceIntroduced, Enforce` so derived `Ord` is the ladder (`blocks`' `==` breaks); new debt a 30th code in `CHECK_CODES` or a section beside `stale`. Risks: an error committed with `--no-verify` stays pre-existing; agents may pass `--no-verify` unless denied.
 
 ## Open
 
-- The store walker (`update_paths` silently drops the rows under an unreadable directory, a Phase 2 item; `resolve`'s race): store README "Open minors".
+- The store walker's and `GitIndex`'s minors: store README "Open minors".
 - A FIFO swapped in for the index before the open would block the writer (`O_NONBLOCK` later).
 - Untested: the replaced-file refusal (needs a seam); the non-UTF-8 name warning on APFS, which refuses such names.
 - Causes are sorted as strings (`:22` before `:6`; cosmetic, core); `ProjectConfig` stops at its first error, so a config's causes may be incomplete.
+- Guard residues, false passes of a `cd` hook (fixes: `docs/features/spec-cli-staged.md`): (a) `core.worktree`, the git dir outside, `git --git-dir=… commit`; (b) discovery refused (dubious ownership, outer `--git-dir`; a broken `.git` gitfile) read as no repository; (c) the caller inside a git dir: accepted. Nits: a link elsewhere to the top's `.git` passes the gitfile clause; the message misleads for a top's foreign or missing `GIT_DIR`.
+- git < 2.44 partial clones fetch lazily; `--ita-invisible-in-index` is experimental (gone → exit 2).

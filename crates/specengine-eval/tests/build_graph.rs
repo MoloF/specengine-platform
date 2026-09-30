@@ -1320,3 +1320,104 @@ fn cli_normal_graph_has_no_git_library() {
         "specengine-cli's normal graph reaches a git library: {git:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// docs/features/spec-cli-staged.md AC-01 (pass 2a.2 adds no dependency).
+// ---------------------------------------------------------------------------
+
+/// The `[dependencies]` keys of `crates/<package>/Cargo.toml`, sorted, and
+/// whether the manifest has a target-specific dependency table.
+fn declared_normal_dependencies(package: &str) -> (Vec<String>, bool) {
+    let path = workspace_root()
+        .join("crates")
+        .join(package)
+        .join("Cargo.toml");
+    let text = std::fs::read_to_string(&path).expect("the member's manifest");
+    let manifest: toml::Table = text.parse().expect("a TOML manifest");
+    let mut names: Vec<String> = manifest
+        .get("dependencies")
+        .and_then(toml::Value::as_table)
+        .map(|deps| deps.keys().cloned().collect())
+        .unwrap_or_default();
+    names.sort();
+    let targeted = manifest
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|targets| {
+            targets.values().any(|target| {
+                target
+                    .as_table()
+                    .is_some_and(|table| table.contains_key("dependencies"))
+            })
+        });
+    (names, targeted)
+}
+
+/// Git libraries and process crates: `spec check --staged` reads git
+/// through `std::process` only (05 §9).
+fn git_or_process_crate(name: &str) -> bool {
+    name == "git2"
+        || name == "libgit2-sys"
+        || name == "gix"
+        || name.starts_with("gix-")
+        || [
+            "duct",
+            "subprocess",
+            "command-group",
+            "os_pipe",
+            "shared_child",
+            "process_control",
+            "wait-timeout",
+            "which",
+            "tokio",
+            "async-process",
+        ]
+        .contains(&name)
+}
+
+/// The store's and the CLI's normal dependencies stay 2a.1's: the same
+/// `[dependencies]` keys, no target-specific table, and no git library or
+/// process crate anywhere in their normal graphs.
+#[test]
+fn store_and_cli_normal_dependencies_are_2a1_s() {
+    for (package, expected) in [
+        (
+            "specengine-store",
+            &[
+                "blake3",
+                "rusqlite",
+                "serde",
+                "serde_json",
+                "specengine-core",
+                "specengine-model",
+            ][..],
+        ),
+        (
+            "specengine-cli",
+            &[
+                "clap",
+                "serde",
+                "serde_json",
+                "specengine-core",
+                "specengine-model",
+                "specengine-store",
+            ][..],
+        ),
+    ] {
+        let (names, targeted) = declared_normal_dependencies(package);
+        assert_eq!(names, expected, "{package}'s [dependencies]");
+        assert!(
+            !targeted,
+            "{package} has a target-specific dependency table"
+        );
+        let graph = normal_graph(package);
+        let offenders: Vec<&(String, String)> = graph
+            .iter()
+            .filter(|(name, _)| git_or_process_crate(name))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "{package}'s normal graph reaches {offenders:?}"
+        );
+    }
+}

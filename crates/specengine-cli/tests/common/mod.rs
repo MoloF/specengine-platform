@@ -10,6 +10,8 @@
 #![allow(dead_code)]
 
 pub mod check;
+pub mod git;
+pub mod staged;
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};

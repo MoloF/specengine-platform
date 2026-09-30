@@ -13,8 +13,9 @@ use specengine_core::{ProjectConfig, ProjectError};
 
 use crate::{CliError, Env, Globals};
 
-/// The project's config file, at its root.
-pub const CONFIG_FILE: &str = "specengine.toml";
+/// The project's config file, at its root (the store's constant: the
+/// staged check reads the index entry of that name).
+pub const CONFIG_FILE: &str = specengine_store::CONFIG_FILE;
 
 /// A found project: its canonical root and its checked config.
 #[derive(Debug, Clone, PartialEq, Eq)]
