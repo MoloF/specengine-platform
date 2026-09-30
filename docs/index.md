@@ -60,6 +60,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0025](decisions/ADR-0025.md) The repository is licensed under MIT · root · accepted
 - [ADR-0026](decisions/ADR-0026.md) Feature-scoped IDs are {#ID} sections of their feature document · storage · accepted
 - [ADR-0027](decisions/ADR-0027.md) Tasks are stack-neutral packages; skills render them · architecture · accepted
+- [ADR-0028](decisions/ADR-0028.md) Tier 3 index lines carry only id and status · docs · accepted
 
 ## Specs
 
@@ -73,17 +74,18 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Archive — Tier 3, by id only
 
-- [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) Technical Specification: SpecEngine Platform · specengine · abandoned
-- [ADR-0002](decisions/ADR-0002.md) A record is a file, a node document is a file, rules are {#ID} sections · storage · superseded-by ADR-0026
-- [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) Phase 0 spikes: turn the engine's unverified claims into numbers on the two pilot corpora · spikes · shipped
-- [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) Phase 1 cleanup: the open minors of the parser, index and check · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
-- [docs/features/spec-check-graph.md](features/spec-check-graph.md) spec check, increment 2 part 1: index, generators, graph warnings · crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
-- [docs/features/spec-check-links.md](features/spec-check-links.md) spec check, pass B: file links · crates/specengine-core, crates/specengine-store · shipped
-- [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) spec check, increment 2 part 2, pass A: feature scopes · crates/specengine-core, crates/specengine-model, crates/specengine-store · shipped
-- [docs/features/spec-check.md](features/spec-check.md) spec check, increment 1: a config-driven check engine at xtask parity · crates/specengine-core, crates/specengine-model, crates/specengine-store, crates/specengine-eval, xtask · shipped
-- [docs/features/spec-cli-check.md](features/spec-cli-check.md) The spec CLI, pass 2a.1: check and export index · crates/specengine-cli, crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
-- [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) The spec CLI, pass 2a.2: check --staged · crates/specengine-cli, crates/specengine-store · shipped
-- [docs/features/spec-cli.md](features/spec-cli.md) The spec CLI, pass 1: the agent read loop · crates/specengine-cli, crates/specengine-core, crates/specengine-store · shipped
-- [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped
-- [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped
-- [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) 03. Critique of the initial specification · specengine · shipped
+- [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) abandoned
+- [ADR-0002](decisions/ADR-0002.md) superseded-by ADR-0026
+- [docs/features/index-compaction.md](features/index-compaction.md) shipped
+- [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) shipped
+- [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) shipped
+- [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
+- [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
+- [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) shipped
+- [docs/features/spec-check.md](features/spec-check.md) shipped
+- [docs/features/spec-cli-check.md](features/spec-cli-check.md) shipped
+- [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) shipped
+- [docs/features/spec-cli.md](features/spec-cli.md) shipped
+- [docs/features/spec-index.md](features/spec-index.md) shipped
+- [docs/features/spec-parser.md](features/spec-parser.md) shipped
+- [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

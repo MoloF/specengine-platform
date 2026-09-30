@@ -9,7 +9,7 @@ ref: research-2026-09-28
 
 ## 1. SpecEngine repository layout
 
-Built: `CLAUDE.md` "Layout" and each crate's README; the crates' planned roles: 05 §1 (topology). Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `ui/` (Vite + React 19 + TS, Phase 4), `plugin/` (the Claude Code plugin: `plugin.json`, `.mcp.json`, hooks, skills, agents), the `spec` binary's alias `specengine`.
+Built: `CLAUDE.md` "Layout" and each crate's README; the crates' planned roles: 05 §1. Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `ui/` (Vite + React 19 + TS, Phase 4), `plugin/` (the Claude Code plugin: `plugin.json`, `.mcp.json`, hooks, skills, agents), the `spec` binary's alias `specengine`.
 
 ## 2. Phases
 
@@ -17,14 +17,14 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 0. Decisions and spikes — done 2026-09-29
 
-- Decisions ADR-0001…ADR-0025, each with its canon diff; spikes: `docs/features/phase-0-spikes.md` (shipped), ADR-0020 and ADR-0021 stand.
-- Carried to Phase 1, not a spike: the pre-code reading (tracey sources and a tracey run on one pilot crate — input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift and amiss, `/speckit.converge`).
-- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`cargo xtask docs budget`): ≈ 117 KB against ≤ 40 KB, driven by 05, 04 and 08.
+- ADR-0001…ADR-0025 with canon diffs; spikes: `docs/features/phase-0-spikes.md`.
+- Carried to Phase 1: pre-code reading (tracey sources and a run on one pilot crate, input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift, amiss, `/speckit.converge`).
+- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`cargo xtask docs budget`): ≈ 116 KB against ≤ 40 KB, driven by 05, 04 and 08.
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped 2026-09-29/30, open owner questions in each crate's README and `docs/canon/spec-check*.md`: the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI passes 1, 2a.1 (`check`, `export index`), 2a.2 (`check --staged`).
-- Next: index compaction, then CLI 2b `spec-cli-switch`, `xtask` retired (`docs/canon/spec-check-cli.md`); 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
+- Shipped (open owner questions: crate READMEs, `docs/canon/spec-check*.md`): the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI passes 1, 2a.1 (`check`, `export index`), 2a.2 (`--staged`), index compaction (ADR-0028).
+- Next: CLI 2b `spec-cli-switch`, `xtask` retired (`docs/canon/spec-check-cli.md`); 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`. Before Phase 2 or a pilot's `spec export index`: index sharding (`docs/features/roadmap.md` Q-8) or a terser live line.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").

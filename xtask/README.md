@@ -3,14 +3,14 @@ class: canon
 tier: 1
 scope: [xtask]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-10-01
 ---
 
 # xtask — enforcement of the documentation convention
 
 Enforces §11 of `docs/canon/documentation-system.md` in this repository until SpecEngine's own `spec check` replaces it (ADR-0013, ADR-0022). No dependencies — std only, builds in seconds.
 
-`spec check` (`docs/canon/spec-check.md`, `docs/canon/spec-check-graph.md`) covers all six §11 checks plus the ADR-0009 ID checks and graph warnings, at parity (`crates/specengine-store/tests/check_parity.rs`, its index render byte for byte against `docs index`). Increment 3 moves this crate onto the core renderer, switches hook and CI, and retires it. Until then this crate is the gate.
+`spec check` (`docs/canon/spec-check.md`, `docs/canon/spec-check-graph.md`) covers all six §11 checks plus the ADR-0009 ID checks and graph warnings, at parity (`crates/specengine-store/tests/check_parity.rs`, its index render byte for byte against `docs index`). CLI pass 2b (`docs/canon/spec-check-cli.md`) switches hook and CI to `spec` and retires this crate; until then it is the gate.
 
 ## Commands
 
@@ -33,7 +33,7 @@ Every `*.md` in the repository, except the directories `.git`, `.claude` (role p
 | `src/docs/mod.rs` | repository walk, document model, headings, anchors (GitHub slug, `{#id}`, `<a id>`), archive flag |
 | `src/docs/frontmatter.rs` | the YAML subset: scalars, `[a, b]`, block lists; anything else is an error with a line number |
 | `src/docs/check.rs` | schema per class, budgets, `canon:`, ADR references, index against front-matter |
-| `src/docs/index.rs` | deterministic index rendering: canon, decisions, specs, archive |
+| `src/docs/index.rs` | deterministic index rendering: canon, decisions, specs, archive (a Tier 3 line is only link and status, ADR-0028) |
 | `src/docs/budget.rs` | §4 caps and the W report |
 
 ## Rules for changes

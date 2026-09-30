@@ -15,6 +15,12 @@
 //! final newline) → `index-drift` on the line of the first differing byte;
 //! the index not walked → `index-missing`; no `index = true` entry →
 //! neither; bytes not supplied → cannot check.
+//!
+//! docs/features/index-compaction.md AC-01, AC-02, AC-08: a Tier 3 line is
+//! `- [<label>](<link>) <status>` (the status whole), every live line and
+//! everything before `## Archive` unchanged; Tier 3 by status, never by
+//! folder; a Tier 3 document without title, H1 or scope compacts the same;
+//! a failed front-matter is live, never compacted.
 
 mod common;
 
@@ -154,10 +160,10 @@ fn expected() -> String {
 
 ## Archive — Tier 3, by id only
 
-- [ADR-0002](decisions/ADR-0002.md) Rejected one · core · rejected
-- [ADR-0003](decisions/ADR-0003.md) Old one · core · superseded-by ADR-0001
-- [docs/features/f-abandoned.md](features/f-abandoned.md) Abandoned feature · core · abandoned
-- [docs/features/f-shipped.md](features/f-shipped.md) Shipped feature · core · shipped
+- [ADR-0002](decisions/ADR-0002.md) rejected
+- [ADR-0003](decisions/ADR-0003.md) superseded-by ADR-0001
+- [docs/features/f-abandoned.md](features/f-abandoned.md) abandoned
+- [docs/features/f-shipped.md](features/f-shipped.md) shipped
 "
     )
 }
@@ -317,6 +323,126 @@ fn reversed_input_renders_identical_bytes() {
     // Any rotation, too.
     input.files.rotate_left(5);
     assert_eq!(render_index(&input, INDEX, generator(&config)), forward);
+}
+
+// ------------------------------------------------ index-compaction AC-02
+
+/// The lines of the section `## <title>` of `render`; empty when absent.
+fn section_lines<'r>(render: &'r str, title: &str) -> Vec<&'r str> {
+    let heading = format!("\n## {title}\n\n");
+    let Some(start) = render.find(&heading) else {
+        return Vec::new();
+    };
+    render[start + heading.len()..]
+        .lines()
+        .take_while(|line| line.starts_with("- ["))
+        .collect()
+}
+
+const ARCHIVE: &str = "Archive — Tier 3, by id only";
+
+#[test]
+fn tier3_is_chosen_by_status_not_by_folder() {
+    let files: &[(&str, &str)] = &[
+        (
+            "docs/archive/x.md",
+            "---\nclass: spec\nstatus: draft\nscope: [core]\n---\n\n# Draft in an archive folder\n",
+        ),
+        (
+            "notes/y.md",
+            "---\nclass: spec\nstatus: shipped\nshipped: 2026-09-01\nscope: [core]\n---\n\n# Shipped outside docs\n",
+        ),
+        (
+            "docs/decisions/ADR-0001.md",
+            "---\nid: ADR-0001\nclass: decision\ntitle: Accepted one\nstatus: accepted\nscope: [core]\n---\n",
+        ),
+        (
+            "docs/decisions/ADR-0002.md",
+            "---\nid: ADR-0002\nclass: decision\ntitle: Without status\nscope: [core]\n---\n",
+        ),
+    ];
+    let config = config();
+    let input = config.input(files);
+    let render = render_index(&input, INDEX, generator(&config));
+    assert_eq!(
+        section_lines(&render, "Specs"),
+        ["- [docs/archive/x.md](archive/x.md) Draft in an archive folder · core · draft"],
+        "{render}"
+    );
+    assert_eq!(
+        section_lines(&render, "Decisions"),
+        [
+            "- [ADR-0001](decisions/ADR-0001.md) Accepted one · core · accepted",
+            "- [ADR-0002](decisions/ADR-0002.md) Without status · core · ?",
+        ],
+        "{render}"
+    );
+    assert_eq!(
+        section_lines(&render, ARCHIVE),
+        ["- [notes/y.md](../notes/y.md) shipped"],
+        "{render}"
+    );
+    // The link follows the configured index's directory, the label stays
+    // the path.
+    for (index, link) in [("toc.md", "notes/y.md"), ("a/b/toc.md", "../../notes/y.md")] {
+        let render = render_index(&input, index, generator(&config));
+        assert_eq!(
+            section_lines(&render, ARCHIVE),
+            [format!("- [notes/y.md]({link}) shipped")],
+            "{index}: {render}"
+        );
+    }
+}
+
+#[test]
+fn a_tier3_line_reads_neither_title_nor_scope() {
+    let files: &[(&str, &str)] = &[
+        // No `title:`, no H1, no `scope:`.
+        (
+            "docs/features/bare.md",
+            "---\nclass: spec\nstatus: abandoned\n---\n\nProse only.\n",
+        ),
+        // A title with inline markup and a setext H1: the renderers'
+        // title divergences cannot reach a Tier 3 line.
+        (
+            "docs/features/marked.md",
+            "---\nclass: spec\nstatus: shipped\ntitle: Front *matter* title\nscope: [a, b]\n---\n\nSetext `H1`\n==========\n",
+        ),
+        // A decision without `title:` and with an H1; one without `id:`.
+        (
+            "docs/decisions/ADR-0005.md",
+            "---\nid: ADR-0005\nclass: decision\nstatus: rejected\n---\n\n# A *heading*\n",
+        ),
+        (
+            "docs/decisions/no-id.md",
+            "---\nclass: decision\ntitle: Nameless\nstatus: superseded-by ADR-0005, ADR-0001\nscope: [core]\n---\n",
+        ),
+        // Failed front-matter with a Tier 3 status: live, never compacted.
+        (
+            "docs/features/broken.md",
+            "---\nclass: spec\nstatus: shipped\ntitle: a: b\nscope: [z]\n---\n\n# Broken shipped\n",
+        ),
+    ];
+    let config = config();
+    let render = render_index(&config.input(files), INDEX, generator(&config));
+    assert_eq!(
+        section_lines(&render, ARCHIVE),
+        [
+            "- [ADR-0005](decisions/ADR-0005.md) rejected",
+            "- [docs/decisions/no-id.md](decisions/no-id.md) superseded-by ADR-0005, ADR-0001",
+            "- [docs/features/bare.md](features/bare.md) abandoned",
+            "- [docs/features/marked.md](features/marked.md) shipped",
+        ],
+        "{render}"
+    );
+    assert_eq!(
+        section_lines(&render, "No class — fix"),
+        ["- [docs/features/broken.md](features/broken.md) Broken shipped ·  · ?"],
+        "{render}"
+    );
+    for line in section_lines(&render, ARCHIVE) {
+        assert!(!line.contains(" · "), "{line}");
+    }
 }
 
 /// Every string literal of a Rust line outside comments (naive: the text

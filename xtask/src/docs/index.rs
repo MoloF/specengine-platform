@@ -1,7 +1,9 @@
 //! The generated index, §9: one line per document — id, title, scope, status.
 //! Built from front-matter, so it cannot disagree with reality.
 //! Tier 3 (shipped and abandoned specs, superseded and rejected decisions) is a separate
-//! section: excluded from default retrieval, but reachable by id.
+//! section: excluded from default retrieval, but reachable by id. Its lines carry only
+//! the id and the status, whole (`superseded-by ADR-0026`); title and scope are not read
+//! (ADR-0028).
 
 use std::fmt::Write as _;
 use std::fs;
@@ -69,16 +71,13 @@ fn section<'a>(out: &mut String, title: &str, docs: impl Iterator<Item = &'a &'a
     }
 }
 
+/// `- [label](link) title · scope · status`; Tier 3: `- [label](link) status`.
 fn line(doc: &Doc) -> String {
     let fm = doc.fm();
     let link = doc
         .path
         .strip_prefix("docs/")
         .map_or_else(|| format!("../{}", doc.path), str::to_string);
-    let scope = fm
-        .and_then(|fm| fm.list("scope"))
-        .map(|s| s.join(", "))
-        .unwrap_or_default();
     let status = match doc.class() {
         Some("canon") => format!("tier {}", doc.tier().map_or("?".into(), |t| t.to_string())),
         _ => fm
@@ -86,16 +85,19 @@ fn line(doc: &Doc) -> String {
             .unwrap_or("?")
             .to_string(),
     };
-    match (doc.class(), fm.and_then(|fm| fm.str("id"))) {
-        (Some("decision"), Some(id)) => {
-            let title = fm.and_then(|fm| fm.str("title")).unwrap_or("?");
-            format!("- [{id}]({link}) {title} · {scope} · {status}")
-        }
-        _ => {
-            let title = doc.title.as_deref().unwrap_or("?");
-            format!("- [{}]({link}) {title} · {scope} · {status}", doc.path)
-        }
+    let (label, title) = match (doc.class(), fm.and_then(|fm| fm.str("id"))) {
+        (Some("decision"), Some(id)) => (id, fm.and_then(|fm| fm.str("title"))),
+        _ => (doc.path.as_str(), doc.title.as_deref()),
+    };
+    if doc.is_archived() {
+        return format!("- [{label}]({link}) {status}");
     }
+    let title = title.unwrap_or("?");
+    let scope = fm
+        .and_then(|fm| fm.list("scope"))
+        .map(|s| s.join(", "))
+        .unwrap_or_default();
+    format!("- [{label}]({link}) {title} · {scope} · {status}")
 }
 
 pub fn run(root: &Path, write: bool) -> io::Result<bool> {

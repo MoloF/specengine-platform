@@ -17,6 +17,7 @@ Increment 2 part 1 of `spec check`. Engine, config, debt, verdict and output: `d
 - Module `check::resolve`, public: `Resolver`, `Resolution`, scope-aware and taking the citing file (`docs/canon/spec-check-links.md`, "API"). The store keeps `dst` as written, so `spec refs` and `get_impact` reuse this resolver rather than resolving again.
 - Normal dependency: `petgraph =0.8.3`, default features off (`Graph`, `tarjan_scc`; owner, Q-C).
 
+<a id="index-render"></a>
 ## Index render (§9)
 
 ```
@@ -35,11 +36,11 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 Then each non-empty section as `\n## <name>\n\n` plus one `\n`-ended line per document, paths in byte order: `Canon`, `Decisions`, `Specs` (live documents of the class), `No class — fix` (live, no readable class or one outside the four, failed front-matter included), `Archive — Tier 3, by id only`. The index and every other generated document are not listed.
 
-Line `- [<label>](<link>) <title> · <scope> · <status>`: label = a decision's ID, else the path; link relative to the directory of the configured index (`a/b/index.md` → `../../CLAUDE.md`); title = `title:`, else the first H1's inline text, else `?`; scope items joined by `, `; status = canon `tier N` (`tier ?`), else `status:`, else `?`.
+Line `- [<label>](<link>) <title> · <scope> · <status>`; a Tier 3 line is only `- [<label>](<link>) <status>`, title and scope unread, the status whole (`superseded-by ADR-0026`; ADR-0028). Label = a decision's ID, else the path; link relative to the directory of the configured index (`a/b/index.md` → `../../CLAUDE.md`); title = `title:`, else the first H1's inline text, else `?`; scope items joined by `, `; status = canon `tier N` (`tier ?`), else `status:`, else `?`.
 
-**Tier 3** is decided once, by status, never by folder, with `xtask`'s rule: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules.
+**Tier 3** is decided once, by status, never by folder, with `xtask`'s rule (`Doc::is_archived`): a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules.
 
-Accepted divergences from `xtask` (none occurs here; avoid them until increment 3 moves `xtask` onto this renderer): an H1 with inline markup (`xtask` keeps the raw text, the core the inline text: H1s here stay plain, no code span, link or emphasis) or a setext H1 (`xtask` sees none); `title:` on a non-decision (`xtask` takes the H1); a decision without `title:` (`xtask` prints `?`, the core the H1); YAML escapes in a quoted value (`xtask`'s `unquote` ignores them); front-matter failing strict YAML (core: `No class — fix`); a key of the wrong type (rendered absent).
+Accepted divergences from `xtask` (none occurs here; avoid them until 2b retires `xtask`): an H1 with inline markup (`xtask` keeps the raw text, the core the inline text: H1s here stay plain, no code span, link or emphasis) or a setext H1 (`xtask` sees none); `title:` on a non-decision (`xtask` takes the H1); a decision without `title:` (`xtask` prints `?`, the core the H1); YAML escapes in a quoted value (`xtask`'s `unquote` ignores them); front-matter failing strict YAML (core: `No class — fix`); a key of the wrong type (rendered absent).
 
 ## §11.5: index drift
 

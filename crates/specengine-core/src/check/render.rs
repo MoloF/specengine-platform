@@ -5,11 +5,13 @@
 //! byte order, empty sections omitted. Pure: the render stays in memory;
 //! the §11.5 rule compares it with the walked bytes of `[paths] index`.
 //!
-//! Which documents are Tier 3 (excluded from default retrieval, listed in
-//! the archive) is decided here once, by status, never by folder: a spec
-//! `shipped` or `abandoned`, a decision with a `status:` other than
-//! `accepted`. The graph rules read their live sources through the same
-//! predicate.
+//! A live line is `- [label](link) title · scope · status`; a Tier 3 line
+//! only `- [label](link) status`, the status whole (`superseded-by <id>`),
+//! title and scope not read. Which documents are Tier 3 (excluded from
+//! default retrieval, listed in the archive) is decided here once, by
+//! status, never by folder: a spec `shipped` or `abandoned`, a decision
+//! with a `status:` other than `accepted`. The archive section, the compact
+//! line and the graph rules' live sources all read the same predicate.
 
 use std::fmt::Write as _;
 
@@ -97,7 +99,7 @@ fn section_of(file: &CheckFile) -> Option<Section> {
     }
 }
 
-/// `- [label](link) title · scope · status`.
+/// `- [label](link) title · scope · status`; Tier 3: `- [label](link) status`.
 fn line(file: &CheckFile, index_path: &str) -> String {
     let parsed = file.parsed.as_ref();
     let document = parsed.and_then(|parsed| parsed.document());
@@ -110,13 +112,6 @@ fn line(file: &CheckFile, index_path: &str) -> String {
         _ => file.path.as_str(),
     };
     let link = relative_link(index_path, &file.path);
-    let title = document
-        .and_then(|document| document.title.as_deref())
-        .unwrap_or("?");
-    let scope = fields
-        .and_then(|fields| fields.scope.as_ref())
-        .map(|scope| scope.join(", "))
-        .unwrap_or_default();
     let status = match class {
         Some(DocClass::Canon) => match fields.and_then(|fields| fields.tier) {
             Some(tier) => format!("tier {tier}"),
@@ -127,6 +122,16 @@ fn line(file: &CheckFile, index_path: &str) -> String {
             .unwrap_or("?")
             .to_owned(),
     };
+    if fields.is_some_and(is_tier3) {
+        return format!("- [{label}]({link}) {status}");
+    }
+    let title = document
+        .and_then(|document| document.title.as_deref())
+        .unwrap_or("?");
+    let scope = fields
+        .and_then(|fields| fields.scope.as_ref())
+        .map(|scope| scope.join(", "))
+        .unwrap_or_default();
     format!("- [{label}]({link}) {title} · {scope} · {status}")
 }
 

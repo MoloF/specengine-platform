@@ -26,6 +26,14 @@
 //! new check's, symmetrically, with nothing set aside (§11.5–6 and failed
 //! front-matter included), and the seeded file blocks with its code.
 //!
+//! docs/features/index-compaction.md AC-04: on a scratch copy seeded with a
+//! `rejected` decision, an `abandoned` spec without `scope:` and the Tier 3
+//! cases this repository lacks, the core render equals `xtask docs index
+//! --root` stdout, every seed a compact `## Archive` line. AC-05: the link
+//! targets of the committed index (and of both renders), resolved against
+//! `docs/`, are the walked documents minus `class: generated`, each once,
+//! the `## Archive` ones exactly the Tier 3 files; no Archive line has ` · `.
+//!
 //! The repository is only read; seeds are applied to scratch copies. The
 //! `xtask` binary is built once and run directly (no racing `cargo run`s).
 
@@ -40,7 +48,9 @@ use std::sync::OnceLock;
 
 use common::{Scratch, blake3_hex, repository_root};
 use parity_config::{INDEX, parity_toml};
-use specengine_core::check::{CheckConfig, CheckInput, Report, Verdict, render_index};
+use specengine_core::check::{
+    CheckConfig, CheckInput, Report, Verdict, is_tier3_file, render_index,
+};
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::{IdScheme, Severity};
 use specengine_store::{WorkingTree, check_input, check_worktree};
@@ -524,6 +534,258 @@ fn the_core_render_is_xtask_s_index_and_the_committed_one() {
     // Independent of the walk's order.
     input.files.reverse();
     assert_eq!(render_index(&input, INDEX, generator), render);
+}
+
+// ------------------------------------------------ index-compaction AC-04, AC-05
+
+const ARCHIVE: &str = "## Archive — Tier 3, by id only";
+
+/// `(section heading, label, link)` of every entry line of an index.
+fn entries(index: &str) -> Vec<(String, String, String)> {
+    let mut heading = String::new();
+    let mut out = Vec::new();
+    for line in index.lines() {
+        if line.starts_with("## ") {
+            heading = line.to_owned();
+        } else if let Some(rest) = line.strip_prefix("- [") {
+            let (label, rest) = rest.split_once("](").expect("`](` in an entry");
+            let link = rest.split_once(')').expect("`)` in an entry").0;
+            out.push((heading.clone(), label.to_owned(), link.to_owned()));
+        }
+    }
+    out
+}
+
+/// The lines under `heading` (up to the next heading).
+fn section_lines<'i>(index: &'i str, heading: &str) -> Vec<&'i str> {
+    index
+        .lines()
+        .skip_while(|line| *line != heading)
+        .skip(1)
+        .take_while(|line| !line.starts_with("## "))
+        .filter(|line| line.starts_with("- ["))
+        .collect()
+}
+
+/// `link` resolved against the index's directory `docs/`, root-relative.
+fn resolve_link(link: &str) -> String {
+    let mut parts: Vec<&str> = vec!["docs"];
+    for part in link.split('/') {
+        match part {
+            ".." => {
+                assert!(parts.pop().is_some(), "{link} leaves the root");
+            }
+            "." | "" => {}
+            part => parts.push(part),
+        }
+    }
+    parts.join("/")
+}
+
+/// The AC-05 property of `index` over the walk of `input`: its link targets
+/// are the walked documents minus `class: generated`, each exactly once;
+/// the `## Archive` ones exactly the Tier 3 files, none with ` · `.
+fn every_document_listed_once(what: &str, index: &str, input: &CheckInput) -> Vec<String> {
+    let mut failures = Vec::new();
+    let generated = |file: &specengine_core::check::CheckFile| {
+        file.parsed
+            .as_ref()
+            .and_then(|parsed| parsed.document())
+            .and_then(|document| document.fields.as_ref())
+            .and_then(|fields| fields.class.as_deref())
+            == Some("generated")
+    };
+    let expected: BTreeSet<String> = input
+        .files
+        .iter()
+        .filter(|file| !generated(file))
+        .map(|file| file.path.clone())
+        .collect();
+    let tier3: BTreeSet<String> = input
+        .files
+        .iter()
+        .filter(|file| file.parsed.as_ref().is_some_and(is_tier3_file))
+        .map(|file| file.path.clone())
+        .collect();
+    let entries = entries(index);
+    let mut seen = std::collections::BTreeMap::<String, usize>::new();
+    for (_, _, link) in &entries {
+        *seen.entry(resolve_link(link)).or_default() += 1;
+    }
+    let twice: Vec<_> = seen.iter().filter(|(_, n)| **n > 1).collect();
+    if !twice.is_empty() {
+        failures.push(format!("{what}: listed more than once: {twice:?}"));
+    }
+    let listed: BTreeSet<String> = seen.keys().cloned().collect();
+    if listed != expected {
+        failures.push(format!(
+            "{what}: unlisted {:?}, listed but not walked {:?}",
+            expected.difference(&listed).collect::<Vec<_>>(),
+            listed.difference(&expected).collect::<Vec<_>>()
+        ));
+    }
+    let archived: BTreeSet<String> = entries
+        .iter()
+        .filter(|(heading, _, _)| heading == ARCHIVE)
+        .map(|(_, _, link)| resolve_link(link))
+        .collect();
+    if archived != tier3 {
+        failures.push(format!(
+            "{what}: `{ARCHIVE}` lists {archived:?}, the Tier 3 files are {tier3:?}"
+        ));
+    }
+    for line in section_lines(index, ARCHIVE) {
+        if line.contains(" · ") {
+            failures.push(format!("{what}: an Archive line with ` · `: {line:?}"));
+        }
+    }
+    failures
+}
+
+#[test]
+fn every_document_of_this_repository_is_listed_once() {
+    let repository = repository_root();
+    let toml = parity_toml(&repository, true);
+    let (_, _, check) = tables(&toml);
+    let generator = check.index_generator().expect("the index entry");
+    let input = input_of(&repository, &toml);
+    assert!(
+        input.files.len() > 50,
+        "the walk found {} files",
+        input.files.len()
+    );
+    let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
+    let render = render_index(&input, INDEX, generator);
+    let (code, stdout) = run_xtask(&["docs", "index", "--root", repository.to_str().unwrap()]);
+    assert_eq!(code, Some(0), "xtask docs index");
+    let mut failures = Vec::new();
+    for (what, index) in [
+        (INDEX, committed.as_str()),
+        ("the core render", render.as_str()),
+        ("xtask docs index stdout", stdout.as_str()),
+    ] {
+        assert!(
+            index.contains(&format!("\n{ARCHIVE}\n\n")),
+            "{what}: no Archive section"
+        );
+        failures.extend(every_document_listed_once(what, index, &input));
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The seeds of AC-04: `(path, text, the expected line, its section)`.
+const COMPACTION_SEEDS: &[(&str, &str, &str, &str)] = &[
+    // The two of the criterion.
+    (
+        "docs/decisions/ADR-0999.md",
+        "---\nid: ADR-0999\nclass: decision\ntitle: A seeded rejection\nstatus: rejected\nscope: [xtask]\n---\n\n# ADR-0999: a seeded rejection\n",
+        "- [ADR-0999](decisions/ADR-0999.md) rejected",
+        ARCHIVE,
+    ),
+    (
+        "docs/features/seed-abandoned.md",
+        "---\nclass: spec\nstatus: abandoned\n---\n\n# A seeded abandoned spec\n",
+        "- [docs/features/seed-abandoned.md](features/seed-abandoned.md) abandoned",
+        ARCHIVE,
+    ),
+    // The same spec with `scope:`: the same line but for the path.
+    (
+        "docs/features/seed-abandoned-scoped.md",
+        "---\nclass: spec\nstatus: abandoned\nscope: [a, b]\n---\n\n# A seeded abandoned spec\n",
+        "- [docs/features/seed-abandoned-scoped.md](features/seed-abandoned-scoped.md) abandoned",
+        ARCHIVE,
+    ),
+    // A Tier 3 decision without `id:`: labelled with its path.
+    (
+        "docs/decisions/seed-no-id.md",
+        "---\nclass: decision\ntitle: No id\nstatus: superseded-by ADR-0001\nscope: [core]\n---\n",
+        "- [docs/decisions/seed-no-id.md](decisions/seed-no-id.md) superseded-by ADR-0001",
+        ARCHIVE,
+    ),
+    // Accepted divergences of the live line that must not reach Tier 3: a
+    // decision without `title:` whose H1 has inline markup; `title:` on a
+    // spec with a setext H1, outside `docs/`.
+    (
+        "docs/decisions/ADR-0998.md",
+        "---\nid: ADR-0998\nclass: decision\nstatus: rejected\n---\n\n# A *marked* `heading`\n",
+        "- [ADR-0998](decisions/ADR-0998.md) rejected",
+        ARCHIVE,
+    ),
+    (
+        "notes/y.md",
+        "---\nclass: spec\ntitle: A front-matter title\nstatus: shipped\nshipped: 2026-09-01\nscope: [core]\n---\n\nA setext heading\n================\n",
+        "- [notes/y.md](../notes/y.md) shipped",
+        ARCHIVE,
+    ),
+    // By status, not folder: a draft under an `archive` directory is live.
+    (
+        "docs/archive/seed-draft.md",
+        "---\nclass: spec\nstatus: draft\nscope: [core]\n---\n\n# A seeded draft\n",
+        "- [docs/archive/seed-draft.md](archive/seed-draft.md) A seeded draft · core · draft",
+        "## Specs",
+    ),
+];
+
+#[test]
+fn seeded_tier3_cases_render_as_xtask_does() {
+    let documents = budget_documents(&repository_root());
+    let scratch = Scratch::new("index-compaction");
+    let root = scratch_copy(&scratch, &documents, "seeded");
+    for (path, text, _, _) in COMPACTION_SEEDS {
+        fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+        write_new(&root, path, text);
+    }
+    let toml = parity_toml(&root, true);
+    let (_, _, check) = tables(&toml);
+    let generator = check.index_generator().expect("the index entry");
+    let input = input_of(&root, &toml);
+    let render = render_index(&input, INDEX, generator);
+
+    let (code, stdout) = run_xtask(&["docs", "index", "--root", root.to_str().unwrap()]);
+    assert_eq!(code, Some(0), "xtask docs index");
+    assert!(
+        render == stdout,
+        "core render vs xtask docs index stdout on the seeded copy, {}",
+        first_difference(&render, &stdout)
+    );
+    for (path, _, line, heading) in COMPACTION_SEEDS {
+        assert!(
+            section_lines(&render, heading).contains(line),
+            "{path}: {line:?} not under {heading:?}:\n{render}"
+        );
+        assert_eq!(
+            render
+                .matches(&format!("]({})", resolve_relative(path)))
+                .count(),
+            1,
+            "{path}: listed once"
+        );
+    }
+    let failures = every_document_listed_once("the seeded render", &render, &input);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    // The seeded copy's live lines are the committed index's plus the draft.
+    let committed = fs::read_to_string(repository_root().join(INDEX)).unwrap();
+    let live = |index: &str| -> Vec<String> {
+        index
+            .split(&format!("\n{ARCHIVE}\n"))
+            .next()
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    };
+    let mut expected_live = live(&committed);
+    expected_live.push(COMPACTION_SEEDS.last().unwrap().2.to_owned());
+    expected_live.sort();
+    let mut got_live = live(&render);
+    got_live.sort();
+    assert_eq!(got_live, expected_live, "live lines, sorted");
+}
+
+/// The link of a root-relative `path` from `docs/index.md`.
+fn resolve_relative(path: &str) -> String {
+    path.strip_prefix("docs/")
+        .map_or_else(|| format!("../{path}"), str::to_owned)
 }
 
 // ------------------------------------------------------------------ AC-20

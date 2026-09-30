@@ -47,9 +47,9 @@ A mode of `spec export` (owner, Q3; its bare form stays Phase 2's queue export, 
 - Q4 (2026-09-30): "introduced" is relative to `HEAD` (spec-cli-introduced below); it answers `docs/canon/spec-check.md` Q-5.
 - Working answers (the code) → the other answer's cost: W-1 JSON verbatim → a second serialiser, or a core change breaking `check_output.rs`; W-2 cannot-check prints its report → no JSON for the failure that matters most; W-3 `--stdout` → previewing means writing, forbidden in pilots; W-4 uncapped → `search`'s cap.
 
-## Next: index compaction, then 2b spec-cli-switch
+## Next: 2b spec-cli-switch
 
-A separate small task compacts the index render first (2a.2 Q10). 2b, owner's answers (2026-09-30):
+Index compaction shipped first (2a.2 Q10, ADR-0028). 2b, owner's answers (2026-09-30):
 
 - Q2: an ADR amending ADR-0023's table — `spec-writer` also `specengine.toml`, `.spec-debt.toml`; `rust-developer` also `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/`. `.claude/**` stays the owner's, who applies by hand the text 2b's spec-writer prepares: the two role prompts, the `*-saving` twins, ~43 `xtask` mentions in 14 files, the `Bash(cargo xtask docs *)` allow entry in `.claude/settings.json`.
 - Q5: `spec check` reports the worst W in its summary and JSON counts (tests compare with the library, not literals). Q6: the hook runs `cargo run -q -p specengine-cli -- check --staged`.
