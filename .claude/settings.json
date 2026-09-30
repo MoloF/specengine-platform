@@ -5,14 +5,15 @@
       "Bash(cargo clippy *)",
       "Bash(cargo fmt *)",
       "Bash(cargo nextest run *)",
-      "Bash(cargo xtask docs *)",
+      "Bash(cargo run -q -p specengine-cli -- check)",
+      "Bash(cargo run -q -p specengine-cli -- check *)",
+      "Bash(cargo run -q -p specengine-cli -- export index)",
+      "Bash(cargo run -q -p specengine-cli -- export index *)",
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
-      "Bash(./scripts/sync-saving-agents.sh --check *)",
       "Bash(git status)",
-      "Bash(git diff)",
-      "Bash(./scripts/sync-saving-agents.sh --check)"
+      "Bash(git diff)"
     ]
   },
   "env": {

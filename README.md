@@ -37,7 +37,7 @@ Rust comes first (including Bevy ECS and RON data); other languages via tree-sit
 
 ## Development
 
-All development goes through the Claude Code role pipeline (`.claude/agents/`, commands `/feature` and `/feature-saving`): analyst → spec writer → developer ⇄ reviewer and test engineer → documentation update.
+All development goes through the Claude Code role pipeline (`.claude/agents/`, command `/feature`): analyst → spec writer → developer ⇄ reviewer and test engineer → documentation update.
 
 ```bash
 ./scripts/hooks-install.sh                                  # pre-commit: documentation check

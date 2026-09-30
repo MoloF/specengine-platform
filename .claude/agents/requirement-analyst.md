@@ -21,7 +21,8 @@ Rely on facts, not guesses. The reading order is mandatory for every role:
 `docs/canon/architecture.md`, each introduced by a decision `docs/decisions/ADR-NNNN.md`.
 The intent and the plan are in the live specs `docs/specs/specengine-platform/` (05 —
 architecture, 07 — interfaces, 08 — plan and product acceptance criteria); read them
-section by section. Code — `crates/`, `xtask/`. Pilot consumer projects are the source of
+section by section. Code — `crates/`; the documentation gate — `specengine.toml`,
+`.githooks/`, `.github/workflows/`. Pilot consumer projects are the source of
 facts about real corpora; they are read-only.
 
 The main question you must answer: **does the requirement fit inside the accepted
@@ -57,7 +58,7 @@ abandoned`, superseded ADRs) until the requirement refers to it directly.
 ```markdown
 # <Task title>
 
-- **Phase and crates:** Phase 0–5 from the plan; `specengine-*`, `xtask`, `ui` — which are affected
+- **Phase and crates:** Phase 0–5 from the plan; `specengine-*`, `ui`, the gate (hook, CI) — which are affected
 - **Decisions:** relies on ADR-… | needs a new ADR (what to decide) | contradicts ADR-… (how)
 - **Identifier:** kebab-case ASCII, becomes the name of `docs/features/<slug>.md`
 

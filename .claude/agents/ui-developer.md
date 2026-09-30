@@ -42,7 +42,7 @@ both the light and the dark theme.
 `git diff --exit-code` over them: the types must not diverge from Rust. Describe manual
 browser verification as steps for the owner: `spec serve` + `pnpm --dir ui dev`.
 
-**Your area is `ui/**`, except the generated types.** Do not edit `crates/**`, `xtask/**`,
+**Your area is `ui/**`, except the generated types.** Do not edit `crates/**`,
 `docs/**`, `CLAUDE.md`, `*/README.md`: a divergence between the spec and the front end must
 stay visible to the writer, not be papered over. While the `ui/` directory does not exist
 (before Phase 4), this role is not called.

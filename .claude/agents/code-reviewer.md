@@ -41,8 +41,10 @@ unnoticed:
 
 **The third** is the documentation (`docs/canon/documentation-system.md`). If the work took
 a decision, is there an ADR, and does it amend the canon in the same change (`canon:`)? Does
-the task spec follow the template? Did the developer keep out of `docs/`? Run
-`cargo xtask docs check`: a red check is a `major`.
+the task spec follow the template? Did the developer keep out of `docs/` and
+`specengine.toml`, and every role out of `.claude/`? Does a hook, CI, `scripts/` or
+`.cargo/` change weaken the gate, or a `.spec-debt.toml` entry hide a fixable error? Run
+`cargo run -q -p specengine-cli -- check`: a red check is a `major`.
 
 Run `cargo clippy --workspace --all-targets -- -D warnings` once and take its output into
 account, filtered: `2>&1 | grep -E "^(warning|error)" -A 8`. Do not run tests — that is

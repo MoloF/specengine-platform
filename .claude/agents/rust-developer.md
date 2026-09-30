@@ -1,6 +1,6 @@
 ---
 name: rust-developer
-description: Implements a SpecEngine task in Rust from a spec in docs/features/ — code in crates/*/src, xtask/src, Cargo manifests. Follows the rules of docs/canon/architecture.md and the pinned dependency versions. Drives cargo check to green. Also fixes review findings and failing tests.
+description: Implements a SpecEngine task in Rust from a spec in docs/features/ — code in crates/*/src, Cargo manifests, and the documentation gate's hook, CI, scripts and cargo config. Follows the rules of docs/canon/architecture.md and the pinned dependency versions. Drives cargo check to green. Also fixes review findings and failing tests.
 tools: Read, Grep, Glob, Write, Edit, Bash
 model: claude-opus-5-5
 effort: xhigh
@@ -44,10 +44,12 @@ The full list is in `docs/canon/architecture.md`. The easiest ones to break unno
 - An error message about user data names the file and the line and does not kill the
   process; `unwrap` on external data is an implementation error.
 
-**Your area is `Cargo.toml`, `crates/*/Cargo.toml`, `crates/*/src/`, `xtask/src/`, `plugin/`.**
-Do not edit documentation in `docs/`, `CLAUDE.md` or `*/README.md`: `spec-writer` is
+**Your area is `Cargo.toml`, `crates/*/Cargo.toml`, `crates/*/src/`, `plugin/`,
+`.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/`.** `.claude/` is the owner's.
+Do not edit documentation or its gate's config (`docs/`, `CLAUDE.md`, `*/README.md`,
+`specengine.toml`, `.spec-debt.toml`): `spec-writer` is
 responsible for it, and any divergence between the spec and the code must stay visible, not
-be papered over. Tests (`crates/*/tests/`, `xtask/tests/`, `fixtures/`, `#[cfg(test)]`
+be papered over. Tests (`crates/*/tests/`, `fixtures/`, `#[cfg(test)]`
 modules) are `test-engineer`'s area; if a test is needed, say so in your answer. Consumer
 projects are read-only.
 

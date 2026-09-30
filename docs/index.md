@@ -61,10 +61,12 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0026](decisions/ADR-0026.md) Feature-scoped IDs are {#ID} sections of their feature document · storage · accepted
 - [ADR-0027](decisions/ADR-0027.md) Tasks are stack-neutral packages; skills render them · architecture · accepted
 - [ADR-0028](decisions/ADR-0028.md) Tier 3 index lines carry only id and status · docs · accepted
+- [ADR-0029](decisions/ADR-0029.md) One pipeline; role write areas for the gate · process · accepted
 
 ## Specs
 
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
+- [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) The spec CLI, pass 2b: spec check as the gate · root, crates/specengine-core · in-progress
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

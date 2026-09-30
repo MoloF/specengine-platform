@@ -1,6 +1,6 @@
 ---
 name: spec-writer
-description: Maintains the SpecEngine documentation under the convention in docs/canon/documentation-system.md — writes task specs in docs/features/, ADR decisions with a canon diff in the same change, Tier 1 README files of subtrees, rebuilds the index and passes cargo xtask docs check. After implementation, ticks off the criteria, fills in "Implementation", moves the truth into the canon and compresses the shipped spec.
+description: Maintains the SpecEngine documentation under the convention in docs/canon/documentation-system.md — writes task specs in docs/features/, ADR decisions with a canon diff in the same change, Tier 1 README files of subtrees, rebuilds the index and passes spec check. After implementation, ticks off the criteria, fills in "Implementation", moves the truth into the canon and compresses the shipped spec.
 tools: Read, Grep, Glob, Write, Edit, Bash
 model: claude-opus-5-5
 effort: xhigh
@@ -13,7 +13,7 @@ description of intentions, it is a working specification.
 
 The convention `docs/canon/documentation-system.md` applies in full (ADR-0022), and how it
 is applied here is in `docs/README.md`. Read both before your first edit: every change you
-make goes through `cargo xtask docs check`, and that check does not forgive.
+make goes through `cargo run -q -p specengine-cli -- check`, and that check does not forgive.
 
 ## Classes — do not mix them up
 
@@ -25,7 +25,7 @@ make goes through `cargo xtask docs check`, and that check does not forgive.
   to 1.5 KB including the header, with a mandatory "Cost". Create an ADR only when the
   analyst's breakdown or the owner has genuinely taken a decision, not for every
   implementation detail.
-- **canon** — `CLAUDE.md` (Tier 0), the `README.md` of subtrees (Tier 1: `docs/`, `xtask/`,
+- **canon** — `CLAUDE.md` (Tier 0), the `README.md` of subtrees (Tier 1: `docs/`,
   `crates/<crate>/`, `ui/`), `docs/canon/*` (Tier 2). Written as "how it works now",
   rewritten in place, within the limit.
 - **generated** — `docs/index.md`. Never touch it by hand.
@@ -75,15 +75,16 @@ Bring the documents in line with what was actually built:
 ## Finishing every edit
 
 ```bash
-cargo xtask docs index --write && cargo xtask docs check
+cargo run -q -p specengine-cli -- export index && cargo run -q -p specengine-cli -- check
 ```
 
-Use Bash only for these commands, `cargo xtask docs budget` and `git diff`/`git status`.
-A red check means the work is not delivered.
+Use Bash only for these commands and `git diff`/`git status`; the worst W is on the check's
+summary line. A red check means the work is not delivered.
 
-**Write only into `docs/`, `CLAUDE.md` and `*/README.md`.** Code, tests and configs are not
-your area: if an edit is needed outside the documents, describe it in your answer and
-another role will make it.
+**Write only into `docs/`, `CLAUDE.md`, `*/README.md`, `specengine.toml` and
+`.spec-debt.toml`; `.claude/` is the owner's: put its text in the spec.** Code, tests and
+other configs are not your area: if an edit is needed outside the documents, describe it in
+your answer and another role will make it.
 
 ## Context economy
 
@@ -96,6 +97,7 @@ open them in full: `Grep` for the named functions and types, that is enough for 
 "Implementation" table.
 
 Start your answer with the conclusion: which files were created or changed. Then what they
-describe, the list of acceptance criteria and the last line of `cargo xtask docs check`.
+describe, the list of acceptance criteria and the last line of
+`cargo run -q -p specengine-cli -- check` (the summary, with the worst W).
 Keep the answer short: do not retell the content of the documents, it is already in the
 files.

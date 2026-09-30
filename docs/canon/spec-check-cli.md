@@ -51,7 +51,7 @@ A mode of `spec export` (owner, Q3; its bare form stays Phase 2's queue export, 
 
 Index compaction shipped first (2a.2 Q10, ADR-0028). 2b, owner's answers (2026-09-30):
 
-- Q2: an ADR amending ADR-0023's table — `spec-writer` also `specengine.toml`, `.spec-debt.toml`; `rust-developer` also `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/`. `.claude/**` stays the owner's, who applies by hand the text 2b's spec-writer prepares: the two role prompts, the `*-saving` twins, ~43 `xtask` mentions in 14 files, the `Bash(cargo xtask docs *)` allow entry in `.claude/settings.json`.
+- Q2: an ADR amending ADR-0023's table — `spec-writer` also `specengine.toml`, `.spec-debt.toml`; `rust-developer` also `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/`. `.claude/**` stays the owner's, who applies by hand the text 2b's spec-writer prepares: 30 lines in 8 files (`xtask` mentions, write areas, `.claude/settings.json` allow entries); the second role set is dropped (ADR-0029).
 - Q5: `spec check` reports the worst W in its summary and JSON counts (tests compare with the library, not literals). Q6: the hook runs `cargo run -q -p specengine-cli -- check --staged`.
 - One commit: the root config registers `cargo run -q -p specengine-cli -- export index` and its gate; the index regenerated; hook and CI switched; `xtask` removed. CI (`enforce`, a `HEAD` checkout) runs the full check; `--base REF` (05 §5.2) later.
 

@@ -1,5 +1,5 @@
 ---
-description: Runs a SpecEngine requirement through the roles — analysis, specification (with an ADR and a canon diff if a decision was taken), implementation, review and tests, documentation update — with a rework loop on blocking findings and a cargo xtask docs check.
+description: Runs a SpecEngine requirement through the roles — analysis, specification (with an ADR and a canon diff if a decision was taken), implementation, review and tests, documentation update — with a rework loop on blocking findings and a spec check.
 argument-hint: "<requirement in your own words>"
 disable-model-invocation: true
 ---
@@ -21,7 +21,7 @@ Decided before the analysis, by where the code will live:
 
 | Place of work | Implementer |
 | --- | --- |
-| `crates/`, `xtask/`, `plugin/`, Cargo manifests | `rust-developer` |
+| `crates/`, `plugin/`, Cargo manifests, `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/` | `rust-developer` |
 | `ui/` — the web interface (Phase 4+) | `ui-developer` |
 | both | both roles, front end after the core: the front end needs finished API types |
 | documents only (canon, a decision, a spec without code) | there is no stage 3: after stage 2 go straight to stage 5 |
@@ -48,7 +48,7 @@ superseding the old one.
 Launch `spec-writer`, passing the breakdown in full. It will create or extend
 `docs/features/<slug>.md` from the template. If a decision was taken in the work, also an
 ADR with a canon diff in the same change. At the end it will rebuild the index and pass
-`cargo xtask docs check`.
+`cargo run -q -p specengine-cli -- check`.
 
 Read the summary and make sure the acceptance criteria are verifiable by an action. If a
 criterion is phrased as an opinion ("works well"), send it back to the writer to sharpen
@@ -83,18 +83,18 @@ Launch `spec-writer` once more — with the reports of the implementer, the revi
 tester. It will tick off the criteria that are met and fill in "Implementation". Then it
 will move the truth into the canon: the Tier 1 README files of the crates and the sections
 of `docs/canon/architecture.md` if a rule changed. If the work is finished, it will ship the
-spec (`status: shipped`, compression to ≤ 3 KB) and pass `cargo xtask docs check` again.
+spec (`status: shipped`, compression to ≤ 3 KB) and pass `cargo run -q -p specengine-cli -- check` again.
 
 ## 5. Summary
 
-Run `cargo xtask docs check` and `git status` yourself. Then a short summary in ordinary
+Run `cargo run -q -p specengine-cli -- check` and `git status` yourself. Then a short summary in ordinary
 sentences:
 
 - what was done and what status the task is in;
 - the changed files (take them from `git status`, not from the roles' reports — they can
   diverge);
 - new ADRs and changed canon sections;
-- the result of `cargo xtask docs check`;
+- the result of `cargo run -q -p specengine-cli -- check` (its summary, with the worst W);
 - how many iterations it took;
 - questions for the owner left unanswered;
 - open findings at level `minor` and `nit`;
