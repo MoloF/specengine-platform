@@ -49,27 +49,78 @@ pub(crate) fn run(
         });
         return;
     };
-    if walk_incomplete(input, paths) {
+    if walk_gap(input, paths).is_some() {
         return;
     }
     index(input, corpus, index_path, generator, findings, causes);
 }
 
-/// The render would not list every document, so a comparison would report
-/// drift the generator cannot fix: a file that could not be read (its
+/// Why a walk cannot vouch for every document, at its path: the render of
+/// the index would leave documents out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkGap<'a> {
+    /// A listed file that could not be read or parsed (its `read_error`).
+    Unreadable { path: &'a str, error: &'a str },
+    /// A root written in `[paths] roots` that names no directory and no
+    /// `.md` file.
+    MissingRoot { path: &'a str },
+    /// A directory that could not be listed; `""`: the root itself.
+    UnlistedDir { path: &'a str },
+}
+
+impl<'a> WalkGap<'a> {
+    /// The root-relative path concerned.
+    pub fn path(&self) -> &'a str {
+        match *self {
+            Self::Unreadable { path, .. }
+            | Self::MissingRoot { path }
+            | Self::UnlistedDir { path } => path,
+        }
+    }
+
+    /// Ties on the path: an unreadable file, a missing root, an unlisted
+    /// directory.
+    fn rank(&self) -> u8 {
+        match self {
+            Self::Unreadable { .. } => 0,
+            Self::MissingRoot { .. } => 1,
+            Self::UnlistedDir { .. } => 2,
+        }
+    }
+}
+
+/// The first gap of the walk by path (byte order), `None` when the walk is
+/// complete (§11.5's stop conditions): a file that could not be read (its
 /// `read_error`), a directory that could not be listed, a written root that
 /// is missing — each already a cause of "cannot check", so the run cannot
-/// vouch for the index either way. A directory or `.md` name that is not
-/// UTF-8 (the warning `name-skipped`) does not stop the comparison: a lossy
-/// generator line for such a file shows as `index-drift`, and renaming the
-/// file, which `name-skipped` already asks for, fixes both.
-fn walk_incomplete(input: &CheckInput, paths: &Paths) -> bool {
-    input.files.iter().any(|file| file.read_error.is_some())
-        || input.problems.iter().any(|problem| match problem.kind {
-            ProblemKind::UnreadableDir => true,
-            ProblemKind::MissingRoot => paths.roots_written,
-            ProblemKind::SkippedName => false,
+/// vouch for the index either way, and a comparison would report drift the
+/// generator cannot fix. A directory or `.md` name that is not UTF-8 (the
+/// warning `name-skipped`) is no gap: a lossy generator line for such a
+/// file shows as `index-drift`, and renaming the file, which `name-skipped`
+/// already asks for, fixes both. The index writer refuses on the same
+/// predicate.
+pub fn walk_gap<'a>(input: &'a CheckInput, paths: &Paths) -> Option<WalkGap<'a>> {
+    let files = input.files.iter().filter_map(|file| {
+        file.read_error.as_deref().map(|error| WalkGap::Unreadable {
+            path: &file.path,
+            error,
         })
+    });
+    let problems = input
+        .problems
+        .iter()
+        .filter_map(|problem| match problem.kind {
+            ProblemKind::UnreadableDir => Some(WalkGap::UnlistedDir {
+                path: &problem.path,
+            }),
+            ProblemKind::MissingRoot if paths.roots_written => Some(WalkGap::MissingRoot {
+                path: &problem.path,
+            }),
+            ProblemKind::MissingRoot | ProblemKind::SkippedName => None,
+        });
+    files
+        .chain(problems)
+        .min_by(|a, b| (a.path(), a.rank()).cmp(&(b.path(), b.rank())))
 }
 
 /// `generator-unknown`, `generator-path` on every generated document whose

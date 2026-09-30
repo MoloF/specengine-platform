@@ -8,11 +8,11 @@ reviewed: 2026-09-30
 
 # specengine-cli — the spec binary
 
-Pass 1 of the Phase 1 CLI (`docs/features/spec-cli.md`), the agent read loop: search, then read by ID, over an index refreshed on every call (07 §1.2). Binary `spec`, a default member, `cargo install --path crates/specengine-cli` (ADR-0015). Normal dependencies: `specengine-{model,core,store}`, `clap` (derive), `serde`, `serde_json`, all workspace entries; never `rusqlite` (the store owns the DB) nor `specengine-{code,import,mcp,eval,ra}` (eval `build_graph.rs`). `main.rs` parses and prints; commands live in the library, which MCP stdio and the Phase 2 daemon bridge reuse.
+The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), search, then read by ID, over an index refreshed on every call (07 §1.2); `check`, `export index` over a fresh parse (pass 2a.1). Binary `spec`, a default member, `cargo install --path crates/specengine-cli` (ADR-0015). Normal dependencies: `specengine-{model,core,store}`, `clap` (derive), `serde`, `serde_json`, all workspace entries; never `rusqlite` (the store owns the DB) nor `specengine-{code,import,mcp,eval,ra}` (eval `build_graph.rs`). `main.rs` parses and prints; commands live in the library, which MCP stdio and the Phase 2 daemon bridge reuse.
 
 ## API
 
-`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError {exit, message}` (the whole stderr line); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}` is passed in (bridge, tests). `specengine.toml` is read only by core's `ProjectConfig`.
+`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}` is passed in (bridge, tests). `specengine.toml`: core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
 
 ## Commands
 
@@ -21,6 +21,7 @@ Pass 1 of the Phase 1 CLI (`docs/features/spec-cli.md`), the agent read loop: se
 - `spec init [--slug S]` writes exactly `[project]\nslug = "<slug>"\n` (`create_new`: a file there → exit 2; a partial one is removed), prints `created <path> with slug <slug>`, JSON `{path, slug}`. Slug: `--slug` validated, else the directory name with ASCII letters and digits lower-cased, every other run (non-UTF-8 bytes included) → `-`, trimmed (`My Project_2` → `my-project-2`); not `grammar::is_slug` or over 64 bytes → exit 2 naming `--slug`. Never walks; a config in an ancestor → a `warning:`.
 - `spec index [--full]`: store `update` (`--full`: `rebuild`); `indexed <slug>: walked 13, parsed 13, unchanged 0, removed 0, unreadable 0` (+ `, reparsed all`), then `db <path>`; JSON `project`, `db` + the `UpdateReport` fields.
 - `spec search QUERY… [--kind K]… [--limit N] [--archive]`: the store's FTS5 search in its order. Terms under 3 characters dropped with a `note:`; none left → exit 2 suggesting `spec show`; `--kind` free, repeatable; `--limit` 1..=200, default 20.
+- `spec check [--baseline F] [--debt]`, `spec export index [--stdout]`: `docs/canon/spec-check-cli.md`.
 - `spec show REF`: `REF` is an ID, an `aliases:` entry, an `aliases_from` legacy ID, `slug/ID`, `ID#SECTION` (`@rev` ignored with a `note:`) or a root-relative `.md` path.
 
 **Discovery.** Without `--root` and `--config`, walk up from the canonical current directory to the first holding a `specengine.toml` file; none → exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the current directory (read-only pilots). Config errors: `<config as given>:<line>: message`.
@@ -34,22 +35,22 @@ language = "en"
 
 ## Database
 
-Owner's answer Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; outside macOS (assumed: ADR-0003 names only macOS) `$XDG_DATA_HOME/specengine/` when absolute, else `$HOME/.local/share/specengine/`. `HOME` unset, empty or relative → exit 2 on every host. One DB per project, each worktree's rows keyed `(project, root)` by the store; no refusal by root in Phase 1; a repository-identity check (by git common dir, so task worktrees pass) comes with the Phase 2 queue. A data directory inside the canonical root (nearest existing ancestor; a project at `$HOME`: a limitation) → exit 2, nothing created. The DB is derived: delete it and `spec index` rebuilds specs and bindings from git; only Phase 2's open proposals and tasks would be lost, `spec export` protects them (05 §8). Until the daemon is the sole writer (05 §1 principle 6), each process writes directly (store README).
+Owner's answer Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; outside macOS (assumed: ADR-0003 names only macOS) `$XDG_DATA_HOME/specengine/` when absolute, else `$HOME/.local/share/specengine/`. `HOME` unset, empty or relative → exit 2 on every host. One DB per project, each worktree's rows keyed `(project, root)` by the store; no refusal by root in Phase 1; a repository-identity check (by git common dir, so task worktrees pass) comes with the Phase 2 queue. A data directory inside the canonical root (nearest existing ancestor; a project at `$HOME`: a limitation) → exit 2, nothing created. The DB is derived: delete it and `spec index` rebuilds specs and bindings from git; only Phase 2's open proposals and tasks would be lost, `spec export` protects them (05 §8).
 
 ## Rules
 
-- Writes: `index`, `search`, `show` only the data directory; `init` only its file; nothing else under the root (`docs/canon/architecture.md#storage`).
+- Writes: `index`, `search`, `show` only the data directory; `init` only its file; `export index` only `[paths] index`; `check` nothing; nothing else under the root (`docs/canon/architecture.md#storage`).
 - Freshness: `search`, `show` run `update` first; a missing root → a `warning:` if `[paths]` is written, else silent; never exit 2.
-- Nothing is fatal: broken or unreadable files are indexed with diagnostics and never change an exit code.
+- Indexing is never fatal: broken or unreadable files are indexed with diagnostics and change no exit code.
 - Resolution is the check's: a `*.md` argument is a path (not `is_clean_relative` → exit 2); else `grammar::parse_reference` (none → exit 1 listing the prefixes; look-alike or mixed-script → exit 2 naming the Latin fix; `project:` → exit 2), then `Resolver::resolve_detached` over `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 → U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
 - Tier 3 (`check::is_tier3_file`): `search` leaves it out in the query, before the limit, unless `--archive`; `show` reaches it, marked ` | archived`.
-- Determinism: one DB state, byte-identical stdout; nothing depends on rowid, insertion, time or the absolute root.
+- Determinism: one DB state (`check`: one tree and one date), byte-identical stdout; nothing depends on rowid, insertion, time or the absolute root.
 
 ## Exit codes and streams
 
-0 answered, zero hits included. 1 `show` found nothing: dangling, no configured prefix, a `.md` path not indexed or unreadable (`cannot be read`), every holder unreadable (`none of its files could be read`) or changed while read. 2 could not run: usage, no project or slug, a config error, `HOME`, the data directory, a `StoreError`, each exit 2 named above.
+0 answered, zero hits included. 1 `show` found nothing: dangling, no configured prefix, a `.md` path not indexed or unreadable (`cannot be read`), every holder unreadable (`none of its files could be read`) or changed while read; `check` blocked. 2 could not run: usage, no project or slug, a config error, `HOME`, the data directory, a `StoreError`, each exit 2 named above; `check` cannot-check; an `export index` refusal.
 
-stdout: results only; `--json`: one compact document for exit 0 and 1, none for 2; every key present, absent = `null`. stderr: `note:`, `warning:` lines (JSON `notes`: the notes only), then exit 1's `spec: <reason>` or exit 2's error. No colour, no timing; paths root-relative but `db`. **One-line rule**: every stderr message and JSON `reason`, `notes` is one line (CR, LF → space); JSON `ref`, `path`, `holders` stay raw; a clap usage error keeps its `Usage:` block after the `spec:` line.
+stdout: results only; `--json`: one compact document for exit 0 and 1, none for 2 (`check`: its report); every key present, absent = `null` (`check`: `Report::to_json` verbatim). stderr: `note:`, `warning:` lines (JSON `notes`: the notes only), then exit 1's `spec: <reason>` or exit 2's error (`export index`'s config error: a `<config>:<line>: message` per cause). No colour, no timing; paths root-relative but `db`. **One-line rule**: every stderr message and JSON `reason`, `notes` is one line (CR, LF → space); JSON `ref`, `path`, `holders` stay raw; a clap usage error keeps its `Usage:` block after the `spec:` line.
 
 ## Output and the cap
 
@@ -66,7 +67,6 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 - The note and tail say "title and snippet cut" when the name or kind was; a cut JSON `id` (never cut it, or mark it).
 - `one_line` flattens only CR, LF: VT, FF, NEL, U+2028/2029, ESC in quoted input reach stderr and `reason`.
 - A caught parser panic prints Rust's panic message (fix: a quiet panic hook).
-- Doc drift: a duplicated doc line on `Message::line`; `search.rs`'s module doc cuts the title before the snippet.
 - `show` reads over a concrete `WorkingTree`, so exit 1's `cannot be read`, `none of its files could be read` are untested (fix: `&dyn Source`).
 - `show` decodes every index row per call: a lighter resolver input before MCP and the daemon.
 - bm25 statistics span the DB: ranks shift across worktrees; moved or deleted roots' rows stay (no prune).
@@ -75,8 +75,7 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 MCP stdio follows 3–4.
 
-- 2a `spec-cli-check` (check increment 3.1): `spec check`, git-blob `Source`, the index writer; Q3 the writer a `spec export` mode, Q4 "introduced" vs `HEAD`.
-- 2b `spec-cli-switch` (3.2): root `specengine.toml`, hook and CI, `xtask` retired; Q2 ADR-0023's write zones, Q5 worst W in `spec check`, Q6 the hook's command.
+- 2a.2 `spec-cli-staged` (`--staged`, `enforce-introduced`), 2b `spec-cli-switch` (`xtask` retired): `docs/canon/spec-check-cli.md`.
 - 3 `spec-cli-graph`: `tree`, `graph`, `show --links`; default link types.
 - 4 `spec-cli-bundle`: `bundle`, `bundle_hash`; Q7 token calibration, `rusqlite_migration`.
 

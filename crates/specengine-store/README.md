@@ -8,17 +8,17 @@ reviewed: 2026-09-30
 
 # specengine-store — the spec index
 
-A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). Derived data outside the repository (ADR-0001, ADR-0003). A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip` workspace-wide: bit-exact floats). Callers: the CLI (updating before every read), `specengine-eval index`, `check`, tests (`spec check` parses afresh).
+A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). Derived data outside the repository (ADR-0001, ADR-0003). A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`: bit-exact floats). Callers: the CLI (updating before every read; `check`, `export index` parse afresh), `specengine-eval index`, `check`, tests.
 
 ## API
 
 No `rusqlite` type in a public signature (`docs/canon/architecture.md#distribution`).
 
-- `trait Source {root, list -> Listing {paths, missing_roots, skipped_names, unreadable_dirs}, probe, read, is_dir}` (`is_dir` provided: `false`) lets `spec check --staged` feed staged blobs. `WorkingTree::new(root, &Paths)` canonicalises the root.
+- `trait Source {root, list -> Listing {paths, missing_roots, skipped_names, unreadable_dirs}, probe, read, is_dir}` lets `spec check --staged` feed staged blobs. `WorkingTree::new(root, &Paths)` canonicalises the root.
 - `SqliteIndex::open(db, project, root)`: a handle on one worktree `(project, canonical root)`; a DB holds several. Inherent: `root()`, `project()`, `settings() -> DbSettings` (PRAGMAs, `fts5`, `sqlite_version`), `check_fts()`, `dump()`, `dump_worktree()`. `Send`, not `Sync`.
-- `trait IndexWriter {update, update_paths, rebuild}` → `UpdateReport {walked, parsed, unchanged, removed, unreadable, reparsed_all, missing_roots, skipped_names, unreadable_dirs}`. `update` walks all; `update_paths` (the Phase 2 watcher) probes each named path by the walk rules (unlisted → deleted; a directory gone from disk re-probes its stored files); an existing directory (`is_dir`) or a non-clean path (`""`, `docs/`, `./x.md`, absolute) walks, as do no prior index and a stamp or fingerprint change; a `[paths]` change needs `update`. `rebuild` = `spec index --full`.
+- `trait IndexWriter {update, update_paths, rebuild}` → `UpdateReport {walked, parsed, unchanged, removed, unreadable, reparsed_all, missing_roots, skipped_names, unreadable_dirs}`. `update` walks all; `update_paths` (the Phase 2 watcher) probes each named path by the walk rules (unlisted → deleted; a directory gone from disk re-probes its stored files); an existing directory (`is_dir`) or a non-clean path (`""`, `docs/`, `./x.md`, absolute) walks, as do no prior index and a stamp or fingerprint change; a `[paths]` change needs `update`.
 - `trait SpecIndex {files, file -> IndexedFile {parsed?, blake3?, size, read_error?}, lookup_id -> [IdHit {path, ord, node}], search(&SearchQuery {text, kinds, limit, archive}) -> SearchResults {hits: [SearchHit {path, ord, id?, kind?, title?, line, tier3, snippet}], short_query, tier3_left_out}, indexed_input -> CheckInput}`; `lookup_id`: every node with exactly that `id`; `indexed_input`: the stored worktree as a `CheckInput`, one snapshot, empty `bytes` (`spec show`'s resolver).
-- `spec check`, no database (`docs/canon/spec-check.md`): `check_input(&dyn Source, &IdScheme) -> CheckInput` (a parser panic → a read error), `check_worktree(root, config, baseline?, today) -> Report` (all tables from `config`; no baseline passed → `BASELINE_FILE` `.spec-debt.toml` at the root if present; no root, a bad config or baseline → `cannot-check`, unwalked), `today_utc()`.
+- `spec check`, no database (rules: `docs/canon/spec-check-cli.md`): `load_config(&NamedBytes {name, bytes})` → `(ProjectConfig, CheckConfig)`, the whole config; `load_check` (+ the baseline) → `CheckSetup`; else a `cannot-check` `Box<Report>` naming only `name`. `default_baseline(root)`: `BASELINE_FILE` when an entry exists, `None` if the root cannot be listed. `check_input(&dyn Source, &IdScheme)` (a parser panic → a read error), `check_source`, `check_tree`, `today_utc()`; `check_worktree(root, config, baseline?, today)` wraps them (the config named by its file name, a baseline as passed).
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 6`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 
 ## Rows
@@ -27,15 +27,15 @@ Keyed `(worktree, path, ord)`, `ord` = position in `ParsedFile.{nodes, links, an
 
 Tables (`schema.rs`), `STRICT`, no `CHECK`: `index_meta` (`format`); `worktrees (wt, project, root, scheme_fp)`, unique `(project, root)`; `files (file_id, wt, path, blake3?, size, read_error?, shell?, tier3)`, unique `(wt, path)`; per file, keyed `(file_id, ord)`, cascading: `nodes (node_id, line, id?, kind?, title?, parent_id?, own_text, node)`, `links (src?, type, dst_id?, dst_path?, link)`, `anchors (name, anchor)` (`slug`, `attr`, `html`), `diagnostics (code, diagnostic)`; `aliases (node_id, ord, alias)`; lookup columns indexed. `nodes_fts`: FTS5 over `id, title, own_text`, external content `nodes`, rowid `node_id` (never ordered by), `tokenize='trigram case_sensitive 0'`, kept by insert, delete, update triggers. `own_text` = the body minus the ID sections inside it, joined by `\n`.
 
-**Canonical dump** (`dump.rs`): every table, its columns from `pragma_table_xinfo` on `main`, `wt`, `file_id`, `node_id` replaced by `(project, root)`, `path`, `(path, ord)`, one sorted line per row `<table>\t<JSON array>`, plus the FTS5 vocabulary (`fts5vocab` `row`; `instance` over its nodes for `dump_worktree`).
+**Canonical dump** (`dump.rs`): every table (columns from `pragma_table_xinfo` on `main`), surrogate keys replaced by `(project, root)`, `path`, `(path, ord)`, one sorted line per row `<table>\t<JSON array>`, plus the FTS5 vocabulary (`fts5vocab`).
 
 ## Cache key and format stamp
 
-Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fingerprint (BLAKE3 of the JSON of `IdScheme::prefixes()`; an `[ids]` comment or another table leaves it) or the DB's stamp changed. Stamp = `INDEX_FORMAT` in `index_meta` (`user_version` is for Phase 2's `rusqlite_migration`). WHEN it differs, the first write recreates the tables in its transaction (other worktrees: `NotIndexed` until updated), dropping only the index's objects (append-only lists in `schema.rs`): Phase 2 tables survive. `tests/format_history.txt`: `<INDEX_FORMAT> <BLAKE3 of the spec-a + spec-b dump, root masked>`; a changed dump needs a new line and number (reasons: `INDEX_FORMAT`'s doc comment; 5: file links as `dst_path` rows; 6: `files.tier3` (`is_tier3_file`), `nodes.line`).
+Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fingerprint (BLAKE3 of the JSON of `IdScheme::prefixes()`; an `[ids]` comment or another table leaves it) or the DB's stamp changed. Stamp = `INDEX_FORMAT` in `index_meta` (`user_version` is for Phase 2's `rusqlite_migration`). WHEN it differs, the first write recreates the tables in its transaction (other worktrees: `NotIndexed` until updated), dropping only the index's objects (append-only lists in `schema.rs`): Phase 2 tables survive. `tests/format_history.txt`: `<INDEX_FORMAT> <BLAKE3 of the spec-a + spec-b dump, root masked>`; a changed dump needs a new line and number (reasons: `INDEX_FORMAT`'s doc comment).
 
 ## Walk
 
-`[paths]` and the matcher, core's `WalkScope` (also the link check's): core README. Regular files ending exactly in `.md` under the roots, minus `exclude`; below a root, symlinks and `.`-names skipped (a dot-name written in a root is kept), `probe`, `read` refuse any symlink component; no `.gitignore`; non-UTF-8 names skipped and counted. A root's components match by exact name: NFC over an NFD directory, or a symlink on its path → `missing_roots`. Paths: root-relative, `/`, as the OS lists them, byte-sorted, repeats dropped. An unlistable directory → `unreadable_dirs`, its files absent.
+`[paths]` and the matcher, core's `WalkScope` (also the link check's): core README. Regular files ending exactly in `.md` under the roots, minus `exclude`; below a root, symlinks and `.`-names skipped (a dot-name written in a root is kept), `probe`, `read` refuse any symlink component; no `.gitignore`; non-UTF-8 names skipped and counted. A root's components match by exact name: NFC over an NFD directory, or a symlink on its path → `missing_roots`. Paths: root-relative, `/`, as the OS lists them, byte-sorted, repeats dropped. An unlistable directory, also one on the way to a root (`""`: the root), → `unreadable_dirs`, never `missing_roots`; its files absent.
 
 ## Writes, reads, search
 
@@ -56,13 +56,12 @@ Working answer (the code) → what the other answer triggers.
 - Q2 `trigram case_sensitive 0` (+ `remove_diacritics 1` only if `fts.rs` stays green), exact IDs outside FTS → `unicode61`: prefix terms, substring and stem tests rewritten; a stemmer by `[project] language`: an ADR on `#universal`.
 - Q3 role keys + `roots` + `exclude` → role keys only: spec-b rewritten, READMEs outside `docs/` unreachable (08 §4.1); `roots` only: role keys leave the walk.
 - Q4 `norm_hash`, 08 AC-13, `spec bump`: own increment after the tracey reading (Q5, outside the pipeline), before Phase 2 → now: Q5 blocks it.
-- Q6, Q7 answered by the CLI (`crates/specengine-cli/README.md`).
 
 ## Open minors
 
-- `entry_kind` re-reads a directory per component per probe (`is_dir`: twice per named clean path) → the Phase 2 watcher.
+- → the Phase 2 watcher: `entry_kind` re-reads a directory per component per probe (`is_dir`: twice per named clean path); `update_paths` silently drops the rows under an unreadable directory, no `unreadable_dirs` (a full walk warns).
 - A pre-existing non-WAL DB with other tables keeps its rollback journal → Phase 2.
 - A broken escalation invariant or JSON encode → `Sqlite`.
-- `read` checks its components, then reads: a race, as `probe` → `read` (accepted).
+- Races, accepted: `read` checks its components, then reads (as `probe` → `read`); `resolve` names the parent when an entry's own type cannot be read.
 
 Tests: `tests/`, by the criteria of `docs/features/spec-index.md`, `spec-check.md` (`check_*.rs`); scratch corpora in temp dirs.

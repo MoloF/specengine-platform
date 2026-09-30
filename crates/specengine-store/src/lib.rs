@@ -23,8 +23,11 @@
 //!   [`SpecIndex::lookup_id`], [`SpecIndex::search`] (Tier 3 files left out
 //!   unless [`SearchQuery::archive`]), [`SpecIndex::indexed_input`] (the
 //!   index-fed [`CheckInput`] of `spec show`);
-//! - [`check_input`], [`check_worktree`]: `spec check` over a fresh parse
-//!   of a [`Source`], no database (docs/features/spec-check.md).
+//! - [`load_config`], [`load_check`]: the config and the baseline from
+//!   their bytes ([`NamedBytes`]), validated into a [`CheckSetup`] or a
+//!   `cannot-check` report; [`check_input`], [`check_source`],
+//!   [`check_tree`], [`check_worktree`]: `spec check` over a fresh parse of
+//!   a [`Source`], no database (docs/features/spec-check.md).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -47,7 +50,10 @@ use serde::Serialize;
 use specengine_core::check::CheckInput;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
-pub use check::{BASELINE_FILE, check_input, check_worktree, today_utc};
+pub use check::{
+    BASELINE_FILE, CheckSetup, NamedBytes, check_input, check_source, check_tree, check_worktree,
+    default_baseline, load_check, load_config, today_utc,
+};
 pub use error::StoreError;
 pub use index::{DbSettings, SqliteIndex};
 pub use source::{Listing, Source, WorkingTree};
@@ -109,7 +115,8 @@ pub struct UpdateReport {
     pub missing_roots: Vec<String>,
     /// Directory and `.md` names skipped because they are not UTF-8.
     pub skipped_names: usize,
-    /// Directories below a root that could not be listed (their files are
+    /// Directories below a root, or on the way to one (`""`: the root
+    /// itself), that could not be listed, root-relative (their files are
     /// treated as absent).
     pub unreadable_dirs: Vec<String>,
 }

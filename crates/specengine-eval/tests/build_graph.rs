@@ -1296,3 +1296,27 @@ fn cli_direct_dependencies_are_all_workspace_entries() {
         "the CLI's direct dependencies (docs/features/spec-cli.md, Crate)"
     );
 }
+
+// ---------------------------------------------------------------------------
+// docs/features/spec-cli-check.md AC-01 (pass 2a.1 adds no dependency).
+// ---------------------------------------------------------------------------
+
+/// `spec check` and `spec export index` add nothing to the CLI's graph:
+/// its direct dependencies stay pass 1's
+/// (`cli_direct_dependencies_are_all_workspace_entries`), and no git
+/// library reaches its normal graph (2a.2 reads git through
+/// `std::process`, 05 §9).
+#[test]
+fn cli_normal_graph_has_no_git_library() {
+    let graph = normal_graph("specengine-cli");
+    let git: Vec<&(String, String)> = graph
+        .iter()
+        .filter(|(name, _)| {
+            name == "git2" || name == "libgit2-sys" || name == "gix" || name.starts_with("gix-")
+        })
+        .collect();
+    assert!(
+        git.is_empty(),
+        "specengine-cli's normal graph reaches a git library: {git:?}"
+    );
+}

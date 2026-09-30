@@ -26,6 +26,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
+- [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) The spec CLI: check and export index · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core, xtask · tier 2
 - [docs/canon/spec-check-links.md](canon/spec-check-links.md) spec check: feature scopes and links · crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval, xtask · tier 2
@@ -79,6 +80,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/spec-check-links.md](features/spec-check-links.md) spec check, pass B: file links · crates/specengine-core, crates/specengine-store · shipped
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) spec check, increment 2 part 2, pass A: feature scopes · crates/specengine-core, crates/specengine-model, crates/specengine-store · shipped
 - [docs/features/spec-check.md](features/spec-check.md) spec check, increment 1: a config-driven check engine at xtask parity · crates/specengine-core, crates/specengine-model, crates/specengine-store, crates/specengine-eval, xtask · shipped
+- [docs/features/spec-cli-check.md](features/spec-cli-check.md) The spec CLI, pass 2a.1: check and export index · crates/specengine-cli, crates/specengine-core, crates/specengine-store, crates/specengine-eval · shipped
 - [docs/features/spec-cli.md](features/spec-cli.md) The spec CLI, pass 1: the agent read loop · crates/specengine-cli, crates/specengine-core, crates/specengine-store · shipped
 - [docs/features/spec-index.md](features/spec-index.md) Spec index: SQLite + FTS5, incremental · crates/specengine-store · shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) Spec parser: the corpus model and the single reference grammar · crates/specengine-model, crates/specengine-core, crates/specengine-eval · shipped

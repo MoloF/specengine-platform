@@ -119,6 +119,7 @@ spec round new | round answer FILE
 spec ship SLUG [--accepted]
 spec compact --dry-run
 spec export [--state]                                # generated/queue.md and state.jsonl
+spec export index [--stdout]                         # [paths] index by its registered generator (Q3)
 ```
 
 `--json` is available everywhere for scripts and the consumer project's tests.

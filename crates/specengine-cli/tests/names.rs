@@ -260,3 +260,77 @@ fn a_newline_in_an_exit_1_reference_json_ref_raw_reason_flat() {
         assert_eq!(format!("note: {}", note.as_str().unwrap()), line);
     }
 }
+
+/// AC-12 of docs/features/spec-cli-check.md, the streams with a line break
+/// in a name: `spec check`'s cause for a `--baseline` typed with one is one
+/// stdout line (JSON keeps it raw); `spec export index` refusing a
+/// document so named, and a config error of a `--config` so named, are one
+/// stderr line each.
+#[test]
+fn a_newline_in_check_and_export_names_stays_on_one_line() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    use common::check::{index_path, registered};
+
+    let scratch = Scratch::new("names-check");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+
+    let run = spec(&home, &root, &["check", "--baseline", "no\npe.toml"]);
+    run.code(2);
+    let lines: Vec<&str> = run.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{}", run.stdout);
+    assert!(
+        lines[0].starts_with("cannot  no pe.toml: cannot read the baseline: "),
+        "{}",
+        lines[0]
+    );
+    assert_eq!(run.stderr, "");
+    let run = spec(
+        &home,
+        &root,
+        &["--json", "check", "--baseline", "no\npe.toml"],
+    );
+    run.code(2);
+    assert_eq!(run.json()["cannot_check"][0]["path"], "no\npe.toml");
+
+    let base = std::fs::read_to_string(root.join("specengine.toml")).unwrap();
+    let text = registered(&base, index_path("spec-a"), "gen-index", None);
+    write(&root, "specengine.toml", &text);
+    let named = root.join("docs/spec/a\nb.md");
+    write(&root, "docs/spec/a\nb.md", "# A b\n");
+    std::fs::set_permissions(&named, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let run = spec(&home, &root, &["export", "index"]);
+    run.code(2);
+    assert_eq!(run.stdout, "");
+    let lines = run.stderr_lines();
+    assert_eq!(lines.len(), 1, "{}", run.stderr);
+    assert!(
+        lines[0].starts_with("spec: ") && lines[0].contains("docs/spec/a b.md"),
+        "{}",
+        lines[0]
+    );
+    std::fs::set_permissions(&named, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    write(&root, "c\nf.toml", format!("{text}\n[bogus]\nx = 1\n"));
+    let line = text.lines().count() + 2;
+    let run = spec(&home, &root, &["--config", "c\nf.toml", "export", "index"]);
+    run.code(2);
+    assert_eq!(run.stdout, "");
+    let lines = run.stderr_lines();
+    assert_eq!(lines.len(), 1, "{}", run.stderr);
+    assert!(
+        lines[0].starts_with(&format!("c f.toml:{line}: ")),
+        "{}",
+        lines[0]
+    );
+    let run = spec(&home, &root, &["--config", "c\nf.toml", "check"]);
+    run.code(2);
+    assert!(
+        run.stdout
+            .starts_with(&format!("cannot  c f.toml:{line}: ")),
+        "{}",
+        run.stdout
+    );
+    assert_eq!(run.stdout.lines().count(), 2, "{}", run.stdout);
+}

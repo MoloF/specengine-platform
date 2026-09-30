@@ -22,6 +22,8 @@
 //!   `slug/ID` and bare feature-scoped IDs resolve in feature documents
 //!   only (ADR-0026);
 //! - [`render_index`] — the generated index, rendered in memory;
+//!   [`walk_gap`] — the first gap of an incomplete walk, which stops the
+//!   index comparison and the index writer alike (§11.5);
 //!   [`is_tier3`] / [`is_tier3_file`] — the one Tier 3 predicate (the
 //!   index's archive, the store's `tier3` column, `spec search`), and
 //!   [`is_live`], the graph rules' live source;
@@ -51,6 +53,7 @@ pub use config::{
     Mode, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
+pub use generated::{WalkGap, walk_gap};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{is_live, is_tier3, is_tier3_file, render_index};
 pub use report::{Cause, Counts, Debt, Finding, Fix, Report, Verdict};

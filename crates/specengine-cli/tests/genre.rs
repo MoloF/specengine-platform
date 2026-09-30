@@ -14,12 +14,14 @@ use std::path::PathBuf;
 
 use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, write};
 
-/// The words no CLI source may hold (the spec's list).
-const FORBIDDEN: [&str; 8] = [
+/// The words no CLI source may hold (the spec's list; pass 2a.1 adds
+/// `cargo xtask`, docs/features/spec-cli-check.md AC-13).
+const FORBIDDEN: [&str; 9] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
     "index.md",
+    "cargo xtask",
     "RULE-",
     "MEC-",
     "REQ-",
@@ -85,6 +87,10 @@ fn the_scan_sees_a_docs_default() {
         2
     );
     assert!(offences("z.rs", "let slug = \"lantern\";\n").is_empty());
+    assert_eq!(
+        offences("w.rs", "let gate = \"cargo xtask docs check\";\n"),
+        ["w.rs:1: cargo xtask"]
+    );
 }
 
 /// One pass of the read loop per fixture: init on a copy without its
@@ -191,5 +197,81 @@ fn the_read_loop_answers_alike_on_both_fixtures() {
         spec(&home, &root, &["search", "zz"]).code(2);
         spec(&home, &root, &["search", "zzqqxxwwvv"]).code(0);
         spec(&home, &root, &["search", "sync", "--limit", "0"]).code(2);
+    }
+}
+
+/// AC-13 of docs/features/spec-cli-check.md: `spec check` and
+/// `spec export index` answer alike on both fixtures (the library's report
+/// and render); without `[paths] index` the index is refused on both, and
+/// nothing is written anywhere.
+#[test]
+fn check_and_export_answer_alike_on_both_fixtures() {
+    use common::check::{index_path, library, library_render, registered, text};
+
+    for (fixture, _) in FIXTURES {
+        let scratch = Scratch::new("genre-check");
+        let home = scratch.home("h");
+        let root = scratch.copy(fixture, "copy");
+        let base = read_text(&root, "specengine.toml");
+
+        let report = library(&root);
+        let run = spec(&home, &root, &["check"]);
+        assert_eq!(run.code, i32::from(report.exit_code()), "{fixture}");
+        assert_eq!(run.stdout, text(&report, false), "{fixture}");
+
+        // No `[paths] index`: refused, with or without a registered entry.
+        let before = snapshot(scratch.path());
+        let unregistered = format!(
+            "{base}\n[[generators]]\ncommand = \"gen-index\"\nwrites  = [\"{}\"]\nindex   = true\n",
+            index_path(fixture)
+        );
+        for (what, config, says) in [
+            ("no [paths] index", unregistered, "[paths] index"),
+            ("nothing registered", base.clone(), "[[generators]]"),
+        ] {
+            write(&root, "specengine.toml", &config);
+            let before = snapshot(scratch.path());
+            for args in [
+                &["export", "index"][..],
+                &["export", "index", "--stdout"][..],
+            ] {
+                let run = spec(&home, &root, args);
+                assert_eq!(run.code, 2, "{fixture} {what}\n{}", run.show());
+                assert_eq!(run.stdout, "", "{fixture} {what}");
+                assert_eq!(
+                    run.stderr_lines().len(),
+                    1,
+                    "{fixture} {what}: {}",
+                    run.stderr
+                );
+                assert!(
+                    run.stderr.contains(says),
+                    "{fixture} {what}: {}",
+                    run.stderr
+                );
+                assert_eq!(
+                    snapshot(scratch.path()),
+                    before,
+                    "{fixture} {what}: written"
+                );
+            }
+        }
+        write(&root, "specengine.toml", &base);
+        assert_eq!(snapshot(scratch.path()), before, "{fixture}");
+
+        // Registered: the library's render.
+        let index = index_path(fixture);
+        write(
+            &root,
+            "specengine.toml",
+            registered(&base, index, "gen-index", None),
+        );
+        let run = spec(&home, &root, &["export", "index"]);
+        run.code(0);
+        assert!(
+            read_text(&root, index) == library_render(&root),
+            "{fixture}"
+        );
+        assert!(!data_dir(&home).exists(), "{fixture}: a data directory");
     }
 }

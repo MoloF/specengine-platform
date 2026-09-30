@@ -8,7 +8,7 @@ reviewed: 2026-09-30
 
 # spec check: what the documentation check enforces
 
-Increment 1 of 4 (pending groups: 05 §4, 08 Phase 1): one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::check_worktree` (fresh parse; no database or daemon), measurement `specengine-eval check` (store and eval APIs: their READMEs). Nothing is written and no status or flag is set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. This repository's gate stays `xtask` until increment 3.
+Increment 1 of 4 (pending groups: 05 §4, 08 Phase 1): one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::load_check` (fresh parse; no database or daemon), commands `spec check`, `spec export index` (`docs/canon/spec-check-cli.md`), measurement `specengine-eval check` (store and eval APIs: their READMEs). Nothing is written and no status or flag is set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. This repository's gate stays `xtask` until CLI pass 2b.
 
 ## Engine types (`specengine_core::check`)
 
@@ -85,7 +85,7 @@ This repository under the parity config, no baseline (Q-2): every document walke
 
 ## Not checked yet
 
-- Increment 3, with the CLI: 07 §2 flags + `--json`; `--staged` over a git-blob `Source`; `enforce-introduced`, no new baseline entries (Q-5); the root `specengine.toml` (Q-7); hook (also on both TOML files) and CI switched; `xtask` retired (`#documentation-convention`, `docs/README.md` rewritten).
+- Increment 3: part 1 shipped (CLI 2a.1); 2a.2 `--staged`, `enforce-introduced`, no new baseline entries; 2b the root config (Q-7), hook (also on both TOML files) and CI, `xtask` retired: `docs/canon/spec-check-cli.md`.
 - Increment 4, `spec-check-process`, from config: decision without cost, question without `to` or working answer, accepted feature with an empty "Implementation" (heading from config), numbered record with its own text; per-kind schemas (core Q2). Queue state (`@assumes`, an unapplied amendment) → Phase 2, non-blocking. Code (marker → node, `impl_status` bound, glossary term in code, `spec.lock` drift) and 08 AC-13 → Phase 3.
 
 ## Open owner questions
@@ -96,7 +96,7 @@ Working answer (the code) → what the other answer triggers.
 - Q-2 = core Q6, answered (owner, 2026-09-29): the four invalid YAML scalars quoted; no baseline.
 - Q-3 the fix is data → "`spec check` applies it": an ADR amending ADR-0004 / ADR-0005.
 - Q-4 answered: `class:` in every document. Per record kind in the fixtures (the importer later): decision → `decision` + `scope`; a file with `generator:` → `generated`; others → `canon` + `owner`, `reviewed`, since only decisions are superseded (§2), though `immutable_text` records are not rewritten in place.
-- Q-5 "introduced" is relative to the change: increment 3. Q-6 an overflow may be baselined with expiry; caps never move. Q-7 root `specengine.toml`: increment 3, an ADR amending ADR-0023's role table or an owner edit. Q-8 the pending groups are the pilots' full check list; per-pilot parity at migration.
+- Q-5 answered (owner's Q4, 2026-09-30): "introduced" is relative to `HEAD`. Q-6 an overflow may be baselined with expiry; caps never move. Q-7 root `specengine.toml`: CLI 2b, an ADR amending ADR-0023's role table. Q-8 the pending groups are the pilots' full check list; per-pilot parity at migration.
 - `serde_json` as a normal `specengine-core` dependency (`to_json`; `=1.0.151`, locked): awaiting acknowledgement.
 
 ## Open minors

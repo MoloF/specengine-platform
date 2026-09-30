@@ -7,7 +7,10 @@
 //! names starting with `.` are skipped below a root (the census rule, plus
 //! dot-files); no `.gitignore`; names that are not UTF-8 are skipped and
 //! counted; a root that names no directory and no `.md` file (missing, a
-//! symlink on the way, another kind of file) is reported. Paths are
+//! symlink on the way, another kind of file) is reported, and a directory
+//! on the way to a root that cannot be listed is an unreadable directory,
+//! never a missing root (a default root's absence is ignored; an unread
+//! one's is not known). Paths are
 //! root-relative with `/`, built from the names as the OS lists them (a
 //! root's own components included), and byte-sorted.
 
@@ -30,8 +33,9 @@ pub struct Listing {
     pub missing_roots: Vec<String>,
     /// Directory and `.md` names skipped because they are not UTF-8.
     pub skipped_names: usize,
-    /// Directories below a root that could not be listed, root-relative;
-    /// their files are not in `paths`.
+    /// Directories below a root, or on the way to one (`""`: the root
+    /// itself), that could not be listed, root-relative; their files are
+    /// not in `paths`.
     pub unreadable_dirs: Vec<String>,
 }
 
@@ -86,25 +90,39 @@ impl WorkingTree {
     /// The kind of a root-relative path (a configured root, or a directory
     /// for [`Source::is_dir`]), looked up by exact name component by
     /// component: `None` when a component is missing, a symlink, or a
-    /// non-directory before the end.
+    /// non-directory before the end, or a directory on the way cannot be
+    /// read.
     fn root_kind(&self, root: &str) -> Option<FileType> {
+        self.resolve(root).ok().flatten()
+    }
+
+    /// [`WorkingTree::root_kind`], telling "not there" (`Ok(None)`) from
+    /// "cannot tell": `Err` names the directory on the way (root-relative,
+    /// `""` for the root itself) that could not be listed, or whose entry's
+    /// type could not be read.
+    fn resolve(&self, root: &str) -> Result<Option<FileType>, String> {
         let mut dir = self.root.clone();
+        let mut read = Vec::new();
         let mut components = root.split('/').peekable();
         while let Some(component) = components.next() {
-            let kind = entry_kind(&dir, OsStr::new(component))?;
+            let Some(kind) = entry_kind(&dir, OsStr::new(component)).map_err(|_| read.join("/"))?
+            else {
+                return Ok(None);
+            };
             if kind.is_symlink() {
-                return None;
+                return Ok(None);
             }
             if components.peek().is_some() {
                 if !kind.is_dir() {
-                    return None;
+                    return Ok(None);
                 }
                 dir.push(component);
+                read.push(component);
             } else {
-                return Some(kind);
+                return Ok(Some(kind));
             }
         }
-        None
+        Ok(None)
     }
 
     fn walk(
@@ -168,16 +186,19 @@ impl Source for WorkingTree {
         let mut listing = Listing::default();
         let mut found = BTreeSet::new();
         for root in self.scope.roots() {
-            match self.root_kind(root) {
-                Some(kind) if kind.is_dir() => {
+            match self.resolve(root) {
+                Ok(Some(kind)) if kind.is_dir() => {
                     self.walk(&self.root.join(root), root, &mut found, &mut listing);
                 }
-                Some(kind) if kind.is_file() && root.ends_with(DOCUMENT_EXTENSION) => {
+                Ok(Some(kind)) if kind.is_file() && root.ends_with(DOCUMENT_EXTENSION) => {
                     if !self.excluded(root) {
                         found.insert(root.clone());
                     }
                 }
-                _ => listing.missing_roots.push(root.clone()),
+                Ok(_) => listing.missing_roots.push(root.clone()),
+                // Could not tell whether the root is there: never "missing"
+                // (ignored for a default root), always unverified.
+                Err(dir) => listing.unreadable_dirs.push(dir),
             }
         }
         listing.paths = found.into_iter().collect();
@@ -196,7 +217,7 @@ impl Source for WorkingTree {
         let mut dir = self.root.clone();
         let components: Vec<&str> = path.split('/').collect();
         for (index, component) in components.iter().enumerate() {
-            let Some(kind) = entry_kind(&dir, OsStr::new(component)) else {
+            let Ok(Some(kind)) = entry_kind(&dir, OsStr::new(component)) else {
                 return false;
             };
             if kind.is_symlink() {
@@ -271,12 +292,21 @@ impl Source for WorkingTree {
 }
 
 /// The type of the entry of `dir` named exactly `name` (no normalisation,
-/// no symlink followed), as its listing shows it; `None` when the listing
-/// fails or has no such name.
-fn entry_kind(dir: &Path, name: &OsStr) -> Option<FileType> {
-    fs::read_dir(dir)
-        .ok()?
-        .filter_map(Result::ok)
-        .find(|entry| entry.file_name() == name)
-        .and_then(|entry| entry.file_type().ok())
+/// no symlink followed), as its listing shows it; `Ok(None)` when the
+/// listing has no such name. `Err` when it cannot tell: the listing fails,
+/// the entry's type cannot be read, or an entry could not be read and the
+/// name was not among the others.
+fn entry_kind(dir: &Path, name: &OsStr) -> io::Result<Option<FileType>> {
+    let mut unread = None;
+    for entry in fs::read_dir(dir)? {
+        match entry {
+            Ok(entry) if entry.file_name() == name => return entry.file_type().map(Some),
+            Ok(_) => {}
+            Err(error) => unread = Some(error),
+        }
+    }
+    match unread {
+        Some(error) => Err(error),
+        None => Ok(None),
+    }
 }

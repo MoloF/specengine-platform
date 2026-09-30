@@ -577,3 +577,50 @@ fn check_refuses_config() {
         )
     );
 }
+
+/// AC-15 of docs/features/spec-cli-check.md: `check` reads the whole config
+/// through the store's loader, as `spec check`: an unknown top-level table
+/// and an unknown `[project]` key refuse the run (exit 2, nothing written)
+/// at their lines.
+#[test]
+fn an_unknown_table_or_project_key_is_refused_at_its_line() {
+    let scratch = Scratch::new("whole-config");
+    let corpus = scratch.join("corpus");
+    copy_dir(&fixture("spec-a"), &corpus);
+    let before = snapshot(&corpus);
+    let out = scratch.join("out");
+    let text = fs::read_to_string(corpus.join("specengine.toml")).unwrap();
+    let bogus = format!("{text}\n[bogus]\nx = 1\n");
+    let bogus_line = text.lines().count() + 2;
+    let project = text.replacen("[project]\n", "[project]\nflavour = 1\n", 1);
+    assert_ne!(project, text, "spec-a has a [project] table");
+    let project_line = project
+        .lines()
+        .position(|line| line == "flavour = 1")
+        .unwrap()
+        + 1;
+    for (context, config_text, line, word) in [
+        ("an unknown table", bogus, bogus_line, "bogus"),
+        ("an unknown [project] key", project, project_line, "flavour"),
+    ] {
+        let config = scratch.join("whole.toml");
+        fs::write(&config, config_text).unwrap();
+        let output = run(&[
+            "check",
+            "--pilot",
+            corpus.to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+            "--scheme",
+            config.to_str().unwrap(),
+            "--today",
+            TODAY,
+        ]);
+        assert_refused(context, &output, &out, &corpus, &before);
+        let message = stderr(&output);
+        assert!(
+            message.contains(&format!("whole.toml:{line}: ")) && message.contains(word),
+            "{context}: line {line} not in stderr:\n{message}"
+        );
+    }
+}

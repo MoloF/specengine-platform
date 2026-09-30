@@ -24,7 +24,7 @@ A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file. A n
 <a id="apply"></a>
 ## Applying proposals
 
-An approved proposal is applied in the task branch's worktree (the spec travels with the code) and committed immediately as a separate commit `spec: apply PR-…` with provenance: who decided, the author agent's model and run. Spec files are written only by `apply_proposal` on the owner's action. ADR-0004, ADR-0005.
+An approved proposal is applied in the task branch's worktree (the spec travels with the code) and committed immediately as a separate commit `spec: apply PR-…` with provenance: who decided, the author agent's model and run. Spec files are written only by `apply_proposal` on the owner's action. ADR-0004, ADR-0005. Class `generated` documents are not spec files: each is written only by its registered generator, never by `apply_proposal` or by hand, as `spec export` writes the queue (ADR-0003) and a project's generators their output (ADR-0013, ADR-0022); owner, Q3, 2026-09-30.
 
 <a id="control"></a>
 ## Control and no blocking

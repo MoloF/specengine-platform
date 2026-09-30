@@ -163,3 +163,85 @@ fn opposite_insertion_orders_print_the_same_bytes() {
         assert_eq!(one.stdout, two.stdout, "{name}: index repeat");
     }
 }
+
+/// AC-07 of docs/features/spec-cli-check.md: `spec check` over two copies
+/// at different absolute paths, their documents written in opposite
+/// orders, gives byte-identical stdout and stderr, text and JSON, blocked
+/// and cannot-check (a broken default baseline), from the root, from
+/// below it and with `--root` from elsewhere; no absolute root is printed.
+#[test]
+fn check_prints_the_same_bytes_wherever_the_root_lies() {
+    for (name, _) in FIXTURES {
+        let scratch = Scratch::new("determinism-check");
+        let home = scratch.home("h");
+        let source = fixture(name);
+        let mut files: Vec<String> = md_files(&source.join("docs"))
+            .into_iter()
+            .map(|file| format!("docs/{file}"))
+            .collect();
+        let one = scratch.dir("one");
+        let two = scratch.dir("second/copy");
+        for (root, reverse) in [(&one, false), (&two, true)] {
+            write(root, "specengine.toml", read(&source, "specengine.toml"));
+            if reverse {
+                files.reverse();
+            }
+            for file in &files {
+                write(root, file, read(&source, file));
+            }
+        }
+        let elsewhere = scratch.dir("elsewhere");
+        let variants: [&[&str]; 4] = [
+            &["check"],
+            &["check", "--debt"],
+            &["--json", "check"],
+            &["--json", "check", "--debt"],
+        ];
+        for broken in [false, true] {
+            if broken {
+                write(&one, ".spec-debt.toml", "[[debt]\n");
+                write(&two, ".spec-debt.toml", "[[debt]\n");
+            }
+            let exit = if broken { 2 } else { 1 };
+            for args in variants {
+                let mut runs = Vec::new();
+                for root in [&one, &two] {
+                    runs.push(spec(&home, root, args));
+                    runs.push(spec(&home, &root.join("docs/spec"), args));
+                    let mut rooted = vec!["--root", root.to_str().unwrap()];
+                    rooted.extend(args.iter().copied());
+                    runs.push(spec(&home, &elsewhere, &rooted));
+                }
+                let first = &runs[0];
+                assert_eq!(first.code, exit, "{name} {args:?}\n{}", first.show());
+                for run in &runs[1..] {
+                    assert_eq!(run.code, first.code, "{name} {args:?}");
+                    assert_eq!(
+                        run.stdout, first.stdout,
+                        "{name} {args:?} (broken {broken})"
+                    );
+                    assert_eq!(
+                        run.stderr, first.stderr,
+                        "{name} {args:?} (broken {broken})"
+                    );
+                }
+                for root in [&one, &two, &scratch.path().to_path_buf()] {
+                    let shown = root.to_str().unwrap();
+                    assert!(
+                        !first.stdout.contains(shown) && !first.stderr.contains(shown),
+                        "{name} {args:?}: {shown} printed\n{}",
+                        first.show()
+                    );
+                }
+                if broken {
+                    let cause = first
+                        .stdout
+                        .lines()
+                        .any(|line| line.starts_with("cannot  .spec-debt.toml"))
+                        || first.stdout.contains("\"path\":\".spec-debt.toml");
+                    assert!(cause, "{name} {args:?}: {}", first.stdout);
+                }
+            }
+        }
+    }
+}

@@ -36,8 +36,43 @@ impl ProjectRoot {
     }
 }
 
+/// A located project, its config not read yet: `spec check` and
+/// `spec export index` read it through the store's check loader, whose
+/// every failure is a cause, not a discovery failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Located {
+    /// Canonical.
+    pub root: PathBuf,
+    /// The file to read.
+    pub config_file: PathBuf,
+    /// As in [`ProjectRoot::config_label`].
+    pub config_label: String,
+}
+
 /// Finds the project (see the module documentation) and reads its config.
 pub fn discover(env: &Env, globals: &Globals) -> Result<ProjectRoot, CliError> {
+    let Located {
+        root,
+        config_file,
+        config_label,
+    } = locate(env, globals)?;
+    let bytes = fs::read(&config_file)
+        .map_err(|error| CliError::spec(format!("cannot read {config_label}: {error}")))?;
+    let text = String::from_utf8(bytes)
+        .map_err(|_| CliError::spec(format!("{config_label}: the file is not UTF-8")))?;
+    let config =
+        ProjectConfig::from_toml(&text).map_err(|error| config_error(&config_label, &error))?;
+    Ok(ProjectRoot {
+        root,
+        config_label,
+        config,
+    })
+}
+
+/// The root and the config file (see the module documentation), nothing
+/// read: a discovery failure is an unusable current directory or `--root`,
+/// or no `specengine.toml` by the walk or in `--root`.
+pub(crate) fn locate(env: &Env, globals: &Globals) -> Result<Located, CliError> {
     let cwd = canonical_dir(&env.cwd, "the current directory")?;
     let (root, config_file, config_label) = match (&globals.root, &globals.config) {
         (None, None) => {
@@ -71,16 +106,10 @@ pub fn discover(env: &Env, globals: &Globals) -> Result<ProjectRoot, CliError> {
             (root, cwd.join(config), config.display().to_string())
         }
     };
-    let bytes = fs::read(&config_file)
-        .map_err(|error| CliError::spec(format!("cannot read {config_label}: {error}")))?;
-    let text = String::from_utf8(bytes)
-        .map_err(|_| CliError::spec(format!("{config_label}: the file is not UTF-8")))?;
-    let config =
-        ProjectConfig::from_toml(&text).map_err(|error| config_error(&config_label, &error))?;
-    Ok(ProjectRoot {
+    Ok(Located {
         root,
+        config_file,
         config_label,
-        config,
     })
 }
 

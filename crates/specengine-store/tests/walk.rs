@@ -507,3 +507,118 @@ fn the_walker_uses_the_core_document_extension() {
         "the walker's file, root and probe rules name the constant"
     );
 }
+
+/// Iteration 3 of docs/features/spec-cli-check.md: a directory on the way
+/// to a root that cannot be listed — `docs` at mode 000, or the root itself
+/// listable but not searchable (mode 0444) — lands in `unreadable_dirs`
+/// (root-relative), never in `missing_roots`, for default role roots
+/// (spec-a) and written ones (spec-b, a root below `docs`); the readable
+/// tree lists as before. Permissions are restored before the scratch goes.
+#[test]
+fn a_directory_on_the_way_that_cannot_be_listed_is_unreadable_not_missing() {
+    for (name, written) in [
+        ("spec-a", None),
+        ("spec-b", Some("[\"docs/spec\", \"docs/records\"]")),
+    ] {
+        let scratch = Scratch::new("walk-locked-way");
+        let mut corpus = Corpus::copy_of(name, &scratch, "wt");
+        if let Some(roots) = written {
+            let text = corpus.read_text("specengine.toml");
+            corpus.write(
+                "specengine.toml",
+                text.replacen("roots = [\"docs\"]", &format!("roots = {roots}"), 1),
+            );
+            corpus.reload();
+            assert!(corpus.paths.roots_written, "{name}");
+        }
+        let readable = corpus.listing();
+        assert!(readable.unreadable_dirs.is_empty(), "{name}");
+        assert!(!readable.paths.is_empty(), "{name}");
+
+        common::chmod(&corpus.root, "docs", 0o000);
+        if std::fs::read_dir(corpus.root.join("docs")).is_ok() {
+            common::chmod(&corpus.root, "docs", 0o755);
+            eprintln!("mode-000 directories are listable here (root?): case skipped");
+            return;
+        }
+        let locked = corpus.listing();
+        common::chmod(&corpus.root, "docs", 0o755);
+        assert_eq!(locked.unreadable_dirs, ["docs"], "{name}: docs mode 000");
+        assert!(
+            locked.missing_roots.is_empty(),
+            "{name}: {:?}",
+            locked.missing_roots
+        );
+        assert!(locked.paths.is_empty(), "{name}");
+
+        let tree = corpus.tree();
+        common::chmod(&corpus.root, "", 0o444);
+        let searched = tree.list();
+        common::chmod(&corpus.root, "", 0o755);
+        let searched = searched.expect("a listable root lists");
+        assert_eq!(searched.unreadable_dirs, ["docs"], "{name}: root mode 0444");
+        assert!(searched.missing_roots.is_empty(), "{name}");
+        assert!(searched.paths.is_empty(), "{name}");
+
+        assert_eq!(corpus.listing(), readable, "{name}: readable again");
+    }
+}
+
+/// Iteration 3: a default role root that is genuinely absent stays ignored
+/// — `missing_roots`, never `unreadable_dirs`, and no cause of the check:
+/// spec-a has no `docs/archive`; with `docs/features` removed too, the
+/// check still runs without a `cannot` cause.
+#[test]
+fn an_absent_default_root_stays_ignored() {
+    let scratch = Scratch::new("walk-absent-default");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    std::fs::remove_dir_all(corpus.root.join("docs/features")).unwrap();
+    let listing = corpus.listing();
+    let mut missing = listing.missing_roots.clone();
+    missing.sort();
+    assert_eq!(missing, ["docs/archive", "docs/features"]);
+    assert!(listing.unreadable_dirs.is_empty());
+    let report = specengine_store::check_worktree(
+        &corpus.root,
+        &corpus.root.join("specengine.toml"),
+        None,
+        "2026-09-30",
+    );
+    assert!(report.cannot_check.is_empty(), "{:?}", report.cannot_check);
+    assert_eq!(report.counts.documents, listing.paths.len());
+}
+
+/// Iteration 3: after `chmod 000 docs`, the incremental update removes
+/// every row under it and reports `docs` unreadable; the database then
+/// equals a rebuild (a fresh index) in the same state.
+#[test]
+fn an_update_after_a_directory_turns_unlistable_equals_a_rebuild() {
+    let scratch = Scratch::new("walk-locked-update");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let mut index = corpus.open(&scratch.db("index"));
+    let first = corpus.update(&mut index);
+    assert!(first.walked > 0);
+    common::chmod(&corpus.root, "docs", 0o000);
+    if std::fs::read_dir(corpus.root.join("docs")).is_ok() {
+        common::chmod(&corpus.root, "docs", 0o755);
+        eprintln!("mode-000 directories are listable here (root?): case skipped");
+        return;
+    }
+    let report = corpus.update(&mut index);
+    let files = index.files().expect("files");
+    let dump = index.dump().expect("dump");
+    let fresh = corpus.fresh_dump(&scratch);
+    common::chmod(&corpus.root, "docs", 0o755);
+    assert_eq!(report.unreadable_dirs, ["docs"]);
+    assert!(
+        report.missing_roots.is_empty(),
+        "{:?}",
+        report.missing_roots
+    );
+    assert_eq!(report.removed, first.walked);
+    assert!(files.is_empty(), "{files:?}");
+    assert!(
+        dump == fresh,
+        "the update differs from a rebuild in the same state"
+    );
+}

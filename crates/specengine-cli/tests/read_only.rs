@@ -120,3 +120,103 @@ fn the_read_loop_leaves_the_copies_untouched() {
         assert_eq!(top, ["copy", "homes", "outside"], "{fixture}");
     }
 }
+
+/// AC-06 of docs/features/spec-cli-check.md: `spec check` (each verdict)
+/// and `spec export index` (written, `--stdout`) need no `HOME` and exit as
+/// their verdicts say; with `HOME` set nothing is created under it; after
+/// `check` the copy is byte- and path-identical, after `export index` only
+/// `[paths] index` differs.
+#[test]
+fn check_and_export_need_no_home_and_write_only_the_index() {
+    use common::check::{baseline_covering, index_path, library, registered};
+    use common::{spec_with, write};
+
+    for (fixture, _) in FIXTURES {
+        let scratch = Scratch::new("read-only-check");
+        let home = scratch.home("h");
+        let root = scratch.copy(fixture, "copy");
+        let outside = scratch.dir("outside");
+        let base = std::fs::read_to_string(root.join("specengine.toml")).unwrap();
+        let index = index_path(fixture);
+        write(
+            &root,
+            "specengine.toml",
+            registered(&base, index, "gen-index", None),
+        );
+        let config = std::fs::read_to_string(root.join("specengine.toml")).unwrap();
+        write(
+            &outside,
+            "cover.toml",
+            baseline_covering(&library(&root), "2999-12-31"),
+        );
+        write(
+            &outside,
+            "observe.toml",
+            format!("{config}\n[check]\nmode = \"observe\"\n"),
+        );
+        let before = snapshot(&root);
+        let outside_before = snapshot(&outside);
+
+        let checks: [(&[&str], i32); 6] = [
+            (&["check"], 1),
+            (&["--json", "check", "--debt"], 1),
+            (&["check", "--baseline", "../outside/cover.toml"], 0),
+            (&["--config", "../outside/observe.toml", "check"], 0),
+            (&["check", "--baseline", "nope.toml"], 2),
+            (&["--json", "check", "--baseline", "nope.toml"], 2),
+        ];
+        for (args, exit) in checks {
+            for with_home in [false, true] {
+                let run = if with_home {
+                    spec(&home, &root, args)
+                } else {
+                    spec_with(&root, args, &[])
+                };
+                assert_eq!(
+                    run.code,
+                    exit,
+                    "{fixture} {args:?} (HOME {with_home})\n{}",
+                    run.show()
+                );
+                assert!(!run.stdout.is_empty(), "{fixture} {args:?}: a report");
+                assert_eq!(
+                    snapshot(&root),
+                    before,
+                    "{fixture} {args:?} changed the copy"
+                );
+            }
+        }
+
+        for with_home in [false, true] {
+            let run = if with_home {
+                spec(&home, &root, &["export", "index", "--stdout"])
+            } else {
+                spec_with(&root, &["export", "index", "--stdout"], &[])
+            };
+            run.code(0);
+            assert_eq!(snapshot(&root), before, "{fixture}: --stdout wrote");
+        }
+        let run = spec_with(&root, &["export", "index"], &[]);
+        run.code(0);
+        let mut after = snapshot(&root);
+        assert!(
+            after.remove(index).is_some_and(|bytes| bytes.is_some()),
+            "{fixture}: the index written"
+        );
+        assert_eq!(after, before, "{fixture}: only [paths] index differs");
+        let run = spec(&home, &root, &["export", "index"]);
+        run.code(0);
+        assert!(run.stdout.starts_with("unchanged "), "{}", run.stdout);
+
+        assert_eq!(snapshot(&outside), outside_before, "{fixture}: outside");
+        assert!(
+            snapshot(&home).is_empty(),
+            "{fixture}: something under HOME"
+        );
+        let top: Vec<String> = snapshot(scratch.path())
+            .into_keys()
+            .filter(|path| !path.contains('/'))
+            .collect();
+        assert_eq!(top, ["copy", "homes", "outside"], "{fixture}");
+    }
+}

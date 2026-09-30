@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "The `spec` command line of SpecEngine: init, index, search and show over the project's spec index"
+description = "The `spec` command line of SpecEngine: init, index, search and show over the project's spec index; check and export index over a fresh parse"
 
 # `spec`, installed with `cargo install --path crates/specengine-cli`.
 [[bin]]

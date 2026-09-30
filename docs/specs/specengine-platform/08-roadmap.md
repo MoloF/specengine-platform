@@ -9,27 +9,7 @@ ref: research-2026-09-28
 
 ## 1. SpecEngine repository layout
 
-```
-specengine-platform/
-  Cargo.toml                       # workspace, edition 2024
-  crates/
-    specengine-model/              # shared types: IDs, nodes, links, proposals, tasks, events (like code-system-graph `-model`)
-    specengine-core/               # md+yaml parser, refs, graph, checks, budget, bundle, proposals, tasks
-    specengine-code/               # tree-sitter (rust), own RON lexer, markers, module resolver, AST hash, Bevy detector, lock
-    specengine-store/              # SQLite: index + operational state, schema migrations
-    specengine-mcp/                # rmcp server: tools, resources, prompts, MRTR/elicitation
-    specengine-http/               # axum: REST, SSE, /mcp, embedded UI
-    specengine-import/             # importers: one adapter per pilot project's convention
-    specengine-ra/                 # layer C: rust-analyzer as a library; outside default-members (ra_ap_* never in the core graph)
-    specengine-eval/               # permanent measurement harness over pilot corpora (paths at run time, read-only, JSON aggregates)
-    specengine-cli/                # `spec` binary (alias `specengine`)
-  ui/                              # Vite + React 19 + TS (Phase 4)
-  plugin/                          # Claude Code plugin: plugin.json, .mcp.json, hooks, skills, agents
-  fixtures/                        # mini-repositories of pilot projects for integration tests (Bevy-like code + docs)
-  docs/                            # this research, later the SpecEngine canon (SpecEngine is managed by SpecEngine)
-```
-
-Built crates and `fixtures/`: `CLAUDE.md` "Layout"; the rest is planned.
+Built: `CLAUDE.md` "Layout" and each crate's README; the crates' planned roles: 05 §1 (topology). Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `ui/` (Vite + React 19 + TS, Phase 4), `plugin/` (the Claude Code plugin: `plugin.json`, `.mcp.json`, hooks, skills, agents), the `spec` binary's alias `specengine`.
 
 ## 2. Phases
 
@@ -44,8 +24,8 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped 2026-09-29/30, open owner questions in each crate's README and `docs/canon/spec-check*.md`: the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI pass 1.
-- Next: CLI 2a, 2b = check increment 3, `xtask` retired; 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
+- Shipped 2026-09-29/30, open owner questions in each crate's README and `docs/canon/spec-check*.md`: the parser, the SQLite + FTS5 index, `spec check` increments 1–2, CLI passes 1 and 2a.1 (`check`, `export index`).
+- Next: CLI 2a.2 `spec-cli-staged`, then 2b `spec-cli-switch`, `xtask` retired (`docs/canon/spec-check-cli.md`); 3 graph; 4 bundle (`crates/specengine-cli/README.md`); then MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").

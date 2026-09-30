@@ -12,7 +12,7 @@ Increment 2 part 1 of `spec check`. Engine, config, debt, verdict and output: `d
 
 ## API (`specengine_core::check`)
 
-- `render_index(&CheckInput, index_path: &str, &Generator) -> String`: pure, blind to input order.
+- `render_index(&CheckInput, index_path: &str, &Generator) -> String`: pure, blind to input order. `walk_gap(&CheckInput, &Paths) -> Option<WalkGap {Unreadable, MissingRoot, UnlistedDir}>`: the first stop condition of §11.5 by path, shared with `spec export index`.
 - `CheckConfig.generators: Option<Vec<Generator {command, writes, index, gate?, line}>>` (`None`: no table, the rules are off); `CheckConfig::index_generator()` → the `index = true` entry; `Generator::gate()` → `gate`, else `DEFAULT_GATE` = `spec check`.
 - Module `check::resolve`, public: `Resolver`, `Resolution`, scope-aware and taking the citing file (`docs/canon/spec-check-links.md`, "API"). The store keeps `dst` as written, so `spec refs` and `get_impact` reuse this resolver rather than resolving again.
 - Normal dependency: `petgraph =0.8.3`, default features off (`Graph`, `tarjan_scc`; owner, Q-C).
@@ -45,7 +45,7 @@ Accepted divergences from `xtask` (none occurs here; avoid them until increment 
 
 WHEN the registry has an `index = true` entry, the render SHALL equal the walked bytes of `[paths] index`, byte for byte. Any difference (a trailing space, CRLF, a BOM, a stale line) → `index-drift` (error, subject `""`) on line 1 + the count of `\n` before the first differing byte; `[paths] index` not walked (absent, outside the roots, excluded) → `index-missing` (error, line 1). Both messages name `<command>`. No `index = true` entry → neither rule runs: the comparison is opt-in.
 
-Not compared when the walk is incomplete — a file with a `read_error`, an `UnreadableDir`, a written `MissingRoot`: each is already a cause of "cannot check", and the render would lack documents the generator sees. A skipped non-UTF-8 name (`name-skipped`) does not stop the comparison: its lossy line shows as `index-drift`, and the rename `name-skipped` asks for fixes both. Causes of "cannot check" here: index bytes not supplied (`size` > 0, empty `bytes`); an `index = true` entry without `[paths] index` (only a config built in code: the TOML reader rejects it).
+Not compared when the walk is incomplete (`walk_gap`) — a file with a `read_error`, an `UnreadableDir`, a written `MissingRoot`: each is already a cause of "cannot check", and the render would lack documents the generator sees. A skipped non-UTF-8 name (`name-skipped`) does not stop the comparison: its lossy line shows as `index-drift`, and the rename `name-skipped` asks for fixes both. Causes of "cannot check" here: index bytes not supplied (`size` > 0, empty `bytes`); an `index = true` entry without `[paths] index` (only a config built in code: the TOML reader rejects it).
 
 ## §11.6: the generator registry
 
@@ -82,7 +82,7 @@ This repository (parity config + registry, `enforce`, no baseline): `clean`, one
 ## Next
 
 - Increment 2 is complete: part 2 shipped feature scopes and Markdown file links (`docs/canon/spec-check-links.md`).
-- Increment 3, the next step, as CLI passes 2a and 2b (`crates/specengine-cli/README.md`): the CLI's `check`, the index writer, the root `specengine.toml` (Q-7), hook and CI switched, `xtask` on this renderer, then retired. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
+- Increment 3 = CLI passes 2a.1 (shipped: `spec check`, the writer `spec export index` on this renderer), 2a.2, 2b (the root `specengine.toml`, Q-7; hook and CI switched; `xtask` retired): `docs/canon/spec-check-cli.md`. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 
 ## Open nits

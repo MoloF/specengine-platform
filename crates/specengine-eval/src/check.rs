@@ -3,13 +3,15 @@
 //! fresh-parse loader of `specengine-store` and the check of
 //! `specengine-core`, read-only.
 //!
-//! The configuration (`[ids]`, `[paths]`, `[budgets]`, `[classes]`,
-//! `[check]`) comes from `--scheme` (default: `SPECENGINE_SCHEME_A` / `_B`
-//! for `--label pilot-a` / `pilot-b` when set, else `specengine.toml` at the
-//! corpus root); the baseline from `--baseline`, else `.spec-debt.toml` at
-//! the corpus root when present; today from `--today`, else the UTC date.
-//! A missing or invalid config, baseline or date refuses the run (exit 2,
-//! nothing written).
+//! The configuration (the whole file through the store's loader, as
+//! `spec check`: the top level, `[project]`, `[ids]`, `[paths]`,
+//! `[budgets]`, `[classes]`, `[check]`, `[[generators]]`) comes from
+//! `--scheme` (default: `SPECENGINE_SCHEME_A` / `_B` for `--label pilot-a` /
+//! `pilot-b` when set, else `specengine.toml` at the corpus root); the
+//! baseline from `--baseline`, else `.spec-debt.toml` at the corpus root
+//! when an entry of that name exists; today from `--today`, else the UTC
+//! date. A missing or invalid config, baseline or date refuses the run
+//! (exit 2, nothing written).
 //!
 //! stdout carries counts only: files, the verdict under each mode, per code
 //! the errors, warnings and debt (`class-missing` counts the documents
@@ -22,10 +24,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use specengine_core::check::{self, Baseline, CheckConfig, Mode, Report, Verdict};
-use specengine_core::{IdSchemeToml, Paths};
-use specengine_model::{IdScheme, Severity};
-use specengine_store::{BASELINE_FILE, WorkingTree, check_input, today_utc};
+use specengine_core::check::{self, Mode, Report, Verdict};
+use specengine_model::Severity;
+use specengine_store::{
+    CheckSetup, NamedBytes, WorkingTree, check_source, default_baseline, load_check, today_utc,
+};
 
 use crate::harness::Corpus;
 
@@ -40,10 +43,7 @@ const ENV_SCHEME_B: &str = "SPECENGINE_SCHEME_B";
 
 /// What the run needs, read before anything is written.
 pub struct Setup {
-    scheme: IdScheme,
-    paths: Paths,
-    config: CheckConfig,
-    baseline: Baseline,
+    setup: CheckSetup,
     today: String,
 }
 
@@ -77,38 +77,30 @@ pub fn prepare(
             path
         }
     };
-    let shown = path.display().to_string();
-    let text = fs::read_to_string(&path)
-        .map_err(|error| format!("{shown}: cannot read the config: {error}"))?;
-    let scheme = IdScheme::from_toml(&text).map_err(|error| error.at(&shown))?;
-    let paths = Paths::from_toml(&text).map_err(|error| error.at(&shown))?;
-    let config = CheckConfig::from_toml(&text).map_err(|error| error.at(&shown))?;
-
-    let baseline_path = match baseline {
-        Some(path) => Some(path.to_path_buf()),
-        None => Some(root.join(BASELINE_FILE)).filter(|path| path.is_file()),
+    // The store's loader, as `spec check`: the whole config validated (an
+    // unknown top-level table refuses the run), then the baseline.
+    let config = NamedBytes::read(path.display().to_string(), &path);
+    let baseline = match baseline {
+        Some(path) => Some(NamedBytes::read(path.display().to_string(), path)),
+        None => default_baseline(root),
     };
-    let baseline = match baseline_path {
-        None => Baseline::empty(),
-        Some(path) => {
-            let shown = path.display().to_string();
-            let text = fs::read_to_string(&path)
-                .map_err(|error| format!("{shown}: cannot read the baseline: {error}"))?;
-            Baseline::from_toml(&text).map_err(|error| error.at(&shown))?
-        }
-    };
+    let setup = load_check(&config, baseline.as_ref()).map_err(|report| refusal(&report))?;
     let today = match today {
         Some(today) if check::is_calendar_date(today) => today.to_owned(),
         Some(today) => return Err(format!("--today {today:?} is not a YYYY-MM-DD date")),
         None => today_utc(),
     };
-    Ok(Setup {
-        scheme,
-        paths,
-        config,
-        baseline,
-        today,
-    })
+    Ok(Setup { setup, today })
+}
+
+/// The loader's causes, `file:line: message` each, on one line.
+fn refusal(report: &Report) -> String {
+    report
+        .cannot_check
+        .iter()
+        .map(|cause| format!("{}: {}", cause.path, cause.message))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// The `result` object.
@@ -137,20 +129,14 @@ pub struct CodeCounts {
 }
 
 pub fn run(corpus: &Corpus, setup: Setup) -> Result<CheckResult, String> {
-    let Setup {
-        scheme,
-        paths,
-        config,
-        baseline,
-        today,
-    } = setup;
+    let Setup { setup, today } = setup;
     let out_dir = corpus.out.join("check").join(&corpus.label);
     fs::create_dir_all(&out_dir)
         .map_err(|error| format!("cannot create {}: {error}", out_dir.display()))?;
 
-    let tree = WorkingTree::new(&corpus.root, &paths).map_err(|error| error.to_string())?;
-    let input = check_input(&tree, &scheme);
-    let report = check::run(&input, &scheme, &paths, &config, &baseline, &today);
+    let tree =
+        WorkingTree::new(&corpus.root, &setup.project.paths).map_err(|error| error.to_string())?;
+    let report = check_source(&tree, &setup, &today);
 
     let detail = out_dir.join("findings.json");
     fs::write(&detail, report.to_json())

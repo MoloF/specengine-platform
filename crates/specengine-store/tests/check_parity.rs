@@ -4,9 +4,11 @@
 //! docs check` and `cargo xtask docs index` on this repository's own
 //! documents.
 //!
-//! The parity config is built here (Q-7): the Data example of the spec with
-//! `roots` = the top-level `.md` files and the directories not `.`-named nor
-//! in `xtask`'s `SKIP_DIRS` (read from `xtask/src/docs/mod.rs`), `exclude` =
+//! The parity config is built in `parity_config/mod.rs` (Q-7; shared with
+//! the CLI's `parity.rs` through a `#[path]` module): the Data example of
+//! the spec with `roots` = the top-level `.md` files and the directories
+//! not `.`-named nor in `xtask`'s `SKIP_DIRS` (read from
+//! `xtask/src/docs/mod.rs`), `exclude` =
 //! `**/_*.md` plus `**/<name>/**` per `SKIP_DIRS`, `[classes]` all four
 //! closed as `docs/README.md` "Front-matter contract" (= `xtask`'s schema),
 //! and the generator registry of spec-check-graph's Data (the index entry).
@@ -28,6 +30,7 @@
 //! `xtask` binary is built once and run directly (no racing `cargo run`s).
 
 mod common;
+mod parity_config;
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -36,24 +39,13 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use common::{Scratch, blake3_hex, repository_root};
+use parity_config::{INDEX, parity_toml};
 use specengine_core::check::{CheckConfig, CheckInput, Report, Verdict, render_index};
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::{IdScheme, Severity};
 use specengine_store::{WorkingTree, check_input, check_worktree};
 
 const TODAY: &str = "2026-09-29";
-
-/// The index path of the parity config.
-const INDEX: &str = "docs/index.md";
-
-/// The generator registry of the parity config (spec-check-graph, Data).
-const REGISTRY: &str = "\
-[[generators]]
-command = \"cargo xtask docs index --write\"
-writes  = [\"docs/index.md\"]
-index   = true
-gate    = \"cargo xtask docs check\"
-";
 
 /// The codes increment 2 adds (spec-check-graph, Findings; part 2's
 /// `id-scope`, spec-check-scopes AC-12; pass B's file link warnings,
@@ -145,28 +137,6 @@ fn run_xtask(args: &[&str]) -> (Option<i32>, String) {
     )
 }
 
-/// `xtask`'s `SKIP_DIRS`, read from its source.
-fn skip_dirs() -> Vec<String> {
-    let source = fs::read_to_string(repository_root().join("xtask/src/docs/mod.rs"))
-        .expect("xtask/src/docs/mod.rs");
-    let start = source
-        .find("const SKIP_DIRS: &[&str] = &[")
-        .expect("SKIP_DIRS in xtask");
-    let block = &source[start..];
-    let block = &block[..block.find("];").expect("end of SKIP_DIRS")];
-    let dirs: Vec<String> = block
-        .lines()
-        .skip(1)
-        .filter_map(|line| line.split('"').nth(1))
-        .map(str::to_owned)
-        .collect();
-    assert!(
-        dirs.len() >= 5 && dirs.iter().any(|d| d == "fixtures"),
-        "{dirs:?}"
-    );
-    dirs
-}
-
 /// The documents `xtask docs budget` lists for `root`.
 fn budget_documents(root: &Path) -> BTreeSet<String> {
     let (code, stdout) = run_xtask(&["docs", "budget", "--root", root.to_str().unwrap()]);
@@ -195,61 +165,6 @@ fn xtask_blocking(root: &Path) -> BTreeSet<String> {
 }
 
 // ------------------------------------------------------------------ the new check
-
-/// The parity config for the documents under `root`.
-fn parity_toml(root: &Path, with_template_exclude: bool) -> String {
-    let skip = skip_dirs();
-    let mut roots = Vec::new();
-    for entry in fs::read_dir(root).expect("root listing") {
-        let entry = entry.unwrap();
-        let name = entry.file_name().to_str().expect("UTF-8 name").to_owned();
-        let kind = entry.file_type().unwrap();
-        let is_md = kind.is_file() && name.ends_with(".md") && !name.starts_with('_');
-        let is_dir = kind.is_dir() && !name.starts_with('.') && !skip.contains(&name);
-        if is_md || is_dir {
-            roots.push(format!("{name:?}"));
-        }
-    }
-    roots.sort();
-    let mut exclude = Vec::new();
-    if with_template_exclude {
-        exclude.push("\"**/_*.md\"".to_owned());
-    }
-    exclude.extend(skip.iter().map(|dir| format!("\"**/{dir}/**\"")));
-    format!(
-        "\
-[paths]
-roots      = [{roots}]
-records    = \"docs/decisions\"
-tier0      = \"CLAUDE.md\"
-tier1_name = \"README.md\"
-index      = \"docs/index.md\"
-exclude    = [{exclude}]
-
-[ids]
-ADR = {{ kind = \"decision\", width = 4 }}
-
-[budgets]
-tier0_bytes    = 16384
-tier1_bytes    = 10240
-index_bytes    = 10240
-decision_bytes = 1536
-canon_bytes    = 12288
-
-[classes]
-canon     = {{ required = [\"class\", \"tier\", \"scope\", \"owner\", \"reviewed\"], closed = true }}
-decision  = {{ required = [\"class\", \"id\", \"title\", \"status\", \"date\", \"scope\"], optional = [\"canon\", \"supersedes\", \"ref\"], closed = true }}
-spec      = {{ required = [\"class\", \"status\", \"scope\"], optional = [\"ref\", \"shipped\", \"adrs\"], closed = true }}
-generated = {{ required = [\"class\", \"generator\", \"source\"], closed = true }}
-
-[check]
-mode = \"enforce\"
-
-{REGISTRY}",
-        roots = roots.join(", "),
-        exclude = exclude.join(", ")
-    )
-}
 
 /// Writes the config to `dir` (outside every walked root).
 fn write_config(dir: &Path, toml: &str) -> PathBuf {
