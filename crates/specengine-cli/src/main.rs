@@ -11,8 +11,8 @@ use std::process::ExitCode;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    CheckRequest, CliError, Env, Exit, ExportIndexRequest, Globals, IndexRequest, InitRequest,
-    Outcome, SearchRequest, ShowRequest, render_json, render_text,
+    CheckRequest, CheckedTree, CliError, Env, Exit, ExportIndexRequest, Globals, IndexRequest,
+    InitRequest, Outcome, SearchRequest, ShowRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -76,6 +76,9 @@ enum Command {
         /// Check what `git commit` would record: the git index, config and baseline from it unless --config, --baseline; judged against HEAD.
         #[arg(long)]
         staged: bool,
+        /// Check the working tree as a plain check does, config and baseline from disk; judged against HEAD.
+        #[arg(long, conflicts_with = "staged")]
+        changed: bool,
         /// The debt baseline to use instead of the root's .spec-debt.toml (relative to the current directory).
         #[arg(long, value_name = "F")]
         baseline: Option<PathBuf>,
@@ -177,20 +180,32 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         )?),
         Command::Check {
             staged,
+            changed,
             baseline,
             debt,
-        } => Outcome::Check(specengine_cli::check(
-            env,
-            globals,
-            &CheckRequest {
-                // Git's children see the process's variables; relative
-                // `GIT_*` paths resolve against the current directory.
-                staged: staged.then(|| GitEnv::new(env.cwd.clone(), std::env::vars_os())),
-                baseline,
-                debt,
-                json,
-            },
-        )?),
+        } => {
+            // Git's children see the process's variables; relative `GIT_*`
+            // paths resolve against the current directory.
+            let git = || GitEnv::new(env.cwd.clone(), std::env::vars_os());
+            // clap refuses `--staged` with `--changed`.
+            let tree = if staged {
+                CheckedTree::Staged(git())
+            } else if changed {
+                CheckedTree::Changed(git())
+            } else {
+                CheckedTree::WorkingTree
+            };
+            Outcome::Check(specengine_cli::check(
+                env,
+                globals,
+                &CheckRequest {
+                    tree,
+                    baseline,
+                    debt,
+                    json,
+                },
+            )?)
+        }
         Command::Export {
             what: Export::Index { stdout },
         } => Outcome::Export(specengine_cli::export_index(

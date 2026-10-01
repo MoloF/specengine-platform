@@ -26,7 +26,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
-- [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) The spec CLI: check and export index · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
+- [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2
 - [docs/canon/spec-check-links.md](canon/spec-check-links.md) spec check: feature scopes and links · crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
@@ -83,6 +84,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) shipped
 - [docs/features/spec-check.md](features/spec-check.md) shipped
+- [docs/features/spec-cli-changed.md](features/spec-cli-changed.md) shipped
 - [docs/features/spec-cli-check.md](features/spec-cli-check.md) shipped
 - [docs/features/spec-cli-introduced.md](features/spec-cli-introduced.md) shipped
 - [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) shipped

@@ -81,7 +81,7 @@ This repository (root config, `enforce`, no baseline): `clean`, no warning.
 ## Next
 
 - Increment 2 is complete: part 2 shipped feature scopes and Markdown file links (`docs/canon/spec-check-links.md`).
-- Increment 3 shipped: CLI passes 2a.1 (`spec check`, the writer `spec export index` on this renderer), 2a.2 (`--staged`), 2b (the root `specengine.toml`, Q-7; the gate here): `docs/canon/spec-check-cli.md`. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
+- Increment 3 shipped: CLI passes 2a.1 (`spec check`, the writer `spec export index` on this renderer), 2a.2 (`--staged`), 2b (the root `specengine.toml`, Q-7; the gate here): `docs/canon/spec-check-{cli,git}.md`. The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 
 ## Open nits

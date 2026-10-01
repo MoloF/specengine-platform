@@ -1,7 +1,15 @@
-//! `spec check [--staged] [--baseline F] [--debt]`: the documentation
-//! convention's check (core's `check::run`) over a fresh parse of the
-//! working tree, no database, data directory, slug or `HOME`; nothing is
-//! written.
+//! `spec check [--staged | --changed] [--baseline F] [--debt]`: the
+//! documentation convention's check (core's `check::run`) over a fresh
+//! parse of the working tree, no database, data directory, slug or `HOME`;
+//! nothing is written.
+//!
+//! `--changed` checks the working tree exactly as the plain run does
+//! (config and baseline from disk, untracked and ignored files included,
+//! the git index never read), judged against `HEAD` by `--staged`'s rules
+//! (the store's `check_changed_with_notes`, task spec `spec-cli-changed`):
+//! the same output, notes and failures; outside a git working tree, or
+//! without `git`, it cannot check (exit 2), never falling back to the plain
+//! run. `--staged` and `--changed` exclude each other (a usage error).
 //!
 //! `--staged` checks what `git commit` would record instead: the git index
 //! git names (`GIT_INDEX_FILE`, so `commit -a`, `-o` too), by the store's
@@ -26,34 +34,51 @@
 //! unreadable or invalid, the root unreadable, the walk's causes. The
 //! baseline is `--baseline F` (relative to the current directory; it must
 //! exist), else the root's `.spec-debt.toml` when an entry of that name
-//! exists. The mode is `[check] mode` (with `--staged`, the stricter of it
-//! and `HEAD`'s); today is the UTC date at start.
+//! exists. The mode is `[check] mode` (with `--staged` or `--changed`, the
+//! stricter of it and `HEAD`'s); today is the UTC date at start.
 //!
 //! Names: the config as discovery gives it (`specengine.toml`, or
 //! `--config` as typed), the default baseline `.spec-debt.toml`,
 //! `--baseline` as typed, the root `.`: no output holds an absolute path
 //! the caller did not type. One tree, config, baseline and date (and with
-//! `--staged` one `HEAD` tree) give the same bytes on stdout and stderr,
-//! wherever the root lies.
+//! `--staged` or `--changed` one `HEAD` tree) give the same bytes on
+//! stdout and stderr, wherever the root lies.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use specengine_core::check::{Mode, Report, Verdict};
 use specengine_store::{
-    GitEnv, GivenFile, NamedBytes, check_staged_with_notes, check_tree, default_baseline,
-    load_check, today_utc,
+    GitEnv, GivenFile, NamedBytes, StagedCheck, check_changed_with_notes, check_staged_with_notes,
+    check_tree, default_baseline, load_check, today_utc,
 };
 
 use crate::project::locate;
 use crate::{CliError, Env, Exit, Globals, Message, one_line};
 
+/// What `spec check` judges, and whether against `HEAD`. Git runs with the
+/// variant's environment (the caller's current directory and variables;
+/// `main` passes the process's).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum CheckedTree {
+    /// Plain: the working tree, no base.
+    #[default]
+    WorkingTree,
+    /// `--staged`: the git index, against `HEAD`.
+    Staged(GitEnv),
+    /// `--changed`: the working tree as plain walks it, config and
+    /// baseline from disk, against `HEAD`.
+    Changed(GitEnv),
+}
+
+/// The store's check against `HEAD` a [`CheckedTree`] variant runs:
+/// `check_staged_with_notes` or `check_changed_with_notes`.
+type AgainstHead = fn(&Path, Option<GivenFile>, Option<GivenFile>, &GitEnv, &str) -> StagedCheck;
+
 /// `spec check` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheckRequest {
-    /// `--staged`: check the git index instead of the working tree, git run
-    /// with this environment (the caller's current directory and
-    /// variables; `main` passes the process's).
-    pub staged: Option<GitEnv>,
+    /// The checked tree: plain, `--staged` or `--changed`.
+    pub tree: CheckedTree,
     /// `--baseline F`: replaces the root's baseline; relative to the current
     /// directory, named as typed.
     pub baseline: Option<PathBuf>,
@@ -103,14 +128,18 @@ pub fn check(
         }
     });
     let mut messages = Vec::new();
-    let report = match &request.staged {
-        Some(git) => {
+    let against_head = match &request.tree {
+        CheckedTree::Staged(git) => Some((git, check_staged_with_notes as AgainstHead)),
+        CheckedTree::Changed(git) => Some((git, check_changed_with_notes as AgainstHead)),
+        CheckedTree::WorkingTree => None,
+    };
+    let report = match against_head {
+        Some((git, against_head)) => {
             let given_config = globals.config.is_some().then(|| GivenFile {
                 bytes: config(),
                 path: Some(located.config_file.clone()),
             });
-            let checked =
-                check_staged_with_notes(&located.root, given_config, given_baseline, git, &today);
+            let checked = against_head(&located.root, given_config, given_baseline, git, &today);
             messages.extend(checked.notes.into_iter().map(Message::Note));
             checked.report
         }
@@ -124,7 +153,7 @@ pub fn check(
             };
             if report.mode == Mode::EnforceIntroduced {
                 messages.push(Message::Note(
-                    "mode `enforce-introduced` has no base without --staged: judged as `enforce`"
+                    "mode `enforce-introduced` has no base without --staged or --changed: judged as `enforce`"
                         .to_owned(),
                 ));
             }

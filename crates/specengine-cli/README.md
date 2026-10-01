@@ -12,7 +12,7 @@ The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), sear
 
 ## API
 
-`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}`, `CheckRequest.staged: Option<GitEnv>` (`main`: the process's) are passed in. `specengine.toml` (`CONFIG_FILE`, the store's): core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
+`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}`, `CheckRequest.tree: CheckedTree {WorkingTree, Staged(GitEnv), Changed(GitEnv)}` (`main`: the process's) are passed in. `specengine.toml` (`CONFIG_FILE`, the store's): core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
 
 ## Commands
 
@@ -21,7 +21,7 @@ The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), sear
 - `spec init [--slug S]` writes exactly `[project]\nslug = "<slug>"\n` (`create_new`: a file there → exit 2; a partial one is removed), prints `created <path> with slug <slug>`, JSON `{path, slug}`. Slug: `--slug` validated, else the directory name with ASCII letters and digits lower-cased, every other run (non-UTF-8 bytes included) → `-`, trimmed (`My Project_2` → `my-project-2`); not `grammar::is_slug` or over 64 bytes → exit 2 naming `--slug`. Never walks; a config in an ancestor → a `warning:`.
 - `spec index [--full]`: store `update` (`--full`: `rebuild`); `indexed <slug>: walked 13, parsed 13, unchanged 0, removed 0, unreadable 0` (+ `, reparsed all`), then `db <path>`; JSON `project`, `db` + the `UpdateReport` fields.
 - `spec search QUERY… [--kind K]… [--limit N] [--archive]`: the store's FTS5 search in its order. Terms under 3 characters dropped with a `note:`; none left → exit 2 suggesting `spec show`; `--kind` free, repeatable; `--limit` 1..=200, default 20.
-- `spec check [--staged] [--baseline F] [--debt]`, `spec export index [--stdout]`: `docs/canon/spec-check-cli.md`.
+- `spec check [--staged | --changed] [--baseline F] [--debt]`, `spec export index [--stdout]`: `docs/canon/spec-check-{cli,git}.md`.
 - `spec show REF`: `REF` is an ID, an `aliases:` entry, an `aliases_from` legacy ID, `slug/ID`, `ID#SECTION` (`@rev` ignored with a `note:`) or a root-relative `.md` path.
 
 **Discovery.** Without `--root` and `--config`, walk up from the canonical current directory to the first holding a `specengine.toml` file; none → exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the current directory (read-only pilots). Config errors: `<config as given>:<line>: message`.
@@ -75,7 +75,6 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 MCP stdio follows 3–4.
 
-- `spec-cli-changed` (`--changed`): `docs/canon/spec-check-cli.md`.
 - 3 `spec-cli-graph`: `tree`, `graph`, `show --links`; default link types.
 - 4 `spec-cli-bundle`: `bundle`, `bundle_hash`; Q7 token calibration, `rusqlite_migration`.
 

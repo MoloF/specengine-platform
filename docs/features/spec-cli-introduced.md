@@ -12,7 +12,7 @@ shipped: 2026-10-01
 
 A backlogged pilot (08 §4.3, §4.2 item 3): `enforce` refuses each documentation commit until fixed or baselined, `observe` lets agents add errors. `enforce-introduced` (04 §1.6) blocks only what a commit adds, with new debt and the stricter mode, else a baseline entry or `observe` silences an error.
 
-Owner's answers: 2a.2 Q4–Q9 (2026-09-30; Q9 no ADR); Q1–Q4 (2026-10-01): Q1 `--changed` is the next task, `spec-cli-changed`, both before pilot agents use `enforce-introduced`; Q2 no `--base REF`; Q3 a `--baseline`, `--config` outside the root counts as outside the repository; Q4 `HEAD`'s unreadable baseline lifts the new-debt rule. How it works now: `docs/canon/spec-check-cli.md` "The base", `docs/canon/spec-check.md`.
+Owner's answers: 2a.2 Q4–Q9 (2026-09-30; Q9 no ADR); Q1–Q4 (2026-10-01): Q1 `--changed` is the next task, `spec-cli-changed`, both before pilot agents use `enforce-introduced`; Q2 no `--base REF`; Q3 a `--baseline`, `--config` outside the root counts as outside the repository; Q4 `HEAD`'s unreadable baseline lifts the new-debt rule. How it works now: `docs/canon/spec-check-git.md` "The base", `docs/canon/spec-check.md`.
 
 ## Acceptance criteria
 
@@ -43,7 +43,7 @@ Cli tests unless core or store is named; 2a.2's scratch repositories (isolated g
 
 ## Implementation
 
-Three iterations; review accepted iteration 3, nothing blocking. The truth moved to `docs/canon/spec-check-cli.md` ("The staged check", "The base", "Next"), `docs/canon/spec-check.md` (types, verdict, output), the three crate READMEs, `docs/README.md` "Enforcement".
+Three iterations; review accepted iteration 3, nothing blocking. The truth moved to `docs/canon/spec-check-git.md` ("The staged check", "The base", "Next"), `docs/canon/spec-check.md` (types, verdict, output), the three crate READMEs, `docs/README.md` "Enforcement".
 
 | Module | What it does |
 |---|---|

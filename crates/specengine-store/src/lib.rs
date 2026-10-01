@@ -33,7 +33,9 @@
 //!   (docs/features/spec-cli-staged.md), judged against `HEAD`, its base;
 //!   [`check_staged_with_notes`] takes the given files' places
 //!   ([`GivenFile`]) and returns the notes too ([`StagedCheck`])
-//!   (docs/features/spec-cli-introduced.md).
+//!   (docs/features/spec-cli-introduced.md); [`check_changed_with_notes`]:
+//!   over the working tree, config and baseline from disk, judged against
+//!   `HEAD` the same way (docs/features/spec-cli-changed.md).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -59,9 +61,9 @@ use specengine_core::check::CheckInput;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
 pub use check::{
-    BASELINE_FILE, CONFIG_FILE, CheckSetup, GivenFile, NamedBytes, StagedCheck, check_input,
-    check_source, check_staged, check_staged_with_notes, check_tree, check_worktree,
-    default_baseline, load_check, load_config, today_utc,
+    BASELINE_FILE, CONFIG_FILE, CheckSetup, GivenFile, NamedBytes, StagedCheck,
+    check_changed_with_notes, check_input, check_source, check_staged, check_staged_with_notes,
+    check_tree, check_worktree, default_baseline, load_check, load_config, today_utc,
 };
 pub use error::StoreError;
 pub use git::GitEnv;

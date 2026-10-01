@@ -179,7 +179,7 @@ fn plain_enforce_introduced_is_enforce_with_one_note_and_no_git() {
                 // its own note after it.
                 assert_eq!(
                     notes(run)[0],
-                    "note: mode `enforce-introduced` has no base without --staged: judged as `enforce`",
+                    "note: mode `enforce-introduced` has no base without --staged or --changed: judged as `enforce`",
                     "{fixture} {form:?}\n{}",
                     run.show()
                 );

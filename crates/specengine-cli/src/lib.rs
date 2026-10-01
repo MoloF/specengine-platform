@@ -2,7 +2,9 @@
 //! `spec-cli`), the agent read loop, `spec init`, `spec index`,
 //! `spec search`, `spec show`; pass 2a.1 (task spec `spec-cli-check`),
 //! `spec check` and `spec export index`; pass 2a.2 (task spec
-//! `spec-cli-staged`), `spec check --staged` over the git index.
+//! `spec-cli-staged`), `spec check --staged` over the git index; task spec
+//! `spec-cli-changed`, `spec check --changed`: the working tree against
+//! `HEAD`.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -48,7 +50,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 pub use cap::OUTPUT_CAP_CHARS;
-pub use check::{CheckOutcome, CheckRequest, check};
+pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use export::{ExportIndexRequest, ExportOutcome, export_index};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use location::{OpenIndex, data_dir, db_path, open_index};

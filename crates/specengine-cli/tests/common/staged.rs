@@ -313,9 +313,11 @@ pub fn spec_timed(
     })
 }
 
-/// Whether `run` is a `spec check --staged`.
+/// Whether `run` is a `spec check` with a base: `--staged` or `--changed`.
 pub fn is_staged(run: &Run) -> bool {
-    run.args.iter().any(|arg| arg == "--staged")
+    run.args
+        .iter()
+        .any(|arg| arg == "--staged" || arg == "--changed")
 }
 
 /// `run` with the base's fields set aside (docs/features/spec-cli-introduced.md,

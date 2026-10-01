@@ -12,9 +12,11 @@
 //! index all feed it the same way; no cause names a path the caller did
 //! not pass (the root is `.`, the root's baseline [`BASELINE_FILE`]).
 //!
-//! The staged check ([`check_staged_with_notes`]) is judged against its
-//! base, `HEAD` (docs/features/spec-cli-introduced.md; `crate::base`), and
-//! returns notes beside its report.
+//! The staged check ([`check_staged_with_notes`]) and the working tree's
+//! against `HEAD` ([`check_changed_with_notes`]) are judged against their
+//! base, `HEAD` (docs/features/spec-cli-introduced.md,
+//! docs/features/spec-cli-changed.md; `crate::base`), and return notes
+//! beside their report.
 
 use std::fs;
 use std::io;
@@ -73,7 +75,8 @@ pub struct GivenFile {
     pub path: Option<PathBuf>,
 }
 
-/// A staged check's answer: the report and the notes beside it.
+/// The answer of a check against `HEAD` (`--staged`, `--changed`): the
+/// report and the notes beside it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagedCheck {
     pub report: Report,
@@ -435,15 +438,23 @@ pub fn check_staged_with_notes(
         Err(report) => return StagedCheck::bare(*report),
     };
     let checked_mode = setup.config.mode;
-    let place = |path: Option<Option<PathBuf>>, flag, name: &str, file| match path {
-        Some(path) => Placed::given(&staged.root, flag, name, path.as_deref()),
-        None => Placed::root_file(file),
-    };
-    let config_place = place(config_path, "--config", &config.name, CONFIG_FILE);
+    let config_place = place(
+        &staged.root,
+        config_path,
+        "--config",
+        &config.name,
+        CONFIG_FILE,
+    );
     let baseline_name = baseline
         .as_ref()
         .map_or(BASELINE_FILE, |given| given.name.as_str());
-    let baseline_place = place(baseline_path, "--baseline", baseline_name, BASELINE_FILE);
+    let baseline_place = place(
+        &staged.root,
+        baseline_path,
+        "--baseline",
+        baseline_name,
+        BASELINE_FILE,
+    );
     match read_base(&mut staged, &setup, &config_place, &baseline_place) {
         Ok((head_walk, head, walk)) => {
             let notes = head.notes(&config_place, checked_mode);
@@ -478,6 +489,148 @@ pub fn check_staged_with_notes(
         }
         Err(failure) => StagedCheck::bare(Report::cannot(checked_mode, vec![failure.cause()])),
     }
+}
+
+/// The whole check of the working tree under `root`, walked as
+/// [`check_tree`] walks it (untracked and ignored files included, the git
+/// index never read), judged against `HEAD`
+/// (docs/features/spec-cli-changed.md): `spec check --changed`. The config
+/// is `config` when given (read from disk by the caller), else
+/// [`CONFIG_FILE`] at the root on disk; the baseline `baseline` when
+/// given, else [`default_baseline`]. `today` as `YYYY-MM-DD`.
+///
+/// The config and the baseline are validated first, before git runs: their
+/// causes as [`load_check`] reports them. The base is
+/// [`check_staged_with_notes`]'s: `HEAD`'s tree under the root, walked and
+/// checked under the checked config, its causes dropped; `HEAD`'s config
+/// at the checked config's root-relative path gives its mode (the stricter
+/// applies), `HEAD`'s baseline at the checked baseline's (the root's
+/// [`BASELINE_FILE`] when none is given, even absent on disk) the new-debt
+/// rule; the same notes. Git, in the root: `rev-parse`, when born
+/// `ls-tree`, one `cat-file --batch` session reading, each OID once,
+/// `HEAD`'s config and baseline, then every blob `HEAD` lists under the
+/// checked `[paths]`. A `HEAD` file reuses the checked parse only when the
+/// file at its path was read without error and holds exactly its bytes.
+///
+/// Every failure after the config is a `cannot-check` report in the
+/// checked config's mode, without notes: the root not in a git working
+/// tree, `git` not runnable or failing (one cause at `.`; never the plain
+/// check instead); a listed `HEAD` object missing or not a blob (a partial
+/// base), at its path, with the checked run's causes and no findings.
+pub fn check_changed_with_notes(
+    root: &Path,
+    config: Option<GivenFile>,
+    baseline: Option<GivenFile>,
+    git: &GitEnv,
+    today: &str,
+) -> StagedCheck {
+    let (config, config_path) = match config {
+        Some(given) => (given.bytes, Some(given.path)),
+        None => (NamedBytes::read(CONFIG_FILE, &root.join(CONFIG_FILE)), None),
+    };
+    let (baseline, baseline_path) = match baseline {
+        Some(given) => (Some(given.bytes), Some(given.path)),
+        None => (default_baseline(root), None),
+    };
+    let setup = match load_check(&config, baseline.as_ref()) {
+        Ok(setup) => setup,
+        Err(report) => return StagedCheck::bare(*report),
+    };
+    let checked_mode = setup.config.mode;
+    let mut session = match Staged::head_only(root, git) {
+        Ok(session) => session,
+        Err(cause) => return StagedCheck::bare(Report::cannot(checked_mode, vec![cause])),
+    };
+    let config_place = place(
+        &session.root,
+        config_path,
+        "--config",
+        &config.name,
+        CONFIG_FILE,
+    );
+    let baseline_name = baseline
+        .as_ref()
+        .map_or(BASELINE_FILE, |given| given.name.as_str());
+    let baseline_place = place(
+        &session.root,
+        baseline_path,
+        "--baseline",
+        baseline_name,
+        BASELINE_FILE,
+    );
+    let (head_walk, head) = match read_head(&mut session, &setup, &config_place, &baseline_place) {
+        Ok(read) => read,
+        Err(failure) => {
+            return StagedCheck::bare(Report::cannot(checked_mode, vec![failure.cause()]));
+        }
+    };
+    let tree = match WorkingTree::new(root, &setup.project.paths) {
+        Ok(tree) => tree,
+        Err(error) => {
+            return StagedCheck::bare(Report::cannot(checked_mode, vec![root_cause(&error)]));
+        }
+    };
+    let input = check_input(&tree, &setup.project.scheme);
+    let report = check::run(
+        &input,
+        &setup.project.scheme,
+        &setup.project.paths,
+        &setup.config,
+        &setup.baseline,
+        today,
+    );
+    let findings = match head_walk.findings_by_bytes(session.objects, input, &setup, today) {
+        Ok(findings) => findings,
+        Err(mut causes) => {
+            // A partial base judges nothing: the checked run's causes and
+            // the base's, no findings, no notes.
+            causes.extend(report.cannot_check);
+            return StagedCheck::bare(Report::cannot(checked_mode, causes));
+        }
+    };
+    let notes = head.notes(&config_place, checked_mode);
+    let base = Base {
+        findings,
+        baseline: head.baseline,
+        mode: head.mode,
+    };
+    StagedCheck {
+        report: check::judge(report, &setup.baseline, &base),
+        notes,
+    }
+}
+
+/// Where a checked config or baseline lies, so `HEAD`'s counterpart can be
+/// found: given under `flag` (`Some`, its path on disk known or not) at
+/// [`Placed::given`] against `root` (canonical), named `name`; else the
+/// root's own `file`.
+fn place(
+    root: &Path,
+    given: Option<Option<PathBuf>>,
+    flag: &'static str,
+    name: &str,
+    file: &str,
+) -> Placed {
+    match given {
+        Some(path) => Placed::given(root, flag, name, path.as_deref()),
+        None => Placed::root_file(file),
+    }
+}
+
+/// Every git read of a `--changed` check, in the session's order: `HEAD`
+/// probed and listed, `HEAD`'s config and baseline, every blob `HEAD`
+/// lists under the checked `[paths]`; then the session ends.
+fn read_head(
+    session: &mut Staged,
+    setup: &CheckSetup,
+    config: &Placed,
+    baseline: &Placed,
+) -> Result<(HeadWalk, Head), GitFailure> {
+    let head = Head::read(session, config, baseline, setup.config.mode)?;
+    let head_walk = head.walk_by(&setup.project.paths.walk_scope());
+    head_walk.read(session)?;
+    session.finish()?;
+    Ok((head_walk, head))
 }
 
 /// Every git read of a staged check after its config and baseline, in the

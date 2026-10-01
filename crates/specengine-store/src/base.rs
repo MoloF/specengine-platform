@@ -1,8 +1,9 @@
-//! The base of `spec check --staged` (docs/features/spec-cli-introduced.md):
-//! `HEAD`'s tree under the root, walked and checked under the checked
-//! tree's scheme, `[paths]` and check tables, so a config change never
-//! turns an old violation into an introduced one; `HEAD`'s config gives
-//! only its mode, `HEAD`'s baseline the new-debt rule. Core's
+//! The base of `spec check --staged` (docs/features/spec-cli-introduced.md)
+//! and `--changed` (docs/features/spec-cli-changed.md): `HEAD`'s tree
+//! under the root, walked and checked under the checked tree's scheme,
+//! `[paths]` and check tables, so a config change never turns an old
+//! violation into an introduced one; `HEAD`'s config gives only its mode,
+//! `HEAD`'s baseline the new-debt rule. Core's
 //! [`specengine_core::check::judge`] compares.
 //!
 //! Git, through the check's one [`Staged`] (its environment, its guard, its
@@ -13,12 +14,19 @@
 //! once ([`Staged::blob`]): bytes are shared by OID across paths, a parse
 //! only at the same path, where the checked [`CheckFile`] is reused.
 //!
+//! `--changed` has no index ([`Staged::head_only`]): every listed blob is
+//! read, and every listed object judged before anything is shared or
+//! parsed ([`HeadWalk::findings_by_bytes`]); a `HEAD` file reuses the
+//! checked [`CheckFile`] only at the same path, read without error, with
+//! bytes equal to `HEAD`'s blob.
+//!
 //! `HEAD`'s files are named in notes only as [`CONFIG_FILE`](crate::CONFIG_FILE),
 //! [`BASELINE_FILE`](crate::BASELINE_FILE) or the flag's value as typed.
 
 use std::collections::BTreeMap;
 use std::path::{Component, Path};
 
+use specengine_core::WalkScope;
 use specengine_core::check::{
     self, Baseline, Cause, CheckConfig, CheckFile, CheckInput, Finding, Mode,
 };
@@ -243,7 +251,13 @@ impl Head {
     /// `HEAD`'s listing by the checked `[paths]` (the index's scope), and
     /// each listed path's OID.
     pub(crate) fn walk(&self, index: &IndexWalk) -> HeadWalk {
-        let (listing, listed) = walk_index(&self.entries, &index.scope);
+        self.walk_by(&index.scope)
+    }
+
+    /// `HEAD`'s listing by `scope`, the checked `[paths]`, and each listed
+    /// path's OID.
+    pub(crate) fn walk_by(&self, scope: &WalkScope) -> HeadWalk {
+        let (listing, listed) = walk_index(&self.entries, scope);
         HeadWalk { listing, listed }
     }
 
@@ -298,11 +312,14 @@ pub(crate) struct HeadWalk {
 }
 
 impl HeadWalk {
-    /// Reads, after the index's, every listed path's blob, in path order.
-    /// An OID already read is not requested again, so every (path, OID)
-    /// the index's listing shares is a no-op and only those it lacks reach
-    /// git. Afterwards the session holds every listed OID, whichever of
-    /// them [`HeadWalk::findings`] parses: no split to keep in step.
+    /// Reads every listed path's blob, in path order. An OID already read
+    /// is not requested again. `--staged` (`read_base`) calls it after the
+    /// index's blobs, so every (path, OID) the index's listing shares is a
+    /// no-op and only those it lacks reach git. `--changed` (`read_head`)
+    /// reads no index: every listed OID reaches git once, unless it is the
+    /// OID of `HEAD`'s config or baseline, read before. Afterwards the session
+    /// holds every listed OID, whichever of them [`HeadWalk::findings`] or
+    /// [`HeadWalk::findings_by_bytes`] parses: no split to keep in step.
     pub(crate) fn read(&self, staged: &mut Staged) -> Result<(), GitFailure> {
         for oid in self.listed.values() {
             staged.blob(oid)?;
@@ -366,38 +383,123 @@ impl HeadWalk {
         if !partial.is_empty() {
             return Err(partial);
         }
-        let mut fresh = fresh.into_iter().peekable();
-        let scheme = &setup.project.scheme;
-        while let Some((path, oid)) = fresh.next() {
-            let last = fresh.peek().is_none_or(|(_, next)| *next != oid);
-            let blob = if last {
-                index.take_object(&oid)
+        let take = |oid: &str, last: bool| {
+            if last {
+                index.take_object(oid)
             } else {
-                index.object(&oid).cloned()
+                index.object(oid).cloned()
+            }
+        };
+        run_base(input, fresh, take, setup, today)
+    }
+
+    /// The base's findings of `spec check --changed`
+    /// (docs/features/spec-cli-changed.md): [`HeadWalk::findings`] with the
+    /// working tree as the checked side, `objects` every object the
+    /// session read.
+    ///
+    /// Every listed object is judged first, before any file is shared or
+    /// parsed (sharing needs `HEAD`'s bytes): `Err` with a cause at each
+    /// path whose object is not a blob read ([`MISSING_HEAD_BLOB`],
+    /// [`HEAD_NOT_A_BLOB`], [`HEAD_BLOB_NOT_READ`]), none exempt. Then a
+    /// path reuses `checked`'s file only when that file lies at the same
+    /// path, was read without error and holds exactly `HEAD`'s blob's
+    /// bytes; never across paths. Every other file is parsed from `HEAD`'s
+    /// bytes.
+    pub(crate) fn findings_by_bytes(
+        self,
+        mut objects: BTreeMap<String, Blob>,
+        checked: CheckInput,
+        setup: &CheckSetup,
+        today: &str,
+    ) -> Result<Vec<Finding>, Vec<Cause>> {
+        let partial: Vec<Cause> = self
+            .listed
+            .iter()
+            .filter_map(|(path, oid)| {
+                partial_cause(objects.get(oid)).map(|message| Cause {
+                    path: path.clone(),
+                    message: message.to_owned(),
+                })
+            })
+            .collect();
+        if !partial.is_empty() {
+            return Err(partial);
+        }
+        // Both in path order: a merge, no lookup table.
+        let mut shared = checked.files;
+        shared.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+        let mut shared = shared.into_iter().peekable();
+        let (_, problems) = split_listing(self.listing);
+        let mut input = CheckInput {
+            files: Vec::with_capacity(self.listed.len()),
+            problems,
+        };
+        let mut fresh = Vec::new();
+        for (path, oid) in self.listed {
+            while shared.next_if(|file| file.path < path).is_some() {}
+            let same_bytes = |file: &CheckFile| {
+                file.path == path
+                    && file.read_error.is_none()
+                    && matches!(objects.get(&oid), Some(Blob::Bytes(bytes)) if *bytes == file.bytes)
             };
-            match blob {
-                Some(Blob::Bytes(bytes)) => input.files.push(parse_head_file(path, bytes, scheme)),
-                // Not reached: every object was seen above, and an OID is
-                // moved out only at its last use. Fail closed regardless.
-                other => {
-                    let message = partial_cause(other.as_ref()).unwrap_or(HEAD_BLOB_NOT_READ);
-                    return Err(vec![Cause {
-                        path,
-                        message: message.to_owned(),
-                    }]);
-                }
+            if let Some(file) = shared.next_if(same_bytes) {
+                input.files.push(file);
+            } else {
+                fresh.push((path, oid));
             }
         }
-        Ok(check::run(
-            &input,
-            scheme,
-            &setup.project.paths,
-            &setup.config,
-            &Baseline::empty(),
-            today,
-        )
-        .findings)
+        // By OID, so an OID's last use is known (see `run_base`).
+        fresh.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+        let take = |oid: &str, last: bool| {
+            if last {
+                objects.remove(oid)
+            } else {
+                objects.get(oid).cloned()
+            }
+        };
+        run_base(input, fresh, take, setup, today)
     }
+}
+
+/// The base's run: `input` holds the files reused from the checked run;
+/// each of `fresh` (path, OID), sorted by OID, is parsed from the object
+/// `take` gives for its OID, told whether this is the OID's last use (its
+/// bytes may then be moved out; before, they are copied). Then
+/// `check::run` with an empty baseline, `today`, its causes dropped.
+fn run_base(
+    mut input: CheckInput,
+    fresh: Vec<(String, String)>,
+    mut take: impl FnMut(&str, bool) -> Option<Blob>,
+    setup: &CheckSetup,
+    today: &str,
+) -> Result<Vec<Finding>, Vec<Cause>> {
+    let mut fresh = fresh.into_iter().peekable();
+    let scheme = &setup.project.scheme;
+    while let Some((path, oid)) = fresh.next() {
+        let last = fresh.peek().is_none_or(|(_, next)| *next != oid);
+        match take(&oid, last) {
+            Some(Blob::Bytes(bytes)) => input.files.push(parse_head_file(path, bytes, scheme)),
+            // Not reached: every object was seen before, and an OID is
+            // moved out only at its last use. Fail closed regardless.
+            other => {
+                let message = partial_cause(other.as_ref()).unwrap_or(HEAD_BLOB_NOT_READ);
+                return Err(vec![Cause {
+                    path,
+                    message: message.to_owned(),
+                }]);
+            }
+        }
+    }
+    Ok(check::run(
+        &input,
+        scheme,
+        &setup.project.paths,
+        &setup.config,
+        &Baseline::empty(),
+        today,
+    )
+    .findings)
 }
 
 /// Why a `HEAD` file whose OID the session read as `blob` would make the
@@ -892,5 +994,188 @@ mod base_partial {
         );
         assert!(checked.report.findings.is_empty(), "{:?}", checked.report);
         assert_eq!(BASE_PARSES.with(std::cell::Cell::get), 0);
+    }
+}
+
+/// AC-05 of docs/features/spec-cli-changed.md: under `--changed` the base
+/// reuses the checked parse of a `HEAD` file only when the disk file at
+/// the same path holds exactly its bytes. N unchanged documents, one
+/// changed, one moved (a plain rename on disk, the same bytes at a new
+/// path), one deleted, one untracked → exactly 3 parses (the changed
+/// file's `HEAD` version, the moved file's old path, the deleted file);
+/// nothing changed → none. A real scratch repository, nothing staged
+/// after the commit, every git process isolated (no global or system
+/// config, a scratch `HOME`, a ceiling at the scratch).
+#[cfg(test)]
+mod base_parses_changed {
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use specengine_core::check::Verdict;
+
+    use super::BASE_PARSES;
+    use crate::{GitEnv, check_changed_with_notes};
+
+    const UNCHANGED: usize = 6;
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    /// A scratch directory, canonical, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "specengine-store-base-parses-changed-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::SeqCst)
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(path.join("home")).expect("scratch");
+            Self(std::fs::canonicalize(&path).expect("canonical scratch"))
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn vars(scratch: &Path) -> Vec<(String, String)> {
+        let home = scratch.join("home").display().to_string();
+        vec![
+            (
+                "PATH".to_owned(),
+                std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_owned()),
+            ),
+            ("HOME".to_owned(), home.clone()),
+            ("XDG_CONFIG_HOME".to_owned(), home),
+            ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
+            ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
+            (
+                "GIT_CEILING_DIRECTORIES".to_owned(),
+                scratch.display().to_string(),
+            ),
+            ("GIT_AUTHOR_NAME".to_owned(), "Scratch".to_owned()),
+            (
+                "GIT_AUTHOR_EMAIL".to_owned(),
+                "a@example.invalid".to_owned(),
+            ),
+            (
+                "GIT_AUTHOR_DATE".to_owned(),
+                "2026-01-01T00:00:00+0000".to_owned(),
+            ),
+            ("GIT_COMMITTER_NAME".to_owned(), "Scratch".to_owned()),
+            (
+                "GIT_COMMITTER_EMAIL".to_owned(),
+                "c@example.invalid".to_owned(),
+            ),
+            (
+                "GIT_COMMITTER_DATE".to_owned(),
+                "2026-01-01T00:00:00+0000".to_owned(),
+            ),
+        ]
+    }
+
+    fn git(scratch: &Path, dir: &Path, args: &[&str]) -> Vec<u8> {
+        let output = Command::new("git")
+            .current_dir(dir)
+            .env_clear()
+            .envs(vars(scratch))
+            .args(args)
+            .output()
+            .expect("git runs");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    }
+
+    fn write(root: &Path, relative: &str, text: &str) {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("directories");
+        std::fs::write(path, text).expect("a file");
+    }
+
+    fn document(title: &str) -> String {
+        format!(
+            "---\nclass: spec\nstatus: draft\nscope: [x]\n---\n\n# {title}\n\nText of {title}.\n"
+        )
+    }
+
+    /// The base's parses of one `--changed` check of `repo`, its verdict
+    /// and its document count.
+    fn parses(scratch: &Path, repo: &Path) -> (usize, Verdict, usize) {
+        BASE_PARSES.with(|count| count.set(0));
+        let env = GitEnv::new(repo, vars(scratch));
+        let checked = check_changed_with_notes(repo, None, None, &env, "2026-10-01");
+        assert!(
+            checked.report.cannot_check.is_empty(),
+            "{:?}",
+            checked.report
+        );
+        assert!(checked.notes.is_empty(), "{:?}", checked.notes);
+        (
+            BASE_PARSES.with(std::cell::Cell::get),
+            checked.report.verdict,
+            checked.report.counts.documents,
+        )
+    }
+
+    #[test]
+    fn the_base_parses_only_what_the_disk_does_not_hold_at_its_path() {
+        let scratch = Scratch::new();
+        let repo = scratch.0.join("repo");
+        git(
+            &scratch.0,
+            &scratch.0,
+            &["init", "--template=", "-q", "-b", "main", "repo"],
+        );
+        write(
+            &repo,
+            "specengine.toml",
+            "[paths]\nroots = [\"notes\"]\n\n[ids]\nR = { kind = \"requirement\", width = 2 }\n\n[check]\nmode = \"enforce-introduced\"\n",
+        );
+        for number in 0..UNCHANGED {
+            write(
+                &repo,
+                &format!("notes/same-{number}.md"),
+                &document(&format!("Same {number}")),
+            );
+        }
+        write(&repo, "notes/changed.md", &document("Before"));
+        write(&repo, "notes/old.md", &document("Moved"));
+        write(&repo, "notes/gone.md", &document("Deleted"));
+        git(&scratch.0, &repo, &["add", "-A"]);
+        git(
+            &scratch.0,
+            &repo,
+            &["commit", "-q", "--no-verify", "-m", "base"],
+        );
+
+        let (count, verdict, documents) = parses(&scratch.0, &repo);
+        assert_eq!(count, 0, "nothing changed: every HEAD file is shared");
+        assert_eq!(verdict, Verdict::Clean);
+        assert_eq!(documents, UNCHANGED + 3);
+
+        write(&repo, "notes/changed.md", &document("After"));
+        std::fs::rename(repo.join("notes/old.md"), repo.join("notes/new.md")).expect("mv");
+        std::fs::remove_file(repo.join("notes/gone.md")).expect("rm");
+        write(&repo, "notes/untracked.md", &document("Untracked"));
+        assert!(
+            git(&scratch.0, &repo, &["diff", "--cached", "--name-only"]).is_empty(),
+            "nothing staged"
+        );
+        let (count, verdict, documents) = parses(&scratch.0, &repo);
+        assert_eq!(
+            count, 3,
+            "the changed file's HEAD side, the moved file's old path, the deleted file"
+        );
+        assert_eq!(verdict, Verdict::Clean);
+        assert_eq!(documents, UNCHANGED + 3);
     }
 }

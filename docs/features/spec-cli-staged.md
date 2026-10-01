@@ -11,7 +11,7 @@ adrs: []
 
 ## Why
 
-2b's pre-commit hook (Q6) must vouch for the tree the commit records (`GIT_INDEX_FILE`'s index, `commit -a`/`-o`'s included), not 2a.1's working tree; `check_source` stays. No new ADR: read-only git truth, worktrees, no daemon (ADR-0001, ADR-0003, ADR-0004, ADR-0006). What shipped is canon in `docs/canon/spec-check-cli.md` ("The staged check": git use, environment, guard, causes, divergences; "Open") and the store and CLI READMEs.
+2b's pre-commit hook (Q6) must vouch for the tree the commit records (`GIT_INDEX_FILE`'s index, `commit -a`/`-o`'s included), not 2a.1's working tree; `check_source` stays. No new ADR: read-only git truth, worktrees, no daemon (ADR-0001, ADR-0003, ADR-0004, ADR-0006). What shipped is canon in `docs/canon/spec-check-git.md` ("The staged check": git use, environment, guard, causes, divergences; "Open") and the store and CLI READMEs.
 
 ## Acceptance criteria
 

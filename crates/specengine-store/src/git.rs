@@ -40,6 +40,12 @@
 //! a cause with a fixed one-line message at `.`: never git's text, never an
 //! absolute path.
 //!
+//! `spec check --changed` (docs/features/spec-cli-changed.md) reads `HEAD`
+//! alone ([`Staged::head_only`]): the same environment and guard, then in
+//! the root `rev-parse --is-inside-work-tree`, `rev-parse --verify -q
+//! HEAD`, when born `ls-tree -r -z <oid>`, and one `cat-file --batch`
+//! session; never `ls-files` or the intent-to-add detector.
+//!
 //! `cat-file --batch` runs in strict lockstep, without `--buffer`: one
 //! request is written and its whole reply read before the next, so neither
 //! side ever waits on a full pipe (no deadlock whatever the blob sizes).
@@ -821,9 +827,9 @@ fn may_be_intent_to_add(entry: &Entry) -> bool {
 }
 
 /// The index git would commit, under the root: its stage-0 entries minus
-/// intent-to-add ones, byte-sorted, and the `cat-file` session reading
-/// their blobs and `HEAD`'s (started at the first read, one per check),
-/// with every object it read.
+/// intent-to-add ones, byte-sorted (none for [`Staged::head_only`]), and
+/// the `cat-file` session reading their blobs and `HEAD`'s (started at the
+/// first read, one per check), with every object it read.
 #[derive(Debug)]
 pub(crate) struct Staged {
     /// Canonical.
@@ -879,6 +885,30 @@ impl Staged {
         Ok(Self {
             root: git.dir.clone(),
             entries,
+            git,
+            session: None,
+            objects: BTreeMap::new(),
+        })
+    }
+
+    /// A session for `HEAD` alone, the base of `spec check --changed`
+    /// (docs/features/spec-cli-changed.md): the root canonicalised, the
+    /// children's environment resolved and guarded as [`Staged::read`]'s,
+    /// the root inside a git working tree; the index is never listed (no
+    /// `ls-files`, no unmerged refusal, no intent-to-add detector), so
+    /// [`Staged::entries`] stays empty. The cause, at `.`: the root
+    /// unreadable, the environment refused, no repository, `git` not
+    /// runnable or failing.
+    pub(crate) fn head_only(root: &Path, env: &GitEnv) -> Result<Self, Cause> {
+        let dir = fs::canonicalize(root).map_err(|_| GitFailure::RootGone.cause())?;
+        let git = Git {
+            dir,
+            vars: env.child_vars()?,
+        };
+        git.check_work_tree()?;
+        Ok(Self {
+            root: git.dir.clone(),
+            entries: Vec::new(),
             git,
             session: None,
             objects: BTreeMap::new(),

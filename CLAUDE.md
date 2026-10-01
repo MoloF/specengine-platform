@@ -10,7 +10,7 @@ reviewed: 2026-10-01
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP (for Claude Code agents), later a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phase 0 done (2026-09-29). **Phase 1**, the reading core, in progress; shipped: parser, index, the CLI read loop, `spec check` increments 1–3 (the gate, `--staged` against `HEAD`), `export index`. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phase 0 done; **Phase 1** (reading core) in progress: parser, index, CLI read loop, `spec check` 1–3 (gate, `--staged`, `--changed`), `export index` shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
@@ -49,13 +49,13 @@ The developer must not touch `docs/`: a discrepancy between spec and code must b
 
 ## Documentation
 
-Classes: canon, decision, spec, generated; tiers: `docs/README.md`. Caps: Tier 0 — 16 KB, Tier 1 — 10 KB, index — 10 KB, Tier 2 canon — 12 KB, ADR — 1.5 KB. An accepted decision changes the canon in the same change, and its `canon:` points at the section. `docs/index.md` is generated only. Before handing in any documentation change:
+Classes: canon, decision, spec, generated; tiers: `docs/README.md`. Caps: Tier 0 16 KB, Tier 1 and index 10 KB, Tier 2 canon 12 KB, ADR 1.5 KB. An accepted decision changes the canon in the same change, and its `canon:` points at the section. `docs/index.md` is generated only. Before handing in any documentation change:
 
 ```bash
 cargo run -q -p specengine-cli -- export index && cargo run -q -p specengine-cli -- check
 ```
 
-The pre-commit hook (`scripts/hooks-install.sh`) and CI (`.github/workflows/docs.yml`) reject commits with a red check.
+The pre-commit hook and CI reject a red check (`docs/README.md` "Enforcement").
 
 ## Layout
 
