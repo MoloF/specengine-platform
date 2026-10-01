@@ -27,7 +27,10 @@ pub mod value;
 
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use grammar::{Canon, Definition, Found, Homoglyph};
-pub use link::{LINK_TYPES, Link, LinkOrigin, LinkTarget, MENTIONS};
+pub use link::{
+    Direction, IMPACT_LINK_TYPES, LINK_TYPES, Link, LinkOrigin, LinkTarget, MENTIONS,
+    graph_direction, impact_direction, is_weak_link,
+};
 pub use node::{Anchor, AnchorOrigin, ExtraEntry, Fields, Node, ParentRef};
 pub use parsed::ParsedFile;
 pub use reference::{CanonTarget, PathTarget, RefForm, Reference};

@@ -89,12 +89,12 @@ spec serve [--port 7777]                 # daemon: HTTP + SSE + MCP(HTTP) + UI +
 spec mcp                                 # MCP over stdio (for .mcp.json)
 
 # tree and nodes
-spec tree [ROOT] [--depth N] [--kind mechanic]
-spec show ID [--links --bindings --history]
+spec tree [ROOT] [--depth N] [--kind K] [--archive]  # shipped: docs/canon/spec-cli-graph.md
+spec show ID [--links [--archive]] [--bindings --history]
 spec new KIND [--parent ID] [TITLE]      # the registry issues the ID, opens $EDITOR
 spec edit ID                             # owner edit = instantly applied proposal
 spec search "query"
-spec graph ID [--impact] [--format dot|mermaid]
+spec graph ID [--impact] [--type T] [--depth N] [--archive] [--format dot|mermaid]
 spec refs ID                             # reverse lookup
 spec unmapped [PATH]                     # spec coverage of sources
 spec bundle (--task T | ID…) [--budget 10000]

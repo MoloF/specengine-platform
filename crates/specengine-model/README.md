@@ -10,8 +10,6 @@ reviewed: 2026-09-30
 
 Types and pure functions, `serde` only: no I/O, no parser library, no other SpecEngine crate in the normal graph (`specengine-eval` `tests/build_graph.rs`). Below `specengine-core` and `specengine-code`. Nothing here knows a project: prefixes, kinds and aliases come from `[ids]` (ADR-0008). The parser and its output contract: `crates/specengine-core/README.md`.
 
-**Dev-only cycle.** `specengine-core` is a dev-dependency: `tests/grammar.rs` checks `canon:` and `status: superseded-by` through `parse`. Tests that use core live in `tests/` only (a `#[cfg(test)]` unit test would see a second copy of the model's types), and the edge never becomes a normal one (`cargo tree -e normal`).
-
 ## Modules
 
 | Module | What it holds |
@@ -53,7 +51,9 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 ## Links
 
-`LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (lives until applied), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6). Another declared type is kept with `unknown-link-type`. `MENTIONS` is the weak link of `refs`, `adrs`, every body reference and every local Markdown link; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a path, unresolved: `PathTarget {path, anchor?, span?}` is a `canon:` value or a Markdown link destination (`path` before the first `#`, cut at the first `?`, `""` for `#h`; a link's `span` always set, the destination as written; `docs/canon/spec-check-links.md`). `parent` is containment, not a link (05 §8).
+`LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (lives until applied), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6). Another declared type is kept with `unknown-link-type`. `MENTIONS` (`is_weak_link`) is the weak link of `refs`, `adrs`, every body reference and every local Markdown link; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a path, unresolved: `PathTarget {path, anchor?, span?}` is a `canon:` value or a Markdown link destination (split and `span`: `docs/canon/spec-check-links.md` "File links"). `parent` is containment, not a link.
+
+Walks (`Direction`; `docs/canon/spec-cli-graph.md`): `graph_direction` follows every strong type out; `IMPACT_LINK_TYPES` (`impact_direction`): `depends_on`, `derived_from`, `verifies`, `uses_term` in, `constrains` out.
 
 ## Anchors
 
@@ -67,10 +67,10 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 ## Tests
 
-`tests/grammar.rs`: table-driven splits of every example above, `canon:` path + anchor, `status: superseded-by` → `supersedes`.
+`tests/grammar.rs`: table-driven splits of every example above; `canon:` path + anchor, `status: superseded-by` → `supersedes` through core's `parse`. **Dev-only cycle**: core is a dev-dependency, so tests using it live in `tests/` (a `#[cfg(test)]` one would see a second copy of the model's types); never a normal edge (`cargo tree -e normal`).
 
 ## Open minors
 
 - The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment; `specengine-code` `markers.rs` `is_latin_id` rejects `/`, `#` → the marker-parser increment: both then use this crate.
 - `see:R-12` in prose reads as project `see` → the `project:` increment.
-- A name-shape body is greedy (`MEC-STAMINA-based` is one ID); `spec check` resolves inline mentions with a fallback, `check::Resolver` (`docs/canon/spec-check-graph.md`).
+- A name-shape body is greedy (`MEC-STAMINA-based` is one ID); the check's `Resolver` falls back (`docs/canon/spec-check-graph.md`).

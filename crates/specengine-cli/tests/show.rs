@@ -136,9 +136,12 @@ fn show_json_has_exactly_the_data_keys() {
             "text",
             "truncated",
             "omitted",
+            // docs/features/spec-cli-graph.md AC-19: `null` without `--links`.
+            "links",
         ]),
         "{json}"
     );
+    assert!(node["links"].is_null(), "{json}");
     assert_eq!(json["ref"], "MEC-STAMINA");
     assert!(json["reason"].is_null());
     assert_eq!(json["notes"], serde_json::json!([]));
@@ -167,9 +170,69 @@ fn show_json_has_exactly_the_data_keys() {
     assert_eq!(node["line"], 21);
     assert_eq!(node["end_line"], 23);
     assert_eq!(node["sections"], serde_json::json!([]));
+    assert!(node["links"].is_null(), "{json}");
     // `@rev` is a note, also in JSON.
     let json = spec(&home, &root, &["--json", "show", "R-12@3"]).json();
     assert_eq!(json["notes"].as_array().unwrap().len(), 1, "{json}");
+    assert!(json["nodes"][0]["links"].is_null(), "{json}");
+
+    // docs/features/spec-cli-graph.md AC-19: with `--links` the same top
+    // and node keys, `links` an object of exactly its keys; a link of
+    // exactly the keys of "Data".
+    let json = spec(&home, &root, &["--json", "show", "MEC-STAMINA", "--links"]).json();
+    let top: BTreeSet<&str> = json
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        top,
+        BTreeSet::from(["ref", "reason", "notes", "nodes"]),
+        "{json}"
+    );
+    let node = &json["nodes"][0];
+    let with_links: BTreeSet<&str> = node
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(with_links, keys, "{json}");
+    let links = node["links"].as_object().expect("`links` is an object");
+    assert_eq!(
+        links.keys().map(String::as_str).collect::<BTreeSet<_>>(),
+        BTreeSet::from(["outgoing", "incoming", "left_out", "omitted"]),
+        "{json}"
+    );
+    // Nothing cut: `omitted` is 0, never `null`.
+    assert_eq!(links["omitted"], 0, "{json}");
+    let link_keys = BTreeSet::from([
+        "type", "origin", "at", "name", "written", "path", "line", "state", "reason",
+    ]);
+    let all: Vec<&serde_json::Value> = links["outgoing"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(links["incoming"].as_array().unwrap())
+        .collect();
+    assert!(all.len() >= 5, "{json}");
+    for link in all {
+        assert_eq!(
+            link.as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>(),
+            link_keys,
+            "{link}"
+        );
+    }
+    assert_eq!(
+        links["left_out"],
+        serde_json::json!({"generated": 0, "tier3": 0})
+    );
+    assert_eq!(node["text"], read_text(&root, STAMINA));
 }
 
 /// The header's optional fields, in order: status, rev, archived, not UTF-8.

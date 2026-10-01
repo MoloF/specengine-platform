@@ -22,6 +22,8 @@
 //!
 //! The base comes only from the config: there is no default (ADR-0008).
 
+use std::collections::BTreeMap;
+
 use specengine_model::{DiagnosticCode, LinkOrigin, LinkTarget, MENTIONS, ParsedFile, PathTarget};
 
 use super::engine::{Corpus, has_anchor};
@@ -130,38 +132,51 @@ impl Links<'_, '_> {
     /// The walked file a checked, non-empty `path` (percent-decoded) names,
     /// else the candidates tried, in order (`None`: one leaving the root).
     fn resolve(&self, from: &str, path: &str) -> Result<usize, Vec<Option<String>>> {
-        let walked = |candidate: &Option<String>| {
-            candidate
-                .as_deref()
-                .and_then(|candidate| self.corpus.by_path.get(candidate).copied())
-        };
-        let mut tried = Vec::with_capacity(2);
-        if let Some(from_root) = path.strip_prefix('/') {
-            let only = normalise("", from_root);
-            if let Some(found) = walked(&only) {
-                return Ok(found);
-            }
-            tried.push(only);
-            return Err(tried);
-        }
-        let directory = from.rsplit_once('/').map_or("", |(directory, _)| directory);
-        let relative = normalise(directory, path);
-        if let Some(found) = walked(&relative) {
+        resolve_link_path(&self.corpus.by_path, self.link_base, from, path)
+    }
+}
+
+/// The file a checked, non-empty `path` (percent-decoded) of a Markdown
+/// file link written in `from` names among the walked files `by_path`,
+/// else the candidates tried, in order (`None`: one leaving the root).
+/// Also the spec graph's.
+pub(crate) fn resolve_link_path(
+    by_path: &BTreeMap<&str, usize>,
+    link_base: Option<&str>,
+    from: &str,
+    path: &str,
+) -> Result<usize, Vec<Option<String>>> {
+    let walked = |candidate: &Option<String>| {
+        candidate
+            .as_deref()
+            .and_then(|candidate| by_path.get(candidate).copied())
+    };
+    let mut tried = Vec::with_capacity(2);
+    if let Some(from_root) = path.strip_prefix('/') {
+        let only = normalise("", from_root);
+        if let Some(found) = walked(&only) {
             return Ok(found);
         }
-        tried.push(relative);
-        if let Some(base) = self.link_base {
-            let from_base = normalise(base, path);
-            if let Some(found) = walked(&from_base) {
-                return Ok(found);
-            }
-            // The same path twice is tried and listed once.
-            if !tried.contains(&from_base) {
-                tried.push(from_base);
-            }
-        }
-        Err(tried)
+        tried.push(only);
+        return Err(tried);
     }
+    let directory = from.rsplit_once('/').map_or("", |(directory, _)| directory);
+    let relative = normalise(directory, path);
+    if let Some(found) = walked(&relative) {
+        return Ok(found);
+    }
+    tried.push(relative);
+    if let Some(base) = link_base {
+        let from_base = normalise(base, path);
+        if let Some(found) = walked(&from_base) {
+            return Ok(found);
+        }
+        // The same path twice is tried and listed once.
+        if !tried.contains(&from_base) {
+            tried.push(from_base);
+        }
+    }
+    Err(tried)
 }
 
 /// `directory` + `path`, `/`-joined: empty and `.` components dropped,
@@ -182,7 +197,7 @@ fn normalise(directory: &str, path: &str) -> Option<String> {
 
 /// `%XX` → that byte; a malformed `%` stays; a result that is not UTF-8
 /// gives the text as written (the census's rule).
-fn percent_decode(text: &str) -> String {
+pub(crate) fn percent_decode(text: &str) -> String {
     if !text.contains('%') {
         return text.to_owned();
     }
@@ -217,7 +232,7 @@ fn hex_value(byte: u8) -> Option<u8> {
 
 /// The target has a parse whose body was read (not the empty parse of a
 /// file that is not UTF-8): its anchors can be judged.
-fn was_read(parsed: &ParsedFile) -> bool {
+pub(crate) fn was_read(parsed: &ParsedFile) -> bool {
     parsed
         .diagnostics
         .iter()
@@ -226,7 +241,7 @@ fn was_read(parsed: &ParsedFile) -> bool {
 
 /// The destination as written: the text under its span, else rebuilt from
 /// the path and the anchor.
-fn written(text: &FileText<'_>, target: &PathTarget) -> String {
+pub(crate) fn written(text: &FileText<'_>, target: &PathTarget) -> String {
     if let Some(span) = target.span
         && !text.is_empty()
     {
@@ -242,7 +257,7 @@ fn written(text: &FileText<'_>, target: &PathTarget) -> String {
 }
 
 /// The line of the destination: its span's, 1 without bytes.
-fn line(text: &FileText<'_>, target: &PathTarget) -> usize {
+pub(crate) fn line(text: &FileText<'_>, target: &PathTarget) -> usize {
     target
         .span
         .filter(|_| !text.is_empty())

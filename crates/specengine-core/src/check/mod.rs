@@ -25,6 +25,9 @@
 //! - [`resolve`] — the one reference resolution ([`Resolver`]), scope-aware:
 //!   `slug/ID` and bare feature-scoped IDs resolve in feature documents
 //!   only (ADR-0026);
+//! - [`SpecGraph`] — the read commands' graph (task spec `spec-cli-graph`):
+//!   containment and every link resolved from its citing file as the check
+//!   resolves it, a node's links, its ancestors, a breadth-first walk;
 //! - [`render_index_set`] — the generated index, rendered in memory: the
 //!   root and its shards ([`render_index`]: the root alone);
 //!   [`walk_gap`] — the first gap of an incomplete walk, which stops the
@@ -53,6 +56,7 @@ mod links;
 mod render;
 pub mod report;
 pub mod resolve;
+mod spec_graph;
 mod text;
 mod working_set;
 
@@ -68,6 +72,9 @@ pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, render_index_set};
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
 pub use resolve::{Resolution, Resolver};
+pub use spec_graph::{
+    Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
+};
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
 pub use working_set::worst_w;
 

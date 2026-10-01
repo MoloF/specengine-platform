@@ -17,18 +17,23 @@
 //! warning citing each. Spans come from a parse of the very bytes printed,
 //! read once after the update, never from the index; a file that is not
 //! UTF-8 is printed with U+FFFD and marked.
+//!
+//! `--links` (task spec `spec-cli-graph`): each shown node also carries its
+//! links, one hop both ways, from the index-fed spec graph
+//! ([`crate::links`]); `--archive` (only with `--links`) admits links
+//! written in Tier 3 files.
 
 use std::panic::{self, AssertUnwindSafe};
 
-use specengine_core::check::{Resolution, Resolver, is_tier3_file};
+use specengine_core::check::{NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
 use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
 use specengine_model::script::normalize_char;
 use specengine_model::{IdScheme, IdScript, ParsedFile, Reference, grammar};
-use specengine_store::{Source as _, SpecIndex as _, WorkingTree};
+use specengine_store::{Source as _, WorkingTree};
 
-use crate::location::open_index;
+use crate::corpus::{Admission, indexed};
+use crate::links::{ShownLinks, node_links};
 use crate::project::discover;
-use crate::refresh::refresh;
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// `spec show` options.
@@ -36,6 +41,11 @@ use crate::{CliError, Env, Globals, Message, one_line, store_error};
 pub struct ShowRequest {
     /// `REF` as given.
     pub reference: String,
+    /// `--links`: each node's links, one hop both ways.
+    pub links: bool,
+    /// `--archive`: links written in Tier 3 files too; only with
+    /// `--links`.
+    pub archive: bool,
 }
 
 /// What `spec show` found: nodes, or the reason there are none (exit 1).
@@ -74,6 +84,8 @@ pub struct ShownNode {
     pub sections: Vec<NestedSection>,
     /// Its bytes: a section's span, a document's whole file.
     pub text: String,
+    /// Its links with `--links`, else `None`.
+    pub links: Option<ShownLinks>,
 }
 
 /// An ID section inside a shown node.
@@ -86,7 +98,7 @@ pub struct NestedSection {
 }
 
 /// What `REF` names.
-enum Target {
+pub(crate) enum Target {
     /// A root-relative `.md` path.
     Path(String),
     /// A reference of the grammar.
@@ -95,20 +107,27 @@ enum Target {
 
 /// `spec show`: updates the index, resolves `REF`, reads its holders.
 pub fn show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowOutcome, CliError> {
+    if request.archive && !request.links {
+        return Err(CliError::spec(
+            "--archive applies to --links only: add --links, or drop --archive",
+        ));
+    }
     let project = discover(env, globals)?;
     project.slug()?;
     let written = request.reference.trim();
     let scheme = &project.config.scheme;
     let mut messages = Vec::new();
-    let target = match classify(written, scheme, &mut messages)? {
+    let target = match classify(
+        written,
+        scheme,
+        &mut messages,
+        "`spec show` prints the current text",
+    )? {
         Ok(target) => target,
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };
 
-    let mut open = open_index(env, &project)?;
-    let (_, warnings) = refresh(&mut open.index, &project, false)?;
-    messages.extend(warnings);
-    let input = open.index.indexed_input().map_err(store_error)?;
+    let input = indexed(env, &project, &mut messages, request.links)?;
     let resolver = Resolver::new(&input, scheme, &project.config.paths);
     let holders: Vec<String> = match &target {
         Target::Path(path) => {
@@ -136,6 +155,27 @@ pub fn show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
             }
             Resolution::Skipped => return Err(project_qualified(written)),
         },
+    };
+
+    // `--links`: the graph over the same input; the holders' files are
+    // asked for, so their own links always count.
+    let graph = request
+        .links
+        .then(|| SpecGraph::new(&input, scheme, &project.config.paths));
+    let admission = graph.as_ref().map(|graph| {
+        Admission::new(
+            graph,
+            request.archive,
+            holders.iter().filter_map(|path| graph.file_of(path)),
+        )
+    });
+    let links_of = |path: &str, ord: usize, id: Option<&str>| -> Option<ShownLinks> {
+        let (graph, admission) = (graph.as_ref()?, admission.as_ref()?);
+        Some(
+            node_in_graph(graph, path, ord, id)
+                .map(|at| node_links(graph, at, admission))
+                .unwrap_or_default(),
+        )
     };
 
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
@@ -173,13 +213,16 @@ pub fn show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         if parsed.nodes.is_empty() {
             // Not UTF-8: no node, only the whole file by its path.
             if let Target::Path(_) = target {
-                nodes.push(whole_file(path, &bytes, archived, utf8));
+                let mut node = whole_file(path, &bytes, archived, utf8);
+                node.links = links_of(path, 0, None);
+                nodes.push(node);
                 citations.push(path.clone());
             }
             continue;
         }
         for ord in pick(&parsed, &target, written) {
-            let node = shown(path, &bytes, &parsed, ord, archived, utf8);
+            let mut node = shown(path, &bytes, &parsed, ord, archived, utf8);
+            node.links = links_of(path, ord, node.id.as_deref());
             citations.push(match (resolver.feature_slug(path), &node.id) {
                 (Some(slug), Some(id)) => format!("{slug}/{id}"),
                 _ => path.clone(),
@@ -221,11 +264,35 @@ fn not_found(request: &ShowRequest, reason: String, messages: Vec<Message>) -> S
     }
 }
 
+/// The graph node of a node read fresh from `path` at position `ord`: the
+/// same position when it holds the same ID, else the first node with that
+/// ID (the file changed in between), else the document.
+fn node_in_graph(
+    graph: &SpecGraph<'_>,
+    path: &str,
+    ord: usize,
+    id: Option<&str>,
+) -> Option<NodeAt> {
+    let file = graph.file_of(path)?;
+    let nodes = graph.nodes(file);
+    if nodes.get(ord).is_some_and(|node| node.id.as_deref() == id) {
+        return Some(NodeAt { file, ord });
+    }
+    let ord = id
+        .and_then(|id| nodes.iter().position(|node| node.id.as_deref() == Some(id)))
+        .unwrap_or(0);
+    graph
+        .node(NodeAt { file, ord })
+        .map(|_| NodeAt { file, ord })
+}
+
 /// What `written` names; `Ok(Err(reason))`: no reference at all (exit 1).
-fn classify(
+/// `ignored_rev`: why a written `@rev` is ignored (the note's end).
+pub(crate) fn classify(
     written: &str,
     scheme: &IdScheme,
     messages: &mut Vec<Message>,
+    ignored_rev: &str,
 ) -> Result<Result<Target, String>, CliError> {
     if written.ends_with(DOCUMENT_EXTENSION) {
         if !is_clean_relative(written) {
@@ -247,9 +314,7 @@ fn classify(
         return Err(project_qualified(written));
     }
     if let Some(rev) = reference.rev {
-        messages.push(Message::Note(format!(
-            "`@{rev}` is ignored: `spec show` prints the current text"
-        )));
+        messages.push(Message::Note(format!("`@{rev}` is ignored: {ignored_rev}")));
     }
     Ok(Ok(Target::Reference(reference)))
 }
@@ -312,7 +377,7 @@ fn latin_fix(written: &str, homoglyphs: &[specengine_model::Homoglyph]) -> Strin
     }
 }
 
-fn project_qualified(written: &str) -> CliError {
+pub(crate) fn project_qualified(written: &str) -> CliError {
     CliError::spec(format!(
         "`{written}`: `project:` references are not supported yet; \
          drop the qualifier to read this project's node"
@@ -431,6 +496,7 @@ fn shown(
         utf8,
         sections,
         text,
+        links: None,
     }
 }
 
@@ -451,6 +517,7 @@ fn whole_file(path: &str, bytes: &[u8], archived: bool, utf8: bool) -> ShownNode
         utf8,
         sections: Vec::new(),
         text,
+        links: None,
     }
 }
 

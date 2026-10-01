@@ -30,6 +30,60 @@ pub fn is_link_type(name: &str) -> bool {
     LINK_TYPES.contains(&name)
 }
 
+/// Which way a walk follows a link from the node it stands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    /// From the link's source to its target.
+    Out,
+    /// From the link's target back to its source.
+    In,
+}
+
+impl Direction {
+    /// `out` or `in`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Out => "out",
+            Self::In => "in",
+        }
+    }
+}
+
+/// The link types `spec graph --impact` follows, and which way: what an
+/// edit of a node reaches. One table for every project; any other type
+/// (`mentions`, `supersedes`, `revises`, `amends`, `answers`,
+/// `working_answer`, `canon`, `adopts`, an unknown declared type) is not
+/// followed.
+pub const IMPACT_LINK_TYPES: [(&str, Direction); 5] = [
+    ("depends_on", Direction::In),
+    ("derived_from", Direction::In),
+    ("verifies", Direction::In),
+    ("uses_term", Direction::In),
+    ("constrains", Direction::Out),
+];
+
+/// `mentions` is the one weak link type; every declared type, an unknown
+/// one included, is strong.
+pub fn is_weak_link(link_type: &str) -> bool {
+    link_type == MENTIONS
+}
+
+/// `spec graph`'s default: every strong type outgoing, `mentions` not
+/// followed.
+pub fn graph_direction(link_type: &str) -> Option<Direction> {
+    (!is_weak_link(link_type)).then_some(Direction::Out)
+}
+
+/// `spec graph --impact`: the direction [`IMPACT_LINK_TYPES`] gives
+/// `link_type`, if any.
+pub fn impact_direction(link_type: &str) -> Option<Direction> {
+    IMPACT_LINK_TYPES
+        .iter()
+        .find(|(name, _)| *name == link_type)
+        .map(|&(_, direction)| direction)
+}
+
 /// Where a link was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

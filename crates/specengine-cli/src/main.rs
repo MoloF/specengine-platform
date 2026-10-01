@@ -11,8 +11,9 @@ use std::process::ExitCode;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    CheckRequest, CheckedTree, CliError, Env, Exit, ExportIndexRequest, Globals, IndexRequest,
-    InitRequest, Outcome, SearchRequest, ShowRequest, render_json, render_text,
+    CheckRequest, CheckedTree, CliError, Env, Exit, ExportIndexRequest, Globals, GraphRequest,
+    IndexRequest, InitRequest, Outcome, SearchRequest, ShowRequest, TreeRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -70,6 +71,46 @@ enum Command {
     Show {
         #[arg(value_name = "REF")]
         reference: String,
+        /// Also list each node's links, outgoing and incoming, before its text.
+        #[arg(long)]
+        links: bool,
+        /// With --links: links written in Tier 3 (archived) documents too.
+        #[arg(long)]
+        archive: bool,
+    },
+    /// Print the containment tree (`parent:` and section nesting) from ROOT, or from the roots under `[paths] spec`.
+    Tree {
+        // Not named `root`: that argument id is the global --root.
+        /// Any form `show` takes.
+        #[arg(value_name = "ROOT")]
+        start: Option<String>,
+        /// Levels below the roots at most (0: the roots only).
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        depth: Option<i64>,
+        /// Keep only the lines of this kind (repeatable).
+        #[arg(long = "kind", value_name = "K")]
+        kinds: Vec<String>,
+        /// Include Tier 3 (archived) documents.
+        #[arg(long)]
+        archive: bool,
+    },
+    /// Walk the typed links from REF: what it depends on, or with --impact what an edit of it reaches.
+    Graph {
+        /// Any form `show` takes.
+        #[arg(value_name = "REF")]
+        reference: String,
+        /// Follow the impact table: depends_on, derived_from, verifies, uses_term back, constrains forward.
+        #[arg(long)]
+        impact: bool,
+        /// Follow only this link type (repeatable): outgoing; with --impact in its table direction, else incoming.
+        #[arg(long = "type", value_name = "T")]
+        types: Vec<String>,
+        /// Distance from REF at most; default unbounded.
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        depth: Option<i64>,
+        /// Include links written in Tier 3 (archived) documents.
+        #[arg(long)]
+        archive: bool,
     },
     /// Check the documents against the convention; exit 0 clean or observed, 1 blocked, 2 cannot check.
     Check {
@@ -173,10 +214,50 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 archive,
             },
         )?),
-        Command::Show { reference } => Outcome::Show(specengine_cli::show(
+        Command::Show {
+            reference,
+            links,
+            archive,
+        } => Outcome::Show(specengine_cli::show(
             env,
             globals,
-            &ShowRequest { reference },
+            &ShowRequest {
+                reference,
+                links,
+                archive,
+            },
+        )?),
+        Command::Tree {
+            start,
+            depth,
+            kinds,
+            archive,
+        } => Outcome::Tree(specengine_cli::tree(
+            env,
+            globals,
+            &TreeRequest {
+                root: start,
+                depth,
+                kinds,
+                archive,
+            },
+        )?),
+        Command::Graph {
+            reference,
+            impact,
+            types,
+            depth,
+            archive,
+        } => Outcome::Graph(specengine_cli::graph(
+            env,
+            globals,
+            &GraphRequest {
+                reference,
+                impact,
+                types,
+                depth,
+                archive,
+            },
         )?),
         Command::Check {
             staged,

@@ -52,6 +52,14 @@ pub struct Resolver<'a> {
     pub(crate) sections: Vec<BTreeSet<String>>,
 }
 
+/// The ID a resolved reference found: its own, or the name-fallback
+/// candidate that won; `bare` is the text looked up as an `aliases:` entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Won {
+    pub id: String,
+    pub bare: String,
+}
+
 /// How a reference fared.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolution {
@@ -182,14 +190,37 @@ impl<'a> Resolver<'a> {
     /// feature document). `slug/ID` resolves in its feature document,
     /// `project:` is skipped, no name fallback.
     pub fn resolve_detached(&self, reference: &Reference, written: &str) -> Resolution {
-        let place = if reference.project.is_some() {
+        self.resolve_at(self.detached_place(reference), reference, written, false)
+    }
+
+    /// Where a reference with no citing file may resolve; `None` for
+    /// `project:` (skipped).
+    fn detached_place<'r>(&self, reference: &'r Reference) -> Option<Place<'r>> {
+        if reference.project.is_some() {
             None
         } else if let Some(slug) = reference.scope.as_deref() {
             Some(Place::Feature(slug, self.by_slug.get(slug).copied()))
         } else {
             Some(Place::Anywhere)
+        }
+    }
+
+    /// [`Resolver::resolve`] (`mention`: [`Resolver::resolve_mention`]) from
+    /// the file `from`, or [`Resolver::resolve_detached`] without one, and
+    /// the ID that won: the reference's own or a name-fallback candidate
+    /// (`None` unless resolved).
+    pub(crate) fn resolve_named(
+        &self,
+        from: Option<&str>,
+        reference: &Reference,
+        written: &str,
+        mention: bool,
+    ) -> (Resolution, Option<Won>) {
+        let place = match from {
+            Some(from) => self.place(from, reference),
+            None => self.detached_place(reference),
         };
-        self.resolve_at(place, reference, written, false)
+        self.resolve_found(place, reference, written, mention && from.is_some())
     }
 
     /// The files holding the reference's ID as cited from the file `from`,
@@ -224,14 +255,26 @@ impl<'a> Resolver<'a> {
         written: &str,
         fallback: bool,
     ) -> Resolution {
+        self.resolve_found(place, reference, written, fallback).0
+    }
+
+    /// [`Resolver::resolve_at`] and the ID that won (`None` unless
+    /// resolved).
+    fn resolve_found(
+        &self,
+        place: Option<Place<'_>>,
+        reference: &Reference,
+        written: &str,
+        fallback: bool,
+    ) -> (Resolution, Option<Won>) {
         let Some(place) = place else {
-            return Resolution::Skipped;
+            return (Resolution::Skipped, None);
         };
         let alias_of = reference.alias_of.as_deref();
         let section = reference.section.as_deref();
         let bare = bare(reference, written);
         if let Some(holders) = self.holders_in(place, &reference.id, alias_of, bare) {
-            return self.in_section(place, holders, section);
+            return self.won(place, holders, section, &reference.id, bare);
         }
         if fallback
             && self.name_shaped(reference)
@@ -241,11 +284,32 @@ impl<'a> Resolver<'a> {
                 body = shorter;
                 let candidate = format!("{prefix}-{body}");
                 if let Some(holders) = self.holders_in(place, &candidate, alias_of, &candidate) {
-                    return self.in_section(place, holders, section);
+                    return self.won(place, holders, section, &candidate, &candidate);
                 }
             }
         }
-        Resolution::Dangling(self.unresolved(place, reference, bare))
+        (
+            Resolution::Dangling(self.unresolved(place, reference, bare)),
+            None,
+        )
+    }
+
+    /// The holders of `id` narrowed to `section`, and `id` with the text
+    /// looked up as an `aliases:` entry when resolved.
+    fn won(
+        &self,
+        place: Place<'_>,
+        holders: Vec<usize>,
+        section: Option<&str>,
+        id: &str,
+        bare: &str,
+    ) -> (Resolution, Option<Won>) {
+        let resolution = self.in_section(place, holders, section);
+        let won = matches!(resolution, Resolution::Resolved(_)).then(|| Won {
+            id: id.to_owned(),
+            bare: bare.to_owned(),
+        });
+        (resolution, won)
     }
 
     /// Where the reference may resolve; `None` for `project:` (skipped).

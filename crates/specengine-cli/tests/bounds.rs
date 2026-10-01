@@ -653,3 +653,474 @@ fn a_first_hit_with_a_huge_id_is_cut_to_fit() {
     let shown = spec(&home, &root, &["show", &id]);
     shown.code(0);
 }
+
+// docs/features/spec-cli-graph.md AC-15: `OUTPUT_CAP_CHARS` cuts `spec
+// tree` and `spec graph` at a node or edge line (the first item whole) and
+// `spec show --links` at a link line; the links block precedes the text,
+// so a long node keeps it; text and JSON hold the same tree nodes.
+
+/// `(text, lines)` of a document `id` of `count` sections `{#<prefix>-<n>}`
+/// titled `<title> <n>`, four lines each from line 9, each mentioning
+/// `mention`; `parent` on line 4 (else an `owner:` line), and the node
+/// line each section prints at `depth` (two spaces per level).
+fn big_document(
+    id: &str,
+    parent: Option<&str>,
+    (prefix, kind, title): (&str, &str, &str),
+    count: usize,
+    mention: &str,
+    path: &str,
+    depth: usize,
+) -> (String, Vec<String>) {
+    let line4 = parent.map_or_else(|| "owner: o".to_owned(), |p| format!("parent: {p}"));
+    let mut text = format!("---\nid: {id}\nclass: canon\n{line4}\n---\n\n# Big\n\n");
+    let mut lines = Vec::new();
+    for n in 1..=count {
+        text.push_str(&format!(
+            "## {title} {n} {{#{prefix}-{n}}}\n\nSee {mention} {n}.\n\n"
+        ));
+        lines.push(format!(
+            "{}{prefix}-{n} | {kind} | {title} {n} | {path}:{}",
+            "  ".repeat(depth),
+            9 + 4 * (n - 1)
+        ));
+    }
+    (text, lines)
+}
+
+/// Splits a capped `tree`/`graph` stdout into (everything before the tail,
+/// the tail), asserting one tail line, last.
+fn split_tail(stdout: &str) -> (&str, &str) {
+    let body = stdout.strip_suffix('\n').expect("a line end");
+    let (before, tail) = body.rsplit_once('\n').expect("a tail line");
+    assert!(tail.starts_with("[truncated: "), "{tail}");
+    assert_eq!(stdout.matches("[truncated: ").count(), 1, "one tail line");
+    (&stdout[..before.len() + 1], tail)
+}
+
+#[test]
+fn a_tree_over_the_cap_is_cut_at_a_node_line() {
+    let cyrillic =
+        "\u{0427}\u{0430}\u{0441}\u{0442}\u{044c} \u{043d}\u{043e}\u{043c}\u{0435}\u{0440}";
+    for fixture in ["spec-a", "spec-b"] {
+        let scratch = Scratch::new("bounds-tree");
+        let home = scratch.home("h");
+        let root = scratch.copy(fixture, "copy");
+        let path = "docs/spec/big.md";
+        // The whole tree, in order, as it would print uncut.
+        let (text, full, roots) = if fixture == "spec-a" {
+            let (text, sections) = big_document(
+                "MEC-BIG",
+                Some("DOM-GAME"),
+                ("RULE-BIG", "rule", "Part"),
+                1000,
+                "MEC-STAMINA",
+                path,
+                2,
+            );
+            let example: Vec<String> = [
+                "DOM-GAME | domain | Lantern Keep | docs/spec/game.md:1 | status accepted",
+                "  RULE-CORE-LOOP | rule | Core loop | docs/spec/game.md:21",
+                "  MEC-BIG | mechanic | Big | docs/spec/big.md:1",
+            ]
+            .iter()
+            .map(|line| (*line).to_owned())
+            .collect();
+            let mut full = example;
+            full.extend(sections);
+            full.push("  DOM-MOVEMENT | domain | Movement | docs/spec/movement/README.md:1 | status accepted".to_owned());
+            (text, full, 1)
+        } else {
+            let (text, sections) = big_document(
+                "MOD-BIG",
+                None,
+                ("CMD-BIG", "command", cyrillic),
+                1000,
+                "REQ-001",
+                path,
+                1,
+            );
+            let mut full = vec!["MOD-BIG | module | Big | docs/spec/big.md:1".to_owned()];
+            full.extend(sections);
+            full.push("MOD-CLI | module | \u{041a}\u{043e}\u{043c}\u{0430}\u{043d}\u{0434}\u{043d}\u{0430}\u{044f} \u{0441}\u{0442}\u{0440}\u{043e}\u{043a}\u{0430} | docs/spec/cli.md:1 | status accepted".to_owned());
+            (text, full, 2)
+        };
+        write(&root, path, &text);
+        let total = if fixture == "spec-a" { 1011 } else { 1005 };
+        let run = spec(&home, &root, &["tree"]);
+        run.code(0);
+        let (before, tail) = split_tail(&run.stdout);
+        let chars = before.chars().count();
+        assert!(
+            chars <= CAP,
+            "{fixture}: {chars} characters before the tail"
+        );
+        let mut lines: Vec<&str> = before.lines().collect();
+        let summary = lines.pop().unwrap();
+        assert_eq!(
+            summary,
+            format!("nodes {total}, roots {roots}"),
+            "{fixture}"
+        );
+        let shown = lines.len();
+        assert!(shown > 100 && shown < total, "{fixture}: {shown} shown");
+        assert_eq!(
+            lines,
+            full[..shown].iter().map(String::as_str).collect::<Vec<_>>(),
+            "{fixture}: the shown lines are the tree's first ones"
+        );
+        // Cut at the last node line that fits.
+        assert!(
+            chars + full[shown].chars().count() + 1 > CAP,
+            "{fixture}: the next node line fits ({chars} + {})",
+            full[shown].chars().count() + 1
+        );
+        assert_eq!(
+            tail,
+            format!(
+                "[truncated: {} of {total} nodes not shown; give a ROOT, lower --depth or add --kind]",
+                total - shown
+            ),
+            "{fixture}"
+        );
+        // JSON: the same nodes, `truncated: true`.
+        let json = spec(&home, &root, &["--json", "tree"]).json();
+        assert_eq!(json["truncated"], true, "{fixture}");
+        let nodes = json["nodes"].as_array().unwrap();
+        assert_eq!(nodes.len(), shown, "{fixture}: JSON nodes vs text");
+        for (node, line) in nodes.iter().zip(&lines) {
+            let name = node["id"].as_str().unwrap();
+            let depth = node["depth"].as_u64().unwrap() as usize;
+            assert!(
+                line.starts_with(&format!("{}{name} | ", "  ".repeat(depth))),
+                "{fixture}: {node} vs {line}"
+            );
+        }
+        // A small tree is never truncated.
+        let json = spec(&home, &root, &["--json", "tree", "--depth", "0"]).json();
+        assert_eq!(json["truncated"], false, "{fixture}");
+    }
+}
+
+/// The first node line is shown whole, however long.
+#[test]
+fn a_first_tree_node_longer_than_the_cap_is_shown_whole() {
+    let scratch = Scratch::new("bounds-tree-first");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let title = "Lanternwick ".repeat(4_000);
+    let title = title.trim_end();
+    write(
+        &root,
+        "docs/spec/aaa.md",
+        format!("---\nid: DOM-AAA\nclass: canon\n---\n\n# {title}\n"),
+    );
+    let run = spec(&home, &root, &["tree"]);
+    run.code(0);
+    let (before, tail) = split_tail(&run.stdout);
+    let first = before.lines().next().unwrap();
+    assert_eq!(
+        first,
+        format!("DOM-AAA | domain | {title} | docs/spec/aaa.md:1"),
+        "the first node whole"
+    );
+    assert_eq!(
+        tail,
+        "[truncated: 10 of 11 nodes not shown; give a ROOT, lower --depth or add --kind]"
+    );
+    let json = spec(&home, &root, &["--json", "tree"]).json();
+    assert_eq!(json["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(json["nodes"][0]["title"], title);
+    assert_eq!(json["truncated"], true);
+}
+
+/// `spec graph` over the cap: cut at a node line (many nodes) or at an
+/// edge line (two nodes, many edges); the tail counts both; JSON holds
+/// the same nodes and edges.
+#[test]
+fn a_graph_over_the_cap_is_cut_at_a_node_or_edge_line() {
+    let scratch = Scratch::new("bounds-graph");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let (text, _) = big_document(
+        "MEC-BIG",
+        Some("DOM-GAME"),
+        ("RULE-BIG", "rule", "Part"),
+        1000,
+        "MEC-STAMINA",
+        "docs/spec/big.md",
+        2,
+    );
+    write(&root, "docs/spec/big.md", &text);
+    let mut echo = "---\nid: MEC-ECHO\nclass: canon\n---\n\n# Echo\n\n".to_owned();
+    for n in 0..1500 {
+        echo.push_str(&format!("Again R-12, time {n}.\n"));
+    }
+    write(&root, "docs/spec/echo.md", &echo);
+    for (args, cut_in_edges) in [
+        (
+            &["graph", "MEC-STAMINA", "--impact", "--type", "mentions"][..],
+            false,
+        ),
+        (&["graph", "MEC-ECHO", "--type", "mentions"], true),
+    ] {
+        let run = spec(&home, &root, args);
+        run.code(0);
+        let (before, tail) = split_tail(&run.stdout);
+        let chars = before.chars().count();
+        assert!(chars <= CAP, "{args:?}: {chars}");
+        let mut lines: Vec<&str> = before.lines().collect();
+        let summary = lines.pop().unwrap();
+        let (nodes_total, edges_total) = summary
+            .split(';')
+            .next()
+            .unwrap()
+            .strip_prefix("nodes ")
+            .and_then(|rest| rest.split_once(", edges "))
+            .map(|(n, e)| (n.parse::<usize>().unwrap(), e.parse::<usize>().unwrap()))
+            .unwrap_or_else(|| panic!("{summary}"));
+        let nodes = lines.iter().filter(|line| !line.contains("--> ")).count();
+        let edges = lines.len() - nodes;
+        if cut_in_edges {
+            assert_eq!(nodes, nodes_total, "{args:?}");
+            assert!(edges > 0 && edges < edges_total, "{args:?}: {edges}");
+        } else {
+            assert!(nodes < nodes_total && edges == 0, "{args:?}");
+        }
+        assert_eq!(
+            tail,
+            format!(
+                "[truncated: {} of {nodes_total} nodes and {} of {edges_total} edges not shown; lower --depth or add --type]",
+                nodes_total - nodes,
+                edges_total - edges
+            ),
+            "{args:?}"
+        );
+        let mut json_args = vec!["--json"];
+        json_args.extend(args);
+        let json = spec(&home, &root, &json_args).json();
+        assert_eq!(json["truncated"], true, "{args:?}");
+        assert_eq!(json["nodes"].as_array().unwrap().len(), nodes, "{args:?}");
+        assert_eq!(json["edges"].as_array().unwrap().len(), edges, "{args:?}");
+    }
+}
+
+/// `show --links` on a node far over the cap: the header, the whole links
+/// block, then the text cut at a line end; JSON keeps every link. M: links
+/// after the text.
+#[test]
+fn show_links_on_a_long_node_keeps_its_links_block() {
+    for (fixture, id, prefix, line, link, back) in [
+        (
+            "spec-a",
+            "MEC-HUGE",
+            "RULE-HUGE",
+            "Plain filler words for a very long mechanic text, line",
+            "depends_on: [MEC-STAMINA]",
+            "docs/records/R/R-77.md",
+        ),
+        (
+            "spec-b",
+            "MOD-HUGE",
+            "CMD-HUGE",
+            "\u{0414}\u{043b}\u{0438}\u{043d}\u{043d}\u{044b}\u{0439} \u{0442}\u{0435}\u{043a}\u{0441}\u{0442} \u{043c}\u{043e}\u{0434}\u{0443}\u{043b}\u{044f}, \u{0441}\u{0442}\u{0440}\u{043e}\u{043a}\u{0430}",
+            "derived_from: [\u{0422}\u{0420}\u{0411}-001]",
+            "docs/records/REQ/REQ-077.md",
+        ),
+    ] {
+        let scratch = Scratch::new("bounds-links");
+        let home = scratch.home("h");
+        let root = scratch.copy(fixture, "copy");
+        let text = huge(id, prefix, line, 100_000).replacen(
+            "class: canon\n",
+            &format!("class: canon\nlinks:\n  {link}\n"),
+            1,
+        );
+        write(&root, "docs/spec/huge.md", &text);
+        let back_id = back.rsplit('/').next().unwrap().trim_end_matches(".md");
+        write(
+            &root,
+            back,
+            format!("---\nid: {back_id}\nclass: canon\n---\n\n# Back\n\nSee {id}.\n"),
+        );
+        let run = spec(&home, &root, &["show", id, "--links"]);
+        run.code(0);
+        let lines: Vec<&str> = run.stdout.lines().collect();
+        assert!(lines[0].starts_with(&format!("{id} | ")), "{}", lines[0]);
+        assert!(
+            lines[1].starts_with("  out ") && lines[1].contains(" | docs/spec/huge.md:5"),
+            "{fixture}: {}",
+            lines[1]
+        );
+        assert_eq!(
+            lines[2],
+            format!("  in mentions {back_id} | {back}:8"),
+            "{fixture}"
+        );
+        assert_eq!(lines[3], "  links 1 out, 1 in", "{fixture}");
+        let (before, tail) = split_tail(&run.stdout);
+        assert!(before.chars().count() <= CAP, "{fixture}");
+        let shown = &before[lines[..4].iter().map(|l| l.len() + 1).sum::<usize>()..];
+        assert!(
+            shown.len() > 1000 && text.starts_with(shown) && shown.ends_with('\n'),
+            "{fixture}: the text follows the block, cut at a line end"
+        );
+        assert!(tail.ends_with("; links not shown: 0]"), "{fixture}: {tail}");
+        let json = spec(&home, &root, &["--json", "show", id, "--links"]).json();
+        let node = &json["nodes"][0];
+        assert_eq!(node["truncated"], true, "{fixture}");
+        assert_eq!(node["links"]["outgoing"].as_array().unwrap().len(), 1);
+        assert_eq!(node["links"]["incoming"].as_array().unwrap().len(), 1);
+        // Nothing of the block cut: `omitted` 0, as the tail's `0`.
+        assert_eq!(node["links"]["omitted"], 0, "{fixture}");
+        // JSON holds exactly what the text prints: the text cut where the
+        // block left it, not at the cap of the texts alone.
+        assert_eq!(node["text"], shown, "{fixture}: JSON text vs printed");
+    }
+}
+
+/// A links block longer than the cap: cut at a link line, no text, the
+/// tail counts the links not shown; JSON keeps the first links in the
+/// text's order, `truncated: true`.
+#[test]
+fn a_links_block_over_the_cap_is_cut_at_a_link_line() {
+    let scratch = Scratch::new("bounds-links-cut");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let (text, _) = big_document(
+        "MEC-BIG",
+        Some("DOM-GAME"),
+        ("RULE-BIG", "rule", "Part"),
+        1000,
+        "MEC-STAMINA",
+        "docs/spec/big.md",
+        2,
+    );
+    write(&root, "docs/spec/big.md", &text);
+    // spec-a: MEC-STAMINA has 5 outgoing and 10 incoming links; 1000 more.
+    let total = 5 + 10 + 1000;
+    let run = spec(&home, &root, &["show", "MEC-STAMINA", "--links"]);
+    run.code(0);
+    let (before, tail) = split_tail(&run.stdout);
+    assert!(before.chars().count() <= CAP);
+    let lines: Vec<&str> = before.lines().collect();
+    assert!(lines[0].starts_with("MEC-STAMINA | "), "{}", lines[0]);
+    let printed = &lines[1..];
+    assert!(
+        printed
+            .iter()
+            .all(|line| line.starts_with("  out ") || line.starts_with("  in ")),
+        "only link lines after the header: no text"
+    );
+    let not_shown = total - printed.len();
+    assert!(not_shown > 0, "the block is cut");
+    assert!(
+        tail.ends_with(&format!("; links not shown: {not_shown}]")),
+        "{tail} ({} printed)",
+        printed.len()
+    );
+    let json = spec(&home, &root, &["--json", "show", "MEC-STAMINA", "--links"]).json();
+    let node = &json["nodes"][0];
+    assert_eq!(node["truncated"], true);
+    assert_eq!(node["text"], "");
+    // Exactly the printed links, and `omitted` the tail's count.
+    let json_links = node["links"]["outgoing"].as_array().unwrap().len()
+        + node["links"]["incoming"].as_array().unwrap().len();
+    assert_eq!(
+        json_links,
+        printed.len(),
+        "JSON links vs printed link lines"
+    );
+    assert_eq!(node["links"]["omitted"], not_shown, "omitted vs the tail");
+    let names: Vec<String> = node["links"]["outgoing"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(node["links"]["incoming"].as_array().unwrap())
+        .map(|link| {
+            format!(
+                "{}:{}",
+                link["path"].as_str().unwrap(),
+                link["line"].as_u64().unwrap()
+            )
+        })
+        .collect();
+    assert!(names.len() >= printed.len(), "{} JSON links", names.len());
+    for (line, name) in printed.iter().zip(&names) {
+        assert!(line.contains(&format!(" | {name}")), "{line} vs {name}");
+    }
+}
+
+/// AC-15, several holders: the first holder's links block is cut, the
+/// second holder is dropped. The tail's `links not shown: <k>` counts the
+/// first's unprinted lines and every link of the dropped one; JSON holds
+/// the first holder only, its printed links exactly, `omitted` that `<k>`.
+/// M: `omitted` 0 after a cut; the JSON cut by the texts alone.
+#[test]
+fn a_cut_links_block_counts_the_dropped_holders_links() {
+    let scratch = Scratch::new("bounds-links-holders");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let (text, _) = big_document(
+        "MEC-DUP",
+        Some("DOM-GAME"),
+        ("RULE-BIG", "rule", "Part"),
+        1000,
+        "R-12",
+        "docs/spec/a-dup.md",
+        2,
+    );
+    write(&root, "docs/spec/a-dup.md", &text);
+    write(
+        &root,
+        "docs/spec/b-dup.md",
+        "---\nid: MEC-DUP\nclass: canon\nlinks:\n  depends_on: [MEC-STAMINA, MEC-SPRINT]\n---\n\n# Dup\n\nSee R-12.\n",
+    );
+    // a-dup: 1000 mentions out; b-dup: two `depends_on` and one mention.
+    let total = 1000 + 3;
+    let run = spec(&home, &root, &["show", "MEC-DUP", "--links"]);
+    run.code(0);
+    let (before, tail) = split_tail(&run.stdout);
+    assert!(before.chars().count() <= CAP);
+    let lines: Vec<&str> = before.lines().collect();
+    assert!(
+        lines[0].starts_with("MEC-DUP | mechanic | Big | docs/spec/a-dup.md:1 | "),
+        "{}",
+        lines[0]
+    );
+    let printed = &lines[1..];
+    assert!(
+        printed.iter().all(|line| line.starts_with("  out ")),
+        "only a-dup's link lines after its header"
+    );
+    assert!(!before.contains("docs/spec/b-dup.md"), "b-dup is not shown");
+    let not_shown = total - printed.len();
+    assert!(
+        tail.contains("holders not shown: docs/spec/b-dup.md:1;")
+            && tail.ends_with(&format!("; links not shown: {not_shown}]")),
+        "{tail} ({} printed)",
+        printed.len()
+    );
+    let json = spec(&home, &root, &["--json", "show", "MEC-DUP", "--links"]).json();
+    let nodes = json["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 1, "the dropped holder is not in JSON");
+    let node = &nodes[0];
+    assert_eq!(node["truncated"], true);
+    assert_eq!(node["text"], "");
+    assert_eq!(
+        node["omitted"]["holders"],
+        serde_json::json!(["docs/spec/b-dup.md:1"])
+    );
+    let outgoing = node["links"]["outgoing"].as_array().unwrap();
+    assert_eq!(outgoing.len(), printed.len(), "JSON links vs printed");
+    assert_eq!(node["links"]["incoming"], serde_json::json!([]));
+    assert_eq!(node["links"]["omitted"], not_shown, "omitted vs the tail");
+    for (line, link) in printed.iter().zip(outgoing) {
+        let place = format!(
+            " | {}:{}",
+            link["path"].as_str().unwrap(),
+            link["line"].as_u64().unwrap()
+        );
+        assert!(line.contains(&place), "{line} vs {place}");
+    }
+}

@@ -78,9 +78,7 @@ A kind is project vocabulary, named per prefix in `[ids]` (a free string, core R
 
 ### 3.2. Link types
 
-Link types with meanings, and the one grammar for text, markers and search: `crates/specengine-model/README.md`; declaring keys: `crates/specengine-core/README.md`. Declared links are strong, inline `mentions` weak; the index graph drives impact analysis; `parent` is containment (§8).
-
-**Front-matter input caps** (nesting 32, alias expansion 10 000: core README) sit beside `MAX_USE_RUN_NESTING = 64` (§5.2) and the RON `MAX_DEPTH = 512` (§5.3).
+Link types and the one grammar for text, markers and search: `crates/specengine-model/README.md`; declaring keys, parser caps: `crates/specengine-core/README.md`; containment, graph and impact reads: `docs/canon/spec-cli-graph.md`.
 
 ### 3.3. Index schema (SQLite)
 
@@ -361,7 +359,7 @@ The full scenario is in `06-workflows.md`. Here are the engine invariants:
 
 ## 8. Operational-state reliability
 
-**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk: shipped, `crates/specengine-store/README.md`. Still to come: migrations by `rusqlite_migration` 2.6 (never `sqlx` or `refinery`: `libsqlite3-sys` `links = "sqlite3"`); the tree as `parent_id` + `WITH RECURSIVE`, dependencies in the separate `links` table; `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID).
+**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk: shipped, `crates/specengine-store/README.md`. Still to come: migrations by `rusqlite_migration` 2.6 (never `sqlx` or `refinery`: `libsqlite3-sys` `links = "sqlite3"`); `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID).
 
 - `spec export` writes `docs/generated/queue.md` (queue and tasks, human-readable, generated, in git) and `state.jsonl` (full queue dump; to a backup directory or into git — ADR-0003).
 - `spec import-state` restores the state from JSONL.

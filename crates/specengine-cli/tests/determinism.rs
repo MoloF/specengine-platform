@@ -245,3 +245,112 @@ fn check_prints_the_same_bytes_wherever_the_root_lies() {
         }
     }
 }
+
+/// docs/features/spec-cli-graph.md AC-16: two copies of each fixture,
+/// their documents written (and indexed) one at a time in opposite orders
+/// at different roots under their own `HOME`, with a `parent:` cycle, a
+/// dangling `parent:` and several holders: `tree`, `graph`, `graph
+/// --impact` and `show --links` of every ID and document path, text and
+/// JSON, print the same bytes (stdout, stderr, exit); no absolute root is
+/// printed. M: `HashMap` or rowid order.
+#[test]
+fn graph_reads_print_the_same_bytes_in_opposite_orders() {
+    for (name, _) in FIXTURES {
+        let scratch = Scratch::new("determinism-graph");
+        let home_forward = scratch.home("forward");
+        let home_reverse = scratch.home("reverse");
+        let forward = written_in_order(&scratch, name, "forward", &home_forward, false);
+        let reverse = written_in_order(&scratch, name, "second/reverse", &home_reverse, true);
+        for root in [&forward, &reverse] {
+            if name == "spec-a" {
+                common::replace(
+                    root,
+                    "docs/spec/movement/sprint.md",
+                    "parent: DOM-MOVEMENT",
+                    "parent: MEC-STAMINA",
+                );
+                common::replace(
+                    root,
+                    "docs/spec/movement/stamina.md",
+                    "parent: DOM-MOVEMENT",
+                    "parent: MEC-SPRINT",
+                );
+            } else {
+                common::replace(
+                    root,
+                    "docs/spec/cli.md",
+                    "tier: 1\n",
+                    "tier: 1\nparent: MOD-CLI\n",
+                );
+            }
+            write(
+                root,
+                "docs/spec/zz-dangling.md",
+                "---\nid: DOM-ZZ\nclass: canon\nparent: DOM-NOWHERE\nlinks:\n  depends_on: [DOM-NOWHERE, other:R-1]\n---\n\n# Dangling\n",
+            );
+        }
+        let config = specengine_core::ProjectConfig::from_toml(
+            &String::from_utf8(read(&forward, "specengine.toml")).unwrap(),
+        )
+        .unwrap();
+        let mut references: BTreeSet<String> = BTreeSet::new();
+        for file in md_files(&forward.join("docs")) {
+            let path = format!("docs/{file}");
+            let parsed = specengine_core::parse(&path, &read(&forward, &path), &config.scheme);
+            references.extend(parsed.nodes.iter().filter_map(|node| node.id.clone()));
+            references.insert(path);
+        }
+        let mut commands: Vec<Vec<String>> = vec![
+            vec!["tree".into()],
+            vec!["tree".into(), "--archive".into()],
+            vec![
+                "tree".into(),
+                "--kind".into(),
+                "rule".into(),
+                "--kind".into(),
+                "command".into(),
+            ],
+        ];
+        for reference in &references {
+            for command in [
+                &["tree"][..],
+                &["graph"],
+                &["graph", "--impact"],
+                &["graph", "--type", "mentions", "--archive"],
+                &["show", "--links"],
+            ] {
+                let mut args: Vec<String> = vec![command[0].into(), reference.clone()];
+                args.extend(command[1..].iter().map(|arg| (*arg).to_owned()));
+                commands.push(args);
+            }
+        }
+        let mut compared = 0;
+        for command in &commands {
+            for json in [false, true] {
+                let mut args: Vec<&str> = command.iter().map(String::as_str).collect();
+                if json {
+                    args.insert(0, "--json");
+                }
+                let one = spec(&home_forward, &forward, &args);
+                let two = spec(&home_reverse, &reverse, &args);
+                assert!(one.code <= 1, "{name}: {args:?}\n{}", one.show());
+                assert_eq!(one.code, two.code, "{name}: {args:?}");
+                assert_eq!(one.stdout, two.stdout, "{name}: {args:?}");
+                assert_eq!(one.stderr, two.stderr, "{name}: {args:?}");
+                for root in [&forward, &reverse] {
+                    let shown = root.to_str().unwrap();
+                    assert!(
+                        !one.stdout.contains(shown) && !one.stderr.contains(shown),
+                        "{name}: {args:?} printed {shown}"
+                    );
+                }
+                compared += 1;
+            }
+        }
+        assert!(compared > 200, "{name}: {compared}");
+        // A repeat is byte-identical, too.
+        let one = spec(&home_forward, &forward, &["--json", "graph", "DOM-ZZ"]);
+        let two = spec(&home_forward, &forward, &["--json", "graph", "DOM-ZZ"]);
+        assert_eq!(one.stdout, two.stdout, "{name}");
+    }
+}

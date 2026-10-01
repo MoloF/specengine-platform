@@ -16,9 +16,20 @@
 //! A section is not shown when its heading line is cut. JSON gives the cut
 //! node `truncated: true` and `omitted: {lines, sections, holders}` and
 //! drops the nodes after it.
+//!
+//! With `--links` each node's links block follows its header line, before
+//! its text, and counts toward the cap: the cut falls in the text first;
+//! when it falls in the block, at a line end, the text is not shown and the
+//! tail gains `; links not shown: <k>` (every link line of the cut node and
+//! of the nodes after it that is not printed; `0` when none). JSON then
+//! takes the text's cut, so it holds exactly what the text prints: the same
+//! nodes, the cut node's text as printed, each node's `links` (`null`
+//! without `--links`) the printed ones (outgoing, then incoming) and
+//! `omitted` the tail's `<k>` on the cut node, 0 on the others.
 
 use serde::Serialize;
 
+use crate::links::{LinksJson, block_lines, links_json};
 use crate::one_line;
 use crate::search::notes;
 use crate::show::{ShowOutcome, ShownNode};
@@ -32,8 +43,12 @@ pub const OUTPUT_CAP_CHARS: usize = 40_000;
 struct Cut {
     /// The node it falls in.
     node: usize,
-    /// Text only: how much of the node's header line is printed.
+    /// The text rendering's: how much of the node's header line is
+    /// printed.
     header: Header,
+    /// Lines of the node's links block printed (all of them when the cut
+    /// falls in its text); JSON with `--links` keeps as many links.
+    links: usize,
     /// Bytes of the node's text shown.
     shown: usize,
 }
@@ -92,14 +107,41 @@ fn header(node: &ShownNode) -> String {
     header
 }
 
+/// The lines of a node's links block (none without `--links`).
+fn block(node: &ShownNode) -> Vec<String> {
+    node.links.as_ref().map(block_lines).unwrap_or_default()
+}
+
+/// `spec tree` and `spec graph`: how many of `lines` (their characters,
+/// line end included), from the first, fit in [`OUTPUT_CAP_CHARS`] after
+/// `used` characters, and the characters then used; `first_whole`: never
+/// fewer than one when there is a line.
+pub(crate) fn lines_within(
+    lines: impl IntoIterator<Item = usize>,
+    mut used: usize,
+    first_whole: bool,
+) -> (usize, usize) {
+    let mut fit = 0;
+    for cost in lines {
+        if used + cost > OUTPUT_CAP_CHARS && !(first_whole && fit == 0) {
+            break;
+        }
+        used += cost;
+        fit += 1;
+    }
+    (fit, used)
+}
+
 /// The cut of the text rendering, if any.
 fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
     let mut used = 0;
     for (index, node) in nodes.iter().enumerate() {
         let head = usize::from(index > 0) + header(node).chars().count() + 1;
+        let block = block(node);
+        let links: usize = block.iter().map(|line| line.chars().count() + 1).sum();
         let body = node.text.chars().count() + usize::from(!node.text.ends_with('\n'));
-        if used + head + body <= OUTPUT_CAP_CHARS {
-            used += head + body;
+        if used + head + links + body <= OUTPUT_CAP_CHARS {
+            used += head + links + body;
             continue;
         }
         if used + head > OUTPUT_CAP_CHARS {
@@ -114,20 +156,50 @@ fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
             return Some(Cut {
                 node: index,
                 header,
+                links: 0,
                 shown: 0,
             });
         }
-        let room = OUTPUT_CAP_CHARS - used - head;
+        if used + head + links > OUTPUT_CAP_CHARS {
+            // In the links block, at the end of the last line that fits.
+            let mut room = OUTPUT_CAP_CHARS - used - head;
+            let mut printed = 0;
+            for line in &block {
+                let cost = line.chars().count() + 1;
+                if cost > room {
+                    break;
+                }
+                room -= cost;
+                printed += 1;
+            }
+            return Some(Cut {
+                node: index,
+                header: Header::Whole,
+                links: printed,
+                shown: 0,
+            });
+        }
+        let room = OUTPUT_CAP_CHARS - used - head - links;
         return Some(Cut {
             node: index,
             header: Header::Whole,
+            links: block.len(),
             shown: cut_text(&node.text, room, true),
         });
     }
     None
 }
 
-/// The cut of the JSON rendering (the sum of the texts), if any.
+/// Link lines of the text rendering not printed: the cut node's beyond
+/// the block lines printed, and every one of the nodes after it.
+fn links_not_shown(nodes: &[ShownNode], cut: Cut) -> usize {
+    let count = |node: &ShownNode| node.links.as_ref().map_or(0, |links| links.len());
+    let cut_node = count(&nodes[cut.node]);
+    cut_node - cut.links.min(cut_node) + nodes[cut.node + 1..].iter().map(count).sum::<usize>()
+}
+
+/// The cut of the JSON rendering without `--links` (the sum of the
+/// texts), if any.
 fn plan_json(nodes: &[ShownNode]) -> Option<Cut> {
     let mut used = 0;
     for (index, node) in nodes.iter().enumerate() {
@@ -139,6 +211,7 @@ fn plan_json(nodes: &[ShownNode]) -> Option<Cut> {
         return Some(Cut {
             node: index,
             header: Header::Whole,
+            links: 0,
             shown: cut_text(&node.text, OUTPUT_CAP_CHARS - used, false),
         });
     }
@@ -216,6 +289,12 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
         }
         out.push_str(&header);
         out.push('\n');
+        let block = block(node);
+        let printed = this_cut.map_or(block.len(), |cut| cut.links.min(block.len()));
+        for line in &block[..printed] {
+            out.push_str(line);
+            out.push('\n');
+        }
         let text = match this_cut {
             Some(cut) => &node.text[..cut.shown],
             None => node.text.as_str(),
@@ -230,9 +309,14 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
     }
     if let Some(cut) = cut {
         let omitted = omitted(nodes, cut);
+        let links = if nodes.iter().any(|node| node.links.is_some()) {
+            format!("; links not shown: {}", links_not_shown(nodes, cut))
+        } else {
+            String::new()
+        };
         // One line whatever the paths hold.
         out.push_str(&one_line(&format!(
-            "[truncated: {} lines {}-{} not shown; sections not shown: {}; holders not shown: {}]",
+            "[truncated: {} lines {}-{} not shown; sections not shown: {}; holders not shown: {}{links}]",
             nodes[cut.node].path,
             omitted.lines[0],
             omitted.lines[1],
@@ -270,6 +354,8 @@ struct NodeJson<'a> {
     text: &'a str,
     truncated: bool,
     omitted: Option<OmittedJson>,
+    /// `null` without `--links`.
+    links: Option<LinksJson<'a>>,
 }
 
 #[derive(Serialize)]
@@ -281,7 +367,12 @@ struct OmittedJson {
 
 fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
     let nodes = &outcome.nodes;
-    let cut = plan_json(nodes);
+    // With `--links`: the text's cut, so the JSON holds the printed links.
+    let cut = if nodes.iter().any(|node| node.links.is_some()) {
+        plan_text(nodes)
+    } else {
+        plan_json(nodes)
+    };
     let shown = cut.map_or(nodes.len(), |cut| cut.node + 1);
     let json_nodes = nodes[..shown]
         .iter()
@@ -317,6 +408,10 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                         sections: omitted.sections,
                         holders: omitted.holders,
                     }
+                }),
+                links: node.links.as_ref().map(|links| match this_cut {
+                    Some(cut) => links_json(links, cut.links, links_not_shown(nodes, cut)),
+                    None => links_json(links, usize::MAX, 0),
                 }),
             }
         })

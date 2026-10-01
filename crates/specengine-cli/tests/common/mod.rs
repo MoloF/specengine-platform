@@ -11,6 +11,7 @@
 
 pub mod check;
 pub mod git;
+pub mod graph;
 pub mod staged;
 
 use std::collections::BTreeMap;

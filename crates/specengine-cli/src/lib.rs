@@ -4,7 +4,9 @@
 //! `spec check` and `spec export index`; pass 2a.2 (task spec
 //! `spec-cli-staged`), `spec check --staged` over the git index; task spec
 //! `spec-cli-changed`, `spec check --changed`: the working tree against
-//! `HEAD`.
+//! `HEAD`; pass 3 (task spec `spec-cli-graph`), the graph reads: `spec
+//! tree`, `spec graph` and `spec show --links`, over the index-fed spec
+//! graph of core ([`specengine_core::check::SpecGraph`]).
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -16,34 +18,38 @@
 //!   instead;
 //! - [`data_dir`], [`db_path`], [`open_index`]: the index database lives
 //!   outside the repository, one per project slug;
-//! - [`init`], [`index`], [`search`], [`show`], [`check`],
-//!   [`export_index`]: one function per command, each giving its outcome or
-//!   a [`CliError`];
+//! - [`init`], [`index`], [`search`], [`show`], [`tree`], [`graph`],
+//!   [`check`], [`export_index`]: one function per command, each giving its
+//!   outcome or a [`CliError`];
 //! - [`render_text`], [`render_json`]: an [`Outcome`] as stdout (JSON: one
 //!   document, every key present, absent = `null`; `check`: the report's
 //!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded);
 //!   [`Outcome::stderr_lines`]: its `note:` and `warning:` lines;
-//! - [`Exit`]: 0 answered, 1 not found (`show`) or blocked (`check`), 2
-//!   could not run (`check`: could not check).
+//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`) or
+//!   blocked (`check`), 2 could not run (`check`: could not check).
 //!
 //! One database state gives one stdout, byte for byte: nothing depends on
 //! time, storage order or the absolute root (`check`: one tree, config,
 //! baseline and date). No command writes under the project root but
 //! `spec init`, which creates its one file, and `spec export index`, which
-//! writes only `[paths] index`; `index`, `search` and `show` write only the
-//! data directory, `check` nothing. Nothing found in the corpus is fatal
+//! writes only `[paths] index`; `index`, `search`, `show`, `tree` and
+//! `graph` write only the data directory, `check` nothing. Nothing found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
 mod cap;
 mod check;
+mod corpus;
 mod export;
+mod graph;
 mod init;
+mod links;
 mod location;
 mod project;
 mod refresh;
 mod search;
 mod show;
+mod tree;
 
 use std::ffi::OsString;
 use std::fmt;
@@ -51,14 +57,18 @@ use std::path::PathBuf;
 
 pub use cap::OUTPUT_CAP_CHARS;
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
+pub use corpus::LeftOut;
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
+pub use graph::{FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
+pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
 pub use project::{CONFIG_FILE, ProjectRoot, discover};
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show};
 pub use specengine_core::ProjectConfig;
+pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -67,8 +77,9 @@ pub enum Exit {
     /// The command answered, zero search hits included; `spec check`:
     /// clean or observed.
     Answered = 0,
-    /// `spec show` found nothing: a dangling reference, no configured
-    /// prefix, a `.md` path that is not indexed. `spec check`: blocked.
+    /// `spec show`, `spec tree`, `spec graph` found nothing: a dangling
+    /// reference, no configured prefix, a `.md` path that is not indexed.
+    /// `spec check`: blocked.
     NotFound = 1,
     /// The command could not run: usage, project, config, environment,
     /// database. Nothing is printed on stdout, but `spec check`'s report
@@ -189,36 +200,40 @@ pub enum Outcome {
     Index(IndexOutcome),
     Search(SearchOutcome),
     Show(ShowOutcome),
+    Tree(TreeOutcome),
+    Graph(GraphOutcome),
     Check(CheckOutcome),
     Export(ExportOutcome),
 }
 
 impl Outcome {
-    /// 0, or 1 for a `show` that found nothing; `check`: its verdict's
-    /// exit (1 blocked, 2 could not check).
+    /// 0, or 1 for a `show`, `tree` or `graph` that found nothing; `check`:
+    /// its verdict's exit (1 blocked, 2 could not check).
     pub fn exit(&self) -> Exit {
         match self {
             Self::Show(show) if show.nodes.is_empty() => Exit::NotFound,
+            Self::Tree(tree) if tree.reason.is_some() => Exit::NotFound,
+            Self::Graph(graph) if graph.reason.is_some() => Exit::NotFound,
             Self::Check(check) => check.exit(),
             _ => Exit::Answered,
         }
     }
 
     /// The stderr lines: notes and warnings in the order they arose, then,
-    /// for a `show` that found nothing, `spec: <reason>`.
+    /// for a `show`, `tree` or `graph` that found nothing, `spec: <reason>`.
     pub fn stderr_lines(&self) -> Vec<String> {
-        let messages = match self {
-            Self::Init(outcome) => &outcome.messages,
-            Self::Index(outcome) => &outcome.messages,
-            Self::Search(outcome) => &outcome.messages,
-            Self::Show(outcome) => &outcome.messages,
-            Self::Check(outcome) => &outcome.messages,
-            Self::Export(outcome) => &outcome.messages,
+        let (messages, reason) = match self {
+            Self::Init(outcome) => (&outcome.messages, None),
+            Self::Index(outcome) => (&outcome.messages, None),
+            Self::Search(outcome) => (&outcome.messages, None),
+            Self::Show(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Tree(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Graph(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Check(outcome) => (&outcome.messages, None),
+            Self::Export(outcome) => (&outcome.messages, None),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
-        if let Self::Show(show) = self
-            && let Some(reason) = &show.reason
-        {
+        if let Some(reason) = reason {
             lines.push(format!("spec: {}", one_line(reason)));
         }
         lines
@@ -232,6 +247,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Index(outcome) => refresh::render_text(outcome),
         Outcome::Search(outcome) => search::render_text(outcome),
         Outcome::Show(outcome) => cap::render_text(outcome),
+        Outcome::Tree(outcome) => tree::render_text(outcome),
+        Outcome::Graph(outcome) => graph::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
     }
@@ -246,6 +263,8 @@ impl serde::Serialize for Outcome {
             Self::Index(outcome) => outcome.serialize(serializer),
             Self::Search(outcome) => outcome.serialize(serializer),
             Self::Show(outcome) => outcome.serialize(serializer),
+            Self::Tree(outcome) => outcome.serialize(serializer),
+            Self::Graph(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
         }
