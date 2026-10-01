@@ -372,11 +372,14 @@ fn the_literal_scan_sees_a_special_cased_prefix() {
 /// docs/features/spec-cli-staged.md AC-17: the scan covers the new store
 /// module (`src/git.rs`, the git plumbing) and the index source beside
 /// the working tree's (`src/source.rs`), and finds no domain literal in
-/// either.
+/// either. docs/features/spec-cli-introduced.md AC-18: also the base
+/// (`src/base.rs`), which moreover names no path or file of a project
+/// (`"docs/"`, this repository's files): `HEAD`'s files are found by the
+/// checked config's paths, never by a name.
 #[test]
 fn the_literal_scan_covers_the_git_module() {
     let sources = store_sources();
-    for module in ["git.rs", "source.rs", "check.rs"] {
+    for module in ["git.rs", "source.rs", "check.rs", "base.rs"] {
         let file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("src")
             .join(module);
@@ -387,4 +390,22 @@ fn the_literal_scan_covers_the_git_module() {
         let offenders = domain_literals(&[file]);
         assert!(offenders.is_empty(), "{module}: {offenders:?}");
     }
+    const PROJECT_NAMES: [&str; 8] = [
+        "docs/",
+        "CLAUDE.md",
+        "README.md",
+        "index.md",
+        "fixtures",
+        "xtask",
+        "specengine-cli",
+        ".githooks",
+    ];
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/base.rs");
+    let text = fs::read_to_string(&base).expect("src/base.rs");
+    let named: Vec<String> = string_literals(&text)
+        .into_iter()
+        .filter(|(_, literal)| PROJECT_NAMES.iter().any(|name| literal.contains(name)))
+        .map(|(line, literal)| format!("base.rs:{line}: {literal:?}"))
+        .collect();
+    assert!(named.is_empty(), "project names in the base: {named:?}");
 }

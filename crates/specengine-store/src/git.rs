@@ -1,7 +1,8 @@
-//! Git plumbing for `spec check --staged` (docs/features/spec-cli-staged.md):
-//! the index git would commit, read through `std::process` and never
-//! written. Git runs in the root, so git computes the prefix and every path
-//! comes root-relative; nothing strips the root against `--show-toplevel`.
+//! Git plumbing for `spec check --staged` (docs/features/spec-cli-staged.md,
+//! docs/features/spec-cli-introduced.md): the index git would commit and
+//! `HEAD`'s tree, its base, read through `std::process` and never written.
+//! Git runs in the root, so git computes the prefix and every path comes
+//! root-relative; nothing strips the root against `--show-toplevel`.
 //!
 //! Commands, and nothing else: `rev-parse --git-path index`,
 //! `--git-path objects`, `--git-common-dir` in the caller's directory, one
@@ -12,11 +13,15 @@
 //! when `GIT_DIR` is set and `GIT_WORK_TREE` is not (a top other than the
 //! caller's directory, or a git dir other than `GIT_DIR`'s, is refused);
 //! in the root
-//! `rev-parse --is-inside-work-tree`, `ls-files -s -z`,
+//! `rev-parse --is-inside-work-tree`, `ls-files -s -z`, `rev-parse --verify
+//! -q HEAD` (exit 0 and one OID: born; exit 1 and nothing: unborn), when
+//! born `ls-tree -r -z <oid>` (no `--full-tree`, no `--full-name`: the
+//! root's subtree, paths root-relative as `ls-files` gives them, nothing
+//! for a root `HEAD` lacks; the OID pins both calls to one commit),
 //! one `cat-file --batch` session per check, and the intent-to-add detector
 //! `diff-files -z --name-only --no-renames --ignore-submodules=all
 //! --diff-filter=A --ita-invisible-in-index --relative` (plumbing: no
-//! `HEAD`, no index refresh, no rename pairing, no submodule probed; paths
+//! index refresh, no rename pairing, no submodule probed; paths
 //! root-relative and under the root; run only when a stage-0 entry holds
 //! the empty blob, the one an intent-to-add entry holds, at a `.md` path or
 //! at the root's config or baseline: it runs clean filters on racily-clean
@@ -38,8 +43,10 @@
 //! `cat-file --batch` runs in strict lockstep, without `--buffer`: one
 //! request is written and its whole reply read before the next, so neither
 //! side ever waits on a full pipe (no deadlock whatever the blob sizes).
+//! Each OID is requested once per check: [`Staged::blob`] keeps what it
+//! read, for the index and `HEAD` alike.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -385,6 +392,14 @@ pub(crate) struct Entry {
     pub(crate) oid: String,
 }
 
+/// An OID as git prints it: 40 or 64 lower-case hex digits.
+fn is_oid(oid: &[u8]) -> bool {
+    matches!(oid.len(), 40 | 64)
+        && oid
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+}
+
 /// One record of `ls-files -s -z`.
 struct Record {
     entry: Entry,
@@ -408,11 +423,8 @@ fn parse_ls_files(output: &[u8]) -> Option<Vec<Record>> {
         else {
             return None;
         };
-        let mode_ok = mode.len() == 6 && mode.iter().all(|byte| (b'0'..=b'7').contains(byte));
-        let oid_ok = matches!(oid.len(), 40 | 64)
-            && oid
-                .iter()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte));
+        let mode_ok = is_mode(mode);
+        let oid_ok = is_oid(oid);
         let stage = match stage {
             b"0" => 0,
             b"1" => 1,
@@ -433,6 +445,41 @@ fn parse_ls_files(output: &[u8]) -> Option<Vec<Record>> {
         });
     }
     Some(records)
+}
+
+/// Six octal digits.
+fn is_mode(mode: &[u8]) -> bool {
+    mode.len() == 6 && mode.iter().all(|byte| (b'0'..=b'7').contains(byte))
+}
+
+/// `<mode> SP <type> SP <oid> TAB <path> NUL`, `ls-tree -r -z`'s records,
+/// parsed as [`parse_ls_files`] parses its own: split at the first TAB, an
+/// OID of 40 or 64 hex. `None`: a record breaks the format.
+fn parse_ls_tree(output: &[u8]) -> Option<Vec<Entry>> {
+    let Some(body) = output.strip_suffix(b"\0") else {
+        return output.is_empty().then(Vec::new);
+    };
+    let mut entries = Vec::new();
+    for record in body.split(|&byte| byte == 0) {
+        let tab = record.iter().position(|&byte| byte == b'\t')?;
+        let (head, path) = (&record[..tab], &record[tab + 1..]);
+        let mut fields = head.split(|&byte| byte == b' ');
+        let (Some(mode), Some(kind), Some(oid), None) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
+            return None;
+        };
+        let kind_ok = !kind.is_empty() && kind.iter().all(u8::is_ascii_lowercase);
+        if !is_mode(mode) || !kind_ok || !is_oid(oid) || path.is_empty() {
+            return None;
+        }
+        entries.push(Entry {
+            path: path.to_vec(),
+            kind: EntryKind::of(mode),
+            oid: String::from_utf8(oid.to_vec()).ok()?,
+        });
+    }
+    Some(entries)
 }
 
 /// Git run in one directory with one resolved environment.
@@ -546,6 +593,43 @@ impl Git {
             )),
             Err(failure) => Err(failure.cause()),
         }
+    }
+
+    /// `HEAD`'s commit: `Some(oid)` when born, `None` when unborn (exit 1,
+    /// nothing printed); anything else is a failure.
+    fn head(&self) -> Result<Option<String>, GitFailure> {
+        const COMMAND: &str = "rev-parse";
+        let output = self
+            .command(&["rev-parse", "--verify", "-q", "HEAD"])
+            .output()
+            .map_err(|error| self.spawn_failure(&error))?;
+        let unreadable = GitFailure::Unreadable { command: COMMAND };
+        match output.status.code() {
+            Some(0) => {
+                let oid = output
+                    .stdout
+                    .strip_suffix(b"\n")
+                    .ok_or(unreadable.clone())?;
+                if !is_oid(oid) {
+                    return Err(unreadable);
+                }
+                String::from_utf8(oid.to_vec())
+                    .map(Some)
+                    .map_err(|_| unreadable)
+            }
+            Some(1) if output.stdout.is_empty() => Ok(None),
+            Some(1) => Err(unreadable),
+            code => Err(GitFailure::Failed {
+                command: COMMAND,
+                code,
+            }),
+        }
+    }
+
+    /// The tree of commit `oid` under the root, root-relative.
+    fn ls_tree(&self, oid: &str) -> Result<Vec<Entry>, GitFailure> {
+        let output = self.run("ls-tree", &["ls-tree", "-r", "-z", oid])?;
+        parse_ls_tree(&output).ok_or(GitFailure::Unreadable { command: "ls-tree" })
     }
 
     fn ls_files(&self) -> Result<Vec<Record>, GitFailure> {
@@ -738,7 +822,8 @@ fn may_be_intent_to_add(entry: &Entry) -> bool {
 
 /// The index git would commit, under the root: its stage-0 entries minus
 /// intent-to-add ones, byte-sorted, and the `cat-file` session reading
-/// their blobs (started at the first read, one per check).
+/// their blobs and `HEAD`'s (started at the first read, one per check),
+/// with every object it read.
 #[derive(Debug)]
 pub(crate) struct Staged {
     /// Canonical.
@@ -746,6 +831,8 @@ pub(crate) struct Staged {
     pub(crate) entries: Vec<Entry>,
     git: Git,
     session: Option<CatFile>,
+    /// Every object read, by OID: none is requested twice.
+    pub(crate) objects: BTreeMap<String, Blob>,
 }
 
 impl Staged {
@@ -794,6 +881,7 @@ impl Staged {
             entries,
             git,
             session: None,
+            objects: BTreeMap::new(),
         })
     }
 
@@ -805,13 +893,33 @@ impl Staged {
             .map(|at| &self.entries[at])
     }
 
-    /// The object `oid`, read through the session (started on first use).
-    pub(crate) fn blob(&mut self, oid: &str) -> Result<Blob, GitFailure> {
-        let session = match &mut self.session {
-            Some(session) => session,
-            None => self.session.insert(self.git.cat_file()?),
-        };
-        session.get(oid)
+    /// The object `oid`, read through the session (started on first use)
+    /// unless already read: each OID is requested once.
+    pub(crate) fn blob(&mut self, oid: &str) -> Result<&Blob, GitFailure> {
+        match self.objects.entry(oid.to_owned()) {
+            btree_map::Entry::Occupied(known) => Ok(known.into_mut()),
+            btree_map::Entry::Vacant(slot) => {
+                let session = match &mut self.session {
+                    Some(session) => session,
+                    None => self.session.insert(self.git.cat_file()?),
+                };
+                Ok(slot.insert(session.get(oid)?))
+            }
+        }
+    }
+
+    /// `HEAD`'s commit in the root: `None` when unborn.
+    pub(crate) fn head(&self) -> Result<Option<String>, GitFailure> {
+        self.git.head()
+    }
+
+    /// The tree of commit `oid` under the root (`ls-tree -r -z`),
+    /// byte-sorted, one entry per path: nothing for a root it lacks.
+    pub(crate) fn head_entries(&self, oid: &str) -> Result<Vec<Entry>, GitFailure> {
+        let mut entries = self.git.ls_tree(oid)?;
+        entries.sort_by(|a, b| a.path.cmp(&b.path));
+        entries.dedup_by(|a, b| a.path == b.path);
+        Ok(entries)
     }
 
     /// Ends the session, if one was started.

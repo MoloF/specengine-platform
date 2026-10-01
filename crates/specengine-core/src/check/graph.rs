@@ -258,5 +258,6 @@ pub(super) fn warning(
         message,
         fix: None,
         debt: None,
+        introduced: None,
     }
 }

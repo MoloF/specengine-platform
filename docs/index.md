@@ -84,6 +84,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) shipped
 - [docs/features/spec-check.md](features/spec-check.md) shipped
 - [docs/features/spec-cli-check.md](features/spec-cli-check.md) shipped
+- [docs/features/spec-cli-introduced.md](features/spec-cli-introduced.md) shipped
 - [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) shipped
 - [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) shipped
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped

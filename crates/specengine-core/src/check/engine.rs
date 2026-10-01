@@ -116,6 +116,7 @@ pub fn run(
             message,
             fix: None,
             debt: None,
+            introduced: None,
         });
     }
 
@@ -291,6 +292,7 @@ impl<'a> Corpus<'a> {
                     message: format!("`{id}` is already defined in {}", self.paths[first]),
                     fix: None,
                     debt: None,
+                    introduced: None,
                 });
             }
         }
@@ -374,6 +376,7 @@ impl FileCheck<'_, '_> {
             message,
             fix: None,
             debt: None,
+            introduced: None,
         });
     }
 
@@ -405,6 +408,7 @@ impl FileCheck<'_, '_> {
                     text: text.clone(),
                 }),
             debt: None,
+            introduced: None,
         }
     }
 

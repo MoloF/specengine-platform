@@ -263,7 +263,9 @@ fn c_d_nothing_relevant_is_not_checked_the_config_and_baseline_are() {
     assert!(shown.contains(" \u{2014} cannot-check"), "{shown}");
     repo.reset();
 
-    // A good `.spec-debt.toml` alone is checked and recorded.
+    // A good `.spec-debt.toml` alone is checked and refused: its entry is
+    // new debt against `HEAD`'s baseline (none), which blocks under
+    // `enforce` too (docs/features/spec-cli-introduced.md, 2a.2 Q7).
     write(
         &repo.top,
         ".spec-debt.toml",
@@ -271,8 +273,13 @@ fn c_d_nothing_relevant_is_not_checked_the_config_and_baseline_are() {
     );
     repo.git(&["add", ".spec-debt.toml"]);
     let (outcome, calls, shown) = repo.commit("good baseline", &[], None);
-    assert_eq!(outcome, Commit::Recorded, "{shown}");
+    assert_eq!(outcome, Commit::Refused, "{shown}");
     assert_eq!(calls, [CALL], "{shown}");
+    assert!(
+        shown.contains("new  docs/guide.md: debt-new: "),
+        "the new entry is named: {shown}"
+    );
+    assert!(shown.contains(" \u{2014} blocked"), "{shown}");
 }
 
 #[test]

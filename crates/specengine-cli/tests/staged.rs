@@ -14,7 +14,7 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt as _, symlink};
 
 use common::check::{FAR, baseline_covering, dangling_document, library, line_of, set_paths_key};
-use common::staged::{Repo, assert_parity, assert_same};
+use common::staged::{GitLog, Repo, assert_parity, assert_same, check_args, spec_in};
 use common::{FIXTURES, read_text, write};
 use serde_json::Value;
 use specengine_core::check::Verdict;
@@ -56,8 +56,24 @@ fn with_mode(config: &str, mode: &str) -> String {
     format!("{config}\n[check]\nmode = \"{mode}\"\n")
 }
 
-/// A staged copy of `fixture` whose baseline (staged) covers every
-/// blocking finding: `--staged` and plain are clean.
+/// `git commit -- .spec-debt.toml`: `HEAD` gets the staged baseline (and
+/// nothing else when it was unborn), so its entries are not new debt
+/// (docs/features/spec-cli-introduced.md, 2a.2 Q7).
+fn commit_baseline(repo: &Repo) {
+    repo.git(&[
+        "commit",
+        "-q",
+        "--no-verify",
+        "-m",
+        "the baseline",
+        "--",
+        ".spec-debt.toml",
+    ]);
+}
+
+/// A staged copy of `fixture` whose baseline (staged, and committed in
+/// `HEAD`: not new debt) covers every blocking finding: `--staged` and
+/// plain are clean.
 fn clean_repo(name: &str, fixture: &str) -> Repo {
     let repo = Repo::of(name, fixture);
     let blocked = library(&repo.top);
@@ -68,6 +84,7 @@ fn clean_repo(name: &str, fixture: &str) -> Repo {
         baseline_covering(&blocked, FAR),
     );
     repo.add_all();
+    commit_baseline(&repo);
     let run = repo.staged_check(&[]);
     run.code(0);
     assert!(summary(&run.stdout).ends_with(" — clean"), "{}", run.show());
@@ -77,8 +94,10 @@ fn clean_repo(name: &str, fixture: &str) -> Repo {
 /// AC-02 (and AC-17: both fixtures): a dot-directory, an excluded, a
 /// `100755` and a symlinked `.md` under a root, a document outside every
 /// root, `git add -A`: `--staged` prints plain's bytes — text, `--debt`,
-/// `--json`, `--json --debt` — when blocked, clean (a covering baseline),
-/// observed and cannot-check (a written root in neither).
+/// `--json`, `--json --debt` — when blocked, clean (a covering baseline,
+/// committed first: not new debt), observed and cannot-check (a written
+/// root in neither), its base's fields set aside
+/// (docs/features/spec-cli-introduced.md, 2a.2 Q4, Q7).
 #[test]
 fn a_fully_staged_tree_prints_plain_s_bytes_for_every_verdict() {
     for (fixture, _) in FIXTURES {
@@ -140,10 +159,12 @@ fn a_fully_staged_tree_prints_plain_s_bytes_for_every_verdict() {
         }
         assert_parity(&repo, &[], &format!("{fixture} blocked"));
 
-        // Clean: a staged baseline covering every blocking finding.
+        // Clean: a staged baseline covering every blocking finding, in
+        // `HEAD` too (2a.2 Q7: else every entry is new debt).
         let report = library(top);
         write(top, ".spec-debt.toml", baseline_covering(&report, FAR));
         repo.add_all();
+        commit_baseline(&repo);
         let clean = repo.staged_check(&[]);
         clean.code(0);
         assert!(
@@ -263,6 +284,7 @@ fn an_unstaged_regenerated_index_is_drift() {
         let blocked = library(top);
         write(top, ".spec-debt.toml", baseline_covering(&blocked, FAR));
         repo.add_all();
+        commit_baseline(&repo);
         repo.staged_check(&[]).code(0);
         repo.plain_check(&[]).code(0);
 
@@ -329,6 +351,8 @@ fn the_staged_config_and_baseline_decide() {
         repo.plain_check(&[]).code(0);
         repo.staged_check(&[]).code(1);
         repo.add_all();
+        // In `HEAD` too: not new debt (2a.2 Q7).
+        commit_baseline(&repo);
         let run = repo.staged_check(&["--debt"]);
         run.code(0);
         let debt = run
@@ -398,7 +422,20 @@ fn given_config_and_baseline_are_read_from_disk_as_typed() {
         }
 
         // `--baseline` on disk, untracked: covering, so clean with debt.
+        // `HEAD` holds it at its root-relative path (2a.2 Q7: else every
+        // entry is new debt), the index does not.
         write(top, "debt.toml", baseline_covering(&blocked, FAR));
+        repo.git(&["add", "debt.toml"]);
+        repo.git(&[
+            "commit",
+            "-q",
+            "--no-verify",
+            "-m",
+            "debt",
+            "--",
+            "debt.toml",
+        ]);
+        repo.git(&["rm", "-q", "--cached", "debt.toml"]);
         let run = repo.staged_check(&["--baseline", "debt.toml"]);
         run.code(0);
         assert_parity(
@@ -526,19 +563,38 @@ fn the_staged_config_must_be_a_regular_staged_blob() {
     }
 }
 
-/// AC-14: documents staged, no commit (`HEAD` unborn): `--staged` = plain.
+/// AC-14, as docs/features/spec-cli-introduced.md (2a.2 Q4) changes it:
+/// documents staged, no commit (`HEAD` unborn): `HEAD` is probed once
+/// (`rev-parse --verify -q HEAD`) and never listed (no `ls-tree`), and
+/// `--staged` = plain, its base's fields set aside.
 #[test]
 fn an_unborn_head_is_never_read() {
     for (fixture, _) in FIXTURES {
         let repo = Repo::staged("staged-unborn", fixture);
         assert_eq!(repo.git.head(&repo.top), None, "{fixture}: HEAD is unborn");
-        repo.staged_check(&[]).code(1);
+        let log = GitLog::new(&repo.scratch, &repo.git);
+        let run = spec_in(&repo.git, &repo.top, &check_args(true, &[]), &log.env());
+        run.code(1);
+        let probes = log
+            .calls()
+            .iter()
+            .filter(|call| call.sub() == ["rev-parse", "--verify", "-q", "HEAD"])
+            .count();
+        assert_eq!(probes, 1, "{fixture}: HEAD probed once: {:?}", log.calls());
+        assert!(
+            log.calls().iter().all(|call| call.name() != "ls-tree"),
+            "{fixture}: an unborn HEAD is listed: {:?}",
+            log.calls()
+        );
         assert_parity(&repo, &[], &format!("{fixture} unborn"));
     }
 }
 
-/// AC-17: `mode = "enforce-introduced"` staged: exit 2 at its line, as
-/// plain reports it.
+/// AC-17 of docs/features/spec-cli-staged.md, as
+/// docs/features/spec-cli-introduced.md (2a.2 Q4–Q9) changes it:
+/// `mode = "enforce-introduced"` staged is valid — no cause; `HEAD`
+/// unborn, so every error is introduced: `[enforce-introduced]`, enforce's
+/// error lines, exit 1, no note. Plain judges it as `enforce`, one note.
 #[test]
 fn enforce_introduced_is_a_cause_at_its_line() {
     for (fixture, _) in FIXTURES {
@@ -548,15 +604,25 @@ fn enforce_introduced_is_a_cause_at_its_line() {
         write(top, "specengine.toml", &text);
         repo.add_all();
         let run = repo.staged_check(&[]);
-        run.code(2);
-        let found = causes(&run.stdout);
-        assert_eq!(found.len(), 1, "{fixture}: {}", run.stdout);
-        let line = line_of(&text, "mode = ");
+        run.code(1);
+        assert!(causes(&run.stdout).is_empty(), "{fixture}: {}", run.show());
         assert!(
-            found[0].starts_with(&format!("cannot  specengine.toml:{line}: ")),
+            summary(&run.stdout).starts_with("spec check [enforce-introduced]: ")
+                && summary(&run.stdout).ends_with(" — blocked"),
             "{fixture}: {}",
-            found[0]
+            run.show()
         );
-        assert_parity(&repo, &[], &format!("{fixture} enforce-introduced"));
+        assert_eq!(run.stderr, "", "{fixture}: no note with a base");
+        let plain = repo.plain_check(&[]);
+        plain.code(1);
+        assert!(
+            summary(&plain.stdout).starts_with("spec check [enforce]: "),
+            "{fixture}: {}",
+            plain.show()
+        );
+        assert_eq!(plain.stderr_lines().len(), 1, "{fixture}: {}", plain.show());
+        assert!(plain.stderr.starts_with("note: "), "{}", plain.show());
+        assert!(!errors(&run.stdout).is_empty(), "{fixture}");
+        assert_eq!(errors(&run.stdout), errors(&plain.stdout), "{fixture}");
     }
 }

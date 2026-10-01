@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-01
 ---
 
 # specengine-store — the spec index
 
-A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). Derived data outside the repository (ADR-0001, ADR-0003). A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`: bit-exact floats). Callers: the CLI (updating before every read; checks, exports parse afresh), `specengine-eval`, tests.
+A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). Derived data outside the repository (ADR-0001, ADR-0003). A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`: bit-exact floats). Callers: the CLI (updating before every read; checks parse afresh), `specengine-eval`, tests.
 
 ## API
 
@@ -18,7 +18,7 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `SqliteIndex::open(db, project, root)`: a handle on one worktree `(project, canonical root)`; a DB holds several. Inherent: `root()`, `project()`, `settings() -> DbSettings` (PRAGMAs, `fts5`, `sqlite_version`), `check_fts()`, `dump()`, `dump_worktree()`. `Send`, not `Sync`.
 - `trait IndexWriter {update, update_paths, rebuild}` → `UpdateReport {walked, parsed, unchanged, removed, unreadable, reparsed_all, missing_roots, skipped_names, unreadable_dirs}`. `update` walks all; `update_paths` (the Phase 2 watcher) probes each named path by the walk rules (unlisted → deleted; a vanished directory re-probes its stored files); an existing directory (`is_dir`) or a non-clean path (`""`, `docs/`, `./x.md`, absolute) walks, as do no prior index and a stamp or fingerprint change; a `[paths]` change needs `update`.
 - `trait SpecIndex {files, file -> IndexedFile {parsed?, blake3?, size, read_error?}, lookup_id -> [IdHit {path, ord, node}], search(&SearchQuery {text, kinds, limit, archive}) -> SearchResults {hits: [SearchHit {path, ord, id?, kind?, title?, line, tier3, snippet}], short_query, tier3_left_out}, indexed_input -> CheckInput}`; `lookup_id`: every node with exactly that `id`; `indexed_input`: the stored worktree as a `CheckInput`, one snapshot, empty `bytes` (`spec show`'s resolver).
-- `spec check`, no database (rules: `docs/canon/spec-check-cli.md`): `load_config(&NamedBytes {name, bytes})` → `(ProjectConfig, CheckConfig)`, the whole config; `load_check` (+ the baseline) → `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic → a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)` (the config named by its file name, a baseline as passed); `check_staged(root, config?, baseline?, &GitEnv, today)`, config (`CONFIG_FILE`) and baseline from the index unless given. `GitEnv::new(cwd, vars)`: git's directory and variables, explicit.
+- `spec check`, no database (`docs/canon/spec-check-cli.md`): `load_config(&NamedBytes {name, bytes})` → `(ProjectConfig, CheckConfig)`, the whole config; `load_check` (+ the baseline) → `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic → a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)` (the config by file name, a baseline as passed); `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}` against `HEAD`, config (`CONFIG_FILE`) and baseline from the index unless given; `check_staged`: the report. `GitEnv::new(cwd, vars)`: git's directory and variables.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 6`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 
 ## Rows
@@ -42,7 +42,7 @@ Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fin
 - Parse outside any transaction against a snapshot of stored hashes; one `Immediate` transaction re-checks and applies (a file whose row moved is re-parsed in place); the next update catches a concurrent edit. A rebuild swaps the worktree's rows in one transaction, never seen empty. A read = one deferred transaction.
 - A changed file's rows are deleted and re-inserted: `INSERT OR REPLACE` on `nodes` fires no `nodes_fts_delete`, leaving the FTS malformed (on `files`, safe only through the `foreign_keys` cascade).
 - Nothing is fatal (ADR-0012): a non-UTF-8 file, broken front-matter or YAML keeps its row and diagnostics; an unreadable file or a caught parser panic → `blake3` NULL, `read_error`, `size` 0, re-read every update.
-- Search: whitespace splits the query; terms of ≥ 3 characters become quoted FTS5 strings (`"` doubled), ANDed, never syntax; shorter ones dropped, none left → no hits, `short_query`. Trigram matches substrings (`R-12` → also `R-123`; exact IDs: `lookup_id`), case-folded, no stemmer. The handle's worktree, `kinds` (empty = any), Tier 3 files dropped before the limit unless `archive`, `ORDER BY bm25(nodes_fts, 10.0, 5.0, 1.0), path, ord`, `limit` clamped, a 64-token `snippet` marked `**`. No order depends on rowid; bm25 statistics are DB-wide: ranks shift with other worktrees.
+- Search: whitespace splits the query; terms of ≥ 3 characters become quoted FTS5 strings (`"` doubled), ANDed, never syntax; shorter ones dropped, none left → no hits, `short_query`. Trigram matches substrings (`R-12` → also `R-123`; exact IDs: `lookup_id`), case-folded, no stemmer. The handle's worktree, `kinds` (empty = any), Tier 3 files dropped before the limit unless `archive`, `ORDER BY bm25(nodes_fts, 10.0, 5.0, 1.0), path, ord`, `limit` clamped, a 64-token `snippet` marked `**`. No order depends on rowid; bm25 statistics are DB-wide.
 
 ## Connection, location, concurrency
 
@@ -65,4 +65,4 @@ Working answer (the code) → what the other answer triggers.
 - Races, accepted: `read` checks components, then reads; `resolve` names the parent when an entry's type cannot be read.
 - `GitIndex` holds each blob twice (`read` returns owned bytes); untested: `RootGone` by a spawn race, a file-system boundary.
 
-Tests: `tests/`, by the criteria of `docs/features/spec-index.md`, `spec-check.md` (`check_*.rs`); scratch corpora in temp dirs.
+Tests: `tests/`, by `docs/features/spec-index.md`, `spec-check.md` criteria; scratch corpora in temp dirs.

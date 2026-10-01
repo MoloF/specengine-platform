@@ -241,5 +241,6 @@ fn error(code: &str, path: &str, line: usize, subject: &str, message: String) ->
         message,
         fix: None,
         debt: None,
+        introduced: None,
     }
 }

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-01
 ---
 
 # specengine-core — the spec parser and the check
@@ -12,7 +12,7 @@ The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and 
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order: types, rules, output in `docs/canon/spec-check.md`, with `check::worst_w(&CheckInput, &Paths) -> u64`; `render_index`, `walk_gap`, `is_tier3_file` (with `is_tier3`, `is_live`), `CheckConfig.generators` in `-graph.md`; `check::resolve` (`Resolver`, `resolve_detached` for `spec show`, reused by `spec refs`, `get_impact`), scopes, file links in `-links.md`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order: types, rules, output in `docs/canon/spec-check.md`, with `check::worst_w(&CheckInput, &Paths) -> u64`, `check::judge` (against a base); `render_index`, `walk_gap`, `is_tier3_file` (with `is_tier3`, `is_live`), `CheckConfig.generators` in `-graph.md`; `check::resolve` (`Resolver`, `resolve_detached` for `spec show`, reused by `spec refs`, `get_impact`), scopes, file links in `-links.md`.
 
 `ProjectConfig::from_toml` (also `project_from_toml`) reads the whole `specengine.toml` for the CLI: `{project: Project {slug?, name?, language?}, scheme, paths, paths_written, project_line?}`. Closed: `[project]` and the top level (`budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code` only name-checked); `ProjectError {line?, message}`, `at(file)`. `slug()` errs when absent; `slug_problem`: `grammar::is_slug`, ≤ `MAX_SLUG_BYTES` (64).
 
@@ -51,9 +51,9 @@ Scanned in text and inline code (tables and link text included), never in fenced
 
 ## Input caps and libraries
 
-Nesting cap 32: the root mapping counts as depth 1 (serde-saphyr `enter_depth`), so 32 levels parse and the 33rd is one `frontmatter-yaml`. Why 32, for the current design (only the four top levels spanned), measured with serde-saphyr 1.3.0 in a debug build: its own frames cost ~20–30 KB of stack per YAML level (mappings as keys worst, ~30 KB); 64 levels of mappings-as-keys peak at ~2.0 MiB, ~5 KB short of a 2 MiB spawned thread, while at 32 every shape peaks ≤ 1.05 MiB.
+Nesting cap 32: the root mapping counts as depth 1 (serde-saphyr `enter_depth`), so 32 levels parse and the 33rd is one `frontmatter-yaml`. Why 32, for the current design (only the four top levels spanned), measured with serde-saphyr 1.3.0 in a debug build: its own frames cost ~20–30 KB of stack per YAML level; 64 levels of mappings-as-keys peak at ~2.0 MiB, ~5 KB short of a 2 MiB spawned thread, while at 32 every shape peaks ≤ 1.05 MiB.
 
-Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both caps are the parser's budgets; the library defaults (depth 64, own alias limits) stay behind them.
+Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both caps are the parser's; the library defaults (depth 64, own alias limits) stay behind them.
 
 ## Token estimator
 

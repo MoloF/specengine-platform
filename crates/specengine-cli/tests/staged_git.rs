@@ -83,6 +83,17 @@ fn assert_no_git_text_or_absolute_path(run: &Run, scratch: &Path, context: &str)
 // AC-06: unmerged stages and intent-to-add entries.
 // ---------------------------------------------------------------------------
 
+/// `git commit -- <path>` in `top`: `HEAD` gets the staged `path` (and
+/// nothing else when it was unborn), so a staged baseline there is not new
+/// debt, a staged mode not weaker than `HEAD`'s
+/// (docs/features/spec-cli-introduced.md, 2a.2 Q6, Q7).
+fn commit_path(git: &Sandbox, top: &Path, path: &str) {
+    git.git(
+        top,
+        &["commit", "-q", "--no-verify", "-m", path, "--", path],
+    );
+}
+
 /// AC-06 (a): a conflict on a document under the root is a cause naming
 /// it (exit 2); a conflict outside a subdirectory root changes nothing.
 #[test]
@@ -208,7 +219,8 @@ fn an_intent_to_add_entry_is_not_staged_but_an_empty_blob_is() {
 
 /// AC-06 (c), the residue: an intent-to-add document deleted on disk is
 /// walked as an empty `.md` — exit 1 with its own `class-missing` (a false
-/// block, never a false pass), on a tree otherwise clean.
+/// block, never a false pass), on a tree otherwise clean (its baseline
+/// committed: not new debt, docs/features/spec-cli-introduced.md 2a.2 Q7).
 #[test]
 fn an_intent_to_add_document_deleted_on_disk_blocks_with_class_missing() {
     for (name, _) in FIXTURES {
@@ -217,6 +229,7 @@ fn an_intent_to_add_document_deleted_on_disk_blocks_with_class_missing() {
         let blocked = library(top);
         write(top, ".spec-debt.toml", baseline_covering(&blocked, FAR));
         repo.add_all();
+        commit_path(&repo.git, top, ".spec-debt.toml");
         let committed = repo.staged_check(&["--json"]);
         committed.code(0);
 
@@ -312,7 +325,10 @@ fn state(git: &Sandbox, top: &Path) -> State {
 /// AC-08: for each verdict, after touching a tracked file (stat-dirty in
 /// the index), `--staged` leaves `.git/index` (bytes, mtime), `.git`
 /// (objects, refs, everything), the working tree and the scratch `HOME`
-/// as they were; `HOME` unset gives the same verdicts.
+/// as they were; `HOME` unset gives the same verdicts. The clean case's
+/// baseline and the observed case's config are committed in their setup
+/// (docs/features/spec-cli-introduced.md: else new debt, `HEAD`'s
+/// stricter mode block).
 #[test]
 fn nothing_is_written_for_any_verdict() {
     for (name, _) in FIXTURES {
@@ -336,7 +352,11 @@ fn nothing_is_written_for_any_verdict() {
             (
                 "clean",
                 0,
-                Box::new(|| write(&proj, ".spec-debt.toml", &covering)),
+                Box::new(|| {
+                    write(&proj, ".spec-debt.toml", &covering);
+                    git.add_all(&top);
+                    commit_path(&git, &top, "proj/.spec-debt.toml");
+                }),
             ),
             (
                 "observed",
@@ -344,6 +364,8 @@ fn nothing_is_written_for_any_verdict() {
                 Box::new(|| {
                     fs::remove_file(proj.join(".spec-debt.toml")).unwrap();
                     write(&proj, "specengine.toml", with_mode(&config, "observe"));
+                    git.add_all(&top);
+                    commit_path(&git, &top, "proj/specengine.toml");
                 }),
             ),
             (
@@ -466,9 +488,11 @@ fn calls(log: &Path) -> Vec<(Vec<String>, Vec<String>)> {
         .collect()
 }
 
-/// AC-09: only `rev-parse`, `ls-files`, `cat-file` and the detector
-/// (`diff-files`); one `cat-file --batch` per check; every call with
-/// `-c core.fsmonitor=false` and the four variables.
+/// AC-09: only `rev-parse`, `ls-files`, `cat-file`, the detector
+/// (`diff-files`) and, for a born `HEAD`, `ls-tree`
+/// (docs/features/spec-cli-introduced.md; `HEAD` is unborn here); one
+/// `cat-file --batch` per check; every call with `-c core.fsmonitor=false`
+/// and the four variables.
 #[test]
 fn only_plumbing_runs_with_the_forced_variables() {
     for (name, _) in FIXTURES {
@@ -524,7 +548,7 @@ fn only_plumbing_runs_with_the_forced_variables() {
                 );
                 let sub = argv[2].as_str();
                 assert!(
-                    ["rev-parse", "ls-files", "cat-file", "diff-files"].contains(&sub),
+                    ["rev-parse", "ls-files", "cat-file", "diff-files", "ls-tree"].contains(&sub),
                     "{name} {args:?}: git {sub} ran: {argv:?}"
                 );
                 seen.insert(sub.to_owned());
@@ -839,6 +863,8 @@ fn json_is_the_library_s_and_the_same_across_repositories() {
         for top in [&one, &two] {
             write(top, ".spec-debt.toml", &covering);
             git.add_all(top);
+            // In `HEAD` too: not new debt (spec-cli-introduced, 2a.2 Q7).
+            commit_path(&git, top, ".spec-debt.toml");
         }
         compare("clean", 0);
         for top in [&one, &two] {
@@ -1124,6 +1150,8 @@ fn rev_parse_resolves_only_the_relative_top_variables() {
             baseline_covering(&library(top), FAR),
         );
         repo.add_all();
+        // In `HEAD` too: not new debt (spec-cli-introduced, 2a.2 Q7).
+        commit_path(&repo.git, top, ".spec-debt.toml");
         const OTHER: &str = "docs/spec/zz-other.md";
         write(top, OTHER, dangling_document(name));
         repo.git(&["add", OTHER]);
@@ -1692,7 +1720,8 @@ fn git_dir_alone_from_the_top_runs_the_guard_and_changes_nothing() {
             }
         }
 
-        // A covering baseline staged, then an error staged and fixed on
+        // A covering baseline staged (and committed: not new debt,
+        // spec-cli-introduced 2a.2 Q7), then an error staged and fixed on
         // disk: only the index blocks.
         write(
             &top,
@@ -1700,6 +1729,7 @@ fn git_dir_alone_from_the_top_runs_the_guard_and_changes_nothing() {
             baseline_covering(&library(&top), FAR),
         );
         repo.add_all();
+        commit_path(&repo.git, &top, ".spec-debt.toml");
         const OTHER: &str = "docs/spec/zz-other.md";
         write(&top, OTHER, dangling_document(name));
         repo.git(&["add", OTHER]);

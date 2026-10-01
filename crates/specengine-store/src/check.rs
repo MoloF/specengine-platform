@@ -11,22 +11,28 @@
 //! working tree, a caller with its own discovery (`spec check`) and a git
 //! index all feed it the same way; no cause names a path the caller did
 //! not pass (the root is `.`, the root's baseline [`BASELINE_FILE`]).
+//!
+//! The staged check ([`check_staged_with_notes`]) is judged against its
+//! base, `HEAD` (docs/features/spec-cli-introduced.md; `crate::base`), and
+//! returns notes beside its report.
 
 use std::fs;
 use std::io;
 use std::panic::{self, AssertUnwindSafe};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use specengine_core::check::{
-    self, Baseline, Cause, CheckConfig, CheckFile, CheckInput, Mode, Problem, ProblemKind, Report,
+    self, Base, Baseline, Cause, CheckConfig, CheckFile, CheckInput, Mode, Problem, ProblemKind,
+    Report,
 };
 use specengine_core::{IdSchemeToml, Paths, ProjectConfig};
 use specengine_model::IdScheme;
 
+use crate::base::{Head, HeadWalk, Placed};
 use crate::error::StoreError;
 use crate::git::{GitEnv, GitFailure, Staged};
-use crate::source::{GitIndex, Source, WorkingTree};
+use crate::source::{GitIndex, IndexWalk, Listing, Source, WorkingTree};
 
 /// The project's config, at its root (the working tree's for discovery,
 /// the index entry for [`check_staged`]).
@@ -50,6 +56,38 @@ impl NamedBytes {
         Self {
             name: name.into(),
             bytes: fs::read(path),
+        }
+    }
+}
+
+/// A file the caller passes instead of the root's (`--config`,
+/// `--baseline`): its bytes as read, and where it lies, so the staged
+/// check can tell whether it lies below the root and find `HEAD`'s file at
+/// its root-relative path.
+#[derive(Debug)]
+pub struct GivenFile {
+    /// Named as typed.
+    pub bytes: NamedBytes,
+    /// Its path on disk (absolute, or relative to the process's current
+    /// directory); `None` when unknown: read as outside the root.
+    pub path: Option<PathBuf>,
+}
+
+/// A staged check's answer: the report and the notes beside it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedCheck {
+    pub report: Report,
+    /// `note:` lines' text, never part of the report, in order: `HEAD`'s
+    /// mode unknown, `HEAD`'s stricter mode applied, `HEAD`'s baseline
+    /// unknown (each at most once).
+    pub notes: Vec<String>,
+}
+
+impl StagedCheck {
+    fn bare(report: Report) -> Self {
+        Self {
+            report,
+            notes: Vec::new(),
         }
     }
 }
@@ -200,40 +238,52 @@ pub fn check_input(source: &dyn Source, scheme: &IdScheme) -> CheckInput {
             return input;
         }
     };
-    for root in listing.missing_roots {
-        input.problems.push(Problem {
-            kind: ProblemKind::MissingRoot,
-            path: root,
-        });
-    }
-    for dir in listing.unreadable_dirs {
-        input.problems.push(Problem {
-            kind: ProblemKind::UnreadableDir,
-            path: dir,
-        });
-    }
-    for _ in 0..listing.skipped_names {
-        input.problems.push(Problem {
-            kind: ProblemKind::SkippedName,
-            path: String::new(),
-        });
-    }
-    for path in listing.paths {
+    let (paths, problems) = split_listing(listing);
+    input.problems = problems;
+    for path in paths {
         let file = match source.read(&path) {
-            Ok(bytes) => {
-                let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
-                    specengine_core::parse(&path, &bytes, scheme)
-                }));
-                match parsed {
-                    Ok(parsed) => CheckFile::parsed(path, bytes, parsed),
-                    Err(_) => CheckFile::unreadable(path, "the spec parser panicked on this file"),
-                }
-            }
+            Ok(bytes) => parse_file(path, bytes, scheme),
             Err(error) => CheckFile::unreadable(path, error.to_string()),
         };
         input.files.push(file);
     }
     input
+}
+
+/// A listing's paths, and its problems in the check's order: missing
+/// roots, directories that could not be listed, skipped names.
+pub(crate) fn split_listing(listing: Listing) -> (Vec<String>, Vec<Problem>) {
+    let mut problems = Vec::new();
+    for root in listing.missing_roots {
+        problems.push(Problem {
+            kind: ProblemKind::MissingRoot,
+            path: root,
+        });
+    }
+    for dir in listing.unreadable_dirs {
+        problems.push(Problem {
+            kind: ProblemKind::UnreadableDir,
+            path: dir,
+        });
+    }
+    for _ in 0..listing.skipped_names {
+        problems.push(Problem {
+            kind: ProblemKind::SkippedName,
+            path: String::new(),
+        });
+    }
+    (listing.paths, problems)
+}
+
+/// A read file parsed; a parser panic is a read error of that file.
+pub(crate) fn parse_file(path: String, bytes: Vec<u8>, scheme: &IdScheme) -> CheckFile {
+    let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
+        specengine_core::parse(&path, &bytes, scheme)
+    }));
+    match parsed {
+        Ok(parsed) => CheckFile::parsed(path, bytes, parsed),
+        Err(_) => CheckFile::unreadable(path, "the spec parser panicked on this file"),
+    }
 }
 
 /// The check of `source` with a loaded setup, `today` as `YYYY-MM-DD`.
@@ -280,21 +330,8 @@ pub fn check_worktree(root: &Path, config: &Path, baseline: Option<&Path>, today
     }
 }
 
-/// The whole check of what `git commit` would record under `root`
-/// (docs/features/spec-cli-staged.md): the index git names (with `git`'s
-/// environment: `GIT_INDEX_FILE`, `GIT_DIR`), walked by [`GitIndex`]. The
-/// config is `config` when given (read from disk by the caller), else the
-/// index entry [`CONFIG_FILE`] at the root; the baseline `baseline` when
-/// given, else the entry [`BASELINE_FILE`] when staged; never the working
-/// tree's. `today` as `YYYY-MM-DD`.
-///
-/// Every failure is a `cannot-check` report: before the config is read
-/// (no repository, `git` not runnable or failing, `GIT_INDEX_FILE` naming
-/// no file: cause `.`; unmerged paths under the root: a cause each) in
-/// `config`'s mode, else `enforce`; the config not staged or not a regular
-/// blob ([`CONFIG_FILE`]), the baseline not a regular blob
-/// ([`BASELINE_FILE`]), either invalid, as [`load_check`] reports them; a
-/// document's blob missing, at its path.
+/// [`check_staged_with_notes`]'s report: a given config or baseline is of
+/// unknown location, read as outside the root.
 pub fn check_staged(
     root: &Path,
     config: Option<NamedBytes>,
@@ -302,9 +339,68 @@ pub fn check_staged(
     git: &GitEnv,
     today: &str,
 ) -> Report {
+    let unplaced = |bytes| GivenFile { bytes, path: None };
+    check_staged_with_notes(
+        root,
+        config.map(unplaced),
+        baseline.map(unplaced),
+        git,
+        today,
+    )
+    .report
+}
+
+/// The whole check of what `git commit` would record under `root`
+/// (docs/features/spec-cli-staged.md), judged against `HEAD`
+/// (docs/features/spec-cli-introduced.md): the index git names (with
+/// `git`'s environment: `GIT_INDEX_FILE`, `GIT_DIR`), walked by
+/// [`GitIndex`]. The config is `config` when given (read from disk by the
+/// caller), else the index entry [`CONFIG_FILE`] at the root; the baseline
+/// `baseline` when given, else the entry [`BASELINE_FILE`] when staged;
+/// never the working tree's. `today` as `YYYY-MM-DD`.
+///
+/// The base: `HEAD`'s tree under the root (none when unborn), walked and
+/// checked under the checked config, its causes dropped; `HEAD`'s config
+/// at the checked config's root-relative path gives its mode (the stricter
+/// applies), `HEAD`'s baseline at the checked baseline's the new-debt
+/// rule; a given file outside the root, or `HEAD`'s file unreadable or
+/// invalid, leaves the mode the checked one or lifts the rule, with a
+/// note. One `cat-file --batch` session reads, each OID once: the staged
+/// config and baseline, `HEAD`'s, the staged documents, then `HEAD`'s
+/// documents whose (path, OID) the index lacks.
+///
+/// Every failure is a `cannot-check` report, without notes: before the
+/// config is read (no repository, `git` not runnable or failing,
+/// `GIT_INDEX_FILE` naming no file: cause `.`; unmerged paths under the
+/// root: a cause each) in `config`'s mode, else `enforce`; the config not
+/// staged or not a regular blob ([`CONFIG_FILE`]), the baseline not a
+/// regular blob ([`BASELINE_FILE`]), either invalid, as [`load_check`]
+/// reports them; git failing on the base, in the checked config's mode
+/// (cause `.`); a document's blob missing, at its path; a document `HEAD`
+/// lists whose blob is missing or whose object is not a blob (a partial
+/// base), at its path, in the checked config's mode, with the checked
+/// run's causes and no findings.
+/// `HEAD`'s config or baseline unreadable is a note, never a cause.
+pub fn check_staged_with_notes(
+    root: &Path,
+    config: Option<GivenFile>,
+    baseline: Option<GivenFile>,
+    git: &GitEnv,
+    today: &str,
+) -> StagedCheck {
+    let (config, config_path) = match config {
+        Some(given) => (Some(given.bytes), Some(given.path)),
+        None => (None, None),
+    };
+    let (baseline, baseline_path) = match baseline {
+        Some(given) => (Some(given.bytes), Some(given.path)),
+        None => (None, None),
+    };
     let mut staged = match Staged::read(root, git) {
         Ok(staged) => staged,
-        Err(causes) => return Report::cannot(early_mode(config.as_ref()), causes),
+        Err(causes) => {
+            return StagedCheck::bare(Report::cannot(early_mode(config.as_ref()), causes));
+        }
     };
     let config = match config {
         Some(config) => config,
@@ -317,7 +413,9 @@ pub fn check_staged(
                     "not staged in the git index",
                 )),
             },
-            Err(failure) => return Report::cannot(Mode::default(), vec![failure.cause()]),
+            Err(failure) => {
+                return StagedCheck::bare(Report::cannot(Mode::default(), vec![failure.cause()]));
+            }
         },
     };
     let baseline = match baseline {
@@ -325,18 +423,80 @@ pub fn check_staged(
         None => match staged_file(&mut staged, BASELINE_FILE) {
             Ok(baseline) => baseline,
             Err(failure) => {
-                return Report::cannot(early_mode(Some(&config)), vec![failure.cause()]);
+                return StagedCheck::bare(Report::cannot(
+                    early_mode(Some(&config)),
+                    vec![failure.cause()],
+                ));
             }
         },
     };
     let setup = match load_check(&config, baseline.as_ref()) {
         Ok(setup) => setup,
-        Err(report) => return *report,
+        Err(report) => return StagedCheck::bare(*report),
     };
-    match GitIndex::from_staged(staged, &setup.project.paths) {
-        Ok(index) => check_source(&index, &setup, today),
-        Err(failure) => Report::cannot(setup.config.mode, vec![failure.cause()]),
+    let checked_mode = setup.config.mode;
+    let place = |path: Option<Option<PathBuf>>, flag, name: &str, file| match path {
+        Some(path) => Placed::given(&staged.root, flag, name, path.as_deref()),
+        None => Placed::root_file(file),
+    };
+    let config_place = place(config_path, "--config", &config.name, CONFIG_FILE);
+    let baseline_name = baseline
+        .as_ref()
+        .map_or(BASELINE_FILE, |given| given.name.as_str());
+    let baseline_place = place(baseline_path, "--baseline", baseline_name, BASELINE_FILE);
+    match read_base(&mut staged, &setup, &config_place, &baseline_place) {
+        Ok((head_walk, head, walk)) => {
+            let notes = head.notes(&config_place, checked_mode);
+            let mut index = GitIndex::from_walk(staged, walk);
+            let input = check_input(&index, &setup.project.scheme);
+            let report = check::run(
+                &input,
+                &setup.project.scheme,
+                &setup.project.paths,
+                &setup.config,
+                &setup.baseline,
+                today,
+            );
+            let findings = match head_walk.findings(&mut index, input, &setup, today) {
+                Ok(findings) => findings,
+                Err(mut causes) => {
+                    // A partial base judges nothing: the checked run's
+                    // causes and the base's, no findings, no notes.
+                    causes.extend(report.cannot_check);
+                    return StagedCheck::bare(Report::cannot(checked_mode, causes));
+                }
+            };
+            let base = Base {
+                findings,
+                baseline: head.baseline,
+                mode: head.mode,
+            };
+            StagedCheck {
+                report: check::judge(report, &setup.baseline, &base),
+                notes,
+            }
+        }
+        Err(failure) => StagedCheck::bare(Report::cannot(checked_mode, vec![failure.cause()])),
     }
+}
+
+/// Every git read of a staged check after its config and baseline, in the
+/// session's order: `HEAD` probed and listed, `HEAD`'s config and
+/// baseline, the index's listed blobs, `HEAD`'s listed blobs the index
+/// lacks at their path; then the session ends.
+fn read_base(
+    staged: &mut Staged,
+    setup: &CheckSetup,
+    config: &Placed,
+    baseline: &Placed,
+) -> Result<(HeadWalk, Head, IndexWalk), GitFailure> {
+    let head = Head::read(staged, config, baseline, setup.config.mode)?;
+    let walk = IndexWalk::new(&staged.entries, &setup.project.paths);
+    walk.read(staged)?;
+    let head_walk = head.walk(&walk);
+    head_walk.read(staged)?;
+    staged.finish()?;
+    Ok((head_walk, head, walk))
 }
 
 /// The mode of a failure before the config is read: `config`'s when it

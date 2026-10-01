@@ -73,13 +73,13 @@ enum Command {
     },
     /// Check the documents against the convention; exit 0 clean or observed, 1 blocked, 2 cannot check.
     Check {
-        /// Check what `git commit` would record: the git index, config and baseline from it unless --config, --baseline.
+        /// Check what `git commit` would record: the git index, config and baseline from it unless --config, --baseline; judged against HEAD.
         #[arg(long)]
         staged: bool,
         /// The debt baseline to use instead of the root's .spec-debt.toml (relative to the current directory).
         #[arg(long, value_name = "F")]
         baseline: Option<PathBuf>,
-        /// List every finding and stale debt entry, not only the blocking ones.
+        /// List every finding, stale and new debt entry, not only the blocking ones.
         #[arg(long)]
         debt: bool,
     },

@@ -15,7 +15,7 @@ mod common;
 use std::path::Path;
 
 use common::check::{library, text};
-use common::staged::Repo;
+use common::staged::{Repo, base_aside};
 use common::{FIXTURES, Run, Scratch, read_text, spec, write};
 use specengine_core::ProjectConfig;
 use specengine_core::check::worst_w;
@@ -133,7 +133,9 @@ fn staged_reports_the_library_s_w_of_the_staged_blobs() {
             .to_owned();
         let run = repo.staged_check(&[]);
         assert_eq!(summary_w(&run, &verdict), w, "{fixture} --staged");
-        let json = repo.staged_check(&["--json"]);
+        // With a base, `counts.introduced` and `counts.new_debt` precede W
+        // (docs/features/spec-cli-introduced.md): set aside, W is last.
+        let json = base_aside(&repo.staged_check(&["--json"]));
         assert_eq!(json_w(&json), w, "{fixture} --staged --json");
 
         // A large live file staged, then shrunk on disk: `--staged` counts

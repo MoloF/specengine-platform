@@ -1,6 +1,9 @@
 //! What a check found: findings, stale debt, the causes that stop it from
 //! vouching for the corpus, counts and the verdict; rendered as a few lines
-//! or as JSON, both deterministic (everything sorted).
+//! or as JSON, both deterministic (everything sorted). A run judged against
+//! a base ([`super::judge`]) adds whether each finding is introduced and the
+//! new debt; without a base those fields are absent and the output is the
+//! plain run's.
 
 use serde::Serialize;
 use specengine_model::{Severity, Span};
@@ -31,6 +34,11 @@ pub struct Finding {
     /// The baseline entry the finding matched.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub debt: Option<Debt>,
+    /// With a base: whether the base's findings lack this finding's
+    /// (code, path, subject); `false` = pre-existing. `None` without a
+    /// base, where every finding counts as introduced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub introduced: Option<bool>,
 }
 
 impl Finding {
@@ -38,6 +46,29 @@ impl Finding {
     /// blocks).
     pub fn blocks_when_enforced(&self) -> bool {
         self.severity == Severity::Error && self.debt.as_ref().is_none_or(|debt| debt.expired)
+    }
+
+    /// Blocks in `mode`: never under `observe`; under `enforce-introduced`
+    /// an error whose debt expired (pre-existing or not), or without debt
+    /// and introduced (no base: introduced); under `enforce` an error not
+    /// in live debt.
+    pub fn blocks_in(&self, mode: Mode) -> bool {
+        match mode {
+            Mode::Observe => false,
+            Mode::EnforceIntroduced => {
+                self.severity == Severity::Error
+                    && match &self.debt {
+                        Some(debt) => debt.expired,
+                        None => self.introduced != Some(false),
+                    }
+            }
+            Mode::Enforce => self.blocks_when_enforced(),
+        }
+    }
+
+    /// Pre-existing: a base holds its key.
+    pub fn is_pre_existing(&self) -> bool {
+        self.introduced == Some(false)
     }
 
     /// In debt that has not expired.
@@ -70,15 +101,30 @@ pub struct Cause {
     pub message: String,
 }
 
+/// A baseline entry its base's baseline lacks (by its triple), or holds
+/// with an earlier `expires`: it blocks under `enforce-introduced` and
+/// `enforce`, shown as `debt-new` (a label, not a code).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+pub struct NewDebt {
+    #[serde(flatten)]
+    pub entry: DebtEntry,
+    /// The base's `expires` this entry extends; `None` when the base's
+    /// baseline lacks the triple.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_expires: Option<String>,
+}
+
 /// The outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Verdict {
-    /// Nothing blocks (warnings, debt and stale entries never do).
+    /// No error outside live debt and no new debt (warnings, debt and
+    /// stale entries never count).
     Clean,
-    /// `observe`: errors that `enforce` would block on.
+    /// Nothing blocks, but an error outside live debt or new debt remains
+    /// (`observe`; pre-existing errors under `enforce-introduced`).
     Observed,
-    /// `enforce`: an error not in live debt.
+    /// Something blocks in the mode.
     Blocked,
     /// A missing root, an unreadable file or directory, an invalid config or
     /// baseline, whatever the mode.
@@ -120,6 +166,13 @@ pub struct Counts {
     pub expired: usize,
     /// Baseline entries that matched nothing; never counted as warnings.
     pub stale: usize,
+    /// With a base: introduced errors not in live debt (also counted in
+    /// `errors`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub introduced: Option<usize>,
+    /// With a base whose baseline is known: the new-debt entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_debt: Option<usize>,
     /// The worst-case working set W in bytes ([`worst_w`](super::worst_w));
     /// 0 when the check could not vouch for the corpus.
     pub worst_w_bytes: u64,
@@ -136,6 +189,11 @@ pub struct Report {
     /// Baseline entries that matched no finding, sorted: no finding, shown
     /// as `debt-stale` only in the detail lines.
     pub stale: Vec<DebtEntry>,
+    /// With a base whose baseline is known: the entries it lacks or holds
+    /// with an earlier `expires`, sorted like `stale`; `None` without a
+    /// base or when the new-debt rule is lifted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_debt: Option<Vec<NewDebt>>,
     /// Sorted; non-empty exactly when the verdict is `cannot-check`.
     pub cannot_check: Vec<Cause>,
 }
@@ -163,14 +221,11 @@ impl Report {
                 .then_with(|| a.cmp(b))
         });
         findings.dedup();
-        stale.sort_by(|a, b| {
-            (&a.path, &a.code, &a.subject, a.line).cmp(&(&b.path, &b.code, &b.subject, b.line))
-        });
+        stale.sort_by(entry_order);
         cannot_check.sort();
         cannot_check.dedup();
-        let mut counts = Counts {
+        let counts = Counts {
             documents,
-            stale: stale.len(),
             worst_w_bytes: if cannot_check.is_empty() {
                 worst_w_bytes
             } else {
@@ -178,7 +233,32 @@ impl Report {
             },
             ..Counts::default()
         };
-        for finding in &findings {
+        let mut report = Self {
+            mode,
+            verdict: Verdict::Clean,
+            counts,
+            findings,
+            stale,
+            new_debt: None,
+            cannot_check,
+        };
+        report.settle(false);
+        report
+    }
+
+    /// Recounts everything but `documents` and `worst_w_bytes` and judges
+    /// in `self.mode`; `with_base` gives `counts.introduced`, a known base
+    /// baseline (`new_debt`) `counts.new_debt`.
+    pub(crate) fn settle(&mut self, with_base: bool) {
+        let mut counts = Counts {
+            documents: self.counts.documents,
+            stale: self.stale.len(),
+            introduced: with_base.then_some(0),
+            new_debt: self.new_debt.as_ref().map(Vec::len),
+            worst_w_bytes: self.counts.worst_w_bytes,
+            ..Counts::default()
+        };
+        for finding in &self.findings {
             if finding.is_live_debt() {
                 counts.debt += 1;
                 continue;
@@ -189,32 +269,55 @@ impl Report {
                     if finding.debt.is_some() {
                         counts.expired += 1;
                     }
+                    if finding.introduced == Some(true)
+                        && let Some(introduced) = counts.introduced.as_mut()
+                    {
+                        *introduced += 1;
+                    }
                 }
                 Severity::Warning => counts.warnings += 1,
             }
         }
-        let mut report = Self {
-            mode,
-            verdict: Verdict::Clean,
-            counts,
-            findings,
-            stale,
-            cannot_check,
-        };
-        report.verdict = report.verdict_in(mode);
-        report
+        self.counts = counts;
+        self.verdict = self.verdict_in(self.mode);
     }
 
-    /// The verdict this run would have in `mode`.
+    /// The same run without a base (a plain run): `enforce-introduced` is
+    /// judged and shown as `enforce`, which it equals there; any other
+    /// mode is kept.
+    #[must_use]
+    pub fn without_base(mut self) -> Self {
+        if self.mode == Mode::EnforceIntroduced {
+            self.mode = Mode::Enforce;
+            self.verdict = self.verdict_in(self.mode);
+        }
+        self
+    }
+
+    /// The verdict this run would have in `mode`: `blocked` when a finding
+    /// blocks in it ([`Finding::blocks_in`]) or, under `enforce-introduced`
+    /// and `enforce`, new debt remains; else `observed` when an error
+    /// outside live debt or new debt remains; else `clean`.
     pub fn verdict_in(&self, mode: Mode) -> Verdict {
         if !self.cannot_check.is_empty() {
             return Verdict::CannotCheck;
         }
-        if self.findings.iter().any(Finding::blocks_when_enforced) {
-            return match mode {
-                Mode::Observe => Verdict::Observed,
-                Mode::Enforce => Verdict::Blocked,
-            };
+        let new_debt = self
+            .new_debt
+            .as_ref()
+            .is_some_and(|entries| !entries.is_empty());
+        if (new_debt && mode != Mode::Observe)
+            || self.findings.iter().any(|finding| finding.blocks_in(mode))
+        {
+            return Verdict::Blocked;
+        }
+        if new_debt
+            || self
+                .findings
+                .iter()
+                .any(|finding| finding.severity == Severity::Error && !finding.is_live_debt())
+        {
+            return Verdict::Observed;
         }
         Verdict::Clean
     }
@@ -226,12 +329,20 @@ impl Report {
 
     /// Whether `finding` blocks in this run's mode.
     pub fn blocks(&self, finding: &Finding) -> bool {
-        self.mode == Mode::Enforce && finding.blocks_when_enforced()
+        finding.blocks_in(self.mode)
     }
 
-    /// One line per finding that blocks in the mode, one per cannot-check
-    /// cause, then the summary. `detail` adds every other finding (errors
-    /// under `observe`, warnings, debt) and the stale entries.
+    /// Whether the new-debt entries block in this run's mode (every one
+    /// does under `enforce-introduced` and `enforce`).
+    pub fn new_debt_blocks(&self) -> bool {
+        self.mode != Mode::Observe
+    }
+
+    /// One line per finding that blocks in the mode, one per new-debt
+    /// entry when they block, one per cannot-check cause, then the
+    /// summary. `detail` adds every other finding (errors under `observe`,
+    /// pre-existing errors, warnings, debt), the stale entries and the new
+    /// debt in any mode.
     pub fn lines(&self, detail: bool) -> Vec<String> {
         let mut lines = Vec::new();
         for finding in &self.findings {
@@ -254,6 +365,9 @@ impl Report {
                     format!(" (debt expired {}: {})", debt.expires, debt.reason)
                 }
                 Some(debt) => format!(" (debt until {}: {})", debt.expires, debt.reason),
+                None if finding.severity == Severity::Error && finding.is_pre_existing() => {
+                    " (pre-existing)".to_owned()
+                }
                 None => String::new(),
             };
             lines.push(format!(
@@ -277,12 +391,37 @@ impl Report {
                 ));
             }
         }
+        if detail || self.new_debt_blocks() {
+            for new in self.new_debt.iter().flatten() {
+                let entry = &new.entry;
+                let what = match &new.head_expires {
+                    Some(head) => format!("extends HEAD's expiry {head}"),
+                    None => "is not in HEAD's baseline".to_owned(),
+                };
+                lines.push(format!(
+                    "new  {}: debt-new: the baseline entry at line {} ({}, subject {:?}) {what} ({}; expires {})",
+                    shown(&entry.path),
+                    entry.line,
+                    entry.code,
+                    entry.subject,
+                    entry.reason,
+                    entry.expires
+                ));
+            }
+        }
         for cause in &self.cannot_check {
             lines.push(format!("cannot  {}: {}", shown(&cause.path), cause.message));
         }
         let counts = &self.counts;
+        let mut against_base = String::new();
+        if let Some(introduced) = counts.introduced {
+            against_base.push_str(&format!(", {introduced} introduced"));
+        }
+        if let Some(new_debt) = counts.new_debt {
+            against_base.push_str(&format!(", {new_debt} new debt"));
+        }
         lines.push(format!(
-            "spec check [{}]: {} documents, {} errors, {} warnings, {} debt, {} expired, {} stale, worst W {} B — {}",
+            "spec check [{}]: {} documents, {} errors, {} warnings, {} debt, {} expired, {} stale{against_base}, worst W {} B — {}",
             self.mode,
             counts.documents,
             counts.errors,
@@ -296,12 +435,18 @@ impl Report {
         lines
     }
 
-    /// `{mode, verdict, counts, findings, stale, cannot_check}`, one line.
+    /// `{mode, verdict, counts, findings, stale, new_debt?, cannot_check}`,
+    /// one line; the base's fields are absent without a base.
     pub fn to_json(&self) -> String {
         // Every field is a plain struct, enum, string or number: encoding
         // cannot fail.
         serde_json::to_string(self).unwrap_or_default()
     }
+}
+
+/// The order of stale and new-debt entries: (path, code, subject, line).
+pub(crate) fn entry_order(a: &DebtEntry, b: &DebtEntry) -> std::cmp::Ordering {
+    (&a.path, &a.code, &a.subject, a.line).cmp(&(&b.path, &b.code, &b.subject, b.line))
 }
 
 fn shown(path: &str) -> &str {

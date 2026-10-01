@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-01
 ---
 
 # specengine-cli — the spec binary
@@ -75,7 +75,7 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 MCP stdio follows 3–4.
 
-- `spec-cli-introduced` (2b shipped): `docs/canon/spec-check-cli.md`.
+- `spec-cli-changed` (`--changed`): `docs/canon/spec-check-cli.md`.
 - 3 `spec-cli-graph`: `tree`, `graph`, `show --links`; default link types.
 - 4 `spec-cli-bundle`: `bundle`, `bundle_hash`; Q7 token calibration, `rusqlite_migration`.
 

@@ -30,7 +30,10 @@
 //!   [`check_tree`], [`check_worktree`]: `spec check` over a fresh parse of
 //!   a [`Source`], no database (docs/features/spec-check.md);
 //!   [`check_staged`]: over the git index, config and baseline from it
-//!   (docs/features/spec-cli-staged.md).
+//!   (docs/features/spec-cli-staged.md), judged against `HEAD`, its base;
+//!   [`check_staged_with_notes`] takes the given files' places
+//!   ([`GivenFile`]) and returns the notes too ([`StagedCheck`])
+//!   (docs/features/spec-cli-introduced.md).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -38,6 +41,7 @@
 //! number of handles, in any processes, may write: WAL, `Immediate` write
 //! transactions and `busy_timeout`, no lock file and no global state.
 
+mod base;
 mod check;
 mod dump;
 mod error;
@@ -55,8 +59,9 @@ use specengine_core::check::CheckInput;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
 pub use check::{
-    BASELINE_FILE, CONFIG_FILE, CheckSetup, NamedBytes, check_input, check_source, check_staged,
-    check_tree, check_worktree, default_baseline, load_check, load_config, today_utc,
+    BASELINE_FILE, CONFIG_FILE, CheckSetup, GivenFile, NamedBytes, StagedCheck, check_input,
+    check_source, check_staged, check_staged_with_notes, check_tree, check_worktree,
+    default_baseline, load_check, load_config, today_utc,
 };
 pub use error::StoreError;
 pub use git::GitEnv;

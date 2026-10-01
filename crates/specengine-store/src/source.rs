@@ -345,30 +345,77 @@ impl GitIndex {
     /// session, each OID once, in path order, and ends the session (a
     /// session left by a failed read is killed when `staged` drops).
     pub(crate) fn from_staged(mut staged: Staged, paths: &Paths) -> Result<Self, GitFailure> {
-        let scope = paths.walk_scope();
-        let (listing, listed) = walk_index(&staged.entries, &scope);
-        let mut objects = BTreeMap::new();
-        for oid in listed.values() {
-            if !objects.contains_key(oid) {
-                let blob = staged.blob(oid)?;
-                objects.insert(oid.clone(), blob);
-            }
-        }
+        let walk = IndexWalk::new(&staged.entries, paths);
+        walk.read(&mut staged)?;
         staged.finish()?;
+        Ok(Self::from_walk(staged, walk))
+    }
+
+    /// The index of `walk`, its blobs read through `staged` (every object
+    /// `staged` read is kept: [`GitIndex::object`] gives the base's too).
+    pub(crate) fn from_walk(staged: Staged, walk: IndexWalk) -> Self {
         let regular = staged
             .entries
             .into_iter()
             .filter(|entry| entry.kind == EntryKind::Regular)
             .map(|entry| entry.path)
             .collect();
-        Ok(Self {
+        Self {
             root: staged.root,
+            scope: walk.scope,
+            listing: walk.listing,
+            listed: walk.listed,
+            objects: staged.objects,
+            regular,
+        }
+    }
+
+    /// The OID of the listed path `path`.
+    pub(crate) fn oid_of(&self, path: &str) -> Option<&str> {
+        self.listed.get(path).map(String::as_str)
+    }
+
+    /// An object read through the session, by OID.
+    pub(crate) fn object(&self, oid: &str) -> Option<&Blob> {
+        self.objects.get(oid)
+    }
+
+    /// An object read through the session, by OID, moved out: a later
+    /// [`Source::read`] of a path holding it fails as a missing blob, so
+    /// only the base takes, after the checked run.
+    pub(crate) fn take_object(&mut self, oid: &str) -> Option<Blob> {
+        self.objects.remove(oid)
+    }
+}
+
+/// The index's listing by `[paths]`, before any blob is read.
+#[derive(Debug, Clone)]
+pub(crate) struct IndexWalk {
+    pub(crate) scope: WalkScope,
+    pub(crate) listing: Listing,
+    /// Every listed path and its blob's OID.
+    pub(crate) listed: BTreeMap<String, String>,
+}
+
+impl IndexWalk {
+    /// `entries` (byte-sorted) walked by `paths`.
+    pub(crate) fn new(entries: &[Entry], paths: &Paths) -> Self {
+        let scope = paths.walk_scope();
+        let (listing, listed) = walk_index(entries, &scope);
+        Self {
             scope,
             listing,
             listed,
-            objects,
-            regular,
-        })
+        }
+    }
+
+    /// Reads every listed blob through `staged`'s session, each OID once,
+    /// in path order; the session stays open.
+    pub(crate) fn read(&self, staged: &mut Staged) -> Result<(), GitFailure> {
+        for oid in self.listed.values() {
+            staged.blob(oid)?;
+        }
+        Ok(())
     }
 }
 
@@ -458,8 +505,11 @@ fn walk_entry(rest: &[u8], kind: EntryKind) -> Walked {
 }
 
 /// The listing of `entries` (byte-sorted) by `scope`, and each listed
-/// path's OID.
-fn walk_index(entries: &[Entry], scope: &WalkScope) -> (Listing, BTreeMap<String, String>) {
+/// path's OID: the index's, and `HEAD`'s tree for the base.
+pub(crate) fn walk_index(
+    entries: &[Entry],
+    scope: &WalkScope,
+) -> (Listing, BTreeMap<String, String>) {
     let mut listing = Listing::default();
     let mut listed = BTreeMap::new();
     for root in scope.roots() {

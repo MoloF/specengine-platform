@@ -11,11 +11,15 @@
 //! [`Verdict`]. It reads no file and writes none (the homoglyph fix is data
 //! for `apply_proposal`); nothing it finds sets a status or a flag
 //! (`#control`): `observe` never blocks, `enforce` blocks on errors not in
-//! live debt, and exit 2 means the check could not vouch for the corpus.
+//! live debt, `enforce-introduced` on what a commit adds against its base
+//! (judged as `enforce` without one), and exit 2 means the check could not
+//! vouch for the corpus.
 //!
 //! - [`config`] — `[budgets]` (caps in bytes), `[classes]` (contracts),
 //!   `[check]` (mode), `[[generators]]` (the generator registry);
 //! - [`baseline`] — `.spec-debt.toml`: expiring debt entries;
+//! - [`base`] — a run judged against its base ([`judge`]): introduced
+//!   findings, new debt, the stricter mode (`enforce-introduced`);
 //! - [`input`] — what the check runs over;
 //! - [`report`] — findings, verdict, lines and JSON;
 //! - [`resolve`] — the one reference resolution ([`Resolver`]), scope-aware:
@@ -37,6 +41,7 @@
 //!   Markdown file-link warnings (`link-dangling`, `link-anchor`,
 //!   resolved file-relative, then through `[paths] link_base`).
 
+pub mod base;
 pub mod baseline;
 pub mod config;
 mod engine;
@@ -50,6 +55,7 @@ pub mod resolve;
 mod text;
 mod working_set;
 
+pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use config::{
     Budgets, CheckConfig, ClassContract, Classes, ConfigError, DEFAULT_GATE, DocClass, Generator,
@@ -59,7 +65,7 @@ pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{is_live, is_tier3, is_tier3_file, render_index};
-pub use report::{Cause, Counts, Debt, Finding, Fix, Report, Verdict};
+pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
 pub use resolve::{Resolution, Resolver};
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
 pub use working_set::worst_w;

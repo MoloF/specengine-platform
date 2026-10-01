@@ -161,22 +161,30 @@ impl Classes {
     }
 }
 
-/// What blocks: `observe` counts and never blocks; `enforce` blocks on
-/// errors not in debt.
+/// What blocks, a ladder in declared order (`Ord`): `observe` counts and
+/// never blocks; `enforce-introduced` blocks on what a commit adds against
+/// its base (introduced errors not in debt, expired debt, new debt);
+/// `enforce` blocks on every error not in live debt (and, with a base, on
+/// new debt). Without a base `enforce-introduced` judges as `enforce`.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum Mode {
     Observe,
+    EnforceIntroduced,
     #[default]
     Enforce,
 }
 
 impl Mode {
+    /// Every mode, in ladder order.
+    pub const ALL: [Self; 3] = [Self::Observe, Self::EnforceIntroduced, Self::Enforce];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Observe => "observe",
+            Self::EnforceIntroduced => "enforce-introduced",
             Self::Enforce => "enforce",
         }
     }
@@ -350,13 +358,18 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
     if let Some(check) = raw.check
         && let Some(mode) = check.mode
     {
-        config.mode = match mode.get_ref().as_str() {
-            "observe" => Mode::Observe,
-            "enforce" => Mode::Enforce,
-            other => {
+        let written = mode.get_ref().as_str();
+        config.mode = match Mode::ALL
+            .into_iter()
+            .find(|known| known.as_str() == written)
+        {
+            Some(known) => known,
+            None => {
                 return Err(error_at(
                     Some(mode.span()),
-                    format!("`mode` `{other}` is neither \"observe\" nor \"enforce\""),
+                    format!(
+                        "`mode` `{written}` is not \"observe\", \"enforce-introduced\" or \"enforce\""
+                    ),
                 ));
             }
         };
