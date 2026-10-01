@@ -18,7 +18,7 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// `cargo xtask`, docs/features/spec-cli-check.md AC-13; pass 2b this
 /// repository's registered command prefix, docs/features/spec-cli-switch.md
 /// AC-15).
-const FORBIDDEN: [&str; 10] = [
+const FORBIDDEN: [&str; 12] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -29,6 +29,10 @@ const FORBIDDEN: [&str; 10] = [
     "MEC-",
     "REQ-",
     "mechanic",
+    // docs/features/index-shards.md AC-11: the shard names of this
+    // repository and of the fixtures' scratch configs.
+    "index-archive",
+    "index-records",
 ];
 
 fn cli_sources() -> Vec<PathBuf> {

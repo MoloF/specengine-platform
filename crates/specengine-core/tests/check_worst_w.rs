@@ -172,7 +172,7 @@ fn w_of_the_crafted_corpus_is_the_one_computed_from_its_sizes() {
         .map(|file| file.path.as_str())
         .collect();
     assert_eq!(tier3, ["work/done.md", "records/R-02.md"]);
-    assert_eq!(check::worst_w(&input, &config.paths), EXPECTED);
+    assert_eq!(check::worst_w(&input, &config.paths, None), EXPECTED);
     // Each named mutation lands elsewhere (these are the values it would give).
     let tier3_counted = (TIER0 + TIER1_LARGE + INDEX + SHIPPED + SUPERSEDED + FAILED) as u64;
     let tier1_summed = EXPECTED + TIER1_SMALL as u64;
@@ -195,7 +195,7 @@ fn w_of_the_crafted_corpus_is_the_one_computed_from_its_sizes() {
 
     // Independent of the order of the files.
     input.files.reverse();
-    assert_eq!(check::worst_w(&input, &config.paths), EXPECTED);
+    assert_eq!(check::worst_w(&input, &config.paths, None), EXPECTED);
 
     // The report: the summary's W and `counts.worst_w_bytes`.
     let report = config.run(&input);
@@ -222,7 +222,7 @@ fn tier_0_files_are_summed_and_a_missing_index_adds_nothing() {
         ),
     ));
     let input = input_of(&config, &files);
-    assert_eq!(check::worst_w(&input, &config.paths), EXPECTED + 700);
+    assert_eq!(check::worst_w(&input, &config.paths, None), EXPECTED + 700);
 
     // The index configured but not walked: 0 for the index, nothing else moves.
     let without: Vec<(String, String)> = corpus()
@@ -231,7 +231,7 @@ fn tier_0_files_are_summed_and_a_missing_index_adds_nothing() {
         .collect();
     let input = input_of(&config, &without);
     assert_eq!(
-        check::worst_w(&input, &config.paths),
+        check::worst_w(&input, &config.paths, None),
         EXPECTED - INDEX as u64
     );
 
@@ -239,7 +239,7 @@ fn tier_0_files_are_summed_and_a_missing_index_adds_nothing() {
     let unindexed = Config::from_toml("[ids]\nR = { kind = \"requirement\", width = 2 }\n");
     let input = input_of(&unindexed, &corpus());
     assert_eq!(
-        check::worst_w(&input, &unindexed.paths),
+        check::worst_w(&input, &unindexed.paths, None),
         EXPECTED - INDEX as u64
     );
 
@@ -257,7 +257,7 @@ fn tier_0_files_are_summed_and_a_missing_index_adds_nothing() {
         .collect();
     let input = input_of(&config, &renamed);
     assert_eq!(
-        check::worst_w(&input, &config.paths),
+        check::worst_w(&input, &config.paths, None),
         EXPECTED - INDEX as u64
     );
 }
@@ -266,7 +266,7 @@ fn tier_0_files_are_summed_and_a_missing_index_adds_nothing() {
 fn cannot_check_reports_w_as_zero() {
     let config = Config::from_toml(TOML);
     let mut input = input_of(&config, &corpus());
-    assert_eq!(check::worst_w(&input, &config.paths), EXPECTED);
+    assert_eq!(check::worst_w(&input, &config.paths, None), EXPECTED);
     input.files.push(CheckFile {
         path: "work/unread.md".to_owned(),
         size: 0,
@@ -289,5 +289,106 @@ fn cannot_check_reports_w_as_zero() {
             .unwrap()
             .ends_with(", worst W 0 B \u{2014} cannot-check"),
         "{summary:#?}"
+    );
+}
+
+// ------------------------------------------------- index shards (ADR-0030)
+// docs/features/index-shards.md AC-08: live shards of 3 000 and 5 000 B
+// and an archive shard of 20 000 B → W = Tier 0 + the largest Tier 1 + the
+// root + 5 000 + the three largest pooled files. The shards are known by
+// path, whatever their class: the 5 000 B one is `class: canon tier: 0`
+// (it would be summed as Tier 0), the archive shard a live spec (it would
+// top the pool).
+
+const SHARDED: &str = "\
+[paths]
+index = \"catalog/list.md\"
+
+[ids]
+R = { kind = \"requirement\", width = 2 }
+
+[[generators]]
+command = \"make list\"
+writes  = [\"catalog/list.md\", \"catalog/live-a.md\", \"catalog/live-b.md\", \"catalog/arch.md\"]
+index   = true
+shards  = [
+  { path = \"catalog/live-a.md\", claims = [\"work/**\"] },
+  { path = \"catalog/arch.md\", tier3 = true },
+  { path = \"catalog/live-b.md\", claims = [\"records/**\"] },
+]
+";
+
+const LIVE_A: usize = 3_000;
+const LIVE_B: usize = 5_000;
+const ARCH: usize = 20_000;
+
+fn with_shards() -> Vec<(String, String)> {
+    let mut files = corpus();
+    files.push((
+        "catalog/live-a.md".to_owned(),
+        sized(
+            "class: generated\ngenerator: make list\nsource: all",
+            LIVE_A,
+        ),
+    ));
+    files.push((
+        "catalog/live-b.md".to_owned(),
+        sized(
+            "class: canon\ntier: 0\nscope: [x]\nowner: o\nreviewed: 2026-09-29",
+            LIVE_B,
+        ),
+    ));
+    files.push((
+        "catalog/arch.md".to_owned(),
+        sized("class: spec\nstatus: draft\nscope: [x]", ARCH),
+    ));
+    files
+}
+
+#[test]
+fn w_counts_the_largest_live_shard_and_not_the_archive() {
+    let config = Config::from_toml(SHARDED);
+    let generator = config.check.index_generator().expect("the index entry");
+    let mut input = input_of(&config, &with_shards());
+    let expected = EXPECTED + LIVE_B as u64;
+    assert_eq!(
+        check::worst_w(&input, &config.paths, Some(generator)),
+        expected
+    );
+    for (mutation, value) in [
+        ("the archive shard counted", EXPECTED + ARCH as u64),
+        ("live shards summed", expected + LIVE_A as u64),
+        ("the term dropped", EXPECTED),
+    ] {
+        assert_ne!(value, expected, "{mutation} would not be seen");
+    }
+    // The report carries the same W (the engine passes the index entry).
+    assert_eq!(config.run(&input).counts.worst_w_bytes, expected);
+    // Order-independent.
+    input.files.reverse();
+    assert_eq!(
+        check::worst_w(&input, &config.paths, Some(generator)),
+        expected
+    );
+
+    // The larger live shard not walked: the other one's term.
+    let without_b: Vec<(String, String)> = with_shards()
+        .into_iter()
+        .filter(|(path, _)| path != "catalog/live-b.md")
+        .collect();
+    let input = input_of(&config, &without_b);
+    assert_eq!(
+        check::worst_w(&input, &config.paths, Some(generator)),
+        EXPECTED + LIVE_A as u64
+    );
+    // No live shard walked: 0 for the term.
+    let only_archive: Vec<(String, String)> = with_shards()
+        .into_iter()
+        .filter(|(path, _)| !path.starts_with("catalog/live-"))
+        .collect();
+    let input = input_of(&config, &only_archive);
+    assert_eq!(
+        check::worst_w(&input, &config.paths, Some(generator)),
+        EXPECTED
     );
 }

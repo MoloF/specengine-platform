@@ -739,3 +739,141 @@ fn a_link_to_a_symlinked_document_dangles() {
     );
     assert_eq!(report.counts.documents, 11, "the symlink is not walked");
 }
+
+// ------------------------------------------------- index shards (ADR-0030)
+// docs/features/index-shards.md AC-05 through the loader, on a scratch
+// spec-b with an archive shard and a records shard: each output judged on
+// its own; a mode-000 file (a walk gap) → no comparison at all.
+
+const SHARD_ARCHIVE: &str = "docs/features/index-archive.md";
+const SHARD_RECORDS: &str = "docs/spec/index-records.md";
+
+fn with_shards(scratch: &Scratch, dir: &str) -> PathBuf {
+    let root = with_index(scratch, dir, "docs/index.md", "");
+    let config = root.join("specengine.toml");
+    let text = fs::read_to_string(&config).unwrap();
+    let from = "writes = [\"docs/index.md\"]\nindex = true\n";
+    assert_eq!(text.matches(from).count(), 1);
+    let text = text.replacen(
+        from,
+        &format!(
+            "writes = [\"docs/index.md\", \"{SHARD_ARCHIVE}\", \"{SHARD_RECORDS}\"]\nindex = true\nshards = [\n  {{ path = \"{SHARD_ARCHIVE}\", tier3 = true }},\n  {{ path = \"{SHARD_RECORDS}\", claims = [\"docs/records/**\"] }},\n]\n"
+        ),
+        1,
+    );
+    fs::write(&config, text).unwrap();
+    root
+}
+
+/// The render set of the walked tree, as the check makes it.
+fn render_set_of(root: &Path) -> Vec<specengine_core::check::IndexOutput> {
+    use specengine_core::{IdSchemeToml, Paths};
+    let text = fs::read_to_string(root.join("specengine.toml")).unwrap();
+    let scheme = specengine_model::IdScheme::from_toml(&text).unwrap();
+    let paths = Paths::from_toml(&text).unwrap();
+    let config = specengine_core::check::CheckConfig::from_toml(&text).unwrap();
+    let tree = specengine_store::WorkingTree::new(root, &paths).unwrap();
+    let input = specengine_store::check_input(&tree, &scheme);
+    specengine_core::check::render_index_set(
+        &input,
+        paths.index.as_deref().unwrap(),
+        config.index_generator().unwrap(),
+    )
+}
+
+fn index_lines(report: &Report) -> Vec<(String, String, usize)> {
+    report
+        .findings
+        .iter()
+        .filter(|f| f.code.starts_with("index-"))
+        .map(|f| (f.code.clone(), f.path.clone(), f.line))
+        .collect()
+}
+
+#[test]
+fn each_index_output_is_judged_on_its_own_through_the_loader() {
+    let scratch = Scratch::new("check-verdict-shards");
+    let root = with_shards(&scratch, "copy");
+    let outputs = render_set_of(&root);
+    assert_eq!(
+        outputs.iter().map(|o| o.path.as_str()).collect::<Vec<_>>(),
+        ["docs/index.md", SHARD_ARCHIVE, SHARD_RECORDS]
+    );
+    for o in &outputs {
+        write(&root, &o.path, &o.bytes);
+    }
+    let report = check(&root);
+    assert!(index_lines(&report).is_empty(), "{:#?}", report.lines(true));
+    assert_eq!(render_set_of(&root), outputs, "no output listed in any");
+    let bytes_of = |path: &str| {
+        outputs
+            .iter()
+            .find(|o| o.path == path)
+            .unwrap()
+            .bytes
+            .clone()
+    };
+
+    // One byte on line k of the records shard: one drift there, at k.
+    let records = bytes_of(SHARD_RECORDS);
+    let k = records
+        .lines()
+        .position(|line| line.contains("REQ-001.md"))
+        .unwrap()
+        + 1;
+    let edited = records.replacen("REQ-001.md)", "REQ-001.md) ", 1);
+    write(&root, SHARD_RECORDS, &edited);
+    assert_eq!(
+        index_lines(&check(&root)),
+        [("index-drift".to_owned(), SHARD_RECORDS.to_owned(), k)]
+    );
+
+    // Both shards and the root edited: three findings, none stops the rest.
+    write(
+        &root,
+        SHARD_ARCHIVE,
+        format!("{}x\n", bytes_of(SHARD_ARCHIVE)),
+    );
+    write(
+        &root,
+        "docs/index.md",
+        format!("x{}", bytes_of("docs/index.md")),
+    );
+    let mut got: Vec<String> = index_lines(&check(&root))
+        .into_iter()
+        .map(|(code, path, line)| format!("{code} {path}:{line}"))
+        .collect();
+    got.sort();
+    let archive_lines = bytes_of(SHARD_ARCHIVE).lines().count();
+    let mut want = vec![
+        "index-drift docs/index.md:1".to_owned(),
+        format!("index-drift {SHARD_ARCHIVE}:{}", archive_lines + 1),
+        format!("index-drift {SHARD_RECORDS}:{k}"),
+    ];
+    want.sort();
+    assert_eq!(got, want);
+
+    // The root alone edited: drift on the root only.
+    write(&root, SHARD_ARCHIVE, bytes_of(SHARD_ARCHIVE));
+    write(&root, SHARD_RECORDS, &records);
+    assert_eq!(
+        index_lines(&check(&root)),
+        [("index-drift".to_owned(), "docs/index.md".to_owned(), 1)]
+    );
+
+    // A shard deleted: `index-missing` on its path.
+    write(&root, "docs/index.md", bytes_of("docs/index.md"));
+    fs::remove_file(root.join(SHARD_ARCHIVE)).unwrap();
+    assert_eq!(
+        index_lines(&check(&root)),
+        [("index-missing".to_owned(), SHARD_ARCHIVE.to_owned(), 1)]
+    );
+
+    // A walk gap: no comparison, though a shard is missing and one drifts.
+    write(&root, SHARD_RECORDS, &edited);
+    chmod(&root, "docs/spec/cli.md", 0o000);
+    let report = check(&root);
+    chmod(&root, "docs/spec/cli.md", 0o644);
+    assert_eq!(report.verdict, Verdict::CannotCheck);
+    assert!(index_lines(&report).is_empty(), "{:#?}", report.lines(true));
+}

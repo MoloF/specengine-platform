@@ -290,16 +290,22 @@ fn registry_example() -> String {
 
 #[test]
 fn the_registry_example_loads() {
-    use specengine_core::check::{DEFAULT_GATE, Generator};
+    use specengine_core::check::{DEFAULT_GATE, Generator, Shard, ShardKind};
     let example = registry_example();
     let config = CheckConfig::from_toml(&example)
         .unwrap_or_else(|e| panic!("{}\n{example}", e.at("specengine.toml")));
+    // This repository's block (#index-shards): the root plus the archive shard.
     let want = Generator {
         command: "cargo run -q -p specengine-cli -- export index".to_owned(),
-        writes: strings(&["docs/index.md"]),
+        writes: strings(&["docs/index.md", "docs/index-archive.md"]),
         index: true,
         gate: Some("cargo run -q -p specengine-cli -- check".to_owned()),
         line: 4,
+        shards: vec![Shard {
+            path: "docs/index-archive.md".to_owned(),
+            kind: ShardKind::Tier3,
+            line: 9,
+        }],
     };
     assert_eq!(
         config.generators.as_deref(),
@@ -321,12 +327,12 @@ index = \"site/toc.md\"
 
 [[generators]]
 command = \"make toc\"
-writes = [\"site/toc.md\", \"site/extra.md\", \"site/toc.md\"]
+writes = [\"site/toc.md\", \"site/toc.md\"]
 index = true
 
 [[generators]]
 command = \"tool gen\"
-writes = [\"b.md\"]
+writes = [\"b.md\", \"site/extra.md\", \"b.md\"]
 index = false
 ";
     let config =
@@ -346,8 +352,8 @@ index = false
     assert_eq!(
         seen,
         [
-            ("make toc", vec!["site/toc.md", "site/extra.md"], true, 4),
-            ("tool gen", vec!["b.md"], false, 9),
+            ("make toc", vec!["site/toc.md"], true, 4),
+            ("tool gen", vec!["b.md", "site/extra.md"], false, 9),
         ],
         "order written, repeats in `writes` dropped, the header's line"
     );
@@ -873,6 +879,7 @@ fn read_back(value: &str) -> Result<String, String> {
         index: true,
         gate: None,
         line: 1,
+        shards: Vec::new(),
     };
     let render = render_index(&CheckInput::default(), "a.md", &generator);
     let scheme = IdScheme::from_toml("").expect("empty scheme");
@@ -999,4 +1006,381 @@ fn an_invalid_link_base_fails_with_file_line_message() {
             "{case}: a message: {shown}"
         );
     }
+}
+
+// ------------------------------------------------- index shards (ADR-0030)
+// docs/features/index-shards.md AC-06: every registry error of its "Data"
+// at its line, one case each; `shards = []` is no shard; the table and the
+// inline forms load in config order with their lines.
+
+/// The index entry with `writes` and the `shards` array's items, one per
+/// line: the entry's header is line 4, `writes` line 6, `shards = [` line
+/// 8, the first item line 9.
+fn sharded(writes: &str, items: &[&str]) -> String {
+    let mut text = format!(
+        "[paths]\nindex = \"x/root.md\"\n\n[[generators]]\ncommand = \"gen\"\nwrites = [{writes}]\nindex = true\nshards = [\n"
+    );
+    for item in items {
+        text.push_str(&format!("  {item},\n"));
+    }
+    text.push_str("]\n");
+    text
+}
+
+const ROOT_AND_S: &str = "\"x/root.md\", \"x/s.md\"";
+const ROOT_S_T: &str = "\"x/root.md\", \"x/s.md\", \"x/t.md\"";
+
+/// `(case, text, line, fragment)`.
+fn invalid_shards() -> Vec<(&'static str, String, usize, &'static str)> {
+    vec![
+        (
+            "shards on an entry without index = true",
+            "[[generators]]\ncommand = \"gen\"\nwrites = [\"a.md\"]\nshards = [{ path = \"a.md\", tier3 = true }]\n".to_owned(),
+            4,
+            "only for the entry with `index = true`",
+        ),
+        (
+            "shards not an array of tables",
+            "[paths]\nindex = \"x/root.md\"\n\n[[generators]]\ncommand = \"gen\"\nwrites = [\"x/root.md\"]\nindex = true\nshards = \"x/s.md\"\n".to_owned(),
+            8,
+            "",
+        ),
+        (
+            "a shard that is a string",
+            sharded(ROOT_AND_S, &["\"x/s.md\""]),
+            9,
+            "",
+        ),
+        (
+            "a shard with an unknown key",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", tier3 = true, label = \"x\" }"]),
+            9,
+            "label",
+        ),
+        (
+            "a shard without path",
+            sharded(ROOT_AND_S, &["{ tier3 = true }"]),
+            9,
+            "without `path`",
+        ),
+        (
+            "both tier3 and claims",
+            sharded(
+                ROOT_AND_S,
+                &["{ path = \"x/s.md\", tier3 = true, claims = [\"y/**\"] }"],
+            ),
+            9,
+            "both",
+        ),
+        (
+            "neither tier3 nor claims",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\" }"]),
+            9,
+            "without `tier3 = true` or `claims`",
+        ),
+        (
+            "tier3 not true",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", tier3 = false }"]),
+            9,
+            "shard `tier3` is only `true`: set it, or give `claims` instead",
+        ),
+        (
+            "tier3 not a boolean",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", tier3 = \"yes\" }"]),
+            9,
+            "",
+        ),
+        (
+            "claims empty",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", claims = [] }"]),
+            9,
+            "empty",
+        ),
+        (
+            "claims not strings",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", claims = [1] }"]),
+            9,
+            "",
+        ),
+        (
+            "a path leaving the root",
+            sharded(ROOT_AND_S, &["{ path = \"../s.md\", tier3 = true }"]),
+            9,
+            "leaves the root",
+        ),
+        (
+            "an absolute path",
+            sharded(ROOT_AND_S, &["{ path = \"/x/s.md\", tier3 = true }"]),
+            9,
+            "absolute",
+        ),
+        (
+            "the path is [paths] index",
+            sharded(ROOT_AND_S, &["{ path = \"x/root.md\", tier3 = true }"]),
+            9,
+            "is the `[paths] index`",
+        ),
+        (
+            "a path repeated",
+            sharded(
+                ROOT_AND_S,
+                &[
+                    "{ path = \"x/s.md\", tier3 = true }",
+                    "{ path = \"x/s.md\", claims = [\"y/**\"] }",
+                ],
+            ),
+            10,
+            "repeated",
+        ),
+        (
+            "tier3 = true twice",
+            sharded(
+                ROOT_S_T,
+                &[
+                    "{ path = \"x/s.md\", tier3 = true }",
+                    "{ path = \"x/t.md\", tier3 = true }",
+                ],
+            ),
+            10,
+            "twice",
+        ),
+        (
+            "a claim leaving the root",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", claims = [\"../y/**\"] }"]),
+            9,
+            "shard `claims`",
+        ),
+        (
+            "a claim with an empty component",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", claims = [\"y//**\"] }"]),
+            9,
+            "shard `claims`",
+        ),
+        (
+            "a shard path missing from writes",
+            sharded("\"x/root.md\"", &["{ path = \"x/s.md\", tier3 = true }"]),
+            9,
+            "not in the entry's `writes`",
+        ),
+        (
+            "an index writes path that is neither the index nor a shard",
+            sharded(ROOT_S_T, &["{ path = \"x/s.md\", tier3 = true }"]),
+            6,
+            "x/t.md is neither",
+        ),
+        (
+            "an extra writes path without shards",
+            "[paths]\nindex = \"x/root.md\"\n\n[[generators]]\ncommand = \"gen\"\nwrites = [\"x/root.md\", \"x/stale.md\"]\nindex = true\n".to_owned(),
+            6,
+            "x/stale.md is neither",
+        ),
+    ]
+}
+
+#[test]
+fn invalid_shards_fail_with_file_line_message() {
+    let mut failures = Vec::new();
+    for (case, text, line, fragment) in invalid_shards() {
+        match CheckConfig::from_toml(&text) {
+            Ok(config) => failures.push(format!("{case}: accepted as {config:?}")),
+            Err(error) => {
+                let shown = error.at("specengine.toml");
+                let prefix = format!("specengine.toml:{line}: ");
+                if !shown.starts_with(&prefix) || shown.len() <= prefix.len() {
+                    failures.push(format!("{case}: {shown:?} does not start with {prefix:?}"));
+                } else if !shown[prefix.len()..].contains(fragment) {
+                    failures.push(format!("{case}: {shown:?} does not name {fragment:?}"));
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The index entry in table form with the shard `path` (TOML source, also
+/// in `writes`) on line 10 and `claims` one per line from line 12: the
+/// first claim `"y/**"` on line 12, `claim` (TOML source) on line 13.
+fn shard_table(path: &str, claim: &str) -> String {
+    format!(
+        "[paths]\nindex = \"x/root.md\"\n\n[[generators]]\ncommand = \"gen\"\nwrites = [\"x/root.md\", {path}]\nindex = true\n\n[[generators.shards]]\npath = {path}\nclaims = [\n  \"y/**\",\n  {claim},\n]\n"
+    )
+}
+
+/// AC-06, iteration 2 (the registry errors of "Data", reported): a claim or
+/// a shard path the index renders into Markdown (a pointer's label and
+/// link, a shard's H1) holding a newline or another control character, or
+/// a backtick, fails at its own line, the value shown escaped; `tier3 =
+/// false` names both ways out. Exact lines.
+#[test]
+fn shard_text_that_would_break_the_markdown_fails_at_its_line() {
+    const CONTROL: &str =
+        "contains a newline or a control character: the index renders it into Markdown";
+    const BACKTICK: &str = "contains a backtick: the index renders it into Markdown";
+    let good_path = "\"x/s.md\"";
+    let good_claim = "\"z/**\"";
+    let cases: Vec<(&str, String, String)> = vec![
+        (
+            "a claim with a newline",
+            shard_table(good_path, r#""y/a\nb/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a\nb/**" {CONTROL}"#),
+        ),
+        (
+            "a claim with a tab",
+            shard_table(good_path, r#""y/a\tb/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a\tb/**" {CONTROL}"#),
+        ),
+        (
+            "a claim with a carriage return",
+            shard_table(good_path, r#""y/a\rb/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a\rb/**" {CONTROL}"#),
+        ),
+        (
+            "a claim with BEL",
+            shard_table(good_path, r#""y/a\u0007b/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a\u{{7}}b/**" {CONTROL}"#),
+        ),
+        (
+            "a claim with DEL",
+            shard_table(good_path, r#""y/a\u007Fb/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a\u{{7f}}b/**" {CONTROL}"#),
+        ),
+        (
+            "a claim with a C1 control (NEL)",
+            shard_table(good_path, r#""y/a\u0085b/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a\u{{85}}b/**" {CONTROL}"#),
+        ),
+        (
+            "a claim with a backtick",
+            shard_table(good_path, r#""y/a`b/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "y/a`b/**" {BACKTICK}"#),
+        ),
+        (
+            "a claim that is a backtick and a glob",
+            shard_table(good_path, r#""`/**""#),
+            format!(r#"specengine.toml:13: shard `claims`: "`/**" {BACKTICK}"#),
+        ),
+        (
+            "a path with a newline",
+            shard_table(r#""x/s\n.md""#, good_claim),
+            format!(r#"specengine.toml:10: shard `path`: "x/s\n.md" {CONTROL}"#),
+        ),
+        (
+            "a path with a tab",
+            shard_table(r#""x/s\t.md""#, good_claim),
+            format!(r#"specengine.toml:10: shard `path`: "x/s\t.md" {CONTROL}"#),
+        ),
+        (
+            "a path with an escape character",
+            shard_table(r#""x/s\u001B.md""#, good_claim),
+            format!(r#"specengine.toml:10: shard `path`: "x/s\u{{1b}}.md" {CONTROL}"#),
+        ),
+        (
+            "a path with a backtick",
+            shard_table(r#""x/s`.md""#, good_claim),
+            format!(r#"specengine.toml:10: shard `path`: "x/s`.md" {BACKTICK}"#),
+        ),
+        (
+            "tier3 = false",
+            sharded(ROOT_AND_S, &["{ path = \"x/s.md\", tier3 = false }"]),
+            "specengine.toml:9: shard `tier3` is only `true`: set it, or give `claims` instead"
+                .to_owned(),
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (case, text, expected) in &cases {
+        match CheckConfig::from_toml(text) {
+            Ok(config) => failures.push(format!("{case}: accepted as {config:?}")),
+            Err(error) => {
+                let shown = error.at("specengine.toml");
+                if shown != *expected {
+                    failures.push(format!(
+                        "{case}:\n  got      {shown:?}\n  expected {expected:?}"
+                    ));
+                }
+            }
+        }
+    }
+    // The same entries without the offending character load.
+    for text in [
+        shard_table(good_path, good_claim),
+        shard_table("\"x/s-a.md\"", "\"y/a-b/**\""),
+    ] {
+        if let Err(error) = CheckConfig::from_toml(&text) {
+            failures.push(format!(
+                "a clean entry refused: {}",
+                error.at("specengine.toml")
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn shards_load_in_config_order_with_their_lines() {
+    use specengine_core::check::{Shard, ShardKind};
+    // Inline, overlapping claims and a claim matching nothing: no error.
+    let text = sharded(
+        "\"x/root.md\", \"x/arch.md\", \"x/a.md\", \"x/b.md\"",
+        &[
+            "{ path = \"x/b.md\", claims = [\"y/**\", \"z/*.md\"] }",
+            "{ path = \"x/arch.md\", tier3 = true }",
+            "{ path = \"x/a.md\", claims = [\"y/sub/**\", \"nothing/**\"] }",
+        ],
+    );
+    let config =
+        CheckConfig::from_toml(&text).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+    let generator = config.index_generator().expect("the index entry");
+    assert_eq!(
+        generator.shards,
+        [
+            Shard {
+                path: "x/b.md".to_owned(),
+                kind: ShardKind::Claims(strings(&["y/**", "z/*.md"])),
+                line: 9,
+            },
+            Shard {
+                path: "x/arch.md".to_owned(),
+                kind: ShardKind::Tier3,
+                line: 10,
+            },
+            Shard {
+                path: "x/a.md".to_owned(),
+                kind: ShardKind::Claims(strings(&["y/sub/**", "nothing/**"])),
+                line: 11,
+            },
+        ]
+    );
+    assert_eq!(
+        generator
+            .shards
+            .iter()
+            .map(Shard::is_archive)
+            .collect::<Vec<_>>(),
+        [false, true, false]
+    );
+
+    // `shards = []`: no shard, the single-file index.
+    let empty = sharded("\"x/root.md\"", &[]);
+    let config =
+        CheckConfig::from_toml(&empty).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+    assert!(config.index_generator().unwrap().shards.is_empty());
+
+    // The table form.
+    let tables = "[paths]\nindex = \"x/root.md\"\n\n[[generators]]\ncommand = \"gen\"\nwrites = [\"x/root.md\", \"x/arch.md\", \"x/a.md\"]\nindex = true\n\n[[generators.shards]]\npath = \"x/arch.md\"\ntier3 = true\n\n[[generators.shards]]\npath = \"x/a.md\"\nclaims = [\"y/**\"]\n";
+    let config =
+        CheckConfig::from_toml(tables).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+    let shards = &config.index_generator().unwrap().shards;
+    assert_eq!(
+        shards
+            .iter()
+            .map(|s| (s.path.as_str(), s.is_archive()))
+            .collect::<Vec<_>>(),
+        [("x/arch.md", true), ("x/a.md", false)]
+    );
+
+    // No shard: the root alone in `writes` loads as before.
+    let plain = "[paths]\nindex = \"x/root.md\"\n\n[[generators]]\ncommand = \"gen\"\nwrites = [\"x/root.md\"]\nindex = true\n";
+    let config =
+        CheckConfig::from_toml(plain).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+    assert!(config.index_generator().unwrap().shards.is_empty());
 }

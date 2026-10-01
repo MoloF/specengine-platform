@@ -4,11 +4,14 @@
 //! shared through a `#[path]` module, not copied).
 //!
 //! AC-04 (on a scratch copy of the walked documents and the root config;
-//! the export never runs in this repository): with `docs/index.md` deleted,
-//! X recreates it byte-identical to the working tree's; run again it
-//! reports `unchanged docs/index.md: <n> bytes` and keeps the mtime;
-//! `--stdout` prints the same bytes; one byte edited → `spec check` exit 1,
-//! `index-drift` naming X. AC-02: G from the top (`spec check` in this
+//! the export never runs in this repository; index-shards AC-12): with
+//! `docs/index.md` and its archive shard `docs/index-archive.md` deleted, X
+//! recreates both byte-identical to the working tree's, one `wrote` line
+//! each; run again it reports both `unchanged` and keeps the mtimes, the
+//! JSON with `shards`; `--stdout` prints the same bytes, one
+//! `==> <path> <==` block per output; one byte edited in an output →
+//! `spec check` exit 1, one `index-drift` naming X on that output only.
+//! AC-02: G from the top (`spec check` in this
 //! repository, no `--root`): exit 0, `— clean`, the stdout the library's;
 //! `--json` has 0 errors, debt, expired and stale; `--debt` lists no
 //! finding (mutation: the five-digit mention `ADR-00011` put back into
@@ -34,9 +37,11 @@ use std::process::Command;
 
 use common::check::{library, library_with, text};
 use common::{Scratch, repository_root, snapshot, spec, write};
-use parity_config::{DANGLING, EXPORT, GATE, INDEX, add_dangling_mention, root_toml, std_walk};
+use parity_config::{
+    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, root_toml, std_walk,
+};
 use specengine_core::ProjectConfig;
-use specengine_core::check::{Verdict, worst_w};
+use specengine_core::check::{CheckConfig, Verdict, worst_w};
 use specengine_store::{WorkingTree, check_input};
 
 /// `git status` of `root` without `.claude/` (the owner's, edited while
@@ -60,13 +65,15 @@ fn git_status(root: &Path) -> String {
 }
 
 /// The documents the root config walks under `root`, and W of that walk
-/// by the library.
+/// by the library (the index entry's shards known).
 fn walked_documents(root: &Path) -> (Vec<String>, u64) {
-    let project = ProjectConfig::from_toml(&root_toml()).expect("the root config");
+    let toml = root_toml();
+    let project = ProjectConfig::from_toml(&toml).expect("the root config");
+    let check = CheckConfig::from_toml(&toml).expect("the root config's check tables");
     let tree = WorkingTree::new(root, &project.paths).expect("the working tree");
     let input = check_input(&tree, &project.scheme);
     assert!(input.problems.is_empty(), "{:?}", input.problems);
-    let w = worst_w(&input, &project.paths);
+    let w = worst_w(&input, &project.paths, check.index_generator());
     (input.files.into_iter().map(|file| file.path).collect(), w)
 }
 
@@ -81,63 +88,134 @@ fn summary_w(stdout: &str) -> u64 {
         .expect("W is a number")
 }
 
+/// The `==> <path> <==` blocks of an `export index --stdout` with shards.
+fn stdout_blocks(stdout: &str) -> Vec<(String, String)> {
+    let mut blocks: Vec<(String, String)> = Vec::new();
+    for line in stdout.split_inclusive('\n') {
+        let marker = line
+            .strip_prefix("==> ")
+            .and_then(|rest| rest.strip_suffix(" <==\n"));
+        match (marker, blocks.last_mut()) {
+            (Some(path), _) => blocks.push((path.to_owned(), String::new())),
+            (None, Some((_, text))) => text.push_str(line),
+            (None, None) => panic!("--stdout starts without `==> <path> <==`: {line:?}"),
+        }
+    }
+    blocks
+}
+
 #[test]
 fn export_index_recreates_this_repository_s_index() {
     let repository = repository_root();
     let (documents, _) = walked_documents(&repository);
-    assert!(documents.iter().any(|path| path == INDEX), "{INDEX} walked");
-    let working = fs::read(repository.join(INDEX)).expect("the working-tree index");
+    let outputs = [INDEX, INDEX_SHARD];
+    for output in outputs {
+        assert!(
+            documents.iter().any(|path| path == output),
+            "{output} walked"
+        );
+    }
+    let working: Vec<Vec<u8>> = outputs
+        .iter()
+        .map(|output| {
+            fs::read(repository.join(output))
+                .unwrap_or_else(|e| panic!("the working-tree {output}: {e}"))
+        })
+        .collect();
 
     let scratch = Scratch::new("parity");
     let home = scratch.home("h");
     let copy = scratch.dir("copy");
     for path in &documents {
-        if path != INDEX {
+        if !outputs.contains(&path.as_str()) {
             write(&copy, path, fs::read(repository.join(path)).unwrap());
         }
     }
     write(&copy, "specengine.toml", root_toml());
-    assert!(!copy.join(INDEX).exists());
+    for output in outputs {
+        assert!(!copy.join(output).exists(), "{output} on the copy");
+    }
 
+    // Both recreated, one line each, in config order.
     let run = spec(&home, &copy, &["export", "index"]);
     run.code(0);
     assert_eq!(
         run.stdout,
-        format!("wrote {INDEX}: {} bytes\n", working.len())
+        format!(
+            "wrote {INDEX}: {} bytes\nwrote {INDEX_SHARD}: {} bytes\n",
+            working[0].len(),
+            working[1].len()
+        )
     );
     assert_eq!(run.stderr, "");
-    let recreated = fs::read(copy.join(INDEX)).unwrap();
-    assert!(
-        recreated == working,
-        "the recreated index differs from the working tree's ({} vs {} bytes)",
-        recreated.len(),
-        working.len()
-    );
+    for (output, working) in outputs.iter().zip(&working) {
+        let recreated = fs::read(copy.join(output)).unwrap();
+        assert!(
+            recreated == *working,
+            "the recreated {output} differs from the working tree's ({} vs {} bytes)",
+            recreated.len(),
+            working.len()
+        );
+    }
 
-    // Again: unchanged, the mtime kept.
-    let mtime = fs::metadata(copy.join(INDEX)).unwrap().modified().unwrap();
+    // Again: unchanged, the mtimes kept; the JSON the same, with `shards`.
+    let mtimes: Vec<_> = outputs
+        .iter()
+        .map(|output| fs::metadata(copy.join(output)).unwrap().modified().unwrap())
+        .collect();
     std::thread::sleep(std::time::Duration::from_millis(20));
     let run = spec(&home, &copy, &["export", "index"]);
     run.code(0);
     assert_eq!(
         run.stdout,
-        format!("unchanged {INDEX}: {} bytes\n", working.len())
+        format!(
+            "unchanged {INDEX}: {} bytes\nunchanged {INDEX_SHARD}: {} bytes\n",
+            working[0].len(),
+            working[1].len()
+        )
     );
+    let run = spec(&home, &copy, &["--json", "export", "index"]);
+    run.code(0);
     assert_eq!(
-        fs::metadata(copy.join(INDEX)).unwrap().modified().unwrap(),
-        mtime,
-        "the unchanged index was rewritten"
+        run.stdout,
+        format!(
+            "{{\"path\":\"{INDEX}\",\"bytes\":{},\"written\":false,\"shards\":[{{\"path\":\"{INDEX_SHARD}\",\"bytes\":{},\"written\":false}}]}}\n",
+            working[0].len(),
+            working[1].len()
+        )
     );
-    // `--stdout`: the same bytes, the header naming X and G.
+    for (output, mtime) in outputs.iter().zip(&mtimes) {
+        assert_eq!(
+            fs::metadata(copy.join(output)).unwrap().modified().unwrap(),
+            *mtime,
+            "the unchanged {output} was rewritten"
+        );
+    }
+    // `--stdout`: one block per output in config order, each the file, its
+    // header naming X and G.
     let run = spec(&home, &copy, &["export", "index", "--stdout"]);
     run.code(0);
-    assert!(run.stdout.as_bytes() == working, "--stdout is the file");
-    let header = run.stdout.split("\n## ").next().unwrap();
-    for command in [EXPORT, GATE] {
+    let blocks = stdout_blocks(&run.stdout);
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        outputs,
+        "--stdout blocks"
+    );
+    for ((path, text), working) in blocks.iter().zip(&working) {
         assert!(
-            header.contains(&format!("`{command}`")),
-            "{command}: {header}"
+            text.as_bytes() == working.as_slice(),
+            "--stdout: {path} is the file"
         );
+        let header = text.split("\n## ").next().unwrap();
+        for command in [EXPORT, GATE] {
+            assert!(
+                header.contains(&format!("`{command}`")),
+                "{path}: {command}: {header}"
+            );
+        }
     }
 
     let report = library(&copy);
@@ -147,33 +225,46 @@ fn export_index_recreates_this_repository_s_index() {
     assert_eq!(run.stdout, text(&report, false));
     assert!(run.stdout.ends_with(" \u{2014} clean\n"), "{}", run.stdout);
 
-    // Mutation (scratch): one byte of the index edited → exit 1,
-    // `index-drift` naming X.
-    let mut edited = working.clone();
-    let at = edited
-        .windows(b"# Documentation index".len())
-        .position(|window| window == b"# Documentation index")
-        .expect("the index heading");
-    edited[at + 2] = b'd';
-    write(&copy, INDEX, &edited);
-    let run = spec(&home, &copy, &["check"]);
-    run.code(1);
-    let drift: Vec<&str> = run
-        .stdout
-        .lines()
-        .filter(|line| line.starts_with(&format!("error  {INDEX}:")))
-        .collect();
-    assert_eq!(drift.len(), 1, "{}", run.stdout);
-    assert!(
-        drift[0].contains(": index-drift: ") && drift[0].contains(&format!("`{EXPORT}`")),
-        "{}",
-        drift[0]
-    );
-    assert!(
-        run.stdout.ends_with(" \u{2014} blocked\n"),
-        "{}",
-        run.stdout
-    );
+    // Mutation (scratch): one byte of an output edited → exit 1, one
+    // `index-drift` naming X on that output, none on the other.
+    for (at, (output, heading)) in outputs
+        .iter()
+        .zip([
+            "# Documentation index",
+            "## Archive \u{2014} Tier 3, by id only",
+        ])
+        .enumerate()
+    {
+        let mut edited = working[at].clone();
+        let found = edited
+            .windows(heading.len())
+            .position(|window| window == heading.as_bytes())
+            .unwrap_or_else(|| panic!("{output}: {heading:?}"));
+        edited[found + heading.len() - 1] ^= 0x20;
+        write(&copy, output, &edited);
+        let run = spec(&home, &copy, &["check"]);
+        run.code(1);
+        let errors: Vec<&str> = run
+            .stdout
+            .lines()
+            .filter(|line| line.starts_with("error  "))
+            .collect();
+        assert_eq!(errors.len(), 1, "{output}: {}", run.stdout);
+        assert!(
+            errors[0].starts_with(&format!("error  {output}:"))
+                && errors[0].contains(": index-drift: ")
+                && errors[0].contains(&format!("`{EXPORT}`")),
+            "{}",
+            errors[0]
+        );
+        assert!(
+            run.stdout.ends_with(" \u{2014} blocked\n"),
+            "{}",
+            run.stdout
+        );
+        write(&copy, output, &working[at]);
+    }
+    spec(&home, &copy, &["check"]).code(0);
     assert!(snapshot(&home).is_empty(), "something under HOME");
 }
 

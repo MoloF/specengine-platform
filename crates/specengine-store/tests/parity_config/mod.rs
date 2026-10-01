@@ -11,8 +11,13 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The index path of the root config (`[paths] index`).
+/// The index path of the root config (`[paths] index`): the root of the
+/// index set.
 pub const INDEX: &str = "docs/index.md";
+
+/// The one shard of the root config's index entry, the archive (`shards`,
+/// `tier3 = true`; ADR-0030, docs/features/index-shards.md).
+pub const INDEX_SHARD: &str = "docs/index-archive.md";
 
 /// X: the registered export command of the index (`[[generators]] command`).
 pub const EXPORT: &str = "cargo run -q -p specengine-cli -- export index";
@@ -43,7 +48,7 @@ pub fn repository() -> PathBuf {
 pub fn root_toml() -> String {
     let toml =
         fs::read_to_string(repository().join("specengine.toml")).expect("the root specengine.toml");
-    for registered in [EXPORT, GATE, INDEX] {
+    for registered in [EXPORT, GATE, INDEX, INDEX_SHARD] {
         let quoted = format!("\"{registered}\"");
         assert!(toml.contains(&quoted), "{quoted} in:\n{toml}");
     }

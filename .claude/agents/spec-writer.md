@@ -28,7 +28,7 @@ make goes through `cargo run -q -p specengine-cli -- check`, and that check does
 - **canon** — `CLAUDE.md` (Tier 0), the `README.md` of subtrees (Tier 1: `docs/`,
   `crates/<crate>/`, `ui/`), `docs/canon/*` (Tier 2). Written as "how it works now",
   rewritten in place, within the limit.
-- **generated** — `docs/index.md`. Never touch it by hand.
+- **generated** — `docs/index.md` and its shards (the index generator's `writes` in `specengine.toml`). Never touch them by hand.
 
 **The promotion rule** (§5): an accepted ADR amends the canon in the same change, and its
 `canon:` points at the amended section. A decision without a canon diff is an error the

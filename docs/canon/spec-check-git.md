@@ -41,7 +41,7 @@ reviewed: 2026-10-01
 
 ## Next
 
-Index sharding (`docs/features/roadmap.md` Q-8) before Phase 2 and a pilot's `spec export index`; then the pilots.
+The rest of Phase 1 (08 §2): CLI passes 3 (graph) and 4 (bundle), MCP stdio reads, check increment 4 (`spec-check-process`); then the pilots.
 
 ## Open
 

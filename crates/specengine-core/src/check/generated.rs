@@ -2,8 +2,9 @@
 //! `specengine.toml` (`[[generators]]`), errors both:
 //!
 //! - `index-drift`, `index-missing`: with an `index = true` entry, the
-//!   render of the index is compared byte for byte with the walked bytes of
-//!   `[paths] index`. Nothing is written; bytes not supplied → cannot check;
+//!   render of each output of the index (the root at `[paths] index`, then
+//!   each shard) is compared byte for byte with its walked bytes, each
+//!   output on its own. Nothing is written; bytes not supplied → cannot check;
 //!   an incomplete walk (an unreadable file or directory, a missing written
 //!   root: each a cause of "cannot check") → not compared. A skipped
 //!   non-UTF-8 name does not stop the comparison.
@@ -18,7 +19,7 @@ use specengine_model::Severity;
 use super::config::{CheckConfig, DocClass, Generator};
 use super::engine::Corpus;
 use super::input::{CheckInput, ProblemKind};
-use super::render::{readable_fields, render_index};
+use super::render::{IndexOutput, readable_fields, render_index_set};
 use super::report::{Cause, Finding};
 use crate::Paths;
 
@@ -171,9 +172,9 @@ fn registry(corpus: &Corpus<'_>, generators: &[Generator], findings: &mut Vec<Fi
     }
 }
 
-/// `index-missing` when `[paths] index` was not walked; `index-drift` when
-/// its bytes differ from the render, on the line of the first differing
-/// byte.
+/// Each output of the index (the root, then its shards) judged on its own:
+/// `index-missing` when it was not walked; `index-drift` when its bytes
+/// differ from its render, on the line of the first differing byte.
 fn index(
     input: &CheckInput,
     corpus: &Corpus<'_>,
@@ -182,15 +183,39 @@ fn index(
     findings: &mut Vec<Finding>,
     causes: &mut Vec<Cause>,
 ) {
+    for (at, output) in render_index_set(input, index_path, generator)
+        .iter()
+        .enumerate()
+    {
+        compare(corpus, output, at == 0, generator, findings, causes);
+    }
+}
+
+/// One output against its walked bytes; `root`: the `[paths] index` file,
+/// else a shard.
+fn compare(
+    corpus: &Corpus<'_>,
+    output: &IndexOutput,
+    root: bool,
+    generator: &Generator,
+    findings: &mut Vec<Finding>,
+    causes: &mut Vec<Cause>,
+) {
     let command = &generator.command;
-    let Some(&at) = corpus.by_path.get(index_path) else {
+    let path = output.path.as_str();
+    let (what, bytes) = if root {
+        ("the `[paths] index` file", "the index bytes were")
+    } else {
+        ("the index shard", "the index shard's bytes were")
+    };
+    let Some(&at) = corpus.by_path.get(path) else {
         findings.push(error(
             "index-missing",
-            index_path,
+            path,
             1,
             "",
             format!(
-                "the `[paths] index` file is not walked (absent, outside the roots or excluded); `{command}` writes it"
+                "{what} is not walked (absent, outside the roots or excluded); `{command}` writes it"
             ),
         ));
         return;
@@ -198,16 +223,15 @@ fn index(
     let file = corpus.files[at];
     if file.size > 0 && file.bytes.is_empty() {
         causes.push(Cause {
-            path: index_path.to_owned(),
+            path: path.to_owned(),
             message: format!(
-                "the index bytes were not supplied: it cannot be compared with the render of `{command}`"
+                "{bytes} not supplied: it cannot be compared with the render of `{command}`"
             ),
         });
         return;
     }
-    let render = render_index(input, index_path, generator);
     let walked = file.bytes.as_slice();
-    let rendered = render.as_bytes();
+    let rendered = output.bytes.as_bytes();
     let first_difference = walked
         .iter()
         .zip(rendered)
@@ -222,7 +246,7 @@ fn index(
         .count();
     findings.push(error(
         "index-drift",
-        index_path,
+        path,
         line,
         "",
         format!(

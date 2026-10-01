@@ -28,6 +28,7 @@ mode = "enforce"
 
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"
-writes  = ["docs/index.md"]
+writes  = ["docs/index.md", "docs/index-archive.md"]
 index   = true
 gate    = "cargo run -q -p specengine-cli -- check"
+shards  = [{ path = "docs/index-archive.md", tier3 = true }]

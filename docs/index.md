@@ -62,6 +62,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0027](decisions/ADR-0027.md) Tasks are stack-neutral packages; skills render them · architecture · accepted
 - [ADR-0028](decisions/ADR-0028.md) Tier 3 index lines carry only id and status · docs · accepted
 - [ADR-0029](decisions/ADR-0029.md) One pipeline; role write areas for the gate · process · accepted
+- [ADR-0030](decisions/ADR-0030.md) Configured index shards · docs · accepted
 
 ## Specs
 
@@ -73,23 +74,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/specs/specengine-platform/08-roadmap.md](specs/specengine-platform/08-roadmap.md) 08. Implementation plan, importing existing corpora, acceptance criteria, risks · specengine · in-progress
 - [docs/specs/specengine-platform/README.md](specs/specengine-platform/README.md) SpecEngine — research and platform concept · specengine · in-progress
 
-## Archive — Tier 3, by id only
+## Shards
 
-- [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) abandoned
-- [ADR-0002](decisions/ADR-0002.md) superseded-by ADR-0026
-- [docs/features/index-compaction.md](features/index-compaction.md) shipped
-- [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) shipped
-- [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) shipped
-- [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
-- [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
-- [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) shipped
-- [docs/features/spec-check.md](features/spec-check.md) shipped
-- [docs/features/spec-cli-changed.md](features/spec-cli-changed.md) shipped
-- [docs/features/spec-cli-check.md](features/spec-cli-check.md) shipped
-- [docs/features/spec-cli-introduced.md](features/spec-cli-introduced.md) shipped
-- [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) shipped
-- [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) shipped
-- [docs/features/spec-cli.md](features/spec-cli.md) shipped
-- [docs/features/spec-index.md](features/spec-index.md) shipped
-- [docs/features/spec-parser.md](features/spec-parser.md) shipped
-- [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped
+- [docs/index-archive.md](index-archive.md) Archive — Tier 3, by id only

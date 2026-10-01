@@ -1,33 +1,42 @@
 //! `spec export index [--stdout]`: the generated index, rendered by core's
-//! `render_index` with the `[[generators]]` entry that has `index = true`
-//! over a fresh walk of the working tree, written to `<root>/<[paths]
-//! index>` and nowhere else (the owner's Q3: a mode of `spec export`, whose
-//! bare form is Phase 2's queue export). The header names the registered
-//! `command` and `gate`; there is no default path, command or gate. No
-//! database, slug or `HOME`; the baseline is not read.
+//! `render_index_set` with the `[[generators]]` entry that has `index =
+//! true` over a fresh walk of the working tree, written to `<root>/<[paths]
+//! index>` and to each shard the entry lists, in config order, and nowhere
+//! else (the owner's Q3: a mode of `spec export`, whose bare form is Phase
+//! 2's queue export). The header names the registered `command` and `gate`;
+//! there is no default path, command, gate or shard. No database, slug or
+//! `HOME`; the baseline is not read.
 //!
 //! Refused, exit 2, nothing written: a config error (one line per cause), no
 //! `index = true` entry, an incomplete walk (a file that cannot be read or
 //! parsed, a directory that cannot be listed, a missing written root: the
 //! render would leave documents out; `--stdout` included), and, when
-//! writing, a symlink or a non-directory on the way to the index, a missing
-//! parent directory (never created), an index that is no regular file, a
-//! failed write, a file replaced between its inspection and its opening.
-//! Equal bytes are not rewritten (`unchanged`, the file not opened for
-//! writing); else the file is opened, checked to be the one inspected
-//! (device and inode), truncated and written in place.
-//! Written anyway, with a `warning:`: names skipped for not being UTF-8
-//! (their documents are not listed), an index outside the walk.
+//! writing, for any output — every one inspected before the first write — a
+//! symlink or a non-directory on the way, a missing parent directory (never
+//! created), an output that is no regular file or cannot be read, an
+//! existing output whose bytes differ that cannot be opened for writing or
+//! is no longer the file inspected (device and inode); and two outputs that
+//! are one file: the same file on disk, or paths equal but for case. Then
+//! the outputs in order: equal bytes are not rewritten (`unchanged`, the
+//! file not opened for writing); an existing file is truncated and written in
+//! place through the handle opened at inspection; an absent one is created
+//! exclusively. A failed write stops there, exit 2: the outputs written
+//! before it stay written. Nothing is deleted. Written anyway, with a
+//! `warning:`: names skipped for not being UTF-8 (their documents are not
+//! listed), each output outside the walk.
 //!
-//! `--stdout` prints the render and writes nothing.
+//! `--stdout` prints the render and writes nothing; with shards, each output
+//! in order after a `==> <path> <==` line.
 
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use specengine_core::check::{CheckInput, ProblemKind, Report, WalkGap, render_index, walk_gap};
+use specengine_core::check::{
+    CheckInput, IndexOutput, ProblemKind, Report, WalkGap, render_index_set, walk_gap,
+};
 use specengine_core::{Paths, is_clean_relative};
 use specengine_store::{NamedBytes, StoreError, WorkingTree, check_input, load_config};
 
@@ -53,7 +62,24 @@ pub struct ExportOutcome {
     pub written: bool,
     /// `--stdout`: the render, printed instead of written.
     pub render: Option<String>,
+    /// The shards of the index, in config order; empty without shards.
+    pub shards: Vec<ShardOutcome>,
     pub messages: Vec<Message>,
+}
+
+/// What `spec export index` did with one shard: as for the root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShardOutcome {
+    /// The shard's `path`, root-relative.
+    pub path: String,
+    /// The render's length in bytes.
+    pub bytes: usize,
+    /// The file was written: `false` when it already held the render, and
+    /// with `--stdout`.
+    pub written: bool,
+    /// `--stdout`: the render, printed instead of written.
+    #[serde(skip)]
+    pub render: Option<String>,
 }
 
 /// `spec export index`: renders the index and writes it (or prints it).
@@ -101,32 +127,84 @@ pub fn export_index(
     }
 
     let mut messages = skipped_warnings(&input);
-    if !project.paths.walk_scope().in_walk_scope(&index_path) {
+    let scope = project.paths.walk_scope();
+    if !scope.in_walk_scope(&index_path) {
         messages.push(Message::Warning(format!(
             "`[paths] index` `{index_path}` is outside the walk (the roots, `exclude`): \
              `spec check` reports it `index-missing`"
         )));
     }
-
-    let render = render_index(&input, &index_path, generator);
-    let bytes = render.len();
-    if request.stdout {
-        return Ok(ExportOutcome {
-            path: index_path,
-            bytes,
-            written: false,
-            render: Some(render),
-            messages,
-        });
+    for shard in &generator.shards {
+        if !scope.in_walk_scope(&shard.path) {
+            messages.push(Message::Warning(format!(
+                "the index shard `{}` is outside the walk (the roots, `exclude`): \
+                 `spec check` reports it `index-missing`",
+                shard.path
+            )));
+        }
     }
-    let written = write_index(&located.root, &index_path, render.as_bytes())?;
+
+    let outputs = render_index_set(&input, &index_path, generator);
+    let written = if request.stdout {
+        vec![false; outputs.len()]
+    } else {
+        write_outputs(&located.root, &outputs)?
+    };
+    let render = |text: &str| request.stdout.then(|| text.to_owned());
+    let mut outcomes = outputs
+        .iter()
+        .zip(written)
+        .map(|(output, written)| ShardOutcome {
+            path: output.path.clone(),
+            bytes: output.bytes.len(),
+            written,
+            render: render(&output.bytes),
+        });
+    let Some(root) = outcomes.next() else {
+        return Err(CliError::spec(
+            "the index render has no root; nothing was written".to_owned(),
+        ));
+    };
     Ok(ExportOutcome {
-        path: index_path,
-        bytes,
-        written,
-        render: None,
+        path: root.path,
+        bytes: root.bytes,
+        written: root.written,
+        render: root.render,
+        shards: outcomes.collect(),
         messages,
     })
+}
+
+/// Inspects every output before writing any (a refusal writes nothing),
+/// then writes them in order, each only when its bytes differ: per output,
+/// whether it was written.
+fn write_outputs(root: &Path, outputs: &[IndexOutput]) -> Result<Vec<bool>, CliError> {
+    let refused = |why: String| CliError::spec(format!("{why}; nothing was written"));
+    let mut targets = Vec::with_capacity(outputs.len());
+    for (at, output) in outputs.iter().enumerate() {
+        let role = if at == 0 { Role::Root } else { Role::Shard };
+        let target = inspect(root, &output.path, role, output.bytes.as_bytes()).map_err(refused)?;
+        targets.push(target);
+    }
+    one_file_each(&targets).map_err(refused)?;
+    let mut written: Vec<bool> = Vec::with_capacity(outputs.len());
+    for (target, output) in targets.into_iter().zip(outputs) {
+        let wrote = write(target, output.bytes.as_bytes()).map_err(|why| {
+            let before: Vec<String> = outputs
+                .iter()
+                .zip(&written)
+                .filter(|(_, wrote)| **wrote)
+                .map(|(output, _)| format!("`{}`", output.path))
+                .collect();
+            if before.is_empty() {
+                CliError::spec(format!("{why}; nothing was written"))
+            } else {
+                CliError::spec(format!("{why}; written before it: {}", before.join(", ")))
+            }
+        })?;
+        written.push(wrote);
+    }
+    Ok(written)
 }
 
 /// One stderr line per cause of a config error: `<config>:<line>: message`,
@@ -190,96 +268,221 @@ fn skipped_warnings(input: &CheckInput) -> Vec<Message> {
         .collect()
 }
 
-/// Writes `bytes` to `<root>/<index>` unless the file holds them already
-/// (`false`). Every existing component below the root is a real directory
-/// and the file, if present, a regular file; the parent must exist.
-fn write_index(root: &Path, index: &str, bytes: &[u8]) -> Result<bool, CliError> {
-    let refuse = |why: String| CliError::spec(format!("{why}; nothing was written"));
-    if !is_clean_relative(index) {
-        return Err(refuse(format!(
-            "`[paths] index` `{index}` is not a root-relative path"
-        )));
+/// Which output of the index a path is, for the messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// `[paths] index`.
+    Root,
+    /// A shard of the index entry.
+    Shard,
+}
+
+impl Role {
+    /// How a message names the output `path`.
+    fn name(self, path: &str) -> String {
+        match self {
+            Self::Root => format!("`[paths] index` `{path}`"),
+            Self::Shard => format!("the index shard `{path}`"),
+        }
     }
-    let components: Vec<&str> = index.split('/').collect();
-    let mut path = root.to_path_buf();
+
+    /// How a message names the output whose directory is missing.
+    fn owner(self, path: &str) -> String {
+        match self {
+            Self::Root => "`[paths] index`".to_owned(),
+            Self::Shard => format!("the index shard `{path}`"),
+        }
+    }
+}
+
+/// An output inspected for writing.
+struct Target {
+    /// Root-relative, as configured.
+    path: String,
+    /// `<root>/<path>`.
+    file: PathBuf,
+    /// What writing does with it.
+    plan: Plan,
+}
+
+/// What writing does with an inspected output.
+enum Plan {
+    /// Absent: created exclusively.
+    Create,
+    /// It holds the render already (as inspected): not opened for writing.
+    Keep(fs::Metadata),
+    /// Its bytes differ: `handle` was opened for writing at inspection and
+    /// checked to be the file `seen`; it is truncated and written through.
+    Rewrite {
+        seen: fs::Metadata,
+        handle: fs::File,
+    },
+}
+
+impl Target {
+    /// The existing file as inspected; `None`: absent.
+    fn seen(&self) -> Option<&fs::Metadata> {
+        match &self.plan {
+            Plan::Create => None,
+            Plan::Keep(seen) | Plan::Rewrite { seen, .. } => Some(seen),
+        }
+    }
+}
+
+/// Inspects `<root>/<path>` without writing: every existing component below
+/// the root is a real directory, the parent exists, and the file, if
+/// present, is a regular file that can be read and, unless it holds `bytes`
+/// already, opened for writing (not truncated, not created) and checked to
+/// be the file inspected. `Err`: why it is refused.
+fn inspect(root: &Path, path: &str, role: Role, bytes: &[u8]) -> Result<Target, String> {
+    if !is_clean_relative(path) {
+        return Err(format!("{} is not a root-relative path", role.name(path)));
+    }
+    let components: Vec<&str> = path.split('/').collect();
+    let mut file = root.to_path_buf();
     let mut seen = None;
     for (at, component) in components.iter().enumerate() {
-        path.push(component);
+        file.push(component);
         let shown = components[..=at].join("/");
         let last = at + 1 == components.len();
-        let metadata = match fs::symlink_metadata(&path) {
+        let metadata = match fs::symlink_metadata(&file) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == io::ErrorKind::NotFound && last => {
-                return create(&path, bytes)
-                    .map(|()| true)
-                    .map_err(|error| refuse(format!("cannot create `{index}`: {error}")));
+                return Ok(Target {
+                    path: path.to_owned(),
+                    file,
+                    plan: Plan::Create,
+                });
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err(refuse(format!(
-                    "the directory `{shown}` of `[paths] index` does not exist (it is \
-                     never created)"
-                )));
+                return Err(format!(
+                    "the directory `{shown}` of {} does not exist (it is never created)",
+                    role.owner(path)
+                ));
             }
-            Err(error) => return Err(refuse(format!("cannot inspect `{shown}`: {error}"))),
+            Err(error) => return Err(format!("cannot inspect `{shown}`: {error}")),
         };
         let kind = metadata.file_type();
         if kind.is_symlink() {
-            return Err(refuse(format!(
+            return Err(format!(
                 "`{shown}` is a symlink: the index is written only through real \
                  directories, to a regular file"
-            )));
+            ));
         }
         if !last && !kind.is_dir() {
-            return Err(refuse(format!("`{shown}` is not a directory")));
+            return Err(format!("`{shown}` is not a directory"));
         }
         if last && !kind.is_file() {
-            return Err(refuse(format!("`{shown}` is not a regular file")));
+            return Err(format!("`{shown}` is not a regular file"));
         }
         if last {
             seen = Some(metadata);
         }
     }
     let Some(seen) = seen else {
-        return Err(refuse(format!(
-            "`[paths] index` `{index}` is not a root-relative path"
-        )));
+        return Err(format!("{} is not a root-relative path", role.name(path)));
     };
-    let current =
-        fs::read(&path).map_err(|error| refuse(format!("cannot read `{index}`: {error}")))?;
+    let current = fs::read(&file).map_err(|error| format!("cannot read `{path}`: {error}"))?;
     if current == bytes {
-        return Ok(false);
+        return Ok(Target {
+            path: path.to_owned(),
+            file,
+            plan: Plan::Keep(seen),
+        });
     }
     // Opened without truncating, then checked to be the very file inspected
-    // above: a symlink or another file put in its place meanwhile is refused
-    // before a byte changes.
-    let cannot_write = |error: io::Error| refuse(format!("cannot write `{index}`: {error}"));
-    let mut file = OpenOptions::new()
+    // above: a read-only file, a symlink or another file put in its place
+    // meanwhile is refused before any output changes.
+    let opened = OpenOptions::new()
         .write(true)
-        .open(&path)
-        .map_err(cannot_write)?;
-    let opened = file.metadata().map_err(cannot_write)?;
-    if !same_file(&seen, &opened) {
-        return Err(refuse(format!(
-            "`{index}` was replaced while it was being written"
-        )));
+        .open(&file)
+        .map_err(|error| format!("cannot open `{path}` for writing: {error}"))?;
+    let metadata = opened
+        .metadata()
+        .map_err(|error| format!("cannot inspect `{path}`: {error}"))?;
+    if !same_file(&seen, &metadata) {
+        return Err(format!(
+            "`{path}` was replaced while it was being inspected"
+        ));
     }
-    file.set_len(0)
-        .and_then(|()| file.write_all(bytes))
-        .map_err(cannot_write)?;
-    Ok(true)
+    Ok(Target {
+        path: path.to_owned(),
+        file,
+        plan: Plan::Rewrite {
+            seen,
+            handle: opened,
+        },
+    })
 }
 
-/// The two metadata name the same file (device and inode).
-#[cfg(unix)]
+/// Two outputs that are one file are refused: existing, the same file on
+/// disk (device and inode: a name differing in case or Unicode form on a
+/// file system that ignores it, or a hard link); existing or not, paths
+/// equal but for case (one file on a case-insensitive file system, and in a
+/// checkout there). Pairs in config order, the first found.
+fn one_file_each(targets: &[Target]) -> Result<(), String> {
+    for (at, later) in targets.iter().enumerate() {
+        for earlier in &targets[..at] {
+            let (first, second) = (&earlier.path, &later.path);
+            if let (Some(a), Some(b)) = (earlier.seen(), later.seen())
+                && identity(a).is_some()
+                && identity(a) == identity(b)
+            {
+                return Err(format!(
+                    "the index outputs `{first}` and `{second}` are one file on disk (names \
+                     differing in case or Unicode form, or a hard link): each output needs a \
+                     file of its own"
+                ));
+            }
+            if first.to_lowercase() == second.to_lowercase() {
+                return Err(format!(
+                    "the index outputs `{first}` and `{second}` differ only in case: one file \
+                     on a case-insensitive file system; each output needs a path of its own"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Writes `bytes` to the inspected `target` unless it holds them already
+/// (`false`, the file not opened for writing). `Err`: why the write failed.
+fn write(target: Target, bytes: &[u8]) -> Result<bool, String> {
+    let path = target.path.as_str();
+    match target.plan {
+        Plan::Keep(_) => Ok(false),
+        Plan::Create => create(&target.file, bytes)
+            .map(|()| true)
+            .map_err(|error| format!("cannot create `{path}`: {error}")),
+        Plan::Rewrite { mut handle, .. } => handle
+            .set_len(0)
+            .and_then(|()| handle.write_all(bytes))
+            .map(|()| true)
+            .map_err(|error| format!("cannot write `{path}`: {error}")),
+    }
+}
+
+/// The two metadata name the same file.
 fn same_file(a: &fs::Metadata, b: &fs::Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt as _;
-    a.dev() == b.dev() && a.ino() == b.ino()
+    match (identity(a), identity(b)) {
+        (Some(a), Some(b)) => a == b,
+        // Without file identities: the opened file is at least a regular
+        // file.
+        _ => b.is_file(),
+    }
 }
 
-/// Without file identities: the opened file is at least a regular file.
+/// The file's identity: device and inode.
+#[cfg(unix)]
+fn identity(metadata: &fs::Metadata) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt as _;
+    Some((metadata.dev(), metadata.ino()))
+}
+
+/// No file identities here.
 #[cfg(not(unix))]
-fn same_file(_: &fs::Metadata, b: &fs::Metadata) -> bool {
-    b.is_file()
+fn identity(_: &fs::Metadata) -> Option<(u64, u64)> {
+    None
 }
 
 /// A new file, created exclusively (a symlink appearing there is not
@@ -300,21 +503,39 @@ fn io_message(error: &StoreError) -> String {
     }
 }
 
-/// `wrote <path>: <n> bytes`, `unchanged …`, or the render (`--stdout`).
+/// One `wrote <path>: <n> bytes` or `unchanged …` line per output, the root
+/// first; `--stdout`: the render, or with shards each output after a
+/// `==> <path> <==` line.
 pub(crate) fn render_text(outcome: &ExportOutcome) -> String {
-    if let Some(render) = &outcome.render {
+    let outputs = std::iter::once((
+        outcome.path.as_str(),
+        outcome.bytes,
+        outcome.written,
+        outcome.render.as_deref(),
+    ))
+    .chain(outcome.shards.iter().map(|shard| {
+        (
+            shard.path.as_str(),
+            shard.bytes,
+            shard.written,
+            shard.render.as_deref(),
+        )
+    }));
+    if let Some(render) = &outcome.render
+        && outcome.shards.is_empty()
+    {
         return render.clone();
     }
-    let verb = if outcome.written {
-        "wrote"
-    } else {
-        "unchanged"
-    };
-    format!(
-        "{verb} {}: {} bytes\n",
-        one_line(&outcome.path),
-        outcome.bytes
-    )
+    let mut text = String::new();
+    for (path, bytes, written, render) in outputs {
+        if let Some(render) = render {
+            text.push_str(&format!("==> {} <==\n{render}", one_line(path)));
+            continue;
+        }
+        let verb = if written { "wrote" } else { "unchanged" };
+        text.push_str(&format!("{verb} {}: {bytes} bytes\n", one_line(path)));
+    }
+    text
 }
 
 #[derive(Serialize)]
@@ -322,15 +543,19 @@ struct ExportJson<'a> {
     path: &'a str,
     bytes: usize,
     written: bool,
+    #[serde(skip_serializing_if = "<[ShardOutcome]>::is_empty")]
+    shards: &'a [ShardOutcome],
 }
 
-/// `{path, bytes, written}`, as [`crate::render_json`] prints it.
+/// `{path, bytes, written}`, as [`crate::render_json`] prints it; with
+/// shards, also `shards`: the same keys per shard, in config order.
 impl Serialize for ExportOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         ExportJson {
             path: &self.path,
             bytes: self.bytes,
             written: self.written,
+            shards: &self.shards,
         }
         .serialize(serializer)
     }

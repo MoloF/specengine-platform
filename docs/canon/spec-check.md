@@ -14,12 +14,12 @@ Increments 1–3 of 4: one check of the convention — §11.1–4 of `docs/canon
 
 - `CheckInput {files: [CheckFile {path, size, parsed?, read_error?, bytes}], problems: [Problem {kind: MissingRoot | UnreadableDir | SkippedName, path}]}`, `CheckFile::{parse, parsed, unreadable}`. `bytes` (the parsed text) give real lines, a parser diagnostic's subject and the written keys (`title`, `kind`, `id` are not in `fields`).
 - `CheckConfig::from_toml` → `{budgets: Budgets {tier0_bytes, tier1_bytes, index_bytes, decision_bytes, canon_bytes?, bundle_node?, bundle_task?}, classes: Classes {canon, decision, spec, generated: ClassContract {required, optional, closed}}, mode: Mode}`; `Baseline::from_toml` → `[DebtEntry {code, path, subject, reason, expires, line}]`; both errors `{line?, message}`, `at(file)` → `file:line: message`.
-- `Report {mode, verdict, counts, findings, stale, new_debt?: [NewDebt {DebtEntry, head_expires?}], cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `verdict_in(mode)`, `without_base()` (`enforce-introduced` → `enforce`), `cannot(mode, causes)`, `Finding::blocks_in(mode)`; `CHECK_CODES` (29), `PARSER_SEVERITY` (13 rows); `worst_w(&CheckInput, &Paths) -> u64`.
+- `Report {mode, verdict, counts, findings, stale, new_debt?: [NewDebt {DebtEntry, head_expires?}], cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `verdict_in(mode)`, `without_base()` (`enforce-introduced` → `enforce`), `cannot(mode, causes)`, `Finding::blocks_in(mode)`; `CHECK_CODES` (29), `PARSER_SEVERITY` (13 rows); `worst_w(&CheckInput, &Paths, Option<&Generator>) -> u64`.
 - `judge(report, &Baseline, &Base {findings, baseline?, mode?}) -> Report`, pure (`docs/canon/spec-check-git.md` "The base"): a finding is `introduced` unless its (code, path, subject) is a base finding (by set); new debt: an entry the base's baseline lacks by triple or holds with an earlier `expires` (not an earlier one, a new `reason`, a removal; `None`: unjudged); the stricter mode.
 
 ## Configuration
 
-`[paths]` gains `tier0` (the one file canon tier 0 may be), `tier1_name` (the only name a canon tier 1 file may have) and `index` (capped by `index_bytes`, whatever its class); each rule is off while its key is absent. This repository's root `specengine.toml`, abridged (Q-7):
+`[paths]` gains `tier0` (the one file canon tier 0 may be), `tier1_name` (the only name a canon tier 1 file may have) and `index`; each rule is off while its key is absent. This repository's root `specengine.toml`, abridged (Q-7):
 
 ```toml
 [paths]
@@ -51,7 +51,7 @@ Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_ta
 - **IDs.** A number-shape definition (`id:`, `{#ID}`; references never) has `width` digits, else `id-width`. Mixed script → `homoglyph`, an error with its Latin `fix`. An ID defined in two files → `id-taken` on each later file by path, naming the first; a feature-scoped ID is unique per feature, misplaced → `id-scope` (`docs/canon/spec-check-links.md`). Under `records`, `id: X` names its file `X` + `.` or `-`, else `file-name` (a bare prefix is not enough).
 - **References** — `supersedes`, `status: superseded-by`, `adrs`, `refs`, `working_answer`, `parent`, `links.*`, a reference-form `canon:` — resolve: the ID is defined; or the text is in a document's `aliases:`; or, through `aliases_from`, the configured prefix + the written body is defined (no re-padding); `#Y` is defined in the ID's file. Else `ref-dangling`. An alias `parent` is re-read through the scheme. Where an ID may resolve (`slug/`, bare feature-scoped IDs): `docs/canon/spec-check-links.md`. Not yet: `project:`, `@rev`.
 - **Path-form `canon:`**, on any document: has `#` (`canon-form`), names a walked canon document (`canon-file`), and one of its anchors or section IDs (`canon-anchor`). Anchors: heading slugs, `{#…}`, `<a id>`, `<a name>` (`crates/specengine-model/README.md`); a start tag split over lines in an HTML block or a blockquote is missed.
-- **Budgets** (`budget`, subject = the slot): whole-file bytes > cap. `index` by path; canon tier 0 → `tier0_bytes`, tier 1 → `tier1_bytes`, else `canon_bytes`; decision → `decision_bytes`; spec, generated, class-less: none.
+- **Budgets** (`budget`, subject = the slot): whole-file bytes > cap. `index`, any class: the root and each live shard (`docs/canon/spec-check-graph.md#index-shards`); canon tier 0 → `tier0_bytes`, tier 1 → `tier1_bytes`, else `canon_bytes`; decision → `decision_bytes`; spec, generated, class-less: none.
 - **Walk.** Non-UTF-8 names → one warning `name-skipped` per problem path, its message counting them; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
 - **Parser codes** pass as themselves through one table, `PARSER_SEVERITY`, with the parser's severity but `homoglyph`, `duplicate-id` (errors).
 
@@ -82,9 +82,9 @@ An entry matches every finding with its (code, path, subject), never by line. A 
 
 `lines(true)` adds the other findings (`warning`, `debt`, `error` with `(debt until|expired <date>: <reason>)`), `stale  path: debt-stale: …` and the `new` lines. JSON: `{mode, verdict, counts: {documents, errors, warnings, debt, expired, stale, introduced?, new_debt?, worst_w_bytes}, findings, stale, new_debt?, cannot_check}`, the `?` keys and a finding's `introduced` omitted without a base (`new_debt` also unjudged); `worst_w_bytes` a u64, 0 on `cannot-check`.
 
-**Worst W** (`worst_w`, §3; not a check, no cap) over the walked files as read (staged blobs under `--staged`): every canon `tier: 0` + the largest canon `tier: 1` + the `[paths] index` file (0 if not walked) + the 3 largest of the pool — every other file that is not canon tier 0 or 1, not Tier 3, not `class: generated`, failed front-matter included.
+**Worst W** (`worst_w`, §3; not a check, no cap) over the walked files as read (staged blobs under `--staged`): every canon `tier: 0` + the largest canon `tier: 1` + the index root (0 if not walked) + its largest live shard + the 3 largest of the pool — every other file but canon tier 0 or 1, Tier 3 and `class: generated`, failed front-matter included.
 
-This repository, root config, no baseline (owner, 2026-09-29): `enforce` → `clean`, 0 debt (`check_parity.rs`).
+This repository, root config, no baseline: `enforce` → `clean`, 0 debt (`check_parity.rs`).
 
 ## Not checked yet
 
@@ -96,7 +96,7 @@ Working answer (the code) → what the other answer triggers.
 
 - Q-1 caps in bytes, the unit in the key names → tokens: an ADR amending ADR-0022.
 - Q-3 the fix is data → "`spec check` applies it": an ADR amending ADR-0004 / ADR-0005.
-- Q-4 answered: `class:` in every document; fixtures (the importer later): decision → `decision` + `scope`, `generator:` → `generated`, others → `canon` + `owner`, `reviewed` (only decisions are superseded, §2).
+- Q-4 answered: `class:` in every document; fixtures (the importer later): decision → `decision` + `scope`, `generator:` → `generated`, others → `canon` + `owner`, `reviewed`.
 - Q-6 an overflow may be baselined with expiry; caps never move. Q-7 answered: the root `specengine.toml` (ADR-0029). Q-8 the pending groups are the pilots' full check list; per-pilot parity at migration.
 
 ## Open minors

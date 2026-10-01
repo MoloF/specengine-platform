@@ -26,7 +26,7 @@ fn library_w(root: &Path) -> u64 {
     let project =
         ProjectConfig::from_toml(&read_text(root, "specengine.toml")).expect("the fixture config");
     let tree = WorkingTree::new(root, &project.paths).expect("the working tree");
-    worst_w(&check_input(&tree, &project.scheme), &project.paths)
+    worst_w(&check_input(&tree, &project.scheme), &project.paths, None)
 }
 
 /// The `worst W <n> B` value of the summary line of `run`, which must end
@@ -176,5 +176,94 @@ fn staged_reports_the_library_s_w_of_the_staged_blobs() {
             plain_w,
             "{fixture} plain, small"
         );
+    }
+}
+
+// ------------------------------------------------- index shards (ADR-0030)
+// docs/features/index-shards.md AC-08 through the binary: on sharded copies
+// of both fixtures (live shards of 3 000 and 5 000 B, an archive shard of
+// 20 000 B, all `class: generated`), the summary's and `--json`'s W is the
+// library's with the index entry, which is the unsharded W (the three
+// generated shards count 0 there) + 5 000.
+
+fn generated_of(size: usize) -> String {
+    let mut text =
+        "---\nclass: generated\ngenerator: gen-index\nsource: front-matter\n---\n\n# Shard\n"
+            .to_owned();
+    text.push_str(&"x".repeat(size - text.len() - 1));
+    text.push('\n');
+    assert_eq!(text.len(), size);
+    text
+}
+
+#[test]
+fn w_counts_the_largest_live_shard_on_both_fixtures() {
+    use common::check::{index_path, quoted, set_paths_key};
+    use specengine_core::check::CheckConfig;
+    let shards = [
+        (
+            "docs/spec/index-records.md",
+            3_000,
+            "{ path = \"docs/spec/index-records.md\", claims = [\"docs/records/**\"] }",
+        ),
+        (
+            "docs/features/index-archive.md",
+            20_000,
+            "{ path = \"docs/features/index-archive.md\", tier3 = true }",
+        ),
+        (
+            "docs/features/index-records.md",
+            5_000,
+            "{ path = \"docs/features/index-records.md\", claims = [\"docs/features/**\"] }",
+        ),
+    ];
+    for (fixture, _) in FIXTURES {
+        let scratch = Scratch::new("worst-w-shards");
+        let home = scratch.home("h");
+        let root = scratch.copy(fixture, "copy");
+        let index = index_path(fixture);
+        let base = read_text(&root, "specengine.toml");
+        let mut config = set_paths_key(&base, "index", &quoted(index));
+        let mut writes = vec![quoted(index)];
+        writes.extend(shards.iter().map(|(path, _, _)| quoted(path)));
+        config.push_str(&format!(
+            "\n[[generators]]\ncommand = \"gen-index\"\nwrites  = [{}]\nindex   = true\nshards  = [\n",
+            writes.join(", ")
+        ));
+        for (_, _, item) in &shards {
+            config.push_str(&format!("  {item},\n"));
+        }
+        config.push_str("]\n");
+        write(&root, "specengine.toml", &config);
+        for (path, size, _) in &shards {
+            write(&root, path, generated_of(*size));
+        }
+
+        let project = ProjectConfig::from_toml(&config).expect("the config");
+        let check = CheckConfig::from_toml(&config)
+            .unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+        let tree = WorkingTree::new(&root, &project.paths).expect("the working tree");
+        let input = check_input(&tree, &project.scheme);
+        let w = worst_w(&input, &project.paths, check.index_generator());
+        assert_eq!(
+            w,
+            worst_w(&input, &project.paths, None) + 5_000,
+            "{fixture}"
+        );
+        assert_eq!(library(&root).counts.worst_w_bytes, w, "{fixture}");
+
+        let report = library(&root);
+        let verdict = report
+            .lines(false)
+            .last()
+            .unwrap()
+            .rsplit(' ')
+            .next()
+            .unwrap()
+            .to_owned();
+        let run = spec(&home, &root, &["check"]);
+        assert_eq!(summary_w(&run, &verdict), w, "{fixture} plain");
+        let json = spec(&home, &root, &["--json", "check"]);
+        assert_eq!(json_w(&json), w, "{fixture} --json");
     }
 }

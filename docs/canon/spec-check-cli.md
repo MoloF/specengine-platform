@@ -23,16 +23,16 @@ CLI passes 2a.1 and 2b of `spec check` increment 3 (`docs/features/spec-cli-chec
 
 ## spec export index
 
-A mode of `spec export` (owner's Q3, 2026-09-30, `docs/canon/architecture.md#apply`; bare `spec export`, Phase 2's queue export, prints clap's help, exit 2): `render_index` with the `[[generators]]` entry `index = true` over the same fresh walk, written to `<root>/<[paths] index>` and nowhere else. The header names the registered `command` and `gate` (default `spec check`), never the binary; no default path, command or gate (ADR-0008). The baseline is not read.
+A mode of `spec export` (owner's Q3, 2026-09-30, `docs/canon/architecture.md#apply`; bare `spec export`, Phase 2's queue export, prints clap's help, exit 2): `render_index_set` with the `[[generators]]` entry `index = true` over the same fresh walk, written to its outputs — `<root>/<[paths] index>`, then each shard in config order (`docs/canon/spec-check-graph.md#index-shards`) — and nowhere else. The header names the registered `command` and `gate` (default `spec check`), never the binary; no default path, command, gate or shard (ADR-0008). The baseline is not read.
 
 - **Refused**, exit 2, empty stdout, nothing written: a config error (one `<config>:<line>: message` per cause); no `[[generators]]` or no `index = true` entry (naming the missing registration); an incomplete walk, `--stdout` included: core's `walk_gap` (§11.5's stop conditions), naming the first by path — an unreadable or unparsable file, an unlistable directory, a missing written root.
-- **Writing**: every existing component of `[paths] index` below the root a non-symlink directory, the file (if any) a non-symlink regular file, the parent existing (never created); else refused, a symlink's target untouched. Equal bytes → `unchanged`, not opened for writing (mtime kept). Else opened, checked to be the file inspected (device and inode), truncated and written in place: no temp file, no guard against a hand-written file (git is the net); a failed write → exit 2.
-- **Written anyway, with a `warning:`**: names skipped for not being UTF-8 (one per problem path, with its count; their documents are not listed); `[paths] index` outside the walk (`spec check` then reports `index-missing`).
-- **Output**: `wrote docs/index.md: 9182 bytes` or `unchanged …`; JSON `{"path":"docs/index.md","bytes":9182,"written":true}`; `--stdout`: the render byte for byte, nothing written (W-3). `--stdout --json` is a usage error in any argument order, one message (`Usage: spec export index [OPTIONS]`). Read-only projects are unguarded: a pilot takes `--stdout`.
+- **Writing**, in two phases. (1) Every output is inspected before any write: each existing component below the root a non-symlink directory, the file (if any) a non-symlink regular file that can be read, the parent existing (never created); an existing output whose bytes differ is opened for writing there and checked to be the file inspected (device and inode), so a read-only one is refused (`cannot open `<path>` for writing: …`). Two outputs that are one file are refused: the same device and inode, or, for every pair, existing or not, paths equal ignoring case (W-5). Any refusal → exit 2, empty stdout, nothing written, a symlink's target untouched. (2) The outputs in config order: equal bytes → `unchanged`, not opened for writing (mtime kept); an existing one truncated and written in place through the handle opened at inspection; an absent one created exclusively. No temp file, no guard against a hand-written file (git is the net). A failed write → exit 2, `…; written before it: <paths>` (or `; nothing was written`): earlier outputs stay written. Still a failed write: an absent output that cannot be created (a non-writable directory; two absent names differing only in Unicode normal form — no normalisation dependency), an I/O error. Nothing is deleted: a shard dropped from the config stays on disk, and §11.6 reports it (`generator-path`).
+- **Written anyway, with a `warning:`**: names skipped for not being UTF-8 (one per problem path, with its count; their documents are not listed); each output outside the walk, naming it (`spec check` then reports `index-missing`).
+- **Output**: one line per output in order, `wrote docs/index.md: 7699 bytes` or `unchanged …`; JSON `{"path":"docs/index.md","bytes":7699,"written":true}`, with shards plus `"shards":[{"path","bytes","written"}, …]` in config order (omitted with none: a reader of the three keys keeps working); `--stdout`, nothing written (W-3): with no shard the render byte for byte, else each output in order after a `==> <path> <==` line. `--stdout --json` is a usage error in any argument order, one message (`Usage: spec export index [OPTIONS]`). Read-only projects are unguarded: a pilot takes `--stdout`.
 
 ## Working answers
 
-The code → the other answer's cost: W-1 JSON verbatim → a second serialiser, or a core change breaking `check_output.rs`; W-2 cannot-check prints its report → no JSON for the failure that matters most; W-3 `--stdout` → previewing means writing, forbidden in pilots; W-4 uncapped → `search`'s cap.
+The code → the other answer's cost: W-1 JSON verbatim → a second serialiser, or a core change breaking `check_output.rs`; W-2 cannot-check prints its report → no JSON for the failure that matters most; W-3 `--stdout` → previewing means writing, forbidden in pilots; W-4 uncapped → `search`'s cap; W-5 output paths equal ignoring case refused on every file system (index-shards, 2026-10-01) → a checkout on a case-insensitive one makes them one file, the second write overwriting the first.
 
 ## The gate here
 
@@ -42,11 +42,13 @@ Elsewhere: queue export, `--state` (Phase 2); applying `fix` (Q-3); an MCP check
 
 ## Next
 
-Index sharding (`docs/features/roadmap.md` Q-8) before Phase 2 and a pilot's `spec export index`; then the pilots.
+The rest of Phase 1 (08 §2): CLI passes 3 (graph) and 4 (bundle), MCP stdio reads, check increment 4 (`spec-check-process`); then the pilots.
 
 ## Open
 
 - The store walker's minors: store README "Open minors".
-- A FIFO swapped in for the index before the open would block the writer (`O_NONBLOCK` later).
+- A FIFO swapped in for an output before the open would block the writer (`O_NONBLOCK` later).
+- An editor's atomic save between inspection and write: the write lands in the replaced file, `spec check` shows `index-drift`; negligible.
+- Gaps left as failed writes, not refusals: an absent shard in a non-writable directory, an absent NFC/NFD alias pair (earlier outputs then stay written).
 - Untested: the replaced-file refusal (needs a seam); the non-UTF-8 name warning on APFS, which refuses such names.
 - Causes are sorted as strings (`:22` before `:6`; cosmetic, core); `ProjectConfig` stops at its first error, so a config's causes may be incomplete.

@@ -191,3 +191,77 @@ fn default_caps_apply_without_a_budgets_table() {
     let over = run(&config, "docs/ADR-0001.md", sized(front, 1537, false));
     assert_eq!(with_code(&over, "budget").len(), 1, "{}", show(&over));
 }
+
+// ------------------------------------------------- index shards (ADR-0030)
+// docs/features/index-shards.md AC-07: `budget` (subject `index`, cap
+// `index_bytes`) on `[paths] index` and on each live shard by path,
+// whatever its class; the archive shard has no cap.
+
+const SHARDED: &str = "\
+[paths]
+index = \"docs/index.md\"
+
+[ids]
+ADR = { kind = \"decision\", width = 4 }
+
+[budgets]
+index_bytes = 250
+canon_bytes = 350
+
+[[generators]]
+command = \"make index\"
+writes  = [\"docs/index.md\", \"docs/idx-arch.md\", \"docs/idx-live.md\", \"notes/idx-two.md\"]
+index   = true
+shards  = [
+  { path = \"docs/idx-arch.md\", tier3 = true },
+  { path = \"docs/idx-live.md\", claims = [\"docs/live/**\"] },
+  { path = \"notes/idx-two.md\", claims = [\"notes/**\"] },
+]
+";
+
+/// `(path, front-matter)` of the outputs; the second live shard is
+/// `class: canon tier: 2` (its own cap 350 > 250): the slot is by path.
+const OUTPUTS: &[(&str, &str)] = &[
+    ("docs/index.md", "class: generated\n"),
+    ("docs/idx-arch.md", "class: generated\n"),
+    ("docs/idx-live.md", "class: generated\n"),
+    (
+        "notes/idx-two.md",
+        "class: canon\ntier: 2\nowner: o\nreviewed: 2026-09-01\n",
+    ),
+];
+
+fn budgets_of(config: &Config, size: usize) -> Vec<(String, String)> {
+    let input = CheckInput {
+        files: OUTPUTS
+            .iter()
+            .map(|(path, front)| CheckFile::parse(*path, sized(front, size, false), &config.scheme))
+            .collect(),
+        problems: Vec::new(),
+    };
+    let report = config.run(&input);
+    let mut got: Vec<(String, String)> = with_code(&report, "budget")
+        .iter()
+        .map(|f| (f.path.clone(), f.subject.clone()))
+        .collect();
+    got.sort();
+    got
+}
+
+#[test]
+fn the_root_and_each_live_shard_are_capped_the_archive_shard_is_not() {
+    let config = Config::from_toml(SHARDED);
+    assert!(budgets_of(&config, 250).is_empty(), "at the cap");
+    let pair = |path: &str| (path.to_owned(), "index".to_owned());
+    assert_eq!(
+        budgets_of(&config, 251),
+        [
+            pair("docs/idx-live.md"),
+            pair("docs/index.md"),
+            pair("notes/idx-two.md"),
+        ],
+        "cap + 1: the root and the live shards, not the archive"
+    );
+    // The archive shard far over the cap: still none.
+    assert_eq!(budgets_of(&config, 20_000).len(), 3);
+}

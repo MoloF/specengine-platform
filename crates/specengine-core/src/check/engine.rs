@@ -155,7 +155,7 @@ pub fn run(
     links::run(&corpus, paths, &mut findings);
 
     let stale = apply_baseline(&mut findings, baseline, today, today_valid);
-    let worst_w_bytes = worst_w(input, paths);
+    let worst_w_bytes = worst_w(input, paths, config.index_generator());
     Report::assemble(
         config.mode,
         input.files.len(),
@@ -650,12 +650,23 @@ impl FileCheck<'_, '_> {
         }
     }
 
-    /// Whole-file bytes against the cap of the document's slot.
+    /// Whole-file bytes against the cap of the document's slot. The index
+    /// slot is by path, whatever the class: `[paths] index` and each live
+    /// shard of the index entry; the archive shard has no cap (ADR-0030).
     fn budget(&mut self, document: &Node, class: Option<DocClass>) {
         let budgets = &self.config.budgets;
         let tier = document.fields.as_ref().and_then(|fields| fields.tier);
-        let slot = if self.paths.index.as_deref() == Some(self.file.path.as_str()) {
+        let path = self.file.path.as_str();
+        let shard = self
+            .config
+            .index_generator()
+            .and_then(|generator| generator.shards.iter().find(|shard| shard.path == path));
+        let slot = if self.paths.index.as_deref() == Some(path)
+            || shard.is_some_and(|shard| !shard.is_archive())
+        {
             Some(("index", budgets.index_bytes))
+        } else if shard.is_some() {
+            None
         } else {
             match class {
                 Some(DocClass::Canon) => match tier {

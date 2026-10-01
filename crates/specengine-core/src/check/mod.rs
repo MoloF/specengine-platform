@@ -25,7 +25,8 @@
 //! - [`resolve`] — the one reference resolution ([`Resolver`]), scope-aware:
 //!   `slug/ID` and bare feature-scoped IDs resolve in feature documents
 //!   only (ADR-0026);
-//! - [`render_index`] — the generated index, rendered in memory;
+//! - [`render_index_set`] — the generated index, rendered in memory: the
+//!   root and its shards ([`render_index`]: the root alone);
 //!   [`walk_gap`] — the first gap of an incomplete walk, which stops the
 //!   index comparison and the index writer alike (§11.5);
 //!   [`is_tier3`] / [`is_tier3_file`] — the one Tier 3 predicate (the
@@ -59,12 +60,12 @@ pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use config::{
     Budgets, CheckConfig, ClassContract, Classes, ConfigError, DEFAULT_GATE, DocClass, Generator,
-    Mode, check_config_from_toml,
+    Mode, Shard, ShardKind, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
-pub use render::{is_live, is_tier3, is_tier3_file, render_index};
+pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, render_index_set};
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
 pub use resolve::{Resolution, Resolver};
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};

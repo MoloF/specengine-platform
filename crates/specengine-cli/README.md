@@ -35,11 +35,11 @@ language = "en"
 
 ## Database
 
-Owner's answer Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; outside macOS (assumed: ADR-0003 names only macOS) `$XDG_DATA_HOME/specengine/` when absolute, else `$HOME/.local/share/specengine/`. `HOME` unset, empty or relative → exit 2 on every host. One DB per project, each worktree's rows keyed `(project, root)` by the store; no refusal by root in Phase 1; a repository-identity check (by git common dir, so task worktrees pass) comes with the Phase 2 queue. A data directory inside the canonical root (nearest existing ancestor; a project at `$HOME`: a limitation) → exit 2, nothing created. The DB is derived: `spec index` rebuilds it from git; only Phase 2's open proposals and tasks would be lost, `spec export` protects them (05 §8).
+Owner's Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; outside macOS (assumed: ADR-0003 names only macOS) `$XDG_DATA_HOME/specengine/` when absolute, else `$HOME/.local/share/specengine/`. `HOME` unset, empty or relative → exit 2 on every host. One DB per project, each worktree's rows keyed `(project, root)` by the store; no refusal by root in Phase 1; a repository-identity check (by git common dir, so task worktrees pass) comes with the Phase 2 queue. A data directory inside the canonical root (nearest existing ancestor; a project at `$HOME`: a limitation) → exit 2, nothing created. The DB is derived: `spec index` rebuilds it from git; only Phase 2's open proposals and tasks would be lost, `spec export` protects them (05 §8).
 
 ## Rules
 
-- Writes: `index`, `search`, `show` only the data directory; `init` only its file; `export index` only `[paths] index`; `check` nothing; nothing else under the root (`docs/canon/architecture.md#storage`).
+- Writes: `index`, `search`, `show` only the data directory; `init` only its file; `export index` only the index and its shards; `check` nothing; nothing else under the root (`docs/canon/architecture.md#storage`).
 - Freshness: `search`, `show` run `update` first; a missing root → a `warning:` if `[paths]` is written, else silent; never exit 2.
 - Indexing is never fatal: broken or unreadable files are indexed with diagnostics and change no exit code.
 - Resolution is the check's: a `*.md` argument is a path (not `is_clean_relative` → exit 2); else `grammar::parse_reference` (none → exit 1 listing the prefixes; look-alike or mixed-script → exit 2 naming the Latin fix; `project:` → exit 2), then `Resolver::resolve_detached` over `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 → U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
@@ -48,7 +48,7 @@ Owner's answer Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>
 
 ## Exit codes and streams
 
-0 answered, zero hits included. 1 `show` found nothing: dangling, no configured prefix, a `.md` path not indexed or unreadable (`cannot be read`), every holder unreadable (`none of its files could be read`) or changed while read; `check` blocked. 2 could not run: usage, no project or slug, a config error, `HOME`, the data directory, a `StoreError`, each exit 2 named above; `check` cannot-check; an `export index` refusal.
+0 answered, zero hits too. 1 `show` found nothing: dangling, no configured prefix, a `.md` path not indexed or unreadable (`cannot be read`), every holder unreadable (`none of its files could be read`) or changed while read; `check` blocked. 2 could not run: usage, no project or slug, a config error, `HOME`, the data directory, a `StoreError`, each exit 2 named above; `check` cannot-check; an `export index` refusal.
 
 stdout: results only; `--json`: one compact document for exit 0 and 1, none for 2 (`check`: its report); every key present, absent = `null` (`check`: `Report::to_json` verbatim). stderr: `note:`, `warning:` lines (JSON `notes`: the notes only), then exit 1's `spec: <reason>` or exit 2's error (`export index`'s config error: a `<config>:<line>: message` per cause). No colour, no timing; paths root-relative but `db`. **One-line rule**: every stderr message and JSON `reason`, `notes` is one line (CR, LF → space); JSON `ref`, `path`, `holders` stay raw; a clap usage error keeps its `Usage:` block after the `spec:` line.
 

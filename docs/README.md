@@ -21,7 +21,7 @@ The norm is `docs/canon/documentation-system.md` (ADR-0022). This document descr
 | canon | how it works now | `CLAUDE.md`, `README.md`, `*/README.md`, `docs/canon/` | rewritten in place |
 | decision | why, and when | `docs/decisions/ADR-NNNN.md` | never edited, only superseded |
 | spec | what we are doing now | `docs/features/<slug>.md`, `docs/specs/` | consumable: compacted after shipping |
-| generated | what exists | `docs/index.md` | written by the generator only |
+| generated | what exists | `docs/index.md` and its shards | written by the generator only |
 
 Misclassification is the main source of rot. A spec in canon position lies within weeks. A canon written as a decision log forces everyone to replay history.
 
@@ -29,8 +29,8 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 
 - **Tier 0** — `CLAUDE.md`, always read.
 - **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), later `ui/README.md`. Canon lives next to the code it describes.
-- **Tier 2** — the index and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
-- **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document. Its index line keeps only the id link and the status (ADR-0028).
+- **Tier 2** — the index root `docs/index.md` and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
+- **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document. Its index line keeps only the id link and the status (ADR-0028) and lives in the archive shard `docs/index-archive.md`, read by id only, outside W (ADR-0030).
 
 ## Budgets (bytes of the whole file, front-matter included)
 
@@ -38,7 +38,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 |---|---|---|
 | Tier 0 | 16 384 | §4 |
 | Tier 1 | 10 240 per subtree | §4 |
-| Index | 10 240 | §4 |
+| Index: the root, each live shard | 10 240 | §4; the archive shard uncapped |
 | Decision | 1 536 | §4 |
 | Tier 2 canon | 12 288 | repository calibration (§4 step 2: recompute from the average of five documents actually opened after the first working week; the cap may only go down) |
 | Spec | none; after shipping — intent + summary ≤ 3 KB | §6 |
@@ -96,7 +96,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-`docs/index.md` is written only by `cargo run -q -p specengine-cli -- export index`, the generator the root `specengine.toml` registers. A manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
+The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here one shard: `docs/index-archive.md`, every Tier 3 line. All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
 
 ## Enforcement
 
@@ -110,4 +110,4 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Compaction
 
-Quarterly, or when the index nears its cap: mark superseded decisions, absorb settled decisions into the canon and trim the record to the "why", drop old shipped specs, regenerate the index. Skipping compaction costs not storage but truth.
+Quarterly, or when the index root nears its cap: mark superseded decisions, absorb settled decisions into the canon and trim the record to the "why", drop old shipped specs, regenerate the index. Shipping or superseding moves a line from the root to the archive shard by itself; a root still near its cap takes a new live shard (a `claims` glob), never a raised cap. Skipping compaction costs not storage but truth.

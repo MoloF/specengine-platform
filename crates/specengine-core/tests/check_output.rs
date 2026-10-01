@@ -59,7 +59,7 @@ fn only_debt_and_warnings_give_the_summary_line_alone() {
         show(&report)
     );
     // W: the library's (both files are `class: generated`, no index: 0).
-    let w = check::worst_w(&config.input(QUIET), &config.paths);
+    let w = check::worst_w(&config.input(QUIET), &config.paths, None);
     assert_eq!((w, report.counts.worst_w_bytes), (0, 0));
     let lines = report.lines(false);
     assert_eq!(
@@ -253,7 +253,7 @@ fn the_json_has_the_documented_shape() {
     );
     // In the documented order, W last (its value the library's);
     // `without_class` is gone (class-missing counts it).
-    let w = check::worst_w(&config.input(QUIET), &config.paths);
+    let w = check::worst_w(&config.input(QUIET), &config.paths, None);
     assert!(
         json.contains(&format!(
             "\"counts\":{{\"documents\":2,\"errors\":0,\"warnings\":2,\"debt\":1,\"expired\":0,\"stale\":1,\"worst_w_bytes\":{w}}}"

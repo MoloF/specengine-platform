@@ -239,6 +239,10 @@ pub struct Generator {
     pub index: bool,
     /// The gate the index header names; only with `index = true`.
     pub gate: Option<String>,
+    /// The shards of the index (ADR-0030), in config order; only with
+    /// `index = true`. Empty: no shard (also `shards = []`), the index is
+    /// the one file at `[paths] index`.
+    pub shards: Vec<Shard>,
     /// The 1-based line of the entry.
     pub line: usize,
 }
@@ -247,6 +251,37 @@ impl Generator {
     /// The gate the index header names: `gate`, else [`DEFAULT_GATE`].
     pub fn gate(&self) -> &str {
         self.gate.as_deref().unwrap_or(DEFAULT_GATE)
+    }
+}
+
+/// One shard of the index (ADR-0030): a file the `index = true` entry
+/// writes beside `[paths] index`, listed in its `writes` too, holding the
+/// documents its kind places there; the root points to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Shard {
+    /// Root-relative, under the `[paths]` path rules.
+    pub path: String,
+    pub kind: ShardKind,
+    /// The 1-based line of the shard.
+    pub line: usize,
+}
+
+/// What a shard holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShardKind {
+    /// `tier3 = true`: the archive shard, every Tier 3 document; uncapped
+    /// and outside W (read by id only).
+    Tier3,
+    /// `claims`: globs over root-relative paths (the `exclude` grammar), as
+    /// written; a document goes to the first shard, in config order, with a
+    /// matching glob. Capped at `index_bytes`, in W.
+    Claims(Vec<String>),
+}
+
+impl Shard {
+    /// The archive shard (`tier3 = true`).
+    pub fn is_archive(&self) -> bool {
+        matches!(self.kind, ShardKind::Tier3)
     }
 }
 
@@ -385,7 +420,9 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
 /// plain YAML scalar ([`not_plain_scalar`]), not repeated; `writes` present,
 /// not empty, root-relative paths no other entry writes; one `index = true`
 /// at most, and only for an entry that writes the `[paths] index` file;
-/// `gate` only beside `index = true`, not blank, a plain YAML scalar.
+/// `gate` only beside `index = true`, not blank, a plain YAML scalar;
+/// `shards` only beside `index = true` ([`shards_from`]), and that entry
+/// writes nothing but the `[paths] index` file and its shards.
 fn generators_from(
     text: &str,
     raw: Vec<Spanned<RawGenerator>>,
@@ -444,6 +481,8 @@ fn generators_from(
         };
         let writes_span = writes.span();
         let mut paths: Vec<String> = Vec::new();
+        // Each written path with the span of its first occurrence.
+        let mut written: Vec<Range<usize>> = Vec::new();
         for path in writes.into_inner() {
             let checked = crate::paths_toml::checked_path(path.get_ref(), false)
                 .map_err(|problem| error_at(path.span(), format!("`writes`: {problem}")))?;
@@ -461,6 +500,7 @@ fn generators_from(
             }
             if !paths.contains(&checked) {
                 paths.push(checked);
+                written.push(path.span());
             }
         }
         if paths.is_empty() {
@@ -528,15 +568,179 @@ fn generators_from(
             }
             None => None,
         };
+        let shards = match entry.shards {
+            None => Vec::new(),
+            Some(shards) if !index => {
+                return Err(error_at(
+                    shards.span(),
+                    "`shards` is only for the entry with `index = true`".to_owned(),
+                ));
+            }
+            Some(shards) => shards_from(text, shards.into_inner(), &paths, &index_path)?,
+        };
+        // The index entry writes the root and its shards, nothing else: a
+        // stale output cannot hide in `writes`, never compared with a render.
+        if index && let Some(Some(root)) = &index_path {
+            for (path, span) in paths.iter().zip(&written) {
+                if path != root && !shards.iter().any(|shard| shard.path == *path) {
+                    return Err(error_at(
+                        span.clone(),
+                        format!(
+                            "`writes`: {path} is neither the `[paths] index` {root} nor a shard: the index entry writes only the index and its `shards`"
+                        ),
+                    ));
+                }
+            }
+        }
         generators.push(Generator {
             command: command.into_inner(),
             writes: paths,
             index,
             gate,
+            shards,
             line,
         });
     }
     Ok(generators)
+}
+
+/// The `shards` of the index entry, checked, in config order: each a table
+/// with `path` and exactly one of `tier3 = true` and `claims` (a non-empty
+/// list of globs under the `exclude` rules); a path under the `[paths]` path
+/// rules, neither `[paths] index` nor another shard's, and in the entry's
+/// `writes`; one `tier3 = true` at most. Claims and paths are rendered into
+/// the index's Markdown (a pointer's label and link, a shard's H1): neither
+/// holds a control character or a backtick. `index_path` is `[paths] index` as
+/// read (`None`: a `[paths]` error, reported by `Paths::from_toml`, and the
+/// comparison with it waits).
+fn shards_from(
+    text: &str,
+    raw: Vec<Spanned<RawShard>>,
+    writes: &[String],
+    index_path: &Option<Option<String>>,
+) -> Result<Vec<Shard>, ConfigError> {
+    let error_at = |span: Range<usize>, message: String| ConfigError {
+        line: Some(super::text::line_of_str(text, span.start)),
+        message,
+    };
+    let mut shards: Vec<Shard> = Vec::with_capacity(raw.len());
+    for shard in raw {
+        let span = shard.span();
+        let line = super::text::line_of_str(text, span.start);
+        let shard = shard.into_inner();
+        let Some(path) = shard.path else {
+            return Err(error_at(span, "a shard without `path`".to_owned()));
+        };
+        let kind = match (shard.tier3, shard.claims) {
+            (Some(_), Some(_)) => {
+                return Err(error_at(
+                    span,
+                    "a shard with both `tier3` and `claims`: one of them".to_owned(),
+                ));
+            }
+            (None, None) => {
+                return Err(error_at(
+                    span,
+                    "a shard without `tier3 = true` or `claims`: one of them".to_owned(),
+                ));
+            }
+            (Some(tier3), None) => {
+                if !*tier3.get_ref() {
+                    return Err(error_at(
+                        tier3.span(),
+                        "shard `tier3` is only `true`: set it, or give `claims` instead".to_owned(),
+                    ));
+                }
+                if let Some(first) = shards.iter().find(|known| known.is_archive()) {
+                    return Err(error_at(
+                        tier3.span(),
+                        format!(
+                            "`tier3 = true` twice: the shard {} (line {}) already holds Tier 3",
+                            first.path, first.line
+                        ),
+                    ));
+                }
+                ShardKind::Tier3
+            }
+            (None, Some(claims)) => {
+                let claims_span = claims.span();
+                let mut globs: Vec<String> = Vec::new();
+                for claim in claims.into_inner() {
+                    let checked = crate::paths_toml::checked_path(claim.get_ref(), false).map_err(
+                        |problem| error_at(claim.span(), format!("shard `claims`: {problem}")),
+                    )?;
+                    if let Some(why) = not_markdown_text(&checked) {
+                        return Err(error_at(
+                            claim.span(),
+                            format!(
+                                "shard `claims`: {:?} {why}: the index renders it into Markdown",
+                                claim.get_ref()
+                            ),
+                        ));
+                    }
+                    globs.push(checked);
+                }
+                if globs.is_empty() {
+                    return Err(error_at(claims_span, "shard `claims` is empty".to_owned()));
+                }
+                ShardKind::Claims(globs)
+            }
+        };
+        let checked = crate::paths_toml::checked_path(path.get_ref(), false)
+            .map_err(|problem| error_at(path.span(), format!("shard `path`: {problem}")))?;
+        if let Some(why) = not_markdown_text(&checked) {
+            return Err(error_at(
+                path.span(),
+                format!(
+                    "shard `path`: {:?} {why}: the index renders it into Markdown",
+                    path.get_ref()
+                ),
+            ));
+        }
+        if let Some(Some(root)) = index_path
+            && *root == checked
+        {
+            return Err(error_at(
+                path.span(),
+                format!("shard `path` {checked} is the `[paths] index`: the root is no shard"),
+            ));
+        }
+        if let Some(other) = shards.iter().find(|known| known.path == checked) {
+            return Err(error_at(
+                path.span(),
+                format!(
+                    "shard `path` {checked} is repeated (first on line {})",
+                    other.line
+                ),
+            ));
+        }
+        if !writes.contains(&checked) {
+            return Err(error_at(
+                path.span(),
+                format!("shard `path` {checked} is not in the entry's `writes`: list it there too"),
+            ));
+        }
+        shards.push(Shard {
+            path: checked,
+            kind,
+            line,
+        });
+    }
+    Ok(shards)
+}
+
+/// Why `value`, a shard's claim or path, would not render into the index's
+/// Markdown as itself, if so: a newline or another control character (a
+/// line break inside the pointer or the H1), a backtick (the end of the code
+/// span a claim is shown in).
+fn not_markdown_text(value: &str) -> Option<&'static str> {
+    if value.chars().any(char::is_control) {
+        return Some("contains a newline or a control character");
+    }
+    if value.contains('`') {
+        return Some("contains a backtick");
+    }
+    None
 }
 
 /// Characters that cannot start a plain YAML scalar.
@@ -654,6 +858,23 @@ struct RawGenerator {
     index: Option<Spanned<bool>>,
     #[serde(default)]
     gate: Option<Spanned<String>>,
+    #[serde(default)]
+    shards: Option<Spanned<Vec<Spanned<RawShard>>>>,
+}
+
+/// One `shards` table of the index entry as written.
+#[derive(Deserialize)]
+#[serde(
+    deny_unknown_fields,
+    expecting = "a shard table: `path`, and `tier3 = true` or `claims`"
+)]
+struct RawShard {
+    #[serde(default)]
+    path: Option<Spanned<String>>,
+    #[serde(default)]
+    tier3: Option<Spanned<bool>>,
+    #[serde(default)]
+    claims: Option<Spanned<Vec<Spanned<String>>>>,
 }
 
 #[derive(Deserialize)]

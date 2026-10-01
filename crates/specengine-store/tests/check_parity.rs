@@ -17,13 +17,16 @@
 //! `mention-dangling`, the verdict still `clean`). Citing the
 //! superseded ADR-0002 adds one `ref-superseded` (spec-check-scopes AC-12);
 //! the file links resolve (spec-check-links AC-10). AC-04 (the library
-//! half): the core render is the committed `docs/index.md` byte for byte,
-//! its header naming X and G; every walked document but `class: generated`
-//! is listed once, the Archive exactly the Tier 3 files (index-compaction
-//! AC-05); the Tier 3 seeds render as compact Archive lines (AC-04 there).
-//! AC-05: each of the 30 seeds, on a scratch copy, blocks exactly its target
-//! with its code (plus `docs/index.md` with `index-drift` when the seed moves
-//! the render); the unseeded copy is clean; nothing is written. AC-08 (second
+//! half): the core render set is the committed `docs/index.md` and its
+//! archive shard `docs/index-archive.md` byte for byte (index-shards AC-12),
+//! each header naming X and G; every walked document but `class: generated`
+//! is listed once across the set, the shard's Archive exactly the Tier 3
+//! files, the root none (index-compaction AC-05, index-shards AC-03); the
+//! Tier 3 seeds render as compact Archive lines in the shard (AC-04 there).
+//! AC-05: each of the 32 seeds, on a scratch copy, blocks exactly its target
+//! with its code (plus each output the seed moves the render of, with
+//! `index-drift` or `index-missing`: a Tier 3 line drifts the shard, not the
+//! root); the unseeded copy is clean; nothing is written. AC-08 (second
 //! half): W by an in-test implementation over the files' bytes and a line
 //! reading of their front-matter equals `counts.worst_w_bytes`.
 //!
@@ -39,10 +42,11 @@ use std::process::Command;
 
 use common::{Scratch, repository_root};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, add_dangling_mention, mutated, root_toml, std_walk,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, mutated, root_toml, std_walk,
 };
 use specengine_core::check::{
-    CheckConfig, CheckInput, Mode, Report, Verdict, is_tier3_file, render_index, worst_w,
+    CheckConfig, CheckInput, Mode, Report, Verdict, is_tier3_file, render_index, render_index_set,
+    worst_w,
 };
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::{IdScheme, Severity};
@@ -242,6 +246,7 @@ fn this_repository_is_clean_under_the_root_config() {
     // The repository is only read.
     let status = git_status(&repository);
     let index_bytes = fs::read(repository.join(INDEX)).expect("the index");
+    let shard_bytes = fs::read(repository.join(INDEX_SHARD)).expect("the archive shard");
     let report = check_worktree(&repository, &config, None, TODAY);
     assert_eq!(
         git_status(&repository),
@@ -249,6 +254,7 @@ fn this_repository_is_clean_under_the_root_config() {
         "the check wrote into the repository"
     );
     assert_eq!(fs::read(repository.join(INDEX)).unwrap(), index_bytes);
+    assert_eq!(fs::read(repository.join(INDEX_SHARD)).unwrap(), shard_bytes);
 
     assert_eq!(report.verdict, Verdict::Clean, "{:#?}", report.lines(true));
     assert!(report.cannot_check.is_empty(), "{:?}", report.cannot_check);
@@ -465,39 +471,76 @@ fn the_core_render_is_the_committed_index() {
     let generator = check.index_generator().expect("the index entry");
     assert_eq!(generator.command, EXPORT);
     assert_eq!(generator.gate(), GATE);
-    assert_eq!(generator.writes, [INDEX]);
+    assert_eq!(generator.writes, [INDEX, INDEX_SHARD]);
+    // One shard, the archive (index-shards, ADR-0030).
+    assert_eq!(
+        generator
+            .shards
+            .iter()
+            .map(|shard| (shard.path.as_str(), shard.is_archive()))
+            .collect::<Vec<_>>(),
+        [(INDEX_SHARD, true)]
+    );
     let mut input = input_of(&repository, &toml);
-    let render = render_index(&input, INDEX, generator);
-    let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
-    assert!(
-        render == committed,
-        "core render vs the committed {INDEX}, {}",
-        first_difference(&render, &committed)
+    let set = render_index_set(&input, INDEX, generator);
+    assert_eq!(
+        set.iter()
+            .map(|output| output.path.as_str())
+            .collect::<Vec<_>>(),
+        [INDEX, INDEX_SHARD],
+        "the root, then the shard"
     );
-    // The header names X (as `generator:` and in the note) and G.
-    let header = committed.split("\n## ").next().unwrap();
-    assert!(
-        header.starts_with(&format!("---\nclass: generated\ngenerator: {EXPORT}\n")),
-        "{header}"
+    assert_eq!(
+        render_index(&input, INDEX, generator),
+        set[0].bytes,
+        "render_index is the root"
     );
-    for command in [EXPORT, GATE] {
+    for output in &set {
+        let path = output.path.as_str();
+        let committed = fs::read_to_string(repository.join(path))
+            .unwrap_or_else(|e| panic!("the committed {path}: {e}"));
         assert!(
-            header.contains(&format!("`{command}`")),
-            "{command}: {header}"
+            output.bytes == committed,
+            "core render vs the committed {path}, {}",
+            first_difference(&output.bytes, &committed)
         );
+        // The header names X (as `generator:` and in the note) and G.
+        let header = committed.split("\n## ").next().unwrap();
+        assert!(
+            header.starts_with(&format!("---\nclass: generated\ngenerator: {EXPORT}\n")),
+            "{path}: {header}"
+        );
+        for command in [EXPORT, GATE] {
+            assert!(
+                header.contains(&format!("`{command}`")),
+                "{path}: {command}: {header}"
+            );
+        }
     }
-    // Every section is exercised here but `No class — fix`.
+    // Every section is exercised here but `No class — fix`: the live ones
+    // and the pointer in the root, the Archive alone in the shard.
+    let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     for section in [
         "\n## Canon\n\n",
         "\n## Decisions\n\n",
         "\n## Specs\n\n",
-        "\n## Archive — Tier 3, by id only\n\n",
+        "\n## Shards\n\n",
     ] {
-        assert!(render.contains(section), "{section:?}");
+        assert!(root.contains(section), "{INDEX}: {section:?}");
     }
+    assert!(!root.contains(ARCHIVE), "{INDEX}: an Archive section");
+    assert!(
+        shard.contains(&format!("\n{ARCHIVE}\n\n")),
+        "{INDEX_SHARD}: no Archive section"
+    );
+    assert_eq!(
+        shard.matches("\n## ").count(),
+        1,
+        "{INDEX_SHARD}: one section"
+    );
     // Independent of the walk's order.
     input.files.reverse();
-    assert_eq!(render_index(&input, INDEX, generator), render);
+    assert_eq!(render_index_set(&input, INDEX, generator), set);
 }
 
 // ------------------------------------------------ index-compaction AC-04, AC-05
@@ -531,6 +574,9 @@ fn section_lines<'i>(index: &'i str, heading: &str) -> Vec<&'i str> {
         .collect()
 }
 
+/// The root's pointer section, present only with shards (ADR-0030).
+const SHARDS: &str = "## Shards";
+
 /// `link` resolved against the index's directory `docs/`, root-relative.
 fn resolve_link(link: &str) -> String {
     let mut parts: Vec<&str> = vec!["docs"];
@@ -546,10 +592,18 @@ fn resolve_link(link: &str) -> String {
     parts.join("/")
 }
 
-/// The AC-05 property of `index` over the walk of `input`: its link targets
-/// are the walked documents minus `class: generated`, each exactly once;
-/// the `## Archive` ones exactly the Tier 3 files, none with ` · `.
-fn every_document_listed_once(what: &str, index: &str, input: &CheckInput) -> Vec<String> {
+/// The AC-05 property of an index set over the walk of `input`
+/// (index-shards AC-03): `outputs` are `(path, text)`, the root first,
+/// every one in `docs/` (so links resolve from there). Their link targets,
+/// the root's `## Shards` pointers aside, are the walked documents minus
+/// `class: generated`, each exactly once across the set; the `## Archive`
+/// ones exactly the Tier 3 files, none with ` · `, and with shards all in
+/// one shard, none in the root; the pointers are the shards, in order.
+fn every_document_listed_once(
+    what: &str,
+    outputs: &[(&str, &str)],
+    input: &CheckInput,
+) -> Vec<String> {
     let mut failures = Vec::new();
     let generated = |file: &specengine_core::check::CheckFile| {
         file.parsed
@@ -571,10 +625,39 @@ fn every_document_listed_once(what: &str, index: &str, input: &CheckInput) -> Ve
         .filter(|file| file.parsed.as_ref().is_some_and(is_tier3_file))
         .map(|file| file.path.clone())
         .collect();
-    let entries = entries(index);
     let mut seen = std::collections::BTreeMap::<String, usize>::new();
-    for (_, _, link) in &entries {
-        *seen.entry(resolve_link(link)).or_default() += 1;
+    let mut archived = BTreeSet::new();
+    let mut archive_in = BTreeSet::new();
+    let mut pointers = Vec::new();
+    for (at, (path, text)) in outputs.iter().enumerate() {
+        assert!(
+            path.strip_prefix("docs/")
+                .is_some_and(|name| !name.contains('/')),
+            "{what}: {path} is not in docs/"
+        );
+        for (heading, _, link) in entries(text) {
+            let target = resolve_link(&link);
+            if heading == SHARDS {
+                if at == 0 {
+                    pointers.push(target);
+                } else {
+                    failures.push(format!("{what}: pointers in the shard {path}"));
+                }
+                continue;
+            }
+            if heading == ARCHIVE {
+                archived.insert(target.clone());
+                archive_in.insert(*path);
+            }
+            *seen.entry(target).or_default() += 1;
+        }
+        for line in section_lines(text, ARCHIVE) {
+            if line.contains(" · ") {
+                failures.push(format!(
+                    "{what}: an Archive line with ` · ` in {path}: {line:?}"
+                ));
+            }
+        }
     }
     let twice: Vec<_> = seen.iter().filter(|(_, n)| **n > 1).collect();
     if !twice.is_empty() {
@@ -588,20 +671,24 @@ fn every_document_listed_once(what: &str, index: &str, input: &CheckInput) -> Ve
             listed.difference(&expected).collect::<Vec<_>>()
         ));
     }
-    let archived: BTreeSet<String> = entries
-        .iter()
-        .filter(|(heading, _, _)| heading == ARCHIVE)
-        .map(|(_, _, link)| resolve_link(link))
-        .collect();
     if archived != tier3 {
         failures.push(format!(
             "{what}: `{ARCHIVE}` lists {archived:?}, the Tier 3 files are {tier3:?}"
         ));
     }
-    for line in section_lines(index, ARCHIVE) {
-        if line.contains(" · ") {
-            failures.push(format!("{what}: an Archive line with ` · `: {line:?}"));
-        }
+    let shards: Vec<String> = outputs[1..]
+        .iter()
+        .map(|(path, _)| (*path).to_owned())
+        .collect();
+    if pointers != shards {
+        failures.push(format!(
+            "{what}: the root points at {pointers:?}, the shards are {shards:?}"
+        ));
+    }
+    if !shards.is_empty() && (archive_in.len() > 1 || archive_in.contains(outputs[0].0)) {
+        failures.push(format!(
+            "{what}: `{ARCHIVE}` in {archive_in:?}, not in one shard"
+        ));
     }
     failures
 }
@@ -618,18 +705,39 @@ fn every_document_of_this_repository_is_listed_once() {
         "the walk found {} files",
         input.files.len()
     );
-    let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
-    let render = render_index(&input, INDEX, generator);
+    let render = render_index_set(&input, INDEX, generator);
+    let paths: Vec<&str> = render.iter().map(|output| output.path.as_str()).collect();
+    assert_eq!(paths, [INDEX, INDEX_SHARD]);
+    let committed: Vec<String> = paths
+        .iter()
+        .map(|path| {
+            fs::read_to_string(repository.join(path))
+                .unwrap_or_else(|e| panic!("the committed {path}: {e}"))
+        })
+        .collect();
+    let committed: Vec<(&str, &str)> = paths
+        .iter()
+        .copied()
+        .zip(committed.iter().map(String::as_str))
+        .collect();
+    let rendered: Vec<(&str, &str)> = render
+        .iter()
+        .map(|output| (output.path.as_str(), output.bytes.as_str()))
+        .collect();
     let mut failures = Vec::new();
-    for (what, index) in [
-        (INDEX, committed.as_str()),
-        ("the core render", render.as_str()),
+    for (what, set) in [
+        ("the committed index set", &committed),
+        ("the core render", &rendered),
     ] {
         assert!(
-            index.contains(&format!("\n{ARCHIVE}\n\n")),
-            "{what}: no Archive section"
+            !set[0].1.contains(ARCHIVE),
+            "{what}: an Archive section in {INDEX}"
         );
-        failures.extend(every_document_listed_once(what, index, &input));
+        assert!(
+            set[1].1.contains(&format!("\n{ARCHIVE}\n\n")),
+            "{what}: no Archive section in {INDEX_SHARD}"
+        );
+        failures.extend(every_document_listed_once(what, set, &input));
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -705,39 +813,62 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     for (path, _, _, _) in COMPACTION_SEEDS {
         assert!(walked.contains(path), "{path} is walked");
     }
-    let render = render_index(&input, INDEX, generator);
+    let set = render_index_set(&input, INDEX, generator);
+    let paths: Vec<&str> = set.iter().map(|output| output.path.as_str()).collect();
+    assert_eq!(paths, [INDEX, INDEX_SHARD]);
+    let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     for (path, _, line, heading) in COMPACTION_SEEDS {
+        // An Archive line goes to the archive shard, a live one to the root.
+        let (output, text) = if *heading == ARCHIVE {
+            (INDEX_SHARD, shard)
+        } else {
+            (INDEX, root)
+        };
         assert!(
-            section_lines(&render, heading).contains(line),
-            "{path}: {line:?} not under {heading:?}:\n{render}"
+            section_lines(text, heading).contains(line),
+            "{path}: {line:?} not under {heading:?} of {output}:\n{text}"
         );
+        let link = format!("]({})", resolve_relative(path));
         assert_eq!(
-            render
-                .matches(&format!("]({})", resolve_relative(path)))
-                .count(),
+            root.matches(&link).count() + shard.matches(&link).count(),
             1,
             "{path}: listed once"
         );
     }
-    let failures = every_document_listed_once("the seeded render", &render, &input);
+    let outputs: Vec<(&str, &str)> = vec![(INDEX, root), (INDEX_SHARD, shard)];
+    let failures = every_document_listed_once("the seeded render", &outputs, &input);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    // The seeded copy's live lines are the committed index's plus the draft.
-    let committed = fs::read_to_string(repository_root().join(INDEX)).unwrap();
-    let live = |index: &str| -> Vec<String> {
-        index
-            .split(&format!("\n{ARCHIVE}\n"))
-            .next()
-            .unwrap()
-            .lines()
-            .map(str::to_owned)
-            .collect()
+    // The seeded copy's root is the committed root plus the draft; its
+    // shard the committed shard plus the six Tier 3 seeds (lines, sorted).
+    let sorted_lines = |text: &str, extra: Vec<&str>| -> Vec<String> {
+        let mut lines: Vec<String> = text.lines().chain(extra).map(str::to_owned).collect();
+        lines.sort();
+        lines
     };
-    let mut expected_live = live(&committed);
-    expected_live.push(COMPACTION_SEEDS.last().unwrap().2.to_owned());
-    expected_live.sort();
-    let mut got_live = live(&render);
-    got_live.sort();
-    assert_eq!(got_live, expected_live, "live lines, sorted");
+    let committed_root = fs::read_to_string(repository_root().join(INDEX)).unwrap();
+    let committed_shard = fs::read_to_string(repository_root().join(INDEX_SHARD)).unwrap();
+    type CompactionSeed = (&'static str, &'static str, &'static str, &'static str);
+    let (archive_seeds, live_seeds): (Vec<&CompactionSeed>, Vec<&CompactionSeed>) =
+        COMPACTION_SEEDS
+            .iter()
+            .partition(|(_, _, _, heading)| *heading == ARCHIVE);
+    assert_eq!((archive_seeds.len(), live_seeds.len()), (6, 1));
+    assert_eq!(
+        sorted_lines(root, Vec::new()),
+        sorted_lines(
+            &committed_root,
+            live_seeds.iter().map(|seed| seed.2).collect()
+        ),
+        "root lines, sorted"
+    );
+    assert_eq!(
+        sorted_lines(shard, Vec::new()),
+        sorted_lines(
+            &committed_shard,
+            archive_seeds.iter().map(|seed| seed.2).collect()
+        ),
+        "shard lines, sorted"
+    );
 }
 
 /// The link of a root-relative `path` from `docs/index.md`.
@@ -781,8 +912,8 @@ const COLLATERAL: &[(&str, &str, &str)] = &[
 fn each_seed_blocks_exactly_its_target() {
     assert_eq!(
         SEEDS.len(),
-        24 + 6,
-        "the 24 front-matter seeds and the six of §11.5–6"
+        24 + 6 + 2,
+        "the 24 front-matter seeds, the six of §11.5–6 and the two of the archive shard"
     );
     let documents = std_walk(&repository_root());
     let toml = root_toml();
@@ -803,6 +934,7 @@ fn each_seed_blocks_exactly_its_target() {
 
     let mut failures = Vec::new();
     let mut targets = BTreeSet::new();
+    let mut drifts = BTreeMap::<&str, Vec<String>>::new();
     for (index, (name, target, code, apply)) in SEEDS.iter().enumerate() {
         let root = scratch_copy(&scratch, &documents, &format!("seed-{index:02}"));
         apply(&root);
@@ -814,13 +946,24 @@ fn each_seed_blocks_exactly_its_target() {
             "seed {name}: the check wrote a file"
         );
         let ours = new_blocking(&report);
-        // A seed that moves the render also drifts the copied index.
-        let rendered = render_index(&input_of(&root, &toml), INDEX, generator);
-        let on_disk = fs::read_to_string(root.join(INDEX)).ok();
-        let drifted = on_disk.as_deref() != Some(rendered.as_str());
+        // A seed that moves the render of an output (the root or the
+        // archive shard) drifts that copied output, each with its finding.
+        let rendered = render_index_set(&input_of(&root, &toml), INDEX, generator);
         let mut expected = BTreeSet::from([(*target).to_owned()]);
-        if drifted {
-            expected.insert(INDEX.to_owned());
+        let mut drifted = Vec::new();
+        let mut index_coded = true;
+        for output in &rendered {
+            let on_disk = fs::read_to_string(root.join(&output.path)).ok();
+            if on_disk.as_deref() == Some(output.bytes.as_str()) {
+                continue;
+            }
+            expected.insert(output.path.clone());
+            drifted.push(output.path.clone());
+            index_coded &= report.findings.iter().any(|f| {
+                f.path == output.path
+                    && report.blocks(f)
+                    && matches!(f.code.as_str(), "index-drift" | "index-missing")
+            });
         }
         let coded = report
             .findings
@@ -834,13 +977,8 @@ fn each_seed_blocks_exactly_its_target() {
                 .iter()
                 .any(|f| f.path == *path && f.code == *code && report.blocks(f));
         }
-        let index_coded = !drifted
-            || report.findings.iter().any(|f| {
-                f.path == INDEX
-                    && report.blocks(f)
-                    && matches!(f.code.as_str(), "index-drift" | "index-missing")
-            });
-        eprintln!("seed {name}: blocking {ours:?}, drifted {drifted}");
+        eprintln!("seed {name}: blocking {ours:?}, drifted {drifted:?}");
+        drifts.insert(name, drifted);
         if ours != expected || !coded || !index_coded || !collateral_coded {
             failures.push(format!(
                 "seed {name}: blocking {ours:?} (expected {expected:?}, {target} with {code})\n  {}",
@@ -851,6 +989,23 @@ fn each_seed_blocks_exactly_its_target() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(targets.len() >= 15, "{targets:?}");
+    // Which output drifts (ADR-0030): a live line the root only, a Tier 3
+    // line the shard only, a document turning Tier 3 both, an output edited
+    // or deleted itself only.
+    for (name, outputs) in [
+        ("docs/index.md hand-edited", &[INDEX][..]),
+        ("a new canon document, not rendered", &[INDEX]),
+        ("docs/index.md deleted", &[INDEX]),
+        ("ADR-0002 as id: ADR-0001", &[INDEX_SHARD]),
+        (
+            "ADR-0010 superseded-by ADR-0001, not rendered",
+            &[INDEX, INDEX_SHARD],
+        ),
+        ("docs/index-archive.md hand-edited", &[INDEX_SHARD]),
+        ("docs/index-archive.md deleted", &[INDEX_SHARD]),
+    ] {
+        assert_eq!(drifts[name], outputs, "seed {name}: the drifting outputs");
+    }
 
     // Mutation: `mode = "observe"` — the first seed no longer blocks.
     let (name, target, _, apply) = SEEDS[0];
@@ -900,9 +1055,10 @@ fn front_matter(bytes: &[u8]) -> BTreeMap<String, String> {
 
 /// W over `documents` under `root` (§3; spec-cli-switch "Worst W"),
 /// computed here: every canon `tier: 0` summed, the largest canon `tier:
-/// 1`, the index, the three largest of the rest that are neither Tier 3
+/// 1`, the index root, the three largest of the rest that are neither Tier 3
 /// (a spec `shipped`/`abandoned`, a decision with a status not `accepted`)
-/// nor `class: generated`.
+/// nor `class: generated`. The root config's archive shard is outside W by
+/// its path, whatever its front-matter (ADR-0030).
 fn oracle_w(root: &Path, documents: &BTreeSet<String>) -> u64 {
     let (mut tier0, mut tier1, mut index) = (0_u64, 0_u64, 0_u64);
     let mut pool = Vec::new();
@@ -911,6 +1067,9 @@ fn oracle_w(root: &Path, documents: &BTreeSet<String>) -> u64 {
         let size = bytes.len() as u64;
         if path == INDEX {
             index = size;
+            continue;
+        }
+        if path == INDEX_SHARD {
             continue;
         }
         let keys = front_matter(&bytes);
@@ -932,8 +1091,9 @@ fn oracle_w(root: &Path, documents: &BTreeSet<String>) -> u64 {
 fn worst_w_is_the_in_test_oracle_s_on_this_repository() {
     let repository = repository_root();
     let toml = root_toml();
-    let (_, paths, _) = tables(&toml);
+    let (_, paths, check) = tables(&toml);
     let documents = std_walk(&repository);
+    assert!(documents.contains(INDEX_SHARD), "{INDEX_SHARD} walked");
     let oracle = oracle_w(&repository, &documents);
     assert!(oracle > 50_000, "W {oracle}");
     let report = check_worktree(
@@ -943,7 +1103,16 @@ fn worst_w_is_the_in_test_oracle_s_on_this_repository() {
         TODAY,
     );
     assert_eq!(report.counts.worst_w_bytes, oracle, "counts.worst_w_bytes");
-    assert_eq!(worst_w(&input_of(&repository, &toml), &paths), oracle);
+    assert_eq!(worst_w(&input_of(&repository, &toml), &paths, None), oracle);
+    assert_eq!(
+        worst_w(
+            &input_of(&repository, &toml),
+            &paths,
+            check.index_generator()
+        ),
+        oracle,
+        "with the index entry's archive shard"
+    );
     let summary = report.lines(false);
     assert!(
         summary[0].ends_with(&format!(", worst W {oracle} B \u{2014} clean")),
@@ -995,7 +1164,7 @@ fn worst_w_is_the_in_test_oracle_s_on_this_repository() {
             .collect::<BTreeSet<_>>(),
         seeded
     );
-    assert_eq!(worst_w(&input, &paths), oracle, "the seeded copy");
+    assert_eq!(worst_w(&input, &paths, None), oracle, "the seeded copy");
     assert!(
         oracle > 200_000 && oracle < 400_000,
         "one big live file: {oracle}"
@@ -1338,6 +1507,27 @@ const SEEDS: &[Seed] = &[
     ("docs/index.md deleted", INDEX, "index-missing", |r| {
         fs::remove_file(r.join(INDEX)).unwrap()
     }),
+    // index-shards AC-05 on this repository: the archive shard is compared
+    // on its own (ADR-0030).
+    (
+        "docs/index-archive.md hand-edited",
+        INDEX_SHARD,
+        "index-drift",
+        |r| {
+            replace_once(
+                r,
+                INDEX_SHARD,
+                "\n## Archive — Tier 3, by id only\n",
+                "\n## Archive — Tier 3, by ID only\n",
+            )
+        },
+    ),
+    (
+        "docs/index-archive.md deleted",
+        INDEX_SHARD,
+        "index-missing",
+        |r| fs::remove_file(r.join(INDEX_SHARD)).unwrap(),
+    ),
     (
         "a generated document by `foo`",
         "docs/zz-generated-foo.md",
@@ -1379,4 +1569,91 @@ fn write_new(root: &Path, path: &str, text: &str) {
     let file = root.join(path);
     assert!(!file.exists(), "{path} exists");
     fs::write(&file, text).unwrap();
+}
+
+// ------------------------------------------------- index shards (ADR-0030)
+// docs/features/index-shards.md AC-08 against the in-test oracle, on a
+// scratch copy of this repository's documents whose config (written outside
+// the copy) gives the index entry live shards of 3 000 and 5 000 B and an
+// archive shard of 20 000 B: W = the oracle of the documents without the
+// shards + 5 000. The 5 000 B shard is `class: canon tier: 0` (summed as
+// Tier 0 were it not known by path), the archive shard a live spec.
+
+/// `toml` with its `[[generators]]` tables replaced by `block`.
+fn with_generators(toml: &str, block: &str) -> String {
+    let mut out = String::new();
+    let mut inside = false;
+    for line in toml.lines() {
+        if line.starts_with('[') {
+            inside = line.trim() == "[[generators]]" || line.trim() == "[[generators.shards]]";
+        }
+        if !inside {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    format!("{}\n{block}", out.trim_end())
+}
+
+const LIVE_A: (&str, usize) = ("docs/live-a.md", 3_000);
+const LIVE_B: (&str, usize) = ("docs/live-b.md", 5_000);
+const ARCHIVE_SHARD: (&str, usize) = ("docs/index-archive.md", 20_000);
+
+fn sized_doc(front: &str, size: usize) -> String {
+    let mut text = format!("---\n{front}\n---\n\n# Sized\n");
+    text.push_str(&"x".repeat(size - text.len() - 1));
+    text.push('\n');
+    assert_eq!(text.len(), size);
+    text
+}
+
+#[test]
+fn worst_w_with_shards_is_the_oracle_plus_the_largest_live_shard() {
+    let documents = std_walk(&repository_root());
+    let scratch = Scratch::new("worst-w-shards");
+    let root = scratch_copy(&scratch, &documents, "copy");
+    let block = format!(
+        "[[generators]]\ncommand = \"{EXPORT}\"\nwrites  = [\"{INDEX}\", \"{}\", \"{}\", \"{}\"]\nindex   = true\ngate    = \"{GATE}\"\nshards  = [\n  {{ path = \"{}\", claims = [\"docs/canon/**\"] }},\n  {{ path = \"{}\", tier3 = true }},\n  {{ path = \"{}\", claims = [\"docs/features/**\"] }},\n]\n",
+        LIVE_A.0, LIVE_B.0, ARCHIVE_SHARD.0, LIVE_A.0, ARCHIVE_SHARD.0, LIVE_B.0
+    );
+    let toml = with_generators(&root_toml(), &block);
+    let config = write_config(&scratch.join("config"), &toml);
+    fs::write(
+        root.join(LIVE_A.0),
+        sized_doc("class: generated\ngenerator: x\nsource: y", LIVE_A.1),
+    )
+    .unwrap();
+    fs::write(
+        root.join(LIVE_B.0),
+        sized_doc(
+            "class: canon\ntier: 0\nscope: [x]\nowner: o\nreviewed: 2026-09-29",
+            LIVE_B.1,
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join(ARCHIVE_SHARD.0),
+        sized_doc("class: spec\nstatus: draft\nscope: [x]", ARCHIVE_SHARD.1),
+    )
+    .unwrap();
+
+    let walked = std_walk(&root);
+    let shards = [LIVE_A.0, LIVE_B.0, ARCHIVE_SHARD.0];
+    for shard in shards {
+        assert!(walked.contains(shard), "{shard} walked");
+    }
+    let rest: BTreeSet<String> = walked
+        .iter()
+        .filter(|path| !shards.contains(&path.as_str()))
+        .cloned()
+        .collect();
+    let oracle = oracle_w(&root, &rest) + LIVE_B.1 as u64;
+
+    let (_, paths, check) = tables(&toml);
+    let generator = check.index_generator().expect("the index entry");
+    assert_eq!(generator.shards.len(), 3);
+    let input = input_of(&root, &toml);
+    assert_eq!(worst_w(&input, &paths, Some(generator)), oracle);
+    let report = check_worktree(&root, &config, None, TODAY);
+    assert_eq!(report.counts.worst_w_bytes, oracle, "counts.worst_w_bytes");
 }

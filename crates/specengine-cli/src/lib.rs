@@ -51,7 +51,7 @@ use std::path::PathBuf;
 
 pub use cap::OUTPUT_CAP_CHARS;
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
-pub use export::{ExportIndexRequest, ExportOutcome, export_index};
+pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
 pub use project::{CONFIG_FILE, ProjectRoot, discover};

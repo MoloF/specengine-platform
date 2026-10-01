@@ -23,7 +23,7 @@ Questions (working answer → cost of the other):
 - Q-5 The chain is advisory: orders `next`, shows "waits on" → gating contradicts ADR-0012.
 - Q-6 The owner fills the pool, agents via `propose_change`, a minor only when promoted → agent writes break ADR-0004 and 08 AC-3; copied minors drift.
 - Q-7 Here 08 §2 becomes the generated roadmap in increment 2, one change → two plans drift, 08 stays in W's top three.
-- Q-8 Per-item files: shard the index by scope (convention §9), with the pilot migration → items out of the index: an ADR against ADR-0022; nothing: the 10 KB cap after ~15 lines.
+- Q-8 Answered (ADR-0030, 2026-10-01): per-item files go into configured index shards, claimed by path globs, not by scope (`docs/features/index-shards.md`).
 
 ## Description and interactions
 
@@ -81,4 +81,4 @@ Dates, velocity, burndown; assignees (ADR-0017); hard dependencies (ADR-0012); t
 
 ## Implementation
 
-Not started. After Q-1: an ADR "plan items are files in git, execution stays in tasks, position is computed", `#storage` diff, reversing the 08 §4.1 rows; Q-8 has its own ADR. Increments: (1) data, findings, CLI, generated view ~1 week, after the Phase 1 CLI and Phase 2 `apply_proposal`; (2) position, agents, pilot import, 08 §2 as items ~0.5–1 week, after Phase 2 tasks and Q-8; (3) the screen ~1 week, after Phase 4. Rejected homes: 08 only (no place for questions, criteria); the archive (false status, still an index line).
+Not started. After Q-1: an ADR "plan items are files in git, execution stays in tasks, position is computed", `#storage` diff, reversing the 08 §4.1 rows; Q-8 is ADR-0030. Increments: (1) data, findings, CLI, generated view ~1 week, after the Phase 1 CLI and Phase 2 `apply_proposal`; (2) position, agents, pilot import, 08 §2 as items ~0.5–1 week, after Phase 2 tasks and Q-8; (3) the screen ~1 week, after Phase 4. Rejected homes: 08 only (no place for questions, criteria); the archive (false status, still an index line).

@@ -12,14 +12,23 @@
 //! status, never by folder: a spec `shipped` or `abandoned`, a decision
 //! with a `status:` other than `accepted`. The archive section, the compact
 //! line and the graph rules' live sources all read the same predicate.
+//!
+//! With shards the index is a set of outputs: the root, then the
+//! shards of the index entry in config order. Each listed document goes to
+//! one output — a Tier 3 document to the archive shard if configured, else
+//! to the first shard with a matching claim, else to the root — and every
+//! output keeps the sections and line formats above, its links relative to
+//! its own directory. The root ends with one pointer per shard; no output is
+//! listed in any output. No shard: the single file, byte for byte.
 
 use std::fmt::Write as _;
 
 use specengine_model::{Fields, ParsedFile};
 
-use super::config::{DocClass, Generator};
+use super::config::{DocClass, Generator, Shard, ShardKind};
 use super::input::{CheckFile, CheckInput};
 use super::text::front_matter_failed;
+use crate::glob::Glob;
 
 /// The section a document is listed in; `None`: not listed (generated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,56 +40,161 @@ enum Section {
     Archive,
 }
 
+/// The Archive section's title, also the archive shard's label (the
+/// section it holds).
+const ARCHIVE_TITLE: &str = "Archive — Tier 3, by id only";
+
 /// The section headings, in order.
 const SECTIONS: [(Section, &str); 5] = [
     (Section::Canon, "Canon"),
     (Section::Decisions, "Decisions"),
     (Section::Specs, "Specs"),
     (Section::NoClass, "No class — fix"),
-    (Section::Archive, "Archive — Tier 3, by id only"),
+    (Section::Archive, ARCHIVE_TITLE),
 ];
 
-/// The index of `input` as the file `index_path` (root-relative), built by
-/// `generator`: byte for byte what the convention's generator writes. The
-/// index itself and every other generated document are not listed; the
-/// result is independent of the order of `input.files`.
+/// The title of the root's pointer section, present only with shards.
+const SHARDS_TITLE: &str = "Shards";
+
+/// One output of the index: the root or a shard.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexOutput {
+    /// Root-relative: `[paths] index` or a shard's `path`.
+    pub path: String,
+    /// The render: byte for byte what the generator writes there.
+    pub bytes: String,
+}
+
+/// The root of the index as the file `index_path` (root-relative), built by
+/// `generator`: the first output of [`render_index_set`]. Without shards,
+/// the whole index.
 pub fn render_index(input: &CheckInput, index_path: &str, generator: &Generator) -> String {
+    render_index_set(input, index_path, generator)
+        .into_iter()
+        .next()
+        .map(|output| output.bytes)
+        .unwrap_or_default()
+}
+
+/// Every output of the index of `input`, built by `generator`: the root at
+/// `index_path` (root-relative) first, then each of `generator.shards` in
+/// config order. Every walked document but a generated one is listed in
+/// exactly one output; no output is listed, whatever its front-matter. The
+/// result is independent of the order of `input.files`.
+pub fn render_index_set(
+    input: &CheckInput,
+    index_path: &str,
+    generator: &Generator,
+) -> Vec<IndexOutput> {
+    let shards = &generator.shards;
+    let is_output =
+        |path: &str| path == index_path || shards.iter().any(|shard| shard.path == path);
     let mut files: Vec<&CheckFile> = input
         .files
         .iter()
-        .filter(|file| file.path != index_path)
+        .filter(|file| !is_output(&file.path))
         .collect();
     files.sort_by(|a, b| a.path.as_bytes().cmp(b.path.as_bytes()));
 
-    let mut out = header(generator);
-    for (section, title) in SECTIONS {
-        let lines: Vec<String> = files
-            .iter()
-            .filter(|file| section_of(file) == Some(section))
-            .map(|file| line(file, index_path))
-            .collect();
-        if lines.is_empty() {
+    // Placement: a Tier 3 document to the archive shard if one is
+    // configured, else to the first shard with a matching claim, else to the
+    // root. Per output (0: the root, 1 + i: shard i), its documents.
+    let claims: Vec<Vec<Glob>> = shards
+        .iter()
+        .map(|shard| match &shard.kind {
+            ShardKind::Tier3 => Vec::new(),
+            ShardKind::Claims(globs) => globs.iter().map(|glob| Glob::new(glob)).collect(),
+        })
+        .collect();
+    let archive = shards.iter().position(Shard::is_archive);
+    let mut placed: Vec<Vec<(Section, &CheckFile)>> = vec![Vec::new(); 1 + shards.len()];
+    for file in files {
+        let Some(section) = section_of(file) else {
             continue;
-        }
-        let _ = write!(out, "\n## {title}\n\n");
-        for line in lines {
-            out.push_str(&line);
-            out.push('\n');
+        };
+        let shard = match archive {
+            Some(at) if section == Section::Archive => Some(at),
+            _ => claims
+                .iter()
+                .position(|globs| globs.iter().any(|glob| glob.matches(&file.path))),
+        };
+        placed[shard.map_or(0, |at| at + 1)].push((section, file));
+    }
+
+    let mut outputs = Vec::with_capacity(1 + shards.len());
+    let mut root = header(generator, "Documentation index");
+    root.push_str(
+        "Reading protocol (§9): this index, then at most three documents. Needing a third step means the index is wrong: fix it rather than reading further.\n",
+    );
+    sections(&mut root, index_path, &placed[0]);
+    if !shards.is_empty() {
+        let _ = write!(root, "\n## {SHARDS_TITLE}\n\n");
+        for shard in shards {
+            let link = relative_link(index_path, &shard.path);
+            let _ = writeln!(root, "- [{}]({link}) {}", shard.path, label(shard));
         }
     }
-    out
+    outputs.push(IndexOutput {
+        path: index_path.to_owned(),
+        bytes: root,
+    });
+    for (shard, documents) in shards.iter().zip(&placed[1..]) {
+        let mut out = header(generator, &format!("Documentation index: {}", label(shard)));
+        let back = relative_link(&shard.path, index_path);
+        let _ = writeln!(
+            out,
+            "A shard of [{index_path}]({back}), the index's one entry point."
+        );
+        sections(&mut out, &shard.path, documents);
+        outputs.push(IndexOutput {
+            path: shard.path.clone(),
+            bytes: out,
+        });
+    }
+    outputs
 }
 
-/// Front-matter, H1, the build comment and the reading protocol line.
-fn header(generator: &Generator) -> String {
+/// Front-matter, the H1 `title` and the build comment, then a blank line.
+fn header(generator: &Generator, title: &str) -> String {
     let command = &generator.command;
     let gate = generator.gate();
     format!(
         "---\nclass: generated\ngenerator: {command}\nsource: front-matter of the repository's documents\n---\n\n\
-         # Documentation index\n\n\
-         <!-- Built by `{command}`. Manual edits are overwritten on rebuild, and `{gate}` rejects them. -->\n\n\
-         Reading protocol (§9): this index, then at most three documents. Needing a third step means the index is wrong: fix it rather than reading further.\n"
+         # {title}\n\n\
+         <!-- Built by `{command}`. Manual edits are overwritten on rebuild, and `{gate}` rejects them. -->\n\n"
     )
+}
+
+/// Each non-empty section of `documents` (in path order) as `\n## <name>\n\n`
+/// plus one line per document, linked from the directory of `output`.
+fn sections(out: &mut String, output: &str, documents: &[(Section, &CheckFile)]) {
+    for (section, title) in SECTIONS {
+        let mut lines = documents
+            .iter()
+            .filter(|(placed, _)| *placed == section)
+            .peekable();
+        if lines.peek().is_none() {
+            continue;
+        }
+        let _ = write!(out, "\n## {title}\n\n");
+        for (_, file) in lines {
+            out.push_str(&line(file, output));
+            out.push('\n');
+        }
+    }
+}
+
+/// A shard's label: the archive's section title, else its claims in
+/// backticks joined by `, `.
+fn label(shard: &Shard) -> String {
+    match &shard.kind {
+        ShardKind::Tier3 => ARCHIVE_TITLE.to_owned(),
+        ShardKind::Claims(globs) => globs
+            .iter()
+            .map(|glob| format!("`{glob}`"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
 }
 
 fn section_of(file: &CheckFile) -> Option<Section> {
