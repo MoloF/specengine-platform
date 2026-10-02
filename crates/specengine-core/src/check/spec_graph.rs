@@ -40,7 +40,9 @@ use super::config::DocClass;
 use super::input::{CheckFile, CheckInput};
 use super::links::{self, percent_decode, resolve_link_path, was_read};
 use super::render::{is_tier3, readable_fields};
-use super::resolve::{Resolution, Resolver, Won, declared_references, reference_line, written};
+use super::resolve::{
+    Resolution, Resolver, Won, declared_references, parent_reference, reference_line, written,
+};
 use super::text::{FileText, front_matter_failed};
 use crate::{DOCUMENT_EXTENSION, Paths, WalkScope};
 
@@ -246,6 +248,18 @@ impl<'a> SpecGraph<'a> {
     /// The graph of `input`'s files, whatever their order; `paths` gives
     /// the feature documents, the link base and the walk scope.
     pub fn new(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths) -> Self {
+        Self::build(input, scheme, paths, true)
+    }
+
+    /// The containment tree alone: [`SpecGraph::new`]'s parents, cycles
+    /// and children, from the same `parent:` resolution and cycle breaking,
+    /// without the links ([`SpecGraph::edges`] is empty).
+    pub(super) fn tree_only(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths) -> Self {
+        Self::build(input, scheme, paths, false)
+    }
+
+    /// `links`: resolve every link too, else only each document's `parent:`.
+    fn build(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths, links: bool) -> Self {
         let mut files: Vec<&CheckFile> = input.files.iter().collect();
         files.sort_by(|a, b| a.path.cmp(&b.path));
         let mut by_path = BTreeMap::new();
@@ -280,7 +294,11 @@ impl<'a> SpecGraph<'a> {
             held: BTreeMap::new(),
         };
         for file in 0..graph.files.len() {
-            let (parent, edges) = graph.file_links(file);
+            let (parent, edges) = if links {
+                graph.file_links(file)
+            } else {
+                (graph.file_parent(file), Vec::new())
+            };
             if let Some(parent) = parent {
                 graph.parents.insert(NodeAt { file, ord: 0 }, parent);
             }
@@ -648,6 +666,23 @@ impl<'a> SpecGraph<'a> {
         with_id(&format!("{prefix}-{body}"), 0)
     }
 
+    /// One file's `parent:` alone, as [`SpecGraph::file_links`] gives it.
+    fn file_parent(&self, file: usize) -> Option<Parent> {
+        let parsed = self.files[file].parsed.as_ref()?;
+        let document = parsed.document()?;
+        if front_matter_failed(parsed) {
+            return Some(Parent::None);
+        }
+        let Some(declared) = &document.parent else {
+            return Some(Parent::None);
+        };
+        let text = &self.texts[file];
+        let reference = parent_reference(declared, self.scheme, text);
+        let written = written(text, &reference);
+        let end = self.locate_from(Some(self.paths()[file]), &reference, &written, false);
+        Some(parent_at(end, written))
+    }
+
     /// One file's `parent:` (documents with a readable front-matter) and
     /// its links, in written order: front-matter references, a path-form
     /// `canon:`, then the body's inline links.
@@ -669,18 +704,7 @@ impl<'a> SpecGraph<'a> {
                 let written = written(text, reference);
                 let end = self.locate_from(Some(from), reference, &written, false);
                 if declared.key == "parent" {
-                    parent = match end {
-                        Endpoint::Nodes(mut nodes) => {
-                            nodes.sort_unstable();
-                            let node = nodes.remove(0);
-                            Parent::Node {
-                                node,
-                                others: nodes,
-                            }
-                        }
-                        Endpoint::Dangling(reason) => Parent::Dangling { written, reason },
-                        Endpoint::Skipped | Endpoint::Unchecked => Parent::Skipped { written },
-                    };
+                    parent = parent_at(end, written);
                     continue;
                 }
                 let names_source = declared.key == "status";
@@ -982,6 +1006,23 @@ impl<'a> SpecGraph<'a> {
                 }
             }
         }
+    }
+}
+
+/// Where a resolved `parent:` hangs a document: under the first of its
+/// holders in (path, position) order, the others kept; else a root.
+fn parent_at(end: Endpoint, written: String) -> Parent {
+    match end {
+        Endpoint::Nodes(mut nodes) => {
+            nodes.sort_unstable();
+            let node = nodes.remove(0);
+            Parent::Node {
+                node,
+                others: nodes,
+            }
+        }
+        Endpoint::Dangling(reason) => Parent::Dangling { written, reason },
+        Endpoint::Skipped | Endpoint::Unchecked => Parent::Skipped { written },
     }
 }
 

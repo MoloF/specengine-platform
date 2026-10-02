@@ -194,43 +194,16 @@ pub(crate) fn size_of(bytes: &[u8]) -> i64 {
     i64::try_from(bytes.len()).unwrap_or(i64::MAX)
 }
 
-/// The node's own text: its body (a section's `body`; the document's the
-/// file's `body`) minus every ID section inside it, the remaining non-empty
-/// pieces joined by `\n`. Nested sections are indexed on their own, so a
-/// word belongs to exactly one node.
-///
-/// Sections come in source order, so only those after `index` can lie in
-/// its range, and the scan stops at the first starting at or after the
-/// range's end: linear in the node's descendants, not in the file's nodes.
+/// The node's own text: the pieces of the core's one split
+/// ([`specengine_core::own_spans`]: its body minus every ID section inside
+/// it), joined by `\n`. Nested sections are indexed on their own, so a word
+/// belongs to exactly one node.
 fn own_text(bytes: &[u8], parsed: &ParsedFile, index: usize) -> String {
-    let Some(node) = parsed.nodes.get(index) else {
-        return String::new();
-    };
-    let range = if index == 0 {
-        parsed.body
-    } else {
-        node.body.unwrap_or(Span::new(node.span.end, node.span.end))
-    };
-    let mut pieces: Vec<Cow<'_, str>> = Vec::new();
-    let mut push = |start: usize, end: usize| {
-        if start < end
-            && let Some(slice) = bytes.get(start..end)
-        {
-            pieces.push(String::from_utf8_lossy(slice));
-        }
-    };
-    let mut cursor = range.start;
-    for section in parsed.nodes.iter().skip(index + 1) {
-        if section.span.start >= range.end {
-            break;
-        }
-        if !range.contains(section.span) || section.span.start < cursor {
-            continue;
-        }
-        push(cursor, section.span.start);
-        cursor = section.span.end;
-    }
-    push(cursor, range.end);
+    let mut pieces: Vec<Cow<'_, str>> = specengine_core::own_spans(parsed, index)
+        .into_iter()
+        .filter_map(|span| bytes.get(span.range()))
+        .map(String::from_utf8_lossy)
+        .collect();
     pieces.retain(|piece| !piece.is_empty());
     pieces.join("\n")
 }

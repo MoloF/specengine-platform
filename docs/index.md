@@ -31,6 +31,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2
 - [docs/canon/spec-check-links.md](canon/spec-check-links.md) spec check: feature scopes and links · crates/specengine-core, crates/specengine-model · tier 2
+- [docs/canon/spec-check-process.md](canon/spec-check-process.md) spec check: process rules · crates/specengine-core · tier 2
 - [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
 - [docs/canon/spec-cli-bundle.md](canon/spec-cli-bundle.md) spec bundle and bundle_hash · crates/specengine-cli, crates/specengine-core, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
@@ -66,6 +67,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0028](decisions/ADR-0028.md) Tier 3 index lines carry only id and status · docs · accepted
 - [ADR-0029](decisions/ADR-0029.md) One pipeline; role write areas for the gate · process · accepted
 - [ADR-0030](decisions/ADR-0030.md) Configured index shards · docs · accepted
+- [ADR-0031](decisions/ADR-0031.md) Kinds and process rules are project config · architecture · accepted
 
 ## Specs
 

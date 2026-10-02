@@ -29,6 +29,17 @@ generated = { required = ["class", "generator", "source"], closed = true }
 [check]
 mode = "enforce"
 
+# The project's process rules (ADR-0031; docs/canon/spec-check-process.md).
+[[check.rules]]                     # decisions
+kinds = ["decision"]
+parts = ["Cost"]
+text  = true
+
+[[check.rules]]                     # shipped features
+paths = ["docs/features/*.md"]
+when  = { status = "shipped" }
+parts = ["Implementation"]
+
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"
 writes  = ["docs/index.md", "docs/index-archive.md"]

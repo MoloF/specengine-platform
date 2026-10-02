@@ -716,7 +716,8 @@ fn several_parent_holders_list_the_node_once_under_the_first() {
 /// AC-07: a two-node `parent:` cycle and a self-parent (spec-a), a
 /// self-parent (spec-b): each node listed once, the cycle broken at its
 /// first member in (path, position) as a root marked `parent cycle`, one
-/// `warning:` per cycle naming its members, exit 0, no new check code;
+/// `warning:` per cycle naming its members, exit 0, the check one
+/// `parent-cycle` warning per cycle (spec-check-process AC-15);
 /// `spec graph MEC-STAMINA` lists MEC-SPRINT once. Every run is killed
 /// after 30 s. M: no visited set.
 #[test]
@@ -824,14 +825,49 @@ nodes 10, roots 2
             assert_eq!(sprint, 1, "{args:?}\n{}", run.show());
         }
     }
-    // No check code for a parent cycle (Q6): the same codes as before.
+    // The check reports each of the two cycles once as a `parent-cycle`
+    // warning (docs/features/spec-check-process.md AC-15 reverses Q6 of
+    // spec-cli-graph), its members those of the tree's warning; nothing
+    // else changes.
     let after = spec30(&home, &root, &["--json", "check"]).json();
     let codes = |json: &Value| {
         let mut codes = field(&json["findings"], "code");
         codes.sort();
         codes
     };
-    assert_eq!(codes(&after), codes(&before), "{after}");
+    let mut want = codes(&before);
+    want.extend(["parent-cycle".to_owned(), "parent-cycle".to_owned()]);
+    want.sort();
+    assert_eq!(codes(&after), want, "{after}");
+    let cycles: Vec<(String, String, String)> = after["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .filter(|f| f["code"] == "parent-cycle")
+        .map(|f| {
+            (
+                f["severity"].as_str().unwrap_or_default().to_owned(),
+                format!("{}:{}", f["path"].as_str().unwrap_or_default(), f["line"]),
+                f["subject"].as_str().unwrap_or_default().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        cycles,
+        [
+            (
+                "warning".to_owned(),
+                "docs/spec/game.md:5".to_owned(),
+                "DOM-GAME".to_owned()
+            ),
+            (
+                "warning".to_owned(),
+                format!("{SPRINT}:5"),
+                "MEC-SPRINT, MEC-STAMINA".to_owned()
+            ),
+        ],
+        "{after}"
+    );
 
     // spec-b: a self-parent.
     let root = scratch.copy("spec-b", "copy-b");

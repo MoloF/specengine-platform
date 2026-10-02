@@ -598,3 +598,77 @@ fn the_link_sources_name_no_project_and_no_default_base() {
     );
     assert_eq!(specengine_core::Paths::default().link_base, None);
 }
+
+// ------------------------------------------- docs/features/spec-check-process.md
+
+/// The rules sources: the module, the `[[check.rules]]` parsing and the
+/// one own-text split the module calls.
+const RULES_SOURCES: [&str; 3] = [
+    "crates/specengine-core/src/check/rules.rs",
+    "crates/specengine-core/src/check/rules_toml.rs",
+    "crates/specengine-core/src/own_text.rs",
+];
+
+/// AC-14 (`#universal`, ADR-0031): the rules sources hold no string
+/// literal equal to an `[ids]` kind of spec-a, spec-b or the root config
+/// (the four class names excepted), to a key or label of this task's test
+/// configs (as written, lower-cased or slugged), or containing a
+/// `PROJECT_NAMES` entry. M: a `"Cost"` or `"question"` literal.
+#[test]
+fn the_rules_sources_name_no_kind_key_label_or_project() {
+    use common::rules::{RULE_WORDS, spec_b_rules, words_of};
+    use specengine_core::check::CheckConfig;
+
+    let mut words: BTreeSet<String> = BTreeSet::new();
+    for scheme in [
+        corpus_scheme(&fixture("spec-a")),
+        corpus_scheme(&fixture("spec-b")),
+        corpus_scheme(&repository_root()),
+    ] {
+        for spec in scheme.prefixes() {
+            words.insert(spec.kind.clone());
+        }
+    }
+    for class in ["canon", "decision", "spec", "generated"] {
+        words.remove(class);
+    }
+    for kind in ["question", "requirement", "domain", "term", "module"] {
+        assert!(words.contains(kind), "{kind} is a fixture kind: {words:?}");
+    }
+    let fragment = format!(
+        "[ids]\nQN = {{ kind = \"question\", width = 2 }}\n{}",
+        spec_b_rules()
+    );
+    let spec_b = words_of(&CheckConfig::from_toml(&fragment).expect("spec-b's fragment"));
+    assert_eq!(spec_b.len(), 1, "{spec_b:?}");
+    for word in RULE_WORDS.iter().map(|w| (*w).to_owned()).chain(spec_b) {
+        words.insert(word.to_lowercase());
+        words.insert(word.to_lowercase().replace(' ', "-"));
+        words.insert(word);
+    }
+    let mut offenders = Vec::new();
+    for source in RULES_SOURCES {
+        let path = repository_root().join(source);
+        let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{source}: {e}"));
+        let mut seen = 0;
+        for (number, line) in text.lines().enumerate() {
+            for literal in literals(line) {
+                seen += 1;
+                let names_word = words.contains(literal);
+                let names_path = PROJECT_NAMES.iter().any(|name| literal.contains(name));
+                if names_word || names_path {
+                    offenders.push(format!("{source}:{}: {literal:?}", number + 1));
+                }
+            }
+        }
+        assert!(
+            seen > 0 || source.ends_with("own_text.rs"),
+            "{source}: no literal read"
+        );
+    }
+    assert!(
+        offenders.is_empty(),
+        "vocabulary in the rules sources:\n{}",
+        offenders.join("\n")
+    );
+}

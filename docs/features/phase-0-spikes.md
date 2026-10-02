@@ -32,7 +32,7 @@ Six probe groups delivered as production code (owner decision: no throwaway crat
 - [x] AC-13 Anonymity and language: no absolute path or pilot name in `docs/`, `crates/`, `fixtures/`; census stdout carries anonymised keys only; English.
 - [x] AC-14 Verdict closure: all 12 claims closed — 9 confirmed, 3 refuted → a spec section, 0 not measured.
 
-## Summary
+## Implementation
 
 | Claim | Outcome | Lives now |
 |---|---|---|

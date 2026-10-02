@@ -87,15 +87,21 @@ pub(crate) struct Body {
     pub summary: Option<Span>,
 }
 
-/// Scans `text[body]`; every offset returned is a file offset.
-pub(crate) fn scan(text: &str, body: Span) -> Body {
-    let source = &text[body.range()];
-    let base = body.start;
+/// The pinned reader's options: one set for the parse ([`scan`]) and the
+/// check's body rules ([`outline`]).
+fn options() -> Options {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
     options.insert(Options::ENABLE_HEADING_ATTRIBUTES);
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
+    options
+}
+
+/// Scans `text[body]`; every offset returned is a file offset.
+pub(crate) fn scan(text: &str, body: Span) -> Body {
+    let source = &text[body.range()];
+    let base = body.start;
 
     let mut headings: Vec<Heading> = Vec::new();
     let mut html_anchors: Vec<HtmlAnchor> = Vec::new();
@@ -113,7 +119,7 @@ pub(crate) fn scan(text: &str, body: Span) -> Body {
     let mut link_depth = 0usize;
     let mut open_link: Option<OpenLink> = None;
 
-    let parser = Parser::new_ext(source, options);
+    let parser = Parser::new_ext(source, options());
     // Reference definitions, one per label (CommonMark: the first), used or
     // not; sorted by span below, never in map order.
     let mut file_links: Vec<FileLink> = parser
@@ -333,6 +339,221 @@ pub(crate) fn slug(text: &str) -> String {
         }
     }
     out
+}
+
+/// A labelled place of the body (task spec `spec-check-process`, "Terms"):
+/// a heading of any level, or a lead-in — strong emphasis (`**…**`, `__…__`)
+/// opening a paragraph, a list item or a line inside one, outside a link.
+pub(crate) struct Label {
+    /// The [`slug`] of its text, never de-duplicated: a heading's inline
+    /// text as its anchor's (no image), a lead-in's inner text.
+    pub slug: String,
+    /// Where it starts: the heading, the lead-in's opening delimiter.
+    pub start: usize,
+    /// What it labels: a heading's, from after its line to the next heading
+    /// of the same or a higher level (else the body's end); a lead-in's, from
+    /// after it to the next lead-in line or the end of its paragraph or list
+    /// item.
+    pub content: Range<usize>,
+}
+
+/// A `Text` or `Code` event outside heading text and HTML.
+pub(crate) struct Run {
+    pub range: Range<usize>,
+    /// Its text holds a letter or digit (`char::is_alphanumeric`).
+    pub alnum: bool,
+    /// In a link's text or an image's description.
+    pub in_link: bool,
+}
+
+/// The body as the check's body rules read it, through the parse's reader.
+pub(crate) struct Outline {
+    /// Headings and lead-ins, in source order.
+    pub labels: Vec<Label>,
+    /// In source order.
+    pub runs: Vec<Run>,
+}
+
+impl Outline {
+    /// A run starting in `range` holds a letter or digit.
+    pub fn filled(&self, range: &Range<usize>) -> bool {
+        self.runs
+            .iter()
+            .any(|run| run.alnum && range.contains(&run.range.start))
+    }
+}
+
+/// The labels and text runs of `text[body]` (file offsets). Code blocks and
+/// HTML blocks hold no label; text in a code block is a run, text in HTML
+/// (comments included) never is.
+pub(crate) fn outline(text: &str, body: Span) -> Outline {
+    struct OpenHeading {
+        level: u8,
+        start: usize,
+        raw_end: usize,
+        text: String,
+    }
+    struct Lead {
+        start: usize,
+        end: usize,
+        block_end: usize,
+        text: String,
+        /// Strong emphasis open inside it, itself included.
+        depth: usize,
+    }
+    let Some(source) = text.get(body.range()) else {
+        return Outline {
+            labels: Vec::new(),
+            runs: Vec::new(),
+        };
+    };
+    let base = body.start;
+    // (level, start, raw end, slug).
+    let mut headings: Vec<(u8, usize, usize, String)> = Vec::new();
+    let mut leads: Vec<Lead> = Vec::new();
+    let mut runs: Vec<Run> = Vec::new();
+    // Open blocks, innermost last: whether a lead-in may open it (a
+    // paragraph, a list item's inline content) and where it ends.
+    let mut blocks: Vec<(bool, usize)> = Vec::new();
+    let mut heading: Option<OpenHeading> = None;
+    let mut lead: Option<Lead> = None;
+    // The next event opens a line of the innermost block.
+    let mut line_open = false;
+    let mut html_blocks = 0usize;
+    let mut links = 0usize;
+    let mut images = 0usize;
+    for (event, range) in Parser::new_ext(source, options()).into_offset_iter() {
+        let range = range.start + base..range.end + base;
+        let mut opens_line = false;
+        match event {
+            Event::Start(Tag::Strong) => match &mut lead {
+                Some(open) => open.depth += 1,
+                None => {
+                    if line_open
+                        && links == 0
+                        && images == 0
+                        && let Some(&(true, block_end)) = blocks.last()
+                    {
+                        lead = Some(Lead {
+                            start: range.start,
+                            end: range.end,
+                            block_end,
+                            text: String::new(),
+                            depth: 1,
+                        });
+                    }
+                }
+            },
+            Event::End(TagEnd::Strong) => {
+                if lead.as_ref().is_some_and(|open| open.depth == 1) {
+                    if let Some(mut open) = lead.take() {
+                        open.end = open.end.max(range.end);
+                        leads.push(open);
+                    }
+                } else if let Some(open) = &mut lead {
+                    open.depth -= 1;
+                }
+            }
+            Event::Start(Tag::Heading { level, .. }) => {
+                blocks.push((false, range.end));
+                heading = Some(OpenHeading {
+                    level: level as u8,
+                    start: range.start,
+                    raw_end: range.end,
+                    text: String::new(),
+                });
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                blocks.pop();
+                if let Some(open) = heading.take() {
+                    headings.push((open.level, open.start, open.raw_end, slug(&open.text)));
+                }
+            }
+            Event::Start(Tag::Paragraph | Tag::Item) => {
+                blocks.push((true, range.end));
+                opens_line = true;
+            }
+            Event::Start(Tag::HtmlBlock) => {
+                html_blocks += 1;
+                blocks.push((false, range.end));
+            }
+            Event::End(TagEnd::HtmlBlock) => {
+                html_blocks = html_blocks.saturating_sub(1);
+                blocks.pop();
+            }
+            Event::Start(Tag::Link { .. }) => links += 1,
+            Event::End(TagEnd::Link) => links = links.saturating_sub(1),
+            Event::Start(Tag::Image { .. }) => images += 1,
+            Event::End(TagEnd::Image) => images = images.saturating_sub(1),
+            Event::Start(
+                Tag::Emphasis | Tag::Strikethrough | Tag::Superscript | Tag::Subscript,
+            )
+            | Event::End(
+                TagEnd::Emphasis | TagEnd::Strikethrough | TagEnd::Superscript | TagEnd::Subscript,
+            ) => {}
+            Event::Start(_) => blocks.push((false, range.end)),
+            Event::End(_) => {
+                blocks.pop();
+            }
+            Event::Text(content) | Event::Code(content) => {
+                if html_blocks == 0 {
+                    if let Some(open) = &mut lead {
+                        open.text.push_str(&content);
+                    }
+                    match &mut heading {
+                        Some(open) => {
+                            if images == 0 {
+                                open.text.push_str(&content);
+                            }
+                        }
+                        None => runs.push(Run {
+                            range,
+                            alnum: content.chars().any(char::is_alphanumeric),
+                            in_link: links > 0 || images > 0,
+                        }),
+                    }
+                }
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                if let Some(open) = &mut heading {
+                    open.text.push(' ');
+                }
+                if let Some(open) = &mut lead {
+                    open.text.push(' ');
+                }
+                opens_line = true;
+            }
+            Event::TaskListMarker(_) => opens_line = line_open,
+            _ => {}
+        }
+        line_open = opens_line;
+    }
+
+    let mut labels: Vec<Label> = Vec::with_capacity(headings.len() + leads.len());
+    for (index, (level, start, raw_end, slug)) in headings.iter().enumerate() {
+        let end = headings[index + 1..]
+            .iter()
+            .find(|(next, ..)| next <= level)
+            .map_or(body.end, |&(_, next_start, ..)| next_start);
+        labels.push(Label {
+            slug: slug.clone(),
+            start: *start,
+            content: *raw_end..end.max(*raw_end),
+        });
+    }
+    for (index, open) in leads.iter().enumerate() {
+        let end = leads
+            .get(index + 1)
+            .filter(|next| next.start < open.block_end)
+            .map_or(open.block_end, |next| next.start);
+        labels.push(Label {
+            slug: slug(&open.text),
+            start: open.start,
+            content: open.end..end.max(open.end),
+        });
+    }
+    labels.sort_by_key(|label| label.start);
+    Outline { labels, runs }
 }
 
 /// `<a id>` / `<a name>` start tags in `source` (file offset `base`),

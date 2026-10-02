@@ -45,7 +45,7 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node and link kinds are shared. Domains, prefixes, zones and budgets live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one project is never carried into another. ADR-0008.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets and process rules (required keys, allowed values, labelled parts, own text; keyed by kind, class or path: `[[check.rules]]`, the project's own form findings) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one project is never carried into another. ADR-0008, ADR-0031.
 
 <a id="ids"></a>
 ## Identifiers

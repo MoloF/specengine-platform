@@ -68,13 +68,13 @@ docs/
 
 ### 2.2. Question record example
 
-`fixtures/spec-a/docs/records/Q/Q-031.md`: `status` (open | answered | deferred | dropped), `to` (customer | owner | team), `severity` (high | normal | low: queue ordering only, blocks nothing), `working_answer`, `refs`, `raised_by`; the body: the question verbatim for the customer, the working answer, the cost of the other answer.
+`fixtures/spec-a/docs/records/Q/Q-031.md` (values in comments); rules: `docs/canon/spec-check-process.md`.
 
 ## 3. Data model
 
 ### 3.1. Node kinds (`kind`)
 
-A kind is project vocabulary, named per prefix in `[ids]` (a free string, core README Q2): the core knows none (ADR-0008). Usual kinds: `game`, `domain`, `mechanic`, `rule`, `invariant`, `edge_case`, `data_contract`, `requirement`, `assumption`, `decision`, `principle`, `term`, `question`, `feature`, `criterion`, `check`, `generated`. IDs are Latin (ADR-0009): a look-alike letter gives `homoglyph` with the Latin fix as data (`spec check` rejects; only `apply_proposal` writes, ADR-0004); legacy IDs resolve through `aliases_from` / `aliases`; `spec new` issues numbers. `[ids]` and the grammar: `crates/specengine-model/README.md`; the parser: §3.2.
+A kind is project vocabulary, named per prefix in `[ids]`: the core knows none (ADR-0008, ADR-0031). Usual kinds: `game`, `domain`, `mechanic`, `rule`, `invariant`, `edge_case`, `data_contract`, `requirement`, `assumption`, `decision`, `principle`, `term`, `question`, `feature`, `criterion`, `check`, `generated`. IDs are Latin (ADR-0009): a look-alike letter gives `homoglyph` with the Latin fix as data (`spec check` rejects; only `apply_proposal` writes, ADR-0004); legacy IDs resolve through `aliases_from` / `aliases`; `spec new` issues numbers. `[ids]` and the grammar: `crates/specengine-model/README.md`; the parser: §3.2.
 
 ### 3.2. Link types
 

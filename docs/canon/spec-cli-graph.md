@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # spec tree, spec graph, show --links
@@ -20,7 +20,7 @@ Live = neither `class: generated` nor Tier 3 (`check::is_tier3_file`). Tree node
 
 ## Parents and links
 
-- **Parent.** A document's: its `parent:` resolved from its file; several holders → the first in (path, ord), one `warning:`; dangling → a root marked ` | parent <written> dangling` (`spec check`: `ref-dangling`); `project:` → an unmarked root. A section's: the nearest enclosing ID section, else its document (an ID-less feature holds its `{#AC-..}` sections). A cycle (a self-parent too) is broken at its member first in (path, ord): a root marked ` | parent cycle`, each node once, one `warning:` naming the members; no check code. Warnings only for nodes a walk reaches. Nothing comes from directories or kinds (ADR-0008); ROOT reaches beyond `[paths] spec`.
+- **Parent.** A document's: its `parent:` resolved from its file; several holders → the first in (path, ord), one `warning:`; dangling → a root marked ` | parent <written> dangling` (`spec check`: `ref-dangling`); `project:` → an unmarked root. A section's: the nearest enclosing ID section, else its document (an ID-less feature holds its `{#AC-..}` sections). A cycle (a self-parent too) is broken at its member first in (path, ord): a root marked ` | parent cycle`, each node once, one `warning:` naming the members (`spec check`: `parent-cycle`). Warnings only for nodes a walk reaches. Nothing comes from directories or kinds (ADR-0008); ROOT reaches beyond `[paths] spec`.
 - **Source**: the innermost ID section around the link, else the document, else the file's path.
 - **Target**: an ID → its node, `ID#SECTION` → that section; a path → its document, an anchor (slug, `attr`, `html`, ID) → the innermost ID section holding it; an anchor naming nothing → the document, `reason` set (`canon-anchor`, `link-anchor`). A `canon:` path without `#anchor` → the document, resolved and followed, reason `` `canon:` names no #anchor; lands on the document ``; no document there → `unchecked`, `` …; not checked `` (the check: `canon-form`); a `canon:` at a non-canon file → dangling (`canon-file`). Never-checked paths (`LICENSE`, `x.rs`) → `unchecked`, `project:` → `skipped`: neither followed. Inline mentions keep the check's name fallback (`MEC-STAMINA-based` → MEC-STAMINA).
 - **`superseded-by`**: in D, `status: superseded-by X` is the edge X `--supersedes-->` D written at D's `status:` line, live as D's file: on D `in supersedes X`, on X `out supersedes D`.

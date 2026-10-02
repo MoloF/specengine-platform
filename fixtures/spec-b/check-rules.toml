@@ -1,0 +1,7 @@
+# Process rules over spec-b (docs/features/spec-check-process.md AC-08),
+# appended to a scratch copy's `specengine.toml` by the tests: the feature's
+# Cyrillic criteria heading is a labelled part, found by its slug.
+
+[[check.rules]]
+paths = ["docs/features/*.md"]
+parts = ["Критерии"]

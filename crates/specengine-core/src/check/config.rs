@@ -2,16 +2,20 @@
 //! `[[generators]]` tables of `specengine.toml`, and only those
 //! (docs/canon/spec-check.md, "Configuration"). Pure and strict: an unknown
 //! key or class, a wrong type, a cap below 1, an unknown mode or an invalid
-//! generator entry is an error `file:line: message` through
-//! [`ConfigError::at`]; other tables are ignored (`[paths] index` is read
-//! only to cross-check the index generator), so editing these tables leaves
-//! the `[ids]` fingerprint (and every stored parse) alone.
+//! generator entry or process rule is an error `file:line: message`
+//! through [`ConfigError::at`]; other tables are ignored (`[paths] index` is
+//! read only to cross-check the index generator, `[ids]` only for the kinds
+//! a rule may name), so editing these tables leaves the `[ids]` fingerprint
+//! (and every stored parse) alone.
 
 use std::fmt;
 use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 use toml::Spanned;
+
+pub use super::rules_toml::CheckRule;
+use super::rules_toml::{RawRule, rules_from};
 
 /// Default document caps in bytes of the whole file, front-matter and BOM
 /// included: the documentation convention's budgets (tier 0, tier 1, the
@@ -206,6 +210,9 @@ pub struct CheckConfig {
     /// The generator registry, in the order written; `None` without a
     /// `[[generators]]` table: the generator rules are off.
     pub generators: Option<Vec<Generator>>,
+    /// The project's process rules (`[[check.rules]]`, ADR-0031), in the
+    /// order written; none built in.
+    pub rules: Vec<CheckRule>,
 }
 
 impl CheckConfig {
@@ -401,28 +408,33 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
         };
     }
 
-    if let Some(check) = raw.check
-        && let Some(mode) = check.mode
-    {
-        let written = mode.get_ref().as_str();
-        config.mode = match Mode::ALL
-            .into_iter()
-            .find(|known| known.as_str() == written)
-        {
-            Some(known) => known,
-            None => {
-                return Err(error_at(
-                    Some(mode.span()),
-                    format!(
-                        "`mode` `{written}` is not \"observe\", \"enforce-introduced\" or \"enforce\""
-                    ),
-                ));
-            }
-        };
+    let mut raw_rules = None;
+    if let Some(check) = raw.check {
+        raw_rules = check.rules;
+        if let Some(mode) = check.mode {
+            let written = mode.get_ref().as_str();
+            config.mode = match Mode::ALL
+                .into_iter()
+                .find(|known| known.as_str() == written)
+            {
+                Some(known) => known,
+                None => {
+                    return Err(error_at(
+                        Some(mode.span()),
+                        format!(
+                            "`mode` `{written}` is not \"observe\", \"enforce-introduced\" or \"enforce\""
+                        ),
+                    ));
+                }
+            };
+        }
     }
 
     if let Some(generators) = raw.generators {
         config.generators = Some(generators_from(text, generators)?);
+    }
+    if let Some(rules) = raw_rules {
+        config.rules = rules_from(text, rules)?;
     }
     Ok(config)
 }
@@ -1010,4 +1022,6 @@ struct RawContract {
 struct RawCheck {
     #[serde(default)]
     mode: Option<Spanned<String>>,
+    #[serde(default)]
+    rules: Option<Vec<Spanned<RawRule>>>,
 }

@@ -4,15 +4,16 @@
 //! references, resolved by scope; then the rules of increment 2 over the
 //! whole corpus: the generated index and the generator registry
 //! (`generated`), the graph warnings (`graph`), the file-link warnings
-//! (`links`). Everything the rules know about a project comes from its
-//! `[ids]`, `[paths]` and check tables (`#universal`): no prefix, path or
-//! file name is written here.
+//! (`links`); then the project's process rules (`rules`) and the
+//! `parent-cycle` warning (`graph`). Everything the rules know about a
+//! project comes from its `[ids]`, `[paths]` and check tables
+//! (`#universal`): no prefix, path or file name is written here.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_model::grammar;
 use specengine_model::{
-    CanonTarget, Diagnostic, DiagnosticCode, IdScheme, Node, ParsedFile, Severity, Shape,
+    CanonTarget, Diagnostic, DiagnosticCode, IdScheme, Node, ParsedFile, Reference, Severity, Shape,
 };
 
 use super::baseline::{Baseline, DebtEntry};
@@ -20,9 +21,9 @@ use super::config::{CheckConfig, DocClass};
 use super::input::{CheckFile, CheckInput, ProblemKind};
 use super::report::{Cause, Debt, Finding, Fix, Report};
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
-use super::text::{FileText, front_matter_failed, is_calendar_date, is_date_shaped};
+use super::text::{FileText, Written, front_matter_failed, is_calendar_date, is_date_shaped};
 use super::working_set::worst_w;
-use super::{generated, graph, links};
+use super::{generated, graph, links, rules};
 use crate::{Paths, is_under};
 
 /// The one table: how a parser diagnostic reaches the report. Every code
@@ -153,6 +154,8 @@ pub fn run(
     generated::run(input, &corpus, paths, config, &mut findings, &mut causes);
     graph::run(&corpus, scheme, &mut findings);
     links::run(&corpus, paths, &mut findings);
+    rules::run(&corpus, &config.rules, &mut findings);
+    graph::parent_cycles(input, scheme, paths, &mut findings);
 
     let stale = apply_baseline(&mut findings, baseline, today, today_valid);
     let worst_w_bytes = worst_w(input, paths, config.index_generator());
@@ -433,35 +436,8 @@ impl FileCheck<'_, '_> {
         self.text.key_line(key).unwrap_or(1)
     }
 
-    /// The top-level keys as written, with lines; from the parse (line 1)
-    /// when no bytes were given.
     fn written_keys(&self, document: &Node) -> Vec<(String, usize)> {
-        if !self.text.is_empty() {
-            return self
-                .text
-                .keys()
-                .map(|(key, line)| (key.to_owned(), line))
-                .collect();
-        }
-        let mut keys: Vec<String> = Vec::new();
-        if document.id.is_some() {
-            keys.push("id".to_owned());
-        }
-        if document.rev.is_some() {
-            keys.push("rev".to_owned());
-        }
-        if document.parent.is_some() {
-            keys.push("parent".to_owned());
-        }
-        if let Some(fields) = &document.fields
-            && let Ok(serde_json::Value::Object(map)) = serde_json::to_value(fields)
-        {
-            keys.extend(map.keys().cloned());
-        }
-        if let Some(extra) = &document.extra {
-            keys.extend(extra.iter().map(|entry| entry.key.clone()));
-        }
-        keys.into_iter().map(|key| (key, 1)).collect()
+        written_keys(self.text, document)
     }
 
     fn has_key(&self, keys: &[(String, usize)], key: &str) -> bool {
@@ -869,6 +845,92 @@ impl FileCheck<'_, '_> {
                 &written,
                 format!("`{key}`: `{written}` {reason}"),
             );
+        }
+    }
+}
+
+/// The top-level keys as written, with lines; from the parse (line 1)
+/// when no bytes were given. The class contract's and the process rules'.
+pub(super) fn written_keys(text: &FileText<'_>, document: &Node) -> Vec<(String, usize)> {
+    if !text.is_empty() {
+        return text
+            .keys()
+            .map(|(key, line)| (key.to_owned(), line))
+            .collect();
+    }
+    let mut keys: Vec<String> = Vec::new();
+    if document.id.is_some() {
+        keys.push("id".to_owned());
+    }
+    if document.rev.is_some() {
+        keys.push("rev".to_owned());
+    }
+    if document.parent.is_some() {
+        keys.push("parent".to_owned());
+    }
+    if let Some(fields) = &document.fields
+        && let Ok(serde_json::Value::Object(map)) = serde_json::to_value(fields)
+    {
+        keys.extend(map.keys().cloned());
+    }
+    if let Some(extra) = &document.extra {
+        keys.extend(extra.iter().map(|entry| entry.key.clone()));
+    }
+    keys.into_iter().map(|key| (key, 1)).collect()
+}
+
+/// The top-level values as written, for the process rules: read back from
+/// the bytes ([`FileText::values`]); without bytes, from the parse, keyed as
+/// [`written_keys`] keys them (a reference by its written form, rebuilt).
+pub(super) fn written_values(text: &FileText<'_>, document: &Node) -> Vec<(String, Written)> {
+    if !text.is_empty() {
+        return text.values().unwrap_or_default();
+    }
+    let mut values: Vec<(String, Written)> = Vec::new();
+    if let Some(id) = &document.id {
+        values.push(("id".to_owned(), Written::Str(id.clone())));
+    }
+    if document.rev.is_some() {
+        values.push(("rev".to_owned(), Written::Scalar));
+    }
+    if let Some(parent) = &document.parent {
+        values.push(("parent".to_owned(), Written::Str(parent.id.clone())));
+    }
+    if let Some(fields) = &document.fields
+        && let Ok(serde_json::Value::Object(map)) = serde_json::to_value(fields)
+    {
+        for (key, value) in map {
+            values.push((key, written_of_json(text, value)));
+        }
+    }
+    if let Some(extra) = &document.extra {
+        for entry in extra {
+            values.push((entry.key.clone(), Written::from_kept(&entry.value)));
+        }
+    }
+    values
+}
+
+/// A typed key's value from the parse: a reference (alone or in a list) as
+/// its written form, any other object a mapping.
+fn written_of_json(text: &FileText<'_>, value: serde_json::Value) -> Written {
+    use serde_json::Value;
+    match value {
+        Value::Null => Written::Null,
+        Value::Bool(_) | Value::Number(_) => Written::Scalar,
+        Value::String(string) => Written::Str(string),
+        Value::Array(items) => Written::Seq(
+            items
+                .into_iter()
+                .map(|item| written_of_json(text, item))
+                .collect(),
+        ),
+        Value::Object(map) => {
+            let empty = map.is_empty();
+            match serde_json::from_value::<Reference>(Value::Object(map)) {
+                Ok(reference) => Written::Str(written(text, &reference)),
+                Err(_) => Written::Map { empty },
+            }
         }
     }
 }

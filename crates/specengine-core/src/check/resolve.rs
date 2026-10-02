@@ -570,7 +570,11 @@ pub(crate) fn declared_references(
 /// from the text under its span when the bytes give back the same ID (the
 /// `project:` and `slug/` qualifiers, the section and `alias_of` kept),
 /// else from the ID alone (a value not written verbatim, no bytes).
-fn parent_reference(parent: &ParentRef, scheme: &IdScheme, text: &FileText<'_>) -> Reference {
+pub(crate) fn parent_reference(
+    parent: &ParentRef,
+    scheme: &IdScheme,
+    text: &FileText<'_>,
+) -> Reference {
     let verbatim = parent
         .span
         .filter(|_| !text.is_empty())

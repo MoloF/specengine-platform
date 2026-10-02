@@ -16,7 +16,8 @@
 //! vouch for the corpus.
 //!
 //! - [`config`] — `[budgets]` (caps in bytes), `[classes]` (contracts),
-//!   `[check]` (mode), `[[generators]]` (the generator registry);
+//!   `[check]` (mode, the project's process rules `[[check.rules]]`, read
+//!   in `rules_toml`), `[[generators]]` (the generator registry);
 //! - [`baseline`] — `.spec-debt.toml`: expiring debt entries;
 //! - [`base`] — a run judged against its base ([`judge`]): introduced
 //!   findings, new debt, the stricter mode (`enforce-introduced`);
@@ -45,7 +46,11 @@
 //!   and the generator registry (§11.5–6, errors); the graph warnings
 //!   (`mention-dangling`, `depends-cycle`, `ref-superseded`); the
 //!   Markdown file-link warnings (`link-dangling`, `link-anchor`,
-//!   resolved file-relative, then through `[paths] link_base`).
+//!   resolved file-relative, then through `[paths] link_base`); the
+//!   project's process rules (task spec `spec-check-process`, ADR-0031:
+//!   `key-missing`, `key-empty`, `value-invalid`, `part-missing`,
+//!   `part-empty`, `text-empty`, at the rule's severity) and the
+//!   `parent-cycle` warning.
 
 pub mod base;
 pub mod baseline;
@@ -59,6 +64,8 @@ mod links;
 mod render;
 pub mod report;
 pub mod resolve;
+mod rules;
+mod rules_toml;
 mod spec_graph;
 mod text;
 mod working_set;
@@ -67,8 +74,8 @@ pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use bundle::{BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers};
 pub use config::{
-    Budgets, BundleNode, CheckConfig, ClassContract, Classes, ConfigError, DEFAULT_GATE, DocClass,
-    Generator, Mode, Shard, ShardKind, bundle_node_from_toml, check_config_from_toml,
+    Budgets, BundleNode, CheckConfig, CheckRule, ClassContract, Classes, ConfigError, DEFAULT_GATE,
+    DocClass, Generator, Mode, Shard, ShardKind, bundle_node_from_toml, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
@@ -86,9 +93,11 @@ pub use working_set::worst_w;
 /// through [`PARSER_SEVERITY`]): increment 1 (errors, then the warning
 /// `name-skipped`), then increment 2 part 1 (the §11.5–6 errors, then the
 /// graph warnings), then part 2 (the error `id-scope`, ADR-0026; the file
-/// link warnings). A stale baseline entry is no finding: it goes to
+/// link warnings), then increment 4 (the process rules' codes beyond the
+/// reused `key-missing`, at each rule's severity; the warning
+/// `parent-cycle`). A stale baseline entry is no finding: it goes to
 /// [`Report::stale`], labelled `debt-stale` only in the detail lines.
-pub const CHECK_CODES: [&str; 29] = [
+pub const CHECK_CODES: [&str; 35] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -118,4 +127,10 @@ pub const CHECK_CODES: [&str; 29] = [
     "id-scope",
     "link-dangling",
     "link-anchor",
+    "key-empty",
+    "value-invalid",
+    "part-missing",
+    "part-empty",
+    "text-empty",
+    "parent-cycle",
 ];

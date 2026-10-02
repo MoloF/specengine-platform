@@ -25,7 +25,9 @@
 //!   destinations (`pulldown-cmark` with offsets);
 //! - [`walk_scope`] — [`WalkScope`]: the walk's rules as pure predicates,
 //!   shared by the store's walker and the check's link scope;
-//! - `glob` — the `[paths] exclude` matcher behind it.
+//! - `glob` — the `[paths] exclude` matcher behind it;
+//! - [`own_spans`] — a node's own text as spans (its body minus nested ID
+//!   sections): the index's `own_text` and the check's `text` rule.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -34,6 +36,7 @@ mod front_matter;
 mod glob;
 mod lines;
 mod markdown;
+mod own_text;
 pub mod paths_toml;
 pub mod project_toml;
 pub mod scheme_toml;
@@ -49,6 +52,7 @@ use specengine_model::{
     LinkTarget, Node, ParentRef, ParsedFile, PathTarget, Reference, Span,
 };
 
+pub use own_text::own_spans;
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
 pub use project_toml::{
     MAX_SLUG_BYTES, Project, ProjectConfig, ProjectError, project_from_toml, slug_problem,

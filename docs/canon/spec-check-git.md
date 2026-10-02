@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # spec check against HEAD
@@ -41,7 +41,7 @@ reviewed: 2026-10-01
 
 ## Next
 
-The rest of Phase 1 (08 §2): check increment 4 (`spec-check-process`), then the pilots.
+The rest of Phase 1 (08 §2): the pilots, with the process rules (`docs/canon/spec-check-process.md`).
 
 ## Open
 

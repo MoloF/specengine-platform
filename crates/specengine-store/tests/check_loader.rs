@@ -114,6 +114,98 @@ fn config_causes_carry_only_the_name_passed_in() {
     assert!(setup.baseline.entries.is_empty());
 }
 
+/// docs/canon/spec-check-cli.md "Cannot check" (task spec-check-process,
+/// iteration 3): a config error is reported in mode `enforce` — the mode
+/// is read only when all of `CheckConfig` is valid, so a `[budgets]`,
+/// `[classes]`, `[check]` or `[[check.rules]]` error beside a valid
+/// `[check] mode = "observe"` (or `enforce-introduced`, before or after
+/// the bad key) is `enforce`, through `load_config`, `load_check` and
+/// `check_worktree` alike. An error of `ProjectConfig` alone keeps the
+/// written mode (the contrast, as in the test above). M: the mode read from
+/// `[check] mode` alone (iteration 2's `CheckConfig::mode_from_toml`).
+#[test]
+fn a_check_config_error_is_judged_in_mode_enforce_whatever_mode_is_written() {
+    let ids = "[ids]\nQ = { kind = \"question\", width = 3 }\n\n";
+    // (the bad part, the 1-based line of its error within the part)
+    let bad: [(&str, usize); 8] = [
+        ("[budgets]\ntier0_bytes = 0\n", 2),
+        ("[budgets]\ntier1_bytes = -4\n", 2),
+        ("[classes.canon]\nflavour = 1\n", 2),
+        (
+            "[[check.rules]]\nkinds = [\"question\"]\nkeys = [\"to\"]\nflavour = 1\n",
+            4,
+        ),
+        ("[[check.rules]]\nkeys = [\"to\"]\n", 1),
+        (
+            "[[check.rules]]\nkinds = [\"question\"]\nkeys = [\"to\"]\nseverity = \"high\"\n",
+            4,
+        ),
+        (
+            "[[check.rules]]\nkinds = [\"ticket\"]\nkeys = [\"to\"]\n",
+            2,
+        ),
+        ("[[check.rules]]\nkinds = [\"question\"]\nparts = []\n", 3),
+    ];
+    let scratch = Scratch::new("check-loader-mode");
+    let root = copy(&scratch, "spec-a");
+    let fixture_config = read_text(&root, "specengine.toml");
+    for written in ["observe", "enforce-introduced"] {
+        for (part, at) in bad {
+            let check = format!("[check]\nmode = \"{written}\"\n\n");
+            // `[check]` before the bad part, and after it.
+            for (text, line) in [
+                (
+                    format!("{ids}{check}{part}"),
+                    ids.lines().count() + check.lines().count() + at,
+                ),
+                (format!("{ids}{part}\n{check}"), ids.lines().count() + at),
+            ] {
+                let context = format!("{written}:\n{text}");
+                let report = *load_config(&named("cfg.toml", &text)).unwrap_err();
+                assert_eq!(report.verdict, Verdict::CannotCheck, "{context}");
+                assert_eq!(report.mode, Mode::Enforce, "{context}\n{report:?}");
+                assert_eq!(
+                    cause_paths(&report),
+                    [format!("cfg.toml:{line}").as_str()],
+                    "{context}"
+                );
+                let setup = load_check(&named("cfg.toml", &text), None).unwrap_err();
+                assert_eq!(*setup, report, "{context}");
+                // A valid baseline is not read either: the same report.
+                let debt = named(BASELINE_FILE, "");
+                let setup = load_check(&named("cfg.toml", &text), Some(&debt)).unwrap_err();
+                assert_eq!(*setup, report, "{context}");
+
+                // On disk, beside spec-a's own config.
+                write(
+                    &root,
+                    "specengine.toml",
+                    format!("{fixture_config}\n{check}{part}"),
+                );
+                let report = check_worktree(&root, &root.join("specengine.toml"), None, TODAY);
+                assert_eq!(report.verdict, Verdict::CannotCheck, "{context}");
+                assert_eq!(report.mode, Mode::Enforce, "{context}\n{report:?}");
+                assert_eq!(report.cannot_check.len(), 1, "{context}\n{report:?}");
+            }
+        }
+    }
+    // The bad part alone is valid with the mode: the written mode stands.
+    let fixed = format!("{ids}[check]\nmode = \"observe\"\n\n[budgets]\ntier0_bytes = 1\n");
+    let (_, config) = load_config(&named("cfg.toml", &fixed)).expect("a valid config");
+    assert_eq!(config.mode, Mode::Observe);
+    // A `ProjectConfig` error with a valid `CheckConfig`: still observe.
+    let project = format!("{ids}[project]\nflavour = 1\n\n[check]\nmode = \"observe\"\n");
+    let report = *load_config(&named("cfg.toml", &project)).unwrap_err();
+    assert_eq!(report.mode, Mode::Observe, "{report:?}");
+    // Both broken: enforce, both causes.
+    let both = format!("{project}\n[budgets]\ntier0_bytes = 0\n");
+    let report = *load_config(&named("cfg.toml", &both)).unwrap_err();
+    assert_eq!(report.mode, Mode::Enforce, "{report:?}");
+    let mut paths = cause_paths(&report);
+    paths.sort_unstable();
+    assert_eq!(paths, ["cfg.toml:11", "cfg.toml:5"], "{report:?}");
+}
+
 #[test]
 fn check_worktree_is_the_loader_s_report() {
     for name in ["spec-a", "spec-b"] {

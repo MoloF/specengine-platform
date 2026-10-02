@@ -386,8 +386,10 @@ fn the_one_table_covers_every_parser_code() {
     // §11.5–6 errors and three graph warnings (docs/features/
     // spec-check-graph.md AC-12), then part 2's error `id-scope`
     // (docs/features/spec-check-scopes.md AC-08), then pass B's two file
-    // link warnings (docs/features/spec-check-links.md AC-07); a stale
-    // entry is no finding.
+    // link warnings (docs/features/spec-check-links.md AC-07), then
+    // increment 4's five rule codes and the warning `parent-cycle`
+    // (docs/features/spec-check-process.md AC-18); a stale entry is no
+    // finding.
     assert_eq!(
         check::CHECK_CODES,
         [
@@ -420,6 +422,12 @@ fn the_one_table_covers_every_parser_code() {
             "id-scope",
             "link-dangling",
             "link-anchor",
+            "key-empty",
+            "value-invalid",
+            "part-missing",
+            "part-empty",
+            "text-empty",
+            "parent-cycle",
         ]
     );
     // No check code shadows a parser code.

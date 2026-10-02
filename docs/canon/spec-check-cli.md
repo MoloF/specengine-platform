@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # spec check and export index
@@ -15,7 +15,7 @@ CLI passes 2a.1 and 2b of `spec check` increment 3 (`docs/features/spec-cli-chec
 `spec check [--staged | --changed] [--baseline F] [--debt]` loads the whole config (`ProjectConfig`, `CheckConfig`) and the baseline, walks the working tree, judges with `check::run` and the UTC date taken at start, prints the report and exits with its verdict. Nothing is written, no index refreshed, no git run; the mode is `[check] mode` (`enforce-introduced`: no base, so `enforce` + ``note: mode `enforce-introduced` has no base without --staged or --changed: judged as `enforce` ``, 2a.2 Q8). `--staged` reads the git index instead, `--changed` this tree, both adding the base and running git (`docs/canon/spec-check-git.md`); names, output, exit and determinism below hold for them too.
 
 - **Baseline**: `<root>/.spec-debt.toml` when an entry of that name exists (a directory or a dangling symlink there cannot be read: cannot check); `--baseline F`, relative to the current directory, replaces it and must exist.
-- **Cannot check** (W-2): after discovery every failure is a `cannot` cause of the printed report, exit 2 — the config unreadable (an unreadable `--config` is no discovery failure), not UTF-8 or invalid anywhere (a cause per distinct error, `<config>:<line>`); the baseline missing, unreadable or invalid; the root unreadable (cause `.`); the walk's causes (an unlistable directory, also on the way to a default root). A config error stops before the baseline, in mode `enforce` (the mode is read only when all of `CheckConfig` is valid). Only usage and discovery failures leave stdout empty.
+- **Cannot check** (W-2): after discovery every failure is a `cannot` cause of the printed report, exit 2 — the config unreadable (an unreadable `--config` is no discovery failure), not UTF-8 or invalid anywhere (a cause per distinct error, `<config>:<line>`); the baseline missing, unreadable or invalid; the root unreadable (cause `.`); the walk's causes (an unlistable directory, also on the way to a default root). A config error stops before the baseline. The mode is read only from a valid `CheckConfig` (`[budgets]`, `[classes]`, `[check]` with its rules, `[[generators]]`): an error there is reported in mode `enforce`; an error only outside it (`[project]`, say) keeps the written mode. Only usage and discovery failures leave stdout empty.
 - **Names**: the config as in pass 1 (`specengine.toml`, or `--config` as typed), `.spec-debt.toml`, `--baseline` as typed, the root `.`; no output holds an absolute path the caller did not type.
 - **Text**: the lines of `Report::lines(--debt)`, one-lined, uncapped (W-4): blocking findings only, and a cut listing would contradict its counts. **JSON** (W-1): `Report::to_json()` + `\n` verbatim, whatever `--debt` (then one `note:`), paths raw — the exception to the CLI's "absent = `null`": an unset `fix`, an absent `debt` are omitted.
 - **Exit**: 0 `clean`, `observed`; 1 `blocked`; 2 `cannot-check`, usage, discovery. No `spec:` line beside a report.
@@ -42,7 +42,7 @@ Elsewhere: queue export, `--state` (Phase 2); applying `fix` (Q-3); an MCP check
 
 ## Next
 
-The rest of Phase 1 (08 §2): check increment 4 (`spec-check-process`), then the pilots.
+The rest of Phase 1 (08 §2): the pilots, with the process rules (`docs/canon/spec-check-process.md`).
 
 ## Open
 

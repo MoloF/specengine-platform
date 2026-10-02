@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-02
 ---
 
 # spec check: feature scopes and links
@@ -79,7 +79,7 @@ A reference without a span gets `<written>` rebuilt as `project:slug/ID#Y` (mess
 - `specengine_core::check::resolve`: `Resolver::new(&CheckInput, &IdScheme, &Paths)`, blind to input order; `resolve(from, &Reference, written)` and `resolve_mention(from, &Reference, written)` (with the name fallback) → `Resolution`; `resolve_detached(&Reference, written)`: no citing file (the table), no fallback; `holders_of(from, &Reference, written) -> Option<Vec<usize>>` (the ID's files, section ignored, no fallback; `None`: dangling or skipped); `from` = the citing file's path (`""` or an unwalked path: no feature document); `feature_slug(path) -> Option<&str>`; `paths()`, what `Resolved` indexes. `Resolution::{Resolved(Vec<usize>), Skipped, Dangling(reason)}`, `Skipped` = `project:` only.
 - `specengine_model::grammar::is_slug(&str) -> bool`: the grammar's `slug`, `[a-z][a-z0-9-]*`, one rule for the lexer's qualifiers and feature stems.
 - `specengine_core` root: `Paths.link_base`; `WalkScope` (`Paths::walk_scope()`, `new(&Paths)`), the walk's rules without the disk, `exclude` compiled once — `roots()`, `is_excluded`, `in_walk_scope` — shared by the store's walker and the link check (`Paths::is_excluded`, `in_walk_scope` compile per call); `is_under(path, dir)`, `is_clean_relative`; `DOCUMENT_EXTENSION` = `.md`.
-- `CHECK_CODES` 29 (`id-scope`, `link-dangling`, `link-anchor` last).
+- `CHECK_CODES` gains `id-scope`, `link-dangling`, `link-anchor`.
 
 ## This repository and the template
 

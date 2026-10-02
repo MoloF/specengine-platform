@@ -1,11 +1,13 @@
 //! What the checks read from a file's bytes beside its parse: lines of
-//! spans, the top-level front-matter keys as written (with their lines),
-//! the text under a span; and the `YYYY-MM-DD` dates.
+//! spans, the top-level front-matter keys as written (with their lines) and
+//! their values ([`Written`], for the process rules), the text under a
+//! span; and the `YYYY-MM-DD` dates.
 
-use specengine_model::{ParsedFile, Span};
+use specengine_model::{FmValue, ParsedFile, Span};
 
 use crate::front_matter;
 use crate::lines::LineIndex;
+use crate::yaml::{self, YValue};
 
 /// The 1-based line of `offset` in `text`.
 pub(crate) fn line_of_str(text: &str, offset: usize) -> usize {
@@ -89,6 +91,89 @@ impl<'a> FileText<'a> {
     /// Bytes were given.
     pub fn is_empty(&self) -> bool {
         self.bytes.is_empty()
+    }
+
+    /// The top-level front-matter entries as written, read back through the
+    /// parse's YAML reader: (key, value) in source order, an entry whose key
+    /// is no scalar left out. `None` without bytes, without a block, or when
+    /// the block does not read as a mapping (the parse reported it).
+    pub fn values(&self) -> Option<Vec<(String, Written)>> {
+        let text = std::str::from_utf8(self.bytes).ok()?;
+        let block = front_matter::split(text).block?;
+        let root = yaml::parse(text.get(block.yaml)?).ok()?;
+        match root.value {
+            YValue::Null => Some(Vec::new()),
+            YValue::Map(entries) => Some(
+                entries
+                    .into_iter()
+                    .filter_map(|(key, value)| {
+                        let key = key.value.scalar_text()?.into_owned();
+                        Some((key, Written::from_yaml(value.value)))
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
+}
+
+/// A front-matter value as the process rules read it
+/// (`docs/features/spec-check-process.md`, "Terms").
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Written {
+    Null,
+    Str(String),
+    /// A number or a boolean.
+    Scalar,
+    Seq(Vec<Written>),
+    /// A mapping: whether it holds no entry.
+    Map {
+        empty: bool,
+    },
+}
+
+impl Written {
+    /// Null, blank (empty or whitespace), `[]` or `{}`.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Null => true,
+            Self::Str(text) => text.trim().is_empty(),
+            Self::Scalar => false,
+            Self::Seq(items) => items.is_empty(),
+            Self::Map { empty } => *empty,
+        }
+    }
+
+    fn from_yaml(value: YValue) -> Self {
+        match value {
+            YValue::Null => Self::Null,
+            YValue::Str(text) => Self::Str(text),
+            YValue::Bool(_) | YValue::Int(_) | YValue::UInt(_) | YValue::Float(_) => Self::Scalar,
+            YValue::Seq(items) => Self::Seq(
+                items
+                    .into_iter()
+                    .map(|item| Self::from_yaml(item.value))
+                    .collect(),
+            ),
+            YValue::Map(entries) => Self::Map {
+                empty: entries.is_empty(),
+            },
+        }
+    }
+
+    /// An untyped or mistyped value as the parse kept it (`extra`).
+    pub fn from_kept(value: &FmValue) -> Self {
+        match value {
+            FmValue::Null => Self::Null,
+            FmValue::Str(text) => Self::Str(text.clone()),
+            FmValue::Bool(_) | FmValue::Int(_) | FmValue::UInt(_) | FmValue::Float(_) => {
+                Self::Scalar
+            }
+            FmValue::Seq(items) => Self::Seq(items.iter().map(Self::from_kept).collect()),
+            FmValue::Map(map) => Self::Map {
+                empty: map.is_empty(),
+            },
+        }
     }
 }
 

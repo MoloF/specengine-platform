@@ -21,6 +21,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
+- [docs/features/spec-check-process.md](features/spec-check-process.md) shipped
 - [docs/features/spec-check-scopes.md](features/spec-check-scopes.md) shipped
 - [docs/features/spec-check.md](features/spec-check.md) shipped
 - [docs/features/spec-cli-bundle.md](features/spec-cli-bundle.md) shipped

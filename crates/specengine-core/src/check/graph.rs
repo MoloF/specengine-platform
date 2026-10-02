@@ -11,6 +11,8 @@
 //! - `ref-superseded`: a reference to a document whose `status:` is
 //!   `superseded-by X`; `supersedes` items, the `status:` value and
 //!   references from X's own files are exempt.
+//! - `parent-cycle`: one finding per `parent:` cycle `spec tree` breaks
+//!   ([`SpecGraph::cycles`]) with a live member.
 
 use petgraph::algo::tarjan_scc;
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -20,10 +22,13 @@ use specengine_model::{
 };
 
 use super::engine::Corpus;
+use super::input::CheckInput;
 use super::render::{is_live, readable_fields};
 use super::report::Finding;
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
+use super::spec_graph::{SpecGraph, Standing};
 use super::text::{FileText, front_matter_failed};
+use crate::Paths;
 
 /// The link type whose items are exempt from `ref-superseded`, as is the
 /// `supersedes:` key.
@@ -229,6 +234,65 @@ fn depends_cycle(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
             line,
             &subject,
             format!("`{DEPENDS_ON}` forms a cycle through {subject}"),
+        ));
+    }
+}
+
+/// `parent-cycle`: one warning per `parent:` cycle of the read commands'
+/// tree ([`SpecGraph::cycles`], the cycles `spec tree` breaks and warns
+/// about) holding a live member ([`Standing::Live`]), rules or none. At the
+/// `parent:` line of its first member in (path, position) order, the root
+/// the tree lists; subject the members' names (ID, else path) sorted by
+/// name, then path, as `depends-cycle`'s. The tree alone is built
+/// ([`SpecGraph::tree_only`], no links); without a document whose
+/// front-matter gives a `parent:`, none.
+pub(super) fn parent_cycles(
+    input: &CheckInput,
+    scheme: &IdScheme,
+    paths: &Paths,
+    findings: &mut Vec<Finding>,
+) {
+    let any_parent = input.files.iter().any(|file| {
+        file.parsed.as_ref().is_some_and(|parsed| {
+            !front_matter_failed(parsed)
+                && parsed
+                    .document()
+                    .is_some_and(|document| document.parent.is_some())
+        })
+    });
+    if !any_parent {
+        return;
+    }
+    let graph = SpecGraph::tree_only(input, scheme, paths);
+    for members in graph.cycles() {
+        let Some(&first) = members.first() else {
+            continue;
+        };
+        if !members
+            .iter()
+            .any(|member| graph.standing(member.file) == Standing::Live)
+        {
+            continue;
+        }
+        let mut named: Vec<(String, &str)> = members
+            .iter()
+            .map(|&member| (graph.name(member), graph.paths()[member.file]))
+            .collect();
+        named.sort();
+        let subject = named
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let line = graph.file(first.file).map_or(1, |file| {
+            FileText::new(&file.bytes).key_line("parent").unwrap_or(1)
+        });
+        findings.push(warning(
+            "parent-cycle",
+            graph.paths()[first.file],
+            line,
+            &subject,
+            format!("`parent:` forms a cycle through {subject}"),
         ));
     }
 }
