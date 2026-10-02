@@ -1459,3 +1459,186 @@ fn store_and_cli_normal_dependencies_are_2a1_s() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// docs/features/mcp-read.md AC-17: the MCP server reads through the CLI
+// library only.
+// ---------------------------------------------------------------------------
+
+/// The MCP server's `[dependencies]`, exactly.
+const MCP_DEPENDENCIES: [&str; 7] = [
+    "clap",
+    "getrandom",
+    "rmcp",
+    "serde",
+    "serde_json",
+    "specengine-cli",
+    "tokio",
+];
+
+/// `specengine-mcp` declares exactly [`MCP_DEPENDENCIES`]: `specengine-cli`
+/// by path, every other a `[workspace.dependencies]` entry with no version,
+/// feature or default-features of its own (no tokio feature added);
+/// `getrandom` is optional and only feature `probes` enables it, which is no
+/// default feature; no target-specific table. The workspace pins of `rmcp`,
+/// `tokio` and `getrandom` are `main`'s.
+#[test]
+fn mcp_direct_dependencies_are_the_cli_library_and_the_protocol_crates() {
+    let (names, targeted) = declared_normal_dependencies("specengine-mcp");
+    assert_eq!(
+        names, MCP_DEPENDENCIES,
+        "specengine-mcp's [dependencies] (docs/features/mcp-read.md AC-17)"
+    );
+    assert!(
+        !targeted,
+        "specengine-mcp has a target-specific dependency table"
+    );
+    let text = std::fs::read_to_string(workspace_root().join("crates/specengine-mcp/Cargo.toml"))
+        .expect("crates/specengine-mcp/Cargo.toml");
+    let manifest: toml::Table = text.parse().expect("the MCP manifest is TOML");
+    let deps = manifest["dependencies"].as_table().expect("[dependencies]");
+    for (name, spec) in deps {
+        let spec = spec
+            .as_table()
+            .unwrap_or_else(|| panic!("dependencies.{name} pins a version: {spec:?}"));
+        if name == "specengine-cli" {
+            assert_eq!(
+                spec.get("path").and_then(toml::Value::as_str),
+                Some("../specengine-cli"),
+                "{spec:?}"
+            );
+            assert_eq!(spec.len(), 1, "specengine-cli: extra keys {spec:?}");
+            continue;
+        }
+        assert_eq!(
+            spec.get("workspace").and_then(toml::Value::as_bool),
+            Some(true),
+            "dependencies.{name} is not a workspace entry: {spec:?}"
+        );
+        let allowed: &[&str] = if name == "getrandom" {
+            &["workspace", "optional"]
+        } else {
+            &["workspace"]
+        };
+        let extra: Vec<&String> = spec
+            .keys()
+            .filter(|key| !allowed.contains(&key.as_str()))
+            .collect();
+        assert!(extra.is_empty(), "dependencies.{name}: {extra:?}");
+    }
+    assert_eq!(
+        deps["getrandom"]
+            .get("optional")
+            .and_then(toml::Value::as_bool),
+        Some(true),
+        "getrandom is optional"
+    );
+    let features = manifest["features"].as_table().expect("[features]");
+    assert_eq!(
+        features.get("probes"),
+        Some(&toml::Value::Array(vec![toml::Value::String(
+            "dep:getrandom".to_owned()
+        )])),
+        "probes enables getrandom"
+    );
+    let default: Vec<String> = features
+        .get("default")
+        .and_then(toml::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        default.is_empty(),
+        "default features of specengine-mcp: {default:?}"
+    );
+
+    // The workspace pins the MCP server takes are main's.
+    let output = Command::new("git")
+        .current_dir(workspace_root())
+        .args(["show", "main:Cargo.toml"])
+        .output()
+        .expect("git runs");
+    if !output.status.success() {
+        eprintln!(
+            "no main:Cargo.toml: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let on_main: toml::Table =
+        toml::from_str(&String::from_utf8_lossy(&output.stdout)).expect("main's manifest");
+    let now: toml::Table = toml::from_str(
+        &std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest"),
+    )
+    .expect("the root manifest");
+    for name in ["rmcp", "tokio", "getrandom", "clap", "serde", "serde_json"] {
+        assert_eq!(
+            now["workspace"]["dependencies"].get(name),
+            on_main["workspace"]["dependencies"].get(name),
+            "[workspace.dependencies].{name} changed against main"
+        );
+    }
+}
+
+/// `rusqlite` and the store reach the MCP server only through the CLI
+/// library: neither is a direct dependency, the store's only dependent in
+/// the MCP graph is `specengine-cli`, rusqlite's is the store; `getrandom`
+/// is direct only with feature `probes`.
+#[test]
+fn mcp_reaches_the_store_and_rusqlite_only_through_the_cli() {
+    for features in [&[][..], &["--features", "specengine-mcp/probes"][..]] {
+        let mut args = vec!["-p", "specengine-mcp", "-e", "normal", "--depth", "1"];
+        args.extend_from_slice(features);
+        let direct = cargo_tree(&args);
+        let crates = tree_crates(&direct);
+        assert!(
+            crates
+                .first()
+                .is_some_and(|(name, _)| name == "specengine-mcp"),
+            "cargo tree lists specengine-mcp first:\n{direct}"
+        );
+        let mut names: Vec<&str> = crates
+            .iter()
+            .skip(1)
+            .map(|(name, _)| name.as_str())
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        let want: Vec<&str> = MCP_DEPENDENCIES
+            .iter()
+            .copied()
+            .filter(|name| !features.is_empty() || *name != "getrandom")
+            .collect();
+        assert_eq!(
+            names, want,
+            "direct dependencies with {features:?}:\n{direct}"
+        );
+        for (inverted, dependents) in [
+            ("specengine-store", ["specengine-cli"]),
+            ("rusqlite", ["specengine-store"]),
+        ] {
+            let mut args = vec![
+                "-p",
+                "specengine-mcp",
+                "-e",
+                "normal",
+                "-i",
+                inverted,
+                "--depth",
+                "1",
+            ];
+            args.extend_from_slice(features);
+            let tree = cargo_tree(&args);
+            let found: Vec<String> = tree_crates(&tree)
+                .into_iter()
+                .skip(1)
+                .map(|(name, _)| name)
+                .collect();
+            assert_eq!(found, dependents, "{inverted}'s dependents:\n{tree}");
+        }
+    }
+}

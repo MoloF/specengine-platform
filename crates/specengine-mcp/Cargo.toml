@@ -5,21 +5,27 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
-description = "MCP server of SpecEngine over stdio: both protocol eras, the review_proposal consent tool"
+description = "MCP server of SpecEngine over stdio: both protocol eras, the read tools and resources over the CLI library"
 
 [[bin]]
 name = "specengine-mcp"
 path = "src/main.rs"
 
+# The reads go through the `spec` library (`specengine-cli`), never the store
+# or `rusqlite` directly; the reverse edge is forbidden (CLI_FORBIDDEN in
+# crates/specengine-eval/tests/build_graph.rs).
 [dependencies]
+specengine-cli = { path = "../specengine-cli" }
 rmcp.workspace = true
 tokio.workspace = true
-getrandom.workspace = true
+getrandom = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true
 
 [features]
-# Probe tools `probe_output` and `probe_sleep` for the interactive MCP checks
-# (crates/specengine-mcp/README.md, "Feature `probes`").
-probes = []
+# The measurement build: the Phase 0 consent demo `review_proposal` (its
+# `requestState` key needs `getrandom`) and the probe tools `probe_output`,
+# `probe_sleep` for the interactive MCP checks (crates/specengine-mcp/README.md,
+# "Feature `probes`").
+probes = ["dep:getrandom"]

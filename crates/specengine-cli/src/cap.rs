@@ -13,9 +13,14 @@
 //! [truncated: <path> lines <a>-<b> not shown; sections not shown: <IDs or none>; holders not shown: <path:line, … or none>]
 //! ```
 //!
-//! A section is not shown when its heading line is cut. JSON gives the cut
-//! node `truncated: true` and `omitted: {lines, sections, holders}` and
-//! drops the nodes after it.
+//! A section is not shown when its heading line is cut. Each list names at
+//! most [`SHOW_TAIL_NAMES`]: the first hidden sections (source order), the
+//! first holders not shown (print order); a longer one ends `, <k> more`,
+//! `k` the rest. JSON gives the cut node `truncated: true`, `sections` only
+//! the IDs whose heading line ends within its `text`, and `omitted: {lines,
+//! sections, sections_more, holders, holders_more}` (the names by the same
+//! rule at the JSON's cut, `*_more` the `k`, 0 when every name is listed),
+//! and drops the nodes after it.
 //!
 //! With `--links` each node's links block follows its header line, before
 //! its text, and counts toward the cap: the cut falls in the text first;
@@ -32,11 +37,15 @@ use serde::Serialize;
 use crate::links::{LinksJson, block_lines, links_json};
 use crate::one_line;
 use crate::search::notes;
-use crate::show::{ShowOutcome, ShownNode};
+use crate::show::{NestedSection, ShowOutcome, ShownNode};
 
 /// The most characters a `show` or `search` answer prints before its tail
 /// line (07 §1.1: bounded answers).
 pub const OUTPUT_CAP_CHARS: usize = 40_000;
+
+/// The most names each list of a `show` tail gives (hidden sections,
+/// holders not shown), as its JSON `omitted`; the rest are counted.
+pub const SHOW_TAIL_NAMES: usize = 20;
 
 /// Where the cap falls.
 #[derive(Debug, Clone, Copy)]
@@ -69,9 +78,15 @@ enum Header {
 struct Omitted {
     /// First and last line of the cut node not shown.
     lines: [usize; 2],
+    /// The first [`SHOW_TAIL_NAMES`] hidden sections, in source order.
     sections: Vec<String>,
-    /// `path:line` of every node after the cut one.
+    /// Hidden sections past them.
+    sections_more: usize,
+    /// `path:line` of the first [`SHOW_TAIL_NAMES`] nodes after the cut
+    /// one, in print order.
     holders: Vec<String>,
+    /// Nodes after the cut one past them.
+    holders_more: usize,
 }
 
 /// `<ID else path> | <kind or -> | <title or -> | <path>:<line> | <n> tokens`
@@ -240,30 +255,51 @@ fn cut_text(text: &str, room: usize, newline_after: bool) -> usize {
     })
 }
 
+/// The names of the first [`SHOW_TAIL_NAMES`] of `items` and how many items
+/// follow them (counted, not named).
+fn first_names<T>(
+    mut items: impl Iterator<Item = T>,
+    name: impl FnMut(T) -> String,
+) -> (Vec<String>, usize) {
+    let first = items.by_ref().take(SHOW_TAIL_NAMES).map(name).collect();
+    (first, items.count())
+}
+
+/// A nested section's heading line ends within the cut node's shown bytes.
+fn section_shown(section: &NestedSection, cut: Cut) -> bool {
+    section.heading_end <= cut.shown
+}
+
 fn omitted(nodes: &[ShownNode], cut: Cut) -> Omitted {
     let node = &nodes[cut.node];
     let shown = &node.text.as_bytes()[..cut.shown];
     let first = node.line + shown.iter().filter(|&&byte| byte == b'\n').count();
+    let (sections, sections_more) = first_names(
+        node.sections
+            .iter()
+            .filter(|section| !section_shown(section, cut)),
+        |section| section.id.clone(),
+    );
+    let (holders, holders_more) = first_names(nodes[cut.node + 1..].iter(), |node| {
+        format!("{}:{}", node.path, node.line)
+    });
     Omitted {
         lines: [first, node.end_line.max(first)],
-        sections: node
-            .sections
-            .iter()
-            .filter(|section| section.heading_end > cut.shown)
-            .map(|section| section.id.clone())
-            .collect(),
-        holders: nodes[cut.node + 1..]
-            .iter()
-            .map(|node| format!("{}:{}", node.path, node.line))
-            .collect(),
+        sections,
+        sections_more,
+        holders,
+        holders_more,
     }
 }
 
-fn list_or_none(items: &[String]) -> String {
+/// `none`, the names, or the names then `, <more> more`.
+fn list_or_none(items: &[String], more: usize) -> String {
     if items.is_empty() {
         "none".to_owned()
-    } else {
+    } else if more == 0 {
         items.join(", ")
+    } else {
+        format!("{}, {more} more", items.join(", "))
     }
 }
 
@@ -320,8 +356,8 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
             nodes[cut.node].path,
             omitted.lines[0],
             omitted.lines[1],
-            list_or_none(&omitted.sections),
-            list_or_none(&omitted.holders)
+            list_or_none(&omitted.sections, omitted.sections_more),
+            list_or_none(&omitted.holders, omitted.holders_more)
         )));
         out.push('\n');
     }
@@ -362,7 +398,9 @@ struct NodeJson<'a> {
 struct OmittedJson {
     lines: [usize; 2],
     sections: Vec<String>,
+    sections_more: usize,
     holders: Vec<String>,
+    holders_more: usize,
 }
 
 fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
@@ -391,9 +429,11 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                 tokens_est: node.tokens_est,
                 archived: node.archived,
                 utf8: node.utf8,
+                // A cut node: the sections whose heading line it prints.
                 sections: node
                     .sections
                     .iter()
+                    .filter(|section| this_cut.is_none_or(|cut| section_shown(section, cut)))
                     .map(|section| section.id.as_str())
                     .collect(),
                 text: match this_cut {
@@ -406,7 +446,9 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                     OmittedJson {
                         lines: omitted.lines,
                         sections: omitted.sections,
+                        sections_more: omitted.sections_more,
                         holders: omitted.holders,
+                        holders_more: omitted.holders_more,
                     }
                 }),
                 links: node.links.as_ref().map(|links| match this_cut {

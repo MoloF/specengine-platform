@@ -26,6 +26,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
+- [docs/canon/mcp-read.md](canon/mcp-read.md) MCP read tools and resources · crates/specengine-mcp, crates/specengine-cli · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
 - [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2

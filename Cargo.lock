@@ -2625,6 +2625,7 @@ dependencies = [
  "rmcp",
  "serde",
  "serde_json",
+ "specengine-cli",
  "tokio",
 ]
 

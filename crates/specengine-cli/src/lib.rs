@@ -17,12 +17,15 @@
 //! - [`discover`] finds the project root and reads its `specengine.toml`
 //!   through core's one loader ([`ProjectConfig`]); `check` and
 //!   `export index` read the whole config through the store's check loader
-//!   instead;
+//!   instead; [`locate`] only finds the root and the config file, nothing
+//!   read (its failure is "no project");
 //! - [`data_dir`], [`db_path`], [`open_index`]: the index database lives
 //!   outside the repository, one per project slug;
 //! - [`init`], [`index`], [`search`], [`show`], [`tree`], [`graph`],
 //!   [`bundle`], [`check`], [`export_index`]: one function per command,
 //!   each giving its outcome or a [`CliError`];
+//! - [`documents`]: the indexed live documents (neither `class: generated`
+//!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
 //! - [`render_text`], [`render_json`]: an [`Outcome`] as stdout (JSON: one
 //!   document, every key present, absent = `null`; `check`: the report's
 //!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded;
@@ -44,6 +47,7 @@ mod bundle;
 mod cap;
 mod check;
 mod corpus;
+mod documents;
 mod export;
 mod graph;
 mod init;
@@ -63,19 +67,24 @@ pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
     ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
 };
-pub use cap::OUTPUT_CAP_CHARS;
+pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use corpus::LeftOut;
+pub use documents::{DocumentEntry, documents};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use graph::{FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
-pub use project::{CONFIG_FILE, ProjectRoot, discover};
+pub use project::{CONFIG_FILE, Located, ProjectRoot, discover, locate};
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show};
 pub use specengine_core::ProjectConfig;
+/// `search`'s `--limit` bounds and default, its shortest term (the store's).
+pub use specengine_store::{
+    MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
+};
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree};
 
 /// The exit code of a command (the verdict scheme of `spec check`).

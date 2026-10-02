@@ -1,14 +1,30 @@
 //! Shared stdio harness for the `specengine-mcp` integration tests: a raw
 //! JSON-RPC client over the real binary's piped stdin/stdout.
 //!
+//! Every spawn runs with a **cleared environment** and a **fresh scratch
+//! `HOME`** of its own under `std::env::temp_dir()` (the CLI's
+//! `tests/common/mod.rs` pattern; task spec `mcp-read`, R2 and AC-09): the
+//! binary needs nothing but `HOME`, so nothing else is passed, and no read
+//! can reach the owner's data directory. Without an explicit `cwd` the child
+//! runs in an empty scratch directory, never in this repository. The scratch
+//! is removed when the [`Server`] drops.
+//!
 //! Every stdout line is parsed and checked as a JSON-RPC 2.0 message; a read
 //! waits at most [`READ_TIMEOUT`]; the child is killed when the harness drops.
 
 #![allow(dead_code)]
 
+pub mod blake3;
+pub mod read;
+
+use std::collections::BTreeMap;
+use std::ffi::OsStr;
+use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::Path;
+use std::os::unix::fs::PermissionsExt as _;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -18,7 +34,7 @@ use serde_json::{Value, json};
 pub const BIN: &str = env!("CARGO_BIN_EXE_specengine-mcp");
 
 /// Longest wait for one stdout line.
-pub const READ_TIMEOUT: Duration = Duration::from_secs(15);
+pub const READ_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Longest wait for the process to exit after stdin is closed.
 pub const EXIT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -28,7 +44,219 @@ pub const STATELESS_VERSION: &str = "2026-07-28";
 
 /// JSON-RPC error codes asserted by the tests.
 pub const INVALID_PARAMS: i64 = -32602;
+pub const INTERNAL_ERROR: i64 = -32603;
+pub const RESOURCE_NOT_FOUND: i64 = -32002;
 pub const UNSUPPORTED_PROTOCOL_VERSION: i64 = -32022;
+
+pub fn repository_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .expect("repository root exists")
+}
+
+pub fn fixture(name: &str) -> PathBuf {
+    repository_root().join("fixtures").join(name)
+}
+
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+/// A scratch directory under the system temp dir, canonical, removed on
+/// drop (permissions restored first).
+pub struct Scratch {
+    root: PathBuf,
+}
+
+impl Scratch {
+    pub fn new(name: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "specengine-mcp-{name}-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::SeqCst)
+        ));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).expect("scratch directory");
+        Self {
+            root: fs::canonicalize(&path).expect("canonical scratch directory"),
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn join(&self, relative: &str) -> PathBuf {
+        self.root.join(relative)
+    }
+
+    /// A new, empty `HOME` of its own at `<scratch>/homes/<name>`.
+    pub fn home(&self, name: &str) -> PathBuf {
+        let home = self.root.join("homes").join(name);
+        fs::create_dir_all(&home).expect("home directory");
+        fs::canonicalize(&home).expect("canonical home")
+    }
+
+    /// A copy of `fixtures/<name>` at `<scratch>/<dir>`, canonical.
+    pub fn copy(&self, name: &str, dir: &str) -> PathBuf {
+        let root = self.root.join(dir);
+        copy_dir(&fixture(name), &root, false);
+        fs::canonicalize(&root).expect("copy exists")
+    }
+
+    /// An empty directory `<scratch>/<dir>`, canonical.
+    pub fn dir(&self, dir: &str) -> PathBuf {
+        let path = self.root.join(dir);
+        fs::create_dir_all(&path).expect("directory");
+        fs::canonicalize(&path).expect("canonical directory")
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        restore_permissions(&self.root);
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+fn restore_permissions(dir: &Path) {
+    let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o755));
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_symlink() {
+            continue;
+        }
+        if kind.is_dir() {
+            restore_permissions(&path);
+        } else {
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o644));
+        }
+    }
+}
+
+/// Copies every directory and regular file under `from` to `to`, files in
+/// name order, or in reverse name order when `reversed`.
+pub fn copy_dir(from: &Path, to: &Path, reversed: bool) {
+    fs::create_dir_all(to).expect("copy target");
+    let mut entries: Vec<_> = fs::read_dir(from)
+        .expect("readable fixture directory")
+        .map(|entry| entry.expect("entry"))
+        .collect();
+    entries.sort_by_key(|entry| entry.file_name());
+    if reversed {
+        entries.reverse();
+    }
+    for entry in entries {
+        let kind = entry.file_type().expect("file type");
+        let target = to.join(entry.file_name());
+        if kind.is_dir() {
+            copy_dir(&entry.path(), &target, reversed);
+        } else if kind.is_file() {
+            fs::copy(entry.path(), &target).expect("copy file");
+        }
+    }
+}
+
+/// Writes `bytes` to `root/relative`, creating its directories.
+pub fn write(root: &Path, relative: &str, bytes: impl AsRef<[u8]>) {
+    let path = root.join(relative);
+    fs::create_dir_all(path.parent().expect("parent")).expect("parent directory");
+    fs::write(&path, bytes).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+}
+
+pub fn read_text(root: &Path, relative: &str) -> String {
+    let path = root.join(relative);
+    fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+}
+
+/// Replaces the one occurrence of `from` in `root/relative` by `to`.
+pub fn replace(root: &Path, relative: &str, from: &str, to: &str) {
+    let text = read_text(root, relative);
+    assert_eq!(
+        text.matches(from).count(),
+        1,
+        "{relative}: {from:?} must occur exactly once"
+    );
+    write(root, relative, text.replacen(from, to, 1));
+}
+
+/// The directory the host rule puts the index databases in, under `home`.
+pub fn data_dir(home: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        home.join("Library")
+            .join("Application Support")
+            .join("specengine")
+    } else {
+        home.join(".local").join("share").join("specengine")
+    }
+}
+
+/// Every entry under `dir`, root-relative: directories as `None`, files as
+/// their bytes, symlinks as `link -> target`.
+pub fn snapshot(dir: &Path) -> BTreeMap<String, Option<Vec<u8>>> {
+    fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Option<Vec<u8>>>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(root)
+                .expect("under root")
+                .to_string_lossy()
+                .into_owned();
+            let kind = entry.file_type().expect("file type");
+            if kind.is_symlink() {
+                let target = fs::read_link(&path).expect("link");
+                out.insert(
+                    relative,
+                    Some(format!("link -> {}", target.display()).into_bytes()),
+                );
+            } else if kind.is_dir() {
+                out.insert(relative, None);
+                walk(root, &path, out);
+            } else {
+                out.insert(relative, Some(fs::read(&path).unwrap_or_default()));
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk(dir, dir, &mut out);
+    out
+}
+
+/// The `HOME` a spawn gets.
+#[derive(Debug, Clone, Copy)]
+pub enum Home<'a> {
+    /// A new, empty scratch `HOME` (the default).
+    Fresh,
+    /// This directory.
+    At(&'a Path),
+    /// No `HOME` at all.
+    Unset,
+}
+
+/// The command every spawn runs: `program args` in `cwd`, the environment
+/// cleared, `HOME` set to `home` (when given) and nothing else.
+pub fn isolated_command(
+    program: impl AsRef<OsStr>,
+    args: &[&str],
+    cwd: &Path,
+    home: Option<&Path>,
+) -> Command {
+    let mut command = Command::new(program);
+    command.env_clear().current_dir(cwd).args(args);
+    if let Some(home) = home {
+        command.env("HOME", home);
+    }
+    command
+}
 
 /// A running `specengine-mcp` child with piped stdio.
 pub struct Server {
@@ -36,6 +264,11 @@ pub struct Server {
     stdin: Option<ChildStdin>,
     lines: Receiver<String>,
     stderr: Option<JoinHandle<String>>,
+    home: Option<PathBuf>,
+    cwd: PathBuf,
+    /// The scratch holding a fresh `HOME` and the default `cwd`; removed
+    /// after the child has exited.
+    scratch: Option<Scratch>,
 }
 
 /// What a finished session left behind.
@@ -49,20 +282,34 @@ pub struct Finished {
 }
 
 impl Server {
+    /// A fresh scratch `HOME`, an empty scratch working directory.
     pub fn spawn(args: &[&str]) -> Self {
-        Self::spawn_in(args, None)
+        Self::spawn_with(args, None, Home::Fresh)
     }
 
+    /// A fresh scratch `HOME`, the working directory `cwd` (else an empty
+    /// scratch one).
     pub fn spawn_in(args: &[&str], cwd: Option<&Path>) -> Self {
-        let mut command = Command::new(BIN);
+        Self::spawn_with(args, cwd, Home::Fresh)
+    }
+
+    pub fn spawn_with(args: &[&str], cwd: Option<&Path>, home: Home) -> Self {
+        let needs_scratch = cwd.is_none() || matches!(home, Home::Fresh);
+        let scratch = needs_scratch.then(|| Scratch::new("spawn"));
+        let home = match home {
+            Home::Fresh => Some(scratch.as_ref().expect("scratch").home("h")),
+            Home::At(path) => Some(path.to_path_buf()),
+            Home::Unset => None,
+        };
+        let cwd = match cwd {
+            Some(dir) => dir.to_path_buf(),
+            None => scratch.as_ref().expect("scratch").dir("cwd"),
+        };
+        let mut command = isolated_command(BIN, args, &cwd, home.as_deref());
         command
-            .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        if let Some(dir) = cwd {
-            command.current_dir(dir);
-        }
         let mut child = command.spawn().expect("spawn specengine-mcp");
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().expect("piped stdout");
@@ -97,7 +344,25 @@ impl Server {
             stdin,
             lines,
             stderr: Some(stderr),
+            home,
+            cwd,
+            scratch,
         }
+    }
+
+    /// The child's `HOME`, `None` when unset.
+    pub fn home(&self) -> Option<&Path> {
+        self.home.as_deref()
+    }
+
+    /// The child's working directory.
+    pub fn cwd(&self) -> &Path {
+        &self.cwd
+    }
+
+    /// The child's process id.
+    pub fn pid(&self) -> u32 {
+        self.child.id()
     }
 
     /// A legacy session: `initialize` with `capabilities`, then
@@ -143,8 +408,16 @@ impl Server {
 
     /// The next stdout message, checked as JSON-RPC 2.0.
     pub fn recv(&mut self) -> Value {
+        parse_message(&self.recv_line())
+    }
+
+    /// The next stdout line as written (checked as JSON-RPC 2.0).
+    pub fn recv_line(&mut self) -> String {
         match self.lines.recv_timeout(READ_TIMEOUT) {
-            Ok(line) => parse_message(&line),
+            Ok(line) => {
+                parse_message(&line);
+                line
+            }
             Err(RecvTimeoutError::Timeout) => {
                 panic!("no stdout message from specengine-mcp within {READ_TIMEOUT:?}")
             }
@@ -158,6 +431,25 @@ impl Server {
                 panic!("specengine-mcp closed stdout (exit {status:?}); stderr: {stderr}")
             }
         }
+    }
+
+    /// Sends a request and returns the next line as written, which must
+    /// answer it.
+    pub fn request_line(&mut self, id: u64, method: &str, params: Option<Value>) -> String {
+        let mut message = json!({"jsonrpc": "2.0", "id": id, "method": method});
+        if let Some(params) = params {
+            message["params"] = params;
+        }
+        self.send(&message);
+        let line = self.recv_line();
+        let reply = parse_message(&line);
+        assert_eq!(
+            reply.get("id"),
+            Some(&json!(id)),
+            "expected the answer to {method} (id {id}), got: {}",
+            clip(&line)
+        );
+        line
     }
 
     /// Sends a request and returns the next message, which must answer it.
@@ -223,6 +515,7 @@ impl Drop for Server {
             let _ = self.child.kill();
         }
         let _ = self.child.wait();
+        // `scratch` drops after this body: the child is gone by then.
     }
 }
 

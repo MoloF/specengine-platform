@@ -39,9 +39,10 @@ impl ProjectRoot {
 
 /// A located project, its config not read yet: `spec check` and
 /// `spec export index` read it through the store's check loader, whose
-/// every failure is a cause, not a discovery failure.
+/// every failure is a cause, not a discovery failure (MCP's
+/// `resources/list` tells "no project" apart from a broken one the same way).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Located {
+pub struct Located {
     /// Canonical.
     pub root: PathBuf,
     /// The file to read.
@@ -85,7 +86,7 @@ pub(crate) fn discover_with_text(
 /// The root and the config file (see the module documentation), nothing
 /// read: a discovery failure is an unusable current directory or `--root`,
 /// or no `specengine.toml` by the walk or in `--root`.
-pub(crate) fn locate(env: &Env, globals: &Globals) -> Result<Located, CliError> {
+pub fn locate(env: &Env, globals: &Globals) -> Result<Located, CliError> {
     let cwd = canonical_dir(&env.cwd, "the current directory")?;
     let (root, config_file, config_label) = match (&globals.root, &globals.config) {
         (None, None) => {

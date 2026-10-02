@@ -1,1 +1,1 @@
-{"mcpServers": {"specengine": {"type": "stdio", "command": "cargo", "args": ["run", "-q", "-p", "specengine-mcp", "--features", "probes"]}}}
+{"mcpServers": {"specengine": {"type": "stdio", "command": "cargo", "args": ["run", "-q", "-p", "specengine-mcp", "--features", "probes"], "env": {"HOME": "${TMPDIR:-/tmp}/specengine-mcp-home", "CARGO_HOME": "${HOME}/.cargo", "RUSTUP_HOME": "${HOME}/.rustup"}}}}

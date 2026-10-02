@@ -15,6 +15,8 @@
 //! on the wall clock, and a replay only returns the answer the client supplies
 //! again. The key is per process, so a restart invalidates every state.
 
+use rmcp::handler::server::tool::{InputResponses, RequestState};
+use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
     CallToolResponse, CallToolResult, ClientCapabilities, ClientResult, ContentBlock,
     ElicitRequest, ElicitRequestParams, ElicitResult, ElicitationAction, ElicitationSchema,
@@ -22,9 +24,11 @@ use rmcp::model::{
     SealOptions, ServerRequest,
 };
 use rmcp::service::RequestContext;
-use rmcp::{ErrorData, RoleServer, schemars};
+use rmcp::{ErrorData, RoleServer, schemars, tool, tool_router};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::server::SpecEngineServer;
 
 /// Tool `_meta` key that makes Claude Code (≥ 2.1.199) prompt the human on every
 /// call, even under `bypassPermissions` (04 §4).
@@ -99,6 +103,40 @@ pub struct ReviewOutcome {
     pub era: Era,
     /// The protocol version of the call, e.g. `2025-11-25` or `2026-07-28`.
     pub protocol_version: String,
+}
+
+#[tool_router(router = review_tools, vis = "pub(crate)")]
+impl SpecEngineServer {
+    /// The owner's consent tool (07 §1.2 `owner` set); the Phase 0 demo,
+    /// built under feature `probes` only.
+    #[tool(
+        description = "Ask the human owner to approve or reject a SpecEngine proposal and \
+return the owner's answer. Shows the owner a form (decision: approve or reject; \
+optional comment) and returns the form action (accept, decline, cancel), the \
+decision and the comment. Every call prompts the human. Phase 0: no proposal \
+queue yet; any Latin ID works, nothing is recorded, no file is written. \
+Deterministic; no LLM inside.",
+        annotations(
+            title = "Review a proposal (owner)",
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = requires_user_interaction(),
+        output_schema = rmcp::handler::server::tool::schema_for_output::<ReviewOutcome>()
+    )]
+    async fn review_proposal(
+        &self,
+        Parameters(args): Parameters<ReviewArgs>,
+        RequestState(request_state): RequestState,
+        InputResponses(input_responses): InputResponses,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        self.reviewer()
+            .review(args, request_state, input_responses, &context)
+            .await
+    }
 }
 
 /// The submitted form: `{decision: approve|reject, comment?: string}`.

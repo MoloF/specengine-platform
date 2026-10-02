@@ -159,16 +159,7 @@ For SpecEngine this means: the context bundle is identifiers plus minimal text, 
 
 ## 4. Claude Code: what can be used (v2.1.283)
 
-**MCP client** (docs: code.claude.com/docs/en/mcp; the era, elicitation, output-cap and background rows are verified on 2.1.283 by script and by hand — re-verify on upgrade):
-- transports `stdio | http | ws` (`sse` deprecated); project scope — **`.mcp.json` in the repository** (read at session start);
-- **resources via `@server:uri`**: `@specengine:spec://node/R-12` — ⚠ content is inserted **without a tool call**, so `PreToolUse` hooks do not fire;
-- **MCP prompts = slash commands**: `/specengine:prepare-task T-0107`;
-- **elicitation is supported** (since 2.1.76, form and URL) **in both protocol eras**; with permission prompts bypassed the form still appears, so bypass mode cannot skip it. The form is a flat object of primitives and enums; answers `accept | decline | cancel`; URL ≤ ~8,000 characters;
-- sampling — no data on support; the Tasks extension — unsupported;
-- a stdio server gets the **legacy handshake** (`2025-11-25`) by default; `MCP_PROTOCOL_NEGOTIATION=auto` negotiates 2026-07-28 → **support both eras**. rmcp has no server-side lifecycle mode (`ClientLifecycleMode::Auto` is client-only): the server detects the era from the first message (`initialize` → legacy; a request with complete 2026-07-28 `_meta` → stateless) and bounds it with `supported_protocol_versions`;
-- **the output cap counts characters**: 48,000 pass inline with no warning reaching the model, 104,000 are rejected, and `MAX_MCP_OUTPUT_TOKENS` does not raise it. **Tool descriptions and server `instructions` are truncated at 2,048 characters**. Tool search is on by default, so `instructions` is the server's most important text;
-- **an MCP call longer than 120 s goes to the background**, runs to completion and returns its result as a notification; a call held by an open elicitation form is exempt (≥ 11 min observed, no timeout). **Do not design a long-blocking "wait for approval"**;
-- ⭐ **`_meta["anthropic/requiresUserInteraction"]: true`** on a tool (≥ 2.1.199): a permission prompt **on every call, even in `bypassPermissions`**, no "don't ask again", allow rules ignored, a `PreToolUse` hook cannot approve it. **The strongest primitive of human consent.**
+**MCP client** (docs: code.claude.com/docs/en/mcp): the behaviour verified on 2.1.283 is canon in `crates/specengine-mcp/README.md` "Claude Code client" (eras, `.mcp.json`, the character-counted output cap, 2,048-character truncation, elicitation, `requiresUserInteraction`, background calls, `@`-resources, prompts); the read tools, their resources (`spec://{project}/node/{id}`) and the `maxResultSizeChars` check: `docs/canon/mcp-read.md`. **Do not design a long-blocking "wait for approval"**.
 
 **Hooks** (~33 events): `PreToolUse`, `PostToolUse`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, `SubagentStart/Stop`, `SessionStart`, `WorktreeCreate/Remove`, `FileChanged`, **`Elicitation`/`ElicitationResult`**, `TaskCreated/Completed` and more. Handler types: `command`, **`http`**, `mcp_tool`, `prompt`, `agent`. Exit 2 blocks; priority `deny > defer > ask > allow`; `if: "Edit(src/**)"` narrows the trigger.
 

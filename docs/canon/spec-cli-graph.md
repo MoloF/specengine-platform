@@ -8,7 +8,7 @@ reviewed: 2026-10-01
 
 # spec tree, spec graph, show --links
 
-CLI pass 3 (`docs/features/spec-cli-graph.md`): a node's ancestors, children, links and an edit's reach without opening files; the shapes feed MCP `get_tree`, `get_node(with: [links])` (07 §1.2) and pass 4's bundle (05 §6). Read-only; each command is one library function returning a struct (`render_text`, `render_json`). As `spec show` (`crates/specengine-cli/README.md`): discovery, `--json`, freshness, REF forms and resolution (several holders → all by (path, ord), one `warning:`), streams, the one-line rule, writes only in the data directory. A node is named by its ID, else its path.
+CLI pass 3 (`docs/features/spec-cli-graph.md`): a node's ancestors, children, links and an edit's reach without opening files; the shapes feed MCP `get_tree`, `get_node(with: [links])` (`docs/canon/mcp-read.md`) and pass 4's bundle (05 §6). Read-only; each command is one library function returning a struct (`render_text`, `render_json`). As `spec show` (`crates/specengine-cli/README.md`): discovery, `--json`, freshness, REF forms and resolution (several holders → all by (path, ord), one `warning:`), streams, the one-line rule, writes only in the data directory. A node is named by its ID, else its path.
 
 ## Input
 
@@ -84,7 +84,7 @@ Nodes by (distance, path, ord), then edges by (type, path, line, column) in link
 
 Exit 0 answered: zero nodes, dangling parents or links, cycles. 1 only an unresolvable REF or ROOT (`show`'s reasons, JSON `reason`). 2 as `show`: usage, `--depth` not an integer ≥ 0, a look-alike or mixed-script ID (naming the Latin fix), `project:`, config, `HOME`, `StoreError`; JSON for 0 and 1 only.
 
-`OUTPUT_CAP_CHARS` cuts at a node, edge or link line, the first item whole. Tails: `[truncated: <k> of <n> nodes not shown; give a ROOT, lower --depth or add --kind]`, `[truncated: <k> of <n> nodes and <j> of <m> edges not shown; lower --depth or add --type]`, `show`'s plus `; links not shown: <k>`. JSON holds exactly the printed items, `truncated: true`. `show --links`: the block counts toward the cap; a cut in the block falls at a line end and hides the node's text. Its JSON follows the text's cut (the same nodes, link lines, text bytes): the cut node's `omitted` is the tail's `<k>` (its unprinted links and those of the nodes and holders after it), 0 elsewhere; the cut node stays in JSON as the carrier of `truncated` and `omitted` even when its header was not printed.
+`OUTPUT_CAP_CHARS` cuts at a node, edge or link line, the first item whole. Tails: `[truncated: <k> of <n> nodes not shown; give a ROOT, lower --depth or add --kind]`, `[truncated: <k> of <n> nodes and <j> of <m> edges not shown; lower --depth or add --type]`, `show`'s (bounded: CLI README "Output and the cap") plus `; links not shown: <k>`. JSON holds exactly the printed items, `truncated: true`. `show --links`: the block counts toward the cap; a cut in the block falls at a line end and hides the node's text. Its JSON follows the text's cut (the same nodes, link lines, text bytes): the cut node's `omitted` is the tail's `<k>` (its unprinted links and those of the nodes and holders after it), 0 elsewhere; the cut node stays in JSON as the carrier of `truncated` and `omitted` even when its header was not printed.
 
 Determinism: `BTreeMap`s and the orders above, never rowid, insertion or the absolute root; copies written in opposite orders at different roots give byte-identical text and JSON.
 
@@ -98,6 +98,6 @@ Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `re
 
 ## Open
 
-- Every call re-reads and re-parses every used file: measure before MCP serves large pilots (a lighter resolver input, or the indexed parse when the bytes match).
+- Every call re-reads and re-parses every used file; measured through MCP (`docs/canon/mcp-read.md` "Latency"): a lighter resolver input, or the indexed parse when the bytes match, before large pilots.
 - The same-size edit race (`freshness.rs`) is probabilistic on its red side: no seam between the index update and the re-read.
 - The unreadable and parser-panic fallback (lines 1, `warning:`) is untested (fix: a `&dyn Source`, as `show`'s).

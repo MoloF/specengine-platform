@@ -22,6 +22,18 @@ use serde_json::{Value, json};
 
 const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 
+/// `tools/list` of the measurement build: the four read tools (task spec
+/// `mcp-read`), the consent demo and the two probes, in wire order.
+const PROBES_BUILD_TOOLS: [&str; 7] = [
+    "get_context_bundle",
+    "get_node",
+    "get_tree",
+    "probe_output",
+    "probe_sleep",
+    "review_proposal",
+    "search",
+];
+
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -283,7 +295,7 @@ fn a_legacy_initialize_list_and_call() {
     let list = server.request(1, "tools/list", None);
     assert_eq!(
         tool_names(result(&list)),
-        ["probe_output", "probe_sleep", "review_proposal"],
+        PROBES_BUILD_TOOLS,
         "legacy tools/list"
     );
 
@@ -344,11 +356,7 @@ fn b_stateless_discover_and_list() {
         "{}",
         clip(&list.to_string())
     );
-    assert_eq!(
-        tool_names(list),
-        ["probe_output", "probe_sleep", "review_proposal"],
-        "stateless tools/list"
-    );
+    assert_eq!(tool_names(list), PROBES_BUILD_TOOLS, "stateless tools/list");
 
     let bare = server.request(3, "tools/list", None);
     assert_eq!(
@@ -401,7 +409,7 @@ fn b_legacy_lifecycle_refuses_stateless_requests() {
     let (mut server, init) = Server::legacy(&["--lifecycle", "legacy"], form_capabilities());
     assert_eq!(init["protocolVersion"], json!(LEGACY_VERSION), "{init}");
     let list = server.request(1, "tools/list", None);
-    assert_eq!(tool_names(result(&list)).len(), 3);
+    assert_eq!(tool_names(result(&list)), PROBES_BUILD_TOOLS);
 }
 
 // ------------------------------------------------------- (c) elicitation
@@ -963,6 +971,14 @@ fn full_sessions_leave_the_working_directory_empty() {
 
 #[test]
 fn mcp_json_fixture_is_the_specified_config() {
+    // The owner's AC-16 launcher (docs/features/mcp-read.md): the Phase 0
+    // command, plus a scratch `HOME` so no read reaches the owner's data
+    // directory, and the real toolchain homes so `cargo` still finds its
+    // toolchain. Claude Code expands `${VAR}` and `${VAR:-default}` from its
+    // own environment: `HOME` is the per-user temp dir (`$TMPDIR` on macOS,
+    // `/tmp` elsewhere), the toolchain homes the defaults under the real
+    // `HOME`. Unexpanded, the `HOME` is relative and every read refuses it
+    // (exit 2), never a write elsewhere.
     let path = repository_root()
         .join("fixtures")
         .join("mcp")
@@ -974,7 +990,19 @@ fn mcp_json_fixture_is_the_specified_config() {
         json!({"mcpServers": {"specengine": {
             "type": "stdio",
             "command": "cargo",
-            "args": ["run", "-q", "-p", "specengine-mcp", "--features", "probes"]
+            "args": ["run", "-q", "-p", "specengine-mcp", "--features", "probes"],
+            "env": {
+                "HOME": "${TMPDIR:-/tmp}/specengine-mcp-home",
+                "CARGO_HOME": "${HOME}/.cargo",
+                "RUSTUP_HOME": "${HOME}/.rustup"
+            }
         }}})
+    );
+    let home = config["mcpServers"]["specengine"]["env"]["HOME"]
+        .as_str()
+        .expect("HOME");
+    assert!(
+        !home.contains("${HOME}") && !home.contains("Application Support"),
+        "the launcher's HOME must not be the owner's: {home}"
     );
 }

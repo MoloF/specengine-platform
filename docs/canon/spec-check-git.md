@@ -41,7 +41,7 @@ reviewed: 2026-10-01
 
 ## Next
 
-The rest of Phase 1 (08 §2): CLI passes 3 (graph) and 4 (bundle), MCP stdio reads, check increment 4 (`spec-check-process`); then the pilots.
+The rest of Phase 1 (08 §2): check increment 4 (`spec-check-process`), then the pilots.
 
 ## Open
 

@@ -8,7 +8,7 @@ reviewed: 2026-10-02
 
 # spec bundle and bundle_hash
 
-CLI pass 4 (`docs/features/spec-cli-bundle.md`, 05 §6): one call returns the context around named targets within a budget of estimated tokens and names the rest by ID for follow-up reads, so an agent's steps do not grow with the corpus. Kind-agnostic (ADR-0008), deterministic (08 AC-7), never over the output ceiling. One library function `bundle(&Env, &Globals, &BundleRequest) -> BundleOutcome` (`render_text`, `render_json`); MCP `get_context_bundle` (next pass) wraps it and gets the same body and hash. As `spec show` (`crates/specengine-cli/README.md`): discovery, `--json`, streams, the one-line rule, writes only in the data directory.
+CLI pass 4 (`docs/features/spec-cli-bundle.md`, 05 §6): one call returns the context around named targets within a budget of estimated tokens and names the rest by ID for follow-up reads, so an agent's steps do not grow with the corpus. Kind-agnostic (ADR-0008), deterministic (08 AC-7), never over the output ceiling. One library function `bundle(&Env, &Globals, &BundleRequest) -> BundleOutcome` (`render_text`, `render_json`); MCP `get_context_bundle` wraps it and gets the same body and hash (`docs/canon/mcp-read.md`). As `spec show` (`crates/specengine-cli/README.md`): discovery, `--json`, streams, the one-line rule, writes only in the data directory.
 
 ## Command
 
@@ -91,10 +91,10 @@ Tests: CLI `bundle.rs` (layers, REFs, keys), `bundle_fit.rs` (fitting, the hash 
 
 ## Not yet
 
-`--task`, task bundles, `bundle_task`, the package (Phase 2); proposals in layer 2; layers 5 and 9 (Phase 3; the keys stay, empty); the `bundles` log, `runs`, the follow-up-reads signal, `rusqlite_migration` (with the first operational table, Phase 2); the "changed since last time" header (06), 07 §1.1 Delta and Hints; MCP `get_context_bundle`, `compact`, `outputSchema` (next pass; the keys above are fixed now); a tokenizer crate.
+`--task`, task bundles, `bundle_task`, the package (Phase 2); proposals in layer 2; layers 5 and 9 (Phase 3; the keys stay, empty); the `bundles` log, `runs`, the follow-up-reads signal, `rusqlite_migration` (with the first operational table, Phase 2); the "changed since last time" header (06), 07 §1.1 Delta and Hints; MCP `compact`; a tokenizer crate.
 
 ## Open
 
-- Fitting re-estimates the whole body per candidate (`fits`): 3 000 candidates 1.13 s against `spec graph`'s 0.62 s (debug), on top of pass 3's per-call re-parse, and MCP inherits both. Measure first, then running counts.
+- Fitting re-estimates the whole body per candidate (`fits`): 3 000 candidates 1.13 s against `spec graph`'s 0.62 s (debug), on top of pass 3's per-call re-parse; MCP inherits both (886 ms, 1 821 ms at budget 10 000: `docs/canon/mcp-read.md` "Latency"). Running counts next.
 - Calibration (Q6): no reference token counts yet (model, date, five `count_tokens` figures); `tokens_est` stays uncalibrated, its calibration test `#[ignore]`d (the task's AC-17); recalibrating is an `INDEX_FORMAT` change.
 - A `working_answer:` written as a Cyrillic legacy alias makes no link (`unparsed-reference`): the question holds no `working_answer` edge and drops out of open questions. Existing front-matter behaviour (core), noted only.

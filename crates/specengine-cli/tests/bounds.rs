@@ -3,6 +3,11 @@
 //! (JSON: the sum of `text`), cut at the last line end within the cap;
 //! the tail names the path, the lines, the sections and the holders not
 //! shown. `--limit` outside 1..=200 is exit 2.
+//!
+//! As amended by docs/features/mcp-read.md ("Data", CLI `show` cut; AC-22):
+//! each tail list names at most 20 (`, <k> more` for the rest); JSON
+//! `omitted` adds `sections_more` and `holders_more`, and the cut node's
+//! `sections` are the IDs whose heading line its `text` holds.
 
 #![cfg(unix)]
 
@@ -75,12 +80,18 @@ fn check_capped_text(stdout: &str, path: &str, file: &str, holders: &str) {
         .filter(|(line, _)| *line >= first_hidden)
         .map(|(_, id)| id)
         .collect();
-    assert!(!hidden_sections.is_empty());
+    assert!(
+        hidden_sections.len() > 20,
+        "{} hidden",
+        hidden_sections.len()
+    );
+    // mcp-read AC-22: the first 20 hidden sections, then the rest counted.
     assert_eq!(
         tail,
         format!(
-            "[truncated: {path} lines {first_hidden}-{last} not shown; sections not shown: {}; holders not shown: {holders}]",
-            hidden_sections.join(", ")
+            "[truncated: {path} lines {first_hidden}-{last} not shown; sections not shown: {}, {} more; holders not shown: {holders}]",
+            hidden_sections[..20].join(", "),
+            hidden_sections.len() - 20
         )
     );
 }
@@ -147,15 +158,44 @@ fn a_100_000_character_document_is_cut_at_a_line_end_with_one_tail_line() {
             serde_json::json!([]),
             "{fixture}"
         );
-        let sections: Vec<String> = heading_lines(&text)
+        let (printed, sections): (Vec<_>, Vec<_>) = heading_lines(&text)
             .into_iter()
-            .filter(|(line, _)| *line >= first_hidden)
-            .map(|(_, id)| id)
-            .collect();
+            .partition(|(line, _)| *line < first_hidden);
+        let printed: Vec<String> = printed.into_iter().map(|(_, id)| id).collect();
+        let sections: Vec<String> = sections.into_iter().map(|(_, id)| id).collect();
+        assert!(sections.len() > 20, "{fixture}");
+        // mcp-read AC-22: `omitted` names the first 20 hidden sections and
+        // counts the rest; the cut node's `sections` are the headings its
+        // `text` holds; `omitted` has exactly five keys.
         assert_eq!(
             node["omitted"]["sections"],
-            serde_json::json!(sections),
+            serde_json::json!(sections[..20]),
             "{fixture}"
+        );
+        assert_eq!(
+            node["omitted"]["sections_more"],
+            serde_json::json!(sections.len() - 20),
+            "{fixture}"
+        );
+        assert_eq!(node["omitted"]["holders_more"], 0, "{fixture}");
+        assert_eq!(node["sections"], serde_json::json!(printed), "{fixture}");
+        let mut omitted_keys: Vec<&str> = node["omitted"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        omitted_keys.sort_unstable();
+        assert_eq!(
+            omitted_keys,
+            [
+                "holders",
+                "holders_more",
+                "lines",
+                "sections",
+                "sections_more"
+            ],
+            "{fixture}: the omitted key set"
         );
         // A small node is never truncated.
         let small = spec(&home, &root, &["--json", "show", &format!("{prefix}-1")]).json();

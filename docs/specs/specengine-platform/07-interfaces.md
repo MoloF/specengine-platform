@@ -13,25 +13,20 @@ ref: research-2026-09-28
 
 ### 1.1. Design rules (from 04 §2–4)
 
-- **Few tools, good `instructions`** (≤ 2,048 characters: Claude Code truncates, and tool search defers definitions). Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
-- Responses are **prose for the model** with a status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); the machine part lives in `structuredContent`.
-- All reading tools carry `readOnlyHint`; each has `compact: bool` (detail levels in the spirit of code-graph-mcp); a response stays well under ~48,000 characters and paginates beyond that (the cap counts characters, 04 §4).
-- Input schemas are flat JSON Schema 2020-12, no root `anyOf/oneOf`; there is `outputSchema` + `structuredContent`, and `content` holds Markdown for the model.
-- **Primary transport is stdio** (`spec mcp` in `.mcp.json`, a bridge to the daemon). Reason: Claude Code (≥ 2.1.84) issues a GET to the MCP HTTP endpoint to open an SSE stream, and a purely stateless 2026-07-28 server answers 405, so the connection drops (claude-code#39790 closed as "not planned"). HTTP `/mcp` is added later, with GET/SSE and `legacy_session_mode`.
-- Both protocol eras, detected from the client's first message (04 §4). State is passed only via explicit handles (`task_id`, `proposal_id`).
-- **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call and delivers its result as a notification (04 §4), so there is no polling tool and no "call again" protocol. A long-blocking "wait for approval" stays excluded.
-- `rmcp` is pinned exactly (04 §6). Output schemas are generated from `Json<T>`/`Parameters<T>` + schemars.
-- **All tools are deterministic**: one state gives one response, no LLM inside (as in cgr, stated in every tool description).
-- **No agent tool writes to spec files** (the "one door" test on a temporary repository).
+Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-mcp/README.md`): few tools, `instructions` and descriptions ≤ 2,048 characters; `readOnlyHint`; flat JSON Schema 2020-12 inputs, `outputSchema` + `structuredContent`, `content` the CLI's text; the CLI's 40,000-character cut and narrowing tails in place of pagination; both protocol eras over stdio; `rmcp` pinned exactly (04 §6); determinism stated in every description; the "one door" test (no agent tool writes to spec files), which every new tool keeps. Still to come:
+
+- Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
+- A status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); `compact: bool` on reading tools (detail levels in the spirit of code-graph-mcp), on measured need.
+- **Primary transport: stdio via `spec mcp`** in `.mcp.json`, a bridge to the daemon (Phase 2; today the `specengine-mcp` binary). Reason: Claude Code (≥ 2.1.84) issues a GET to the MCP HTTP endpoint to open an SSE stream, and a purely stateless 2026-07-28 server answers 405, so the connection drops (claude-code#39790 closed as "not planned"). HTTP `/mcp` is added later, with GET/SSE and `legacy_session_mode`.
+- State is passed only via explicit handles (`task_id`, `proposal_id`).
+- **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call and delivers its result as a notification (MCP README), so there is no polling tool and no "call again" protocol. A long-blocking "wait for approval" stays excluded.
 
 ### 1.2. Tools (`core` set)
 
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6).
+
 | Tool | Input | Output | Notes |
 |---|---|---|---|
-| `get_tree` | `root?`, `depth?`, `kinds?` | id, kind, title, statuses, `sync`, open-proposal counters | no node bodies |
-| `get_node` | `id`, `with: [links, bindings, history, proposals]` | full section text + the selected extras | read-more by id |
-| `search` | `query`, `kinds?`, `limit?` | id, title, snippet | FTS5; "search instead of list-all" |
-| `get_context_bundle` | `task_id` \| `node_ids[]`, `budget?` | Markdown bundle + `bundle_hash` + "left out" tail | 05 §6; deterministic, logged |
 | `find_symbols` | `query` \| `node_id` \| `file` \| `path:line` | qpath, kind, Bevy layer, signature, file:lines, bound nodes | repo-map on demand; general code navigation the agent does with the `LSP` tool of the code-intelligence plugin (04 §1.7), SpecEngine does not duplicate it |
 | `get_impact` | `node_id` \| `qpath` \| `since: <commit>` | nodes, symbols, tests, tasks within the radius | graph + bindings; `since` = git diff → graph walk (change impact) |
 | `refs` | `node_id` | reverse lookup: all markers, tests, records referring to the node | needed **during** refactoring |
@@ -61,12 +56,7 @@ The MCP server remembers nothing between calls: the owner's decision is stored b
 
 ### 1.3. Resources (for `@`-mentions)
 
-- `spec://{project}/tree` — tree without bodies.
-- `spec://{project}/node/{id}` — node (RFC 6570 template).
-- `spec://{project}/task/{id}` — task package (§1.2).
-- `spec://{project}/inbox` — open proposals.
-
-⚠ An `@`-mention inserts content without a tool call, so hooks do not fire. Irrelevant for the gate: resources are read-only.
+`spec://{project}/tree` and the template `spec://{project}/node/{id}` ship (canon `docs/canon/mcp-read.md` "Resources"). To come: `spec://{project}/task/{id}` — task package (§1.2); `spec://{project}/inbox` — open proposals.
 
 ### 1.4. Prompts (= slash commands in Claude Code)
 

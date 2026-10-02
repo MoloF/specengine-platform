@@ -23,13 +23,13 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–3 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`), index compaction (ADR-0028), index shards (ADR-0030).
-- Next: MCP stdio `get_tree`, `get_node`, `search`, `get_context_bundle` + resources; check increment 4 `spec-check-process`.
+- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `docs/canon/mcp-read.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–3 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources).
+- Next: check increment 4 `spec-check-process`; the pilots below.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").
   - The marker parser parses the `[tiers]` list of the canon grammar `// @implements ID@rev [tiers]` (`docs/canon/architecture.md#markers`, 05 §5.3); the Phase 0 parser keeps everything after `ID[@rev]` as a free-text note. Duplicate RON paths are flagged as ambiguous, never merged.
-  - MCP: test the per-tool `_meta["anthropic/maxResultSizeChars"]` lever against the character-based output cap (04 §4, 07 §1.1).
+  - MCP: the per-tool `_meta["anthropic/maxResultSizeChars"]` lever against the character-based output cap is declared (500 000); its test waits for the owner's run (`docs/canon/mcp-read.md` "Owner's check").
   - The census findings of §4.3 become per-corpus importer settings and rules.
 
 ### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner
@@ -136,7 +136,7 @@ A census config alone described each pilot corpus (ADR-0008; schema and counts: 
 | The tool eats time from the main projects (scope creep) | high | MVP = CLI + MCP; UI only after validation on live tasks; "enforcement first, the bot never first"; multi-user server mode out of plan (ADR-0017) |
 | The core silently bends toward one project | medium | pilot projects of different nature are connected from Phase 1 (ADR-0008); specifics only in `specengine.toml` and the importer; core tests on fixtures of all pilots |
 | Bevy 0.20 changes the schedule API | medium | tree-sitter detector covered by `fixtures/bevy-mini`; observers behind a Bevy-version gate (05 §5.1); the `schedule_data` dump schema is unstable across minors — re-run `specengine-eval bevy-detector --dump` on every Bevy upgrade |
-| The MCP protocol changes again | medium | rmcp + both eras; logic in core, MCP is a thin adapter; Claude Code behaviour verified on 2.1.283 (04 §4), re-run the checks on upgrade; Streamable HTTP without GET → 405 not measured (stdio-only build) |
+| The MCP protocol changes again | medium | rmcp + both eras; logic in core, MCP is a thin adapter; Claude Code behaviour verified on 2.1.283 (MCP README), re-run the checks on upgrade; Streamable HTTP without GET → 405 not measured (stdio-only build) |
 | rust-analyzer memory near the threshold | medium | whole-group peak 3.76 GiB against 4 GiB (≈ 6 % headroom) on the heavier pilot; re-measure with `specengine-eval ra` when a pilot grows or `ra_ap` is bumped; fallback: load without the proc-macro server (≤ 3.2 GiB) |
 | HTTP hook is open when the daemon is down | known | `command` hook with exit 2 + managed-deny |
 | Specs do not reduce the cost of change (O(n) cross-cutting edits) | fact | do not promise it; show the blast radius via `get_impact` |
