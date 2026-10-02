@@ -9,6 +9,7 @@
 
 #![allow(dead_code)]
 
+pub mod bundle;
 pub mod check;
 pub mod git;
 pub mod graph;

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # specengine-cli — the spec binary
@@ -12,7 +12,7 @@ The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), sear
 
 ## API
 
-`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `tree`, `graph`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}`, `CheckRequest.tree: CheckedTree {WorkingTree, Staged(GitEnv), Changed(GitEnv)}` (`main`: the process's) are passed in. `specengine.toml` (`CONFIG_FILE`, the store's): core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
+`discover(&Env, &Globals) -> ProjectRoot`; `data_dir`, `db_path(&Env, slug)`, `open_index`; `init`, `index`, `search`, `show`, `tree`, `graph`, `bundle`, `check`, `export_index` (`&Env, &Globals, &<Command>Request`) → an outcome or `CliError` (whole stderr lines); `Outcome::{exit, stderr_lines}`, `render_text`, `render_json`; `Exit {Answered = 0, NotFound = 1, CannotRun = 2}`; `OUTPUT_CAP_CHARS`; `derive_slug`. `Env {cwd, home, xdg_data_home}`, `CheckRequest.tree: CheckedTree {WorkingTree, Staged(GitEnv), Changed(GitEnv)}` (`main`: the process's) are passed in. `specengine.toml` (`CONFIG_FILE`, the store's): core's `ProjectConfig` (`check`, `export index`: all of it, by the store's loader).
 
 ## Commands
 
@@ -24,6 +24,7 @@ The Phase 1 CLI: the agent read loop (pass 1, `docs/features/spec-cli.md`), sear
 - `spec check [--staged | --changed] [--baseline F] [--debt]`, `spec export index [--stdout]`: `docs/canon/spec-check-{cli,git}.md`.
 - `spec show REF`: `REF` is an ID, an `aliases:` entry, an `aliases_from` legacy ID, `slug/ID`, `ID#SECTION` (`@rev` ignored with a `note:`) or a root-relative `.md` path.
 - `spec tree`, `spec graph`, `spec show --links`: `docs/canon/spec-cli-graph.md`.
+- `spec bundle REF… [--budget N]`, `bundle_hash`: `docs/canon/spec-cli-bundle.md`.
 
 **Discovery.** Without `--root` and `--config`, walk up from the canonical current directory to the first holding a `specengine.toml` file; none → exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the current directory (read-only pilots). Config errors: `<config as given>:<line>: message`.
 
@@ -40,7 +41,7 @@ Owner's Q1 (2026-09-30): `~/Library/Application Support/specengine/<slug>.db`; o
 
 ## Rules
 
-- Writes: `index` and the reads (`search`, `show`, `tree`, `graph`) only the data directory; `init` only its file; `export index` only the index and its shards; `check` nothing; nothing else under the root (`docs/canon/architecture.md#storage`).
+- Writes: `index` and the reads (`search`, `show`, `tree`, `graph`, `bundle`) only the data directory; `init` only its file; `export index` only the index and its shards; `check` nothing; nothing else under the root (`docs/canon/architecture.md#storage`).
 - Freshness: the reads run `update` first; a missing root → a `warning:` if `[paths]` is written, else silent; never exit 2.
 - Indexing is never fatal: broken or unreadable files are indexed with diagnostics and change no exit code.
 - Resolution is the check's: a `*.md` argument is a path (not `is_clean_relative` → exit 2); else `grammar::parse_reference` (none → exit 1 listing the prefixes; look-alike or mixed-script → exit 2 naming the Latin fix; `project:` → exit 2), then `Resolver::resolve_detached` over `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 → U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
@@ -74,6 +75,6 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 ## Next passes
 
-4 `spec-cli-bundle`: `bundle`, `bundle_hash`; Q7 token calibration, `rusqlite_migration`. Then MCP stdio.
+MCP stdio: `get_tree`, `get_node`, `search`, `get_context_bundle` + resources over these library functions.
 
 Tests: `tests/`, over copies of `fixtures/spec-a`, `-b` in temp dirs, each run with its own `HOME`.

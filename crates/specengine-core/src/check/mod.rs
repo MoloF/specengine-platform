@@ -28,6 +28,8 @@
 //! - [`SpecGraph`] — the read commands' graph (task spec `spec-cli-graph`):
 //!   containment and every link resolved from its citing file as the check
 //!   resolves it, a node's links, its ancestors, a breadth-first walk;
+//!   [`bundle_layers`] — the layers of a context bundle over it (task spec
+//!   `spec-cli-bundle`), by link type and `[ids]` scope only;
 //! - [`render_index_set`] — the generated index, rendered in memory: the
 //!   root and its shards ([`render_index`]: the root alone);
 //!   [`walk_gap`] — the first gap of an incomplete walk, which stops the
@@ -47,6 +49,7 @@
 
 pub mod base;
 pub mod baseline;
+mod bundle;
 pub mod config;
 mod engine;
 mod generated;
@@ -62,9 +65,10 @@ mod working_set;
 
 pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
+pub use bundle::{BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers};
 pub use config::{
-    Budgets, CheckConfig, ClassContract, Classes, ConfigError, DEFAULT_GATE, DocClass, Generator,
-    Mode, Shard, ShardKind, check_config_from_toml,
+    Budgets, BundleNode, CheckConfig, ClassContract, Classes, ConfigError, DEFAULT_GATE, DocClass,
+    Generator, Mode, Shard, ShardKind, bundle_node_from_toml, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};

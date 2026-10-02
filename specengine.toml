@@ -1,4 +1,7 @@
 # This repository's documentation gate: spec check (ADR-0013, ADR-0022; docs/canon/spec-check-cli.md).
+[project]
+slug = "specengine-platform"   # names the index database of the read commands
+
 [paths]
 roots      = ["CLAUDE.md", "README.md", "crates", "docs"]
 records    = "docs/decisions"

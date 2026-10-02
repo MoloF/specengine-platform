@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # specengine-core — the spec parser and the check
@@ -12,7 +12,7 @@ The reading core of Phase 1: the parser (one file's bytes → `ParsedFile`) and 
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order, with `check::worst_w`, `check::judge` (against a base): `docs/canon/spec-check.md`; `render_index{,_set}`, `walk_gap`, `is_tier3_file` (with `is_tier3`, `is_live`), `CheckConfig.generators` in `-graph.md`; `check::resolve` (`Resolver`, `resolve_detached` for `spec show`), scopes, file links in `-links.md`; `check::SpecGraph` (graph reads) in `docs/canon/spec-cli-graph.md`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `MAX_DEPTH = 32`, `MAX_ALIAS_EXPANSION = 10_000`. `check::run(&CheckInput, &IdScheme, &Paths, &CheckConfig, &Baseline, today: &str) -> Report`: `spec check`'s engine, blind to input order, with `check::worst_w`, `check::judge` (against a base): `docs/canon/spec-check.md`; `render_index{,_set}`, `walk_gap`, `is_tier3_file` (with `is_tier3`, `is_live`), `CheckConfig.generators` in `-graph.md`; `check::resolve` (`Resolver`, `resolve_detached` for `spec show`), scopes, file links in `-links.md`; `check::SpecGraph` (graph reads) in `docs/canon/spec-cli-graph.md`; `check::bundle_layers` (`BundleLayer`, `BUNDLE_LINK_TYPES`, `BundleCandidate`, `BundleLayers`), `bundle_node_from_toml` (`BundleNode`), `SpecGraph::{file, scheme}` (`spec bundle`) in `docs/canon/spec-cli-bundle.md`.
 
 `ProjectConfig::from_toml` (also `project_from_toml`) reads the whole `specengine.toml` for the CLI: `{project: Project {slug?, name?, language?}, scheme, paths, paths_written, project_line?}`. Closed: `[project]` and the top level (`budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code` only name-checked); `ProjectError {line?, message}`, `at(file)`. `slug()` errs when absent; `slug_problem`: `grammar::is_slug`, ≤ `MAX_SLUG_BYTES` (64).
 
@@ -72,4 +72,4 @@ Working answer (the code) → what the other answer triggers.
 
 ## Tests
 
-`tests/`, one file per concern: `crafted_yaml.rs` (every shape at cap and cap + 1, 2 MiB thread), `genre.rs` (spec-a game design; spec-b a CLI tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document the root config walks), `check_*.rs`, `project_config.rs`, `detached.rs`, `spec_graph.rs`.
+`tests/`, one file per concern: `crafted_yaml.rs` (every shape at cap and cap + 1, 2 MiB thread), `genre.rs` (spec-a game design; spec-b a CLI tool, Russian prose, Cyrillic aliases), `dogfood.rs` (every document the root config walks), `check_*.rs`, `project_config.rs`, `detached.rs`, `spec_graph.rs`, `bundle_layers.rs`.

@@ -97,7 +97,7 @@ spec search "query"
 spec graph ID [--impact] [--type T] [--depth N] [--archive] [--format dot|mermaid]
 spec refs ID                             # reverse lookup
 spec unmapped [PATH]                     # spec coverage of sources
-spec bundle (--task T | ID…) [--budget 10000]
+spec bundle REF… [--budget N]            # shipped, default 2000: docs/canon/spec-cli-bundle.md; --task T: Phase 2
 
 # owner queue
 spec inbox [--severity high] [--task T]
@@ -192,8 +192,8 @@ R    = { kind = "requirement", width = 2, immutable_text = true }
 
 [budgets]                   # document caps in bytes (tier0_bytes …), [classes], [check]: docs/canon/spec-check.md;
                             # [[generators]] (the generated-document registry): docs/canon/spec-check-graph.md
-bundle_node = 2000          # bundle budgets in tokens, multilingual estimator
-bundle_task = 10000
+bundle_node = 2000          # bundle budgets in estimated tokens (default 2000): docs/canon/spec-cli-bundle.md
+bundle_task = 10000         # Phase 2, --task
 
 [zones]                     # for the gate and role write rules
 code  = ["src/**"]

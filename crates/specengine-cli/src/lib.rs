@@ -6,7 +6,9 @@
 //! `spec-cli-changed`, `spec check --changed`: the working tree against
 //! `HEAD`; pass 3 (task spec `spec-cli-graph`), the graph reads: `spec
 //! tree`, `spec graph` and `spec show --links`, over the index-fed spec
-//! graph of core ([`specengine_core::check::SpecGraph`]).
+//! graph of core ([`specengine_core::check::SpecGraph`]); pass 4 (task spec
+//! `spec-cli-bundle`), `spec bundle`: the context around named targets
+//! within a budget of estimated tokens, named by its `bundle_hash`.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -19,24 +21,26 @@
 //! - [`data_dir`], [`db_path`], [`open_index`]: the index database lives
 //!   outside the repository, one per project slug;
 //! - [`init`], [`index`], [`search`], [`show`], [`tree`], [`graph`],
-//!   [`check`], [`export_index`]: one function per command, each giving its
-//!   outcome or a [`CliError`];
+//!   [`bundle`], [`check`], [`export_index`]: one function per command,
+//!   each giving its outcome or a [`CliError`];
 //! - [`render_text`], [`render_json`]: an [`Outcome`] as stdout (JSON: one
 //!   document, every key present, absent = `null`; `check`: the report's
-//!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded);
+//!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded;
+//!   `bundle`: its body fitted within it, never cut);
 //!   [`Outcome::stderr_lines`]: its `note:` and `warning:` lines;
-//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`) or
+//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`) or
 //!   blocked (`check`), 2 could not run (`check`: could not check).
 //!
 //! One database state gives one stdout, byte for byte: nothing depends on
 //! time, storage order or the absolute root (`check`: one tree, config,
 //! baseline and date). No command writes under the project root but
 //! `spec init`, which creates its one file, and `spec export index`, which
-//! writes only `[paths] index`; `index`, `search`, `show`, `tree` and
-//! `graph` write only the data directory, `check` nothing. Nothing found in the corpus is fatal
+//! writes only `[paths] index`; `index`, `search`, `show`, `tree`, `graph`
+//! and `bundle` write only the data directory, `check` nothing. Nothing found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
+mod bundle;
 mod cap;
 mod check;
 mod corpus;
@@ -55,6 +59,10 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 
+pub use bundle::{
+    BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
+    ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
+};
 pub use cap::OUTPUT_CAP_CHARS;
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use corpus::LeftOut;
@@ -77,7 +85,7 @@ pub enum Exit {
     /// The command answered, zero search hits included; `spec check`:
     /// clean or observed.
     Answered = 0,
-    /// `spec show`, `spec tree`, `spec graph` found nothing: a dangling
+    /// `spec show`, `spec tree`, `spec graph`, `spec bundle` found nothing: a dangling
     /// reference, no configured prefix, a `.md` path that is not indexed.
     /// `spec check`: blocked.
     NotFound = 1,
@@ -202,25 +210,28 @@ pub enum Outcome {
     Show(ShowOutcome),
     Tree(TreeOutcome),
     Graph(GraphOutcome),
+    Bundle(BundleOutcome),
     Check(CheckOutcome),
     Export(ExportOutcome),
 }
 
 impl Outcome {
-    /// 0, or 1 for a `show`, `tree` or `graph` that found nothing; `check`:
+    /// 0, or 1 for a `show`, `tree`, `graph` or `bundle` that found nothing; `check`:
     /// its verdict's exit (1 blocked, 2 could not check).
     pub fn exit(&self) -> Exit {
         match self {
             Self::Show(show) if show.nodes.is_empty() => Exit::NotFound,
             Self::Tree(tree) if tree.reason.is_some() => Exit::NotFound,
             Self::Graph(graph) if graph.reason.is_some() => Exit::NotFound,
+            Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
             Self::Check(check) => check.exit(),
             _ => Exit::Answered,
         }
     }
 
     /// The stderr lines: notes and warnings in the order they arose, then,
-    /// for a `show`, `tree` or `graph` that found nothing, `spec: <reason>`.
+    /// for a `show`, `tree`, `graph` or `bundle` that found nothing,
+    /// `spec: <reason>`.
     pub fn stderr_lines(&self) -> Vec<String> {
         let (messages, reason) = match self {
             Self::Init(outcome) => (&outcome.messages, None),
@@ -229,6 +240,7 @@ impl Outcome {
             Self::Show(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Tree(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Graph(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Bundle(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
         };
@@ -249,6 +261,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Show(outcome) => cap::render_text(outcome),
         Outcome::Tree(outcome) => tree::render_text(outcome),
         Outcome::Graph(outcome) => graph::render_text(outcome),
+        Outcome::Bundle(outcome) => bundle::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
     }
@@ -265,6 +278,7 @@ impl serde::Serialize for Outcome {
             Self::Show(outcome) => outcome.serialize(serializer),
             Self::Tree(outcome) => outcome.serialize(serializer),
             Self::Graph(outcome) => outcome.serialize(serializer),
+            Self::Bundle(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
         }

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # specengine-store — the spec index
@@ -20,6 +20,7 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `trait SpecIndex {files, file -> IndexedFile {parsed?, blake3?, size, read_error?}, lookup_id -> [IdHit {path, ord, node}], search(&SearchQuery {text, kinds, limit, archive}) -> SearchResults {hits: [SearchHit {path, ord, id?, kind?, title?, line, tier3, snippet}], short_query, tier3_left_out}, indexed_input -> CheckInput}`; `lookup_id`: every node with exactly that `id`; `indexed_input`: the stored worktree as a `CheckInput`, one snapshot, empty `bytes` (`spec show`'s resolver).
 - `spec check`, no database (`docs/canon/spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` → `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) → `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic → a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)` (the config by file name, a baseline as passed); `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}` against `HEAD`, config (`CONFIG_FILE`) and baseline staged unless given, `check_changed_with_notes` alike from disk; `check_staged`: the report. `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 6`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
+- `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form; `spec bundle`'s `bundle_hash` (`docs/canon/spec-cli-bundle.md`), nothing stored.
 
 ## Rows
 

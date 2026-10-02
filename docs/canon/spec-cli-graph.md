@@ -101,4 +101,3 @@ Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `re
 - Every call re-reads and re-parses every used file: measure before MCP serves large pilots (a lighter resolver input, or the indexed parse when the bytes match).
 - The same-size edit race (`freshness.rs`) is probabilistic on its red side: no seam between the index update and the re-read.
 - The unreadable and parser-panic fallback (lines 1, `warning:`) is untested (fix: a `&dyn Source`, as `show`'s).
-- This repository's `specengine.toml` has no `[project] slug`, so the index commands (`index`, `search`, `show`, `tree`, `graph`) exit 2 here; the owner decides whether to add one.

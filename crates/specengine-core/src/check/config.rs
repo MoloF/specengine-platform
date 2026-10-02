@@ -325,21 +325,30 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
     let mut config = CheckConfig::default();
 
     if let Some(budgets) = raw.budgets {
-        let cap = |key: &str, value: Option<Spanned<i64>>| -> Result<Option<u64>, ConfigError> {
+        // A value from 1 to `max`; `u64::MAX`: no upper bound of its own.
+        let capped = |key: &str,
+                      value: Option<Spanned<i64>>,
+                      max: u64|
+         -> Result<Option<u64>, ConfigError> {
             match value {
                 None => Ok(None),
                 Some(value) => {
                     let span = value.span();
                     match u64::try_from(*value.get_ref()) {
-                        Ok(cap) if cap >= 1 => Ok(Some(cap)),
-                        _ => Err(error_at(
+                        Ok(cap) if (1..=max).contains(&cap) => Ok(Some(cap)),
+                        _ if max == u64::MAX => Err(error_at(
                             Some(span),
                             format!("`{key}` must be at least 1, not {}", value.get_ref()),
+                        )),
+                        _ => Err(error_at(
+                            Some(span),
+                            format!("`{key}` must be from 1 to {max}, not {}", value.get_ref()),
                         )),
                     }
                 }
             }
         };
+        let cap = |key: &str, value: Option<Spanned<i64>>| capped(key, value, u64::MAX);
         let target = &mut config.budgets;
         if let Some(value) = cap("tier0_bytes", budgets.tier0_bytes)? {
             target.tier0_bytes = value;
@@ -354,7 +363,9 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
             target.decision_bytes = value;
         }
         target.canon_bytes = cap("canon_bytes", budgets.canon_bytes)?;
-        target.bundle_node = cap("bundle_node", budgets.bundle_node)?;
+        // `spec bundle` reads it as a `u32` (`bundle_node_from_toml`): the
+        // gate accepts no value that every bundle would refuse.
+        target.bundle_node = capped("bundle_node", budgets.bundle_node, u64::from(u32::MAX))?;
         target.bundle_task = cap("bundle_task", budgets.bundle_task)?;
     }
 
@@ -414,6 +425,79 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
         config.generators = Some(generators_from(text, generators)?);
     }
     Ok(config)
+}
+
+/// `[budgets] bundle_node` as `spec bundle` reads it: the default budget of
+/// a node bundle, in estimated tokens, and the line of its value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BundleNode {
+    pub tokens: u32,
+    pub line: usize,
+}
+
+/// `[budgets] bundle_node` alone (task spec `spec-cli-bundle`), read from
+/// the whole `specengine.toml` text without judging any other table or key:
+/// a broken `[classes]`, `[check]` or another `[budgets]` key never stops
+/// `spec bundle` (`spec check` judges them). `None`: no such key, or
+/// `budgets` is no table. A value that is no integer from 1 to `u32::MAX`
+/// is an error at its line.
+pub fn bundle_node_from_toml(text: &str) -> Result<Option<BundleNode>, ConfigError> {
+    let error_at = |span: Option<Range<usize>>, message: String| ConfigError {
+        line: span.map(|span| super::text::line_of_str(text, span.start)),
+        message,
+    };
+    let loose: LooseFile = toml::from_str(text)
+        .map_err(|error| error_at(error.span(), error.message().trim().to_owned()))?;
+    if !loose.budgets.as_ref().is_some_and(toml::Value::is_table) {
+        return Ok(None);
+    }
+    let narrow: NarrowFile = toml::from_str(text)
+        .map_err(|error| error_at(error.span(), error.message().trim().to_owned()))?;
+    let Some(value) = narrow.budgets.and_then(|budgets| budgets.bundle_node) else {
+        return Ok(None);
+    };
+    let span = value.span();
+    let tokens = value
+        .get_ref()
+        .as_integer()
+        .and_then(|tokens| u32::try_from(tokens).ok())
+        .filter(|&tokens| tokens >= 1);
+    match tokens {
+        Some(tokens) => Ok(Some(BundleNode {
+            tokens,
+            line: super::text::line_of_str(text, span.start),
+        })),
+        None => Err(error_at(
+            Some(span.clone()),
+            format!(
+                "`[budgets] bundle_node` must be a whole number of tokens from 1 to {}, not {}",
+                u32::MAX,
+                text.get(span).unwrap_or_default().trim()
+            ),
+        )),
+    }
+}
+
+/// The top level as [`bundle_node_from_toml`] first sees it: every key
+/// but `budgets` ignored, whatever it holds.
+#[derive(Deserialize)]
+struct LooseFile {
+    #[serde(default)]
+    budgets: Option<toml::Value>,
+}
+
+/// The top level once `budgets` is known to be a table: only its
+/// `bundle_node`, with the span of its value.
+#[derive(Deserialize)]
+struct NarrowFile {
+    #[serde(default)]
+    budgets: Option<NarrowBudgets>,
+}
+
+#[derive(Deserialize)]
+struct NarrowBudgets {
+    #[serde(default)]
+    bundle_node: Option<Spanned<toml::Value>>,
 }
 
 /// The `[[generators]]` entries, checked: `command` present, not blank, a

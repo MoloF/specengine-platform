@@ -52,6 +52,15 @@ pub(crate) struct Located {
 
 /// Finds the project (see the module documentation) and reads its config.
 pub fn discover(env: &Env, globals: &Globals) -> Result<ProjectRoot, CliError> {
+    discover_with_text(env, globals).map(|(project, _)| project)
+}
+
+/// [`discover`], and the config's text as read: `spec bundle` reads its
+/// `[budgets] bundle_node` from the same bytes.
+pub(crate) fn discover_with_text(
+    env: &Env,
+    globals: &Globals,
+) -> Result<(ProjectRoot, String), CliError> {
     let Located {
         root,
         config_file,
@@ -63,11 +72,14 @@ pub fn discover(env: &Env, globals: &Globals) -> Result<ProjectRoot, CliError> {
         .map_err(|_| CliError::spec(format!("{config_label}: the file is not UTF-8")))?;
     let config =
         ProjectConfig::from_toml(&text).map_err(|error| config_error(&config_label, &error))?;
-    Ok(ProjectRoot {
-        root,
-        config_label,
-        config,
-    })
+    Ok((
+        ProjectRoot {
+            root,
+            config_label,
+            config,
+        },
+        text,
+    ))
 }
 
 /// The root and the config file (see the module documentation), nothing

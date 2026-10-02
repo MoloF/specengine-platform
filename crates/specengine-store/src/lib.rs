@@ -35,7 +35,10 @@
 //!   ([`GivenFile`]) and returns the notes too ([`StagedCheck`])
 //!   (docs/features/spec-cli-introduced.md); [`check_changed_with_notes`]:
 //!   over the working tree, config and baseline from disk, judged against
-//!   `HEAD` the same way (docs/features/spec-cli-changed.md).
+//!   `HEAD` the same way (docs/features/spec-cli-changed.md);
+//! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
+//!   of the index's cache key in the `spec.lock` form (05 §3.5), and
+//!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -96,6 +99,12 @@ pub use source::{GitIndex, Listing, Source, WorkingTree};
 /// node's span start), both pure functions of the file's bytes
 /// (docs/features/spec-cli.md).
 pub const INDEX_FORMAT: u32 = 6;
+
+/// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
+/// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.
+pub fn b3_hash(bytes: &[u8]) -> String {
+    format!("b3:{}", rows::hash_bytes(bytes))
+}
 
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;

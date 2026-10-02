@@ -302,6 +302,17 @@ impl<'a> SpecGraph<'a> {
         self.by_path.get(path).copied()
     }
 
+    /// A file as given: its bytes (the source of every span) and its
+    /// parse.
+    pub fn file(&self, file: usize) -> Option<&'a CheckFile> {
+        self.files.get(file).copied()
+    }
+
+    /// The `[ids]` scheme the graph resolves by.
+    pub fn scheme(&self) -> &'a IdScheme {
+        self.scheme
+    }
+
     /// The file under the live rule.
     pub fn standing(&self, file: usize) -> Standing {
         self.standing.get(file).copied().unwrap_or(Standing::Live)

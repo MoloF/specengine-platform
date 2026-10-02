@@ -2,7 +2,7 @@
 //! `spec` runs killed after a short deadline (a walk without a visited set
 //! must not hang the machine), the parts of a `tree` / `graph` / `show
 //! --links` stdout, and a scratch copy of this repository's walked
-//! documents with a `[project] slug` (the committed config has none).
+//! documents with the committed config (its `[project] slug` included).
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
@@ -181,26 +181,20 @@ pub fn field(items: &Value, key: &str) -> Vec<String> {
 
 /// A scratch copy of this repository's walked documents (the committed
 /// root config's walk) at `<scratch>/<dir>`, its `specengine.toml` the
-/// committed one plus `[project] slug`. The repository is only read.
+/// committed one as is (it names `[project] slug`, Q8 of
+/// docs/features/spec-cli-bundle.md). The repository is only read.
 pub fn repository_copy(scratch: &Scratch, dir: &str) -> PathBuf {
     let repository = repository_root();
-    let toml = String::from_utf8(read(&repository, "specengine.toml")).expect("UTF-8 config");
-    let project = ProjectConfig::from_toml(&toml).expect("the root config");
+    let toml = read(&repository, "specengine.toml");
+    let text = std::str::from_utf8(&toml).expect("UTF-8 config");
+    let project = ProjectConfig::from_toml(text).expect("the root config");
     let tree = WorkingTree::new(&repository, &project.paths).expect("the working tree");
     let input = check_input(&tree, &project.scheme);
     let copy = scratch.dir(dir);
     for file in &input.files {
         write(&copy, &file.path, read(&repository, &file.path));
     }
-    assert!(
-        !toml.contains("[project]"),
-        "the committed config grew a [project] table; drop the scratch slug"
-    );
-    write(
-        &copy,
-        "specengine.toml",
-        format!("{toml}\n[project]\nslug = \"specengine-platform\"\n"),
-    );
+    write(&copy, "specengine.toml", &toml);
     copy
 }
 

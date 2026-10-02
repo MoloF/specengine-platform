@@ -11,9 +11,9 @@ use std::process::ExitCode;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    CheckRequest, CheckedTree, CliError, Env, Exit, ExportIndexRequest, Globals, GraphRequest,
-    IndexRequest, InitRequest, Outcome, SearchRequest, ShowRequest, TreeRequest, render_json,
-    render_text,
+    BundleRequest, CheckRequest, CheckedTree, CliError, Env, Exit, ExportIndexRequest, Globals,
+    GraphRequest, IndexRequest, InitRequest, Outcome, SearchRequest, ShowRequest, TreeRequest,
+    render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -111,6 +111,15 @@ enum Command {
         /// Include links written in Tier 3 (archived) documents.
         #[arg(long)]
         archive: bool,
+    },
+    /// Assemble the context of REF within a budget of estimated tokens: the targets, open questions, ancestors, criteria, decisions, neighbours, terms; the rest named by ID.
+    Bundle {
+        /// Any form `show` takes; several are bundled together.
+        #[arg(required = true, num_args = 1.., value_name = "REF")]
+        references: Vec<String>,
+        /// Estimated tokens at most (default: `[budgets] bundle_node`, else 2000).
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        budget: Option<i64>,
     },
     /// Check the documents against the convention; exit 0 clean or observed, 1 blocked, 2 cannot check.
     Check {
@@ -258,6 +267,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 depth,
                 archive,
             },
+        )?),
+        Command::Bundle { references, budget } => Outcome::Bundle(specengine_cli::bundle(
+            env,
+            globals,
+            &BundleRequest { references, budget },
         )?),
         Command::Check {
             staged,

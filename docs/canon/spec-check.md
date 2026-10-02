@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-01
+reviewed: 2026-10-02
 ---
 
 # spec check: what the documentation check enforces
@@ -42,7 +42,7 @@ decision = { required = ["class", "id", "title", "status", "date", "scope"], opt
 mode = "enforce"             # observe | enforce-introduced | enforce (default)
 ```
 
-Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_task` accepted (tokens, 07 §5). Default contracts, open: canon `owner`, `reviewed`; decision `id`, `status`, `scope`; spec `status`, `scope`; generated nothing; each plus `class`. `closed = true` admits only `class`, `required`, `optional`. A written class replaces its default whole: an omitted `required` or `optional` is empty, `closed` false, so `canon = { closed = true }` admits only `class`. An unknown key or class, a wrong type, a cap < 1, an unknown mode → `specengine.toml:<line>: message`, and the run cannot check.
+Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node` (≤ 4294967295, `u32::MAX` as `spec bundle` reads it), `bundle_task` accepted (tokens). Default contracts, open: canon `owner`, `reviewed`; decision `id`, `status`, `scope`; spec `status`, `scope`; generated nothing; each plus `class`. `closed = true` admits only `class`, `required`, `optional`. A written class replaces its default whole: an omitted `required` or `optional` is empty, `closed` false, so `canon = { closed = true }` admits only `class`. An unknown key or class, a wrong type, a cap out of range, an unknown mode → `specengine.toml:<line>: message`; the run cannot check.
 
 ## Rules
 

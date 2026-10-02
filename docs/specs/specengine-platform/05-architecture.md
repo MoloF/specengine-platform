@@ -328,22 +328,7 @@ The coverage requirement is set **on the node**, not globally (OpenFastTrace `Ne
 
 ## 6. Context bundle (`get_context_bundle`)
 
-The bundle is deterministic, assembled layer by layer with priorities and a budget, and logged in `bundles`.
-
-| Priority | Layer | Form | Always? |
-|---|---|---|---|
-| 1 | Target: task nodes | full section text | yes |
-| 2 | **Open proposals/questions** on the targets + working assumptions | id, gist, working answer | yes |
-| 3 | Ancestor chain | heading + summary + invariants (not the body) | yes |
-| 4 | Acceptance criteria | text + kind + named mutation | yes |
-| 5 | Target bindings | `qpath`, file, **signature**, layer, `sync` | yes |
-| 6 | Decisions promoted to canon for these nodes | 1–2 lines + id | by budget |
-| 7 | `depends_on` / `constrains` | summary | by budget |
-| 8 | Glossary terms | term → identifier in code | by budget |
-| 9 | `@verifies` tests | names | by budget |
-| — | **"Not included" tail** | list `id — title — tokens` | yes |
-
-Default budgets: node 2k, task 10k tokens (bilingual estimator). The "not included" tail implements progressive disclosure: the agent reads more by id via `get_node`, not by grepping the whole corpus. The assembly checks its own reading protocol: if an agent needed more than three follow-up reads, this is recorded in `runs` as a "bundle/tree incomplete" signal (the convention's reading protocol: a third step is an index defect).
+Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, the budget, fitting, the not-included tail and `bundle_hash` in `docs/canon/spec-cli-bundle.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9 (Phase 3); the `bundles` log and the follow-up-reads signal: more than three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete" (the convention's reading protocol: a third step is an index defect).
 
 ## 7. Proposals, owner queue and gates
 

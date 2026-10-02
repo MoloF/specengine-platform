@@ -147,6 +147,71 @@ fn token_bundles_and_observe_are_accepted() {
     assert_eq!(config.mode, Mode::Observe);
 }
 
+/// docs/features/spec-cli-bundle.md, R9 / AC-13: `bundle_node` is read as
+/// a `u32` by `spec bundle`, so the gate takes it from 1 to `u32::MAX`
+/// and refuses the rest at its line with that range; every other cap
+/// keeps "at least 1" and no upper bound of its own.
+#[test]
+fn bundle_node_is_capped_at_u32_max_and_no_other_key_is() {
+    let config = CheckConfig::from_toml("[budgets]\nbundle_node = 4294967295\n").expect("u32::MAX");
+    assert_eq!(config.budgets.bundle_node, Some(u64::from(u32::MAX)));
+    let config = CheckConfig::from_toml("[budgets]\nbundle_node = 1\n").expect("1");
+    assert_eq!(config.budgets.bundle_node, Some(1));
+
+    for (value, text, line) in [
+        ("4294967296", "[budgets]\n\nbundle_node = 4294967296\n", 3),
+        ("0", "[budgets]\nbundle_node = 0\n", 2),
+        (
+            "-1",
+            "[ids]\n\n[budgets]\ntier0_bytes = 100\nbundle_node = -1\n",
+            5,
+        ),
+        (
+            "9223372036854775807",
+            "[budgets]\nbundle_node = 9223372036854775807\n",
+            2,
+        ),
+    ] {
+        let shown = CheckConfig::from_toml(text)
+            .err()
+            .unwrap_or_else(|| panic!("bundle_node = {value}: accepted"))
+            .at("specengine.toml");
+        assert_eq!(
+            shown,
+            format!(
+                "specengine.toml:{line}: `bundle_node` must be from 1 to 4294967295, not {value}"
+            )
+        );
+    }
+
+    // Past `u32::MAX`, the other caps still load.
+    let config = CheckConfig::from_toml(
+        "[budgets]\ntier0_bytes = 5000000000\ntier1_bytes = 5000000000\n\
+         decision_bytes = 5000000000\nindex_bytes = 5000000000\n\
+         canon_bytes = 5000000000\nbundle_task = 5000000000\nbundle_node = 4294967295\n",
+    )
+    .expect("other caps past u32::MAX");
+    assert_eq!(config.budgets.tier0_bytes, 5_000_000_000);
+    assert_eq!(config.budgets.tier1_bytes, 5_000_000_000);
+    assert_eq!(config.budgets.decision_bytes, 5_000_000_000);
+    assert_eq!(config.budgets.index_bytes, 5_000_000_000);
+    assert_eq!(config.budgets.canon_bytes, Some(5_000_000_000));
+    assert_eq!(config.budgets.bundle_task, Some(5_000_000_000));
+    assert_eq!(config.budgets.bundle_node, Some(4_294_967_295));
+
+    // And keep their own wording below 1.
+    for (key, line) in [("tier0_bytes", 2), ("tier1_bytes", 2), ("bundle_task", 2)] {
+        let shown = CheckConfig::from_toml(&format!("[budgets]\n{key} = 0\n"))
+            .err()
+            .unwrap_or_else(|| panic!("{key} = 0: accepted"))
+            .at("specengine.toml");
+        assert_eq!(
+            shown,
+            format!("specengine.toml:{line}: `{key}` must be at least 1, not 0")
+        );
+    }
+}
+
 /// `(case, text, line)`: each must fail at that line of the file.
 const INVALID: &[(&str, &str, usize)] = &[
     (

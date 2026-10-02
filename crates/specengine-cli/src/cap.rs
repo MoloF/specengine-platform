@@ -76,8 +76,8 @@ struct Omitted {
 
 /// `<ID else path> | <kind or -> | <title or -> | <path>:<line> | <n> tokens`
 /// and, when they apply, ` | status <s>`, ` | rev <n>`, ` | archived`,
-/// ` | not UTF-8`.
-fn header(node: &ShownNode) -> String {
+/// ` | not UTF-8`. Also `spec bundle`'s target headers.
+pub(crate) fn header(node: &ShownNode) -> String {
     let name = node.id.as_deref().unwrap_or(&node.path);
     let kind = node.kind.as_deref().unwrap_or("-");
     let title = node

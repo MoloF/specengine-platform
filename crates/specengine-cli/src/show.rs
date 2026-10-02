@@ -447,8 +447,9 @@ fn bare_text<'w>(reference: &Reference, written: &'w str) -> &'w str {
         .unwrap_or(text)
 }
 
-/// Node `ord` of `parsed`, its text from `bytes`.
-fn shown(
+/// Node `ord` of `parsed`, its text from `bytes` (also `spec bundle`'s
+/// targets).
+pub(crate) fn shown(
     path: &str,
     bytes: &[u8],
     parsed: &ParsedFile,
