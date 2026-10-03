@@ -1,8 +1,8 @@
 {
-  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (AC-07 of docs/features/phase-0-spikes.md; binding rules in 05 §5.3, output shape in crates/specengine-eval/README.md). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file.",
-  "files": 2,
-  "files_with_comments": 2,
-  "parse_clean": { "lexer": 2, "grammar": null },
+  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (AC-07 of docs/features/phase-0-spikes.md; binding rules in 05 \u00a75.3, output shape in crates/specengine-eval/README.md). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file. `ambiguous.ron` (docs/features/layer-a-identity.md AC-10, AC-11) adds level lists (one declared `[sig]`, one declared out of order, one `unknown`, one `unclosed`), an empty ID and five markers under colliding siblings (`ambiguous`, never `anchored`); `levels` in a row is the effective list (`null` when invalid), `levels_state` its state.",
+  "files": 3,
+  "files_with_comments": 3,
+  "parse_clean": { "lexer": 3, "grammar": null },
   "parse_clean_pct": { "lexer": 100.0, "grammar": null },
   "rejected_categories": {
     "lexer": [],
@@ -10,21 +10,37 @@
   },
   "comment_byte_ranges": { "lexer": true, "grammar": null, "files_agreeing_pct": null },
   "markers": {
-    "total": 3,
-    "by_relation": { "implements": 3 },
-    "anchored": { "lexer": 2, "grammar": null },
+    "total": 14,
+    "by_relation": { "implements": 14 },
+    "anchored": { "lexer": 8, "grammar": null },
     "unanchored": { "lexer": 1, "grammar": null },
     "cannot_verify": { "lexer": 0, "grammar": null },
-    "nested": 2,
+    "ambiguous": { "lexer": 5, "grammar": null },
+    "nested": 3,
     "agree_pct": null,
-    "id_not_latin": 0
+    "id_not_latin": 0,
+    "id_empty": 1,
+    "levels": { "default": 10, "declared": 2, "invalid": 2 }
   },
+  "levels_invalid": { "unclosed": 1, "unknown": 1 },
+  "colliding_groups": 4,
   "nested_marker_resolves": { "lexer": true, "grammar": null },
   "recommendation": "lexer",
   "anchors": [
-    { "path": "config.ron", "line": 7, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.player.speed", "depth": 2 },
-    { "path": "config.ron", "line": 14, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.waves[2]", "depth": 2 },
-    { "path": "config.ron", "line": 19, "relation": "implements", "id": "X", "rev": 1, "anchor": "unanchored", "depth": null }
+    {"path": "ambiguous.ron", "line": 4, "relation": "implements", "id": "LV", "rev": 2, "anchor": "root.speed", "depth": 1, "levels": ["sig"], "levels_state": "declared", "ambiguous": false},
+    {"path": "ambiguous.ron", "line": 6, "relation": "implements", "id": "BAD", "rev": 1, "anchor": "root.volume", "depth": 1, "levels": null, "levels_state": "unknown", "ambiguous": false},
+    {"path": "ambiguous.ron", "line": 8, "relation": "implements", "id": "OPEN", "rev": 1, "anchor": "root.pan", "depth": 1, "levels": null, "levels_state": "unclosed", "ambiguous": false},
+    {"path": "ambiguous.ron", "line": 10, "relation": "implements", "id": "", "rev": null, "anchor": "root.gain", "depth": 1, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false},
+    {"path": "ambiguous.ron", "line": 13, "relation": "implements", "id": "LONG-A", "rev": 1, "anchor": "root.tables{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\u2026}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "ambiguous.ron", "line": 15, "relation": "implements", "id": "LONG-B", "rev": 1, "anchor": "root.tables{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\u2026}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "ambiguous.ron", "line": 18, "relation": "implements", "id": "FIRE", "rev": 1, "anchor": "root.tables{\"fire ice\"}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "ambiguous.ron", "line": 20, "relation": "implements", "id": "WATER", "rev": 1, "anchor": "root.tables{\"water\"}", "depth": 2, "levels": ["sig", "body"], "levels_state": "declared", "ambiguous": false},
+    {"path": "ambiguous.ron", "line": 24, "relation": "implements", "id": "RATE", "rev": 1, "anchor": "root.twice.rate", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "ambiguous.ron", "line": 28, "relation": "implements", "id": "DEEP-MAP", "rev": 1, "anchor": "root.deep", "depth": 1, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false},
+    {"path": "ambiguous.ron", "line": 31, "relation": "implements", "id": "DEEP", "rev": 1, "anchor": "root.deep{\"k\"}.x", "depth": 3, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "config.ron", "line": 7, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.player.speed", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false},
+    {"path": "config.ron", "line": 14, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.waves[2]", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false},
+    {"path": "config.ron", "line": 19, "relation": "implements", "id": "X", "rev": 1, "anchor": "unanchored", "depth": null, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false}
   ],
-  "comments": { "config.ron": 6, "extensions.ron": 2 }
+  "comments": { "ambiguous.ron": 13, "config.ron": 6, "extensions.ron": 2 }
 }

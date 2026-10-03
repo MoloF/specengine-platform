@@ -10,7 +10,7 @@ use specengine_code::hash::{
     self, Digest, ErrorCategory, HashState, attached_attributes, hash_item, normalize,
 };
 use specengine_code::items::{FileAnalysis, analyze_tree};
-use specengine_code::qpath::{self, FileRole};
+use specengine_code::qpath::{self, FileRole, Unit, UnitKind};
 use specengine_code::{RustParser, grammar};
 use tree_sitter::{Node, Tree};
 
@@ -531,32 +531,89 @@ fn path_attribute_is_counted_and_resolved() {
 
 #[test]
 fn file_roles_follow_the_cargo_layout() {
-    let module = |parts: &[&str]| FileRole::Module(parts.iter().map(|p| (*p).to_owned()).collect());
+    // The old path-only table, re-read against the package's own targets
+    // (Cargo's auto-discovery over the same files): every crate root now
+    // names its unit, the primary target (the lib) stays unnamed.
+    let files = [
+        "src/lib.rs",
+        "src/main.rs",
+        "build.rs",
+        "src/bin/tool.rs",
+        "src/bin/multi/main.rs",
+        "src/bin/multi/cli.rs",
+        "tests/smoke.rs",
+        "examples/demo.rs",
+        "benches/bench.rs",
+        "tests/suite/main.rs",
+        "tests/suite/helpers.rs",
+        "src/a/b.rs",
+        "src/a/mod.rs",
+        "src/broken.rs",
+        "src/vendored/relocated.rs",
+        "scripts/gen.rs",
+        "lib.rs",
+        "src/notes.txt",
+    ];
+    let table = qpath::layout_targets("pkg", files.iter().map(Path::new));
+    let unit = |kind: &str, name: &str| {
+        Some(Unit {
+            kind: UnitKind::Target(kind.to_owned()),
+            name: name.to_owned(),
+        })
+    };
+    let module = |unit: Option<Unit>, parts: &[&str]| {
+        FileRole::Module(unit, parts.iter().map(|p| (*p).to_owned()).collect())
+    };
     let cases = [
-        ("src/lib.rs", FileRole::CrateRoot),
-        ("src/main.rs", FileRole::CrateRoot),
-        ("build.rs", FileRole::CrateRoot),
-        ("src/bin/tool.rs", FileRole::CrateRoot),
-        ("src/bin/tool/main.rs", FileRole::CrateRoot),
-        ("src/bin/tool/cli.rs", module(&["cli"])),
-        ("tests/smoke.rs", FileRole::CrateRoot),
-        ("examples/demo.rs", FileRole::CrateRoot),
-        ("benches/bench.rs", FileRole::CrateRoot),
-        ("tests/suite/main.rs", FileRole::CrateRoot),
-        ("tests/suite/helpers.rs", module(&["helpers"])),
-        ("src/a/b.rs", module(&["a", "b"])),
-        ("src/a/mod.rs", module(&["a"])),
-        ("src/broken.rs", module(&["broken"])),
+        ("src/lib.rs", FileRole::CrateRoot(None)),
+        ("src/main.rs", FileRole::CrateRoot(unit("bin", "pkg"))),
+        (
+            "build.rs",
+            FileRole::CrateRoot(unit("custom-build", "build-script-build")),
+        ),
+        ("src/bin/tool.rs", FileRole::CrateRoot(unit("bin", "tool"))),
+        (
+            "src/bin/multi/main.rs",
+            FileRole::CrateRoot(unit("bin", "multi")),
+        ),
+        (
+            "src/bin/multi/cli.rs",
+            module(unit("bin", "multi"), &["cli"]),
+        ),
+        ("tests/smoke.rs", FileRole::CrateRoot(unit("test", "smoke"))),
+        (
+            "examples/demo.rs",
+            FileRole::CrateRoot(unit("example", "demo")),
+        ),
+        (
+            "benches/bench.rs",
+            FileRole::CrateRoot(unit("bench", "bench")),
+        ),
+        (
+            "tests/suite/main.rs",
+            FileRole::CrateRoot(unit("test", "suite")),
+        ),
+        (
+            "tests/suite/helpers.rs",
+            module(unit("test", "suite"), &["helpers"]),
+        ),
+        ("src/a/b.rs", module(None, &["a", "b"])),
+        ("src/a/mod.rs", module(None, &["a"])),
+        ("src/broken.rs", module(None, &["broken"])),
         (
             "src/vendored/relocated.rs",
-            module(&["vendored", "relocated"]),
+            module(None, &["vendored", "relocated"]),
         ),
         ("scripts/gen.rs", FileRole::Unrooted),
         ("lib.rs", FileRole::Unrooted),
         ("src/notes.txt", FileRole::Unrooted),
     ];
     for (path, expected) in cases {
-        assert_eq!(qpath::file_role(Path::new(path)), expected, "{path}");
+        assert_eq!(
+            qpath::file_role(Path::new(path), &table),
+            expected,
+            "{path}"
+        );
     }
     let packages = ["", "crates/x"];
     let is_package = |dir: &Path| packages.iter().any(|p| Path::new(p) == dir);
@@ -579,7 +636,7 @@ fn qpath_names_owner_and_never_an_absolute_path() {
     let analysis = analysis(
         "pub struct Counter;\nimpl Counter { pub fn tick(&self) {} }\nimpl Default for Counter { fn default() -> Self { Counter } }\n",
     );
-    let role = FileRole::Module(vec!["a".to_owned()]);
+    let role = FileRole::Module(None, vec!["a".to_owned()]);
     let rendered: Vec<String> = analysis
         .items
         .iter()
@@ -598,9 +655,19 @@ fn qpath_names_owner_and_never_an_absolute_path() {
     let crate_root: Vec<String> = analysis
         .items
         .iter()
-        .map(|item| qpath::qpath("crates/x", &FileRole::CrateRoot, item).to_string())
+        .map(|item| qpath::qpath("crates/x", &FileRole::CrateRoot(None), item).to_string())
         .collect();
     assert_eq!(crate_root[0], "crates/x::Counter");
+    // A non-primary unit sits between the package and the module path.
+    let tool = FileRole::CrateRoot(Some(Unit {
+        kind: UnitKind::Target("bin".to_owned()),
+        name: "tool".to_owned(),
+    }));
+    let in_tool = qpath::qpath("crates/x", &tool, &analysis.items[2]);
+    assert_eq!(in_tool.to_string(), "crates/x::bin:tool::Counter::tick");
+    let unrooted = qpath::qpath("crates/x", &FileRole::Unrooted, &analysis.items[0]);
+    assert_eq!(unrooted.to_string(), "crates/x::Counter");
+    assert_eq!(unrooted.unit, None);
     assert!(
         rendered
             .iter()

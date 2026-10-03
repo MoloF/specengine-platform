@@ -19,16 +19,14 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 - ADR-0001…ADR-0025 with canon diffs; spikes: `docs/features/phase-0-spikes.md`.
 - Carried to Phase 1: pre-code reading (tracey sources and a run on one pilot crate, input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift, amiss, `/speckit.converge`).
-- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ≈ 114 KB against ≤ 40 KB, driven by 05, 04 and 06.
+- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ≈ 109 KB against ≤ 40 KB, driven by 05, 04 and 06.
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `docs/canon/mcp-read.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources).
+- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `mcp-read.md`, `code-identity.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources), layer A identity (`qpath` target units, marker `[tiers]`, ambiguous RON paths; pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %).
 - Next: the pilots below.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
-  - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").
-  - The marker parser parses the `[tiers]` list of the canon grammar `// @implements ID@rev [tiers]` (`docs/canon/architecture.md#markers`, 05 §5.3); the Phase 0 parser keeps everything after `ID[@rev]` as a free-text note. Duplicate RON paths are flagged as ambiguous, never merged.
   - MCP: the `_meta["anthropic/maxResultSizeChars"]` lever (500 000) is declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does the lever act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
   - The census findings of §4.3 become per-corpus importer settings and rules.
 

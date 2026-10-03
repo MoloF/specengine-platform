@@ -60,7 +60,8 @@ a form to approve or reject and returns the answer; every call prompts the human
 nothing is recorded. probe_output(tokens) returns filler of about that many tokens; \
 probe_sleep(seconds) waits, then returns.";
 
-/// Claude Code truncates `instructions` and tool descriptions at this length (04 §4).
+/// Claude Code truncates `instructions` and tool descriptions at this length
+/// (`crates/specengine-mcp/README.md`, "Claude Code client").
 const TEXT_LIMIT: usize = 2048;
 
 const _: () = assert!(INSTRUCTIONS.is_ascii());

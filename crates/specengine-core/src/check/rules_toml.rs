@@ -43,8 +43,8 @@ pub struct CheckRule {
     pub line: usize,
 }
 
-/// The `[[check.rules]]` entries, checked, in config order (task spec
-/// `spec-check-process`, "Rules and edge cases"): no empty list or table;
+/// The `[[check.rules]]` entries, checked, in config order
+/// (`docs/canon/spec-check-process.md`, "Config errors"): no empty list or table;
 /// each kind one an `[ids]` prefix declares (checked when `[ids]` reads:
 /// its own errors are `ProjectConfig`'s), each class one of the four, each
 /// glob a root-relative path (the `exclude` rules), each label with a

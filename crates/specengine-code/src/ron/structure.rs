@@ -67,14 +67,27 @@
 //! comments inside it resolve to `cannot_verify`, and the walk goes on after
 //! the closer. The stack a walk needs is therefore bounded whatever the file.
 //!
+//! Ambiguity (`docs/canon/code-identity.md`). Each open struct body or map
+//! keeps one set of its entries' segment texts; an entry whose segment is
+//! already there joins that sibling *group*, and a group of two or more
+//! collides. Every group records the group of the entry enclosing its
+//! container, so a resolved marker remembers only the innermost entry it lies
+//! under; after the walk — every container closed, the unclosed ones at the
+//! end of input — a marker is [`Anchor::Ambiguous`] when that group or any
+//! enclosing one collides. Siblings sharing a segment are thus flagged
+//! wholesale, marked or not, with no pairwise comparison and no path per
+//! value.
+//!
 //! Cost: linear in the tokens. Per entry the walk reads at most
 //! [`MAX_SEGMENT_BYTES`] of a field name or a map key (the key's extent is
-//! looked for no further), and renders a path only when a marker is pending
+//! looked for no further) and looks that bounded text up once in its
+//! container's set; it renders a path only when a marker is pending
 //! (and, for a trailing comment, only when one starts on the value's line).
 //! Lines are looked up only for marker comments: a fixed few when a comment
 //! is crossed (its two ends, the tokens on either side), once per pending
 //! check at a value's end or an opener.
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use super::lexer::{Delim, Token, TokenKind};
@@ -122,14 +135,19 @@ pub(super) struct StructureError {
     pub offset: usize,
 }
 
+/// What a walk yields.
+pub(super) struct Walked {
+    /// Resolved markers, in source order.
+    pub markers: Vec<RonMarker>,
+    /// Structural errors met on the way.
+    pub errors: Vec<StructureError>,
+    /// Sibling groups sharing a segment text.
+    pub colliding_groups: usize,
+}
+
 /// Resolves `markers` (comment token index, marker) against the structure of
-/// `tokens`; returns the resolved markers in source order and the structural
-/// errors met on the way.
-pub(super) fn walk(
-    source: &str,
-    tokens: &[Token],
-    markers: Vec<(usize, Marker)>,
-) -> (Vec<RonMarker>, Vec<StructureError>) {
+/// `tokens`.
+pub(super) fn walk(source: &str, tokens: &[Token], markers: Vec<(usize, Marker)>) -> Walked {
     // Lines are needed only to resolve markers.
     let lines = if markers.is_empty() {
         LineIndex::default()
@@ -148,11 +166,51 @@ pub(super) fn walk(
         pending: Vec::new(),
         resolved: Vec::new(),
         errors: Vec::new(),
+        sibling_sets: Vec::new(),
+        open_entries: Vec::new(),
+        groups: Vec::new(),
+        colliding_groups: 0,
     };
     walker.file();
-    let mut resolved = walker.resolved;
+    // Every container is closed now: a group is flagged when it or an
+    // enclosing group collides (an enclosing group is always created first).
+    let mut flagged = vec![false; walker.groups.len()];
+    for (index, group) in walker.groups.iter().enumerate() {
+        flagged[index] = group.collides
+            || group
+                .parent
+                .is_some_and(|parent| parent < index && flagged[parent]);
+    }
+    let mut resolved: Vec<RonMarker> = walker
+        .resolved
+        .into_iter()
+        .map(|(mut marker, group)| {
+            if group.is_some_and(|group| flagged[group])
+                && let Anchor::Path { path, depth } = marker.anchor
+            {
+                marker.anchor = Anchor::Ambiguous { path, depth };
+            }
+            marker
+        })
+        .collect();
     resolved.sort_by_key(|m| (m.comment.start, m.marker.offset));
-    (resolved, walker.errors)
+    Walked {
+        markers: resolved,
+        errors: walker.errors,
+        colliding_groups: walker.colliding_groups,
+    }
+}
+
+/// Innermost struct or map entry a path lies under: an index into
+/// [`Walker::groups`]; `None` at the root and under elements only.
+type GroupId = Option<usize>;
+
+/// The siblings of one struct body or map sharing one segment text.
+struct Group {
+    /// The group of the entry whose value holds this group's container.
+    parent: GroupId,
+    /// Two or more siblings share the segment.
+    collides: bool,
 }
 
 /// A marker of a crossed comment, not resolved yet.
@@ -171,9 +229,10 @@ struct Pending {
     /// `end_line`: the comment binds to the value the walk begins there, if
     /// one does.
     leads: bool,
-    /// Set on a leading comment that trails a value: its anchor when no value
-    /// begins at the next token after all.
-    fallback: Option<Anchor>,
+    /// Set on a leading comment that trails a value: its anchor (and the
+    /// innermost entry it lies under) when no value begins at the next token
+    /// after all.
+    fallback: Option<(Anchor, GroupId)>,
 }
 
 /// Token kinds a value can begin with ([`Walker::value`]); extension
@@ -205,8 +264,15 @@ struct Walker<'a> {
     next_marker: usize,
     /// Markers of the comments crossed since the last consumed token.
     pending: Vec<Pending>,
-    resolved: Vec<RonMarker>,
+    /// Resolved markers with the innermost entry their anchor lies under.
+    resolved: Vec<(RonMarker, GroupId)>,
     errors: Vec<StructureError>,
+    /// One set per open struct body or map: segment text → its group.
+    sibling_sets: Vec<HashMap<String, usize>>,
+    /// The group of every open struct or map entry, outermost first.
+    open_entries: Vec<usize>,
+    groups: Vec<Group>,
+    colliding_groups: usize,
 }
 
 impl Walker<'_> {
@@ -365,6 +431,13 @@ impl Walker<'_> {
 
     /// Fields of a named struct; `true` when a closer ended it.
     fn struct_entries(&mut self, path: &mut Vec<Segment>) -> bool {
+        self.sibling_sets.push(HashMap::new());
+        let closed = self.struct_fields(path);
+        self.sibling_sets.pop();
+        closed
+    }
+
+    fn struct_fields(&mut self, path: &mut Vec<Segment>) -> bool {
         loop {
             let Some(token) = self.peek() else {
                 self.error(StructureErrorKind::UnbalancedDelimiter, self.source.len());
@@ -382,11 +455,9 @@ impl Walker<'_> {
                     return true;
                 }
                 TokenKind::Ident => {
-                    path.push(Segment::Field(segment_text(
-                        self.source,
-                        range.start,
-                        range.end,
-                    )));
+                    let segment = segment_text(self.source, range.start, range.end);
+                    self.enter_entry(&segment);
+                    path.push(Segment::Field(segment));
                     self.anchor_pending(path);
                     self.bump();
                     if self.peek().is_some_and(|t| t.kind == TokenKind::Colon) {
@@ -399,6 +470,7 @@ impl Walker<'_> {
                     let has_value = self.value(path);
                     self.separator(path, Delim::Paren, has_value);
                     path.pop();
+                    self.open_entries.pop();
                 }
                 _ => {
                     self.error(StructureErrorKind::ExpectedField, range.start);
@@ -450,6 +522,13 @@ impl Walker<'_> {
 
     /// Entries of a map; `true` when a closer ended it.
     fn map(&mut self, path: &mut Vec<Segment>) -> bool {
+        self.sibling_sets.push(HashMap::new());
+        let closed = self.map_entries(path);
+        self.sibling_sets.pop();
+        closed
+    }
+
+    fn map_entries(&mut self, path: &mut Vec<Segment>) -> bool {
         loop {
             let Some(token) = self.peek() else {
                 self.error(StructureErrorKind::UnbalancedDelimiter, self.source.len());
@@ -479,7 +558,9 @@ impl Walker<'_> {
                     // Past the cap the key's end is not looked for: any end
                     // beyond `limit` truncates alike, and the file's end is one.
                     let key_end = self.key_end(limit).unwrap_or(self.source.len());
-                    path.push(Segment::Key(segment_text(self.source, start, key_end)));
+                    let segment = segment_text(self.source, start, key_end);
+                    self.enter_entry(&segment);
+                    path.push(Segment::Key(segment));
                     self.anchor_pending(path);
                     // The key is not the entry's end: a comment trailing it
                     // is followed by `:` and stays `unanchored`.
@@ -494,6 +575,7 @@ impl Walker<'_> {
                     let has_value = self.value(path);
                     self.separator(path, Delim::Brace, has_value);
                     path.pop();
+                    self.open_entries.pop();
                 }
             }
         }
@@ -707,12 +789,13 @@ impl Walker<'_> {
             return;
         }
         let anchor = render_path(path);
+        let group = self.innermost_entry();
         let (taken, rest): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.pending)
             .into_iter()
             .partition(|p| takes(p));
         self.pending = rest;
         for pending in taken {
-            self.resolve(pending, anchor.clone());
+            self.resolve(pending, anchor.clone(), group);
         }
     }
 
@@ -732,14 +815,15 @@ impl Walker<'_> {
             return;
         }
         let anchor = render_path(path);
+        let group = self.innermost_entry();
         for mut pending in std::mem::take(&mut self.pending) {
             if pending.line != line {
                 self.pending.push(pending);
             } else if pending.leads {
-                pending.fallback = Some(anchor.clone());
+                pending.fallback = Some((anchor.clone(), group));
                 self.pending.push(pending);
             } else {
-                self.resolve(pending, anchor.clone());
+                self.resolve(pending, anchor.clone(), group);
             }
         }
     }
@@ -748,18 +832,63 @@ impl Walker<'_> {
     /// led a token no value began at), else to `anchor`.
     fn settle_pending(&mut self, anchor: Anchor) {
         for mut pending in std::mem::take(&mut self.pending) {
-            let anchor = pending.fallback.take().unwrap_or_else(|| anchor.clone());
-            self.resolve(pending, anchor);
+            let (anchor, group) = pending
+                .fallback
+                .take()
+                .unwrap_or_else(|| (anchor.clone(), None));
+            self.resolve(pending, anchor, group);
         }
     }
 
-    fn resolve(&mut self, pending: Pending, anchor: Anchor) {
-        self.resolved.push(RonMarker {
-            marker: pending.marker,
-            line: pending.line,
-            comment: pending.comment,
-            anchor,
-        });
+    fn resolve(&mut self, pending: Pending, anchor: Anchor, group: GroupId) {
+        self.resolved.push((
+            RonMarker {
+                marker: pending.marker,
+                line: pending.line,
+                comment: pending.comment,
+                anchor,
+            },
+            group,
+        ));
+    }
+
+    /// A struct or map entry with this segment text begins in the innermost
+    /// open container: it joins the group of an earlier sibling with the same
+    /// text (which then collides) or starts one, and stays open until its
+    /// value is done. One bounded lookup; the text is copied only for a new
+    /// group.
+    fn enter_entry(&mut self, segment: &str) {
+        let parent = self.innermost_entry();
+        let known = self
+            .sibling_sets
+            .last()
+            .and_then(|set| set.get(segment).copied());
+        let group = match known {
+            Some(group) => {
+                if !self.groups[group].collides {
+                    self.groups[group].collides = true;
+                    self.colliding_groups += 1;
+                }
+                group
+            }
+            None => {
+                let group = self.groups.len();
+                self.groups.push(Group {
+                    parent,
+                    collides: false,
+                });
+                if let Some(set) = self.sibling_sets.last_mut() {
+                    set.insert(segment.to_owned(), group);
+                }
+                group
+            }
+        };
+        self.open_entries.push(group);
+    }
+
+    /// The group of the innermost open struct or map entry.
+    fn innermost_entry(&self) -> GroupId {
+        self.open_entries.last().copied()
     }
 
     fn offset(&self) -> usize {

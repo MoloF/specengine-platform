@@ -12,15 +12,17 @@
 //! - [`comments`] — comment stripping by comment node ranges (a perturbation);
 //! - [`items`] — the items of one file with their hash state and attached
 //!   `#[path]` attributes;
-//! - [`qpath`] — module path from the file's place in a Cargo package; every
-//!   ambiguity is reported, never guessed.
+//! - [`qpath`] — module path from the file's place among its package's Cargo
+//!   targets (a target table handed in, or Cargo's auto-discovery): one unit
+//!   per file; every ambiguity is reported, never guessed.
 //!
 //! Phase 0 increment `ron` (marker grammar and RON binding: 05 §5.3):
 //!
-//! - [`markers`] — the marker syntax shared by `.rs` and `.ron` comments;
+//! - [`markers`] — the marker syntax shared by `.rs` and `.ron` comments,
+//!   level lists (`[sig]`) included;
 //! - [`ron`] — markers in `.ron` files resolved to field paths by an own
 //!   lexer and a tolerant structure walk (the Phase 0 verdict `lexer`,
-//!   05 §9 "AST" row).
+//!   05 §9 "AST" row); colliding sibling segments make a path ambiguous.
 //!
 //! Phase 0 increment `bevy-schedule` (the Bevy detector of 05 §5.1):
 //!
@@ -43,6 +45,9 @@ pub use bevy::{BevyAnalysis, detect, detect_file};
 pub use grammar::{GrammarInfo, RustParser, grammar_info};
 pub use hash::{Digest, ErrorCategory, HashState, RECIPE, hash_item, normalize, recipe_header};
 pub use items::{FileAnalysis, ItemRecord, ModDeclaration, analyze_file, analyze_tree};
-pub use markers::{Marker, Relation, markers_in};
-pub use qpath::{Ambiguity, FileRole, QPath};
+pub use markers::{Level, LevelError, Levels, Marker, Relation, markers_in};
+pub use qpath::{
+    Ambiguity, FileRole, PackageTargets, QPath, Target, TargetIndex, TargetSource, Unit, UnitKind,
+    layout_targets,
+};
 pub use ron::{Anchor, Rejected, RonAnalysis, RonMarker};

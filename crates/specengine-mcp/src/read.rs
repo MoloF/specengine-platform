@@ -46,7 +46,8 @@ pub(crate) const MAX_RESULT_SIZE_KEY: &str = "anthropic/maxResultSizeChars";
 /// stderr that list corpus defects.
 pub const MAX_RESULT_CHARS: u64 = 500_000;
 
-/// Claude Code truncates tool descriptions at this length (04 §4).
+/// Claude Code truncates tool descriptions at this length
+/// (`crates/specengine-mcp/README.md`, "Claude Code client").
 const DESCRIPTION_LIMIT: usize = 2048;
 
 /// Every read tool's description ends with this sentence (07 §1.1).

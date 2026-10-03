@@ -118,7 +118,7 @@ impl<'a> FileText<'a> {
 }
 
 /// A front-matter value as the process rules read it
-/// (`docs/features/spec-check-process.md`, "Terms").
+/// (`docs/canon/spec-check-process.md`, "A rule").
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Written {
     Null,

@@ -186,11 +186,14 @@ fn assert_all_rows_present(result: &Value) {
         "comment byte ranges are what the lexer is for"
     );
     let markers = &result["markers"];
-    for key in ["total", "nested", "id_not_latin"] {
+    for key in ["total", "nested", "id_not_latin", "id_empty"] {
         count(&markers[key], &format!("markers.{key}"));
     }
+    for key in ["default", "declared", "invalid"] {
+        count(&markers["levels"][key], &format!("markers.levels.{key}"));
+    }
     assert!(markers["by_relation"].is_object());
-    for key in ["anchored", "unanchored", "cannot_verify"] {
+    for key in ["anchored", "unanchored", "cannot_verify", "ambiguous"] {
         count(&markers[key]["lexer"], &format!("markers.{key}.lexer"));
     }
     assert!(
@@ -205,6 +208,8 @@ fn assert_all_rows_present(result: &Value) {
     count(&detail["comments"]["lexer"], "detail.comments.lexer");
     count(&detail["files_with_markers"], "detail.files_with_markers");
     assert!(detail["rejected_files"]["lexer"].is_object());
+    assert!(detail["levels_invalid"].is_object());
+    count(&detail["colliding_groups"], "detail.colliding_groups");
 
     let grammar_side = [
         &result["parse_clean"]["grammar"],
@@ -215,6 +220,7 @@ fn assert_all_rows_present(result: &Value) {
         &markers["anchored"]["grammar"],
         &markers["unanchored"]["grammar"],
         &markers["cannot_verify"]["grammar"],
+        &markers["ambiguous"]["grammar"],
         &grammar["version"],
         &grammar["abi"],
         &grammar["second_runtime"],
@@ -237,6 +243,7 @@ fn assert_all_rows_present(result: &Value) {
         (&markers["anchored"], "markers.anchored"),
         (&markers["unanchored"], "markers.unanchored"),
         (&markers["cannot_verify"], "markers.cannot_verify"),
+        (&markers["ambiguous"], "markers.ambiguous"),
         (&result["nested_marker_resolves"], "nested_marker_resolves"),
         (&detail["comments"], "detail.comments"),
         (&detail["rejected_files"], "detail.rejected_files"),
@@ -294,7 +301,7 @@ fn fixture_run_matches_expected_json_and_leaves_the_fixture_untouched() {
             result["comment_byte_ranges"][approach], expected["comment_byte_ranges"][approach],
             "comment_byte_ranges.{approach}"
         );
-        for key in ["anchored", "unanchored", "cannot_verify"] {
+        for key in ["anchored", "unanchored", "cannot_verify", "ambiguous"] {
             assert_eq!(
                 result["markers"][key][approach], expected["markers"][key][approach],
                 "markers.{key}.{approach}"
@@ -306,12 +313,34 @@ fn fixture_run_matches_expected_json_and_leaves_the_fixture_untouched() {
             "nested_marker_resolves.{approach}"
         );
     }
-    for key in ["total", "by_relation", "nested", "id_not_latin"] {
+    for key in [
+        "total",
+        "by_relation",
+        "nested",
+        "id_not_latin",
+        "id_empty",
+        "levels",
+    ] {
         assert_eq!(
             result["markers"][key], expected["markers"][key],
             "markers.{key}"
         );
     }
+    // docs/features/layer-a-identity.md AC-10, AC-12: an ambiguous marker
+    // is counted apart, never `anchored`; invalid lists by category.
+    let by_anchor: u64 = ["anchored", "unanchored", "cannot_verify", "ambiguous"]
+        .iter()
+        .map(|key| count(&result["markers"][key]["lexer"], key))
+        .sum();
+    assert_eq!(by_anchor, count(&result["markers"]["total"], "total"));
+    assert_eq!(
+        result["detail"]["levels_invalid"], expected["levels_invalid"],
+        "detail.levels_invalid"
+    );
+    assert_eq!(
+        result["detail"]["colliding_groups"], expected["colliding_groups"],
+        "detail.colliding_groups"
+    );
     assert_eq!(
         result["comment_byte_ranges"]["files_agreeing_pct"],
         expected["comment_byte_ranges"]["files_agreeing_pct"]
@@ -334,6 +363,9 @@ fn fixture_run_matches_expected_json_and_leaves_the_fixture_untouched() {
         assert_eq!(row["id_latin"], Value::Bool(true));
         assert_eq!(row["note"], Value::Null);
         assert_eq!(row["lexer"], want["anchor"], "lexer anchor: {row}");
+        for key in ["levels", "levels_state", "ambiguous"] {
+            assert_eq!(row[key], want[key], "markers.json {key}: {row}");
+        }
         assert_eq!(row["grammar"], Value::Null, "grammar anchor: {row}");
     }
     let files = read_json(&detail.join("files.json"));
@@ -493,7 +525,11 @@ fn out_beside_the_corpus_is_accepted_and_labelled_pilot() {
     ]);
     let envelope = envelope(&output);
     assert_envelope_shape(&envelope, "pilot");
-    assert_eq!(envelope["result"]["markers"]["total"], 3);
+    assert_eq!(
+        envelope["result"]["markers"]["total"],
+        expected()["markers"]["total"],
+        "the copy of fixtures/ron measures like the fixture"
+    );
     assert!(out.join("ron").join("pilot").join("markers.json").is_file());
     assert_eq!(snapshot(&corpus.corpus), corpus.before);
 }

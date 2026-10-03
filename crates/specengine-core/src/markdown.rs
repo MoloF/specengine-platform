@@ -341,7 +341,7 @@ pub(crate) fn slug(text: &str) -> String {
     out
 }
 
-/// A labelled place of the body (task spec `spec-check-process`, "Terms"):
+/// A labelled place of the body (`docs/canon/spec-check-process.md`, "A rule"):
 /// a heading of any level, or a lead-in — strong emphasis (`**…**`, `__…__`)
 /// opening a paragraph, a list item or a line inside one, outside a link.
 pub(crate) struct Label {

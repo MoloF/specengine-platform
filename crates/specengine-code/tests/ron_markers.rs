@@ -801,3 +801,27 @@ fn trailing_marker_after_a_too_deep_value_binds_to_its_entry() {
         [2, 3, 4]
     );
 }
+
+/// docs/features/layer-a-identity.md AC-12: the 53 adjacency cases hold no
+/// colliding siblings, so none resolves `Ambiguous` under either line end
+/// (the case test above compares path texts, which an ambiguous anchor
+/// shares).
+#[test]
+fn adjacency_cases_never_resolve_ambiguous() {
+    assert_eq!(ADJACENCY.len(), 53);
+    for case in ADJACENCY {
+        for eol in ["\n", "\r\n"] {
+            let analysis = ron::analyze(&expand(case.source).replace('\n', eol));
+            assert!(
+                !analysis
+                    .markers
+                    .iter()
+                    .any(|m| matches!(m.anchor, Anchor::Ambiguous { .. })),
+                "{} {eol:?}: {:?}",
+                case.name,
+                analysis.markers
+            );
+            assert_eq!(analysis.colliding_groups, 0, "{} {eol:?}", case.name);
+        }
+    }
+}

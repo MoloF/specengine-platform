@@ -1,0 +1,297 @@
+{
+  "_comment": "Expected `ast-hash --pilot <copy>` result and manifest on this fixture (docs/features/layer-a-identity.md AC-02, AC-04; rules in its \"Units and qpath\"). `manifest` lists every file in manifest order with its role, unit, target source and each item's [qpath, ambiguity]. `duplicate`: two adjacent-impl pairs, `impl Pair` in the library and `impl House` in the shared dir `tests/common` (shared items are not exempt). `path_attribute`: one `#[path]` target (`src/vendored/relocated.rs`); the second, `tests/common/extra.rs`, lies in a shared dir and is not flagged. `layout` holds what changes when no `cargo metadata` answer is used (AC-04): the renamed default bin takes the package name, the custom-path bin is unrooted; every other file keeps its role, unit and qpaths, with `targets` = `layout`.",
+  "files": 21,
+  "items": 43,
+  "path_attrs": 2,
+  "qpath_ambiguity": {
+    "duplicate": 4,
+    "path_attribute": 1
+  },
+  "qpath_units": {
+    "bench": 2,
+    "bin": 6,
+    "custom-build": 1,
+    "example": 4,
+    "primary": 14,
+    "shared": 8,
+    "test": 8,
+    "unrooted": 0
+  },
+  "targets_from": {
+    "layout": 0,
+    "metadata": 2
+  },
+  "manifest": [
+    {
+      "path": "app/benches/b.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "bench:b",
+      "targets": "metadata",
+      "items": [
+        ["app::bench:b::bench_once", null],
+        ["app::bench:b::main", null]
+      ]
+    },
+    {
+      "path": "app/build.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "custom-build:build-script-build",
+      "targets": "metadata",
+      "items": [
+        ["app::custom-build:build-script-build::main", null]
+      ]
+    },
+    {
+      "path": "app/examples/d.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "example:d",
+      "targets": "metadata",
+      "items": [
+        ["app::example:d::setup", null],
+        ["app::example:d::main", null]
+      ]
+    },
+    {
+      "path": "app/examples/e/main.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "example:e",
+      "targets": "metadata",
+      "items": [
+        ["app::example:e::setup", null],
+        ["app::example:e::main", null]
+      ]
+    },
+    {
+      "path": "app/src/a/b.rs",
+      "package": "app",
+      "role": "module:a::b",
+      "unit": "primary",
+      "targets": "metadata",
+      "items": [
+        ["app::a::b::in_b", null]
+      ]
+    },
+    {
+      "path": "app/src/a.rs",
+      "package": "app",
+      "role": "module:a",
+      "unit": "primary",
+      "targets": "metadata",
+      "items": [
+        ["app::a::b", null],
+        ["app::a::in_a", null]
+      ]
+    },
+    {
+      "path": "app/src/bin/m/cli.rs",
+      "package": "app",
+      "role": "module:cli",
+      "unit": "bin:m",
+      "targets": "metadata",
+      "items": [
+        ["app::bin:m::cli::run", null]
+      ]
+    },
+    {
+      "path": "app/src/bin/m/main.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "bin:m",
+      "targets": "metadata",
+      "items": [
+        ["app::bin:m::cli", null],
+        ["app::bin:m::main", null]
+      ]
+    },
+    {
+      "path": "app/src/bin/t.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "bin:t",
+      "targets": "metadata",
+      "items": [
+        ["app::bin:t::main", null]
+      ]
+    },
+    {
+      "path": "app/src/lib.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "primary",
+      "targets": "metadata",
+      "items": [
+        ["app::a", null],
+        ["app::relocated", null],
+        ["app::Pair", null],
+        ["app::impl Pair", "duplicate"],
+        ["app::Pair::left", null],
+        ["app::impl Pair", "duplicate"],
+        ["app::Pair::right", null]
+      ]
+    },
+    {
+      "path": "app/src/main.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "bin:app-cli",
+      "targets": "metadata",
+      "items": [
+        ["app::bin:app-cli::main", null]
+      ]
+    },
+    {
+      "path": "app/src/vendored/relocated.rs",
+      "package": "app",
+      "role": "module:vendored::relocated",
+      "unit": "primary",
+      "targets": "metadata",
+      "items": [
+        ["app::vendored::relocated::relocated", "path_attribute"]
+      ]
+    },
+    {
+      "path": "app/tests/a.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "test:a",
+      "targets": "metadata",
+      "items": [
+        ["app::test:a::common", null],
+        ["app::test:a::extra", null],
+        ["app::test:a::setup", null],
+        ["app::test:a::single_file_test", null]
+      ]
+    },
+    {
+      "path": "app/tests/common/extra.rs",
+      "package": "app",
+      "role": "module:extra",
+      "unit": "shared:tests/common",
+      "targets": "metadata",
+      "items": [
+        ["app::shared:tests/common::extra::extra_helper", null]
+      ]
+    },
+    {
+      "path": "app/tests/common/house.rs",
+      "package": "app",
+      "role": "module:house",
+      "unit": "shared:tests/common",
+      "targets": "metadata",
+      "items": [
+        ["app::shared:tests/common::house::House", null],
+        ["app::shared:tests/common::house::impl House", "duplicate"],
+        ["app::shared:tests/common::house::House::open", null],
+        ["app::shared:tests/common::house::impl House", "duplicate"],
+        ["app::shared:tests/common::house::House::close", null]
+      ]
+    },
+    {
+      "path": "app/tests/common/mod.rs",
+      "package": "app",
+      "role": "module:",
+      "unit": "shared:tests/common",
+      "targets": "metadata",
+      "items": [
+        ["app::shared:tests/common::house", null],
+        ["app::shared:tests/common::shared_setup", null]
+      ]
+    },
+    {
+      "path": "app/tests/s/h.rs",
+      "package": "app",
+      "role": "module:h",
+      "unit": "test:s",
+      "targets": "metadata",
+      "items": [
+        ["app::test:s::h::helper", null]
+      ]
+    },
+    {
+      "path": "app/tests/s/main.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "test:s",
+      "targets": "metadata",
+      "items": [
+        ["app::test:s::h", null],
+        ["app::test:s::setup", null],
+        ["app::test:s::dir_test", null]
+      ]
+    },
+    {
+      "path": "app/tools/x.rs",
+      "package": "app",
+      "role": "crate_root",
+      "unit": "bin:x",
+      "targets": "metadata",
+      "items": [
+        ["app::bin:x::main", null]
+      ]
+    },
+    {
+      "path": "binonly/src/cli.rs",
+      "package": "binonly",
+      "role": "module:cli",
+      "unit": "primary",
+      "targets": "metadata",
+      "items": [
+        ["binonly::cli::run", null]
+      ]
+    },
+    {
+      "path": "binonly/src/main.rs",
+      "package": "binonly",
+      "role": "crate_root",
+      "unit": "primary",
+      "targets": "metadata",
+      "items": [
+        ["binonly::cli", null],
+        ["binonly::main", null]
+      ]
+    }
+  ],
+  "layout": {
+    "targets_from": {
+      "layout": 2,
+      "metadata": 0
+    },
+    "qpath_ambiguity": {
+      "duplicate": 4,
+      "path_attribute": 1,
+      "unrooted": 1
+    },
+    "qpath_units": {
+      "bench": 2,
+      "bin": 5,
+      "custom-build": 1,
+      "example": 4,
+      "primary": 14,
+      "shared": 8,
+      "test": 8,
+      "unrooted": 1
+    },
+    "changed": [
+      {
+        "path": "app/src/main.rs",
+        "role": "crate_root",
+        "unit": "bin:unit-app",
+        "items": [
+          ["app::bin:unit-app::main", null]
+        ]
+      },
+      {
+        "path": "app/tools/x.rs",
+        "role": "unrooted",
+        "unit": null,
+        "items": [
+          ["app::main", "unrooted"]
+        ]
+      }
+    ]
+  }
+}

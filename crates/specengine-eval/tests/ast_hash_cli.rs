@@ -181,6 +181,24 @@ fn assert_all_rows_numeric(result: &Value) {
         "detail.orphan_error_regions",
     );
     assert!(result["detail"]["stability"].is_object());
+    // docs/features/layer-a-identity.md "Eval outputs": items per unit kind
+    // (`primary`, `shared`, `unrooted` always there) and package dirs per
+    // target source.
+    let units = result["detail"]["qpath_units"]
+        .as_object()
+        .expect("detail.qpath_units is an object");
+    for key in ["primary", "shared", "unrooted"] {
+        assert!(units.contains_key(key), "detail.qpath_units.{key} missing");
+    }
+    for (kind, value) in units {
+        count(value, &format!("detail.qpath_units.{kind}"));
+    }
+    for key in ["metadata", "layout"] {
+        count(
+            &result["detail"]["targets_from"][key],
+            &format!("detail.targets_from.{key}"),
+        );
+    }
 }
 
 fn assert_envelope_shape(envelope: &Value, label: &str) {
@@ -845,6 +863,32 @@ fn pilot_run(variable: &str, label: &str) {
         "the pilot must stay untouched"
     );
     eprintln!("{label} result: {result}");
+
+    // docs/features/layer-a-identity.md AC-06: every remaining `duplicate`
+    // group lies within one file (adjacent impls, `cfg` twins); a group
+    // across files is a unit the rules failed to tell apart. Counts only.
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(out.join("ast-hash").join(label).join("manifest.json"))
+            .expect("manifest.json"),
+    )
+    .expect("manifest is JSON");
+    let mut groups: BTreeMap<String, std::collections::BTreeSet<String>> = BTreeMap::new();
+    for file in manifest["files"].as_array().expect("files") {
+        for item in file["items"].as_array().expect("items") {
+            if item["ambiguity"] == "duplicate" {
+                groups
+                    .entry(item["qpath"].as_str().unwrap().to_owned())
+                    .or_default()
+                    .insert(file["path"].as_str().unwrap().to_owned());
+            }
+        }
+    }
+    let across = groups.values().filter(|files| files.len() > 1).count();
+    eprintln!(
+        "{label} duplicate groups: {}, across files: {across}",
+        groups.len()
+    );
+    assert_eq!(across, 0, "duplicate groups spanning several files");
 }
 
 #[test]

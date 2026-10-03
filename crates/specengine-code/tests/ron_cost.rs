@@ -566,3 +566,130 @@ fn unclosed_unicode_escape_at_eof_is_unterminated_char() {
     assert_eq!(analysis.rejected[0].category, "unterminated_char");
     assert_eq!(analysis.rejected[0].offset, 0);
 }
+
+// ------------------- colliding siblings (docs/features/layer-a-identity.md AC-13)
+
+/// Siblings of the generated maps.
+const SIBLINGS: usize = 50_000;
+
+/// `{ "<prefix><i>": i, … }`: with `shared`, every key shares its first
+/// `MAX_SEGMENT_BYTES` source bytes (so all render alike); else the keys are
+/// short and distinct. With `marked`, a marker line before every entry.
+fn sibling_map(shared: bool, marked: bool) -> String {
+    let prefix = if shared {
+        ascii('k', MAX_SEGMENT_BYTES)
+    } else {
+        String::new()
+    };
+    let mut source = String::from("{\n");
+    for i in 0..SIBLINGS {
+        if marked {
+            source.push_str(&marker_line(i));
+        }
+        source.push_str(&format!("\"{prefix}{i}\": {i},\n"));
+    }
+    source.push_str("}\n");
+    source
+}
+
+#[test]
+fn fifty_thousand_colliding_siblings_cost_the_order_of_distinct_keys() {
+    let (distinct_marked, distinct_marked_time) = best_of_three(&sibling_map(false, true));
+    assert_eq!(distinct_marked.markers.len(), SIBLINGS);
+    assert!(
+        distinct_marked
+            .markers
+            .iter()
+            .all(|m| matches!(m.anchor, Anchor::Path { .. }))
+    );
+    assert_eq!(distinct_marked.colliding_groups, 0);
+
+    let (colliding_marked, colliding_marked_time) = best_of_three(&sibling_map(true, true));
+    assert!(!colliding_marked.has_error);
+    assert_eq!(colliding_marked.markers.len(), SIBLINGS, "never merged");
+    let first = colliding_marked.markers[0].anchor.as_str().to_owned();
+    assert!(
+        colliding_marked
+            .markers
+            .iter()
+            .all(|m| matches!(m.anchor, Anchor::Ambiguous { .. }) && m.anchor.as_str() == first),
+        "every marker ambiguous, one path text"
+    );
+    assert_eq!(colliding_marked.colliding_groups, 1);
+    assert_same_order(
+        "50 000 colliding siblings, marked",
+        colliding_marked_time,
+        distinct_marked_time,
+        10,
+    );
+
+    let (distinct, distinct_time) = best_of_three(&sibling_map(false, false));
+    assert_eq!(distinct.colliding_groups, 0);
+    let (colliding, colliding_time) = best_of_three(&sibling_map(true, false));
+    assert!(colliding.markers.is_empty());
+    assert_eq!(colliding.colliding_groups, 1);
+    assert_same_order(
+        "50 000 colliding siblings, unmarked",
+        colliding_time,
+        distinct_time,
+        10,
+    );
+}
+
+/// The unmarked colliding map of [`sibling_map`] under `levels` nested maps,
+/// each keyed by a `MAX_SEGMENT_BYTES`-byte key: a full path per value
+/// would copy `levels` × `MAX_SEGMENT_BYTES` bytes per sibling.
+fn deep_sibling_map(levels: usize) -> String {
+    let key = format!("\"{}\"", ascii('d', MAX_SEGMENT_BYTES - 2));
+    let mut source = String::new();
+    for _ in 0..levels {
+        source.push_str(&format!("{{ {key}: "));
+    }
+    source.push_str(&sibling_map(true, false));
+    for _ in 0..levels {
+        source.push_str(" }");
+    }
+    source.push('\n');
+    source
+}
+
+/// The first `n` entries of `sibling_map(true, true)`.
+fn colliding_marked_prefix(n: usize) -> String {
+    let prefix = ascii('k', MAX_SEGMENT_BYTES);
+    let mut source = String::from("{\n");
+    for i in 0..n {
+        source.push_str(&marker_line(i));
+        source.push_str(&format!("\"{prefix}{i}\": {i},\n"));
+    }
+    source.push_str("}\n");
+    source
+}
+
+/// AC-13, continued: colliding siblings scale linearly (50 000 cost about
+/// ten times 5 000, a pairwise compare a hundred), and deep under long keys
+/// they still render no path when unmarked.
+#[test]
+fn colliding_siblings_scale_linearly_and_render_no_path_per_value() {
+    let (small, small_time) = best_of_three(&colliding_marked_prefix(SIBLINGS / 10));
+    assert_eq!(small.colliding_groups, 1);
+    let (large, large_time) = best_of_three(&colliding_marked_prefix(SIBLINGS));
+    assert_eq!(large.markers.len(), SIBLINGS);
+    assert_same_order(
+        "50 000 against 10 x 5 000 colliding siblings",
+        large_time,
+        small_time * 10,
+        4,
+    );
+
+    let (distinct, distinct_time) = best_of_three(&sibling_map(false, false));
+    assert_eq!(distinct.colliding_groups, 0);
+    let (deep, deep_time) = best_of_three(&deep_sibling_map(400));
+    assert!(!deep.has_error, "{:?}", deep.error_categories);
+    assert_eq!(deep.colliding_groups, 1);
+    assert_same_order(
+        "50 000 colliding siblings 400 maps deep, unmarked",
+        deep_time,
+        distinct_time,
+        10,
+    );
+}

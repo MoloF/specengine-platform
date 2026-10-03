@@ -1,7 +1,7 @@
 //! Measurement `ron`: `.ron` marker extraction of `specengine-code` by its own
 //! lexer — the parse-clean share, rejected-construct categories, comment byte
-//! ranges and marker resolution. Per-file detail goes to `--out`, aggregates
-//! to stdout.
+//! ranges, marker resolution (ambiguous paths apart), marker level lists and
+//! empty IDs. Per-file detail goes to `--out`, aggregates to stdout.
 //!
 //! The `tree-sitter-ron` comparison path was removed after the spike verdict
 //! (`lexer`): its build linked a second tree-sitter runtime. The envelope keeps
@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::Serialize;
+use specengine_code::Levels;
 use specengine_code::ron::{self, Anchor, Rejected, RonAnalysis};
 
 use crate::harness::{self, Corpus, percent};
@@ -95,12 +96,29 @@ pub struct MarkerSummary {
     pub anchored: ByApproach<usize>,
     pub unanchored: ByApproach<usize>,
     pub cannot_verify: ByApproach<usize>,
-    /// Markers anchored at depth ≥ 2.
+    /// Bound to a path that names more than one value (colliding siblings);
+    /// never counted `anchored`.
+    pub ambiguous: ByApproach<usize>,
+    /// Markers anchored (an `Anchor::Path`, not an ambiguous one) at depth ≥ 2.
     pub nested: usize,
     /// Always `null` (the comparison path was removed).
     pub agree_pct: Option<f64>,
-    /// IDs outside the Latin script (ADR-0009); reported, never fatal.
+    /// IDs outside the Latin script (ADR-0009); reported, never fatal. An
+    /// empty ID is not counted here.
     pub id_not_latin: usize,
+    /// Markers whose keyword ends the line: no ID at all.
+    pub id_empty: usize,
+    /// Markers by the state of their level list.
+    pub levels: LevelCounts,
+}
+
+#[derive(Serialize, Default)]
+pub struct LevelCounts {
+    /// No list: `[sig, body]`.
+    pub default: usize,
+    pub declared: usize,
+    /// A malformed list (categories in `detail.levels_invalid`).
+    pub invalid: usize,
 }
 
 /// Side information that explains the headline numbers. No names, no paths.
@@ -115,6 +133,10 @@ pub struct Detail {
     pub files_with_markers: usize,
     /// Files per rejected category.
     pub rejected_files: ByApproach<BTreeMap<&'static str, usize>>,
+    /// Invalid level lists per category (`empty`, `duplicate`, `unknown`, `unclosed`).
+    pub levels_invalid: BTreeMap<&'static str, usize>,
+    /// Sibling groups of a struct or map sharing a segment, marked or not.
+    pub colliding_groups: usize,
 }
 
 /// One row of `files.json`.
@@ -137,7 +159,14 @@ struct MarkerRow {
     id: String,
     rev: Option<u32>,
     id_latin: bool,
+    /// The levels the binding depends on (the default `[sig, body]` when
+    /// none are written); `null` when the list is invalid.
+    levels: Option<Vec<&'static str>>,
+    /// `default`, `declared` or the invalid list's category.
+    levels_state: &'static str,
     note: Option<String>,
+    /// `lexer` holds the path text of an ambiguous anchor.
+    ambiguous: bool,
     lexer: String,
     /// Always `null` (the comparison path was removed).
     grammar: Option<String>,
@@ -213,12 +242,16 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
         }
     }
     let lexer_comments: usize = files.iter().map(|f| f.lexer.comments.len()).sum();
+    let colliding_groups: usize = files.iter().map(|f| f.lexer.colliding_groups).sum();
 
     // 4. Markers.
     let mut by_relation: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut lexer_anchors = Counts::default();
     let mut nested = 0;
     let mut id_not_latin = 0;
+    let mut id_empty = 0;
+    let mut levels = LevelCounts::default();
+    let mut levels_invalid: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut files_with_markers = 0;
     let mut marker_rows = Vec::new();
     for file in &files {
@@ -233,6 +266,17 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
             if !marker.marker.id_latin {
                 id_not_latin += 1;
             }
+            if marker.marker.id.is_empty() {
+                id_empty += 1;
+            }
+            match &marker.marker.levels {
+                Levels::Default => levels.default += 1,
+                Levels::Declared(_) => levels.declared += 1,
+                Levels::Invalid(error) => {
+                    levels.invalid += 1;
+                    *levels_invalid.entry(error.as_str()).or_default() += 1;
+                }
+            }
             if matches!(marker.anchor, Anchor::Path { depth, .. } if depth >= 2) {
                 nested += 1;
             }
@@ -243,7 +287,14 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
                 id: marker.marker.id.clone(),
                 rev: marker.marker.rev,
                 id_latin: marker.marker.id_latin,
+                levels: marker
+                    .marker
+                    .levels
+                    .effective()
+                    .map(|list| list.iter().map(|level| level.as_str()).collect()),
+                levels_state: marker.marker.levels.state(),
                 note: marker.marker.note.clone(),
+                ambiguous: matches!(marker.anchor, Anchor::Ambiguous { .. }),
                 lexer: marker.anchor.as_str().to_owned(),
                 grammar: None,
             });
@@ -299,9 +350,12 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
             anchored: ByApproach::lexer(lexer_anchors.anchored),
             unanchored: ByApproach::lexer(lexer_anchors.unanchored),
             cannot_verify: ByApproach::lexer(lexer_anchors.cannot_verify),
+            ambiguous: ByApproach::lexer(lexer_anchors.ambiguous),
             nested,
             agree_pct: None,
             id_not_latin,
+            id_empty,
+            levels,
         },
         nested_marker_resolves: ByApproach::lexer(nested_lexer),
         recommendation: "lexer",
@@ -313,6 +367,8 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
             comments: ByApproach::lexer(lexer_comments),
             files_with_markers,
             rejected_files: ByApproach::lexer(lexer_rejected_files),
+            levels_invalid,
+            colliding_groups,
         },
     };
 
@@ -326,12 +382,14 @@ struct Counts {
     anchored: usize,
     unanchored: usize,
     cannot_verify: usize,
+    ambiguous: usize,
 }
 
 impl Counts {
     fn count(&mut self, anchor: &Anchor) {
         match anchor {
             Anchor::Path { .. } => self.anchored += 1,
+            Anchor::Ambiguous { .. } => self.ambiguous += 1,
             Anchor::Unanchored => self.unanchored += 1,
             Anchor::CannotVerify => self.cannot_verify += 1,
         }
@@ -405,9 +463,10 @@ fn summarize(result: &RonResult, label: &str, out_dir: &Path) {
         categories(&result.rejected_categories.lexer)
     );
     eprintln!(
-        "  markers: {} total, anchored {}, unanchored {}, cannot_verify {}, nested {} (resolve: {})",
+        "  markers: {} total, anchored {}, ambiguous {}, unanchored {}, cannot_verify {}, nested {} (resolve: {})",
         result.markers.total,
         result.markers.anchored.lexer,
+        result.markers.ambiguous.lexer,
         result.markers.unanchored.lexer,
         result.markers.cannot_verify.lexer,
         result.markers.nested,
@@ -415,6 +474,14 @@ fn summarize(result: &RonResult, label: &str, out_dir: &Path) {
             .nested_marker_resolves
             .lexer
             .map_or("n/a", |v| if v { "yes" } else { "no" })
+    );
+    eprintln!(
+        "  levels: default {}, declared {}, invalid {}; empty IDs {}; colliding sibling groups {}",
+        result.markers.levels.default,
+        result.markers.levels.declared,
+        result.markers.levels.invalid,
+        result.markers.id_empty,
+        result.detail.colliding_groups
     );
     eprintln!(
         "  recommendation: {} (lexer {} ms)",

@@ -1,0 +1,6 @@
+# A bin-only package: its `src/main.rs` bin is the primary target.
+[package]
+name = "binonly"
+version = "0.0.0"
+edition = "2024"
+publish = false

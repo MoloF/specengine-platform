@@ -1,6 +1,7 @@
-//! RON support (05 §5.3, 05 §9 "AST" row): a marker in a `.ron` comment
-//! attaches to an entry, element or root value; its path becomes the
-//! `qpath`, e.g. `data/movement.ron#root.stamina.regen_per_second`. Only the
+//! RON support (`docs/canon/code-identity.md`; 05 §5.3, 05 §9 "AST" row): a
+//! marker in a `.ron` comment attaches to an entry, element or root value;
+//! its path becomes the `qpath`, e.g.
+//! `data/movement.ron#root.stamina.regen_per_second`. Only the
 //! comment's position counts, and the first rule that applies decides: a
 //! block comment attaches to the value that starts on the line of its `*/`
 //! (`pos: (/* m */ 10, 20)`); else a comment that starts on the line where a
@@ -24,6 +25,14 @@
 //! (an unbalanced key runs to the end of input) keeps its first bytes, cut at
 //! a character boundary, plus [`TRUNCATION_MARK`]: a path stays bounded and
 //! deterministic whatever the file.
+//!
+//! **Ambiguity.** Two siblings of one struct or map whose segments render
+//! alike — cut at the cap, whitespace collapsed, or a field or key written
+//! twice — give one path to two values: every marker under either of them
+//! (on them or deeper) is [`Anchor::Ambiguous`], whether or not the other
+//! sibling has a marker; decided when the container closes. Both markers
+//! stay, never merged. [`RonAnalysis::colliding_groups`] counts such sibling
+//! groups, marked or not.
 
 pub mod lexer;
 mod structure;
@@ -86,6 +95,15 @@ pub enum Anchor {
         /// Segments after `root`; `root` itself is depth 0.
         depth: usize,
     },
+    /// Bound like [`Anchor::Path`], but the path names more than one value:
+    /// a segment of it (the value's own or an ancestor's) equals a sibling's
+    /// in the same struct or map. The path text is kept; the binding is not
+    /// trusted.
+    Ambiguous {
+        path: String,
+        /// Segments after `root`.
+        depth: usize,
+    },
     /// No value to attach to (rule 5): an own-line comment before a closer
     /// or a `,`; a comment after a map key; a comment after a `:` or inside
     /// a value already begun that does not lead the value (`speed:`, then
@@ -104,7 +122,7 @@ impl Anchor {
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Path { path, .. } => path,
+            Self::Path { path, .. } | Self::Ambiguous { path, .. } => path,
             Self::Unanchored => "unanchored",
             Self::CannotVerify => "cannot_verify",
         }
@@ -143,6 +161,9 @@ pub struct RonAnalysis {
     pub comments: Vec<Range<usize>>,
     /// Every marker in every comment, in source order.
     pub markers: Vec<RonMarker>,
+    /// Sibling groups of a struct or map sharing one segment text, marked
+    /// or not: each group once, however many siblings it holds.
+    pub colliding_groups: usize,
 }
 
 impl RonAnalysis {
@@ -152,6 +173,7 @@ impl RonAnalysis {
         mut rejected: Vec<Rejected>,
         comments: Vec<Range<usize>>,
         markers: Vec<RonMarker>,
+        colliding_groups: usize,
     ) -> Self {
         rejected.sort_by_key(|r| (r.offset, r.category));
         let categories: BTreeSet<&'static str> = rejected.iter().map(|r| r.category).collect();
@@ -161,10 +183,12 @@ impl RonAnalysis {
             rejected,
             comments,
             markers,
+            colliding_groups,
         }
     }
 
-    /// `true` when at least one marker resolved to a path of depth ≥ 2.
+    /// `true` when at least one marker resolved to a path of depth ≥ 2
+    /// (an ambiguous one does not count).
     #[must_use]
     pub fn has_nested_anchor(&self) -> bool {
         self.markers
@@ -270,7 +294,8 @@ pub fn analyze(source: &str) -> RonAnalysis {
                 .map(move |marker| (index, marker))
         })
         .collect();
-    let (markers, structure_errors) = structure::walk(source, &tokens, raw_markers);
+    let walked = structure::walk(source, &tokens, raw_markers);
+    let structure_errors = walked.errors;
     let rejected = lex_errors
         .iter()
         .map(|e| Rejected {
@@ -282,5 +307,5 @@ pub fn analyze(source: &str) -> RonAnalysis {
             offset: e.offset,
         }))
         .collect();
-    RonAnalysis::assemble(rejected, comments, markers)
+    RonAnalysis::assemble(rejected, comments, walked.markers, walked.colliding_groups)
 }

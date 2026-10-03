@@ -183,7 +183,18 @@ pub struct CommonArgs {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.measurement {
-        Measurement::AstHash(args) => measure("ast-hash", &args, ast_hash::FIXTURE, ast_hash::run),
+        Measurement::AstHash(args) => {
+            let timeout = Duration::from_secs(args.timeout);
+            measure_with(
+                "ast-hash",
+                &args,
+                ast_hash::FIXTURE,
+                // The end of `--timeout`, taken before the run's own timer
+                // starts, so never after it: the cargo calls end in time.
+                move |_: &Path| Ok(Instant::now().checked_add(timeout)),
+                ast_hash::run,
+            )
+        }
         Measurement::Ron(args) => measure("ron", &args, ron::FIXTURE, ron::run),
         Measurement::Census(args) => {
             let config = args.config.clone();

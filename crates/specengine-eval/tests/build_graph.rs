@@ -1642,3 +1642,55 @@ fn mcp_reaches_the_store_and_rusqlite_only_through_the_cli() {
         }
     }
 }
+
+/// docs/features/layer-a-identity.md AC-14: `specengine-code` keeps exactly
+/// `tree-sitter`, `tree-sitter-rust` and `blake3` as `[dependencies]`, each a
+/// workspace entry, and nothing under a target table or as a build
+/// dependency (the target table and the cargo call live in the harness).
+#[test]
+fn code_crate_depends_on_exactly_the_parser_and_the_hash() {
+    let text = std::fs::read_to_string(workspace_root().join("crates/specengine-code/Cargo.toml"))
+        .expect("specengine-code manifest");
+    let manifest: toml::Table = toml::from_str(&text).expect("a TOML manifest");
+    let dependencies = manifest
+        .get("dependencies")
+        .and_then(toml::Value::as_table)
+        .expect("[dependencies]");
+    let mut names: Vec<&str> = dependencies.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        ["blake3", "tree-sitter", "tree-sitter-rust"],
+        "specengine-code [dependencies]"
+    );
+    for (name, value) in dependencies {
+        let table = value.as_table();
+        assert!(
+            table
+                .is_some_and(|t| t.len() == 1
+                    && t.get("workspace").and_then(toml::Value::as_bool) == Some(true)),
+            "{name} must be `.workspace = true` only, got {value:?}"
+        );
+    }
+    assert!(
+        !manifest.contains_key("build-dependencies") && !manifest.contains_key("target"),
+        "no build or target-specific dependency in specengine-code"
+    );
+
+    let metadata = workspace_metadata();
+    let package = metadata["packages"]
+        .as_array()
+        .expect("packages")
+        .iter()
+        .find(|p| p["name"] == "specengine-code")
+        .expect("specengine-code in the workspace");
+    let mut normal: Vec<&str> = package["dependencies"]
+        .as_array()
+        .expect("dependencies")
+        .iter()
+        .filter(|d| d["kind"].is_null())
+        .map(|d| d["name"].as_str().unwrap())
+        .collect();
+    normal.sort_unstable();
+    assert_eq!(normal, ["blake3", "tree-sitter", "tree-sitter-rust"]);
+}

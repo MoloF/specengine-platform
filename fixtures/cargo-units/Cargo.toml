@@ -1,0 +1,7 @@
+# Fixture of docs/features/layer-a-identity.md (AC-01, AC-02, AC-04): a Cargo
+# workspace of its own, read by `cargo metadata --no-deps --offline` and by
+# Cargo's auto-discovery, never built. `[workspace]` keeps it out of the
+# repository workspace; no `Cargo.lock` and no build directory are committed.
+[workspace]
+resolver = "3"
+members = ["app", "binonly"]

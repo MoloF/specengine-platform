@@ -1,10 +1,12 @@
 //! Measurement `ast-hash`: stability of the 05 §5.2 recipe under (a) default
 //! rustfmt, (b) contrasting rustfmt, (c) comment stripping, with parse-error
-//! and `qpath` by-products. Per-file detail goes to `--out`, aggregates to stdout.
+//! and `qpath` by-products (target units from `cargo metadata`, layout
+//! fallback: [`targets`]). Per-file detail goes to `--out`, aggregates to stdout.
 
 mod fmt;
 #[cfg(feature = "syn")]
 mod syn_cmp;
+mod targets;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
@@ -13,7 +15,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 use specengine_code::comments::strip_comments;
-use specengine_code::qpath::{self, Ambiguity, FileRole};
+use specengine_code::qpath::{self, Ambiguity, FileRole, TargetSource, UnitKind};
 use specengine_code::{Digest, FileAnalysis, ItemRecord, RustParser};
 
 use crate::harness::{self, Corpus, percent, stability_percent};
@@ -76,6 +78,18 @@ pub struct Detail {
     pub rustfmt: RustfmtDetail,
     pub stability: BTreeMap<&'static str, Stability>,
     pub qpath_ambiguity: BTreeMap<&'static str, usize>,
+    /// Items per unit kind: `primary`, `shared`, `unrooted` (always present)
+    /// and every Cargo kind met (`bin`, `example`, `test`, `bench`,
+    /// `custom-build`).
+    pub qpath_units: BTreeMap<String, usize>,
+    /// Package dirs by where their target table came from.
+    pub targets_from: TargetsFrom,
+}
+
+#[derive(Serialize, Default)]
+pub struct TargetsFrom {
+    pub metadata: usize,
+    pub layout: usize,
 }
 
 #[derive(Serialize)]
@@ -195,6 +209,10 @@ struct ManifestFile {
     path: String,
     package: String,
     role: String,
+    /// `primary`, `<kind>:<name>`, `shared:<dir>`; `null` when unrooted.
+    unit: Option<String>,
+    /// `metadata` or `layout`; `null` for a file in no package.
+    targets: Option<&'static str>,
     has_error: bool,
     orphan_error_regions: usize,
     items: Vec<ManifestItem>,
@@ -214,7 +232,9 @@ struct ManifestItem {
     perturbed: BTreeMap<&'static str, String>,
 }
 
-pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
+/// `run_end` is the end of the run's `--timeout` (`None`: unbounded); no
+/// `cargo metadata` call outlives it ([`targets`]).
+pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, String> {
     let out_dir = corpus.out.join("ast-hash").join(&corpus.label);
     fs::create_dir_all(&out_dir)
         .map_err(|error| format!("cannot create {}: {error}", out_dir.display()))?;
@@ -223,6 +243,8 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
     // 1. Read the corpus.
     let paths = harness::rust_files(&corpus.root)
         .map_err(|error| format!("cannot list {}: {error}", corpus.root.display()))?;
+    // Every listed file counts for Cargo's auto-discovery, a skipped one too.
+    let listed = paths.clone();
     let mut files = Vec::with_capacity(paths.len());
     let mut files_skipped = 0;
     for relative in paths {
@@ -367,8 +389,30 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
         stability.insert(name, stat);
     }
 
-    // 5. qpath: package roots, file roles, `#[path]` targets, duplicates.
+    // 5. qpath: package roots, target tables, file roles, `#[path]` targets,
+    // duplicates.
     let is_package_dir = |dir: &Path| corpus.root.join(dir).join("Cargo.toml").is_file();
+    let mut package_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
+    for relative in &listed {
+        if let Some(package) = qpath::package_dir(relative, is_package_dir)
+            && let Ok(inner) = relative.strip_prefix(&package)
+        {
+            let inner = inner.to_path_buf();
+            package_files.entry(package).or_default().push(inner);
+        }
+    }
+    let tables = targets::tables(&corpus.root, &corpus.label, &package_files, run_end);
+    let indexes: BTreeMap<&PathBuf, qpath::TargetIndex<'_>> = tables
+        .iter()
+        .map(|(dir, table)| (dir, qpath::TargetIndex::new(table)))
+        .collect();
+    let mut targets_from = TargetsFrom::default();
+    for table in tables.values() {
+        match table.source {
+            TargetSource::Metadata => targets_from.metadata += 1,
+            TargetSource::Layout => targets_from.layout += 1,
+        }
+    }
     let mut path_targets: BTreeSet<PathBuf> = BTreeSet::new();
     let mut path_attrs = 0;
     for (file, original) in files.iter().zip(&originals) {
@@ -383,6 +427,10 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
     let mut qpaths: Vec<Vec<String>> = Vec::with_capacity(files.len());
     let mut ambiguities: Vec<Vec<Option<Ambiguity>>> = Vec::with_capacity(files.len());
     let mut occurrences: HashMap<String, usize> = HashMap::new();
+    let mut unit_counts: BTreeMap<String, usize> = ["primary", "shared", "unrooted"]
+        .into_iter()
+        .map(|kind| (kind.to_owned(), 0))
+        .collect();
     for (file, original) in files.iter().zip(&originals) {
         let package = qpath::package_dir(&file.relative, is_package_dir);
         let package_label = package
@@ -390,14 +438,28 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
             .map(relative_string)
             .filter(|label| !label.is_empty())
             .unwrap_or_else(|| ".".to_owned());
-        let role = match &package {
-            Some(package) => file
+        let table = package.as_ref().and_then(|package| tables.get(package));
+        let index = package.as_ref().and_then(|package| indexes.get(package));
+        let role = match (&package, index) {
+            (Some(package), Some(index)) => file
                 .relative
                 .strip_prefix(package)
-                .map(qpath::file_role)
+                .map(|inner| index.file_role(inner))
                 .unwrap_or(FileRole::Unrooted),
-            None => FileRole::Unrooted,
+            _ => FileRole::Unrooted,
         };
+        // A shared unit is named by its location, however it is included, so
+        // a `#[path]` aimed at it says nothing new; it is analysed once, so a
+        // duplicate inside it is a real one.
+        let shared = role
+            .unit()
+            .is_some_and(|unit| unit.kind == UnitKind::Shared);
+        let unit_kind = match (&role, role.unit()) {
+            (FileRole::Unrooted, _) => "unrooted",
+            (_, None) => "primary",
+            (_, Some(unit)) => unit.kind_str(),
+        };
+        *unit_counts.entry(unit_kind.to_owned()).or_insert(0) += original.analysis.items.len();
         let is_path_target = path_targets.contains(&file.relative);
         let mut file_qpaths = Vec::with_capacity(original.analysis.items.len());
         let mut file_ambiguities = Vec::with_capacity(original.analysis.items.len());
@@ -405,7 +467,7 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
             let path = qpath::qpath(&package_label, &role, item).to_string();
             *occurrences.entry(path.clone()).or_insert(0) += 1;
             file_qpaths.push(path);
-            file_ambiguities.push(if is_path_target {
+            file_ambiguities.push(if is_path_target && !shared {
                 Some(Ambiguity::PathAttribute)
             } else if role == FileRole::Unrooted {
                 Some(Ambiguity::Unrooted)
@@ -413,7 +475,12 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
                 None
             });
         }
-        file_meta.push((package_label, role_string(&role)));
+        file_meta.push(FileMeta {
+            package: package_label,
+            role: role_string(&role),
+            unit: unit_string(&role),
+            targets: table.map(|table| table.source.as_str()),
+        });
         qpaths.push(file_qpaths);
         ambiguities.push(file_ambiguities);
     }
@@ -479,11 +546,13 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
             .enumerate()
             .map(|(index, file)| {
                 let original = &originals[index];
-                let (package, role) = &file_meta[index];
+                let meta = &file_meta[index];
                 ManifestFile {
                     path: relative_string(&file.relative),
-                    package: package.clone(),
-                    role: role.clone(),
+                    package: meta.package.clone(),
+                    role: meta.role.clone(),
+                    unit: meta.unit.clone(),
+                    targets: meta.targets,
                     has_error: original.analysis.has_error,
                     orphan_error_regions: original.analysis.orphan_errors,
                     items: original
@@ -555,6 +624,8 @@ pub fn run(corpus: &Corpus) -> Result<AstHashResult, String> {
             },
             stability,
             qpath_ambiguity: ambiguity_counts,
+            qpath_units: unit_counts,
+            targets_from,
         },
     };
 
@@ -597,8 +668,11 @@ fn summarize(result: &AstHashResult, label: &str, out_dir: &Path) {
         }
     );
     eprintln!(
-        "  qpath ambiguous {:.1} %, #[path] attributes {}",
-        result.qpath_ambiguous_pct, result.path_attrs
+        "  qpath ambiguous {:.1} %, #[path] attributes {}; package targets from metadata {}, layout {}",
+        result.qpath_ambiguous_pct,
+        result.path_attrs,
+        result.detail.targets_from.metadata,
+        result.detail.targets_from.layout
     );
     match &result.syn {
         Some(syn) => eprintln!(
@@ -642,10 +716,27 @@ fn relative_string(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+/// The `qpath` facts of one file for the manifest.
+struct FileMeta {
+    package: String,
+    role: String,
+    unit: Option<String>,
+    targets: Option<&'static str>,
+}
+
 fn role_string(role: &FileRole) -> String {
     match role {
-        FileRole::CrateRoot => "crate_root".to_owned(),
-        FileRole::Module(path) => format!("module:{}", path.join("::")),
+        FileRole::CrateRoot(_) => "crate_root".to_owned(),
+        FileRole::Module(_, path) => format!("module:{}", path.join("::")),
         FileRole::Unrooted => "unrooted".to_owned(),
+    }
+}
+
+/// `primary`, the rendered unit, or `None` when unrooted.
+fn unit_string(role: &FileRole) -> Option<String> {
+    match (role, role.unit()) {
+        (FileRole::Unrooted, _) => None,
+        (_, None) => Some("primary".to_owned()),
+        (_, Some(unit)) => Some(unit.to_string()),
     }
 }

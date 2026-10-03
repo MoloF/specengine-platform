@@ -174,8 +174,7 @@ Canon: `docs/canon/spec-check*.md`; pending: 08 Phase 1; queue state → Phase 2
 
 Layer A details:
 
-- Items: `function_item`, `struct_item`, `enum_item`, `union_item`, `trait_item`, `impl_item` (+ methods), `const_item`, `static_item`, `type_item`, `mod_item`, `macro_definition`.
-- **Module resolver**: crate roots from `cargo metadata --no-deps`, the `mod x;` tree → `x.rs | x/mod.rs`, `#[path]`, inline `mod {}`. Methods: `Type::method`, trait impls: `<Type as Trait>::method`. Macro-generated items are invisible, and this limitation is stated explicitly. **`qpath` carries a target discriminator** (Phase 1): `src/bin`, `examples` and `tests` targets share an empty root module path, so without it 16.5–32.2 % of pilot items were ambiguous, almost all such duplicates.
+- **Items and `qpath`** (Cargo target units, method names, ambiguity): `docs/canon/code-identity.md`; following `mod x;` is layer C. Macro-generated items are invisible, a stated limitation.
 - **Bevy detector** (`specengine-code`; the node layer is inferred, not written by hand):
   - `#[derive(Component)]`, `#[derive(Resource)]` (in 0.19 also a `Component`), `#[derive(Message)]`, `#[derive(Event)]`/`EntityEvent`, `#[derive(Reflect)]`; `.add_message::<T>()` → message registration;
   - systems of `.add_systems(Schedule, …)` and of the one-argument `Schedule::add_systems(…)`: tuples nest (explicit stack, cap 256), combinators `.in_set/.before/.after/*_ignore_deferred/.run_if/.distributive_run_if/.ambiguous_with*/.chain*` are peeled, adapters `pipe/map/with_input/with_input_from` recorded; a leaf is a path (`tick`, `a::b`, `f::<T>`), a closure (named by its innermost enclosing `fn`) or a factory call (named by its callee); `.add_observer(…)` → `observer`; `.add_plugins(…)` → plugin uses;
@@ -256,32 +255,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 
 ### 5.3. Markers and the sync matrix
 
-```rust
-/// Stamina regeneration.
-// @implements RULE-STAM-REGEN@3
-pub fn regen_system(...) { ... }
-
-#[test]
-// @verifies EDGE-STAM-ZERO   mutation: "drop the immediate Exhausted"
-fn zero_stamina_applies_exhausted_immediately() { ... }
-```
-
-```ron
-// @configures RULE-STAM-REGEN
-regen_per_second: 10.0,
-```
-
-**Marker grammar** (`.rs` and `.ron` comments alike; canon form `// @implements ID@rev [tiers]`, `docs/canon/architecture.md#markers`): `@implements|@verifies|@configures|@assumes`, then `ID`, an optional `@rev` (omitted only for weak bindings and in adoption mode), an optional `[tiers]` — a literal bracketed list of the §5.2 fingerprint levels (`path`, `sig`, `body`, `deps`; default `[sig, body]`) — and an optional free-text note; several markers per comment; an ID outside the Latin script is counted, never fatal (ADR-0009). **Phase 1 item**: the Phase 0 parser (`specengine-code` `markers.rs`) does not parse `[tiers]` yet and keeps everything after `ID[@rev]` as the note. In Rust a marker applies to the next item; Rust binding (Phase 3) follows the same principles as RON below.
-
-**RON binding** (own lexer, §9). The field path is the `qpath`: `data/movement.ron#root.stamina.regen_per_second`. Segments: `root` = the file's value, `.name` a struct field, `[i]` a list element, `.i` a tuple element (tuple structs such as `Some(x)` too), `{key}` a map entry (the key's source text: string keys keep their quotes, whitespace runs collapse to one space, inside strings too); each capped at `MAX_SEGMENT_BYTES = 128` source bytes plus `…`, so two keys sharing their first 128 bytes render one path — Phase 1 flags such paths as ambiguous, never merges them. A *value* is an entry, an element or the root value. A comment binds by the first rule that applies; positions count, not the comment kind, except that `//` never leads:
-
-1. **leading** — a block comment followed on its `*/` line by the start of a value binds to it: `pos: (/* @A */ 10, /* @B */ 20)` → `root.pos.0`, `root.pos.1`; `speed: /* m */ 4.5` → `root.speed`, also with `speed:` alone on the line above;
-2. **trailing a value** — a comment starting on the line of a value's last token (`,` on either side; of several values closing there, the one right before it): `speed: 1, // m` → `root.speed`; `[1, 2, 3 /* m */]` → `…[2]`; `Config(..) // m` → `root`;
-3. **trailing an opener** — right after `(`, `[`, `{` on its line → the container's value: `player: Player( // m` → `root.player`;
-4. **own line** — no token before it on its line → the value starting at the next token; extension attributes before the root are transparent (`#![enable(..)] // m` → `root`);
-5. otherwise **`unanchored`**: own line before a closer or `,`; after a map key or a `:` (a `//` under `speed:`, or a block comment whose value starts below its `*/` line); between a type name and its `(`; after trailing content.
-
-A multi-line block comment trails by its `/*` line and leads by its `*/` line; LF and CRLF alike. Fallback: when error recovery consumes the token a block comment leads, it binds to the value it trails (`a: 1 /* m */ 2` → `root.a`). Past `MAX_DEPTH = 512` open containers the container is skipped through its closer (`nesting_too_deep`) and its markers are `cannot_verify`. Cost is linear in tokens.
+**Marker grammar** (`.rs` and `.ron` alike) and **RON binding** (own lexer, §9; the field path is the `qpath`, `data/movement.ron#root.stamina.regen_per_second`): `docs/canon/code-identity.md`. In Rust a marker applies to the next item; Rust binding (Phase 3) follows the RON principles.
 
 **Revision in the marker** (`@3`, ADR-0018) — tracey discipline. First the code is brought to the new rule text, **then** the marker is raised, and the raise is visible in the code diff as a review record. Marker `@2` on a node with `rev: 3` means `spec_ahead` even without a lock. Marker `@4` on a node with `rev: 3` means `predated` (reference to a non-existent revision; OpenFastTrace reports this error separately). A marker without a revision is allowed for weak bindings and in adoption mode.
 

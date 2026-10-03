@@ -1,0 +1,15 @@
+# A library beside a renamed default bin (`src/main.rs` declared as `app-cli`),
+# a bin at a custom path (`tools/x.rs`) and every auto-discovered target kind.
+[package]
+name = "unit-app"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "app-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "x"
+path = "tools/x.rs"

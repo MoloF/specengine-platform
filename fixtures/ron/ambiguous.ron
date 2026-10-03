@@ -1,0 +1,36 @@
+// Fixture of docs/features/layer-a-identity.md (AC-10, AC-11): marker level
+// lists, an empty ID, and siblings whose segments render alike.
+Config(
+    // @implements LV@2 [sig]
+    speed: 1,
+    // @implements BAD@1 [sgi]
+    volume: 2,
+    // @implements OPEN@1 [path
+    pan: 3,
+    // @implements
+    gain: 4,
+    tables: {
+        // @implements LONG-A@1
+        "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkka": 1,
+        // @implements LONG-B@1
+        "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkb": 2,
+        "fire  ice": 3,
+        // @implements FIRE@1
+        "fire ice": 4,
+        // @implements WATER@1 [body, sig]
+        "water": 5,
+    },
+    twice: Twice(
+        // @implements RATE@1
+        rate: 1,
+        rate: 2,
+    ),
+    // @implements DEEP-MAP@1
+    deep: {
+        "k": Inner(
+            // @implements DEEP@1
+            x: 1,
+        ),
+        "k": 2,
+    },
+)
