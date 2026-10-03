@@ -1,5 +1,5 @@
 //! MCP server of SpecEngine over stdio (`crates/specengine-mcp/README.md`;
-//! task spec `mcp-read`; 07 §1.1–1.3; 04 §3–4).
+//! task spec `mcp-read`; 07 §1.1–1.3; 04 §3).
 //!
 //! One process serves one client over stdin/stdout in either protocol era, chosen
 //! by the client's first message (rmcp 3.5.0 `serve_server`):

@@ -1,5 +1,6 @@
 //! `review_proposal`: the owner's consent through an elicitation form, in both
-//! protocol eras (07 §1.2 `owner` set; 04 §3–4).
+//! protocol eras (07 §1.2 `owner` set; 04 §3;
+//! `crates/specengine-mcp/README.md` "Claude Code client").
 //!
 //! - Legacy session: the form goes out as a server-initiated
 //!   `elicitation/create` request and the call waits for the answer.
@@ -31,7 +32,8 @@ use serde_json::Value;
 use crate::server::SpecEngineServer;
 
 /// Tool `_meta` key that makes Claude Code (≥ 2.1.199) prompt the human on every
-/// call, even under `bypassPermissions` (04 §4).
+/// call, even under `bypassPermissions`
+/// (`crates/specengine-mcp/README.md` "Claude Code client").
 pub(crate) const REQUIRES_USER_INTERACTION: &str = "anthropic/requiresUserInteraction";
 
 /// Key of the form in `inputRequests` / `inputResponses` (stateless era).

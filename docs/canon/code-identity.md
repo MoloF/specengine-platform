@@ -19,7 +19,7 @@ Layer A (05 §5.1) names code without a build: a heuristic `qpath` per Rust item
 An answer gives `PackageTargets { source: Metadata, targets: [Target { kind, name, root }] }`: Cargo's first kind and name, the root relative to the canonical package dir (outside it: dropped); a covered virtual root has no targets. A dir no run covers (cargo missing, a broken manifest, a nested workspace, no answer) gets `layout_targets(package, files)`, Cargo's auto-discovery (`src/lib.rs` → `lib` `<package>` with `-`→`_`, `src/main.rs` → `bin` `<package>`, `src/bin/<n>.rs`, `src/bin/<n>/main.rs` → `bin` `<n>`, alike under `examples`, `tests`, `benches`, `build.rs` → `custom-build` `build-script-build`), `<package>` = `[package] name` if the manifest parses, else the dir name. Exit 0 either way, `detail.targets_from` tells which.
 
 - **Never builds, patches or runs a corpus**: `--no-deps` writes no lock file, `--offline` stays off the network, stdin null.
-- **cwd always `/`**, root-owned, wherever the harness starts: no corpus `rust-toolchain` or `.cargo/config.toml` is read via the cwd; never a world-writable dir (a `rust-toolchain.toml` planted in the temp dir makes the rustup proxy run a foreign cargo). A corpus at `/` → no cargo call, layout for all.
+- **cwd always `/`**, root-owned, wherever the harness starts, for cargo and rustfmt (`ast_hash/fmt.rs`: `--version`, each format call): no corpus `rust-toolchain` or `.cargo/config.toml` is read via the cwd; never a world-writable dir (a `rust-toolchain.toml` planted there makes the rustup proxy run a foreign toolchain). rustfmt is picked by `RUSTUP_TOOLCHAIN` or a `SPECENGINE_RUSTFMT` wrapper, a relative path (`bin/fmt`) resolved against the harness's cwd. A corpus at `/` → no cargo call, layout for all; rustfmt not run, its rows `null`, one stderr line.
 - **Budget** per call: min(60 s, the remaining `--timeout` − 1 s); nothing left → no call. An overrun is killed and reaped and, like a cargo that cannot start, ends the run's cargo calls: layout for the rest. No cargo child outlives the run.
 - **stderr** captured, never on stdout; one harness stderr line per failure: cargo's first `error…` line (else first non-blank, else the exit status), the corpus root replaced by the label where it stands as a whole path (`/mnt<root>/y`, `<root>.bak` stay), cut to 200 chars.
 
@@ -90,10 +90,10 @@ Pilots (read-only): A 0.2 % of 11 852 items ambiguous — `duplicate` 29 in 11 g
 - A module of `src/main.rs` beside a lib is named a lib module; stray `src/` files are named modules; adding a lib renames `main.rs` items.
 - `#[path]` targets outside shared units stay `path_attribute`.
 - The kill reaches only the direct child: a `SPECENGINE_CARGO` wrapper that does not `exec` can leave a grandchild.
-- The scrub misses the root inside a `path+file:///<root>` URL (stderr only); the `targets.rs` doc "no absolute corpus path reaches stderr" overstates it (comment fix, later sweep).
+- The scrub misses a root right after `/`, as in cargo's `path+file:///<root>` (stderr only).
+- A relative `SPECENGINE_CARGO` path (`bin/c`) resolves against `/`: cargo cannot start, layout for all.
 
 ## Open
 
-- rustfmt (`ast_hash/fmt.rs`) inherits the harness cwd, so a corpus toolchain file can pick it: start the harness outside the corpus until the follow-up task. A process-group kill.
+- A process-group kill.
 - Phase 3: Rust marker binding, `symbols` and `markers` rows, `spec.lock`, per-level hashes, level meaning in RON, the impl `disambiguator`, malformed revs (`X@3a`).
-- Later sweep: "04 §4" in mcp `src/review.rs:34`, `src/probes.rs:1`; test comments citing the task spec's sections, now here.

@@ -1,12 +1,13 @@
-//! docs/features/layer-a-identity.md AC-15 ("Rules": unit sources hold no
-//! directory or package literal beyond Cargo's; no pilot layout special-cased,
-//! ADR-0008): every word-like string literal of `specengine-code`'s
-//! `qpath.rs`, the harness's target-table code (`ast_hash/targets.rs`) and
-//! the qpath step of `ast_hash/mod.rs` (from its `// 5. qpath` comment to
-//! `// 6.`, both required to exist) is a Cargo layout name, a Cargo target
-//! kind, `Cargo.toml`, an output category, a piece of the one `cargo
-//! metadata` call or a key of its answer. Messages and format strings
-//! (whitespace or `{`) are not names.
+//! docs/features/layer-a-identity.md AC-15 (`docs/canon/code-identity.md`,
+//! opening paragraph: unit sources hold no directory or package literal
+//! beyond Cargo's; no pilot layout special-cased, ADR-0008): every word-like
+//! string literal of `specengine-code`'s `qpath.rs`, the harness's
+//! target-table code (`ast_hash/targets.rs`) and the qpath step of
+//! `ast_hash/mod.rs` (from its `// 5. qpath` comment to `// 6.`, both
+//! required to exist) is a Cargo layout name, a Cargo target kind,
+//! `Cargo.toml`, an output category, a piece of the one `cargo metadata`
+//! call or a key of its answer. Messages and format strings (whitespace or
+//! `{`) are not names.
 //!
 //! The literals are read with a small lexer that skips comments, so a doc
 //! comment may name anything.

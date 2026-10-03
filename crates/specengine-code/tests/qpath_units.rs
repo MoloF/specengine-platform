@@ -1,7 +1,8 @@
-//! `qpath` target units (docs/features/layer-a-identity.md, "Units and
-//! `qpath`", AC-01): `file_role` against a package's target table — the one
-//! `cargo metadata --no-deps` gives for `fixtures/cargo-units/app` and the
-//! one `layout_targets` finds — and the primary-target and shared-unit rules.
+//! `qpath` target units (`docs/canon/code-identity.md` "Units and `qpath`";
+//! docs/features/layer-a-identity.md AC-01): `file_role` against a package's
+//! target table — the one `cargo metadata --no-deps` gives for
+//! `fixtures/cargo-units/app` and the one `layout_targets` finds — and the
+//! primary-target and shared-unit rules.
 //!
 //! The metadata table is written out here as Cargo reports it for the
 //! fixture (`ast_hash_units.rs` checks the real `cargo metadata` answer end

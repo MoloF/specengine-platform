@@ -217,8 +217,10 @@ impl fmt::Display for QPath {
 ///
 /// An `impl` block is named `impl Type` / `impl <Type as Trait>` so it never
 /// collides with the type it implements; its methods are `Type::method` and
-/// `<Type as Trait>::method` (05 §5.1). Two adjacent inherent impls of one
-/// type do collide, and that is reported as [`Ambiguity::Duplicate`].
+/// `<Type as Trait>::method`
+/// (`docs/canon/code-identity.md` "Units and `qpath`"). Two adjacent inherent
+/// impls of one type do collide, and that is reported as
+/// [`Ambiguity::Duplicate`].
 #[must_use]
 pub fn qpath(package: &str, role: &FileRole, item: &ItemRecord) -> QPath {
     let (unit, mut module) = match role {

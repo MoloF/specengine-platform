@@ -20,6 +20,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/mcp-read.md](features/mcp-read.md) shipped
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) shipped
 - [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) shipped
+- [docs/features/pointer-sweep.md](features/pointer-sweep.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
 - [docs/features/spec-check-process.md](features/spec-check-process.md) shipped

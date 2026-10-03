@@ -1,9 +1,10 @@
-//! Ambiguous RON paths (docs/features/layer-a-identity.md, "RON ambiguity",
-//! AC-11, AC-12): a marker whose value or ancestor shares its segment text
-//! with a sibling in the same struct or map — cut at `MAX_SEGMENT_BYTES`,
-//! whitespace collapsed, or a field or key written twice — is
-//! `Anchor::Ambiguous`, keeps its path text, is never merged; a marker on
-//! the container itself stays `Path`. Every case runs under LF and CRLF.
+//! Ambiguous RON paths (`docs/canon/code-identity.md` "RON ambiguity";
+//! docs/features/layer-a-identity.md AC-11, AC-12): a marker whose value or
+//! ancestor shares its segment text with a sibling in the same struct or map
+//! — cut at `MAX_SEGMENT_BYTES`, whitespace collapsed, or a field or key
+//! written twice — is `Anchor::Ambiguous`, keeps its path text, is never
+//! merged; a marker on the container itself stays `Path`. Every case runs
+//! under LF and CRLF.
 
 use specengine_code::ron::{self, Anchor, MAX_SEGMENT_BYTES, RonAnalysis, TRUNCATION_MARK};
 

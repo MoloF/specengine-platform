@@ -16,7 +16,8 @@
 //!   targets (a target table handed in, or Cargo's auto-discovery): one unit
 //!   per file; every ambiguity is reported, never guessed.
 //!
-//! Phase 0 increment `ron` (marker grammar and RON binding: 05 §5.3):
+//! Phase 0 increment `ron` (marker grammar and RON binding:
+//! `docs/canon/code-identity.md` "Marker grammar", "RON binding"):
 //!
 //! - [`markers`] — the marker syntax shared by `.rs` and `.ron` comments,
 //!   level lists (`[sig]`) included;

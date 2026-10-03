@@ -136,11 +136,13 @@ pub fn tables(
         .collect()
 }
 
-/// The working directory for the cargo calls: the filesystem root, which the
-/// system owns, unless the corpus is the root itself. Never a world-writable
-/// directory such as the system temporary one, where anyone could plant a
-/// `rust-toolchain.toml` that makes the rustup proxy run a foreign cargo.
-fn outside_dir(root: &Path) -> Option<PathBuf> {
+/// The working directory for the cargo calls and every rustfmt call: the
+/// filesystem root, which the system owns, unless the corpus is the root
+/// itself (`None`: cargo is not called, rustfmt is not run). Never a
+/// world-writable directory such as the system temporary one, where anyone
+/// could plant a `rust-toolchain.toml` that makes the rustup proxy run a
+/// foreign cargo or rustfmt.
+pub(super) fn outside_dir(root: &Path) -> Option<PathBuf> {
     fs::canonicalize("/")
         .ok()
         .filter(|dir| dir.is_dir() && !dir.starts_with(root))
@@ -242,11 +244,13 @@ impl Runner<'_> {
 }
 
 /// `line` with the corpus root replaced by the run's label wherever it
-/// stands as a whole path, so no absolute corpus path reaches stderr: after
-/// the start of the line or a character no path continues through
-/// (whitespace, a quote, a backtick, `(`, `=`, `:` …), and before the end or
-/// a character no name continues through (`/`, whitespace, a quote …).
-/// `/mnt<root>/y` and `<root>.bak` name other paths and stay.
+/// stands as a whole path: after the start of the line or a character no
+/// path continues through (whitespace, a quote, a backtick, `(`, `=`, `:` …),
+/// and before the end or a character no name continues through (`/`,
+/// whitespace, a quote …). `/mnt<root>/y` and `<root>.bak` name other paths
+/// and stay. So does a root right after a `/`, as in cargo's
+/// `path+file:///<root>` package URL: that absolute corpus path can still
+/// reach stderr (a known limit; stdout never sees it).
 fn scrub(line: &str, root: &Path, label: &str) -> String {
     let root = root.to_string_lossy();
     let root = root.as_ref();

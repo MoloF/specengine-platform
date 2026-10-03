@@ -1,7 +1,8 @@
 #![cfg(feature = "probes")]
-//! AC-08 of docs/features/phase-0-spikes.md (04 §4, 07 §1.1-1.2), scripted:
-//! a raw JSON-RPC client drives the real `specengine-mcp` binary (feature
-//! `probes`) over stdio in both protocol eras — (a) legacy `initialize` +
+//! AC-08 of docs/features/phase-0-spikes.md
+//! (`crates/specengine-mcp/README.md` "Claude Code client"; 07 §1.1-1.2),
+//! scripted: a raw JSON-RPC client drives the real `specengine-mcp` binary
+//! (feature `probes`) over stdio in both protocol eras — (a) legacy `initialize` +
 //! `tools/list` + `tools/call`, (b) stateless 2026-07-28 requests, (c) the
 //! `review_proposal` elicitation round trips, (d) the tool `_meta` and
 //! annotations, (e) a 26 k-token output — plus the edge cases of the stdio

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-03
 ---
 
 # Documentation: how the convention is applied
@@ -107,6 +107,7 @@ The index is the root `docs/index.md`, the one entry point, plus the shards its 
 - **Pre-commit hook** (`scripts/hooks-install.sh` enables `.githooks/`): when the staged names (renames split, `--diff-filter=ACDMT`) include a `.md` file or the top-level `specengine.toml` or `.spec-debt.toml`, it runs `cargo run -q -p specengine-cli -- check --staged --root .`, judged against `HEAD`: a new `.spec-debt.toml` entry or a later `expires` is new debt and blocks, so it takes the owner's `--no-verify`. Fail closed: any non-zero exit (errors, cannot check, a failed build, no toolchain) refuses the commit; only `--no-verify` skips. The checker is built from the working tree. Only form errors block: the convention's (ADR-0022) and the project's declared `[[check.rules]]` (ADR-0031, here a decision's "Cost" and own text, a shipped feature's "Implementation": `docs/canon/spec-check-process.md`); content never does (ADR-0006).
 - **Merges**: a clean `git merge` runs `pre-merge-commit`, not `pre-commit`; merged documents are judged by CI alone.
 - **CI** `.github/workflows/docs.yml`: `cargo run --locked -q -p specengine-cli -- check --root .` on `HEAD`, its only step.
+- **Code pointers**, a test, not the check: a code comment cites a document as `` `<path>` "Heading" ``, the heading verbatim on one line; `crates/specengine-eval/tests/doc_pointers.rs` fails when a heading cited from code is gone, so renaming one means fixing its citations.
 
 ## Compaction
 

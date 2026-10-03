@@ -1,7 +1,8 @@
-//! RON depth cap (05 §5.3; `crates/specengine-code/README.md`, "Rules":
-//! broken or hostile input yields a category or `cannot_verify`, never a
-//! panic): the lexer path's structure walk is capped at `ron::MAX_DEPTH` open
-//! containers. A container past the cap is a `nesting_too_deep` rejection,
+//! RON depth cap (`docs/canon/code-identity.md` "RON binding";
+//! `crates/specengine-code/README.md`, "Rules": broken or hostile input
+//! yields a category or `cannot_verify`, never a panic): the lexer path's
+//! structure walk is capped at `ron::MAX_DEPTH` open containers. A container
+//! past the cap is a `nesting_too_deep` rejection,
 //! skipped through its matching closer; markers inside it are
 //! `cannot_verify`; the walk resumes after the closer.
 //!

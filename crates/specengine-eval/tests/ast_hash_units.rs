@@ -1029,6 +1029,86 @@ fn cargo_runs_at_the_filesystem_root_never_in_the_temp_dir_inside_or_outside_the
     assert_no_cargo_leftovers(&corpus);
 }
 
+/// A `SPECENGINE_RUSTFMT` stand-in at `path` (docs/features/pointer-sweep.md,
+/// Data): appends `<kind> <pwd -P>` to `log`, `kind` = `version` for
+/// `--version` (then prints `rustfmt 0.0.0-stub`), else `format` (then
+/// echoes stdin, its arguments ignored); exit 0.
+fn rustfmt_stub(path: &Path, log: &Path) {
+    let script = format!(
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then\n  printf 'version %s\\n' \"$(pwd -P)\" >> '{log}'\n  echo 'rustfmt 0.0.0-stub'\nelse\n  printf 'format %s\\n' \"$(pwd -P)\" >> '{log}'\n  cat\nfi\nexit 0\n",
+        log = log.display(),
+    );
+    fs::write(path, script).expect("rustfmt stub written");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+            .expect("rustfmt stub executable");
+    }
+}
+
+/// docs/features/pointer-sweep.md AC-06: every rustfmt call, `--version`
+/// included, runs at `/` like the cargo call, even when the harness starts
+/// inside the corpus; the version reported is the one taken there. Two legs:
+/// the stub by absolute path, and by a path relative to the harness's own
+/// directory (resolved before any spawn, `ast_hash/fmt.rs`). Named
+/// mutations: `current_dir` dropped from the format spawn or from the
+/// `--version` spawn turns this red.
+#[test]
+fn rustfmt_runs_at_the_filesystem_root_even_when_the_harness_starts_inside_the_corpus() {
+    let scratch = Scratch::new("rustfmt-cwd");
+    let corpus = scratch.join("corpus");
+    copy_dir(
+        &repository_root().join("fixtures").join("ast-hash"),
+        &corpus,
+    );
+    let before = snapshot(&corpus);
+    let stub = scratch.join("rustfmt-stub.sh");
+    let relative = Path::new("..").join("rustfmt-stub.sh");
+    // Resolved from `/` instead of the harness's directory, it names nothing.
+    assert!(!Path::new("/").join(&relative).exists());
+    for (leg, command) in [("absolute", stub.clone()), ("relative", relative)] {
+        let log = scratch.join(&format!("rustfmt-{leg}.log"));
+        rustfmt_stub(&stub, &log);
+        let out = scratch.join(&format!("out-{leg}"));
+        let output = Command::new(BIN)
+            .current_dir(&corpus)
+            .env_remove("SPECENGINE_PILOT_A")
+            .env_remove("SPECENGINE_PILOT_B")
+            .env_remove("SPECENGINE_CARGO")
+            .env("SPECENGINE_RUSTFMT", &command)
+            .arg("ast-hash")
+            .arg("--pilot")
+            .arg(&corpus)
+            .arg("--out")
+            .arg(&out)
+            .output()
+            .expect("specengine-eval runs");
+        let result = result_of(&output);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let calls = fs::read_to_string(&log)
+            .unwrap_or_else(|_| panic!("{leg}: the stub never ran; stderr:\n{stderr}"));
+        let calls: Vec<&str> = calls.lines().collect();
+        let versions = calls.iter().filter(|call| **call == "version /").count();
+        let formats = calls.iter().filter(|call| **call == "format /").count();
+        assert_eq!(versions, 1, "{leg}: one `--version`, at `/`: {calls:?}");
+        assert!(formats >= 1, "{leg}: no format call at `/`: {calls:?}");
+        assert_eq!(
+            versions + formats,
+            calls.len(),
+            "{leg}: a rustfmt call ran elsewhere: {calls:?}"
+        );
+        assert_eq!(
+            result["detail"]["rustfmt"]["version"], "rustfmt 0.0.0-stub",
+            "{leg}: {}",
+            result["detail"]["rustfmt"]
+        );
+        assert_eq!(result["detail"]["rustfmt"]["available"], true, "{leg}");
+    }
+    assert_eq!(snapshot(&corpus), before, "nothing written into the corpus");
+    assert_no_cargo_leftovers(&corpus);
+}
+
 #[test]
 fn a_failure_line_names_the_corpus_by_its_label_never_its_root() {
     let scratch = Scratch::new("stub-scrub");

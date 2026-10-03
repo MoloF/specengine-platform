@@ -181,7 +181,7 @@ fn assert_all_rows_numeric(result: &Value) {
         "detail.orphan_error_regions",
     );
     assert!(result["detail"]["stability"].is_object());
-    // docs/features/layer-a-identity.md "Eval outputs": items per unit kind
+    // `docs/canon/code-identity.md` "Eval outputs": items per unit kind
     // (`primary`, `shared`, `unrooted` always there) and package dirs per
     // target source.
     let units = result["detail"]["qpath_units"]
@@ -408,13 +408,32 @@ fn contrast_config_wraps_fixture_blocks_and_every_hash_stays_stable() {
         serde_json::from_str(&fs::read_to_string(detail.join("unstable.json")).unwrap()).unwrap();
     assert_eq!(unstable, Value::Array(Vec::new()), "no unstable items");
 
-    // The same rustfmt the harness used, with the configs it wrote to --out.
+    // The same rustfmt the harness used, with the configs it wrote to --out:
+    // the same command, a relative path resolved from the harness's
+    // directory (the repository root here), every call run at `/` as the
+    // harness runs it (docs/features/pointer-sweep.md); the version it
+    // reports proves it.
     let source_path = fixture_dir().join("src").join("blocks.rs");
     let source = fs::read_to_string(&source_path).expect("fixture file readable");
     let rustfmt = std::env::var("SPECENGINE_RUSTFMT")
         .ok()
         .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "rustfmt".to_owned());
+        .map_or_else(|| PathBuf::from("rustfmt"), PathBuf::from);
+    let rustfmt = if rustfmt.is_relative() && rustfmt.components().count() > 1 {
+        repository_root().join(rustfmt)
+    } else {
+        rustfmt
+    };
+    let version = Command::new(&rustfmt)
+        .arg("--version")
+        .current_dir("/")
+        .output()
+        .expect("rustfmt --version runs");
+    assert_eq!(
+        result["detail"]["rustfmt"]["version"],
+        String::from_utf8_lossy(&version.stdout).trim(),
+        "the comparison rustfmt is not the one the harness used"
+    );
     // Through stdin, as the harness does: with a file argument rustfmt would
     // prefix the output with the file's name.
     let format = |config: &str| -> String {
@@ -423,6 +442,7 @@ fn contrast_config_wraps_fixture_blocks_and_every_hash_stays_stable() {
         let mut child = Command::new(&rustfmt)
             .args(["--edition", "2024", "--emit", "stdout", "--config-path"])
             .arg(detail.join(config))
+            .current_dir("/")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

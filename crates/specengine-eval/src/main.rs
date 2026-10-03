@@ -43,7 +43,8 @@ struct Cli {
 enum Measurement {
     /// Stability of the normalized AST hash under rustfmt and comment stripping (05 §5.2).
     AstHash(CommonArgs),
-    /// `.ron` marker extraction by the own lexer (05 §5.3; verdict `lexer`, 05 §9).
+    /// `.ron` marker extraction by the own lexer
+    /// (`docs/canon/code-identity.md` "RON binding"; verdict `lexer`, 05 §9).
     Ron(CommonArgs),
     /// Dry-run census of a spec corpus by `specengine-import`; the convention
     /// comes from `--config` (default: `census.toml` at the corpus root) (08 §4.3).

@@ -271,10 +271,23 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
     let hash_us = started.elapsed().as_micros();
 
     // 3. Perturbed texts, on copies in memory; `None` = the file stays as it is.
-    let rustfmt = fmt::Rustfmt::detect();
-    if rustfmt.is_none() {
-        eprintln!("ast-hash: no rustfmt found; the rustfmt rows are null");
-    }
+    // rustfmt runs where cargo does, outside the corpus; nowhere to run it
+    // counts as no rustfmt.
+    let rustfmt = match targets::outside_dir(&corpus.root) {
+        Some(cwd) => {
+            let found = fmt::Rustfmt::detect(&cwd);
+            if found.is_none() {
+                eprintln!("ast-hash: no rustfmt found; the rustfmt rows are null");
+            }
+            found
+        }
+        None => {
+            eprintln!(
+                "ast-hash: no working directory outside the corpus for rustfmt; the rustfmt rows are null"
+            );
+            None
+        }
+    };
     let default_config = out_dir.join("rustfmt-default.toml");
     let contrast_config = out_dir.join("rustfmt-contrast.toml");
     fs::write(&default_config, fmt::DEFAULT_CONFIG)

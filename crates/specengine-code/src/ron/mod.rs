@@ -1,6 +1,6 @@
-//! RON support (`docs/canon/code-identity.md`; 05 §5.3, 05 §9 "AST" row): a
-//! marker in a `.ron` comment attaches to an entry, element or root value;
-//! its path becomes the `qpath`, e.g.
+//! RON support (`docs/canon/code-identity.md` "Marker grammar", "RON binding";
+//! 05 §9 "AST" row): a marker in a `.ron` comment attaches to an entry, element
+//! or root value; its path becomes the `qpath`, e.g.
 //! `data/movement.ron#root.stamina.regen_per_second`. Only the
 //! comment's position counts, and the first rule that applies decides: a
 //! block comment attaches to the value that starts on the line of its `*/`

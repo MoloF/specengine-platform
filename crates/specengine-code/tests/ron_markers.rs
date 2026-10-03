@@ -1,7 +1,8 @@
-//! AC-07 of docs/features/phase-0-spikes.md, binding rules 1-5 of 05 §5.3: a
-//! marker in a `.ron` comment resolves to a field path through the own lexer
-//! (`ron::analyze`), on `fixtures/ron` and on inline edge data. Nothing here
-//! writes into the fixture.
+//! AC-07 of docs/features/phase-0-spikes.md, binding rules 1-5 of
+//! `docs/canon/code-identity.md` "RON binding": a marker in a `.ron` comment
+//! resolves to a field path through the own lexer (`ron::analyze`), on
+//! `fixtures/ron` and on inline edge data. Nothing here writes into the
+//! fixture.
 //!
 //! The mixed-script ID is assembled from a Unicode escape so no non-Latin
 //! letter sits in the repository (ADR-0024, checked by the anonymity test).
@@ -219,8 +220,9 @@ fn several_markers_in_one_comment_share_the_anchor() {
     assert_eq!(analysis.markers[1].marker.note.as_deref(), Some("the note"));
 }
 
-/// A `{key}` segment is the key's source text (05 §5.3): a string key keeps
-/// its quotes, and whitespace runs collapse to one space — across lines and
+/// A `{key}` segment is the key's source text
+/// (`docs/canon/code-identity.md` "RON binding"): a string key keeps its
+/// quotes, and whitespace runs collapse to one space — across lines and
 /// inside strings too. Named mutation: `segment_text` returning the raw slice
 /// instead of `collapse_whitespace(..)` turns this red.
 #[test]
@@ -367,10 +369,11 @@ fn mixed_script_id_is_reported_and_still_resolves() {
 
 // ------------------------------------------- adjacency (owner decision)
 
-/// One adjacency case of the owner's binding rules 1-5 (05 §5.3):
-/// `source` with every `@` expanded to `@implements ` (so `// @M` is the
-/// marker `M`), the `(id, anchor)` of every marker in source order, and
-/// whether the file must lex and walk clean.
+/// One adjacency case of the owner's binding rules 1-5
+/// (`docs/canon/code-identity.md` "RON binding"): `source` with every `@`
+/// expanded to `@implements ` (so `// @M` is the marker `M`), the
+/// `(id, anchor)` of every marker in source order, and whether the file must
+/// lex and walk clean.
 struct Adjacency {
     name: &'static str,
     source: &'static str,

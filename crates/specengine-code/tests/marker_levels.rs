@@ -1,7 +1,7 @@
-//! Marker grammar (docs/features/layer-a-identity.md, "Marker grammar",
-//! AC-07 levels, AC-08 level-list errors, AC-09 ID boundaries): every case
-//! under `\n` and `\r\n` line ends, through `markers_in` and through a `.rs`
-//! / `.ron` comment as the walkers see it.
+//! Marker grammar (`docs/canon/code-identity.md` "Marker grammar";
+//! docs/features/layer-a-identity.md AC-07 levels, AC-08 level-list errors,
+//! AC-09 ID boundaries): every case under `\n` and `\r\n` line ends, through
+//! `markers_in` and through a `.rs` / `.ron` comment as the walkers see it.
 //!
 //! Timing compares a 1 MB level list with a 1 MB note in the same process,
 //! with a generous factor (a debug build on a busy laptop stays green, a

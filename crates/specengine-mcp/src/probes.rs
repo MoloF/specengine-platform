@@ -1,4 +1,5 @@
-//! Probe tools for the interactive MCP checks of 04 §4 (feature `probes`;
+//! Probe tools for the interactive MCP checks of
+//! `crates/specengine-mcp/README.md` "Claude Code client" (feature `probes`;
 //! re-run on a Claude Code upgrade): the output cap and 2-minute backgrounding.
 //! Measured on Claude Code 2.1.283: the output cap counts characters, not
 //! tokens — 48 000 pass inline, 104 000 are rejected (48 000 < cap < 104 000)

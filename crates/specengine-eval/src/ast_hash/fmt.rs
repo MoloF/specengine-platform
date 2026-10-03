@@ -1,9 +1,17 @@
 //! rustfmt as a perturbation, on copies only: the source goes in through stdin
 //! and comes back through `--emit stdout`. The corpus is never touched and
 //! `mod` children are never followed (rustfmt cannot follow them from stdin).
+//!
+//! Every call, `--version` included, runs in the directory the cargo calls
+//! get (`targets::outside_dir`): the edition is on the command line and the
+//! configuration file is an absolute path under `--out`, so the working
+//! directory only decides which toolchain the rustup proxy picks, and a
+//! `rust-toolchain` file of the corpus or of the harness's own directory
+//! never does. A relative `SPECENGINE_RUSTFMT` path is resolved against the
+//! harness's own directory first.
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// Overrides the rustfmt command (e.g. a nightly wrapper); default `rustfmt`.
@@ -18,7 +26,9 @@ pub const DEFAULT_CONFIG: &str = "";
 pub const CONTRAST_CONFIG: &str = "max_width = 60\ntrailing_comma = \"Never\"\n";
 
 pub struct Rustfmt {
-    command: String,
+    command: PathBuf,
+    /// The working directory of every call.
+    cwd: PathBuf,
     /// Output of `rustfmt --version`, trimmed.
     pub version: String,
 }
@@ -30,18 +40,35 @@ pub struct Formatted {
 }
 
 impl Rustfmt {
-    /// `None` when no rustfmt answers `--version`.
-    pub fn detect() -> Option<Self> {
+    /// `None` when no rustfmt answers `--version` run in `cwd`, the
+    /// directory every later call runs in too.
+    pub fn detect(cwd: &Path) -> Option<Self> {
         let command = std::env::var(ENV_RUSTFMT)
             .ok()
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| "rustfmt".to_owned());
-        let output = Command::new(&command).arg("--version").output().ok()?;
+        let command = PathBuf::from(command);
+        // A bare name is looked up on `PATH`; a path with a directory part
+        // names a file from here, not from `cwd`.
+        let command = if command.components().count() > 1 {
+            std::path::absolute(&command).unwrap_or(command)
+        } else {
+            command
+        };
+        let output = Command::new(&command)
+            .arg("--version")
+            .current_dir(cwd)
+            .output()
+            .ok()?;
         if !output.status.success() {
             return None;
         }
         let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        Some(Self { command, version })
+        Some(Self {
+            command,
+            cwd: cwd.to_owned(),
+            version,
+        })
     }
 
     /// Formats `source` with the configuration file at `config_path`.
@@ -49,6 +76,7 @@ impl Rustfmt {
         let mut child = Command::new(&self.command)
             .args(["--edition", "2024", "--emit", "stdout", "--config-path"])
             .arg(config_path)
+            .current_dir(&self.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

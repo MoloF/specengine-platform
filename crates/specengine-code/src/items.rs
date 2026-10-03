@@ -1,8 +1,10 @@
 //! The items of one Rust file, each with its hash state (05 §5.1 layer A).
 //!
-//! Items are the kinds listed in 05 §5.1: `function_item`, `struct_item`,
-//! `enum_item`, `union_item`, `trait_item`, `impl_item` (plus its methods),
-//! `const_item`, `static_item`, `type_item`, `mod_item`, `macro_definition`.
+//! Items are the kinds listed in
+//! `docs/canon/code-identity.md` "Units and `qpath`": `function_item`,
+//! `struct_item`, `enum_item`, `union_item`, `trait_item`, `impl_item` (plus
+//! its methods), `const_item`, `static_item`, `type_item`, `mod_item`,
+//! `macro_definition`.
 //! Inline `mod` bodies are entered; items inside function bodies belong to the
 //! function's hash. Items produced by macros are invisible (stated limitation).
 

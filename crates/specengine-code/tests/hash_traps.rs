@@ -470,7 +470,8 @@ fn items_are_collected_with_scope_owner_and_line() {
     assert_eq!(find("deep").mod_path, ["outer", "inner"]);
     assert_eq!(find("deep").line, 2);
     // Owners carry the impl label (`Type` / `<Type as Trait>`); the `impl `
-    // prefix is added only to the block's own qpath (05 §5.1).
+    // prefix is added only to the block's own qpath
+    // (`docs/canon/code-identity.md` "Units and `qpath`").
     assert_eq!(find("m").owner.as_deref(), Some("T"));
     assert_eq!(find("m").mod_path, ["outer"]);
     assert_eq!(find("n").owner.as_deref(), Some("T"));
