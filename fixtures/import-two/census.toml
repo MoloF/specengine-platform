@@ -1,0 +1,46 @@
+# Import config of the import-two fixture
+# (`crates/specengine-import/README.md` "Config"): an invented decision-log
+# convention, different from import-one's in every recognizer. expected.json is the `result` of
+# `specengine-eval import --pilot fixtures/import-two` without
+# `detail.import_ms`.
+[corpus]
+roots = ["log", "pages"]
+extensions = ["markdown", "mdown"]
+exclude = ["log/draft-*"]
+[front_matter]
+class_key = "type"
+header_table = '^Title$'
+header_row_field = true
+[front_matter.key_map]
+"Outcome" = "state"
+"Rôle" = "role"
+"Heading" = "title"
+[front_matter.value_map.state]
+"Agreed" = "accepted"
+"Pending" = "proposed"
+[ids]
+regex = '^[A-Z]{3}-[0-9]{4}$'
+like = '[A-Z]{2,5}-[0-9]{2,5}'
+feature_prefixes = ["CRT"]
+hyphenless = ['\bP[0-9]{4}\b', '\bG[0-9]{2}\b']
+[ids.legacy]
+"OLD" = "DEC"
+[tables]
+id_column = 1
+headerless = true
+text_column = 2
+local_number = '^No\.[0-9]+$'
+[lists]
+lead_in = true
+separators = [" -", ";"]
+[definitions]
+reference_paths = ["pages/refs/**"]
+reference_headers = ['^Cited in$']
+[links]
+wiki = true
+base = "log"
+[code]
+roots = ["tools", "absent"]
+extensions = ["py"]
+exclude = ["tools/generated/**"]
+strip = ["log/", "pages/"]

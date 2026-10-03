@@ -23,12 +23,11 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `mcp-read.md`, `code-identity.md`, `pilot-schemes.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources), layer A identity (`qpath` target units, marker `[tiers]`, ambiguous RON paths; pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %), pilot schemes (a "before" `specengine.toml` per pilot; `parse`, `index`, `check` read both, read-only: §3 AC-10).
-- Next: `import-records`, then the rest of the pilots below.
+- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `mcp-read.md`, `code-identity.md`, `pilot-schemes.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources), layer A identity (`qpath` target units, marker `[tiers]`, ambiguous RON paths; pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %), pilot schemes (a "before" `specengine.toml` per pilot; `parse`, `index`, `check` read both, read-only: §3 AC-10), import records (the record model and the "before" report on both pilots, §4.3).
+- Next: `import-gaps` (a small follow-up: `docs/features/import-records.md` "Open"), then `import-layout`, then the rest of the pilots below.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - MCP: the `_meta["anthropic/maxResultSizeChars"]` lever (500 000) is declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does the lever act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
-  - The census findings of §4.3 become per-corpus importer settings and rules.
 
 ### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner
 
@@ -116,13 +115,7 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 
 ### 4.3. Census findings (Phase 0, both pilots)
 
-A census config alone described each pilot corpus (ADR-0008; schema and counts: `crates/specengine-import/README.md`) once it read headerless `|` blocks, ID-column header regexes and wiki links. Each finding is a per-corpus importer setting or rule, not core code:
-
-- (a) **Link base**: 57 of one pilot's 58 "broken" links resolve from the docs root, not the linking file → `[paths] link_base`.
-- (b) **Genuine debt**: the other pilot's broken wiki links name 8 targets that exist nowhere → the baseline (§4.2 item 3).
-- (c) **Legacy prefixes**: both pilots keep non-Latin prefixes (20 / 287 IDs; one whole decision register) → aliases (§4.2 item 4).
-- (d) **Definition vs reference**: IDs recur across index and reference tables (1 407 / 110 duplicates) → a per-corpus rule telling a definition from a reference.
-- (e) **Locally numbered tables**: a numero-sign (U+2116) column holds most of one pilot's 185 rows without an ID → a per-corpus local-number column setting (candidates for §4.1's feature-scoped IDs).
+Each finding became a per-corpus import config setting or rule, not core code (ADR-0008); how each works now: `crates/specengine-import/README.md`; pilot counts: `docs/features/import-records.md` AC-10. (a) Link base → `[links] base`, `[paths] link_base`. (b) Wiki links to 8 targets that exist nowhere: genuine debt → the baseline (§4.2 item 3). (c) Legacy prefixes → `[ids.legacy]` aliases (§4.2 item 4). (d) Definition vs reference → `[definitions]`. (e) Locally numbered tables → `tables.local_number` (candidates for §4.1's feature-scoped IDs). Found at import: (f) criteria as list items → `[lists]`; (g) field/value table headers → `header_table`, key and value maps; (h) hyphenless codes → `hyphenless`, counted only (ADR-0009 needs a superseding ADR before that pilot migrates).
 
 ## 5. Risks
 

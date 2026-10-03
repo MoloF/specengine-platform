@@ -26,7 +26,12 @@
 //! written or with a document extension appended — as its relative path or
 //! as a trailing part of it after a `/` (case ignored), or when it
 //! exists relative to the linking document.
+//!
+//! The import keys (`docs/features/import-records.md` AC-02) live in the
+//! same file and are compiled into [`ImportConfig`]; the census validates
+//! them and reads none of them.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::ops::Range;
@@ -37,6 +42,10 @@ use serde::Deserialize;
 use toml::Spanned;
 
 use crate::script::{IdScript, Normalized};
+
+/// ID-like text when `ids.like` is absent: an upper-case letter run, a
+/// hyphen, digits (`docs/features/import-records.md` AC-02, AC-06).
+pub const DEFAULT_LIKE: &str = r"\p{Lu}[\p{Lu}\p{N}]*-[0-9]+";
 
 /// A config error names the file and, when known, the line.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +85,81 @@ pub struct CensusConfig {
     pub section_ids: bool,
     /// Corpus-relative directory wiki links resolve in; `None`: wiki links off.
     pub wiki_root: Option<PathBuf>,
+    /// The import keys; never read by the census.
+    pub import: ImportConfig,
+}
+
+/// The import keys of the config, compiled. Every key is optional and off
+/// by default, `like` aside.
+#[derive(Debug, Clone)]
+pub struct ImportConfig {
+    /// Over the first header cell of a two-column table opening the body.
+    pub header_table: Option<Regex>,
+    /// The header row of such a table is a field too.
+    pub header_row_field: bool,
+    /// Header key as written → target key.
+    pub key_map: BTreeMap<String, String>,
+    /// Per target key: value as written → target value.
+    pub value_map: BTreeMap<String, BTreeMap<String, String>>,
+    /// ID-like text, for the unclaimed counter.
+    pub like: Regex,
+    /// Latin prefixes whose IDs are unique per document (ADR-0026).
+    pub feature_prefixes: BTreeSet<String>,
+    /// Hyphenless ID patterns: counted only.
+    pub hyphenless: Vec<Pattern>,
+    /// Legacy prefix as written → Latin prefix.
+    pub legacy: BTreeMap<String, String>,
+    /// The mapped cell of a record row; `None`: the column after the ID column.
+    pub text_column: Option<usize>,
+    /// Over header cells: the first match is the mapped cell (beats `text_column`).
+    pub text_header: Option<Regex>,
+    /// Over an ID cell holding no ID: a local number.
+    pub local_number: Option<Regex>,
+    /// List items opening with a strong ID are records.
+    pub list_lead_in: bool,
+    /// One of these is stripped after a lead-in ID.
+    pub separators: Vec<String>,
+    /// Globs over corpus-relative paths: documents whose IDs are references.
+    pub reference_paths: Vec<Regex>,
+    /// Over header cells: tables whose IDs are references.
+    pub reference_headers: Vec<Regex>,
+    /// Corpus-relative directory a missing file link is retried from.
+    pub link_base: Option<PathBuf>,
+    pub code: CodeConfig,
+}
+
+/// A configured regex and its text as written (for `labels.json`).
+#[derive(Debug, Clone)]
+pub struct Pattern {
+    pub source: String,
+    pub regex: Regex,
+}
+
+/// `[code]`: files scanned for literal document paths, never built.
+#[derive(Debug, Clone, Default)]
+pub struct CodeConfig {
+    /// Corpus-relative, without `..`; empty: no code scan.
+    pub roots: Vec<PathBuf>,
+    /// Lower-case, without the dot; empty: every file under the roots.
+    pub extensions: Vec<String>,
+    pub exclude: Vec<Regex>,
+    /// Path prefixes a document path is also matched without.
+    pub strip: Vec<String>,
+}
+
+impl CodeConfig {
+    /// Whether a file under a code root is scanned.
+    pub fn keeps(&self, file_name: &str, relative: &str) -> bool {
+        let listed = self.extensions.is_empty()
+            || file_name.rsplit_once('.').is_some_and(|(stem, extension)| {
+                !stem.is_empty()
+                    && self
+                        .extensions
+                        .iter()
+                        .any(|wanted| wanted.eq_ignore_ascii_case(extension))
+            });
+        listed && !self.exclude.iter().any(|glob| glob.is_match(relative))
+    }
 }
 
 #[derive(Deserialize)]
@@ -91,6 +175,12 @@ struct RawConfig {
     sections: RawSections,
     #[serde(default)]
     links: RawLinks,
+    #[serde(default)]
+    lists: RawLists,
+    #[serde(default)]
+    definitions: RawDefinitions,
+    #[serde(default)]
+    code: RawCode,
 }
 
 #[derive(Deserialize)]
@@ -110,12 +200,28 @@ struct RawCorpus {
 struct RawFrontMatter {
     #[serde(default)]
     class_key: Option<Spanned<String>>,
+    #[serde(default)]
+    header_table: Option<Spanned<String>>,
+    #[serde(default)]
+    header_row_field: bool,
+    #[serde(default)]
+    key_map: BTreeMap<String, Spanned<String>>,
+    #[serde(default)]
+    value_map: BTreeMap<String, BTreeMap<String, Spanned<String>>>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawIds {
     regex: Spanned<String>,
+    #[serde(default)]
+    like: Option<Spanned<String>>,
+    #[serde(default)]
+    feature_prefixes: Vec<Spanned<String>>,
+    #[serde(default)]
+    hyphenless: Vec<Spanned<String>>,
+    #[serde(default)]
+    legacy: BTreeMap<String, Spanned<String>>,
 }
 
 #[derive(Deserialize, Default)]
@@ -127,6 +233,43 @@ struct RawTables {
     id_header: Option<Spanned<String>>,
     #[serde(default)]
     headerless: bool,
+    #[serde(default)]
+    text_column: Option<usize>,
+    #[serde(default)]
+    text_header: Option<Spanned<String>>,
+    #[serde(default)]
+    local_number: Option<Spanned<String>>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct RawLists {
+    #[serde(default)]
+    lead_in: bool,
+    #[serde(default)]
+    separators: Vec<Spanned<String>>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct RawDefinitions {
+    #[serde(default)]
+    reference_paths: Vec<Spanned<String>>,
+    #[serde(default)]
+    reference_headers: Vec<Spanned<String>>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct RawCode {
+    #[serde(default)]
+    roots: Vec<Spanned<String>>,
+    #[serde(default)]
+    extensions: Vec<Spanned<String>>,
+    #[serde(default)]
+    exclude: Vec<Spanned<String>>,
+    #[serde(default)]
+    strip: Vec<Spanned<String>>,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +286,8 @@ struct RawLinks {
     wiki: bool,
     #[serde(default)]
     wiki_root: Option<Spanned<String>>,
+    #[serde(default)]
+    base: Option<Spanned<String>>,
 }
 
 impl Default for RawSections {
@@ -221,6 +366,9 @@ impl CensusConfig {
             (true, None) => Some(PathBuf::from(".")),
             (true, Some(root)) => Some(inside("links.wiki_root", root)?),
         };
+
+        // Before the census keys below are moved out of `raw`.
+        let import = compile_import(&raw, &error_at, &inside)?;
 
         let extensions = match raw.corpus.extensions {
             None => vec!["md".to_owned()],
@@ -308,6 +456,7 @@ impl CensusConfig {
             headerless_tables: raw.tables.headerless,
             section_ids: raw.sections.id_attr,
             wiki_root,
+            import,
         })
     }
 
@@ -326,6 +475,266 @@ impl CensusConfig {
                     .any(|wanted| wanted.eq_ignore_ascii_case(extension))
         })
     }
+}
+
+/// A config error at a span of the config text.
+type ErrorAt<'a> = dyn Fn(Option<Range<usize>>, String) -> ConfigError + 'a;
+
+/// A corpus-relative path key, validated (no `..`, not absolute, not empty).
+type Inside<'a> = dyn Fn(&str, &Spanned<String>) -> Result<PathBuf, ConfigError> + 'a;
+
+/// Compiles and validates the import keys; an error names the key's line.
+fn compile_import(
+    raw: &RawConfig,
+    error_at: &ErrorAt<'_>,
+    inside: &Inside<'_>,
+) -> Result<ImportConfig, ConfigError> {
+    let regex = |key: &str, value: &Spanned<String>| {
+        Regex::new(value.get_ref())
+            .map_err(|error| error_at(Some(value.span()), format!("`{key}`: {error}")))
+    };
+    let non_empty_regex = |key: &str, value: &Spanned<String>| {
+        let compiled = regex(key, value)?;
+        if compiled.is_match("") {
+            return Err(error_at(
+                Some(value.span()),
+                format!("`{key}` matches the empty string"),
+            ));
+        }
+        Ok(compiled)
+    };
+    let glob = |key: &str, value: &Spanned<String>| {
+        Regex::new(&glob_to_regex(value.get_ref())).map_err(|error| {
+            error_at(
+                Some(value.span()),
+                format!("`{key}` glob `{}`: {error}", value.get_ref()),
+            )
+        })
+    };
+    let filled = |key: &str, value: &Spanned<String>| {
+        if value.get_ref().trim().is_empty() {
+            Err(error_at(
+                Some(value.span()),
+                format!("`{key}` holds an empty entry"),
+            ))
+        } else {
+            Ok(value.get_ref().clone())
+        }
+    };
+    let latin_prefix = |key: &str, value: &Spanned<String>| {
+        if is_latin_prefix(value.get_ref()) {
+            Ok(value.get_ref().clone())
+        } else {
+            Err(error_at(
+                Some(value.span()),
+                format!(
+                    "`{key}` entry `{}` is not a Latin prefix (an ASCII capital, then ASCII capitals or digits)",
+                    value.get_ref()
+                ),
+            ))
+        }
+    };
+
+    let front = &raw.front_matter;
+    let header_table = front
+        .header_table
+        .as_ref()
+        .map(|value| non_empty_regex("front_matter.header_table", value))
+        .transpose()?;
+    let mut key_map = BTreeMap::new();
+    for (written, target) in &front.key_map {
+        if written.trim().is_empty() {
+            return Err(error_at(
+                Some(target.span()),
+                "`front_matter.key_map` has an empty key".to_owned(),
+            ));
+        }
+        key_map.insert(written.clone(), filled("front_matter.key_map", target)?);
+    }
+    let mut value_map = BTreeMap::new();
+    for (target, values) in &front.value_map {
+        let mut compiled = BTreeMap::new();
+        for (written, value) in values {
+            if written.trim().is_empty() {
+                return Err(error_at(
+                    Some(value.span()),
+                    format!("`front_matter.value_map.{target}` has an empty key"),
+                ));
+            }
+            compiled.insert(written.clone(), filled("front_matter.value_map", value)?);
+        }
+        value_map.insert(target.clone(), compiled);
+    }
+
+    let ids = &raw.ids;
+    let like = match &ids.like {
+        Some(value) => non_empty_regex("ids.like", value)?,
+        None => Regex::new(DEFAULT_LIKE)
+            .map_err(|error| error_at(None, format!("the default `ids.like`: {error}")))?,
+    };
+    let feature_prefixes = ids
+        .feature_prefixes
+        .iter()
+        .map(|value| latin_prefix("ids.feature_prefixes", value))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let mut hyphenless: Vec<Pattern> = Vec::new();
+    for value in &ids.hyphenless {
+        if hyphenless
+            .iter()
+            .any(|pattern| &pattern.source == value.get_ref())
+        {
+            return Err(error_at(
+                Some(value.span()),
+                format!("`ids.hyphenless` lists `{}` twice", value.get_ref()),
+            ));
+        }
+        hyphenless.push(Pattern {
+            source: value.get_ref().clone(),
+            regex: non_empty_regex("ids.hyphenless", value)?,
+        });
+    }
+    let mut legacy = BTreeMap::new();
+    for (written, target) in &ids.legacy {
+        let mut chars = written.chars();
+        let letters =
+            chars.next().is_some_and(char::is_alphabetic) && chars.all(char::is_alphanumeric);
+        if !letters {
+            return Err(error_at(
+                Some(target.span()),
+                format!(
+                    "`ids.legacy` key `{written}` is not a letter run (a letter, then letters or digits)"
+                ),
+            ));
+        }
+        legacy.insert(written.clone(), latin_prefix("ids.legacy", target)?);
+    }
+
+    let tables = &raw.tables;
+    let text_header = tables
+        .text_header
+        .as_ref()
+        .map(|value| non_empty_regex("tables.text_header", value))
+        .transpose()?;
+    let local_number = tables
+        .local_number
+        .as_ref()
+        .map(|value| non_empty_regex("tables.local_number", value))
+        .transpose()?;
+
+    let separators = raw
+        .lists
+        .separators
+        .iter()
+        .map(|value| {
+            if value.get_ref().is_empty() {
+                Err(error_at(
+                    Some(value.span()),
+                    "`lists.separators` holds an empty entry".to_owned(),
+                ))
+            } else {
+                Ok(value.get_ref().clone())
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let reference_paths = raw
+        .definitions
+        .reference_paths
+        .iter()
+        .map(|value| glob("definitions.reference_paths", value))
+        .collect::<Result<Vec<_>, _>>()?;
+    let reference_headers = raw
+        .definitions
+        .reference_headers
+        .iter()
+        .map(|value| non_empty_regex("definitions.reference_headers", value))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let link_base = raw
+        .links
+        .base
+        .as_ref()
+        .map(|value| inside("links.base", value))
+        .transpose()?;
+
+    let code = &raw.code;
+    let code = CodeConfig {
+        roots: code
+            .roots
+            .iter()
+            .map(|value| {
+                let root = inside("code.roots", value)?;
+                if root
+                    .components()
+                    .all(|component| component == Component::CurDir)
+                {
+                    return Err(error_at(
+                        Some(value.span()),
+                        format!(
+                            "`code.roots` entry `{}` is the corpus root; name the code directories inside it",
+                            value.get_ref()
+                        ),
+                    ));
+                }
+                Ok(root)
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        extensions: code
+            .extensions
+            .iter()
+            .map(|value| {
+                let extension = value.get_ref().trim_start_matches('.').to_ascii_lowercase();
+                if extension.is_empty() || extension.contains('/') {
+                    Err(error_at(
+                        Some(value.span()),
+                        format!(
+                            "`code.extensions` entry `{}` is not an extension",
+                            value.get_ref()
+                        ),
+                    ))
+                } else {
+                    Ok(extension)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        exclude: code
+            .exclude
+            .iter()
+            .map(|value| glob("code.exclude", value))
+            .collect::<Result<Vec<_>, _>>()?,
+        strip: code
+            .strip
+            .iter()
+            .map(|value| filled("code.strip", value))
+            .collect::<Result<Vec<_>, _>>()?,
+    };
+
+    Ok(ImportConfig {
+        header_table,
+        header_row_field: front.header_row_field,
+        key_map,
+        value_map,
+        like,
+        feature_prefixes,
+        hyphenless,
+        legacy,
+        text_column: tables.text_column,
+        text_header,
+        local_number,
+        list_lead_in: raw.lists.lead_in,
+        separators,
+        reference_paths,
+        reference_headers,
+        link_base,
+        code,
+    })
+}
+
+/// An ASCII capital, then ASCII capitals or digits (ADR-0009).
+pub(crate) fn is_latin_prefix(text: &str) -> bool {
+    let mut chars = text.chars();
+    chars.next().is_some_and(|first| first.is_ascii_uppercase())
+        && chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
 }
 
 /// The ID regex of the config and how a match splits into a prefix.
@@ -349,6 +758,11 @@ pub struct IdMatch {
 impl IdPattern {
     /// The first ID in `text`, matched after look-alike normalization.
     pub fn find(&self, text: &str) -> Option<IdMatch> {
+        self.find_range(text).map(|(found, _)| found)
+    }
+
+    /// [`IdPattern::find`] and the byte range of the match in `text`.
+    pub(crate) fn find_range(&self, text: &str) -> Option<(IdMatch, Range<usize>)> {
         let normalized = Normalized::new(text);
         let captures = self.regex.captures(&normalized.text)?;
         let whole = captures.get(0)?;
@@ -361,14 +775,17 @@ impl IdPattern {
             None => id.chars().take_while(char::is_ascii_alphabetic).collect(),
         };
         let original = normalized.original_range(whole.range());
-        let verbatim = text.get(original).unwrap_or(&id).to_owned();
+        let verbatim = text.get(original.clone()).unwrap_or(&id).to_owned();
         let script = IdScript::of(&verbatim);
-        Some(IdMatch {
-            verbatim,
-            id,
-            prefix,
-            script,
-        })
+        Some((
+            IdMatch {
+                verbatim,
+                id,
+                prefix,
+                script,
+            },
+            original,
+        ))
     }
 }
 

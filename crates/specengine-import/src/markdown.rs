@@ -5,6 +5,7 @@
 //! are out of its reach.
 
 use std::borrow::Cow;
+use std::ops::Range;
 
 /// An ATX heading.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +26,11 @@ pub struct Heading<'a> {
 pub struct Table<'a> {
     /// `None` for a headerless block.
     pub header: Option<Vec<String>>,
+    /// 1-based line of the header row (of the first row when headerless).
+    pub header_line: usize,
+    /// Only blank lines and headings precede the table in the body: it opens
+    /// the body (where a document may keep a field/value header table).
+    pub opens_body: bool,
     pub rows: Vec<Row<'a>>,
 }
 
@@ -61,14 +67,44 @@ pub struct Scan<'a> {
     pub headings: Vec<Heading<'a>>,
     pub tables: Vec<Table<'a>>,
     pub links: Vec<Link>,
+    /// Every line of the body, in order.
+    pub lines: Vec<Line<'a>>,
 }
 
-struct Line<'a> {
-    number: usize,
-    start: usize,
-    raw: &'a str,
-    /// `None` inside a fenced code block (fence lines included).
-    visible: Option<Cow<'a, str>>,
+/// One line of the body.
+#[derive(Debug)]
+pub struct Line<'a> {
+    /// 1-based line number.
+    pub number: usize,
+    /// Byte offset of the line in the document.
+    pub start: usize,
+    /// The line as written, without its terminator (one CR before LF dropped).
+    pub raw: &'a str,
+    /// `None` inside a fenced code block (fence lines included); otherwise
+    /// the line with HTML comments removed (borrowed when nothing was removed).
+    pub visible: Option<Cow<'a, str>>,
+    /// The line starts inside an HTML comment opened on an earlier line.
+    pub opens_in_comment: bool,
+}
+
+impl Line<'_> {
+    /// The byte offset in `raw` of byte `offset` of `visible`: where a
+    /// removed comment sits at `offset`, the offset before it, so that a tail
+    /// taken from there keeps the comment.
+    pub(crate) fn raw_offset(&self, offset: usize) -> usize {
+        if !matches!(self.visible, Some(Cow::Owned(_))) {
+            return offset.min(self.raw.len());
+        }
+        let mut in_comment = self.opens_in_comment;
+        let mut before = 0;
+        for range in kept_ranges(self.raw, &mut in_comment) {
+            if offset <= before + range.len() {
+                return range.start + (offset - before);
+            }
+            before += range.len();
+        }
+        self.raw.len()
+    }
 }
 
 /// Scans the body of a document that starts at byte `body_start`, whose first
@@ -77,12 +113,19 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
     let lines = classify_lines(text, body_start, body_line);
     let mut result = Scan::default();
     let mut index = 0;
+    // Whether a line other than a blank one or a heading came before.
+    let mut content_before = false;
     while index < lines.len() {
         let line = &lines[index];
         let Some(visible) = &line.visible else {
+            content_before = true;
             index += 1;
             continue;
         };
+        if visible.trim().is_empty() {
+            index += 1;
+            continue;
+        }
         if let Some(level) = heading_level(visible) {
             collect_links(visible, line.number, wiki, &mut result.links);
             result.headings.push(Heading {
@@ -100,13 +143,17 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
         let header = table_header(visible, delimiter);
         if header.is_none() && !is_pipe_row(visible) {
             collect_links(visible, line.number, wiki, &mut result.links);
+            content_before = true;
             index += 1;
             continue;
         }
         let mut table = Table {
             header,
+            header_line: line.number,
+            opens_body: !content_before,
             rows: Vec::new(),
         };
+        content_before = true;
         if table.header.is_some() {
             collect_links(visible, line.number, wiki, &mut result.links);
             index += 2;
@@ -144,6 +191,7 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
             result.tables.push(table);
         }
     }
+    result.lines = lines;
     result
 }
 
@@ -160,6 +208,7 @@ fn classify_lines(text: &str, body_start: usize, body_line: usize) -> Vec<Line<'
         let number = body_line + index;
         let start = offset;
         offset += chunk.len();
+        let opens_in_comment = in_comment;
         if let Some((marker, length)) = fence {
             if closes_fence(raw, marker, length) {
                 fence = None;
@@ -169,6 +218,7 @@ fn classify_lines(text: &str, body_start: usize, body_line: usize) -> Vec<Line<'
                 start,
                 raw,
                 visible: None,
+                opens_in_comment,
             });
             continue;
         }
@@ -180,6 +230,7 @@ fn classify_lines(text: &str, body_start: usize, body_line: usize) -> Vec<Line<'
                 start,
                 raw,
                 visible: None,
+                opens_in_comment,
             });
             continue;
         }
@@ -188,18 +239,19 @@ fn classify_lines(text: &str, body_start: usize, body_line: usize) -> Vec<Line<'
             start,
             raw,
             visible: Some(visible),
+            opens_in_comment,
         });
     }
     lines
 }
 
 /// Up to three spaces of indentation, as CommonMark allows for block starts.
-fn block_content(line: &str) -> Option<&str> {
+pub(crate) fn block_content(line: &str) -> Option<&str> {
     let content = line.trim_start_matches(' ');
     (line.len() - content.len() <= 3).then_some(content)
 }
 
-fn opens_fence(line: &str) -> Option<(u8, usize)> {
+pub(crate) fn opens_fence(line: &str) -> Option<(u8, usize)> {
     let content = block_content(line)?;
     let marker = *content.as_bytes().first()?;
     if marker != b'`' && marker != b'~' {
@@ -215,7 +267,7 @@ fn opens_fence(line: &str) -> Option<(u8, usize)> {
     Some((marker, length))
 }
 
-fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
+pub(crate) fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
     let Some(content) = block_content(line) else {
         return false;
     };
@@ -223,7 +275,7 @@ fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
     run >= length && content[run..].trim().is_empty()
 }
 
-fn heading_level(line: &str) -> Option<usize> {
+pub(crate) fn heading_level(line: &str) -> Option<usize> {
     let content = block_content(line)?;
     let level = content.bytes().take_while(|&b| b == b'#').count();
     if !(1..=6).contains(&level) {
@@ -263,23 +315,36 @@ fn is_pipe_row(line: &str) -> bool {
 
 /// Cells of a pipe-table line: outer pipes optional, `\|` does not split.
 fn split_cells(line: &str) -> Vec<String> {
-    let trimmed = line.trim();
-    let trimmed = trimmed.strip_prefix('|').unwrap_or(trimmed);
-    let trimmed = match trimmed.strip_suffix('|') {
-        Some(rest) if !rest.ends_with('\\') => rest,
-        _ => trimmed,
-    };
+    cell_ranges(line)
+        .into_iter()
+        .map(|range| line[range].trim().to_owned())
+        .collect()
+}
+
+/// Byte ranges of the cells of a pipe-table line, untrimmed: outer pipes
+/// optional, `\|` does not split. Always at least one cell.
+pub(crate) fn cell_ranges(line: &str) -> Vec<Range<usize>> {
+    let mut from = line.len() - line.trim_start().len();
+    let mut to = line.trim_end().len().max(from);
+    if line[from..to].starts_with('|') {
+        from += 1;
+    }
+    if let Some(rest) = line[from..to].strip_suffix('|')
+        && !rest.ends_with('\\')
+    {
+        to -= 1;
+    }
     let mut cells = Vec::new();
-    let mut start = 0;
+    let mut start = from;
     let mut escaped = false;
-    for (index, byte) in trimmed.bytes().enumerate() {
+    for (offset, byte) in line[from..to].bytes().enumerate() {
         if byte == b'|' && !escaped {
-            cells.push(trimmed[start..index].trim().to_owned());
-            start = index + 1;
+            cells.push(start..from + offset);
+            start = from + offset + 1;
         }
         escaped = byte == b'\\' && !escaped;
     }
-    cells.push(trimmed[start..].trim().to_owned());
+    cells.push(start..to);
     cells
 }
 
@@ -289,6 +354,20 @@ fn strip_comments<'a>(line: &'a str, in_comment: &mut bool) -> Cow<'a, str> {
         return Cow::Borrowed(line);
     }
     let mut out = String::with_capacity(line.len());
+    for range in kept_ranges(line, in_comment) {
+        out.push_str(&line[range]);
+    }
+    Cow::Owned(out)
+}
+
+/// The byte ranges of `line` that [`strip_comments`] keeps, in order and
+/// merged; `in_comment` carries the comment state from line to line.
+fn kept_ranges(line: &str, in_comment: &mut bool) -> Vec<Range<usize>> {
+    let mut kept: Vec<Range<usize>> = Vec::new();
+    let mut keep = |range: Range<usize>| match kept.last_mut() {
+        Some(last) if last.end == range.start => last.end = range.end,
+        _ => kept.push(range),
+    };
     let mut spans: Option<CodeSpans> = None;
     let mut index = 0;
     while index < line.len() {
@@ -307,7 +386,7 @@ fn strip_comments<'a>(line: &'a str, in_comment: &mut bool) -> Cow<'a, str> {
             let span = spans
                 .get_or_insert_with(|| CodeSpans::new(line))
                 .len_at(line, index);
-            out.push_str(&rest[..span]);
+            keep(index..index + span);
             index += span;
             continue;
         }
@@ -317,10 +396,69 @@ fn strip_comments<'a>(line: &'a str, in_comment: &mut bool) -> Cow<'a, str> {
             continue;
         }
         let Some(c) = rest.chars().next() else { break };
-        out.push(c);
+        keep(index..index + c.len_utf8());
         index += c.len_utf8();
     }
-    Cow::Owned(out)
+    kept
+}
+
+/// `line` with every emphasis delimiter run (`*`, `_`) that can open or
+/// close emphasis by CommonMark's flanking rules read as blanks, byte for
+/// byte (offsets keep); runs inside code spans and backslash-escaped
+/// delimiters stay as written.
+pub(crate) fn emphasis_blanks(line: &str) -> Cow<'_, str> {
+    if !line.contains(['*', '_']) {
+        return Cow::Borrowed(line);
+    }
+    let bytes = line.as_bytes();
+    let mut runs: Vec<Range<usize>> = Vec::new();
+    let mut spans: Option<CodeSpans> = None;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\\' if bytes.get(index + 1).is_some_and(u8::is_ascii_punctuation) => index += 2,
+            b'`' => {
+                index += spans
+                    .get_or_insert_with(|| CodeSpans::new(line))
+                    .len_at(line, index);
+            }
+            marker @ (b'*' | b'_') => {
+                let run = bytes[index..].iter().take_while(|&&b| b == marker).count();
+                let before = line[..index].chars().next_back();
+                let after = line[index + run..].chars().next();
+                if emphasis_delimiter(marker, before, after) {
+                    runs.push(index..index + run);
+                }
+                index += run;
+            }
+            _ => index += 1,
+        }
+    }
+    if runs.is_empty() {
+        return Cow::Borrowed(line);
+    }
+    let mut out = bytes.to_vec();
+    for run in runs {
+        out[run].fill(b' ');
+    }
+    // Only ASCII delimiters became ASCII blanks: still UTF-8.
+    Cow::Owned(String::from_utf8(out).unwrap_or_else(|_| line.to_owned()))
+}
+
+/// Whether a run of `marker` between `before` and `after` (`None`: the
+/// line's edge) can open or close emphasis (CommonMark "left-flanking" and
+/// "right-flanking" delimiter runs; `_` not inside a word).
+fn emphasis_delimiter(marker: u8, before: Option<char>, after: Option<char>) -> bool {
+    let blank = |c: Option<char>| c.is_none_or(char::is_whitespace);
+    let punctuation =
+        |c: Option<char>| c.is_some_and(|c| !c.is_alphanumeric() && !c.is_whitespace());
+    let left = !blank(after) && (!punctuation(after) || blank(before) || punctuation(before));
+    let right = !blank(before) && (!punctuation(before) || blank(after) || punctuation(after));
+    if marker == b'*' {
+        left || right
+    } else {
+        (left && (!right || punctuation(before))) || (right && (!left || punctuation(after)))
+    }
 }
 
 /// The backtick runs of one line, collected once so that closing a code span

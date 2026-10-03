@@ -12,6 +12,7 @@ mod bevy;
 mod census;
 mod check;
 mod harness;
+mod import;
 mod index;
 mod parse;
 #[cfg(all(feature = "ra", unix))]
@@ -51,6 +52,12 @@ enum Measurement {
     /// `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set, else `census.toml` at
     /// the corpus root) (08 §4.3).
     Census(CommonArgs),
+    /// The import engine of `specengine-import`, read-only: records by form,
+    /// definitions and references, legacy prefixes, header maps, unclaimed
+    /// ID-like text, link base and code citations (the "before" report).
+    /// Config from `--config` as `census` (default for `--label pilot-a` /
+    /// `pilot-b`: `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set).
+    Import(CommonArgs),
     /// The spec parser of `specengine-core` over the census's documents:
     /// front-matter, `{#ID}` sections, references, token estimates. Files
     /// from `--config` as `census` (default for `--label pilot-a` / `pilot-b`:
@@ -174,9 +181,9 @@ pub struct CommonArgs {
     #[arg(long, value_name = "LABEL")]
     pub label: Option<String>,
     /// Measurement-specific configuration (TOML): the corpus convention of
-    /// `census` and `parse` (default `census.toml` at the corpus root; both
-    /// first take `SPECENGINE_CENSUS_CONFIG_A` / `_B` for `--label pilot-a` /
-    /// `pilot-b` when set); `ast-hash`, `ron`, `bevy-detector` and `ra` take none;
+    /// `census`, `import` and `parse` (default `census.toml` at the corpus
+    /// root; all first take `SPECENGINE_CENSUS_CONFIG_A` / `_B` for `--label
+    /// pilot-a` / `pilot-b` when set); `ast-hash`, `ron`, `bevy-detector` and `ra` take none;
     /// `index` and `check` refuse it (exit 2): their configuration is `--scheme`.
     #[arg(long, value_name = "TOML")]
     pub config: Option<PathBuf>,
@@ -211,6 +218,17 @@ fn main() -> ExitCode {
                 census::FIXTURE,
                 move |root: &Path| census::load_config(config.as_deref(), root, label.as_deref()),
                 census::run,
+            )
+        }
+        Measurement::Import(args) => {
+            let config = args.config.clone();
+            let label = args.label.clone();
+            measure_with(
+                "import",
+                &args,
+                import::FIXTURE,
+                move |root: &Path| census::load_config(config.as_deref(), root, label.as_deref()),
+                import::run,
             )
         }
         Measurement::Parse(args) => {

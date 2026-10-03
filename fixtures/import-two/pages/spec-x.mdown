@@ -1,0 +1,19 @@
+| Title | Exporter design |
+|---|---|
+| Heading | Exporter design, long form |
+| Outcome | Pending |
+| Owner | Board |
+
+# Exporter design
+
+Some text with **P1234** inline, a mention.
+
+**P1235** A principle defined at a paragraph start.
+
+* **G12** A guideline defined in a list item.
+
+G12 and P1235 are mentioned again.
+
+## Format {#DEC-0011}
+
+The format follows DEC-0001.

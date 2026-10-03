@@ -1,7 +1,8 @@
 //! Measurement `parse`: the spec parser of `specengine-core` over a corpus
 //! (`crates/specengine-eval/README.md`, "CLI contract").
 //!
-//! Files are the census's documents: the same convention, the same walk. The
+//! Files are the census's documents: the same convention, the one walk of
+//! `specengine-import` (`walk::documents`). The
 //! convention comes from `--config` (default: `SPECENGINE_CENSUS_CONFIG_A` /
 //! `_B` for `--label pilot-a` / `pilot-b` when set, else `census.toml` at the
 //! corpus root). The ID scheme comes from `--scheme` (default:
@@ -14,7 +15,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
-use std::path::{Component, Path};
+use std::path::Path;
 use std::time::Instant;
 
 use serde::Serialize;
@@ -160,7 +161,14 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
     let Setup { config, scheme } = setup;
 
     let started = Instant::now();
-    let census = specengine_import::run(&corpus.root, &config)?;
+    let walk = specengine_import::walk::documents(&corpus.root, &config)?;
+    let mut problems: Vec<String> = walk
+        .diagnostics
+        .iter()
+        .map(|diagnostic| format!("{}: {}", diagnostic.path, diagnostic.message))
+        .collect();
+    let paths = walk.documents.clone();
+    let census = specengine_import::census::run_walked(&corpus.root, &config, walk);
     let mut census_sections: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
     for record in census
         .records
@@ -173,8 +181,6 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
             .insert(record.line);
     }
 
-    let mut problems: Vec<String> = Vec::new();
-    let paths = documents(&corpus.root, &config, &mut problems);
     let mut result = ParseResult {
         files: paths.len(),
         unreadable: 0,
@@ -327,90 +333,6 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<ParseResult, String> {
 
     summarize(&result, &diagnostics, &corpus.label, &out_dir, parse_ms);
     Ok(result)
-}
-
-/// The census's documents: configured roots, dot-directories and symlinks
-/// skipped, document extensions, excludes; sorted, corpus-relative, `/`.
-fn documents(root: &Path, config: &CensusConfig, problems: &mut Vec<String>) -> Vec<String> {
-    let mut documents = BTreeSet::new();
-    for configured in &config.roots {
-        let relative = relative_string(configured);
-        let absolute = root.join(configured);
-        match fs::metadata(&absolute) {
-            Ok(meta) if meta.is_dir() => {
-                walk(&absolute, &relative, config, &mut documents, problems)
-            }
-            Ok(_) => {
-                let name = relative.rsplit('/').next().unwrap_or("");
-                if config.is_document(name) && !config.is_excluded(&relative) {
-                    documents.insert(relative);
-                }
-            }
-            Err(error) => {
-                problems.push(format!("{relative}: configured root not readable: {error}"))
-            }
-        }
-    }
-    documents.into_iter().collect()
-}
-
-fn walk(
-    absolute: &Path,
-    relative: &str,
-    config: &CensusConfig,
-    documents: &mut BTreeSet<String>,
-    problems: &mut Vec<String>,
-) {
-    let entries = match fs::read_dir(absolute) {
-        Ok(entries) => entries,
-        Err(error) => {
-            problems.push(format!("{relative}: directory skipped: {error}"));
-            return;
-        }
-    };
-    let mut children = Vec::new();
-    for entry in entries {
-        match entry.and_then(|entry| Ok((entry.file_name(), entry.file_type()?))) {
-            Ok(child) => children.push(child),
-            Err(error) => problems.push(format!("{relative}: directory entry skipped: {error}")),
-        }
-    }
-    children.sort_by(|a, b| a.0.cmp(&b.0));
-    for (name, file_type) in children {
-        let name = name.to_string_lossy();
-        let child = if relative.is_empty() {
-            name.to_string()
-        } else {
-            format!("{relative}/{name}")
-        };
-        if file_type.is_symlink() {
-            continue;
-        }
-        if file_type.is_dir() {
-            if !name.starts_with('.') {
-                walk(
-                    &absolute.join(name.as_ref()),
-                    &child,
-                    config,
-                    documents,
-                    problems,
-                );
-            }
-        } else if config.is_document(&name) && !config.is_excluded(&child) {
-            documents.insert(child);
-        }
-    }
-}
-
-fn relative_string(path: &Path) -> String {
-    let parts: Vec<String> = path
-        .components()
-        .filter_map(|component| match component {
-            Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect();
-    parts.join("/")
 }
 
 /// Offsets of every `\n` in `bytes`: the line index of one file.

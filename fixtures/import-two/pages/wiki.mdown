@@ -1,0 +1,9 @@
+---
+type: page
+state: rejected
+---
+# Wiki
+
+Links: [[decisions]] resolves, [[no-such-page]] does not, [criteria](../log/criteria.markdown) resolves, [budget](budget.markdown) does not.
+
+Tokens: DEC-0001 and OLD-0002 are claimed; CRT-0003 is a feature-scoped ID defined only in another document, so it is counted outside its feature; ABCD-12 and QRS-0042 are not claimed.

@@ -1,10 +1,13 @@
-//! The pilot-run plumbing shared by `index_cli.rs`, `check_cli.rs` and
-//! `parse_cli.rs`
+//! The pilot-run plumbing shared by `index_cli.rs`, `check_cli.rs`,
+//! `parse_cli.rs` and `import_cli.rs`
 //! (`crates/specengine-eval/README.md` "Pilot runs and tests"): the label's
 //! variables, the `[paths]` requirement, the read-only proof, the child
 //! environment, and the invented setup of docs/features/pilot-schemes.md
 //! AC-01 (a scratch copy of `fixtures/spec-b`, a test-written scheme with
-//! every recipe table, a test-written census config).
+//! every recipe table, a test-written census config). A measurement that
+//! reads no scheme (`import`, docs/features/import-records.md AC-10) proves
+//! over the census config's corpus and code roots instead
+//! (`run_census_read_only`).
 //!
 //! Non-Latin text is built from `\u{...}` escapes at test time; nothing here
 //! names a pilot.
@@ -172,24 +175,83 @@ pub struct Inputs<'a> {
 pub fn run_read_only(measurement: &str, label: &str, scratch: &Path, inputs: &Inputs) -> Output {
     let variables = variables(label);
     let roots = scheme_roots(inputs.scheme, variables.scheme);
+    let mut set = vec![
+        (variables.corpus, inputs.corpus),
+        (variables.scheme, inputs.scheme),
+    ];
+    if let Some(config) = inputs.config {
+        set.push((variables.config, config));
+    }
+    run_read_only_over(measurement, label, scratch, inputs.corpus, &roots, &set)
+}
+
+/// The walked roots of the census config at `config`, as the engine reads
+/// them: `[corpus] roots` (default `.`), then `[code] roots`. A config the
+/// engine refuses fails naming `config_variable`.
+pub fn census_roots(config: &Path, config_variable: &str) -> Vec<String> {
+    let config = specengine_import::CensusConfig::load(config)
+        .unwrap_or_else(|error| panic!("{config_variable}: {error}"));
+    config
+        .roots
+        .iter()
+        .chain(&config.import.code.roots)
+        .map(|root| {
+            root.to_str()
+                .unwrap_or_else(|| panic!("{config_variable}: a root is not UTF-8: {root:?}"))
+                .to_owned()
+        })
+        .collect()
+}
+
+/// `run_read_only` for a measurement that reads no scheme: the proof covers
+/// the census config's corpus and code roots (`census_roots`); the child
+/// gets only `PATH`, `HOME` = the empty `<scratch>/home` and the label's
+/// corpus and census-config variables.
+pub fn run_census_read_only(
+    measurement: &str,
+    label: &str,
+    scratch: &Path,
+    corpus: &Path,
+    config: &Path,
+) -> Output {
+    let variables = variables(label);
+    let roots = census_roots(config, variables.config);
+    run_read_only_over(
+        measurement,
+        label,
+        scratch,
+        corpus,
+        &roots,
+        &[(variables.corpus, corpus), (variables.config, config)],
+    )
+}
+
+/// The run both entry points share: the proof over `roots` of `corpus`
+/// before and after, the child with `PATH`, `HOME` = the empty
+/// `<scratch>/home` (also its working directory) and `set` only; exit 0,
+/// the proof equal and `HOME` still empty, else fails.
+pub fn run_read_only_over(
+    measurement: &str,
+    label: &str,
+    scratch: &Path,
+    corpus: &Path,
+    roots: &[String],
+    set: &[(&str, &Path)],
+) -> Output {
     let home = scratch.join("home");
     let out = scratch.join("out");
     fs::create_dir_all(&home).expect("the scratch HOME");
     assert!(empty(&home), "the scratch HOME starts empty");
     assert!(!out.exists(), "--out must not exist before the run");
-    let before = proof(inputs.corpus, &roots);
+    let before = proof(corpus, roots);
     let mut command = Command::new(BIN);
     command.env_clear();
     if let Some(path) = std::env::var_os("PATH") {
         command.env("PATH", path);
     }
-    command
-        .current_dir(&home)
-        .env("HOME", &home)
-        .env(variables.corpus, inputs.corpus)
-        .env(variables.scheme, inputs.scheme);
-    if let Some(config) = inputs.config {
-        command.env(variables.config, config);
+    command.current_dir(&home).env("HOME", &home);
+    for (variable, value) in set {
+        command.env(variable, value);
     }
     let output = command
         .args([
@@ -203,7 +265,7 @@ pub fn run_read_only(measurement: &str, label: &str, scratch: &Path, inputs: &In
         ])
         .output()
         .expect("specengine-eval runs");
-    let after = proof(inputs.corpus, &roots);
+    let after = proof(corpus, roots);
     assert_eq!(
         output.status.code(),
         Some(0),

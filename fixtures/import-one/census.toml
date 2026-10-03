@@ -1,0 +1,41 @@
+# Import config of the import-one fixture
+# (`crates/specengine-import/README.md` "Config"): an invented requirements
+# convention. The default corpus of `specengine-eval import` without
+# --pilot; expected.json is its `result` without `detail.import_ms`.
+[corpus]
+roots = ["spec"]
+exclude = ["spec/archive/**"]
+[front_matter]
+class_key = "kind"
+header_table = '^Field$'
+[front_matter.key_map]
+"Phase" = "status"
+"Résumé" = "summary"
+[front_matter.value_map.status]
+"Done" = "shipped"
+"Open" = "draft"
+[ids]
+regex = '^(?P<prefix>[A-Z]{2,3})-[0-9]{3}$'
+feature_prefixes = ["AC"]
+hyphenless = ['\b[A-Z]{2}[0-9]{3}\b']
+[ids.legacy]
+"SR" = "REQ"
+[tables]
+id_header = '^ID$'
+headerless = true
+text_header = '^Statement$'
+local_number = '^[0-9]+$'
+[sections]
+id_attr = true
+[lists]
+lead_in = true
+separators = [":"]
+[definitions]
+reference_paths = ["spec/map.md"]
+reference_headers = ['^Source$']
+[links]
+base = "spec"
+[code]
+roots = ["src", "tests"]
+extensions = ["rs"]
+strip = ["spec/"]

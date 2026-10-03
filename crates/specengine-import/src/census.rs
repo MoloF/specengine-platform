@@ -6,14 +6,15 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
-use std::path::{Component, Path};
+use std::path::Path;
 
 use serde::Serialize;
 
 use crate::config::{CensusConfig, IdMatch};
 use crate::frontmatter::{self, FrontMatter};
-use crate::markdown::{self, Heading, LinkKind, Table};
+use crate::markdown::{self, Heading, Link, LinkKind, Table};
 use crate::script::IdScript;
+use crate::walk::{self, Walk, relative_string};
 
 /// Where a record comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -224,63 +225,32 @@ impl Census {
 /// Runs the census over the corpus at `root`. Fails only when `root` itself
 /// cannot be read; every per-file problem becomes a [`Diagnostic`].
 pub fn run(root: &Path, config: &CensusConfig) -> Result<Census, String> {
-    fs::read_dir(root).map_err(|error| format!("cannot read the corpus root: {error}"))?;
-    let mut census = Census::default();
-    let mut documents = BTreeSet::new();
-    for configured in &config.roots {
-        let relative = relative_string(configured);
-        let absolute = root.join(configured);
-        match fs::metadata(&absolute) {
-            Ok(meta) if meta.is_dir() => walk(
-                &absolute,
-                &relative,
-                config,
-                &mut documents,
-                &mut census.diagnostics,
-            ),
-            Ok(_) => {
-                if file_name_of(&relative).is_some_and(|name| config.is_document(name))
-                    && !config.is_excluded(&relative)
-                {
-                    documents.insert(relative);
-                }
-            }
-            Err(error) => {
-                census.roots_missing += 1;
-                census.diagnostics.push(Diagnostic {
-                    path: relative,
-                    line: None,
-                    message: format!("configured root not readable: {error}"),
-                });
-            }
-        }
-    }
+    let walk = walk::documents(root, config)?;
+    Ok(run_walked(root, config, walk))
+}
+
+/// The census over the documents of a walk already taken ([`walk::documents`]).
+pub fn run_walked(root: &Path, config: &CensusConfig, walk: Walk) -> Census {
+    let mut census = Census {
+        roots_missing: walk.roots_missing,
+        diagnostics: walk.diagnostics,
+        ..Census::default()
+    };
+    let documents = walk.documents;
     census.documents = documents.len();
     let wiki = config
         .wiki_root
         .as_deref()
         .map(|wiki_root| WikiIndex::build(root, wiki_root, &mut census.diagnostics));
     for relative in documents {
-        let absolute = root.join(&relative);
-        let text = match fs::read(&absolute) {
-            Ok(bytes) => match String::from_utf8(bytes) {
-                Ok(text) => text,
-                Err(_) => {
-                    census.files_skipped += 1;
-                    census.diagnostics.push(Diagnostic {
-                        path: relative,
-                        line: None,
-                        message: "skipped: not UTF-8".to_owned(),
-                    });
-                    continue;
-                }
-            },
-            Err(error) => {
+        let text = match read_document(root, &relative) {
+            Ok(text) => text,
+            Err(message) => {
                 census.files_skipped += 1;
                 census.diagnostics.push(Diagnostic {
                     path: relative,
                     line: None,
-                    message: format!("skipped: {error}"),
+                    message,
                 });
                 continue;
             }
@@ -290,64 +260,14 @@ pub fn run(root: &Path, config: &CensusConfig) -> Result<Census, String> {
     census
         .records
         .sort_by(|a, b| (&a.path, a.line, a.kind).cmp(&(&b.path, b.line, b.kind)));
-    Ok(census)
+    census
 }
 
-/// Collects documents under a directory: dot-directories and symlinks are
-/// skipped; an unreadable directory is a diagnostic.
-fn walk(
-    absolute: &Path,
-    relative: &str,
-    config: &CensusConfig,
-    documents: &mut BTreeSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let entries = match fs::read_dir(absolute) {
-        Ok(entries) => entries,
-        Err(error) => {
-            diagnostics.push(Diagnostic {
-                path: relative.to_owned(),
-                line: None,
-                message: format!("directory skipped: {error}"),
-            });
-            return;
-        }
-    };
-    let mut children = Vec::new();
-    for entry in entries {
-        match entry.and_then(|entry| Ok((entry.file_name(), entry.file_type()?))) {
-            Ok(child) => children.push(child),
-            Err(error) => diagnostics.push(Diagnostic {
-                path: relative.to_owned(),
-                line: None,
-                message: format!("directory entry skipped: {error}"),
-            }),
-        }
-    }
-    children.sort_by(|a, b| a.0.cmp(&b.0));
-    for (name, file_type) in children {
-        let name = name.to_string_lossy();
-        let child = if relative.is_empty() {
-            name.to_string()
-        } else {
-            format!("{relative}/{name}")
-        };
-        if file_type.is_symlink() {
-            continue;
-        }
-        if file_type.is_dir() {
-            if !name.starts_with('.') {
-                walk(
-                    &absolute.join(name.as_ref()),
-                    &child,
-                    config,
-                    documents,
-                    diagnostics,
-                );
-            }
-        } else if config.is_document(&name) && !config.is_excluded(&child) {
-            documents.insert(child);
-        }
+/// A document's text, or why it is skipped (unreadable, not UTF-8).
+pub(crate) fn read_document(root: &Path, relative: &str) -> Result<String, String> {
+    match fs::read(root.join(relative)) {
+        Ok(bytes) => String::from_utf8(bytes).map_err(|_| "skipped: not UTF-8".to_owned()),
+        Err(error) => Err(format!("skipped: {error}")),
     }
 }
 
@@ -405,49 +325,88 @@ fn census_document(
         census_sections(relative, text, &scan.headings, config, census, &mut summary);
     }
 
-    let directory = Path::new(relative).parent().unwrap_or(Path::new(""));
     for link in &scan.links {
-        let exists = match (link.kind, wiki) {
-            (LinkKind::Markdown, _) => {
-                let Some(target) = local_target(&link.destination) else {
-                    continue;
-                };
-                let resolved = match target.strip_prefix('/') {
-                    Some(from_root) => root.join(from_root),
-                    None => root.join(directory).join(&target),
-                };
-                fs::metadata(&resolved).is_ok()
+        match check_link(root, relative, link, config, wiki, None) {
+            LinkCheck::Skipped => continue,
+            LinkCheck::Resolved | LinkCheck::ResolvedByBase => summary.links_checked += 1,
+            LinkCheck::Broken => {
+                summary.links_checked += 1;
+                summary.broken_links += 1;
+                census.broken_links.push(BrokenLink {
+                    path: relative.to_owned(),
+                    line: link.line,
+                    target: link.destination.clone(),
+                });
             }
-            (LinkKind::Wiki, Some(wiki)) => {
-                let target = link.destination.split('#').next().unwrap_or("").trim();
-                if target.is_empty() {
-                    continue;
-                }
-                wiki.resolves(target, &config.extensions, &root.join(directory))
-            }
-            (LinkKind::Wiki, None) => continue,
-        };
-        summary.links_checked += 1;
-        if !exists {
-            summary.broken_links += 1;
-            census.broken_links.push(BrokenLink {
-                path: relative.to_owned(),
-                line: link.line,
-                target: link.destination.clone(),
-            });
         }
     }
     census.documents_detail.push(summary);
 }
 
+/// What checking one link found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LinkCheck {
+    /// Not a local file link (an anchor, a URL), or a wiki link with wiki off.
+    Skipped,
+    Resolved,
+    /// Missing from the linking document, found from the link base.
+    ResolvedByBase,
+    Broken,
+}
+
+/// Checks one link of the document at `relative`. A Markdown link not led
+/// by `/` and missing relative to the document is retried from `base`.
+pub(crate) fn check_link(
+    root: &Path,
+    relative: &str,
+    link: &Link,
+    config: &CensusConfig,
+    wiki: Option<&WikiIndex>,
+    base: Option<&Path>,
+) -> LinkCheck {
+    let directory = Path::new(relative).parent().unwrap_or(Path::new(""));
+    match (link.kind, wiki) {
+        (LinkKind::Markdown, _) => {
+            let Some(target) = local_target(&link.destination) else {
+                return LinkCheck::Skipped;
+            };
+            let (resolved, relative_to_document) = match target.strip_prefix('/') {
+                Some(from_root) => (root.join(from_root), false),
+                None => (root.join(directory).join(&target), true),
+            };
+            if fs::metadata(&resolved).is_ok() {
+                LinkCheck::Resolved
+            } else if relative_to_document
+                && base.is_some_and(|base| fs::metadata(root.join(base).join(&target)).is_ok())
+            {
+                LinkCheck::ResolvedByBase
+            } else {
+                LinkCheck::Broken
+            }
+        }
+        (LinkKind::Wiki, Some(wiki)) => {
+            let target = link.destination.split('#').next().unwrap_or("").trim();
+            if target.is_empty() {
+                return LinkCheck::Skipped;
+            }
+            if wiki.resolves(target, &config.extensions, &root.join(directory)) {
+                LinkCheck::Resolved
+            } else {
+                LinkCheck::Broken
+            }
+        }
+        (LinkKind::Wiki, None) => LinkCheck::Skipped,
+    }
+}
+
 /// Every file under the wiki root, lower-cased, by its relative path and by
 /// each trailing part of it after a `/`: how wiki links name files.
-struct WikiIndex {
+pub(crate) struct WikiIndex {
     suffixes: HashSet<String>,
 }
 
 impl WikiIndex {
-    fn build(root: &Path, wiki_root: &Path, diagnostics: &mut Vec<Diagnostic>) -> Self {
+    pub(crate) fn build(root: &Path, wiki_root: &Path, diagnostics: &mut Vec<Diagnostic>) -> Self {
         let mut files = BTreeSet::new();
         collect_files(
             &root.join(wiki_root),
@@ -639,7 +598,7 @@ fn record(relative: &str, line: usize, kind: RecordKind, id: IdMatch, verbatim: 
 }
 
 /// The `X` of the first `{#X …}` attribute block on a heading line.
-fn heading_anchor(heading: &str) -> Option<&str> {
+pub(crate) fn heading_anchor(heading: &str) -> Option<&str> {
     let start = heading.find("{#")? + 2;
     let rest = &heading[start..];
     let close = rest.find('}')?;
@@ -649,7 +608,7 @@ fn heading_anchor(heading: &str) -> Option<&str> {
 
 /// The text of an ID cell without Markdown decoration: emphasis, strike,
 /// code and link brackets around it, and a leading unmatched marker.
-fn clean_cell(cell: &str) -> &str {
+pub(crate) fn clean_cell(cell: &str) -> &str {
     let mut text = cell.trim();
     loop {
         let before = text;
@@ -747,20 +706,4 @@ fn percent_decode(text: &str) -> String {
         index += 1;
     }
     String::from_utf8(decoded).unwrap_or_else(|_| text.to_owned())
-}
-
-/// `/`-separated relative path; `.` components dropped, `""` for the root.
-fn relative_string(path: &Path) -> String {
-    let parts: Vec<String> = path
-        .components()
-        .filter_map(|component| match component {
-            Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect();
-    parts.join("/")
-}
-
-fn file_name_of(relative: &str) -> Option<&str> {
-    relative.rsplit('/').next().filter(|name| !name.is_empty())
 }

@@ -30,7 +30,12 @@ pub const DEFAULT_CONFIG: &str = "census.toml";
 const DIAGNOSTICS_ON_STDERR: usize = 10;
 
 /// Bucket of documents whose front-matter has no class key.
-const UNCLASSIFIED: &str = "unclassified";
+pub(crate) const UNCLASSIFIED: &str = "unclassified";
+
+/// Stems of the anonymous labels on stdout: `class-N`, `prefix-N`, `pattern-N`.
+pub(crate) const CLASS_STEM: &str = "class";
+pub(crate) const PREFIX_STEM: &str = "prefix";
+pub(crate) const PATTERN_STEM: &str = "pattern";
 
 /// The `result` object: the rows of the "Results" table plus `detail`.
 #[derive(Serialize)]
@@ -91,7 +96,7 @@ pub struct Detail {
 
 /// One row of `labels.json`: what an anonymous label stands for.
 #[derive(Serialize)]
-struct LabelRow {
+pub(crate) struct LabelRow {
     label: String,
     value: String,
     count: usize,
@@ -139,11 +144,11 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<CensusResult, String
             None => unclassified = count,
         }
     }
-    let (mut per_class, class_labels) = anonymize(classes, "class");
+    let (mut per_class, class_labels) = anonymize(classes, CLASS_STEM);
     if unclassified > 0 {
         per_class.insert(UNCLASSIFIED.to_owned(), unclassified);
     }
-    let (per_prefix, prefix_labels) = anonymize(census.per_prefix(), "prefix");
+    let (per_prefix, prefix_labels) = anonymize(census.per_prefix(), PREFIX_STEM);
 
     write_json(&out_dir.join("records.json"), &census.records)?;
     write_json(&out_dir.join("documents.json"), &census.documents_detail)?;
@@ -199,7 +204,7 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<CensusResult, String
 
 /// Replaces corpus strings by `<stem>-N`, N by descending count (ties by the
 /// string), zero-padded to a common width; returns the mapping for `--out`.
-fn anonymize(
+pub(crate) fn anonymize(
     counts: BTreeMap<String, usize>,
     stem: &str,
 ) -> (BTreeMap<String, usize>, Vec<LabelRow>) {
@@ -268,7 +273,7 @@ fn summarize(result: &CensusResult, census: &Census, label: &str, out_dir: &Path
     eprintln!("  detail: {}", out_dir.display());
 }
 
-fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
+pub(crate) fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let json = serde_json::to_string_pretty(value)
         .map_err(|error| format!("cannot serialize {}: {error}", path.display()))?;
     fs::write(path, json).map_err(|error| format!("cannot write {}: {error}", path.display()))
