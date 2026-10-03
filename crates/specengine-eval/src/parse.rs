@@ -1,18 +1,20 @@
 //! Measurement `parse`: the spec parser of `specengine-core` over a corpus
 //! (`crates/specengine-eval/README.md`, "CLI contract").
 //!
-//! Files are the census's documents: the same `--config` (default
-//! `census.toml` at the corpus root), the same walk. The ID scheme comes from
-//! `--scheme` (default: `SPECENGINE_SCHEME_A` / `_B` for `--label pilot-a` /
-//! `pilot-b` when set, else `specengine.toml` at the corpus root); a missing
-//! or invalid scheme refuses the run (exit 2, `file:line: message`).
+//! Files are the census's documents: the same convention, the same walk. The
+//! convention comes from `--config` (default: `SPECENGINE_CENSUS_CONFIG_A` /
+//! `_B` for `--label pilot-a` / `pilot-b` when set, else `census.toml` at the
+//! corpus root). The ID scheme comes from `--scheme` (default:
+//! `SPECENGINE_SCHEME_A` / `_B` for `--label pilot-a` / `pilot-b` when set,
+//! else `specengine.toml` at the corpus root). A missing or invalid config or
+//! scheme refuses the run (exit 2, `file:line: message`).
 //!
 //! stdout carries counts only; paths, IDs and messages go to `--out` only.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use std::time::Instant;
 
 use serde::Serialize;
@@ -23,16 +25,13 @@ use specengine_model::{
 };
 
 use crate::census;
-use crate::harness::Corpus;
+use crate::harness::{self, Corpus};
 
 /// Fixture directory (relative to `fixtures/`) used without `--pilot`.
 pub const FIXTURE: &str = "corpus-mini";
 
 /// Scheme file looked up at the corpus root when `--scheme` is absent.
 pub const DEFAULT_SCHEME: &str = "specengine.toml";
-
-const ENV_SCHEME_A: &str = "SPECENGINE_SCHEME_A";
-const ENV_SCHEME_B: &str = "SPECENGINE_SCHEME_B";
 
 /// Diagnostics echoed on stderr; the rest are in `diagnostics.json`.
 const DIAGNOSTICS_ON_STDERR: usize = 10;
@@ -50,29 +49,15 @@ pub fn prepare(
     scheme: Option<&Path>,
     label: Option<&str>,
 ) -> Result<Setup, String> {
-    let config = census::load_config(config, root)?;
-    let from_environment = || {
-        let variable = match label {
-            Some("pilot-a") => ENV_SCHEME_A,
-            Some("pilot-b") => ENV_SCHEME_B,
-            _ => return None,
-        };
-        std::env::var_os(variable)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    let path = match scheme.map(Path::to_path_buf).or_else(from_environment) {
-        Some(path) => path,
-        None => {
-            let path = root.join(DEFAULT_SCHEME);
-            if !path.is_file() {
-                return Err(format!(
-                    "no --scheme given and no {DEFAULT_SCHEME} at the corpus root"
-                ));
-            }
-            path
-        }
-    };
+    let config = census::load_config(config, root, label)?;
+    let path = harness::resolve_file(
+        "--scheme",
+        scheme,
+        harness::PILOT_SCHEME,
+        label,
+        root,
+        DEFAULT_SCHEME,
+    )?;
     let shown = path.display().to_string();
     let text = fs::read_to_string(&path)
         .map_err(|error| format!("{shown}: cannot read the ID scheme: {error}"))?;

@@ -47,11 +47,14 @@ enum Measurement {
     /// (`docs/canon/code-identity.md` "RON binding"; verdict `lexer`, 05 §9).
     Ron(CommonArgs),
     /// Dry-run census of a spec corpus by `specengine-import`; the convention
-    /// comes from `--config` (default: `census.toml` at the corpus root) (08 §4.3).
+    /// comes from `--config` (default for `--label pilot-a` / `pilot-b`:
+    /// `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set, else `census.toml` at
+    /// the corpus root) (08 §4.3).
     Census(CommonArgs),
     /// The spec parser of `specengine-core` over the census's documents:
     /// front-matter, `{#ID}` sections, references, token estimates. Files
-    /// from `--config` as `census`; IDs from `--scheme`.
+    /// from `--config` as `census` (default for `--label pilot-a` / `pilot-b`:
+    /// `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set); IDs from `--scheme`.
     Parse(ParseArgs),
     /// The spec index of `specengine-store` over a scratch copy of the files
     /// the `[paths]` walk finds: full index, unchanged update, one-file
@@ -171,7 +174,9 @@ pub struct CommonArgs {
     #[arg(long, value_name = "LABEL")]
     pub label: Option<String>,
     /// Measurement-specific configuration (TOML): the corpus convention of
-    /// `census` and `parse`; `ast-hash`, `ron`, `bevy-detector` and `ra` take none;
+    /// `census` and `parse` (default `census.toml` at the corpus root; both
+    /// first take `SPECENGINE_CENSUS_CONFIG_A` / `_B` for `--label pilot-a` /
+    /// `pilot-b` when set); `ast-hash`, `ron`, `bevy-detector` and `ra` take none;
     /// `index` and `check` refuse it (exit 2): their configuration is `--scheme`.
     #[arg(long, value_name = "TOML")]
     pub config: Option<PathBuf>,
@@ -199,11 +204,12 @@ fn main() -> ExitCode {
         Measurement::Ron(args) => measure("ron", &args, ron::FIXTURE, ron::run),
         Measurement::Census(args) => {
             let config = args.config.clone();
+            let label = args.label.clone();
             measure_with(
                 "census",
                 &args,
                 census::FIXTURE,
-                move |root: &Path| census::load_config(config.as_deref(), root),
+                move |root: &Path| census::load_config(config.as_deref(), root, label.as_deref()),
                 census::run,
             )
         }

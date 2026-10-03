@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Serialize;
 use specengine_core::check::{self, Mode, Report, Verdict};
@@ -30,16 +30,13 @@ use specengine_store::{
     CheckSetup, NamedBytes, WorkingTree, check_source, default_baseline, load_check, today_utc,
 };
 
-use crate::harness::Corpus;
+use crate::harness::{self, Corpus};
 
 /// Fixture directory (relative to `fixtures/`) used without `--pilot`.
 pub const FIXTURE: &str = "spec-a";
 
 /// Config file looked up at the corpus root when `--scheme` is absent.
 pub const DEFAULT_SCHEME: &str = "specengine.toml";
-
-const ENV_SCHEME_A: &str = "SPECENGINE_SCHEME_A";
-const ENV_SCHEME_B: &str = "SPECENGINE_SCHEME_B";
 
 /// What the run needs, read before anything is written.
 pub struct Setup {
@@ -55,28 +52,14 @@ pub fn prepare(
     today: Option<&str>,
     label: Option<&str>,
 ) -> Result<Setup, String> {
-    let from_environment = || {
-        let variable = match label {
-            Some("pilot-a") => ENV_SCHEME_A,
-            Some("pilot-b") => ENV_SCHEME_B,
-            _ => return None,
-        };
-        std::env::var_os(variable)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    let path = match scheme.map(Path::to_path_buf).or_else(from_environment) {
-        Some(path) => path,
-        None => {
-            let path = root.join(DEFAULT_SCHEME);
-            if !path.is_file() {
-                return Err(format!(
-                    "no --scheme given and no {DEFAULT_SCHEME} at the corpus root"
-                ));
-            }
-            path
-        }
-    };
+    let path = harness::resolve_file(
+        "--scheme",
+        scheme,
+        harness::PILOT_SCHEME,
+        label,
+        root,
+        DEFAULT_SCHEME,
+    )?;
     // The store's loader, as `spec check`: the whole config validated (an
     // unknown top-level table refuses the run), then the baseline.
     let config = NamedBytes::read(path.display().to_string(), &path);

@@ -759,6 +759,198 @@ fn an_unreadable_pilot_is_refused() {
     assert_refused(&output, &out, "missing --pilot");
 }
 
+// ------------------------------------------ docs/features/pilot-schemes.md
+
+/// Under `--label pilot-a` / `pilot-b` the census config defaults to
+/// `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set and not empty, before
+/// `census.toml` at the corpus root; `--config` beats it. A pilot label's
+/// refusal names the variable it looked for; any other label (or none) keeps
+/// the old text.
+#[test]
+fn pilot_labels_take_the_census_config_from_the_environment() {
+    let guard = GuardCorpus::without_census_toml("census-env");
+    let good = guard.scratch.join("census-a.toml");
+    fs::copy(fixture_dir().join("census.toml"), &good).unwrap();
+    let bad = guard.scratch.join("census-bad.toml");
+    fs::write(&bad, "[corpus]\nroots = [\"design\"]\nsurprise = true\n").unwrap();
+    let absent = guard.scratch.join("absent-census.toml");
+    let census = |label: Option<&str>,
+                  variable: Option<(&str, &Path)>,
+                  config: Option<&Path>,
+                  name: &str| {
+        let out = guard.scratch.join(name);
+        let mut command = eval();
+        if let Some((variable, value)) = variable {
+            command.env(variable, value);
+        }
+        command.args([
+            "census",
+            "--pilot",
+            guard.arg(),
+            "--out",
+            out.to_str().unwrap(),
+        ]);
+        if let Some(label) = label {
+            command.args(["--label", label]);
+        }
+        if let Some(config) = config {
+            command.args(["--config", config.to_str().unwrap()]);
+        }
+        (command.output().expect("specengine-eval runs"), out)
+    };
+    let refused = |output: &Output, out: &Path, context: &str| {
+        assert_refused(output, out, context);
+        stderr(output).trim_end().to_owned()
+    };
+    // The result without its one timing, `detail.census_ms`.
+    let counts = |output: &Output| {
+        let mut result = envelope(output)["result"].clone();
+        result["detail"]
+            .as_object_mut()
+            .expect("result.detail")
+            .remove("census_ms")
+            .expect("detail.census_ms");
+        result
+    };
+
+    let (flag, _) = census(Some("pilot-a"), None, Some(&good), "out-flag");
+    let by_flag = counts(&flag);
+    assert_counts_match(&by_flag, expected().as_object().unwrap());
+
+    // The variable alone: the same result as the flag.
+    for (label, variable) in [
+        ("pilot-a", "SPECENGINE_CENSUS_CONFIG_A"),
+        ("pilot-b", "SPECENGINE_CENSUS_CONFIG_B"),
+    ] {
+        let (output, out) = census(
+            Some(label),
+            Some((variable, &good)),
+            None,
+            &format!("out-{label}"),
+        );
+        assert_eq!(envelope(&output)["label"], label, "{variable} alone");
+        assert_eq!(counts(&output), by_flag, "{variable} alone");
+        assert!(
+            out.join("census").join(label).join("labels.json").is_file(),
+            "{variable} alone: the details go under --out"
+        );
+    }
+    // --config beats a bad variable, a malformed file or a missing one.
+    for (value, name) in [(&bad, "out-beats-bad"), (&absent, "out-beats-absent")] {
+        let (output, _) = census(
+            Some("pilot-a"),
+            Some(("SPECENGINE_CENSUS_CONFIG_A", value)),
+            Some(&good),
+            name,
+        );
+        assert_eq!(
+            counts(&output),
+            by_flag,
+            "--config beats SPECENGINE_CENSUS_CONFIG_A={}",
+            value.display()
+        );
+    }
+    // The variable is read: a bad config there is refused at its line, a
+    // missing one by its path.
+    let (output, out) = census(
+        Some("pilot-b"),
+        Some(("SPECENGINE_CENSUS_CONFIG_B", &bad)),
+        None,
+        "out-bad",
+    );
+    let message = refused(&output, &out, "a bad config in the variable");
+    let located = format!("{}:3:", bad.display());
+    assert!(message.contains(&located), "{located:?} in\n{message}");
+    let (output, out) = census(
+        Some("pilot-a"),
+        Some(("SPECENGINE_CENSUS_CONFIG_A", &absent)),
+        None,
+        "out-absent",
+    );
+    let message = refused(&output, &out, "a missing config in the variable");
+    assert!(message.contains("absent-census.toml"), "{message}");
+
+    // No config anywhere: a pilot label names the variable it looked for,
+    // unset, empty or only the other label's set; any other label or none
+    // keeps the old text.
+    let pilot_text = |letter: &str| {
+        format!(
+            "census: refused: no --config given, no SPECENGINE_CENSUS_CONFIG_{letter} and no census.toml at the corpus root"
+        )
+    };
+    let old_text = "census: refused: no --config given and no census.toml at the corpus root";
+    let empty = PathBuf::new();
+    for (label, variable, expected, name) in [
+        (Some("pilot-a"), None, pilot_text("A"), "out-unset-a"),
+        (Some("pilot-b"), None, pilot_text("B"), "out-unset-b"),
+        (
+            Some("pilot-a"),
+            Some(("SPECENGINE_CENSUS_CONFIG_A", empty.as_path())),
+            pilot_text("A"),
+            "out-empty-a",
+        ),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_CENSUS_CONFIG_B", empty.as_path())),
+            pilot_text("B"),
+            "out-empty-b",
+        ),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_CENSUS_CONFIG_A", good.as_path())),
+            pilot_text("B"),
+            "out-letter-b",
+        ),
+        (
+            Some("pilot-a"),
+            Some(("SPECENGINE_CENSUS_CONFIG_B", good.as_path())),
+            pilot_text("A"),
+            "out-letter-a",
+        ),
+        (
+            Some("other"),
+            Some(("SPECENGINE_CENSUS_CONFIG_A", good.as_path())),
+            old_text.to_owned(),
+            "out-other",
+        ),
+        (
+            Some("pilot"),
+            Some(("SPECENGINE_CENSUS_CONFIG_A", good.as_path())),
+            old_text.to_owned(),
+            "out-pilot",
+        ),
+        (
+            None,
+            Some(("SPECENGINE_CENSUS_CONFIG_A", good.as_path())),
+            old_text.to_owned(),
+            "out-no-label",
+        ),
+    ] {
+        let context = format!("{label:?} with {variable:?}");
+        let (output, out) = census(label, variable, None, name);
+        assert_eq!(refused(&output, &out, &context), expected, "{context}");
+    }
+    assert_eq!(
+        snapshot(&guard.corpus),
+        guard.before,
+        "the corpus stays byte-identical"
+    );
+
+    // With census.toml at the corpus root the variable still comes first;
+    // unset, the root's file is read under a pilot label as before.
+    fs::copy(&good, guard.corpus.join("census.toml")).unwrap();
+    let (output, out) = census(
+        Some("pilot-a"),
+        Some(("SPECENGINE_CENSUS_CONFIG_A", &bad)),
+        None,
+        "out-root-bad",
+    );
+    let message = refused(&output, &out, "the variable before census.toml");
+    assert!(message.contains(&located), "{located:?} in\n{message}");
+    let (output, _) = census(Some("pilot-b"), None, None, "out-root");
+    assert_eq!(counts(&output), by_flag, "census.toml at the root");
+}
+
 // ---------------------------------------------------------------- pilots
 
 fn pilot_run(pilot_variable: &str, config_variable: &str, label: &str) {

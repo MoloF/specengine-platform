@@ -27,8 +27,73 @@ pub enum HarnessError {
     Internal(String),
 }
 
-const ENV_PILOT_A: &str = "SPECENGINE_PILOT_A";
-const ENV_PILOT_B: &str = "SPECENGINE_PILOT_B";
+/// The environment variables that stand in for a flag under a pilot label:
+/// the first under `--label pilot-a`, the second under `--label pilot-b`.
+/// Every `SPECENGINE_*` name of this crate's flags is declared here once.
+#[derive(Clone, Copy)]
+pub struct PilotVariable([&'static str; 2]);
+
+/// The corpus root (`--pilot`).
+pub const PILOT_CORPUS: PilotVariable = PilotVariable(["SPECENGINE_PILOT_A", "SPECENGINE_PILOT_B"]);
+/// The ID scheme of `parse`, `index` and `check` (`--scheme`).
+pub const PILOT_SCHEME: PilotVariable =
+    PilotVariable(["SPECENGINE_SCHEME_A", "SPECENGINE_SCHEME_B"]);
+/// The census config of `census` and `parse` (`--config`).
+pub const PILOT_CENSUS_CONFIG: PilotVariable =
+    PilotVariable(["SPECENGINE_CENSUS_CONFIG_A", "SPECENGINE_CENSUS_CONFIG_B"]);
+
+impl PilotVariable {
+    /// The variable read under `label`; none for a label that is not a pilot's.
+    fn name(self, label: &str) -> Option<&'static str> {
+        match label {
+            "pilot-a" => Some(self.0[0]),
+            "pilot-b" => Some(self.0[1]),
+            _ => None,
+        }
+    }
+}
+
+/// The path in `variable` under `label`, when it is set and not empty.
+fn from_environment(variable: PilotVariable, label: Option<&str>) -> Option<PathBuf> {
+    path_in(variable.name(label?)?)
+}
+
+/// The path in `variable`, when it is set and not empty.
+fn path_in(variable: &str) -> Option<PathBuf> {
+    std::env::var_os(variable)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+/// The file a measurement reads: the path of `flag` (`flag_name`) when
+/// given, else the path in `variable` under a pilot label, else `default`
+/// at the corpus root. None of them: refused, naming what was looked for.
+/// The path is not opened here: reading it is the caller's.
+pub fn resolve_file(
+    flag_name: &str,
+    flag: Option<&Path>,
+    variable: PilotVariable,
+    label: Option<&str>,
+    root: &Path,
+    default: &str,
+) -> Result<PathBuf, String> {
+    if let Some(path) = flag
+        .map(Path::to_path_buf)
+        .or_else(|| from_environment(variable, label))
+    {
+        return Ok(path);
+    }
+    let path = root.join(default);
+    if path.is_file() {
+        return Ok(path);
+    }
+    Err(match label.and_then(|label| variable.name(label)) {
+        Some(name) => {
+            format!("no {flag_name} given, no {name} and no {default} at the corpus root")
+        }
+        None => format!("no {flag_name} given and no {default} at the corpus root"),
+    })
+}
 
 /// Resolves the corpus and the scratch directory.
 ///
@@ -52,22 +117,20 @@ pub fn prepare_with<C>(
     }
     let (requested, label) = match (&args.pilot, args.label.as_deref()) {
         (Some(pilot), label) => (pilot.clone(), label.unwrap_or("pilot").to_owned()),
-        (None, Some(label @ ("pilot-a" | "pilot-b"))) => {
-            let variable = if label == "pilot-a" {
-                ENV_PILOT_A
-            } else {
-                ENV_PILOT_B
-            };
-            match std::env::var_os(variable) {
-                Some(value) if !value.is_empty() => (PathBuf::from(value), label.to_owned()),
-                _ => {
-                    return Err(HarnessError::Refused(format!(
-                        "--label {label} needs --pilot or the {variable} environment variable"
-                    )));
-                }
+        (None, label) => {
+            let label = label.unwrap_or("fixtures");
+            match PILOT_CORPUS.name(label) {
+                Some(variable) => match path_in(variable) {
+                    Some(path) => (path, label.to_owned()),
+                    None => {
+                        return Err(HarnessError::Refused(format!(
+                            "--label {label} needs --pilot or the {variable} environment variable"
+                        )));
+                    }
+                },
+                None => (fixture_dir(fixture), label.to_owned()),
             }
         }
-        (None, label) => (fixture_dir(fixture), label.unwrap_or("fixtures").to_owned()),
     };
     let root = fs::canonicalize(&requested).map_err(|error| {
         HarnessError::Refused(format!(

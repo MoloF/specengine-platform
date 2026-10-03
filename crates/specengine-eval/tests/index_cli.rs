@@ -8,16 +8,22 @@
 //!
 //! Pilot runs are `#[ignore]` and owner-run: the corpus comes from
 //! `SPECENGINE_PILOT_A` / `_B`, the scheme from `SPECENGINE_SCHEME_A` / `_B`
-//! (both outside the repository, read-only); they are skipped while the
-//! scheme has no `[paths]` table, and check 08 AC-10: `full_ms` ≤ 10 000,
-//! `one_file_ms` ≤ 200.
+//! (both outside the repository, read-only). Their helper
+//! (docs/features/pilot-schemes.md) fails, never skips: a scheme without a
+//! `[paths]` table fails naming its variable; the run must leave the
+//! read-only proof equal and the scratch `HOME` empty, find every root and
+//! meet 08 AC-10: `full_ms` ≤ 10 000, `one_file_ms` ≤ 200. Non-ignored
+//! tests run the same helper on an invented setup.
 
 #![cfg(unix)]
+
+mod pilot;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -414,68 +420,175 @@ fn a_bad_paths_table_is_refused_with_file_line_message() {
 
 // ---------------------------------------------------------------- pilots
 
-fn pilot_run(pilot_variable: &str, scheme_variable: &str, label: &str) {
-    let Some(pilot) = std::env::var_os(pilot_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {pilot_variable} to the pilot corpus to run this test");
-    };
-    let Some(scheme) = std::env::var_os(scheme_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {scheme_variable} to the pilot's scheme (outside the repository)");
-    };
-    let text = fs::read_to_string(&scheme).expect("the pilot scheme is readable");
-    if !text.lines().any(|line| line.trim() == "[paths]") {
-        eprintln!("{scheme_variable} has no [paths] table yet: {label} skipped");
-        return;
-    }
-    let pilot = fs::canonicalize(pilot).expect("pilot path exists");
-    let snapshot_before = snapshot(&pilot);
-    let scratch = Scratch::new(label);
-    let out = scratch.join("out");
-    let output = eval()
-        .env(scheme_variable, &scheme)
-        .args([
-            "index",
-            "--pilot",
-            pilot.to_str().unwrap(),
-            "--label",
-            label,
-            "--out",
-            out.to_str().unwrap(),
-            "--timeout",
-            "600",
-        ])
-        .output()
-        .expect("specengine-eval runs");
+/// One `index` run over `inputs`
+/// (`crates/specengine-eval/README.md` "Pilot runs and tests"):
+/// `pilot::run_read_only` (the `[paths]` requirement, the proof, the child
+/// environment, exit 0, `HOME` empty), the anonymous envelope, every root
+/// found, one file parsed by the one-file update, 08 AC-10's budgets.
+fn pilot_run(label: &str, inputs: &pilot::Inputs, scratch: &Path) -> Value {
+    let output = pilot::run_read_only("index", label, scratch, inputs);
     let envelope = envelope(&output);
-    assert_anonymous(&output, &envelope, label, &pilot);
+    assert_anonymous(&output, &envelope, label, inputs.corpus);
     let result = &envelope["result"];
     eprintln!("{label} result: {result}");
-    assert_eq!(result["one_file_parsed"], 1);
+    assert_eq!(
+        result["missing_roots"], 0,
+        "every scheme root exists: {result}"
+    );
+    assert_eq!(result["one_file_parsed"], 1, "{result}");
     assert!(
-        result["full_ms"].as_u64().unwrap() <= 10_000,
+        result["full_ms"].as_u64().is_some_and(|ms| ms <= 10_000),
         "08 AC-10: full_ms {} > 10 000",
         result["full_ms"]
     );
     assert!(
-        result["one_file_ms"].as_u64().unwrap() <= 200,
+        result["one_file_ms"].as_u64().is_some_and(|ms| ms <= 200),
         "08 AC-10: one_file_ms {} > 200",
         result["one_file_ms"]
     );
-    assert!(
-        snapshot(&pilot) == snapshot_before,
-        "the pilot must stay untouched"
-    );
+    envelope
+}
+
+/// The `#[ignore]` pilot test: the inputs from the label's variables (the
+/// corpus and the scheme required, the census config passed on when set).
+fn pilot_from_environment(label: &str) {
+    let variables = pilot::variables(label);
+    let corpus = pilot::required(variables.corpus, "the pilot corpus");
+    let corpus = fs::canonicalize(corpus).unwrap_or_else(|error| {
+        panic!(
+            "{}: the pilot corpus is unreadable: {error}",
+            variables.corpus
+        )
+    });
+    let scheme = pilot::required(variables.scheme, "the pilot's scheme");
+    let config = pilot::optional(variables.config);
+    let scratch = Scratch::new(label);
+    let inputs = pilot::Inputs {
+        corpus: &corpus,
+        scheme: &scheme,
+        config: config.as_deref(),
+    };
+    pilot_run(label, &inputs, &scratch.0);
 }
 
 #[test]
 #[ignore = "needs SPECENGINE_PILOT_A and SPECENGINE_SCHEME_A (with [paths]); read-only, owner-run"]
 fn pilot_a_index_meets_the_budgets() {
-    pilot_run("SPECENGINE_PILOT_A", "SPECENGINE_SCHEME_A", "pilot-a");
+    pilot_from_environment("pilot-a");
 }
 
 #[test]
 #[ignore = "needs SPECENGINE_PILOT_B and SPECENGINE_SCHEME_B (with [paths]); read-only, owner-run"]
 fn pilot_b_index_meets_the_budgets() {
-    pilot_run("SPECENGINE_PILOT_B", "SPECENGINE_SCHEME_B", "pilot-b");
+    pilot_from_environment("pilot-b");
+}
+
+/// docs/features/pilot-schemes.md AC-01, AC-02: the pilot helper on the
+/// invented setup (a spec-b copy, `git init`, a scheme with every recipe
+/// table, the three variables on the child) is green; the detail lands
+/// only under `--out/index/pilot-a`.
+#[test]
+fn the_pilot_helper_indexes_the_invented_setup_read_only() {
+    let scratch = Scratch::new("pilot-setup");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    let envelope = pilot_run("pilot-a", &setup.inputs(), &scratch.0);
+    let result = &envelope["result"];
+    assert_eq!(
+        result["files"],
+        pilot::walked_files(&setup),
+        "the scheme's roots, the template excluded: {result}"
+    );
+    assert_eq!(result["unreadable"], 0, "{result}");
+    let out = scratch.join("out");
+    let names = |dir: &Path| {
+        fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect::<BTreeSet<_>>()
+    };
+    assert_eq!(names(&out), BTreeSet::from(["index".to_owned()]));
+    assert_eq!(
+        names(&out.join("index")),
+        BTreeSet::from(["pilot-a".to_owned()])
+    );
+    assert_eq!(
+        names(&out.join("index").join("pilot-a")),
+        ["corpus", "index.db", "reports.json"]
+            .map(str::to_owned)
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+    );
+}
+
+/// docs/features/pilot-schemes.md AC-02: without `[paths]` the helper fails
+/// naming the scheme variable, before anything runs; it does not skip.
+#[test]
+#[should_panic(expected = "SPECENGINE_SCHEME_A: the scheme sets no [paths] table")]
+fn the_pilot_helper_fails_on_a_scheme_without_paths() {
+    let scratch = Scratch::new("pilot-no-paths");
+    let setup = pilot::invented_setup(&scratch.0, false);
+    pilot_run("pilot-a", &setup.inputs(), &scratch.0);
+}
+
+/// docs/features/pilot-schemes.md AC-03: two proofs of an untouched corpus
+/// are equal; an mtime moved by one second on a file under a directory root,
+/// or on a single-file root, makes them unequal (the listing sees it, git
+/// status does not).
+#[test]
+fn the_proof_sees_an_mtime_moved_under_a_root() {
+    let scratch = Scratch::new("proof-mtime");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    let roots = pilot::scheme_roots(&setup.scheme, "SPECENGINE_SCHEME_A");
+    assert_eq!(roots, ["AGENTS.md", "docs", "crates/engine/README.md"]);
+    for file in ["docs/records/REQ/REQ-001.md", "AGENTS.md"] {
+        let before = pilot::proof(&setup.corpus, &roots);
+        assert_eq!(
+            pilot::proof(&setup.corpus, &roots),
+            before,
+            "nothing changed: the proofs are equal"
+        );
+        let path = setup.corpus.join(file);
+        let moved = fs::metadata(&path).unwrap().modified().unwrap() + Duration::from_secs(1);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(moved)
+            .unwrap();
+        let after = pilot::proof(&setup.corpus, &roots);
+        assert_eq!(
+            after.status, before.status,
+            "{file}: git status sees no mtime"
+        );
+        assert_ne!(after, before, "{file}: the moved mtime is seen");
+    }
+}
+
+/// docs/features/pilot-schemes.md AC-03: a file created at the corpus root,
+/// outside every scheme root, makes the proofs unequal (git status sees it,
+/// the listing cannot).
+#[test]
+fn the_proof_sees_a_file_created_outside_every_root() {
+    let scratch = Scratch::new("proof-stray");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    let roots = pilot::scheme_roots(&setup.scheme, "SPECENGINE_SCHEME_A");
+    let before = pilot::proof(&setup.corpus, &roots);
+    fs::write(setup.corpus.join("pilot-a.db"), b"a stray database").unwrap();
+    let after = pilot::proof(&setup.corpus, &roots);
+    assert_eq!(after.entries, before.entries, "outside every root");
+    assert_ne!(after, before, "the stray file is seen");
+}
+
+/// `crates/specengine-eval/README.md` "Pilot runs and tests": no git
+/// worktree, no proof; the helper fails.
+#[test]
+#[should_panic(expected = "must be a git worktree")]
+fn the_proof_needs_a_git_worktree() {
+    let scratch = Scratch::new("proof-no-git");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    fs::remove_dir_all(setup.corpus.join(".git")).unwrap();
+    let roots = pilot::scheme_roots(&setup.scheme, "SPECENGINE_SCHEME_A");
+    pilot::proof(&setup.corpus, &roots);
 }
 
 // ------------------------------------------ docs/features/phase1-cleanup.md
@@ -521,6 +634,82 @@ fn an_unreadable_corpus_file_is_counted_unreadable() {
 
 /// AC-21 (E6): `index` takes its configuration from `--scheme` only; a
 /// `--config` is refused (exit 2) before anything is written.
+/// docs/features/pilot-schemes.md: with no scheme anywhere a pilot label's
+/// refusal names the variable it looked for (unset, empty or only the other
+/// label's set); any other label (or none) keeps the old text.
+#[test]
+fn pilot_label_refusals_name_the_scheme_variable() {
+    let scratch = Scratch::new("refusal-names");
+    let corpus = scratch.join("corpus");
+    copy_dir(&fixture("spec-b"), &corpus);
+    let scheme = scratch.join("scheme.toml");
+    fs::rename(corpus.join("specengine.toml"), &scheme).unwrap();
+    let before = snapshot(&corpus);
+    let pilot_text = |letter: &str| {
+        format!(
+            "index: refused: no --scheme given, no SPECENGINE_SCHEME_{letter} and no specengine.toml at the corpus root"
+        )
+    };
+    let old_text = "index: refused: no --scheme given and no specengine.toml at the corpus root";
+    let empty = PathBuf::new();
+    let cases = [
+        (Some("pilot-a"), None, pilot_text("A")),
+        (Some("pilot-b"), None, pilot_text("B")),
+        (
+            Some("pilot-a"),
+            Some(("SPECENGINE_SCHEME_A", empty.as_path())),
+            pilot_text("A"),
+        ),
+        (
+            Some("pilot-a"),
+            Some(("SPECENGINE_SCHEME_B", scheme.as_path())),
+            pilot_text("A"),
+        ),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            pilot_text("B"),
+        ),
+        (
+            Some("other"),
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            old_text.to_owned(),
+        ),
+        (
+            Some("pilot"),
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            old_text.to_owned(),
+        ),
+        (
+            None,
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            old_text.to_owned(),
+        ),
+    ];
+    for (index, (label, variable, expected)) in cases.into_iter().enumerate() {
+        let context = format!("{label:?} with {variable:?}");
+        let out = scratch.join(&format!("out-{index}"));
+        let mut command = eval();
+        if let Some((variable, value)) = variable {
+            command.env(variable, value);
+        }
+        command.args([
+            "index",
+            "--pilot",
+            corpus.to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+        ]);
+        if let Some(label) = label {
+            command.args(["--label", label]);
+        }
+        let output = command.output().expect("specengine-eval runs");
+        let message = assert_refused(&output, &out, &context);
+        assert_eq!(message.trim_end(), expected, "{context}");
+    }
+    assert_eq!(snapshot(&corpus), before, "the corpus is untouched");
+}
+
 #[test]
 fn index_refuses_config() {
     let scratch = Scratch::new("config");

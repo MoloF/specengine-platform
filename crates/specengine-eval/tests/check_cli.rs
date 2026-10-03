@@ -8,10 +8,16 @@
 //!
 //! Pilot runs are `#[ignore]` and owner-run (spec, "Out of scope"): the
 //! corpus from `SPECENGINE_PILOT_A` / `_B`, the config from
-//! `SPECENGINE_SCHEME_A` / `_B` (outside the repository, read-only); the
-//! counts are informational.
+//! `SPECENGINE_SCHEME_A` / `_B` (outside the repository, read-only). Their
+//! helper (docs/features/pilot-schemes.md) fails, never skips: a scheme
+//! without a `[paths]` table fails naming its variable; the run must exit 0
+//! with files read and an observe verdict `clean` or `observed`, leave the
+//! read-only proof equal and the scratch `HOME` empty. Non-ignored tests run
+//! the same helper on an invented setup.
 
 #![cfg(unix)]
+
+mod pilot;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -497,56 +503,225 @@ fn an_invalid_config_baseline_or_date_is_refused() {
     }
 }
 
-fn pilot_run(pilot_variable: &str, scheme_variable: &str, label: &str) {
-    let Some(pilot) = std::env::var_os(pilot_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {pilot_variable} to the pilot corpus (outside the repository)");
-    };
-    let Some(scheme) = std::env::var_os(scheme_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {scheme_variable} to the pilot's config (outside the repository)");
-    };
-    let pilot = fs::canonicalize(pilot).expect("pilot path exists");
-    let snapshot_before = snapshot(&pilot);
-    let scratch = Scratch::new(label);
-    let out = scratch.join("out");
-    let output = eval()
-        .env(scheme_variable, &scheme)
-        .args([
-            "check",
-            "--pilot",
-            pilot.to_str().unwrap(),
-            "--label",
-            label,
-            "--out",
-            out.to_str().unwrap(),
-            "--timeout",
-            "600",
-        ])
-        .output()
-        .expect("specengine-eval runs");
+/// One `check` run over `inputs`
+/// (`crates/specengine-eval/README.md` "Pilot runs and tests"):
+/// `pilot::run_read_only` (the `[paths]` requirement, the proof, the child
+/// environment, exit 0, `HOME` empty), the anonymous envelope, files read,
+/// `verdicts.observe` `clean` or `observed`.
+fn pilot_run(label: &str, inputs: &pilot::Inputs, scratch: &Path) -> Value {
+    let output = pilot::run_read_only("check", label, scratch, inputs);
     let envelope = envelope(&output);
-    assert_anonymous(&output, &envelope, label, &pilot);
-    eprintln!("{label} result (informational): {}", envelope["result"]);
+    assert_anonymous(&output, &envelope, label, inputs.corpus);
+    let result = &envelope["result"];
+    eprintln!("{label} result: {result}");
     assert!(
-        snapshot(&pilot) == snapshot_before,
-        "the pilot must stay untouched"
+        result["files"].as_u64().is_some_and(|files| files > 0),
+        "check reads files: {result}"
+    );
+    let observe = result["verdicts"]["observe"].as_str();
+    assert!(
+        matches!(observe, Some("clean" | "observed")),
+        "verdicts.observe {observe:?}: {result}"
+    );
+    envelope
+}
+
+/// The `#[ignore]` pilot test: the inputs from the label's variables (the
+/// corpus and the scheme required, the census config passed on when set).
+fn pilot_from_environment(label: &str) {
+    let variables = pilot::variables(label);
+    let corpus = pilot::required(variables.corpus, "the pilot corpus");
+    let corpus = fs::canonicalize(corpus).unwrap_or_else(|error| {
+        panic!(
+            "{}: the pilot corpus is unreadable: {error}",
+            variables.corpus
+        )
+    });
+    let scheme = pilot::required(variables.scheme, "the pilot's scheme");
+    let config = pilot::optional(variables.config);
+    let scratch = Scratch::new(label);
+    let inputs = pilot::Inputs {
+        corpus: &corpus,
+        scheme: &scheme,
+        config: config.as_deref(),
+    };
+    pilot_run(label, &inputs, &scratch.0);
+}
+
+#[test]
+#[ignore = "needs SPECENGINE_PILOT_A and SPECENGINE_SCHEME_A (with [paths]); read-only, owner-run"]
+fn pilot_a_check_runs_read_only() {
+    pilot_from_environment("pilot-a");
+}
+
+#[test]
+#[ignore = "needs SPECENGINE_PILOT_B and SPECENGINE_SCHEME_B (with [paths]); read-only, owner-run"]
+fn pilot_b_check_runs_read_only() {
+    pilot_from_environment("pilot-b");
+}
+
+/// docs/features/pilot-schemes.md AC-01, AC-02: the pilot helper on the
+/// invented setup (a spec-b copy, `git init`, a scheme with every recipe
+/// table, the three variables on the child) is green; the report lands
+/// only in `--out/check/pilot-a/findings.json`.
+#[test]
+fn the_pilot_helper_checks_the_invented_setup_read_only() {
+    let scratch = Scratch::new("pilot-setup");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    let envelope = pilot_run("pilot-a", &setup.inputs(), &scratch.0);
+    assert_eq!(
+        envelope["result"]["files"],
+        pilot::walked_files(&setup),
+        "the scheme's roots, the template excluded: {}",
+        envelope["result"]
+    );
+    let out = scratch.join("out");
+    assert_eq!(
+        snapshot(&out).into_keys().collect::<Vec<_>>(),
+        [Path::new("check/pilot-a/findings.json")],
+        "only the report under --out"
     );
 }
 
+/// docs/features/pilot-schemes.md AC-02: without `[paths]` the helper fails
+/// naming the scheme variable, before anything runs; it does not skip.
 #[test]
-#[ignore = "needs SPECENGINE_PILOT_A and SPECENGINE_SCHEME_A; read-only, owner-run, informational"]
-fn pilot_a_check_runs_read_only() {
-    pilot_run("SPECENGINE_PILOT_A", "SPECENGINE_SCHEME_A", "pilot-a");
+#[should_panic(expected = "SPECENGINE_SCHEME_A: the scheme sets no [paths] table")]
+fn the_pilot_helper_fails_on_a_scheme_without_paths() {
+    let scratch = Scratch::new("pilot-no-paths");
+    let setup = pilot::invented_setup(&scratch.0, false);
+    pilot_run("pilot-a", &setup.inputs(), &scratch.0);
 }
 
+/// The fixture side of docs/features/pilot-schemes.md AC-07 (recipe step
+/// 10): the invented scheme with one unknown key in a table `index` does not
+/// read is refused by `check` with exit 2 at `<scheme>:<line>`, nothing
+/// written.
 #[test]
-#[ignore = "needs SPECENGINE_PILOT_B and SPECENGINE_SCHEME_B; read-only, owner-run, informational"]
-fn pilot_b_check_runs_read_only() {
-    pilot_run("SPECENGINE_PILOT_B", "SPECENGINE_SCHEME_B", "pilot-b");
+fn an_unknown_key_in_a_recipe_table_is_refused_at_its_line() {
+    let scratch = Scratch::new("pilot-unknown-key");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    let text = fs::read_to_string(&setup.scheme).unwrap();
+    let text = text.replace(
+        "decision_bytes = 1536\n",
+        "decision_bytes = 1536\nsurprise_bytes = 1\n",
+    );
+    let line = 1 + text
+        .lines()
+        .position(|line| line.starts_with("surprise_bytes"))
+        .expect("the unknown key is written");
+    fs::write(&setup.scheme, text).unwrap();
+    let before = snapshot(&setup.corpus);
+    let out = scratch.join("out");
+    let output = eval()
+        .env("SPECENGINE_PILOT_A", &setup.corpus)
+        .env("SPECENGINE_SCHEME_A", &setup.scheme)
+        .env("SPECENGINE_CENSUS_CONFIG_A", &setup.config)
+        .args([
+            "check",
+            "--label",
+            "pilot-a",
+            "--out",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("specengine-eval runs");
+    assert_refused(
+        "an unknown [budgets] key",
+        &output,
+        &out,
+        &setup.corpus,
+        &before,
+    );
+    let located = format!("{}:{line}: ", setup.scheme.display());
+    assert!(
+        stderr(&output).contains(&located),
+        "stderr names {located:?}:\n{}",
+        stderr(&output)
+    );
 }
 
 /// AC-21 of docs/features/phase1-cleanup.md (E6): `check` takes its
 /// configuration from `--scheme` only; a `--config` is refused (exit 2)
 /// before anything is written.
+/// docs/features/pilot-schemes.md: with no scheme anywhere a pilot label's
+/// refusal names the variable it looked for (unset, empty or only the other
+/// label's set); any other label (or none) keeps the old text.
+#[test]
+fn pilot_label_refusals_name_the_scheme_variable() {
+    let scratch = Scratch::new("refusal-names");
+    let corpus = scratch.join("corpus");
+    copy_dir(&fixture("spec-a"), &corpus);
+    let scheme = scratch.join("scheme.toml");
+    fs::rename(corpus.join("specengine.toml"), &scheme).unwrap();
+    let before = snapshot(&corpus);
+    let pilot_text = |letter: &str| {
+        format!(
+            "check: refused: no --scheme given, no SPECENGINE_SCHEME_{letter} and no specengine.toml at the corpus root"
+        )
+    };
+    let old_text = "check: refused: no --scheme given and no specengine.toml at the corpus root";
+    let empty = PathBuf::new();
+    let cases = [
+        (Some("pilot-a"), None, pilot_text("A")),
+        (Some("pilot-b"), None, pilot_text("B")),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_SCHEME_B", empty.as_path())),
+            pilot_text("B"),
+        ),
+        (
+            Some("pilot-a"),
+            Some(("SPECENGINE_SCHEME_B", scheme.as_path())),
+            pilot_text("A"),
+        ),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            pilot_text("B"),
+        ),
+        (
+            Some("other"),
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            old_text.to_owned(),
+        ),
+        (
+            Some("pilot"),
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            old_text.to_owned(),
+        ),
+        (
+            None,
+            Some(("SPECENGINE_SCHEME_A", scheme.as_path())),
+            old_text.to_owned(),
+        ),
+    ];
+    for (index, (label, variable, expected)) in cases.into_iter().enumerate() {
+        let context = format!("{label:?} with {variable:?}");
+        let out = scratch.join(&format!("out-{index}"));
+        let mut command = eval();
+        if let Some((variable, value)) = variable {
+            command.env(variable, value);
+        }
+        command.args([
+            "check",
+            "--pilot",
+            corpus.to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+            "--today",
+            TODAY,
+        ]);
+        if let Some(label) = label {
+            command.args(["--label", label]);
+        }
+        let output = command.output().expect("specengine-eval runs");
+        assert_refused(&context, &output, &out, &corpus, &before);
+        assert!(!out.exists(), "{context}: --out was created");
+        assert_eq!(stderr(&output).trim_end(), expected, "{context}");
+    }
+}
+
 #[test]
 fn check_refuses_config() {
     let scratch = Scratch::new("config");

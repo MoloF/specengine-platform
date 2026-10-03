@@ -8,9 +8,16 @@
 //!
 //! Pilot runs are `#[ignore]` and owner-run: the corpus comes from
 //! `SPECENGINE_PILOT_A` / `_B`, the scheme from `SPECENGINE_SCHEME_A` / `_B`,
-//! both outside the repository and read-only.
+//! the census config from `SPECENGINE_CENSUS_CONFIG_A` / `_B`, all outside
+//! the repository and read-only. Their helper
+//! (docs/features/pilot-schemes.md) fails, never skips: a scheme without a
+//! `[paths]` table fails naming its variable; the run must exit 0 with files
+//! parsed and no panic, leave the read-only proof equal and the scratch
+//! `HOME` empty. Non-ignored tests run the same helper on an invented setup.
 
 #![cfg(unix)]
+
+mod pilot;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -545,68 +552,289 @@ fn pilot_labels_take_the_scheme_from_the_environment() {
 
 // ---------------------------------------------------------------- pilots
 
-fn pilot_run(pilot_variable: &str, scheme_variable: &str, config_variable: &str, label: &str) {
-    let Some(pilot) = std::env::var_os(pilot_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {pilot_variable} to the pilot corpus to run this test");
-    };
-    let Some(scheme) = std::env::var_os(scheme_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {scheme_variable} to the pilot's ID scheme (outside the repository)");
-    };
-    let Some(config) = std::env::var_os(config_variable).filter(|v| !v.is_empty()) else {
-        panic!("set {config_variable} to the pilot's census config (outside the repository)");
-    };
-    let pilot = fs::canonicalize(pilot).expect("pilot path exists");
-    let status_before = git_status(&pilot, ".");
+/// One `parse` run over `inputs`
+/// (`crates/specengine-eval/README.md` "Pilot runs and tests"):
+/// `pilot::run_read_only` (the `[paths]` requirement, the proof, the child
+/// environment with the census-config variable, exit 0, `HOME` empty), the
+/// anonymous envelope, files parsed, no panic.
+fn pilot_run(label: &str, inputs: &pilot::Inputs, scratch: &Path) -> Value {
+    assert!(inputs.config.is_some(), "parse needs the census config");
+    let output = pilot::run_read_only("parse", label, scratch, inputs);
+    let envelope = envelope(&output);
+    assert_anonymous(&output, &envelope, label, inputs.corpus);
+    let result = &envelope["result"];
+    eprintln!("{label} result: {result}");
+    assert!(
+        result["files"].as_u64().is_some_and(|files| files > 0),
+        "parse reads files: {result}"
+    );
+    assert_eq!(result["panics"], 0, "{result}");
+    envelope
+}
+
+/// The `#[ignore]` pilot test: the corpus, the scheme and the census config
+/// from the label's variables, each required.
+fn pilot_from_environment(label: &str) {
+    let variables = pilot::variables(label);
+    let corpus = pilot::required(variables.corpus, "the pilot corpus");
+    let corpus = fs::canonicalize(corpus).unwrap_or_else(|error| {
+        panic!(
+            "{}: the pilot corpus is unreadable: {error}",
+            variables.corpus
+        )
+    });
+    let scheme = pilot::required(variables.scheme, "the pilot's scheme");
+    let config = pilot::required(variables.config, "the pilot's census config");
     let scratch = Scratch::new(label);
+    let inputs = pilot::Inputs {
+        corpus: &corpus,
+        scheme: &scheme,
+        config: Some(&config),
+    };
+    pilot_run(label, &inputs, &scratch.0);
+}
+
+#[test]
+#[ignore = "needs SPECENGINE_PILOT_A, SPECENGINE_SCHEME_A (with [paths]), SPECENGINE_CENSUS_CONFIG_A; read-only, owner-run"]
+fn pilot_a_parse_prints_anonymous_counts() {
+    pilot_from_environment("pilot-a");
+}
+
+#[test]
+#[ignore = "needs SPECENGINE_PILOT_B, SPECENGINE_SCHEME_B (with [paths]), SPECENGINE_CENSUS_CONFIG_B; read-only, owner-run"]
+fn pilot_b_parse_prints_anonymous_counts() {
+    pilot_from_environment("pilot-b");
+}
+
+/// docs/features/pilot-schemes.md AC-01, AC-02: the pilot helper on the
+/// invented setup (a spec-b copy, `git init`, a scheme with every recipe
+/// table, the three variables on the child, no `--config`) is green; the
+/// scheme's escape-written alias prefix is read; the detail lands only under
+/// `--out/parse/pilot-a`.
+#[test]
+fn the_pilot_helper_parses_the_invented_setup_read_only() {
+    let scratch = Scratch::new("pilot-setup");
+    let setup = pilot::invented_setup(&scratch.0, true);
+    let envelope = pilot_run("pilot-a", &setup.inputs(), &scratch.0);
+    let result = &envelope["result"];
+    let documents = snapshot(&setup.corpus.join("docs"))
+        .into_keys()
+        .filter(|path| path.extension().is_some_and(|ext| ext == "md"))
+        .count();
+    assert_eq!(
+        result["files"], documents,
+        "the census config's docs/: {result}"
+    );
+    assert!(
+        result["references"]["alias"]
+            .as_u64()
+            .is_some_and(|alias| alias > 0),
+        "references through the aliases_from prefix: {result}"
+    );
     let out = scratch.join("out");
-    let output = eval()
-        .env(scheme_variable, &scheme)
-        .args([
+    assert!(
+        snapshot(&out)
+            .into_keys()
+            .all(|path| path.starts_with("parse/pilot-a")),
+        "only under --out/parse/pilot-a"
+    );
+}
+
+/// docs/features/pilot-schemes.md AC-02: without `[paths]` the helper fails
+/// naming the scheme variable, before anything runs; it does not skip.
+#[test]
+#[should_panic(expected = "SPECENGINE_SCHEME_A: the scheme sets no [paths] table")]
+fn the_pilot_helper_fails_on_a_scheme_without_paths() {
+    let scratch = Scratch::new("pilot-no-paths");
+    let setup = pilot::invented_setup(&scratch.0, false);
+    pilot_run("pilot-a", &setup.inputs(), &scratch.0);
+}
+
+/// docs/features/pilot-schemes.md AC-01 (the "Runs" line gives `parse`
+/// without `--config`): for `--label pilot-a` / `pilot-b` the census config
+/// defaults to `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set and not empty;
+/// `--config` beats it; otherwise `census.toml` at the corpus root (none
+/// here: refused). Only the census-config variable is set.
+#[test]
+fn pilot_labels_take_the_census_config_from_the_environment() {
+    let scratch = Scratch::new("census-env");
+    let corpus = scratch.join("corpus");
+    copy_dir(&corpus_mini(), &corpus, &["census.toml"]);
+    assert!(!corpus.join("census.toml").exists());
+    let good = scratch.join("census-a.toml");
+    fs::copy(corpus_mini().join("census.toml"), &good).unwrap();
+    let bad = scratch.join("census-bad.toml");
+    fs::write(&bad, "[corpus]\nroots = [\"design\"]\nsurprise = true\n").unwrap();
+    let parse =
+        |label: &str, variable: Option<(&str, &Path)>, config: Option<&Path>, name: &str| {
+            let out = scratch.join(name);
+            let mut command = eval();
+            if let Some((variable, value)) = variable {
+                command.env(variable, value);
+            }
+            command.args([
+                "parse",
+                "--pilot",
+                corpus.to_str().unwrap(),
+                "--label",
+                label,
+                "--out",
+                out.to_str().unwrap(),
+            ]);
+            if let Some(config) = config {
+                command.args(["--config", config.to_str().unwrap()]);
+            }
+            (command.output().expect("specengine-eval runs"), out)
+        };
+    let (flag, _) = parse("pilot-a", None, Some(&good), "out-flag");
+    let by_flag = envelope(&flag)["result"].clone();
+    assert_eq!(by_flag["sections"]["parsed"], 1, "{by_flag}");
+
+    // The variable alone: the same result as the flag.
+    for (label, variable) in [
+        ("pilot-a", "SPECENGINE_CENSUS_CONFIG_A"),
+        ("pilot-b", "SPECENGINE_CENSUS_CONFIG_B"),
+    ] {
+        let (output, _) = parse(
+            label,
+            Some((variable, &good)),
+            None,
+            &format!("out-{label}"),
+        );
+        assert_eq!(envelope(&output)["result"], by_flag, "{variable} alone");
+    }
+    // --config beats the variable.
+    let (output, _) = parse(
+        "pilot-a",
+        Some(("SPECENGINE_CENSUS_CONFIG_A", &bad)),
+        Some(&good),
+        "out-beats",
+    );
+    assert_eq!(
+        envelope(&output)["result"],
+        by_flag,
+        "--config beats the variable"
+    );
+    // The variable is read: a bad config there is refused at its line.
+    let (output, out) = parse(
+        "pilot-a",
+        Some(("SPECENGINE_CENSUS_CONFIG_A", &bad)),
+        None,
+        "out-bad",
+    );
+    let message = assert_refused(&output, &out, "a bad config in the variable");
+    let located = format!("{}:3: ", bad.display());
+    assert!(message.contains(&located), "{located:?} in\n{message}");
+    // Empty, the other label's or a non-pilot label: no config, refused.
+    let empty = PathBuf::new();
+    for (label, variable, value, name) in [
+        (
+            "pilot-a",
+            "SPECENGINE_CENSUS_CONFIG_A",
+            empty.as_path(),
+            "out-empty",
+        ),
+        (
+            "pilot-b",
+            "SPECENGINE_CENSUS_CONFIG_A",
+            good.as_path(),
+            "out-other-b",
+        ),
+        (
+            "pilot-a",
+            "SPECENGINE_CENSUS_CONFIG_B",
+            good.as_path(),
+            "out-other-a",
+        ),
+        (
+            "other",
+            "SPECENGINE_CENSUS_CONFIG_A",
+            good.as_path(),
+            "out-other",
+        ),
+    ] {
+        let (output, out) = parse(label, Some((variable, value)), None, name);
+        let message = assert_refused(&output, &out, &format!("{label} with {variable}"));
+        assert!(message.contains("census.toml"), "{label}: {message}");
+    }
+}
+
+/// docs/features/pilot-schemes.md: a pilot label's refusal names the variable
+/// it looked for — the census config first, then the scheme — any other label
+/// (or none) keeps the old text.
+#[test]
+fn pilot_label_refusals_name_the_variable_they_looked_for() {
+    let scratch = Scratch::new("refusal-names");
+    let corpus = scratch.join("corpus");
+    copy_dir(&corpus_mini(), &corpus, &["census.toml", "specengine.toml"]);
+    let before = snapshot(&corpus);
+    let config = scratch.join("census-a.toml");
+    fs::copy(corpus_mini().join("census.toml"), &config).unwrap();
+    let census_text = |letter: &str| {
+        format!(
+            "parse: refused: no --config given, no SPECENGINE_CENSUS_CONFIG_{letter} and no census.toml at the corpus root"
+        )
+    };
+    let scheme_text = |letter: &str| {
+        format!(
+            "parse: refused: no --scheme given, no SPECENGINE_SCHEME_{letter} and no specengine.toml at the corpus root"
+        )
+    };
+    let old_census = "parse: refused: no --config given and no census.toml at the corpus root";
+    let old_scheme = "parse: refused: no --scheme given and no specengine.toml at the corpus root";
+    // (label, variable, --config, expected stderr)
+    let cases = [
+        (Some("pilot-a"), None, false, census_text("A")),
+        (Some("pilot-b"), None, false, census_text("B")),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_SCHEME_B", config.as_path())),
+            false,
+            census_text("B"),
+        ),
+        (Some("other"), None, false, old_census.to_owned()),
+        (None, None, false, old_census.to_owned()),
+        (Some("pilot-a"), None, true, scheme_text("A")),
+        (
+            Some("pilot-b"),
+            Some(("SPECENGINE_CENSUS_CONFIG_B", config.as_path())),
+            false,
+            scheme_text("B"),
+        ),
+        (
+            Some("pilot-a"),
+            Some(("SPECENGINE_SCHEME_B", config.as_path())),
+            true,
+            scheme_text("A"),
+        ),
+        (Some("other"), None, true, old_scheme.to_owned()),
+        (None, None, true, old_scheme.to_owned()),
+    ];
+    for (index, (label, variable, flag, expected)) in cases.into_iter().enumerate() {
+        let context = format!("{label:?}, {variable:?}, --config {flag}");
+        let out = scratch.join(&format!("out-{index}"));
+        let mut command = eval();
+        if let Some((variable, value)) = variable {
+            command.env(variable, value);
+        }
+        command.args([
             "parse",
             "--pilot",
-            pilot.to_str().unwrap(),
-            "--label",
-            label,
-            "--config",
-            Path::new(&config).to_str().unwrap(),
+            corpus.to_str().unwrap(),
             "--out",
             out.to_str().unwrap(),
-            "--timeout",
-            "600",
-        ])
-        .output()
-        .expect("specengine-eval runs");
-    let envelope = envelope(&output);
-    assert_anonymous(&output, &envelope, label, &pilot);
-    assert_eq!(envelope["result"]["panics"], 0);
-    assert_eq!(
-        git_status(&pilot, "."),
-        status_before,
-        "the pilot must stay untouched"
-    );
-    eprintln!("{label} result: {}", envelope["result"]);
-}
-
-#[test]
-#[ignore = "needs SPECENGINE_PILOT_A, SPECENGINE_SCHEME_A, SPECENGINE_CENSUS_CONFIG_A; read-only, owner-run"]
-fn pilot_a_parse_prints_anonymous_counts() {
-    pilot_run(
-        "SPECENGINE_PILOT_A",
-        "SPECENGINE_SCHEME_A",
-        "SPECENGINE_CENSUS_CONFIG_A",
-        "pilot-a",
-    );
-}
-
-#[test]
-#[ignore = "needs SPECENGINE_PILOT_B, SPECENGINE_SCHEME_B, SPECENGINE_CENSUS_CONFIG_B; read-only, owner-run"]
-fn pilot_b_parse_prints_anonymous_counts() {
-    pilot_run(
-        "SPECENGINE_PILOT_B",
-        "SPECENGINE_SCHEME_B",
-        "SPECENGINE_CENSUS_CONFIG_B",
-        "pilot-b",
-    );
+        ]);
+        if let Some(label) = label {
+            command.args(["--label", label]);
+        }
+        if flag {
+            command.args(["--config", config.to_str().unwrap()]);
+        }
+        let output = command.output().expect("specengine-eval runs");
+        let message = assert_refused(&output, &out, &context);
+        assert_eq!(message.trim_end(), expected, "{context}");
+    }
+    assert_eq!(snapshot(&corpus), before, "the corpus is untouched");
 }
 
 // ------------------------------------------ docs/features/phase1-cleanup.md

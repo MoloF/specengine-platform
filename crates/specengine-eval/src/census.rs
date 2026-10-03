@@ -1,6 +1,8 @@
 //! Measurement `census`: the dry-run counter of `specengine-import` over a
-//! spec corpus. The convention comes from `--config` (default: `census.toml`
-//! at the corpus root); the fixture and the pilots take the same code path.
+//! spec corpus. The convention comes from `--config` (default:
+//! `SPECENGINE_CENSUS_CONFIG_A` / `_B` for `--label pilot-a` / `pilot-b`
+//! when set, else `census.toml` at the corpus root); the fixture and the
+//! pilots take the same code path.
 //!
 //! stdout carries counts only: per-class and per-prefix buckets are keyed by
 //! anonymous labels (`class-1`, `prefix-1`, … by descending count), never by
@@ -16,7 +18,7 @@ use std::time::Instant;
 use serde::Serialize;
 use specengine_import::{Census, CensusConfig};
 
-use crate::harness::Corpus;
+use crate::harness::{self, Corpus};
 
 /// Fixture directory (relative to `fixtures/`) used without `--pilot`.
 pub const FIXTURE: &str = "corpus-mini";
@@ -102,19 +104,19 @@ struct Labels {
 }
 
 /// Reads the census config before anything is written; an error refuses the run.
-pub fn load_config(config: Option<&Path>, root: &Path) -> Result<CensusConfig, String> {
-    let path = match config {
-        Some(path) => path.to_path_buf(),
-        None => {
-            let path = root.join(DEFAULT_CONFIG);
-            if !path.is_file() {
-                return Err(format!(
-                    "no --config given and no {DEFAULT_CONFIG} at the corpus root"
-                ));
-            }
-            path
-        }
-    };
+pub fn load_config(
+    config: Option<&Path>,
+    root: &Path,
+    label: Option<&str>,
+) -> Result<CensusConfig, String> {
+    let path = harness::resolve_file(
+        "--config",
+        config,
+        harness::PILOT_CENSUS_CONFIG,
+        label,
+        root,
+        DEFAULT_CONFIG,
+    )?;
     CensusConfig::load(&path).map_err(|error| error.to_string())
 }
 

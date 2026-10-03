@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-03
 ---
 
 # spec check: index render, generators, graph warnings
@@ -72,11 +72,11 @@ WHEN the table is present (even empty), each `class: generated` document whose f
 
 **Resolution** (`Resolver`) as for front-matter references (`docs/canon/spec-check.md` "Rules"; feature-scoped IDs: `docs/canon/spec-check-links.md`). `project:` → `Skipped`, no finding. Width is never checked on recognition: a five-digit number is a real mention.
 
-**`mention-dangling`**: one per unresolved inline mention (`mentions`, origin `inline`) of a live source, at its line; subject as written, a wiki link's `[[…]]` included; the message as `ref-dangling`'s. Front-matter keeps `ref-dangling` (error). The lexer joins `#Y` to an ID only when `Y` is ID-shaped. Fallback, inline only: WHEN a mention of a `shape = "name"` prefix does not resolve, the check drops its last `-segment` and retries while prefix + one segment remain; the first resolving ID wins, its `#section` checked there (`MEC-STAMINA-based` → `MEC-STAMINA`). Never for front-matter or number shapes; case cannot decide (`TERM-exhausted` is a real ID).
+**`mention-dangling`**: one per distinct (line, subject) of a live source's unresolved inline mentions (`mentions`, origin `inline`): the report keeps one of equal findings, so a citation repeated on one line is one finding, as for `link-dangling`; subject as written, a wiki link's `[[…]]` included; the message as `ref-dangling`'s. Front-matter keeps `ref-dangling` (error). The lexer joins `#Y` to an ID only when `Y` is ID-shaped. Fallback, inline only: WHEN a mention of a `shape = "name"` prefix does not resolve, the check drops its last `-segment` and retries while prefix + one segment remain; the first resolving ID wins, its `#section` checked there (`MEC-STAMINA-based` → `MEC-STAMINA`). Never for front-matter or number shapes; case cannot decide (`TERM-exhausted` is a real ID).
 
 **`depends-cycle`**: nodes are documents; an edge A → B for each `links.depends_on` item of a live A that resolves, from A, to an ID B holds (no fallback, `#section` ignored; several holders → an edge to each). `petgraph::algo::tarjan_scc`: one finding per strongly connected component of ≥ 2 documents, or of one with a self-loop. Subject: the member names (ID, else path) sorted by name then path, joined by `, `; placed on the first member's first `depends_on` item into the cycle; message "`depends_on` forms a cycle through <subject>".
 
-**`ref-superseded`**: WHEN a live source references Y — declared (`refs`, `adrs`, `links.*`, `parent`, `working_answer`, a reference-form `canon:`) or inline (with the fallback) — and Y resolves to a document whose `status:` is `superseded-by X`, the check warns once per occurrence, subject as written: "`Y` is superseded by X". Exempt: `supersedes:` items, `links.supersedes`, the `status:` value, references from X's own files. Several holders of Y: the first superseded one in path order.
+**`ref-superseded`**: WHEN a live source references Y — declared (`refs`, `adrs`, `links.*`, `parent`, `working_answer`, a reference-form `canon:`) or inline (with the fallback) — and Y resolves to a document whose `status:` is `superseded-by X`, the check warns once per (line, subject), subject as written: "`Y` is superseded by X". Exempt: `supersedes:` items, `links.supersedes`, the `status:` value, references from X's own files. Several holders of Y: the first superseded one in path order.
 
 **Determinism**: render, findings and cycle subjects do not depend on input order. **Genre** (ADR-0008): no project command (`cargo run -q -p specengine-cli`), `docs/`, `ADR` or `index.md` literal in the sources, no shard name; the ADR-0022 convention text (header, H1, `source:`, protocol line, section names, `Shards`, `Documentation index: `, `A shard of `) and `spec check` are literal.
 
@@ -84,7 +84,7 @@ This repository (root config, `enforce`, no baseline): `clean`, no warning.
 
 ## Next
 
-- Built on this: increment 2 part 2 (`docs/canon/spec-check-links.md`), increment 3 (`docs/canon/spec-check-{cli,git}.md`). The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
+- The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
 - Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
 
 ## Open nits

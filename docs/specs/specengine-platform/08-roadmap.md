@@ -23,8 +23,8 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `mcp-read.md`, `code-identity.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources), layer A identity (`qpath` target units, marker `[tiers]`, ambiguous RON paths; pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %).
-- Next: the pilots below.
+- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `mcp-read.md`, `code-identity.md`, `pilot-schemes.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources), layer A identity (`qpath` target units, marker `[tiers]`, ambiguous RON paths; pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %), pilot schemes (a "before" `specengine.toml` per pilot; `parse`, `index`, `check` read both, read-only: §3 AC-10).
+- Next: `import-records`, then the rest of the pilots below.
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
 - **From the Phase 0 spikes**:
   - MCP: the `_meta["anthropic/maxResultSizeChars"]` lever (500 000) is declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does the lever act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
@@ -79,7 +79,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 | AC-7 | **Bundle determinism**: one state → one `bundle_hash` | test |
 | AC-8 | **Machine-verified**: `verified` is set only after SpecEngine itself runs the `@verifies` tests | test |
 | AC-9 | **Staleness**: editing a node from the `spec_snapshot` of a `ready` task makes it `stale`, the bundle shows the diff | test |
-| AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects. **`ra_ap_ide` layer measured in Phase 0** (`specengine-eval ra`, 05 §5.1): cold 33–65 s, warm pass ≈ 0.2 s, group peak ≤ 3.76 GiB. Index: `specengine-eval index`, pilot run pending |
+| AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects. **`ra_ap_ide` layer measured in Phase 0** (`specengine-eval ra`, 05 §5.1): cold 33–65 s, warm pass ≈ 0.2 s, group peak ≤ 3.76 GiB. Index (`specengine-eval index`, 2026-10-03, dev profile): `full_ms` A 3 637, B 1 373; `one_file_ms` A 184, B 76 |
 | AC-11 | **Homoglyphs**: IDs with mixed scripts are rejected with an auto-fix | test on IDs where a Latin letter is swapped for its Cyrillic look-alike (U+0420 for `P`, U+0415 for `E`). **Rejection met** (`spec check`, `check_ids.rs`); applying the fix: Phase 2 (`apply_proposal`) |
 | AC-12 | **Responsiveness**: an MCP event is visible in the UI ≤ 1 s | e2e |
 | AC-13 | **Meaning change without revision fails**: pre-commit fails if a node's `norm_hash` changed without a `rev` bump and without `--editorial` | test on a temp repo |

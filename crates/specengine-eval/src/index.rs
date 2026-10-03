@@ -23,16 +23,13 @@ use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::IdScheme;
 use specengine_store::{IndexWriter, Source, SpecIndex, SqliteIndex, UpdateReport, WorkingTree};
 
-use crate::harness::Corpus;
+use crate::harness::{self, Corpus};
 
 /// Fixture directory (relative to `fixtures/`) used without `--pilot`.
 pub const FIXTURE: &str = "spec-b";
 
 /// Scheme file looked up at the corpus root when `--scheme` is absent.
 pub const DEFAULT_SCHEME: &str = "specengine.toml";
-
-const ENV_SCHEME_A: &str = "SPECENGINE_SCHEME_A";
-const ENV_SCHEME_B: &str = "SPECENGINE_SCHEME_B";
 
 /// The project name of the scratch index.
 const PROJECT: &str = "specengine-eval";
@@ -48,28 +45,14 @@ pub struct Setup {
 
 /// Reads `[ids]` and `[paths]` of the scheme file; any error refuses the run.
 pub fn prepare(root: &Path, scheme: Option<&Path>, label: Option<&str>) -> Result<Setup, String> {
-    let from_environment = || {
-        let variable = match label {
-            Some("pilot-a") => ENV_SCHEME_A,
-            Some("pilot-b") => ENV_SCHEME_B,
-            _ => return None,
-        };
-        std::env::var_os(variable)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    let path = match scheme.map(Path::to_path_buf).or_else(from_environment) {
-        Some(path) => path,
-        None => {
-            let path = root.join(DEFAULT_SCHEME);
-            if !path.is_file() {
-                return Err(format!(
-                    "no --scheme given and no {DEFAULT_SCHEME} at the corpus root"
-                ));
-            }
-            path
-        }
-    };
+    let path = harness::resolve_file(
+        "--scheme",
+        scheme,
+        harness::PILOT_SCHEME,
+        label,
+        root,
+        DEFAULT_SCHEME,
+    )?;
     let shown = path.display().to_string();
     let text = fs::read_to_string(&path)
         .map_err(|error| format!("{shown}: cannot read the scheme: {error}"))?;
