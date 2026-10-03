@@ -29,7 +29,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 - **From the Phase 0 spikes**:
   - `qpath` gains a target discriminator: `src/bin`, `examples` and `tests` targets share an empty root module path (16.5–32.2 % of pilot items ambiguous; 05 §5.1 "Module resolver").
   - The marker parser parses the `[tiers]` list of the canon grammar `// @implements ID@rev [tiers]` (`docs/canon/architecture.md#markers`, 05 §5.3); the Phase 0 parser keeps everything after `ID[@rev]` as a free-text note. Duplicate RON paths are flagged as ambiguous, never merged.
-  - MCP: the per-tool `_meta["anthropic/maxResultSizeChars"]` lever against the character-based output cap is declared (500 000); its test waits for the owner's run (`docs/canon/mcp-read.md` "Owner's check").
+  - MCP: the `_meta["anthropic/maxResultSizeChars"]` lever (500 000) is declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does the lever act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
   - The census findings of §4.3 become per-corpus importer settings and rules.
 
 ### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner

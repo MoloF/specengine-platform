@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-03
 ---
 
 # MCP read tools and resources
@@ -56,18 +56,26 @@ AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8–28 ms, warm 2–6 ms; a co
 
 ## Owner's check
 
-AC-16, interactive; re-run on a Claude Code upgrade. Setup: the launcher `fixtures/mcp/mcp.json` (its scratch `HOME`), the Claude Code version written down. Record: results of 48 000, 60 000, 104 000 and 200 000 characters, each with and without `maxResultSizeChars`; whether `structuredContent` reaches the model and counts toward the cap (in UTF-16 units?); `@` autocompletion of the resources and `nextCursor`; the server's working directory (assumed: the session's); an `@`-mention of a node; the four tools in a real session here.
+AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Recorded 2026-10-03**: Claude Code 2.1.288, `claude --mcp-config fixtures/mcp/mcp.json --strict-mcp-config` from the repository root, `MAX_MCP_OUTPUT_TOKENS` unset.
 
-Recorded: pending.
+- `${…}` expands: the DB landed in the scratch `HOME` (`$TMPDIR/specengine-mcp-home`); the owner's data directory was not created. `/mcp`: 7 tools, the `probes` set.
+- cwd = the session's: `get_tree {}` used this repository's config (`note: no document under [paths] spec "docs/spec"; give a ROOT`: no `[paths] spec`, no `parent:` here).
+- The four tools work: `search` "bundle budget" 12 hits (5 archived hidden); `get_node ADR-0031` ± `with: ["links"]`: 7 outgoing, 8 incoming, 4 left out (2 generated, 2 archived); `get_context_bundle ADR-0031` budget 2 000: 385 tokens, the target only, `more: 0` (ADRs cite by `mentions` only).
+- `structuredContent` reaches the model: it gave `end_line` 18, `utf8` `true` of `get_node ADR-0031` (JSON only; `wc -l` 18).
+- Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file, `result (<N> characters across <M> lines) exceeds maximum allowed tokens`: the content cap lies in 48 000–60 000 (Phase 0: 48 000 in, 104 000 out).
+- Above it in total, `get_node` of 05 (text ≈ 40 000 characters, `truncated: false`, the same text in `structuredContent`, whose `truncated`, `sections` the model reported) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished. Read tools pass at this size: Q3's fallback not triggered.
+- `@specengine:` lists the template (`spec:// – node`) and documents by path (04…08, crate READMEs); `@spec…` alone suggests other Claude sessions; the `tree` resource was not seen.
+- Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (to ~268 000 combined, Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
 
 ## Tests
 
-`crates/specengine-mcp/tests`, one spawned binary per session with a cleared environment and a fresh scratch `HOME`, over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default` (lists, annotations, texts), `mcp_read` (parity, errors, schemas), `mcp_resources`, `mcp_session` (discovery, freshness, cancellation, `HOME`), `mcp_door` (the single door in a git repository), `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]` to `clap, getrandom (probes), rmcp, serde, serde_json, specengine-cli, tokio`.
+`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default` (lists, annotations, texts), `mcp_read` (parity, errors, schemas), `mcp_resources`, `mcp_session` (discovery, freshness, cancellation, `HOME`), `mcp_door` (the single door in a git repository), `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]` to `clap, getrandom (probes), rmcp, serde, serde_json, specengine-cli, tokio`.
 
 ## Open
 
-- AC-16 unrecorded: until it is, 500 000 is the working answer (A12).
-- Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` → `null`) bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
+- AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
+- Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` → `null`), untriggered so far, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
+- `get_node … with: ["links"]` lists a document's own heading (`# ADR-0031`, line 12) as a self-mention, outgoing and incoming: a candidate small fix (CLI/core links), not done.
 - A panic in the async wrapper, outside `spawn_blocking`, gets no response (low).
 - The Size residue. `resources/list` over a busy, corrupt or read-only database is untested.
 - Pilots: latency and W once the owner names them.

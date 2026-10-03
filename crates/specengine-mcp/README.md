@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-mcp]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-03
 ---
 
 # specengine-mcp — the MCP server over stdio
@@ -28,10 +28,10 @@ rmcp has no server-side lifecycle mode (`ClientLifecycleMode::Auto` is client-on
 
 ## Claude Code client
 
-Verified on v2.1.283 by script and by hand (Phase 0); re-verify on an upgrade with the `probes` build (the read-tool items: `docs/canon/mcp-read.md` "Owner's check").
+Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checked by hand on 2.1.288 (2026-10-03, `docs/canon/mcp-read.md` "Owner's check"); re-verify on an upgrade with the `probes` build.
 
 - A stdio server gets the legacy handshake (2025-11-25) by default; `MCP_PROTOCOL_NEGOTIATION=auto` negotiates 2026-07-28: hence both eras. Project scope: `.mcp.json` in the repository, read at session start; transports `stdio | http | ws` (`sse` deprecated).
-- The output cap counts characters: 48 000 pass inline with no warning reaching the model, 104 000 are rejected, `MAX_MCP_OUTPUT_TOKENS` does not raise it. Tool descriptions and `instructions` are truncated at 2 048 characters; tool search is on by default, so `instructions` is the server's most important text.
+- The output cap counts characters: 48 000 pass inline with no warning reaching the model, 104 000 are rejected (2.1.288: 60 000 too, the result stored in a file), `MAX_MCP_OUTPUT_TOKENS` does not raise it. Tool descriptions and `instructions` are truncated at 2 048 characters; tool search is on by default, so `instructions` is the server's most important text.
 - Elicitation (since 2.1.76, form and URL) works in both eras; with permission prompts bypassed the form still appears. The form is a flat object of primitives and enums; answers `accept | decline | cancel`; a URL ≤ ~8 000 characters. Sampling: no data; the Tasks extension: unsupported.
 - `_meta["anthropic/requiresUserInteraction"]: true` (≥ 2.1.199): a permission prompt on every call, even in `bypassPermissions`; no "don't ask again", allow rules ignored, a `PreToolUse` hook cannot approve it — the strongest consent primitive.
 - A call longer than 120 s goes to the background, runs to its end and returns its result as a notification; one held by an open elicitation form is exempt (≥ 11 min observed).
