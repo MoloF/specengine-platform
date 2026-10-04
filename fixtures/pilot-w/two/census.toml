@@ -1,0 +1,43 @@
+# Import config of the pilot-w/two fixture (docs/features/pilot-w.md): an
+# invented decision-log convention, different from pilot-w/one's in every
+# recognizer and in its `[layout]`: a page moved by its slug, a decision
+# defined in two documents, no index and no Tier 0. expected.json is the
+# `result` of `specengine-eval w --pilot fixtures/pilot-w/two` without the
+# `*_ms` timings.
+[corpus]
+roots = ["log", "pages", "ledger"]
+[front_matter]
+class_key = "type"
+header_table = '^Key$'
+[front_matter.key_map]
+"Outcome" = "state"
+"Owner" = "steward"
+[front_matter.value_map.state]
+"Agreed" = "accepted"
+[ids]
+regex = '^[A-Z]{3}-[0-9]{4}$'
+feature_prefixes = ["CRT"]
+[ids.legacy]
+"OLD" = "DEC"
+[tables]
+id_column = 1
+headerless = true
+text_column = 2
+[sections]
+id_attr = true
+[lists]
+lead_in = true
+separators = [" -"]
+[documents]
+id_path = '^log/(?P<id>[A-Z]{3}-[0-9]{4})\.md$'
+[code]
+roots = ["tools"]
+extensions = ["py"]
+[layout]
+records = "ledger"
+features = "topics"
+slug = '^pages/(?P<slug>[^/]+)/index\.md$'
+record_class = "decision"
+classes = [{ glob = "topics/**", class = "spec" }, { glob = "*/**", class = "decision" }]
+debt_expires = "2999-01-01"
+targets = { PRB = "section" }

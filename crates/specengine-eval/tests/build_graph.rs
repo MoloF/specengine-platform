@@ -1694,3 +1694,135 @@ fn code_crate_depends_on_exactly_the_parser_and_the_hash() {
     normal.sort_unstable();
     assert_eq!(normal, ["blake3", "tree-sitter", "tree-sitter-rust"]);
 }
+
+// ---------------------------------------------------------------------------
+// docs/features/pilot-w.md AC-09: `w` reaches `spec bundle` and `spec show`
+// through the CLI library; eval gains exactly that edge, the CLI nothing.
+// ---------------------------------------------------------------------------
+
+/// Direct dependencies of a workspace package by kind (`normal`, `dev`,
+/// `build`) and whether optional: (name, kind, optional), sorted.
+fn direct_dependencies(metadata: &Value, package: &str) -> Vec<(String, String, bool)> {
+    let package = metadata["packages"]
+        .as_array()
+        .expect("packages")
+        .iter()
+        .find(|p| p["name"] == package)
+        .unwrap_or_else(|| panic!("no workspace package {package}"));
+    let mut out: Vec<(String, String, bool)> = package["dependencies"]
+        .as_array()
+        .expect("dependencies")
+        .iter()
+        .map(|d| {
+            (
+                d["name"].as_str().unwrap().to_owned(),
+                d["kind"].as_str().unwrap_or("normal").to_owned(),
+                d["optional"].as_bool().unwrap_or(false),
+            )
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// AC-09: eval's direct normal dependencies are the set it had before `w`
+/// plus `specengine-cli` — a path dependency on the workspace crate, no
+/// features, not optional (M2: another dependency → red); its optional
+/// ones are unchanged.
+#[test]
+fn eval_direct_dependencies_gain_exactly_the_cli_library() {
+    let metadata = workspace_metadata();
+    let direct = direct_dependencies(&metadata, "specengine-eval");
+    let normal: Vec<&str> = direct
+        .iter()
+        .filter(|(_, kind, optional)| kind == "normal" && !optional)
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    assert_eq!(
+        normal,
+        [
+            "clap",
+            "serde",
+            "serde_json",
+            "specengine-cli",
+            "specengine-code",
+            "specengine-core",
+            "specengine-import",
+            "specengine-model",
+            "specengine-store",
+            "toml",
+        ],
+        "eval's direct normal dependencies"
+    );
+    let optional: Vec<&str> = direct
+        .iter()
+        .filter(|(_, kind, optional)| kind == "normal" && *optional)
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    assert_eq!(
+        optional,
+        ["libc", "proc-macro2", "quote", "specengine-ra", "syn"],
+        "eval's optional dependencies"
+    );
+    let cli = declared_dependency(&metadata, "specengine-eval", "specengine-cli");
+    assert!(cli["source"].is_null(), "a path dependency: {cli}");
+    let path = cli["path"].as_str().expect("a path dependency");
+    assert!(
+        Path::new(path).ends_with("crates/specengine-cli"),
+        "the workspace crate: {path}"
+    );
+    assert_eq!(
+        cli["features"].as_array().map(Vec::len),
+        Some(0),
+        "no features: {cli}"
+    );
+    assert_eq!(cli["uses_default_features"], true, "{cli}");
+    assert_eq!(cli["optional"], false, "{cli}");
+    assert_eq!(cli["req"], "*", "no version requirement: {cli}");
+
+    // The manifest entry itself is `{ path = "../specengine-cli" }`.
+    let text = std::fs::read_to_string(workspace_root().join("crates/specengine-eval/Cargo.toml"))
+        .expect("the eval manifest");
+    let manifest: toml::Table = text.parse().expect("TOML");
+    let entry = manifest["dependencies"]["specengine-cli"]
+        .as_table()
+        .expect("a table entry");
+    assert_eq!(entry.len(), 1, "{entry:?}");
+    assert_eq!(
+        entry.get("path").and_then(toml::Value::as_str),
+        Some("../specengine-cli")
+    );
+}
+
+/// AC-09: the CLI's own direct dependencies are unchanged by `w`: the
+/// model, core and store, `clap`, `serde`, `serde_json`, nothing else of
+/// any kind (its normal graph is pinned by
+/// `cli_normal_graph_is_model_core_store_without_measurement_mcp_or_rust_analyzer`,
+/// `CLI_FORBIDDEN` holding `specengine-eval`).
+#[test]
+fn cli_direct_dependencies_are_unchanged_by_w() {
+    let metadata = workspace_metadata();
+    let direct = direct_dependencies(&metadata, "specengine-cli");
+    let normal: Vec<&str> = direct
+        .iter()
+        .filter(|(_, kind, _)| kind == "normal")
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    assert_eq!(
+        normal,
+        [
+            "clap",
+            "serde",
+            "serde_json",
+            "specengine-core",
+            "specengine-model",
+            "specengine-store",
+        ],
+        "the CLI's direct normal dependencies"
+    );
+    assert!(
+        direct.iter().all(|(_, _, optional)| !optional),
+        "{direct:?}"
+    );
+    assert!(CLI_FORBIDDEN.contains(&"specengine-eval"));
+}

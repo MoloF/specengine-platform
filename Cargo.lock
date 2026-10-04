@@ -2596,6 +2596,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
+ "specengine-cli",
  "specengine-code",
  "specengine-core",
  "specengine-import",

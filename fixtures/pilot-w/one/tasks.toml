@@ -1,0 +1,15 @@
+# The tasks config of the pilot-w/one fixture (docs/features/pilot-w.md
+# "Tasks config"): the notebook's pages and flows are its tasks, its
+# lexicon is not; an area key routes a task to its Tier 1 README.
+[tasks]
+include = ["book/*.md", "book/flows/**"]
+exclude = ["book/lexicon.md"]
+
+[tier1]
+key = "area"
+default = "book/areas/README.md"
+
+[tier1.paths]
+"input" = "engine/README.md"
+"output" = "engine/out/README.md"
+"store" = "engine/store/README.md"

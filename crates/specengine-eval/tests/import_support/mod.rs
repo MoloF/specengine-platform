@@ -79,6 +79,8 @@ pub fn eval() -> Command {
         "SPECENGINE_CENSUS_CONFIG_B",
         "SPECENGINE_SCHEME_A",
         "SPECENGINE_SCHEME_B",
+        "SPECENGINE_TASKS_A",
+        "SPECENGINE_TASKS_B",
     ] {
         command.env_remove(variable);
     }
@@ -181,20 +183,21 @@ pub fn git_status(dir: &Path, pathspec: &str) -> String {
 }
 
 /// Every line of `git status --porcelain -- fixtures/` names one of the
-/// `fixtures/import-*` fixtures this task adds (untracked until the owner
-/// commits them), nothing else.
+/// `fixtures/import-*` fixtures or the `fixtures/pilot-w` ones
+/// (docs/features/pilot-w.md; untracked until the owner commits them),
+/// nothing else.
 pub fn assert_fixtures_status_clean() {
     let status = git_status(&repository_root(), "fixtures/");
     let foreign: Vec<&str> = status
         .lines()
         .filter(|line| {
             let path = line.get(3..).unwrap_or("");
-            !path.starts_with("fixtures/import-")
+            !path.starts_with("fixtures/import-") && !path.starts_with("fixtures/pilot-w/")
         })
         .collect();
     assert!(
         foreign.is_empty(),
-        "git status -- fixtures/ shows more than fixtures/import-*:\n{}",
+        "git status -- fixtures/ shows more than fixtures/import-* and fixtures/pilot-w:\n{}",
         foreign.join("\n")
     );
 }

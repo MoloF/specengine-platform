@@ -13,7 +13,7 @@ Built: `CLAUDE.md` "Layout" and each subtree's README; the crates' planned roles
 
 ## 2. Phases
 
-Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + MCP**, no web UI. That is enough to close the main requirement: reading tasks, sending them back for elaboration, approval, the discrepancy queue.
+Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + MCP**, no web UI. Enough for the main requirement: reading tasks, sending them back for elaboration, approval, the discrepancy queue.
 
 ### Phase 0. Decisions and spikes — done 2026-09-29
 
@@ -23,17 +23,16 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped (open questions: crate READMEs, `docs/canon/spec-c*`, `mcp-read.md`, `code-identity.md`, `pilot-schemes.md`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 (`tree`, `graph`, `show --links`) and 4 (`bundle`, `bundle_hash`), check increments 1–4 (CLI 2a.1 `check`, `export index`; 2a.2 `--staged`; 2b the gate; `enforce-introduced`; `--changed`; process rules, ADR-0031), index compaction (ADR-0028), index shards (ADR-0030), MCP stdio reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, resources), layer A identity (`qpath` target units, marker `[tiers]`, ambiguous RON paths; pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %), pilot schemes (a "before" `specengine.toml` per pilot; `parse`, `index`, `check` read both, read-only: §3 AC-10), import records, gaps and layout (record model, "before" report, after-tree compared on both pilots: §3 AC-6, §4.3; `docs/canon/import*.md`), token calibration (`tokens_est` fitted to `claude-opus-5-5`, `INDEX_FORMAT` 7).
-- Next: `pilot-w` (the rest of the pilots below).
-- **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W measured on 10 tasks per project. The order of full migration (§4) is chosen at the end of Phase 1 from the reports.
-- **From the Phase 0 spikes**:
-  - MCP: the `_meta["anthropic/maxResultSizeChars"]` lever (500 000) is declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does the lever act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
+- Shipped (open questions: crate READMEs, `docs/canon/*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 and 4 (`bundle`), check increments 1–4 (`check` to `--changed`, the gate, process rules ADR-0031), index compaction, shards (ADR-0028, ADR-0030), MCP stdio reads, layer A identity (pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %), pilot schemes (§3 AC-10), import records, gaps and layout (§3 AC-6, §4.3), token calibration, pilot W (§3 AC-1, `docs/canon/w-measurement.md`).
+- **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W on every task document. The owner picks the full-migration order (§4) from the reports.
+- Next: the owner names the migration order (decision table in `docs/features/pilot-w.md`).
 
 ### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner
 
 - Proposals (all kinds), questions with deduplication, decisions with `cost` and `canon:`, `apply_proposal` (patch by section, optional commit with provenance).
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `inbox`, `review`, `approve/reject`, `task …`, `round new/answer`.
+- MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_discrepancy`, `ask_question`, `propose_change`, `get_proposal`, `report_run`; `review_proposal`/`approve_task` with `requiresUserInteraction` and the consent-tool requirements of 07 §1.2 (the Phase 0 `review_proposal` is a demo skeleton, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE; MCP for agents is the `spec mcp` stdio bridge to the daemon (MCP HTTP transport after MVP, 07 §1.1).
 - **Plugin**: `.mcp.json`, hooks (`gate` fail-closed, session-start, touched, subagent-stop), prompts, stack-neutral roles and `/feature` (06 §8); stack roles come from a stack-profile plugin or the project (ADR-0027).
@@ -42,7 +41,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 ### Phase 3. Code and drift — ~2-3 weeks
 
 - Symbol index (layer A: tree-sitter; layer B: the Bevy `schedule_data` dump; layer C: `ra_ap_ide` per ADR-0020 — B or C is required for generic system instances, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`, `get_impact`.
-- Layer C: monikers for items under attribute proc macros (`#[tokio::main]`-style), which lose theirs when the proc-macro server runs — the scan must map an item through its attribute expansion (`crates/specengine-ra/README.md`).
+- Layer C: items under attribute proc macros (`#[tokio::main]`-style) lose their monikers with the proc-macro server on; the scan must map an item through its expansion (`crates/specengine-ra/README.md`).
 - Markers `@implements/@verifies/@configures/@assumes` (with revision `@N`), `spec.lock` with `file_blob`, drift cascade (blob OID → normalized text → AST), `spec verify [--tests] [--changed]` with Fix/Check/Pre-existing verdicts and exit codes 0/1/2, `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
 - Existing ID citations in code automatically become **weak** `mentions` links. Markers appear in new work and when code is touched; they are not added in bulk (ADR-0016).
 - Check codes lifted into constants are the first source of machine bindings `check → const → test`.
@@ -68,14 +67,14 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 
 | # | Criterion | How it is checked |
 |---|---|---|
-| AC-1 | **Task W**: median on the pilot projects ≤ 40 KB or the project's own target | `bundles` log on 10 real tasks per pilot project |
+| AC-1 | **Task W**: median on the pilot projects ≤ 40 KB or the project's own target | `bundles` log on every task document per pilot. **Measured 2026-10-05** (`specengine-eval w`, budget 10 000, debug; A / B): tasks 70 / 51; median (p90, max) W_before 533 076 (743 566, 922 383) / 225 562 (396 166, 483 850), W_after 43 061 (45 048, 45 760) / 27 233 (39 154, 41 216), W_after_followups 101 031 (160 515, 200 347) / 76 516 (306 313, 417 480); third_step 70 / 21, incomplete 67 / 15, refused 0, unresolved 100 / 0, wiki_links 1 030 / 2 216; 40 KB (not an AC) unmet on both W_after_followups medians, met on B's W_after; bundle ms median 2 035 / 640. Phase 2 re-measures: `bundles` log, `--task` at `bundle_task`, follow-ups, live-check tasks |
 | AC-2 | **AST isolation**: `cargo fmt`, edits to comments and neighbouring functions do not change a symbol's hash | property test over all symbols of the pilot projects. **Phase 0 baseline met for fmt and comments**: 100 % on both pilots (`specengine-eval ast-hash`, 05 §5.2); the property test is Phase 3 |
 | AC-3 | **Single door**: no agent-facing MCP tool modifies spec files | call every tool on a temp repo + `git status` is empty |
 | AC-4 | **Task approval**: without an approved task an agent cannot write a file in `zones.code` (`selective` mode); same with the daemon stopped; in `observe` mode the write passes and a finding is recorded | hook integration test |
 | AC-4b | **Nothing is blocked by a discrepancy** (ADR-0012): an open proposal does not change the task status, several proposals can be open on one node, applying the second one rebases | test |
 | AC-5 | **No repeated questions**: `ask_question` on an already answered question returns the decision instead of opening a new one | test: a repeated call yields `decision`, the question count does not grow |
 | AC-6 | **Lossless import**: all records of the corpus are imported, verbatim-text hashes match; **the project's full test suite is green** after migration | importer report + the project's `cargo test`. **Dry run met 2026-10-04** (`specengine-eval layout`): A 2 242 of 2 249 definitions matched (7 headers core rejects), B 251 of 251; none unexplained, enforce clean; B one residue, a corpus fact. Suite: at migration |
-| AC-7 | **Bundle determinism**: one state → one `bundle_hash` | test |
+| AC-7 | **Bundle determinism**: one state → one `bundle_hash` | test. **Re-confirmed on both pilots** 2026-10-05 (`w`: every bundle twice, `nondeterministic` 0) |
 | AC-8 | **Machine-verified**: `verified` is set only after SpecEngine itself runs the `@verifies` tests | test |
 | AC-9 | **Staleness**: editing a node from the `spec_snapshot` of a `ready` task makes it `stale`, the bundle shows the diff | test |
 | AC-10 | **Performance**: full symbol hash ≤ 2 s per 300 kLOC, full index ≤ 10 s for hundreds of md files; per-file increment ≤ 200 ms. The `ra_ap_ide` layer is measured separately | benchmark on the pilot projects. **`ra_ap_ide` layer measured in Phase 0** (`specengine-eval ra`, 05 §5.1): cold 33–65 s, warm pass ≈ 0.2 s, group peak ≤ 3.76 GiB. Index (`specengine-eval index`, 2026-10-03, dev profile): `full_ms` A 3 637, B 1 373; `one_file_ms` A 184, B 76 |
@@ -115,7 +114,7 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 
 ### 4.3. Census findings (Phase 0, both pilots)
 
-Each finding became a per-corpus import config setting or rule, not core code (ADR-0008); how each works now: `crates/specengine-import/README.md`, `docs/canon/import.md`; pilot counts: `docs/features/import-records.md` AC-10. (a) Link base → `[links] base`, `[paths] link_base`. (b) Wiki links to 8 targets that exist nowhere: genuine debt → the baseline (§4.2 item 3). (c) Legacy prefixes → `[ids.legacy]` aliases (§4.2 item 4). (d) Definition vs reference → `[definitions]`. (e) Locally numbered tables → `tables.local_number` (candidates for §4.1's feature-scoped IDs). Found at import: (f) criteria as list items → `[lists]`; (g) field/value table headers → `header_table`, key and value maps; (h) hyphenless codes → `hyphenless`, counted only (ADR-0009 needs a superseding ADR before that pilot migrates).
+Each finding is a per-corpus import setting, not core code (ADR-0008; `crates/specengine-import/README.md`, `docs/canon/import.md`; counts: `docs/features/import-records.md` AC-10): (a) link base → `[links] base`, `[paths] link_base`; (b) wiki links to 8 targets that exist nowhere → the baseline (§4.2.3); (c) legacy prefixes → `[ids.legacy]` aliases (§4.2.4); (d) definition vs reference → `[definitions]`; (e) locally numbered tables → `tables.local_number` (candidates for §4.1's feature-scoped IDs); at import: (f) criteria as list items → `[lists]`; (g) field/value table headers → `header_table`, key and value maps; (h) hyphenless codes → `hyphenless`, counted only (ADR-0009 needs a superseding ADR before that pilot migrates).
 
 ## 5. Risks
 
@@ -125,9 +124,9 @@ Each finding became a per-corpus import config setting or rule, not core code (A
 | The queue grows faster than the owner processes it | medium | nothing is blocked (ADR-0012), sorting by `severity` and number of dependent `@assumes`; batched rounds; metric "decided differently from the working answer" |
 | Agents do not add markers | medium | rules in plugin roles; `unbound` on the panel; `SubagentStop` reminder; check in `spec verify` |
 | The tool eats time from the main projects (scope creep) | high | MVP = CLI + MCP; live UI only after live-task validation; "enforcement first, the bot never first"; multi-user server mode out of plan (ADR-0017) |
-| The core silently bends toward one project | medium | pilot projects of different nature are connected from Phase 1 (ADR-0008); specifics only in `specengine.toml` and the importer; core tests on fixtures of all pilots |
-| Bevy 0.20 changes the schedule API | medium | tree-sitter detector covered by `fixtures/bevy-mini`; observers behind a Bevy-version gate (05 §5.1); the `schedule_data` dump schema is unstable across minors — re-run `specengine-eval bevy-detector --dump` on every Bevy upgrade |
-| The MCP protocol changes again | medium | rmcp + both eras; logic in core, MCP is a thin adapter; Claude Code behaviour verified on 2.1.283 (MCP README), re-run the checks on upgrade; Streamable HTTP without GET → 405 not measured (stdio-only build) |
-| rust-analyzer memory near the threshold | medium | whole-group peak 3.76 GiB against 4 GiB (≈ 6 % headroom) on the heavier pilot; re-measure with `specengine-eval ra` when a pilot grows or `ra_ap` is bumped; fallback: load without the proc-macro server (≤ 3.2 GiB) |
+| The core silently bends toward one project | medium | pilots of different nature connected from Phase 1 (ADR-0008); specifics only in `specengine.toml` and the importer; core tests on fixtures of all pilots |
+| Bevy 0.20 changes the schedule API | medium | tree-sitter detector covered by `fixtures/bevy-mini`; observers behind a Bevy-version gate (05 §5.1); the `schedule_data` dump schema changes across minors: re-run `specengine-eval bevy-detector --dump` per Bevy upgrade |
+| The MCP protocol changes again | medium | rmcp + both eras; logic in core, MCP a thin adapter; Claude Code verified on 2.1.283 (MCP README), re-check on upgrade; Streamable HTTP without GET → 405 unmeasured (stdio-only build) |
+| rust-analyzer memory near the threshold | medium | whole-group peak 3.76 of 4 GiB (≈ 6 % headroom) on the heavier pilot; re-measure (`specengine-eval ra`) when a pilot grows or `ra_ap` is bumped; fallback: no proc-macro server (≤ 3.2 GiB) |
 | HTTP hook is open when the daemon is down | known | `command` hook with exit 2 + managed-deny |
 | Specs do not reduce the cost of change (O(n) cross-cutting edits) | fact | do not promise it; show the blast radius via `get_impact` |

@@ -23,6 +23,9 @@ specengine-model = { path = "../specengine-model" }
 specengine-core = { path = "../specengine-core" }
 # Subcommand `index`: the spec index (docs/features/spec-index.md).
 specengine-store = { path = "../specengine-store" }
+# Subcommand `w`: `spec bundle` and `spec show` through the CLI library, as
+# MCP calls them (docs/features/pilot-w.md).
+specengine-cli = { path = "../specengine-cli" }
 specengine-ra = { path = "../specengine-ra", optional = true }
 clap.workspace = true
 serde.workspace = true

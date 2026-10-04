@@ -1,0 +1,47 @@
+# Import config of the pilot-w/one fixture (docs/features/pilot-w.md): an
+# invented requirements-notebook convention and its `[layout]`, with a
+# Tier 0 guide, an index root with two shards, a Tier 1 key table and a
+# generated document inside the task globs. The default corpus of
+# `specengine-eval w` without --pilot; expected.json is its `result`
+# without the `*_ms` timings.
+[corpus]
+roots = ["book"]
+exclude = ["book/index*.md"]
+[front_matter]
+class_key = "sort"
+header_table = '^Attribute$'
+[front_matter.key_map]
+"Stage" = "status"
+"Keeper" = "owner"
+"Serial" = "serial"
+"Weight" = "weight"
+[front_matter.value_map.status]
+"Settled" = "accepted"
+[front_matter.value_map.class]
+"register" = "canon"
+[ids]
+regex = '^(?P<prefix>[A-Z]{2,4})-[0-9]{2,3}$'
+feature_prefixes = ["CK"]
+[ids.legacy]
+"OLDR" = "NEED"
+"LAW" = "RULE"
+[tables]
+id_header = '^Code$'
+text_header = '^Wording$'
+[sections]
+id_attr = true
+[lists]
+lead_in = true
+separators = [":"]
+[documents]
+id_key = "serial"
+[code]
+roots = ["engine"]
+extensions = ["rs"]
+[layout]
+records = "book/atoms"
+features = "book/flows"
+classes = [{ glob = "book/notes-generated.md", class = "generated" }, { glob = "book/flows/**", class = "spec" }, { glob = "book/**", class = "canon" }]
+task_box_key = "ticked"
+debt_expires = "2999-12-31"
+targets = { RULE = "section", ASK = "file" }

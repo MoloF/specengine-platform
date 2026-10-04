@@ -59,7 +59,7 @@ use crate::harness::{self, Corpus};
 pub const FIXTURE: &str = "import-layout/one";
 
 /// The measurement's directory under `--out`.
-const MEASUREMENT: &str = "layout";
+pub(crate) const MEASUREMENT: &str = "layout";
 /// The after-tree's directory beside the detail files.
 const TREE: &str = "tree";
 /// The index of the tree.
@@ -105,17 +105,17 @@ const AS_WRITTEN: &str = "-as-written";
 
 /// What the run needs, read and emitted before anything is written.
 pub struct Setup {
-    config: CensusConfig,
-    scheme: Scheme,
+    pub(crate) config: CensusConfig,
+    pub(crate) scheme: Scheme,
     /// The before scheme loaded by the store, without a baseline.
-    before: CheckSetup,
-    today: String,
-    import: Import,
-    sources: Vec<SourceDocument>,
-    layout: Layout,
+    pub(crate) before: CheckSetup,
+    pub(crate) today: String,
+    pub(crate) import: Import,
+    pub(crate) sources: Vec<SourceDocument>,
+    pub(crate) layout: Layout,
     /// `[paths] index` and the shards of the `index = true` entry.
-    index_outputs: Vec<String>,
-    emit_ms: u128,
+    pub(crate) index_outputs: Vec<String>,
+    pub(crate) emit_ms: u128,
 }
 
 /// Reads the census config (`--config`, as `import`), the before scheme
@@ -207,9 +207,10 @@ pub fn prepare(
 
 /// Refuses a run that could write into the corpus or follow a link out of
 /// `--out` (`docs/features/import-layout.md` AC-08): the canonical corpus
-/// root under `--out` or `--out` under it, a symlinked `<out>/layout` or
-/// `<out>/layout/<label>`. Runs before anything is created.
-pub fn check_out(root: &Path, out: &Path, label: &str) -> Result<(), String> {
+/// root under `--out` or `--out` under it, a symlinked `<out>/<measurement>`
+/// or `<out>/<measurement>/<label>` (`layout`'s or `w`'s own directory).
+/// Runs before anything is created.
+pub fn check_out(root: &Path, out: &Path, measurement: &str, label: &str) -> Result<(), String> {
     let out = harness::absolutize(out);
     if root.starts_with(&out) || out.starts_with(root) {
         return Err(format!(
@@ -218,7 +219,7 @@ pub fn check_out(root: &Path, out: &Path, label: &str) -> Result<(), String> {
             root.display()
         ));
     }
-    let measurement = out.join(MEASUREMENT);
+    let measurement = out.join(measurement);
     for dir in [measurement.join(label), measurement] {
         if is_symlink(&dir) {
             return Err(format!(
@@ -418,6 +419,16 @@ pub struct Detail {
     pub layout_ms: u128,
 }
 
+/// What [`write_tree`] wrote: the documents and index outputs, the notes
+/// on paths it skipped, and the emitted config as the store loads it.
+pub(crate) struct WrittenTree {
+    /// Tree files written: documents and index outputs.
+    pub(crate) written: usize,
+    pub(crate) notes: Vec<Note>,
+    /// The emitted `specengine.toml`, loaded as `spec check` loads it.
+    pub(crate) emitted: CheckSetup,
+}
+
 /// The tree on disk, before the verifier reads it.
 struct Staged {
     out_dir: PathBuf,
@@ -430,10 +441,10 @@ struct Staged {
 
 /// A verifier diagnostic (never fatal).
 #[derive(Debug, Clone, Serialize)]
-struct Note {
-    path: String,
-    line: Option<usize>,
-    message: String,
+pub(crate) struct Note {
+    pub(crate) path: String,
+    pub(crate) line: Option<usize>,
+    pub(crate) message: String,
 }
 
 pub fn run(corpus: &Corpus, setup: Setup) -> Result<LayoutResult, String> {
@@ -459,6 +470,24 @@ pub(crate) fn run_tampered(
     finish(corpus, setup, staged)
 }
 
+/// Writes the after-tree into the empty directory `tree` as `layout`
+/// writes it before its verifier reads it: the tree's documents, the
+/// emitted `specengine.toml` (its roots covering the index outputs), then
+/// the index outputs the emitted config renders over the written tree. No
+/// baseline. `w` reads the tree it leaves (`docs/canon/w-measurement.md`;
+/// `docs/features/pilot-w.md` AC-04).
+pub(crate) fn write_tree(tree: &Path, setup: &Setup) -> Result<WrittenTree, String> {
+    let mut notes = Vec::new();
+    let mut written = write_documents(tree, setup, &mut notes)?;
+    let emitted = load_emitted(tree)?;
+    written += write_index_outputs(tree, &emitted, &mut notes)?;
+    Ok(WrittenTree {
+        written,
+        notes,
+        emitted,
+    })
+}
+
 /// Empties `<out>/layout/<label>/`, writes the tree's documents and the
 /// emitted `specengine.toml` (its roots covering the index outputs).
 fn stage(corpus: &Corpus, setup: &Setup) -> Result<Staged, String> {
@@ -469,9 +498,22 @@ fn stage(corpus: &Corpus, setup: &Setup) -> Result<Staged, String> {
     fs::create_dir_all(&tree)
         .map_err(|error| format!("cannot create {}: {error}", tree.display()))?;
     let mut notes = Vec::new();
+    let written = write_documents(&tree, setup, &mut notes)?;
+    Ok(Staged {
+        out_dir,
+        tree,
+        written,
+        notes,
+        stage_ms: started.elapsed().as_millis(),
+    })
+}
+
+/// The tree's documents and the emitted `specengine.toml`; the documents
+/// written.
+fn write_documents(tree: &Path, setup: &Setup, notes: &mut Vec<Note>) -> Result<usize, String> {
     let mut written = 0;
     for file in &setup.layout.files {
-        if write_file(&tree, &file.path, file.content.as_bytes(), &mut notes)? {
+        if write_file(tree, &file.path, file.content.as_bytes(), notes)? {
             written += 1;
         }
     }
@@ -489,20 +531,51 @@ fn stage(corpus: &Corpus, setup: &Setup) -> Result<Staged, String> {
     let scheme_file = tree.join(CONFIG_FILE);
     fs::write(&scheme_file, scheme_toml)
         .map_err(|error| format!("cannot write {}: {error}", scheme_file.display()))?;
-    Ok(Staged {
-        out_dir,
-        tree,
-        written,
-        notes,
-        stage_ms: started.elapsed().as_millis(),
+    Ok(written)
+}
+
+/// The emitted config at the tree's root, loaded by the store as `spec
+/// check` loads it, without a baseline.
+fn load_emitted(tree: &Path) -> Result<CheckSetup, String> {
+    let scheme_file = tree.join(CONFIG_FILE);
+    load_check(&NamedBytes::read(CONFIG_FILE, &scheme_file), None).map_err(|report| {
+        format!(
+            "the emitted {CONFIG_FILE} does not load: {}",
+            refusal(&report)
+        )
     })
 }
 
+/// The index outputs of the emitted config's `index = true` generator
+/// over the tree as written; none without the generator and `[paths]
+/// index`. The outputs written.
+fn write_index_outputs(
+    tree: &Path,
+    emitted: &CheckSetup,
+    notes: &mut Vec<Note>,
+) -> Result<usize, String> {
+    let mut written = 0;
+    if let (Some(generator), Some(index_path)) = (
+        emitted.config.index_generator(),
+        emitted.project.paths.index.clone(),
+    ) {
+        let tree_source =
+            WorkingTree::new(tree, &emitted.project.paths).map_err(|error| error.to_string())?;
+        let input = check_input(&tree_source, &emitted.project.scheme);
+        for output in render_index_set(&input, &index_path, generator) {
+            if write_file(tree, &output.path, output.bytes.as_bytes(), notes)? {
+                written += 1;
+            }
+        }
+    }
+    Ok(written)
+}
+
 /// Removes an earlier run's directory (this measurement's own scratch);
-/// a symbolic link there or at `<out>/layout` is refused, never followed
-/// nor removed: nothing outside `<out>/layout/<label>/` is deleted
-/// (AC-08).
-fn clear(dir: &Path) -> io::Result<()> {
+/// a symbolic link there or at its parent (`<out>/layout`, `<out>/w`) is
+/// refused, never followed nor removed: nothing outside the directory is
+/// deleted (AC-08).
+pub(crate) fn clear(dir: &Path) -> io::Result<()> {
     let parent_link = dir.parent().is_some_and(is_symlink);
     match fs::symlink_metadata(dir) {
         _ if parent_link => Err(io::Error::other("a symbolic link is in its path")),
@@ -558,26 +631,10 @@ fn finish(corpus: &Corpus, setup: Setup, staged: Staged) -> Result<LayoutResult,
 
     // The emitted config, loaded by the store as `spec check` loads it.
     let scheme_file = tree.join(CONFIG_FILE);
-    let emitted =
-        load_check(&NamedBytes::read(CONFIG_FILE, &scheme_file), None).map_err(|report| {
-            format!(
-                "the emitted {CONFIG_FILE} does not load: {}",
-                refusal(&report)
-            )
-        })?;
+    let emitted = load_emitted(&tree)?;
     let tree_source =
         WorkingTree::new(&tree, &emitted.project.paths).map_err(|error| error.to_string())?;
-    if let (Some(generator), Some(index_path)) = (
-        emitted.config.index_generator(),
-        emitted.project.paths.index.clone(),
-    ) {
-        let input = check_input(&tree_source, &emitted.project.scheme);
-        for output in render_index_set(&input, &index_path, generator) {
-            if write_file(&tree, &output.path, output.bytes.as_bytes(), &mut notes)? {
-                written += 1;
-            }
-        }
-    }
+    written += write_index_outputs(&tree, &emitted, &mut notes)?;
 
     // The verifier: every tree file re-read and parsed by core.
     let docs = read_tree(&tree, &tree_source, &setup, &emitted, &mut notes)?;

@@ -1,0 +1,9 @@
+# The tasks config of the pilot-w/two fixture (docs/features/pilot-w.md
+# "Tasks config"): the pages and the log are the tasks, the problems page
+# is not; no area key, so every task reads the default Tier 1 README.
+[tasks]
+include = ["pages/**/*.md", "log/*.md"]
+exclude = ["log/problems.md"]
+
+[tier1]
+default = "tools/README.md"

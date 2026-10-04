@@ -1,0 +1,25 @@
+# The "before" scheme of the pilot-w/one fixture: the notebook's own
+# `specengine.toml`, read by `specengine-eval w --scheme`. Its Tier 0, its
+# index root and the two shards of its index generator are the reading
+# protocol W_before charges.
+[project]
+name = "notebook"
+slug = "notebook"
+
+[paths]
+roots = ["book"]
+tier0 = "GUIDE.md"
+index = "book/index.md"
+exclude = ["book/index*.md"]
+
+[ids]
+NEED = { kind = "requirement", width = 2 }
+RULE = { kind = "rule",        width = 2 }
+ASK  = { kind = "question",    width = 3 }
+CK   = { kind = "criterion",   width = 2, scope = "feature" }
+
+[[generators]]
+command = "spec export index"
+writes  = ["book/index.md", "book/index-a.md", "book/index-b.md"]
+index   = true
+shards  = [{ path = "book/index-b.md", claims = ["book/**"] }, { path = "book/index-a.md", claims = ["book/flows/**"] }]

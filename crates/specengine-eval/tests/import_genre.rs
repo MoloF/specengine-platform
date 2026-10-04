@@ -19,6 +19,10 @@
 //! `src`) and the eval `layout` module, and the forbidden set to both
 //! `fixtures/import-layout/*/census.toml` configs with their `[layout]`;
 //! each layout rule is non-zero in both layout fixtures' `expected.json`.
+//!
+//! docs/features/pilot-w.md AC-09 extends the scan to the eval `w` module
+//! and the forbidden set to both `fixtures/pilot-w/*` census configs and
+//! tasks configs (their globs, key, paths and `[tier1.paths]` values).
 
 mod import_support;
 
@@ -30,6 +34,9 @@ use import_support::*;
 
 /// The two invented conventions of docs/features/import-layout.md.
 const LAYOUT_FIXTURES: [&str; 2] = ["import-layout/one", "import-layout/two"];
+
+/// The two invented conventions of docs/features/pilot-w.md.
+const W_FIXTURES: [&str; 2] = ["pilot-w/one", "pilot-w/two"];
 
 /// Every `.rs` file of the import engine, and the eval `import` module.
 fn scanned_sources() -> Vec<PathBuf> {
@@ -48,6 +55,7 @@ fn scanned_sources() -> Vec<PathBuf> {
     walk(&root.join("crates/specengine-import/src"), &mut sources);
     sources.push(root.join("crates/specengine-eval/src/import.rs"));
     sources.push(root.join("crates/specengine-eval/src/layout.rs"));
+    sources.push(root.join("crates/specengine-eval/src/w.rs"));
     sources.sort();
     sources
 }
@@ -195,6 +203,14 @@ fn forbidden() -> BTreeSet<String> {
     for name in LAYOUT_FIXTURES {
         strings.extend(convention_strings(
             &fs::read_to_string(fixture_config(name)).expect("layout fixture config"),
+        ));
+    }
+    for name in W_FIXTURES {
+        strings.extend(convention_strings(
+            &fs::read_to_string(fixture_config(name)).expect("pilot-w fixture config"),
+        ));
+        strings.extend(tasks_config_strings(
+            &fs::read_to_string(fixture_dir(name).join("tasks.toml")).expect("tasks config"),
         ));
     }
     let scratch = Scratch::new("genre");
@@ -592,6 +608,78 @@ fn every_layout_rule_is_non_zero_in_both_layout_fixtures() {
                 .iter()
                 .any(|(name, value)| layout_count(value, path, name) > 0),
             "{path} is zero in both layout fixtures"
+        );
+    }
+}
+
+// ------------------------------------------------ docs/features/pilot-w.md
+
+/// Every string of a tasks config: its globs, its key, its paths and the
+/// `[tier1.paths]` keys (the key's values, a convention's area names).
+fn tasks_config_strings(text: &str) -> BTreeSet<String> {
+    let table: toml::Table = toml::from_str(text).expect("a tasks config");
+    fn walk(value: &toml::Value, out: &mut BTreeSet<String>) {
+        match value {
+            toml::Value::String(text) => {
+                out.insert(text.clone());
+            }
+            toml::Value::Array(items) => items.iter().for_each(|item| walk(item, out)),
+            toml::Value::Table(table) => table.values().for_each(|item| walk(item, out)),
+            _ => {}
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(&toml::Value::Table(table.clone()), &mut out);
+    if let Some(paths) = table
+        .get("tier1")
+        .and_then(|tier1| tier1.get("paths"))
+        .and_then(toml::Value::as_table)
+    {
+        out.extend(paths.keys().cloned());
+    }
+    out
+}
+
+/// AC-09: the scan reads the eval `w` module (a literal only it holds is
+/// found), and the forbidden set holds both tasks configs' strings — so a
+/// fixture glob, key, path or area value written into `w.rs` turns
+/// `no_literal_of_the_engine_names_a_fixture_convention` red (M1).
+#[test]
+fn the_scan_covers_the_w_module_and_the_tasks_configs() {
+    let scanned: Vec<String> = scanned_sources()
+        .iter()
+        .map(|path| relative(path))
+        .collect();
+    assert!(
+        scanned
+            .iter()
+            .any(|path| path == "crates/specengine-eval/src/w.rs"),
+        "w.rs is not scanned: {scanned:?}"
+    );
+    let probes = BTreeSet::from(["below this bundle's minimum".to_owned()]);
+    let (found, _) = convention_literals(&probes);
+    assert!(
+        found
+            .iter()
+            .any(|hit| hit.starts_with("crates/specengine-eval/src/w.rs:")),
+        "{found:?}"
+    );
+    let forbidden = forbidden();
+    for sample in [
+        "book/*.md",               // [tasks] include (one)
+        "book/lexicon.md",         // [tasks] exclude (one)
+        "area",                    // [tier1] key (one)
+        "book/areas/README.md",    // [tier1] default (one)
+        "input",                   // a [tier1.paths] key (one)
+        "engine/out/README.md",    // a [tier1.paths] value (one)
+        "pages/**/*.md",           // [tasks] include (two)
+        "log/problems.md",         // [tasks] exclude (two)
+        "tools/README.md",         // [tier1] default (two)
+        "book/notes-generated.md", // a [layout] classes glob (one)
+    ] {
+        assert!(
+            forbidden.contains(sample),
+            "{sample:?} is in the forbidden set"
         );
     }
 }

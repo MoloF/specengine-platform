@@ -1,0 +1,70 @@
+{
+  "budget": {
+    "source": "default",
+    "tokens": 10000
+  },
+  "bytes_per_token": 2.1,
+  "citations": {
+    "unchecked": 0,
+    "unresolved": 3,
+    "wiki_links": 0
+  },
+  "docs_needed": {
+    "max": 3,
+    "median": 1,
+    "p90": 3
+  },
+  "failed": 0,
+  "fill_percent": {
+    "max": 9.5,
+    "median": 1.2
+  },
+  "followups": {
+    "bytes": 0,
+    "incomplete": 0,
+    "refs": 0,
+    "truncated": 0
+  },
+  "nondeterministic": 0,
+  "refused": 0,
+  "slots": {
+    "index": 0,
+    "shard": 0,
+    "tier0": 0,
+    "tier1": {
+      "default": 6,
+      "key": 0,
+      "none": 0
+    },
+    "unmapped": 0
+  },
+  "targets": {
+    "header": 0,
+    "not_included": 0,
+    "outline": 0,
+    "refs": 18,
+    "text": 20
+  },
+  "tasks": 6,
+  "third_step": 0,
+  "w_after": {
+    "max": 2074,
+    "median": 349,
+    "p90": 2074
+  },
+  "w_after_followups": {
+    "max": 2074,
+    "median": 349,
+    "p90": 2074
+  },
+  "w_before": {
+    "max": 1135,
+    "median": 200,
+    "p90": 1135
+  },
+  "worst": {
+    "w_after": "task-3",
+    "w_after_followups": "task-3",
+    "w_before": "task-5"
+  }
+}

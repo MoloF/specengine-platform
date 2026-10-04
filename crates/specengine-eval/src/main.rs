@@ -19,6 +19,7 @@ mod parse;
 #[cfg(all(feature = "ra", unix))]
 mod ra;
 mod ron;
+mod w;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -83,6 +84,14 @@ enum Measurement {
     /// `--config` as `import` (with its `[layout]`), `--scheme` as `check`
     /// (the before scheme).
     Layout(LayoutArgs),
+    /// Task W before and after (`docs/canon/w-measurement.md`): every task
+    /// document of `--tasks` replayed twice over the same targets, the
+    /// corpus's reading protocol on the untouched corpus and `spec bundle`
+    /// (the CLI library) on the after-tree `layout` writes, under
+    /// `--out/w/<label>/`; follow-up reads by `spec show`, every bundle
+    /// recomputed once more in reverse order. `--config`, `--scheme` and
+    /// `--today` as `layout`.
+    W(WArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -180,6 +189,23 @@ pub struct LayoutArgs {
     /// default the UTC date.
     #[arg(long, value_name = "DATE")]
     pub today: Option<String>,
+}
+
+/// `w`: `layout`'s arguments plus the tasks config and the budget.
+#[derive(Args, Clone)]
+pub struct WArgs {
+    #[command(flatten)]
+    pub layout: LayoutArgs,
+    /// The tasks config (`docs/features/pilot-w.md` AC-01);
+    /// read-only. Default: `SPECENGINE_TASKS_A` / `_B` for `--label
+    /// pilot-a` / `pilot-b` when set, else `tasks.toml` at the corpus root.
+    /// Missing or invalid: refused (exit 2) with `file:line: message`.
+    #[arg(long, value_name = "TOML")]
+    pub tasks: Option<PathBuf>,
+    /// The budget of every bundle, estimated tokens, 1 to 4294967295;
+    /// default 10000. Anything else: refused (exit 2).
+    #[arg(long, value_name = "N")]
+    pub budget: Option<u64>,
 }
 
 /// `bevy-detector`: the shared arguments plus the optional schedule dump.
@@ -323,7 +349,7 @@ fn main() -> ExitCode {
                 &args.common,
                 layout::FIXTURE,
                 move |root: &Path| {
-                    layout::check_out(root, &out, &run_label)?;
+                    layout::check_out(root, &out, layout::MEASUREMENT, &run_label)?;
                     layout::prepare(
                         root,
                         config.as_deref(),
@@ -333,6 +359,16 @@ fn main() -> ExitCode {
                     )
                 },
                 layout::run,
+            )
+        }
+        Measurement::W(args) => {
+            let run_label = harness::label_of(&args.layout.common).to_owned();
+            measure_with(
+                w::MEASUREMENT,
+                &args.layout.common,
+                w::FIXTURE,
+                |root: &Path| w::prepare(root, &args, &run_label),
+                w::run,
             )
         }
         Measurement::BevyDetector(args) => {

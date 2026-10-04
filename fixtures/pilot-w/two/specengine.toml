@@ -1,0 +1,16 @@
+# The "before" scheme of the pilot-w/two fixture: the decision log's own
+# `specengine.toml`, read by `specengine-eval w --scheme`. It names no
+# Tier 0, no index and no generator: W_before charges a task's Tier 1 and
+# its documents alone.
+[project]
+name = "decision-log"
+slug = "decision-log"
+
+[paths]
+roots = ["log", "pages", "ledger"]
+
+[ids]
+DEC = { kind = "decision",  width = 4 }
+PRB = { kind = "problem",   width = 4 }
+CRT = { kind = "criterion", width = 4, scope = "feature" }
+
