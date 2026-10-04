@@ -3,9 +3,9 @@
 //! `spec index` (the CLI library) created: no table, index or trigger is
 //! added (the `CREATE` statements in the database files, read as bytes as
 //! the CLI's `bundle_config.rs` does: no SQLite library in this crate's
-//! tests). `INDEX_FORMAT` 6, `format_history.txt` and the CLI's JSON key
+//! tests). `INDEX_FORMAT` 7, `format_history.txt` and the CLI's JSON key
 //! sets are pinned by the CLI's own tests (`bundle_config.rs`
-//! `ac16_index_format_stays_six`, the key-set tests of `tree.rs`,
+//! `ac16_index_format_is_seven`, the key-set tests of `tree.rs`,
 //! `search.rs`/`bounds.rs`, `show.rs`, `bundle.rs`).
 //!
 //! M: a log table.

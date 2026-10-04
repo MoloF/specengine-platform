@@ -1,1 +1,1 @@
-{"model":null,"date":null,"counts":{"english":null,"russian":null,"mixed":null,"code-block":null,"table":null}}
+{"model":"claude-opus-5-5","date":"2026-10-04","method":"Anthropic count_tokens; one user message holding the file's text; counts = input_tokens - overhead","baseline":{"text":"x","input_tokens":9},"overhead":8,"input_tokens":{"english":80,"russian":94,"mixed":66,"code-block":150,"table":118},"counts":{"english":72,"russian":86,"mixed":58,"code-block":142,"table":110}}

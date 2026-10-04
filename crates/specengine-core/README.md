@@ -57,7 +57,7 @@ Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both
 
 ## Token estimator
 
-`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 270, other ASCII 500, whitespace 150, Cyrillic 500, other 1000; a document costs the whole file, a section its span; saturating `u32`. **Uncalibrated** and conservative: `fixtures/token-calibration/` has null `reference.json` counts, and AC-15 (±15 % per sample, sum ≤ 5 % below) waits `#[ignore]`d for them (Q4).
+`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 350, other ASCII 1400, whitespace 150, Cyrillic 450, other 1000; a document costs the whole file, a section its span; saturating `u32`. Calibrated against `claude-opus-5-5` (`count_tokens`, 2026-10-04: `fixtures/token-calibration/reference.json`): each sample ±15 %, sum not below (AC-15); a new tokenizer: a new reference and `INDEX_FORMAT`.
 
 ## Open owner questions
 
@@ -66,7 +66,7 @@ Working answer (the code) → what the other answer triggers.
 - Q1 (parser libraries): the pins above, default features off, gaps reported, never swapped silently; `serde-saphyr`'s unpinned transitive crates (04 §6) and `serde_json` as a normal dependency await acknowledgement.
 - Q2 (kind vocabulary): answered by ADR-0031 (`docs/canon/architecture.md#universal`).
 - Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0026 / ADR-0018 with a `#layout` diff.
-- Q4 (reference token counts): filled → AC-15 un-ignored.
+- Q4 answered: Token estimator.
 - Q5 (raw Russian test text): self-written, only in `fixtures/{spec-b,token-calibration}/`, exempt in `anonymity.rs`. "Yes" → an ADR amending ADR-0024 (`#language`); "no" → escapes built at test time.
 - Q6 answered: invalid YAML scalars quoted; `dogfood.rs` parses strictly.
 

@@ -40,4 +40,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped
 - [docs/features/spec-index.md](features/spec-index.md) shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped
+- [docs/features/token-calibration.md](features/token-calibration.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

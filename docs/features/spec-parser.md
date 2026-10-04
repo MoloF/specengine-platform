@@ -31,7 +31,7 @@ Tests in `crates/specengine-core/tests/` unless named; AC-01–03 in `specengine
 - [x] AC-12 `links.rs`: the stamina mechanic's declared links with spans, `parent` not a link, the citation's `src` = `RULE-STAM-REGEN`, `uses_terms` kept as unknown. Mutation: `src` always the document → red.
 - [x] AC-13 `records.rs`: kind from `[ids]`; another declared → `kind-mismatch`, declared kept. Mutation: prefix kind wins → red.
 - [x] AC-14 `genre.rs`: `fixtures/spec-a` and `fixtures/spec-b` pass the same tests; no prefix is a literal in model or core `src`.
-- [ ] AC-15 `tokens.rs` (ignored, Q4): each sample ±15 % of `reference.json`, sum ≤ 5 % below. Mutation: `chars / 4` → Russian out of band.
+- [x] AC-15 `tokens.rs`: each sample ±15 % of `reference.json`, sum ≤ 5 % below. Mutation: `chars / 4` → Russian out of band. Met by `token-calibration` (2026-10-04; tightened to sum not below).
 - [x] AC-16 `tokens.rs`: empty → 0, monotone, Russian above English, stable, every node estimated. Mutation: one weight → red.
 - [x] AC-17 `determinism.rs`: twice and reversed → byte-identical JSON. Mutation: a `HashMap` in output → red.
 - [x] AC-18 `cost.rs`: 1 MB line, 100 000 each of `{#`, `[[`, ID-like tokens, ≤ 2 s. Mutation: rescan per opener → timeout.

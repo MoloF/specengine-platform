@@ -1,10 +1,15 @@
-//! AC-15 and AC-16 of docs/features/spec-parser.md: the token estimator.
+//! AC-15 and AC-16 of docs/features/spec-parser.md: the token estimator,
+//! with AC-01 to AC-05 of docs/features/token-calibration.md.
 //!
-//! AC-15 (calibration against `fixtures/token-calibration/reference.json`)
-//! is ignored until the owner supplies the reference counts (Q4). AC-16
-//! holds now: empty is 0, a prefix never costs more than the whole, Russian
-//! prose costs more than English of equal character count, repeat calls
-//! agree, and every fixture node carries the estimate of its own span.
+//! AC-15 runs: every calibration sample estimates within ±15 % of its count
+//! in `fixtures/token-calibration/reference.json` (Anthropic `count_tokens`,
+//! `claude-opus-5-5`, 2026-10-04), with the reference moved by one either
+//! way, and the estimated sum is not below the reference sum; the reference
+//! file is self-consistent (counts = input_tokens − overhead, overhead =
+//! baseline − 1). AC-16 holds: empty is 0, a prefix never costs more than
+//! the whole, Russian prose costs more than English of equal character
+//! count, repeat calls agree, and every fixture node carries the estimate of
+//! its own span.
 
 mod common;
 
@@ -133,55 +138,132 @@ fn the_estimate_saturates_instead_of_overflowing() {
 
 // ------------------------------------------------------------------- AC-15
 
+/// The five calibration samples, `fixtures/token-calibration/<name>.md`.
+const SAMPLES: [&str; 5] = ["code-block", "english", "mixed", "russian", "table"];
+
+fn reference() -> Value {
+    let path = fixture("token-calibration").join("reference.json");
+    serde_json::from_str(&fs::read_to_string(&path).expect("reference.json"))
+        .unwrap_or_else(|error| panic!("reference.json: {error}"))
+}
+
+fn count(map: &Value, name: &str) -> u64 {
+    map[name]
+        .as_u64()
+        .unwrap_or_else(|| panic!("reference.json: {name} is not a count: {map}"))
+}
+
+fn names(map: &Value, key: &str) -> Vec<String> {
+    map[key]
+        .as_object()
+        .unwrap_or_else(|| panic!("reference.json: no `{key}` map"))
+        .keys()
+        .cloned()
+        .collect()
+}
+
+/// token-calibration AC-02, AC-03: each estimate within ±15 % of its
+/// reference count, for the count and the count moved by one either way;
+/// the estimated sum is not below the reference sum.
+/// M: the weights before calibration; `chars / 4`; CYRILLIC 500 (mixed 66);
+/// ASCII_ALNUM 330 (sum 464).
 #[test]
-#[ignore = "reference counts pending owner (Q4)"]
 fn calibration_samples_are_within_fifteen_percent_of_the_reference() {
-    let reference: Value = serde_json::from_str(
-        &fs::read_to_string(fixture("token-calibration").join("reference.json")).unwrap(),
-    )
-    .unwrap();
-    assert!(
-        reference["model"].is_string(),
-        "reference.json names no tokenizer model yet (Q4)"
-    );
-    let counts = reference["counts"].as_object().expect("counts");
+    let reference = reference();
+    let counts = &reference["counts"];
     let mut estimated_sum = 0u64;
     let mut reference_sum = 0u64;
-    for (name, count) in counts {
-        let want = count
-            .as_u64()
-            .unwrap_or_else(|| panic!("{name}: reference count pending (Q4)"));
+    for name in SAMPLES {
+        let want = count(counts, name);
         let got = u64::from(tokens_est(&sample(name)));
-        let low = want * 85 / 100;
-        let high = want * 115 / 100;
-        assert!(
-            (low..=high).contains(&got),
-            "{name}: estimate {got} outside ±15 % of {want}"
-        );
+        for r in [want - 1, want, want + 1] {
+            let (low, high) = (r * 85 / 100, r * 115 / 100);
+            assert!(
+                (low..=high).contains(&got),
+                "{name}: estimate {got} outside {low}..={high} (±15 % of {r}, reference {want})"
+            );
+        }
         estimated_sum += got;
         reference_sum += want;
     }
     assert!(
-        estimated_sum * 100 >= reference_sum * 95,
-        "sum {estimated_sum} more than 5 % below {reference_sum}"
+        estimated_sum >= reference_sum,
+        "estimated sum {estimated_sum} below the reference sum {reference_sum}"
     );
 }
 
+/// token-calibration AC-01: the reference names the model, the date and the
+/// method; `counts + overhead = input_tokens` for each sample, the overhead
+/// is the one-token baseline less that token, and both maps hold exactly
+/// the five samples, each a non-empty file. M: table 111.
 #[test]
-fn calibration_fixture_has_the_five_samples_and_an_empty_reference() {
-    let reference: Value = serde_json::from_str(
-        &fs::read_to_string(fixture("token-calibration").join("reference.json")).unwrap(),
-    )
-    .unwrap();
-    let counts = reference["counts"].as_object().expect("counts");
-    let names: Vec<&str> = counts.keys().map(String::as_str).collect();
-    let mut sorted = names.clone();
-    sorted.sort_unstable();
-    assert_eq!(
-        sorted,
-        ["code-block", "english", "mixed", "russian", "table"]
-    );
-    for name in names {
+fn calibration_fixture_has_the_five_samples_and_consistent_reference_counts() {
+    let reference = reference();
+    for key in ["model", "date", "method"] {
+        assert!(
+            reference[key]
+                .as_str()
+                .is_some_and(|value| !value.is_empty()),
+            "reference.json: `{key}` is not a non-empty string: {reference}"
+        );
+    }
+    assert_eq!(reference["baseline"]["text"], "x", "{reference}");
+    let baseline = count(&reference["baseline"], "input_tokens");
+    let overhead = reference["overhead"].as_u64().expect("overhead");
+    assert_eq!(overhead, baseline - 1, "overhead = baseline − 1");
+    for key in ["counts", "input_tokens"] {
+        let mut keys = names(&reference, key);
+        keys.sort_unstable();
+        assert_eq!(keys, SAMPLES, "reference.json `{key}`");
+    }
+    for name in SAMPLES {
+        assert_eq!(
+            count(&reference["counts"], name) + overhead,
+            count(&reference["input_tokens"], name),
+            "{name}: counts + overhead = input_tokens"
+        );
         assert!(!sample(name).is_empty(), "{name}.md");
+    }
+}
+
+/// token-calibration AC-05, the documentation half: each of the six weight
+/// constants carries a reason, and the module doc names the reference's
+/// model, date and file (a new reference rewrites it). The values are not
+/// pinned here: the calibration test bounds them, and the store's format
+/// history pins the estimates of the fixture nodes.
+#[test]
+fn the_weights_carry_reasons_and_the_module_doc_names_the_reference() {
+    let source =
+        fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tokens.rs"))
+            .expect("src/tokens.rs");
+    let lines: Vec<&str> = source.lines().collect();
+    let constants: Vec<usize> = (0..lines.len())
+        .filter(|&i| lines[i].trim_start().starts_with("pub const "))
+        .collect();
+    assert_eq!(constants.len(), 6, "six weight constants");
+    for i in constants {
+        assert!(
+            i > 0 && lines[i - 1].trim_start().starts_with("///"),
+            "src/tokens.rs:{}: a weight without a reason: {}",
+            i + 1,
+            lines[i]
+        );
+    }
+    let module_doc: String = lines
+        .iter()
+        .take_while(|line| line.starts_with("//!"))
+        .map(|line| line.trim_start_matches("//!").trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let reference = reference();
+    for named in [
+        reference["model"].as_str().unwrap(),
+        reference["date"].as_str().unwrap(),
+        "fixtures/token-calibration/reference.json",
+    ] {
+        assert!(
+            module_doc.contains(named),
+            "module doc names {named}: {module_doc}"
+        );
     }
 }

@@ -98,7 +98,11 @@ pub use source::{GitIndex, Listing, Source, WorkingTree};
 /// [`SearchQuery::archive`]) and `nodes.line` (the 1-based line of the
 /// node's span start), both pure functions of the file's bytes
 /// (docs/features/spec-cli.md).
-pub const INDEX_FORMAT: u32 = 6;
+///
+/// 7: the token weights of core's `tokens_est` were recalibrated, so
+/// `nodes.tokens_est` changes; no schema change
+/// (docs/features/token-calibration.md).
+pub const INDEX_FORMAT: u32 = 7;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

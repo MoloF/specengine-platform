@@ -12,7 +12,7 @@ CLI pass 3 (`docs/features/spec-cli-graph.md`): a node's ancestors, children, li
 
 ## Input
 
-`update`, `SpecIndex::indexed_input()`, then every parsed file re-read from the working tree and re-parsed by the check's parser (`CheckFile::parsed`) whatever its size: the source of the graph, `path:line` and written forms, so a call sees each file in one state. A file that cannot be read or panics the parser keeps its indexed parse, its lines 1, one `warning:`. `check::SpecGraph` resolves parents and links once per call as `spec check` does. No table, column, query or SQL recursion; `INDEX_FORMAT` stays 6. `parent:` is read from the bytes, so `#SECTION`, `slug/` and `project:` are kept.
+`update`, `SpecIndex::indexed_input()`, then every parsed file re-read from the working tree and re-parsed by the check's parser (`CheckFile::parsed`) whatever its size: the source of the graph, `path:line` and written forms, so a call sees each file in one state. A file that cannot be read or panics the parser keeps its indexed parse, its lines 1, one `warning:`. `check::SpecGraph` resolves parents and links once per call as `spec check` does. No table, column, query, SQL recursion or `INDEX_FORMAT` change. `parent:` is read from the bytes, so `#SECTION`, `slug/` and `project:` are kept.
 
 ## Live sources
 

@@ -524,14 +524,34 @@ fn fixture_kinds(name: &str) -> BTreeSet<String> {
     kinds
 }
 
-/// `spec-a` at `dir` with every kind renamed (`[ids]` and front-matter).
+/// A kind renamed at equal cost: ROT13 of its ASCII letters keeps its
+/// length and the class of every character, so every estimate, and with it
+/// every budget decision, is the original's whatever the estimator weights.
+fn renamed_kind(kind: &str) -> String {
+    kind.chars()
+        .map(|c| match c {
+            'a'..='z' => char::from(b'a' + (c as u8 - b'a' + 13) % 26),
+            'A'..='Z' => char::from(b'A' + (c as u8 - b'A' + 13) % 26),
+            _ => c,
+        })
+        .collect()
+}
+
+/// `spec-a` at `dir` with every kind renamed (`[ids]` and front-matter),
+/// each to a string that is no kind of the fixture.
 fn renamed_copy(scratch: &Scratch, dir: &str) -> std::path::PathBuf {
     let root = scratch.copy("spec-a", dir);
+    let kinds = fixture_kinds("spec-a");
     let mut toml = read_text(&root, "specengine.toml");
-    for kind in fixture_kinds("spec-a") {
+    for kind in &kinds {
+        let renamed = renamed_kind(kind);
+        assert!(
+            !kinds.contains(&renamed),
+            "{kind} renames to a kind: {renamed}"
+        );
         toml = toml.replace(
             &format!("kind = \"{kind}\""),
-            &format!("kind = \"zz-{kind}-x\""),
+            &format!("kind = \"{renamed}\""),
         );
     }
     assert!(!toml.contains("kind = \"question\""), "{toml}");
@@ -539,10 +559,10 @@ fn renamed_copy(scratch: &Scratch, dir: &str) -> std::path::PathBuf {
     for path in common::md_files(&root) {
         let text = read_text(&root, &path);
         let renamed: String = text
-            .lines()
+            .split_inclusive('\n')
             .map(|line| match line.strip_prefix("kind: ") {
-                Some(kind) => format!("kind: zz-{}-x\n", kind.trim()),
-                None => format!("{line}\n"),
+                Some(kind) => format!("kind: {}", renamed_kind(kind)),
+                None => line.to_owned(),
             })
             .collect();
         if renamed != text {
@@ -555,13 +575,20 @@ fn renamed_copy(scratch: &Scratch, dir: &str) -> std::path::PathBuf {
 /// AC-05: every kind of spec-a renamed → MEC-STAMINA, R-12,
 /// EDGE-SPRINT-EMPTY (and DEC-0023, MEC-STAMINA without DEC-0023's
 /// `answers:`, so layer 2 is not empty) give the same names per layer in
-/// the same order. M: a `kind == "…"` in a layer rule.
+/// the same order, the same tail and `more`, at a roomy and a tight budget.
+/// The renaming keeps every estimate ([`renamed_kind`]), so the tight
+/// budget compares like with like under any token weights. M: a
+/// `kind == "…"` in a layer rule.
 #[test]
 fn ac05_renamed_kinds_give_the_same_layers() {
     let scratch = Scratch::new("bundle-ac05");
     let home = scratch.home("h");
     let original = scratch.copy("spec-a", "original");
     let renamed = renamed_copy(&scratch, "renamed");
+    let renamed_kinds: BTreeSet<String> = fixture_kinds("spec-a")
+        .iter()
+        .map(|kind| renamed_kind(kind))
+        .collect();
     let mut filled = BTreeSet::new();
     let mut compare = |targets: &[&str], round: &str| {
         for &target in targets {
@@ -586,7 +613,7 @@ fn ac05_renamed_kinds_give_the_same_layers() {
                 assert!(
                     kinds
                         .iter()
-                        .all(|kind| kind == "null" || kind.starts_with("zz-")),
+                        .all(|kind| kind == "null" || renamed_kinds.contains(kind)),
                     "{round} {target}: kinds not renamed: {kinds:?}"
                 );
                 for (layer, items) in all_layers(&after) {

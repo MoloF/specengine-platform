@@ -394,14 +394,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// AC-19 of docs/features/spec-cli.md: `files.tier3` and `nodes.line`
-/// change the schema, so `INDEX_FORMAT` is 6 and the history is the five
-/// earlier lines, verbatim, followed by exactly one `6 <hash>` line (no
-/// earlier `6`). Replaces pass B's format-5 pin
-/// (docs/features/spec-check-links.md AC-03), whose line stays verbatim.
+/// AC-06 of docs/features/token-calibration.md: the recalibrated weights of
+/// core's `tokens_est` change `nodes.tokens_est` (not the schema), so
+/// `INDEX_FORMAT` is 7 and the history is the six earlier lines, verbatim,
+/// followed by exactly one `7 <hash>` line (no earlier `7`). Replaces
+/// spec-cli's format-6 pin (docs/features/spec-cli.md AC-19), whose line
+/// stays verbatim. M: the stamp kept 6; an earlier line edited.
 #[test]
-fn spec_cli_pins_format_6_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 6);
+fn token_calibration_pins_format_7_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 7);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -416,11 +417,12 @@ fn spec_cli_pins_format_6_with_one_new_history_line() {
         "3 d63c06dc03ed97243ff25dfb14a165cfec059582eee05dc72d9fba05b3c5f55f",
         "4 d958fe30af22feb15f1dbd8fafa67ef1113a8c4ba267c4dd71a8968eb30bf5b5",
         "5 df99199e747d5d2f16712fd23737a443457140d4bb6e37d59393c78724809be4",
+        "6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "pass B's history plus exactly one new line:\n{history}"
+        "spec-cli's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -429,14 +431,14 @@ fn spec_cli_pins_format_6_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "6", "the new line is format 6: {last}");
+    assert_eq!(format, "7", "the new line is format 7: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("6 ")).count(),
+        lines.iter().filter(|line| line.starts_with("7 ")).count(),
         1,
-        "no earlier `6` line"
+        "no earlier `7` line"
     );
 }

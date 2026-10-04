@@ -1,8 +1,9 @@
 //! docs/features/spec-cli-bundle.md, config, writes and genre: AC-13 (the
 //! budget's sources; `[budgets] bundle_node` read alone), AC-15 (read only
 //! but the data directory; no table added; an edit shows without `spec
-//! index`), AC-16 (`INDEX_FORMAT` 6, the format history unchanged), AC-18
-//! (a synthetic non-Rust corpus: no P2-3 word in a bundle or the bundle
+//! index`), AC-16 (no format of the bundle's own: `INDEX_FORMAT` 7, the
+//! token-calibration stamp, and the format history pinned), AC-18 (a
+//! synthetic non-Rust corpus: no P2-3 word in a bundle or the bundle
 //! sources). Scratch copies of `fixtures/spec-a`, each run with its own
 //! `HOME`; the fixtures are only read.
 
@@ -292,13 +293,14 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: `INDEX_FORMAT` stays 6 and the store's format history is the
-/// one at HEAD (its six lines). M: estimator weights changed, the stamp
-/// kept (the store's `format.rs` turns red on the dump; this pins the
-/// stamp and the file).
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 7, the stamp
+/// of the recalibrated estimator (docs/features/token-calibration.md
+/// AC-06), and the store's format history is its seven lines. M: estimator
+/// weights changed, the stamp kept (the store's `format.rs` turns red on
+/// the dump; this pins the stamp and the file).
 #[test]
-fn ac16_index_format_stays_six() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 6);
+fn ac16_index_format_is_seven() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 7);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -312,6 +314,7 @@ fn ac16_index_format_stays_six() {
 4 d958fe30af22feb15f1dbd8fafa67ef1113a8c4ba267c4dd71a8968eb30bf5b5
 5 df99199e747d5d2f16712fd23737a443457140d4bb6e37d59393c78724809be4
 6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9
+7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b
 "
     );
 }

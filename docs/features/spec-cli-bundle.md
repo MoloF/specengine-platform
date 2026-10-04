@@ -34,7 +34,7 @@ CLI tests on scratch copies of `fixtures/spec-a`, `-b`, own `HOME`; no git write
 - [x] AC-14 both fixtures give the same JSON key sets (top level, `layers`, item, tail entry), every key present, `task: null`; `show`, `search`, `tree`, `graph` key sets unchanged. M: a key omitted when empty.
 - [x] AC-15 after a call the copies are byte- and path-identical, new files only under `HOME`, DB tables unchanged; an edit shows in the next bundle without `spec index`. M: `update` skipped; a log table.
 - [x] AC-16 `INDEX_FORMAT` 6; store `tests/format_history.txt` unchanged. M: estimator weights changed, the stamp kept.
-- [ ] AC-17 Deferred until Q6's counts arrive (canon "Open"): the calibration test un-ignored and green.
+- [x] AC-17 The calibration test un-ignored and green: `token-calibration` (2026-10-04).
 - [x] AC-18 eval `build_graph.rs` green: no new dependency edge (the hash is `specengine_store::b3_hash`), no tokenizer crate, no `rusqlite_migration`; a synthetic non-Rust corpus yields a bundle with no P2-3 word as a whole word. M: a "run `cargo nextest`" hint in the bundle.
 - [x] AC-19 the gate clean; `tree.rs` green over the committed config and its slug; at shipping worst W ≤ 114 377 B, every Tier 1 README and the root index ≤ 10 240 B, the new canon ≤ 12 288 B. M: the bundle canon appended to the CLI README.
 

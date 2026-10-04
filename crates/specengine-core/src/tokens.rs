@@ -1,23 +1,32 @@
 //! The token estimator: `ceil(Σ weight(char))`, one weight per character
-//! class, conservative until calibrated against `fixtures/token-calibration/`
-//! (the calibration itself is pending the owner, Q4 of the spec).
+//! class, calibrated against the tokenizer of the agents' model
+//! `claude-opus-5-5` (counts of 2026-10-04, recorded in
+//! `fixtures/token-calibration/reference.json`). A new tokenizer is a new
+//! reference and a new index format stamp.
 //!
 //! Weights are integers in thousandths of a token, so the sum is exact and
-//! the same on every machine.
+//! the same on every machine. The fit minimises the worst relative error
+//! over the five samples, in multiples of 50, with `WHITESPACE` held, the
+//! estimated sum not below the reference sum, and `CYRILLIC` above
+//! `ASCII_ALNUM`.
 
 /// Thousandths of a token per character of each class.
 mod weight {
-    /// `[A-Za-z0-9]`: English runs about four characters to a token.
-    pub const ASCII_ALNUM: u64 = 270;
-    /// Other visible ASCII: punctuation and Markdown markup, often a token each.
-    pub const ASCII_OTHER: u64 = 500;
-    /// Whitespace: mostly merged into the next word's token.
+    /// `[A-Za-z0-9]`: letters and digits run about 2.9 characters to a token.
+    pub const ASCII_ALNUM: u64 = 350;
+    /// Other visible ASCII: punctuation and Markdown markup are a token of
+    /// their own and split the next word off its leading space.
+    pub const ASCII_OTHER: u64 = 1400;
+    /// Whitespace: mostly merged into the next word's token; held at its
+    /// previous value by the fit.
     pub const WHITESPACE: u64 = 150;
-    /// Cyrillic letters: about two characters to a token.
-    pub const CYRILLIC: u64 = 500;
-    /// Letters of other scripts (accented Latin, Greek, CJK, …).
+    /// Cyrillic letters: about 2.2 characters to a token.
+    pub const CYRILLIC: u64 = 450;
+    /// Letters of other scripts (accented Latin, Greek, CJK, …): a token
+    /// each, conservatively; no sample exercises them.
     pub const OTHER_LETTER: u64 = 1000;
-    /// Everything else: symbols, non-ASCII punctuation, emoji.
+    /// Everything else: symbols, non-ASCII punctuation, emoji: a token each,
+    /// conservatively; no sample fits them.
     pub const REST: u64 = 1000;
 }
 

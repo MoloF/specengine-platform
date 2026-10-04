@@ -15,7 +15,7 @@ CLI pass 4 (`docs/features/spec-cli-bundle.md`, 05 §6): one call returns the co
 `spec bundle REF… [--budget N]`, globals `--root`, `--config`, `--json`; no `--task` (Phase 2).
 
 - **REF**: `spec show`'s forms and resolution. Every REF is classified first (a look-alike or mixed-script ID, `project:` → exit 2 whatever the others), then located in order. Several holders → all, one `warning:`; REFs naming one node count once. A target within another merges into the outermost, one ``note: `X` is within `Y`: bundled as part of it``: X shares Y's form, so it is in the body only when Y prints its text; Y outlined or header-only, the not-included list names X (a direct child ID section of Y) or the child section holding it.
-- **Budget**, in `tokens_est` (core, uncalibrated): `--budget N` (1..=`u32::MAX`), else `[budgets] bundle_node`, else `DEFAULT_BUNDLE_BUDGET` 2 000. With `--budget` the key is not read. Without, core's `bundle_node_from_toml` reads that key alone from the config's text: a broken `[classes]`, `[check]` or other `[budgets]` key never stops a bundle (`spec check` judges them); a value that is no whole number in 1..=4294967295 → exit 2 at its line, the bound `spec check` applies too (`docs/canon/spec-check.md` "Configuration"). `bundle_task` waits for `--task`.
+- **Budget**, in `tokens_est` (core, calibrated on `claude-opus-5-5`): `--budget N` (1..=`u32::MAX`), else `[budgets] bundle_node`, else `DEFAULT_BUNDLE_BUDGET` 2 000. With `--budget` the key is not read. Without, core's `bundle_node_from_toml` reads that key alone from the config's text: a broken `[classes]`, `[check]` or other `[budgets]` key never stops a bundle (`spec check` judges them); a value that is no whole number in 1..=4294967295 → exit 2 at its line, the bound `spec check` applies too (`docs/canon/spec-check.md` "Configuration"). `bundle_task` waits for `--task`.
 - **Input**: pass 3's (`docs/canon/spec-cli-graph.md` "Input", "Live sources"): `update`, every used file re-read and re-parsed, one `SpecGraph` per call, so an edit shows in the next bundle without `spec index`. Candidates come from live files only; a named target is always admitted (` | archived`) and the links written in its own file are followed.
 
 ## Layers
@@ -79,7 +79,7 @@ tokens <t> of 2000, chars <c>, bytes <b>, not included 1
 
 Exit 0 answered: dangling links and parents, cycles (each node once), empty layers. 1 only a REF that does not resolve (`show`'s reasons): no bundle, `spec: <reason>`, JSON `reason`. 2, no JSON, as `show`: usage (no REF, `--budget` not in 1..=`u32::MAX`), a look-alike or mixed-script ID (naming the Latin fix), `project:`, config (`bundle_node` included), `HOME`, `StoreError`, the minimum, the frame over the ceiling.
 
-Determinism: the orders above, never rowid, insertion, time, `HashMap` order or the absolute root; the title names the resolved targets, not the REFs as typed; copies in opposite file orders, at different roots and `HOME`s give byte-identical text, JSON and hash. Records print verbatim (`docs/canon/architecture.md#ui`); labels are English and stack-neutral (no P2-3 word, 07 §1.2). Writes: the data directory only (`update`); no table or column, `INDEX_FORMAT` stays 6.
+Determinism: the orders above, never rowid, insertion, time, `HashMap` order or the absolute root; the title names the resolved targets, not the REFs as typed; copies in opposite file orders, at different roots and `HOME`s give byte-identical text, JSON and hash. Records print verbatim (`docs/canon/architecture.md#ui`); labels are English and stack-neutral (no P2-3 word, 07 §1.2). Writes: the data directory only (`update`); no table, column or `INDEX_FORMAT` change.
 
 ## API
 
@@ -96,5 +96,4 @@ Tests: CLI `bundle.rs` (layers, REFs, keys), `bundle_fit.rs` (fitting, the hash 
 ## Open
 
 - Fitting re-estimates the whole body per candidate (`fits`): 3 000 candidates 1.13 s against `spec graph`'s 0.62 s (debug), on top of pass 3's per-call re-parse; MCP inherits both (886 ms, 1 821 ms at budget 10 000: `docs/canon/mcp-read.md` "Latency"). Running counts next.
-- Calibration (Q6): no reference token counts yet (model, date, five `count_tokens` figures); `tokens_est` stays uncalibrated, its calibration test `#[ignore]`d (the task's AC-17); recalibrating is an `INDEX_FORMAT` change.
 - A `working_answer:` written as a Cyrillic legacy alias makes no link (`unparsed-reference`): the question holds no `working_answer` edge and drops out of open questions. Existing front-matter behaviour (core), noted only.

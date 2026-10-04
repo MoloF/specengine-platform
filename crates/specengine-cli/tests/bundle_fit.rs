@@ -476,8 +476,9 @@ fn ac09_a_thousand_open_questions_keep_the_tail_at_twenty_lines() {
         "TERM = { kind = \"term\",        shape = \"name\" }\n",
         "TERM = { kind = \"term\",        shape = \"name\" }\nOQ   = { kind = \"question\",    width = 4 }\n",
     );
-    // About 900 estimated tokens each: letters of another script weigh one.
-    let filler: String = (0..150)
+    // About 1 900 estimated tokens each, more than the room the targets
+    // leave at either budget: letters of another script weigh one.
+    let filler: String = (0..300)
         .map(|_| "\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9} ")
         .collect();
     for n in 0..1_000 {
@@ -490,7 +491,7 @@ fn ac09_a_thousand_open_questions_keep_the_tail_at_twenty_lines() {
             ),
         );
     }
-    for (budget, flag) in [(1_000u64, Some("1000")), (2_000, None)] {
+    for (budget, flag) in [(1_500u64, Some("1500")), (2_000, None)] {
         let mut args = vec!["MEC-STAMINA"];
         if let Some(flag) = flag {
             args.extend(["--budget", flag]);
