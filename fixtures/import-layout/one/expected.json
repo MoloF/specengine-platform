@@ -1,0 +1,139 @@
+{
+  "before": {
+    "definitions": 17,
+    "documents": 5,
+    "duplicates": 1,
+    "hyphenless": {
+      "definitions": 0,
+      "mentions": 0
+    }
+  },
+  "check": {
+    "baseline": {
+      "entries": 28,
+      "per_code": {
+        "id-taken": 1,
+        "key-missing": 27
+      }
+    },
+    "emitter_findings": 0,
+    "enforce": "clean",
+    "findings": {
+      "class-missing": {
+        "before": 5,
+        "emitter": 0,
+        "layout": 0,
+        "source": 0
+      },
+      "id-taken": {
+        "before": 0,
+        "emitter": 0,
+        "layout": 0,
+        "source": 1
+      },
+      "key-missing": {
+        "before": 0,
+        "emitter": 0,
+        "layout": 0,
+        "source": 27
+      },
+      "link-anchor": {
+        "before": 0,
+        "emitter": 0,
+        "layout": 1,
+        "source": 0
+      },
+      "link-dangling": {
+        "before": 0,
+        "emitter": 0,
+        "layout": 1,
+        "source": 0
+      },
+      "mention-dangling": {
+        "before": 16,
+        "emitter": 0,
+        "layout": 0,
+        "source": 1
+      },
+      "unknown-key": {
+        "before": 3,
+        "emitter": 0,
+        "layout": 0,
+        "source": 12
+      }
+    },
+    "observe": "observed",
+    "stale": 0
+  },
+  "code": {
+    "citations_to_moved": 1,
+    "moved_cited": 1
+  },
+  "dangling": {
+    "links": {
+      "after": 2,
+      "before": 0
+    },
+    "mentions": {
+      "after": 1,
+      "before": 16
+    }
+  },
+  "detail": {
+    "diagnostics": 0
+  },
+  "extents": {
+    "residue": 0,
+    "total": 16
+  },
+  "fields": {
+    "matched": 13,
+    "mismatched": 0
+  },
+  "hashes": {
+    "extra": 0,
+    "matched": 17,
+    "mismatched": 0,
+    "missing": 0
+  },
+  "header": {
+    "conflicts": 0,
+    "documents": 5,
+    "keys_dropped": 0,
+    "last_row_comment": 0,
+    "unparseable": 0
+  },
+  "index": {
+    "files": 14,
+    "links": 11,
+    "nodes": 21
+  },
+  "prose": {
+    "documents": 5,
+    "mismatched": 0
+  },
+  "reasons": {
+    "header_unparseable": 0,
+    "path_taken": 0,
+    "prefix_unknown": 0,
+    "reader_boundary": 0,
+    "section_fields": 0,
+    "slug": 0,
+    "unexplained": 0
+  },
+  "task_box": {
+    "carried": 5,
+    "dropped": 0
+  },
+  "titles": {
+    "matched": 6,
+    "mismatched": 0
+  },
+  "tree": {
+    "documents": 14,
+    "feature_documents": 2,
+    "moved": 1,
+    "record_files": 9,
+    "reshaped": 6
+  }
+}

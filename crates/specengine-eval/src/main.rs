@@ -14,6 +14,7 @@ mod check;
 mod harness;
 mod import;
 mod index;
+mod layout;
 mod parse;
 #[cfg(all(feature = "ra", unix))]
 mod ra;
@@ -73,6 +74,15 @@ enum Measurement {
     /// `enforce`; paths, IDs and messages only in
     /// `--out/check/<label>/findings.json`. Config from `--scheme`.
     Check(CheckArgs),
+    /// The import layout (`docs/features/import-layout.md`): the import
+    /// engine's model projected into the target layout under
+    /// `--out/layout/<label>/tree/`, read back through `specengine-core`
+    /// and compared by identity; the before check, the tree's check under
+    /// `observe`, attributed, its source-caused errors as the tree's
+    /// baseline, the check under `enforce` with it, and the tree's index.
+    /// `--config` as `import` (with its `[layout]`), `--scheme` as `check`
+    /// (the before scheme).
+    Layout(LayoutArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -150,6 +160,24 @@ pub struct CheckArgs {
     #[arg(long, value_name = "TOML")]
     pub baseline: Option<PathBuf>,
     /// Today as `YYYY-MM-DD` (debt expiry); default the UTC date.
+    #[arg(long, value_name = "DATE")]
+    pub today: Option<String>,
+}
+
+/// `layout`: the shared arguments plus the before scheme and the date.
+#[derive(Args, Clone)]
+pub struct LayoutArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// The before scheme: `specengine.toml` of the corpus, loaded as `check`
+    /// loads it; read-only. Default: `SPECENGINE_SCHEME_A` / `_B` for
+    /// `--label pilot-a` / `pilot-b` when set, else `specengine.toml` at the
+    /// corpus root. Missing or invalid: refused (exit 2) with
+    /// `file:line: message`.
+    #[arg(long, value_name = "TOML")]
+    pub scheme: Option<PathBuf>,
+    /// Today as `YYYY-MM-DD` (`[layout] debt_expires`, debt expiry);
+    /// default the UTC date.
     #[arg(long, value_name = "DATE")]
     pub today: Option<String>,
 }
@@ -281,6 +309,30 @@ fn main() -> ExitCode {
                     )
                 },
                 check::run,
+            )
+        }
+        Measurement::Layout(args) => {
+            let config = args.common.config.clone();
+            let scheme = args.scheme.clone();
+            let today = args.today.clone();
+            let label = args.common.label.clone();
+            let out = args.common.out.clone();
+            let run_label = harness::label_of(&args.common).to_owned();
+            measure_with(
+                "layout",
+                &args.common,
+                layout::FIXTURE,
+                move |root: &Path| {
+                    layout::check_out(root, &out, &run_label)?;
+                    layout::prepare(
+                        root,
+                        config.as_deref(),
+                        scheme.as_deref(),
+                        today.as_deref(),
+                        label.as_deref(),
+                    )
+                },
+                layout::run,
             )
         }
         Measurement::BevyDetector(args) => {

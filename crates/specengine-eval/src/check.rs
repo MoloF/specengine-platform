@@ -77,7 +77,7 @@ pub fn prepare(
 }
 
 /// The loader's causes, `file:line: message` each, on one line.
-fn refusal(report: &Report) -> String {
+pub(crate) fn refusal(report: &Report) -> String {
     report
         .cannot_check
         .iter()

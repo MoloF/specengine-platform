@@ -95,6 +95,16 @@ pub fn resolve_file(
     })
 }
 
+/// The label of a run: `--label`, else `pilot` with `--pilot`, else
+/// `fixtures`.
+pub fn label_of(args: &CommonArgs) -> &str {
+    args.label.as_deref().unwrap_or(if args.pilot.is_some() {
+        "pilot"
+    } else {
+        "fixtures"
+    })
+}
+
 /// Resolves the corpus and the scratch directory.
 ///
 /// Refuses — before opening anything for writing — when `--label` is not a
@@ -115,10 +125,10 @@ pub fn prepare_with<C>(
             "--label {label:?} is not a single plain path component (it names a directory under --out); nothing written"
         )));
     }
-    let (requested, label) = match (&args.pilot, args.label.as_deref()) {
-        (Some(pilot), label) => (pilot.clone(), label.unwrap_or("pilot").to_owned()),
-        (None, label) => {
-            let label = label.unwrap_or("fixtures");
+    let (requested, label) = match &args.pilot {
+        Some(pilot) => (pilot.clone(), label_of(args).to_owned()),
+        None => {
+            let label = label_of(args);
             match PILOT_CORPUS.name(label) {
                 Some(variable) => match path_in(variable) {
                     Some(path) => (path, label.to_owned()),

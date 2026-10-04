@@ -65,6 +65,13 @@ pub struct Entry<'a> {
     /// stripped, trimmed, quotes removed; `None` for an empty value, a block
     /// scalar, an unclosed quote or a value continued on indented lines.
     pub value: Option<&'a str>,
+    /// The line as written, without its terminator.
+    pub content: &'a str,
+    /// Byte range in `content` of the key as written, quotes included.
+    pub key_token: std::ops::Range<usize>,
+    /// Byte range in `content` of the single-line scalar, quotes included,
+    /// comment and surrounding blanks excluded; `None` when `value` is.
+    pub scalar: Option<std::ops::Range<usize>>,
 }
 
 /// The top-level entries of the front-matter block, in order; none when the
@@ -92,13 +99,26 @@ pub fn entries(text: &str) -> Vec<Entry<'_>> {
         let unclosed_quote = ['"', '\'']
             .iter()
             .any(|&quote| value.starts_with(quote) && (value.len() < 2 || !value.ends_with(quote)));
-        let value =
-            if value.is_empty() || continued || unclosed_quote || value.starts_with(['|', '>']) {
-                None
-            } else {
-                Some(unquote(value).trim())
-            };
-        entries.push(Entry { line, key, value });
+        let single =
+            !(value.is_empty() || continued || unclosed_quote || value.starts_with(['|', '>']));
+        let scalar =
+            single.then(|| offset_in(content, value)..offset_in(content, value) + value.len());
+        let value = single.then(|| unquote(value).trim());
+        let key_start = offset_in(content, key);
+        let quoted_key = key_start > 0 && content[..key_start].ends_with(['"', '\'']);
+        let key_token = if quoted_key {
+            key_start - 1..key_start + key.len() + 1
+        } else {
+            key_start..key_start + key.len()
+        };
+        entries.push(Entry {
+            line,
+            key,
+            value,
+            content,
+            key_token,
+            scalar,
+        });
     }
     entries
 }
@@ -131,7 +151,7 @@ pub fn values(text: &str) -> Vec<(usize, &str)> {
 
 /// The lines of a closed front-matter block as (1-based line, content
 /// without terminator); none when the block is absent or unclosed.
-fn block(text: &str) -> Vec<(usize, &str)> {
+pub fn block(text: &str) -> Vec<(usize, &str)> {
     let bom = if text.starts_with('\u{FEFF}') { 3 } else { 0 };
     let mut lines = text[bom..].split_inclusive('\n');
     let Some(first) = lines.next() else {
@@ -244,6 +264,13 @@ fn strip_comment(value: &str) -> &str {
         previous_space = c.is_whitespace();
     }
     value
+}
+
+/// Byte offset of `part`, a subslice of `whole`, in `whole`.
+fn offset_in(whole: &str, part: &str) -> usize {
+    (part.as_ptr() as usize)
+        .saturating_sub(whole.as_ptr() as usize)
+        .min(whole.len())
 }
 
 fn unquote(value: &str) -> &str {

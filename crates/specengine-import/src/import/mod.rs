@@ -33,6 +33,7 @@ pub use model::{
 };
 
 use header::HeaderKeys;
+pub(crate) use header::field_table_entries;
 use ids::{Resolution, Resolved, Resolver};
 use lead_in::{LeadIn, Split};
 
@@ -276,10 +277,8 @@ impl DocumentRun<'_, '_> {
                 add_key(&mut keys, entry.line, entry.key, entry.value);
             }
         }
-        let field_table = scan
-            .tables
-            .iter()
-            .position(|table| header::is_field_table(config, table));
+        let field_table_found = field_table(config, &scan);
+        let field_table = field_table_found.as_ref().map(|(index, _)| *index);
         if let Some(index) = field_table {
             for (line, key, value) in header::field_table_entries(config, &scan.tables[index]) {
                 add_key(&mut keys, line, key, value);
@@ -296,15 +295,7 @@ impl DocumentRun<'_, '_> {
             .iter()
             .any(|glob| glob.is_match(self.relative));
         let mut record_ids: HashMap<usize, Vec<String>> = HashMap::new();
-        // The field table's lines: header row, delimiter row, rows.
-        let field_table_lines = field_table.map(|index| {
-            let table = &scan.tables[index];
-            let end = table
-                .rows
-                .last()
-                .map_or(table.header_line + 1, |row| row.line);
-            table.header_line..=end
-        });
+        let field_table_lines = field_table_found.map(|(_, lines)| lines);
         self.document(
             &id_values,
             || document_body(text, &scan, body_start, field_table_lines),
@@ -420,14 +411,22 @@ impl DocumentRun<'_, '_> {
                     let cells = verbatim_cells(row.verbatim, &row.cells);
                     let text = cells.get(text_column).copied().unwrap_or("");
                     let fields = fields(table.header.as_deref(), &cells, column, text_column);
+                    let id_cell = (text_column != column)
+                        .then(|| id_cell(table.header.as_deref(), &cells, column, &resolved))
+                        .flatten();
                     self.record(
-                        row.line,
-                        form,
+                        Found {
+                            line: row.line,
+                            form,
+                            title: None,
+                            text: text.to_owned(),
+                            fields,
+                            extent: [row.line, row.line],
+                            task_box: None,
+                            id_cell,
+                        },
                         role,
                         resolved,
-                        None,
-                        text.to_owned(),
-                        fields,
                         record_ids,
                     );
                 }
@@ -483,14 +482,21 @@ impl DocumentRun<'_, '_> {
                         .get(heading.start..end)
                         .unwrap_or("")
                         .trim_end_matches([' ', '\t', '\r', '\n']);
+                    // The heading line, then one line per LF the trimmed span holds.
+                    let last = heading.line + section.matches('\n').count();
                     self.record(
-                        heading.line,
-                        Form::Section,
+                        Found {
+                            line: heading.line,
+                            form: Form::Section,
+                            title: None,
+                            text: lf_lines(section),
+                            fields: Vec::new(),
+                            extent: [heading.line, last],
+                            task_box: None,
+                            id_cell: None,
+                        },
                         role,
                         resolved,
-                        None,
-                        lf_lines(section),
-                        Vec::new(),
                         record_ids,
                     );
                 }
@@ -544,6 +550,7 @@ impl DocumentRun<'_, '_> {
                         lead_in::after_span(visible, &lead, separators, split.stripped_inside);
                     let first = line.raw.get(line.raw_offset(after)..).unwrap_or("");
                     let mut text = first.trim_start_matches([' ', '\t']).to_owned();
+                    let mut last = line.number;
                     for continued in lead_in::item_continuation(
                         &scan.lines,
                         index,
@@ -553,12 +560,15 @@ impl DocumentRun<'_, '_> {
                     ) {
                         text.push('\n');
                         text.push_str(continued.raw);
+                        last = continued.number;
                     }
                     items.push(ListItem::Record {
                         line: line.number,
                         resolved,
                         title,
                         text: text.trim_end().to_owned(),
+                        last,
+                        task_box: lead.task_box,
                     });
                 }
                 Resolution::Unmapped(written) => items.push(ListItem::Unmapped {
@@ -590,14 +600,21 @@ impl DocumentRun<'_, '_> {
                     resolved,
                     title,
                     text,
+                    last,
+                    task_box,
                 } => self.record(
-                    line,
-                    Form::ListItem,
+                    Found {
+                        line,
+                        form: Form::ListItem,
+                        title,
+                        text,
+                        fields: Vec::new(),
+                        extent: [line, last],
+                        task_box,
+                        id_cell: None,
+                    },
                     role,
                     resolved,
-                    title,
-                    text,
-                    Vec::new(),
                     record_ids,
                 ),
                 ListItem::Unmapped { line, written } => self.unmapped(line, written),
@@ -722,18 +739,23 @@ impl DocumentRun<'_, '_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn record(
         &mut self,
-        line: usize,
-        form: Form,
+        found: Found,
         role: Role,
         resolved: Resolved,
-        title: Option<String>,
-        text: String,
-        fields: Vec<Field>,
         record_ids: &mut HashMap<usize, Vec<String>>,
     ) {
+        let Found {
+            line,
+            form,
+            title,
+            text,
+            fields,
+            extent,
+            task_box,
+            id_cell,
+        } = found;
         let path = self.relative.to_owned();
         if resolved.legacy {
             self.import.legacy.mapped.push(IdChange {
@@ -771,10 +793,14 @@ impl DocumentRun<'_, '_> {
             line,
             form,
             aliases: if resolved.legacy {
-                vec![resolved.written]
+                vec![resolved.written.clone()]
             } else {
                 Vec::new()
             },
+            written: resolved.written,
+            extent,
+            task_box,
+            id_cell,
             id: resolved.id,
             prefix: resolved.prefix,
             script: resolved.script,
@@ -900,13 +926,18 @@ impl DocumentRun<'_, '_> {
             &mut path_ids
         };
         self.record(
-            line,
-            Form::Document,
+            Found {
+                line,
+                form: Form::Document,
+                title: None,
+                text: body(),
+                fields: Vec::new(),
+                extent: [1, self.text.split_inclusive('\n').count().max(1)],
+                task_box: None,
+                id_cell: None,
+            },
             role,
             resolved,
-            None,
-            body(),
-            Vec::new(),
             record_ids,
         );
     }
@@ -945,6 +976,21 @@ impl DocumentRun<'_, '_> {
     }
 }
 
+/// What a recognizer found at one position, before the record is made.
+struct Found {
+    line: usize,
+    form: Form,
+    title: Option<String>,
+    text: String,
+    fields: Vec<Field>,
+    /// `[first, last]` source lines.
+    extent: [usize; 2],
+    task_box: Option<bool>,
+    /// A table row's ID cell holding more than its ID
+    /// ([`ImportRecord::id_cell`]).
+    id_cell: Option<Field>,
+}
+
 /// A list item read before any record is made.
 enum ListItem {
     Record {
@@ -952,6 +998,9 @@ enum ListItem {
         resolved: Resolved,
         title: Option<String>,
         text: String,
+        /// The line of the text's last line (the marker's when it has one).
+        last: usize,
+        task_box: Option<bool>,
     },
     /// The lead-in holds an unmapped legacy ID.
     Unmapped { line: usize, written: String },
@@ -1038,6 +1087,24 @@ fn document_body(
     document_text(&body)
 }
 
+/// The document's field table (`front_matter.header_table`): its index in
+/// `scan.tables` and its lines, header row, delimiter row and rows.
+pub(crate) fn field_table(
+    config: &CensusConfig,
+    scan: &Scan<'_>,
+) -> Option<(usize, RangeInclusive<usize>)> {
+    let index = scan
+        .tables
+        .iter()
+        .position(|table| header::is_field_table(config, table))?;
+    let table = &scan.tables[index];
+    let end = table
+        .rows
+        .last()
+        .map_or(table.header_line + 1, |row| row.line);
+    Some((index, table.header_line..=end))
+}
+
 /// Blanks as Markdown reads them: spaces, tabs and line terminators, not
 /// every Unicode white space.
 const BLANKS: [char; 4] = [' ', '\t', '\r', '\n'];
@@ -1060,7 +1127,7 @@ pub fn document_text(body: &str) -> String {
 }
 
 /// A line (its CR before an LF dropped) of only spaces and tabs.
-fn is_blank(line: &str) -> bool {
+pub(crate) fn is_blank(line: &str) -> bool {
     line.bytes().all(|byte| byte == b' ' || byte == b'\t')
 }
 
@@ -1079,7 +1146,7 @@ fn table_lines(tables: &[Table<'_>]) -> HashSet<usize> {
 
 /// The cells of a row as written, each without surrounding blanks; the
 /// scanner's cells (HTML comments removed) when a comment shifts the split.
-fn verbatim_cells<'t>(verbatim: &'t str, cells: &'t [String]) -> Vec<&'t str> {
+pub(crate) fn verbatim_cells<'t>(verbatim: &'t str, cells: &'t [String]) -> Vec<&'t str> {
     let ranges = cell_ranges(verbatim);
     if ranges.len() == cells.len() {
         ranges
@@ -1089,6 +1156,33 @@ fn verbatim_cells<'t>(verbatim: &'t str, cells: &'t [String]) -> Vec<&'t str> {
     } else {
         cells.iter().map(String::as_str).collect()
     }
+}
+
+/// A row's ID cell as a field (`docs/features/import-layout.md` AC-03,
+/// AC-04): the cell as written under its column's header as written
+/// (`col-N` without one, or for an empty header cell), when a letter or
+/// digit is left once the written ID is cut from it (decoration alone
+/// leaves none); `None` otherwise.
+fn id_cell(
+    header: Option<&[String]>,
+    cells: &[&str],
+    id_column: usize,
+    resolved: &Resolved,
+) -> Option<Field> {
+    let cell = *cells.get(id_column)?;
+    let beyond = cell
+        .replacen(resolved.written.as_str(), " ", 1)
+        .chars()
+        .any(|c| c.is_alphabetic() || c.is_ascii_digit());
+    beyond.then(|| Field {
+        header: header
+            .and_then(|header| header.get(id_column))
+            .filter(|name| !name.is_empty())
+            .cloned()
+            .unwrap_or_else(|| format!("col-{id_column}")),
+        value: cell.to_owned(),
+        column: id_column,
+    })
 }
 
 /// The cells other than the ID and the text, by header as written.
@@ -1113,6 +1207,7 @@ fn fields(
         fields.push(Field {
             header: name,
             value: (*value).to_owned(),
+            column,
         });
     }
     fields

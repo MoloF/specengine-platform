@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [root]
 owner: owner
-reviewed: 2026-09-28
+reviewed: 2026-10-04
 ---
 
 # SpecEngine
@@ -22,7 +22,7 @@ Rust comes first (including Bevy ECS and RON data); other languages via tree-sit
 
 ## Status
 
-**Phase 0 done** (2026-09-29): architectural decisions are made and the engine's key claims are measured on two pilot corpora. **Phase 1**, the reading core, in progress: the spec parser (`specengine-model`, `specengine-core`), the SQLite index (`specengine-store`), `spec check` and the `spec` CLI (`specengine-cli`: `init`, `index`, `search`, `show`, `tree`, `graph`, `bundle`, `check`, `export index`) and the stdio MCP server's read tools and resources (`specengine-mcp`) are shipped; `spec check` is this repository's documentation gate. Also built: layer A parsing and hashing (`specengine-code`), a corpus census (`specengine-import`), rust-analyzer loading (`specengine-ra`) and the measurement harness (`specengine-eval`). Next: process checks, then the pilot projects ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
+**Phase 0 done** (2026-09-29): architectural decisions are made and the engine's key claims are measured on two pilot corpora. **Phase 1**, the reading core, in progress: the spec parser (`specengine-model`, `specengine-core`), the SQLite index (`specengine-store`), `spec check` and the `spec` CLI (`specengine-cli`: `init`, `index`, `search`, `show`, `tree`, `graph`, `bundle`, `check`, `export index`) and the stdio MCP server's read tools and resources (`specengine-mcp`) are shipped; `spec check` is this repository's documentation gate. Also built: layer A parsing and hashing (`specengine-code`), a corpus census, importer and layout round trip (`specengine-import`), rust-analyzer loading (`specengine-ra`) and the measurement harness (`specengine-eval`). Next: token calibration, then the pilot projects ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
 
 ## Where to start
 

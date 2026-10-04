@@ -623,37 +623,62 @@ impl Reader<'_> {
     }
 }
 
+/// The type the reader gives a typed front-matter key's value (its
+/// per-key dispatch); a value of another type is
+/// `frontmatter-type`, kept in `extra`. Read-only: importers writing
+/// front-matter pin their own copy of the table against [`TYPED_KEYS`]
+/// (`docs/features/import-layout.md` AC-05).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum KeyType {
+    /// A string (dates included: kept as text).
+    Text,
+    /// A string holding exactly one reference (`canon`: or a path).
+    Reference,
+    /// An integer.
+    Integer,
+    /// A list of strings.
+    List,
+    /// A list of strings, each exactly one reference.
+    ReferenceList,
+    /// A mapping.
+    Mapping,
+}
+
+/// Every typed front-matter key and its [`KeyType`]; any other key is
+/// untyped (`unknown-key`, kept in `extra`).
+pub const TYPED_KEYS: [(&str, KeyType); 27] = [
+    ("id", KeyType::Text),
+    ("kind", KeyType::Text),
+    ("class", KeyType::Text),
+    ("title", KeyType::Text),
+    ("status", KeyType::Text),
+    ("owner", KeyType::Text),
+    ("reviewed", KeyType::Text),
+    ("date", KeyType::Text),
+    ("shipped", KeyType::Text),
+    ("ref", KeyType::Text),
+    ("to", KeyType::Text),
+    ("severity", KeyType::Text),
+    ("generator", KeyType::Text),
+    ("source", KeyType::Text),
+    ("acceptance", KeyType::Text),
+    ("tier", KeyType::Integer),
+    ("rev", KeyType::Integer),
+    ("scope", KeyType::List),
+    ("aliases", KeyType::List),
+    ("parent", KeyType::Reference),
+    ("working_answer", KeyType::Reference),
+    ("canon", KeyType::Reference),
+    ("supersedes", KeyType::ReferenceList),
+    ("adrs", KeyType::ReferenceList),
+    ("refs", KeyType::ReferenceList),
+    ("links", KeyType::Mapping),
+    ("raised_by", KeyType::Mapping),
+];
+
 /// Keys with a type: a null value leaves them absent.
 fn is_typed(name: &str) -> bool {
-    matches!(
-        name,
-        "id" | "kind"
-            | "class"
-            | "title"
-            | "status"
-            | "owner"
-            | "reviewed"
-            | "date"
-            | "shipped"
-            | "ref"
-            | "to"
-            | "severity"
-            | "generator"
-            | "source"
-            | "acceptance"
-            | "tier"
-            | "rev"
-            | "scope"
-            | "aliases"
-            | "parent"
-            | "working_answer"
-            | "canon"
-            | "supersedes"
-            | "adrs"
-            | "refs"
-            | "links"
-            | "raised_by"
-    )
+    TYPED_KEYS.iter().any(|(key, _)| *key == name)
 }
 
 fn repeated_key(text: &str) -> String {

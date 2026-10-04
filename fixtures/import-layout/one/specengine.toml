@@ -1,0 +1,14 @@
+# The "before" scheme of the import-layout/one fixture: the notebook's own
+# `specengine.toml`, read by `specengine-eval layout --scheme`.
+[project]
+name = "notebook"
+slug = "notebook"
+
+[paths]
+roots = ["book"]
+
+[ids]
+NEED = { kind = "requirement", width = 2 }
+RULE = { kind = "rule",        width = 2 }
+ASK  = { kind = "question",    width = 3 }
+CK   = { kind = "criterion",   width = 2, scope = "feature" }

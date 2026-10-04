@@ -19,6 +19,9 @@ pub(crate) struct LeadIn {
     pub content: Range<usize>,
     /// Byte offset right after the closing delimiter.
     pub after: usize,
+    /// A list item's task box: `[ ]` → `false`, `[x]` / `[X]` → `true`;
+    /// `None` without one (and for a paragraph).
+    pub task_box: Option<bool>,
 }
 
 /// A list item whose content opens (after an optional `[ ]`, `[x]`, `[X]`)
@@ -42,12 +45,14 @@ pub(crate) fn list_item(line: &str) -> Option<LeadIn> {
     if at == after_marker {
         return None;
     }
-    for task in ["[ ]", "[x]", "[X]"] {
+    let mut task_box = None;
+    for (task, checked) in [("[ ]", false), ("[x]", true), ("[X]", true)] {
         if line[at..].starts_with(task) {
             let after_task = at + task.len();
             let next = skip_blanks(line, after_task);
             if next > after_task {
                 at = next;
+                task_box = Some(checked);
             }
             break;
         }
@@ -57,6 +62,7 @@ pub(crate) fn list_item(line: &str) -> Option<LeadIn> {
         marker_indent: columns(&line[..indent_bytes]),
         content,
         after,
+        task_box,
     })
 }
 
@@ -71,6 +77,7 @@ pub(crate) fn paragraph(line: &str) -> Option<LeadIn> {
         marker_indent: 0,
         content,
         after,
+        task_box: None,
     })
 }
 

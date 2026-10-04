@@ -14,6 +14,7 @@ pub mod census;
 pub mod config;
 mod frontmatter;
 pub mod import;
+pub mod layout;
 mod markdown;
 pub mod script;
 pub mod walk;
@@ -23,8 +24,8 @@ pub use census::{
     RecordKind, run,
 };
 pub use config::{
-    CensusConfig, CodeConfig, ConfigError, DocumentsConfig, IdMatch, IdPattern, ImportConfig,
-    Pattern,
+    CensusConfig, ClassRule, CodeConfig, ConfigError, DocClass, DocumentsConfig, IdMatch,
+    IdPattern, ImportConfig, LayoutConfig, Pattern, Target, TargetRule,
 };
 pub use script::IdScript;
 pub use walk::Walk;

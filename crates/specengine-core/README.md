@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-04
 ---
 
 # specengine-core — the spec parser and the check
@@ -43,7 +43,7 @@ exclude = ["docs/archive/old/**"]
 
 ## Front-matter
 
-Optional UTF-8 BOM, then front-matter iff the next line is exactly `---`, closed by the next exact `---`. Typed keys (wrong type, or a bare string for a list → `frontmatter-type`, raw kept in `extra`): strings `kind`, `class`, `title`, `status`, `owner`, `reviewed`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`; integers `tier`, `rev`; string lists `scope`, `aliases` (not lexed); `id`; references `parent`, `working_answer`, `canon`; reference lists `supersedes`, `adrs`, `refs`; `links` (type → reference list); `raised_by` (map). Other keys → `extra` in source order + one `unknown-key`. Declared links (origin `frontmatter`): each `links` item, `supersedes`, `working_answer`, `canon`; `refs`, `adrs` → `mentions`; `status: superseded-by X` → X `supersedes` this document, `src_span` at X. Floats are finite (NaN, ±inf → strings `.nan`, `.inf`, `-.inf`). Each map built (`extra` values, `raised_by`, `links`) holds a key text once: a repeat or a collection key drops its entry with one `frontmatter-type`; top-level repeats stay (`extra` is a list). Limit: a float key's text is Rust `Display` (`{1.0: a, 1: b}` drops `b`). Failed YAML: one `frontmatter-yaml` at its line, no guessed ID, the body still parsed; no lax re-parse (the importer's job).
+Optional UTF-8 BOM, then front-matter iff the next line is exactly `---`, closed by the next exact `---`. Typed keys (pub `TYPED_KEYS`, each with its `KeyType`, read-only: importers pin their copy to it; a wrong type, or a bare string for a list → `frontmatter-type`, raw kept in `extra`): `Text` `kind`, `class`, `title`, `status`, `owner`, `reviewed`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `id`; `Integer` `tier`, `rev`; `List` (of strings) `scope`, `aliases` (not lexed); `Reference` `parent`, `working_answer`, `canon`; `ReferenceList` `supersedes`, `adrs`, `refs`; `Mapping` `links` (type → reference list), `raised_by`. Other keys → `extra` in source order + one `unknown-key`. Declared links (origin `frontmatter`): each `links` item, `supersedes`, `working_answer`, `canon`; `refs`, `adrs` → `mentions`; `status: superseded-by X` → X `supersedes` this document, `src_span` at X. Floats are finite (NaN, ±inf → strings `.nan`, `.inf`, `-.inf`). Each map built (`extra` values, `raised_by`, `links`) holds a key text once: a repeat or a collection key drops its entry with one `frontmatter-type`; top-level repeats stay (`extra` is a list). Limit: a float key's text is Rust `Display` (`{1.0: a, 1: b}` drops `b`). Failed YAML: one `frontmatter-yaml` at its line, no guessed ID, the body still parsed; no lax re-parse (the importer's job).
 
 ## Body references
 

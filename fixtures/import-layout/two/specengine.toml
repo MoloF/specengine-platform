@@ -1,0 +1,20 @@
+# The "before" scheme of the import-layout/two fixture: the decision log's
+# own `specengine.toml`, read by `specengine-eval layout --scheme`. Its
+# `index = true` generator is rendered into the after-tree.
+[project]
+name = "decision-log"
+slug = "decision-log"
+
+[paths]
+roots = ["log", "pages", "ledger"]
+index = "pages/index.md"
+
+[ids]
+DEC = { kind = "decision",  width = 4 }
+PRB = { kind = "problem",   width = 4 }
+CRT = { kind = "criterion", width = 4, scope = "feature" }
+
+[[generators]]
+command = "spec export index"
+writes  = ["pages/index.md"]
+index   = true

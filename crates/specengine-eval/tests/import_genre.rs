@@ -13,6 +13,12 @@
 //! String literals are read with a small lexer that skips comments (the one
 //! of `identity_literals.rs`), so a doc comment may cite anything; the
 //! character checks cover comments too.
+//!
+//! docs/features/import-layout.md AC-10 extends the scan to the layout
+//! emitter (`crates/specengine-import/src/layout/`, under the walked
+//! `src`) and the eval `layout` module, and the forbidden set to both
+//! `fixtures/import-layout/*/census.toml` configs with their `[layout]`;
+//! each layout rule is non-zero in both layout fixtures' `expected.json`.
 
 mod import_support;
 
@@ -21,6 +27,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use import_support::*;
+
+/// The two invented conventions of docs/features/import-layout.md.
+const LAYOUT_FIXTURES: [&str; 2] = ["import-layout/one", "import-layout/two"];
 
 /// Every `.rs` file of the import engine, and the eval `import` module.
 fn scanned_sources() -> Vec<PathBuf> {
@@ -38,6 +47,7 @@ fn scanned_sources() -> Vec<PathBuf> {
     }
     walk(&root.join("crates/specengine-import/src"), &mut sources);
     sources.push(root.join("crates/specengine-eval/src/import.rs"));
+    sources.push(root.join("crates/specengine-eval/src/layout.rs"));
     sources.sort();
     sources
 }
@@ -182,6 +192,11 @@ fn forbidden() -> BTreeSet<String> {
         ));
     }
     strings.extend(convention_strings(&generated_config_text()));
+    for name in LAYOUT_FIXTURES {
+        strings.extend(convention_strings(
+            &fs::read_to_string(fixture_config(name)).expect("layout fixture config"),
+        ));
+    }
     let scratch = Scratch::new("genre");
     for name in FIXTURES {
         let run = ImportRun::new(&fixture_dir(name), &scratch, name, &[]);
@@ -448,5 +463,135 @@ fn every_recognizer_is_non_zero_in_both_fixtures() {
                 "{name}: {map} {counts:?}"
             );
         }
+    }
+}
+
+// ------------------------------------------- docs/features/import-layout.md
+
+/// AC-10: the scan reads the layout emitter and the eval `layout` module.
+#[test]
+fn the_scan_covers_the_layout_emitter_and_the_eval_layout_module() {
+    let scanned: Vec<String> = scanned_sources()
+        .iter()
+        .map(|path| relative(path))
+        .collect();
+    for wanted in [
+        "crates/specengine-import/src/layout/mod.rs",
+        "crates/specengine-import/src/layout/body.rs",
+        "crates/specengine-import/src/layout/header.rs",
+        "crates/specengine-import/src/layout/records.rs",
+        "crates/specengine-import/src/layout/scheme.rs",
+        "crates/specengine-import/src/layout/toml_out.rs",
+        "crates/specengine-import/src/layout/yaml.rs",
+        "crates/specengine-eval/src/layout.rs",
+    ] {
+        assert!(
+            scanned.iter().any(|path| path == wanted),
+            "{wanted} is not scanned: {scanned:?}"
+        );
+    }
+    // Not vacuous: a literal only the eval layout module holds is found.
+    let probes = BTreeSet::from(["import-layout source debt".to_owned()]);
+    let (found, _) = convention_literals(&probes);
+    assert!(
+        found
+            .iter()
+            .any(|hit| hit.starts_with("crates/specengine-eval/src/layout.rs:")),
+        "{found:?}"
+    );
+}
+
+/// AC-10: the forbidden set holds the `[layout]` values and the other
+/// convention strings of both layout fixtures.
+#[test]
+fn the_forbidden_set_holds_the_layout_fixture_conventions() {
+    let forbidden = forbidden();
+    for sample in [
+        "book/atoms",                           // layout.records (one)
+        "book/flows",                           // layout.features (one)
+        "book/flows/**",                        // layout.classes glob (one)
+        "ticked",                               // layout.task_box_key (one)
+        "2999-12-31",                           // layout.debt_expires (one)
+        "register",                             // value_map.class entry (one)
+        "Keeper",                               // key-map key (one)
+        "ledger",                               // layout.records (two)
+        "topics",                               // layout.features (two)
+        r"^pages/(?P<slug>[^/]+)/index\.md$",   // layout.slug (two)
+        "*/**",                                 // layout.classes glob (two)
+        "steward",                              // key-map target (two)
+        r"^log/(?P<id>[A-Z]{3}-[0-9]{4})\.md$", // documents.id_path (two)
+    ] {
+        assert!(
+            forbidden.contains(sample),
+            "{sample:?} is in the forbidden set"
+        );
+    }
+}
+
+/// The layout counts each layout fixture must exercise.
+const LAYOUT_RULES: [&str; 16] = [
+    "tree/documents",
+    "tree/record_files",
+    "tree/feature_documents",
+    "tree/moved",
+    "tree/reshaped",
+    "hashes/matched",
+    "titles/matched",
+    "fields/matched",
+    "prose/documents",
+    "extents/total",
+    "header/documents",
+    "before/duplicates",
+    "dangling/links/after",
+    "code/moved_cited",
+    "code/citations_to_moved",
+    "index/files",
+];
+
+/// The layout counts one convention exercises and the other shows zero:
+/// the task box carried (a `task_box_key`) or dropped (none), and the
+/// emitter's reasons and header conflicts.
+const LAYOUT_RULES_EITHER: [&str; 6] = [
+    "task_box/carried",
+    "task_box/dropped",
+    "reasons/path_taken",
+    "reasons/prefix_unknown",
+    "reasons/slug",
+    "header/conflicts",
+];
+
+fn layout_count(expected: &serde_json::Value, path: &str, name: &str) -> u64 {
+    let mut value = expected;
+    for part in path.split('/') {
+        value = &value[part];
+    }
+    value
+        .as_u64()
+        .unwrap_or_else(|| panic!("{name}: expected.json has no count at {path}"))
+}
+
+/// AC-10: each layout rule is non-zero in both layout fixtures'
+/// `expected.json`; the rest in at least one of them.
+#[test]
+fn every_layout_rule_is_non_zero_in_both_layout_fixtures() {
+    let expected: Vec<(&str, serde_json::Value)> = LAYOUT_FIXTURES
+        .iter()
+        .map(|name| (*name, read_json(&fixture_dir(name).join("expected.json"))))
+        .collect();
+    for (name, value) in &expected {
+        let zero: Vec<&str> = LAYOUT_RULES
+            .iter()
+            .copied()
+            .filter(|path| layout_count(value, path, name) == 0)
+            .collect();
+        assert!(zero.is_empty(), "{name}: zero layout rules {zero:?}");
+    }
+    for path in LAYOUT_RULES_EITHER {
+        assert!(
+            expected
+                .iter()
+                .any(|(name, value)| layout_count(value, path, name) > 0),
+            "{path} is zero in both layout fixtures"
+        );
     }
 }

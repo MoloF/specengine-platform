@@ -20,7 +20,8 @@
 //!   docs/features/spec-cli.md);
 //! - [`tokens`] — the per-script token estimator;
 //! - `front_matter` — the block and its typed keys (`serde-saphyr`, with
-//!   depth and alias budgets);
+//!   depth and alias budgets); [`TYPED_KEYS`] — each typed key's
+//!   [`KeyType`], read-only;
 //! - `markdown` — headings, attribute blocks, text regions and local link
 //!   destinations (`pulldown-cmark` with offsets);
 //! - [`walk_scope`] — [`WalkScope`]: the walk's rules as pure predicates,
@@ -52,6 +53,7 @@ use specengine_model::{
     LinkTarget, Node, ParentRef, ParsedFile, PathTarget, Reference, Span,
 };
 
+pub use front_matter::{KeyType, TYPED_KEYS};
 pub use own_text::own_spans;
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
 pub use project_toml::{

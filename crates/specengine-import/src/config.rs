@@ -39,7 +39,8 @@ use std::ops::Range;
 use std::path::{Component, Path, PathBuf};
 
 use regex::Regex;
-use serde::Deserialize;
+use serde::de::IntoDeserializer;
+use serde::{Deserialize, Serialize};
 use toml::Spanned;
 
 use crate::script::{IdScript, Normalized};
@@ -88,6 +89,209 @@ pub struct CensusConfig {
     pub wiki_root: Option<PathBuf>,
     /// The import keys; never read by the census.
     pub import: ImportConfig,
+    /// `[layout]`, defaults when absent; read by neither the census nor the
+    /// import, only by [`crate::layout`].
+    pub layout: LayoutConfig,
+}
+
+/// Default of `[layout] records`: core's `[paths] records` default
+/// (`docs/canon/architecture.md` "Spec layout in a project").
+pub const DEFAULT_LAYOUT_RECORDS: &str = "docs/records";
+/// Default of `[layout] features`: core's `[paths] features` default
+/// (`docs/canon/architecture.md` "Spec layout in a project").
+pub const DEFAULT_LAYOUT_FEATURES: &str = "docs/features";
+/// Default of `[layout] debt_expires`.
+pub const DEFAULT_DEBT_EXPIRES: &str = "9999-12-31";
+
+/// `[layout]`, validated (`crates/specengine-import/README.md` "Config"): where
+/// the after-tree puts record files and feature documents, the classes it
+/// gives, the task-box key, the baseline's expiry and the target per
+/// prefix. Absent: every default.
+#[derive(Debug, Clone)]
+pub struct LayoutConfig {
+    /// `<records>/<PREFIX>/<ID>.md`; root-relative, `/`-separated.
+    pub records: String,
+    /// `<features>/<slug>.md`; root-relative, `/`-separated.
+    pub features: String,
+    /// Over the corpus-relative source path; group `slug`. `None`: the stem.
+    pub slug: Option<Regex>,
+    /// The `class` of every record file.
+    pub record_class: DocClass,
+    /// A document's class when its header gives none: the first match over
+    /// its after path.
+    pub classes: Vec<ClassRule>,
+    /// The key carrying a list item's task box; `None`: boxes are dropped.
+    pub task_box_key: Option<String>,
+    /// `YYYY-MM-DD`: the `expires` of every baseline entry.
+    pub debt_expires: String,
+    /// The line of `debt_expires`, when written.
+    pub debt_expires_line: Option<usize>,
+    /// Per Latin prefix; absent: project scope `file`, feature `section`.
+    pub targets: BTreeMap<String, TargetRule>,
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
+            records: DEFAULT_LAYOUT_RECORDS.to_owned(),
+            features: DEFAULT_LAYOUT_FEATURES.to_owned(),
+            slug: None,
+            record_class: DocClass::default(),
+            classes: Vec::new(),
+            task_box_key: None,
+            debt_expires: DEFAULT_DEBT_EXPIRES.to_owned(),
+            debt_expires_line: None,
+            targets: BTreeMap::new(),
+        }
+    }
+}
+
+impl LayoutConfig {
+    /// Where a definition of `prefix` goes: its `targets` entry, else
+    /// `section` for a feature-scoped prefix and `file` for the others.
+    pub fn target(&self, prefix: &str, feature: bool) -> Target {
+        match self.targets.get(prefix) {
+            Some(rule) => rule.target,
+            None if feature => Target::Section,
+            None => Target::File,
+        }
+    }
+
+    /// The first `classes` entry matching a document's after path.
+    pub fn class_of(&self, after: &str) -> Option<DocClass> {
+        self.classes
+            .iter()
+            .find(|rule| rule.glob.is_match(after))
+            .map(|rule| rule.class)
+    }
+
+    /// The refusals that need the before scheme and the run's date
+    /// (`crates/specengine-import/README.md` "Config", at start): a `targets`
+    /// key the scheme does not configure, a feature-scoped one set to
+    /// `file`, `debt_expires` before `today` (`YYYY-MM-DD`). `origin` names
+    /// the config in the error. The index output path is checked by the
+    /// caller against [`crate::layout::Layout::holds`].
+    pub fn check_start(
+        &self,
+        origin: &Path,
+        scheme: &crate::layout::Scheme,
+        today: &str,
+    ) -> Result<(), ConfigError> {
+        let error = |line: Option<usize>, message: String| ConfigError {
+            path: origin.to_path_buf(),
+            line,
+            message,
+        };
+        for (prefix, rule) in &self.targets {
+            if !scheme.has_prefix(prefix) {
+                return Err(error(
+                    Some(rule.line),
+                    format!(
+                        "`layout.targets` names `{prefix}`, which the scheme's `[ids]` does not configure"
+                    ),
+                ));
+            }
+            if rule.target == Target::File && scheme.is_feature(prefix) {
+                return Err(error(
+                    Some(rule.line),
+                    format!(
+                        "`layout.targets.{prefix}` is `{}`, but the scheme scopes `{prefix}` to a feature: its IDs are sections of a feature document",
+                        word(&Target::File)
+                    ),
+                ));
+            }
+        }
+        if self.debt_expires.as_str() < today {
+            return Err(error(
+                self.debt_expires_line,
+                format!(
+                    "`layout.debt_expires` `{}` is before today, {today}",
+                    self.debt_expires
+                ),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// One `[layout] classes` entry, compiled.
+#[derive(Debug, Clone)]
+pub struct ClassRule {
+    /// Over the after path, `/`-separated.
+    pub glob: Regex,
+    pub class: DocClass,
+}
+
+/// One `[layout] targets` entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TargetRule {
+    pub target: Target,
+    /// The entry's line in the config.
+    pub line: usize,
+}
+
+/// Where a prefix's definitions go (ADR-0026): one record file each, or a
+/// `{#ID}` section of their document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Target {
+    File,
+    Section,
+}
+
+/// The four document classes of the target layout (`docs/canon/spec-check.md`).
+/// The names are the format's vocabulary, spelled by serde from the variants:
+/// no string literal of the engine names a class.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DocClass {
+    #[default]
+    Canon,
+    Decision,
+    Spec,
+    Generated,
+}
+
+impl DocClass {
+    /// The class as the target front-matter writes it.
+    pub fn name(self) -> String {
+        word(&self)
+    }
+}
+
+/// The front-matter keys the after-tree writes itself (core's reader): a
+/// task-box key may be none of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CoreKey {
+    Id,
+    Class,
+    Title,
+    Aliases,
+}
+
+impl CoreKey {
+    pub fn name(self) -> String {
+        word(&self)
+    }
+
+    /// The key `text` names, if it is one.
+    pub fn of(text: &str) -> Option<Self> {
+        let deserializer: serde::de::value::StrDeserializer<'_, serde::de::value::Error> =
+            text.into_deserializer();
+        Self::deserialize(deserializer).ok()
+    }
+}
+
+/// The name serde gives a unit variant of the format's vocabulary
+/// ([`Target`], [`DocClass`], [`CoreKey`], the scheme's scope): the target
+/// format's words live in the variants, not in string literals, so that the
+/// genre test's literal scan keeps reading only corpus conventions.
+pub(crate) fn word<T: Serialize>(value: &T) -> String {
+    match toml::Value::try_from(value) {
+        Ok(toml::Value::String(name)) => name,
+        _ => String::new(),
+    }
 }
 
 /// The import keys of the config, compiled. Every key is optional and off
@@ -195,6 +399,39 @@ struct RawConfig {
     code: RawCode,
     #[serde(default)]
     documents: RawDocuments,
+    #[serde(default)]
+    layout: RawLayout,
+}
+
+/// `[layout]` as written (`crates/specengine-import/README.md` "Config"); the
+/// census and the import validate it and read none of it.
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct RawLayout {
+    #[serde(default)]
+    records: Option<Spanned<String>>,
+    #[serde(default)]
+    features: Option<Spanned<String>>,
+    #[serde(default)]
+    slug: Option<Spanned<String>>,
+    #[serde(default)]
+    record_class: Option<Spanned<DocClass>>,
+    #[serde(default)]
+    classes: Vec<RawClassRule>,
+    #[serde(default)]
+    task_box_key: Option<Spanned<String>>,
+    #[serde(default)]
+    debt_expires: Option<Spanned<String>>,
+    #[serde(default)]
+    targets: BTreeMap<String, Spanned<Target>>,
+}
+
+/// One `[layout] classes` entry.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawClassRule {
+    glob: Spanned<String>,
+    class: Spanned<DocClass>,
 }
 
 #[derive(Deserialize)]
@@ -392,6 +629,7 @@ impl CensusConfig {
 
         // Before the census keys below are moved out of `raw`.
         let import = compile_import(&raw, &error_at, &inside)?;
+        let layout = compile_layout(&raw.layout, &error_at, &import)?;
 
         let extensions = match raw.corpus.extensions {
             None => vec!["md".to_owned()],
@@ -480,6 +718,7 @@ impl CensusConfig {
             section_ids: raw.sections.id_attr,
             wiki_root,
             import,
+            layout,
         })
     }
 
@@ -785,6 +1024,217 @@ fn compile_import(
         code,
         documents: DocumentsConfig { id_key, id_path },
     })
+}
+
+/// Compiles and validates `[layout]`
+/// (`crates/specengine-import/README.md` "Config"); an error names the key's
+/// line. The refusals that need the before scheme or the run's date are
+/// [`LayoutConfig::check_start`].
+fn compile_layout(
+    raw: &RawLayout,
+    error_at: &ErrorAt<'_>,
+    import: &ImportConfig,
+) -> Result<LayoutConfig, ConfigError> {
+    let directory = |key: &str, value: &Option<Spanned<String>>, default: &str| match value {
+        None => Ok((default.to_owned(), None)),
+        Some(value) => root_relative(value.get_ref())
+            .map(|path| (path, Some(value.span())))
+            .map_err(|problem| error_at(Some(value.span()), format!("`layout.{key}`: {problem}"))),
+    };
+    let (records, records_span) = directory("records", &raw.records, DEFAULT_LAYOUT_RECORDS)?;
+    let (features, features_span) = directory("features", &raw.features, DEFAULT_LAYOUT_FEATURES)?;
+    let nested = |outer: &str, inner: &str| {
+        inner
+            .strip_prefix(outer)
+            .is_some_and(|rest| rest.starts_with('/'))
+    };
+    if records == features || nested(&records, &features) || nested(&features, &records) {
+        return Err(error_at(
+            features_span.or(records_span),
+            format!(
+                "`layout.records` `{records}` and `layout.features` `{features}` are equal or nested"
+            ),
+        ));
+    }
+
+    let slug = match &raw.slug {
+        None => None,
+        Some(value) => {
+            let compiled = Regex::new(value.get_ref())
+                .map_err(|error| error_at(Some(value.span()), format!("`layout.slug`: {error}")))?;
+            if compiled.is_match("") {
+                return Err(error_at(
+                    Some(value.span()),
+                    "`layout.slug` matches the empty string".to_owned(),
+                ));
+            }
+            if !compiled.capture_names().any(|name| name == Some("slug")) {
+                return Err(error_at(
+                    Some(value.span()),
+                    "`layout.slug` has no group `slug`".to_owned(),
+                ));
+            }
+            Some(compiled)
+        }
+    };
+
+    let mut classes = Vec::with_capacity(raw.classes.len());
+    for rule in &raw.classes {
+        let source = rule.glob.get_ref();
+        if source.is_empty() {
+            return Err(error_at(
+                Some(rule.glob.span()),
+                "`layout.classes` holds an empty glob".to_owned(),
+            ));
+        }
+        let glob = Regex::new(&glob_to_regex(source)).map_err(|error| {
+            error_at(
+                Some(rule.glob.span()),
+                format!("`layout.classes` glob `{source}`: {error}"),
+            )
+        })?;
+        classes.push(ClassRule {
+            glob,
+            class: *rule.class.get_ref(),
+        });
+    }
+
+    let task_box_key = match &raw.task_box_key {
+        None => None,
+        Some(value) => {
+            let key = value.get_ref();
+            let problem = if key.is_empty() {
+                Some("is empty".to_owned())
+            } else if key.trim() != key {
+                Some("has blanks around it".to_owned())
+            } else {
+                CoreKey::of(key).map(|_| format!("`{key}` is a key the layout writes itself"))
+            };
+            if let Some(problem) = problem {
+                return Err(error_at(
+                    Some(value.span()),
+                    format!("`layout.task_box_key` {problem}"),
+                ));
+            }
+            Some(key.clone())
+        }
+    };
+
+    let (debt_expires, debt_expires_line) = match &raw.debt_expires {
+        None => (DEFAULT_DEBT_EXPIRES.to_owned(), None),
+        Some(value) => {
+            if !is_date(value.get_ref()) {
+                return Err(error_at(
+                    Some(value.span()),
+                    format!(
+                        "`layout.debt_expires` `{}` is not a date `YYYY-MM-DD`",
+                        value.get_ref()
+                    ),
+                ));
+            }
+            let line = error_at(Some(value.span()), String::new()).line;
+            (value.get_ref().clone(), line)
+        }
+    };
+
+    let mut targets = BTreeMap::new();
+    for (prefix, target) in &raw.targets {
+        if !is_latin_prefix(prefix) {
+            return Err(error_at(
+                Some(target.span()),
+                format!(
+                    "`layout.targets` key `{prefix}` is not a Latin prefix (an ASCII capital, then ASCII capitals or digits)"
+                ),
+            ));
+        }
+        let target_value = *target.get_ref();
+        if target_value == Target::File && import.feature_prefixes.contains(prefix) {
+            return Err(error_at(
+                Some(target.span()),
+                format!(
+                    "`layout.targets.{prefix}` is `{}`, but `{prefix}` is one of `ids.feature_prefixes`: its IDs are sections of a feature document",
+                    word(&Target::File)
+                ),
+            ));
+        }
+        let line = error_at(Some(target.span()), String::new())
+            .line
+            .unwrap_or(1);
+        targets.insert(
+            prefix.clone(),
+            TargetRule {
+                target: target_value,
+                line,
+            },
+        );
+    }
+
+    Ok(LayoutConfig {
+        records,
+        features,
+        slug,
+        record_class: raw
+            .record_class
+            .as_ref()
+            .map(|class| *class.get_ref())
+            .unwrap_or_default(),
+        classes,
+        task_box_key,
+        debt_expires,
+        debt_expires_line,
+        targets,
+    })
+}
+
+/// A root-relative directory under core's `[paths]` rules: no leading `/`,
+/// no `..`, no `.` or empty component; one trailing `/` dropped.
+fn root_relative(value: &str) -> Result<String, String> {
+    let trimmed = value.strip_suffix('/').unwrap_or(value);
+    if trimmed.is_empty() {
+        return Err(format!("{value:?} is empty"));
+    }
+    if trimmed.starts_with('/') {
+        return Err(format!("{value:?} is absolute; paths are root-relative"));
+    }
+    for component in trimmed.split('/') {
+        match component {
+            ".." => return Err(format!("{value:?} leaves the root through `..`")),
+            "." => return Err(format!("{value:?} has a `.` component")),
+            "" => return Err(format!("{value:?} has an empty component")),
+            _ => {}
+        }
+    }
+    Ok(trimmed.to_owned())
+}
+
+/// `YYYY-MM-DD`, a date of the proleptic Gregorian calendar.
+pub fn is_date(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let number = |range: Range<usize>| {
+        text.get(range)
+            .and_then(|part| part.parse::<u32>().ok())
+            .unwrap_or(0)
+    };
+    let (year, month, day) = (number(0..4), number(5..7), number(8..10));
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    (1..=days).contains(&day)
 }
 
 /// An ASCII capital, then ASCII capitals or digits (ADR-0009).

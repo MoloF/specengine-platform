@@ -57,6 +57,9 @@ pub struct Field {
     /// an empty header cell or a repeated one.
     pub header: String,
     pub value: String,
+    /// The cell's 0-based column (the layout's `col-N` for a repeated key).
+    #[serde(skip)]
+    pub column: usize,
 }
 
 /// One record of the model.
@@ -86,6 +89,24 @@ pub struct ImportRecord {
     pub hash: String,
     /// Table rows only.
     pub fields: Vec<Field>,
+    /// `[first, last]`, 1-based source lines
+    /// (`docs/canon/import.md` "Record model"): a row's line; a list item's
+    /// marker line to its text's last; a section's heading to its last
+    /// non-blank line; a document's every line. Detail only: no count reads it.
+    pub extent: [usize; 2],
+    /// The ID as written (legacy prefix and look-alikes as they stand).
+    #[serde(skip)]
+    pub written: String,
+    /// A list item's task box (`[ ]` → `false`, `[x]` → `true`); `None`
+    /// without one and for every other form.
+    #[serde(skip)]
+    pub task_box: Option<bool>,
+    /// A table row's ID cell as written, under its column's header as
+    /// written (`col-N` without one), when a letter or digit is left once
+    /// the written ID is cut from it: the layout carries it as a field
+    /// (`docs/features/import-layout.md` AC-03, AC-04). `None` otherwise.
+    #[serde(skip)]
+    pub id_cell: Option<Field>,
 }
 
 /// A position in the corpus with what is written there.

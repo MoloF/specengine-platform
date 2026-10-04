@@ -4,8 +4,9 @@
 //! walker's business.
 //!
 //! Role keys `spec`, `records`, `features`, `generated`, `archive` (07 §5,
-//! defaults 05 §2); `roots`, the walked directories or `.md` files (default:
-//! the role directories but `generated`, SpecEngine's own output);
+//! defaults `docs/canon/architecture.md` "Spec layout in a project");
+//! `roots`, the walked directories or `.md` files (default: the role
+//! directories but `generated`, SpecEngine's own output);
 //! `exclude`, census globs (`*`, `**`, `?`) over root-relative file paths;
 //! for `spec check` (docs/features/spec-check.md): `tier0` (the one file
 //! canon tier 0 may be), `tier1_name` (the file name canon tier 1 is

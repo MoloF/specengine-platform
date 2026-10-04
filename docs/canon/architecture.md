@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-04
 ---
 
 # SpecEngine architecture rules
@@ -20,6 +20,13 @@ The rules all code is written by. Each rule was introduced by a decision (ADR) a
 ## Spec layout in a project
 
 A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file. A node document (mechanic, feature) is one file; its rules are sections with `{#ID}`. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is defined only as a `{#ID}` section of a feature document: a file `<slug>.md` directly under `[paths] features`, slug = the file stem, `[a-z][a-z0-9-]*`. It is unique within that file, has no record file, and is cited `<slug>/ID` from other files, bare inside its own. ADR-0026.
+
+Granularity: a record file gives atomic diffs, conflict-free merges and cheap agent writes; a mechanic or feature reads best whole, and its sections are hashed one by one, so editing a neighbour gives no false drift. Directories come from `specengine.toml` `[paths]`, so a consumer's existing `docs/` stays intact; the defaults (`crates/specengine-core/README.md` "`[paths]`"):
+
+- `specengine.toml` (roots, ID prefixes, classes, budgets, zones); `spec.lock` (verified node ↔ symbol hash pairs, generated, committed; Phase 3);
+- `docs/spec/`, the business-logic tree (canon): a root document (a game's vision, pillars, core loop), `<domain>/README.md` (Tier 1), `<domain>/<mechanic>.md` with rules, invariants and edge cases as `{#ID}` sections;
+- `docs/records/<PREFIX>/<ID>.md` (`R/R-12.md`, `DEC/DEC-0023.md`); `docs/features/<slug>.md`, change specs (consumable);
+- `docs/generated/` (index, registries, glossary, queue: SpecEngine's output); `docs/archive/` (Tier 3 by front-matter, not by folder).
 
 <a id="apply"></a>
 ## Applying proposals
