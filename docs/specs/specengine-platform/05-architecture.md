@@ -254,7 +254,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 | no | no | `ok` | — |
 | yes | no | `spec_ahead` | a "bring code to spec" task is created/updated |
 | no | yes | `code_ahead` | into the owner's queue: "accept code changes" (update lock) or "reject" (task to revert/fix). If the meaning changed too, the agent proposes a spec edit |
-| yes | yes | `conflict` | UI: two diffs side by side — spec `git diff <lock.commit> -- <file>#anchor` and code `git diff <lock.commit> -- <symbol span>` |
+| yes | yes | `conflict` | UI: spec-section and symbol-span diffs since `lock.commit`, side by side |
 | — | symbol not found | `broken_binding` | marker removed or symbol renamed; a rebind proposal |
 | node accepted, no bindings | | `unbound` | visible on the "what's left" panel |
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
@@ -322,4 +322,4 @@ The full scenario is in `06-workflows.md`. The engine invariants:
 | Watch | `notify` | live drift in the daemon |
 | Diff | `similar` | proposal patches, diff view |
 | CLI | `clap` 4 | — |
-| UI | Vite + React 19 + TS + TanStack Query + `@xyflow/react` + dagre/ELK + CodeMirror 6 (`@codemirror/merge` for diffs) | the stack consumer-project editors already use; embedded via `rust-embed` |
+| UI | `ui/README.md` | ADR-0011, ADR-0033 |

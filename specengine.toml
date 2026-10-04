@@ -3,7 +3,7 @@
 slug = "specengine-platform"   # names the index database of the read commands
 
 [paths]
-roots      = ["CLAUDE.md", "README.md", "crates", "docs"]
+roots      = ["CLAUDE.md", "README.md", "crates", "docs", "ui"]
 records    = "docs/decisions"
 tier0      = "CLAUDE.md"
 tier1_name = "README.md"

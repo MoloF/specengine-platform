@@ -120,7 +120,7 @@ $ spec review PR-0042
   [a] accept option  [e] edit and accept  [r] reject  [c] needs clarification  [d] defer
 ```
 
-**Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, diff in `@codemirror/merge`. The diff can be edited right in the card before accepting.
+**Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting.
 
 **Inside a Claude Code session** (fast path): the `review_proposal` tool is marked `_meta["anthropic/requiresUserInteraction"]: true` and via MRTR/elicitation shows a form (option, comment) or URL mode with a link to the card in the UI. The model cannot answer for the human, and allow rules and hooks cannot bypass this.
 

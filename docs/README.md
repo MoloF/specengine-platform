@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-10-03
+reviewed: 2026-10-05
 ---
 
 # Documentation: how the convention is applied
@@ -28,7 +28,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 ## Tiers
 
 - **Tier 0** — `CLAUDE.md`, always read.
-- **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), later `ui/README.md`. Canon lives next to the code it describes.
+- **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), `ui/README.md`. Canon lives next to the code it describes.
 - **Tier 2** — the index root `docs/index.md` and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
 - **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document. Its index line keeps only the id link and the status (ADR-0028) and lives in the archive shard `docs/index-archive.md`, read by id only, outside W (ADR-0030).
 
@@ -102,7 +102,7 @@ The index is the root `docs/index.md`, the one entry point, plus the shards its 
 
 `spec check` (`docs/canon/spec-check*.md`, CLI: `docs/canon/spec-check-cli.md`) is the only check: the six of §11 (budgets, front-matter schema, `canon:` resolves, `superseded-by`/`supersedes`/`adrs` targets exist, index and generated documents have not drifted), IDs and scopes, graph and file-link warnings, the project's process rules, a debt baseline. The root `specengine.toml` configures it.
 
-- **Walk**: roots `CLAUDE.md`, `README.md`, `crates`, `docs`; `_*.md` and every `fixtures`, `target`, `target.noindex`, `node_modules`, `dist` directory excluded. A new top-level directory or `.md` file (`ui/`, `plugin/`, `AGENTS.md`) stays unwalked until listed in `roots`: the task creating it adds it in the same change.
+- **Walk**: roots `CLAUDE.md`, `README.md`, `crates`, `docs`, `ui`; `_*.md` and every `fixtures`, `target`, `target.noindex`, `node_modules`, `dist` directory excluded. A new top-level directory or `.md` file (`plugin/`, `AGENTS.md`) stays unwalked until listed in `roots`: the task creating it adds it in the same change.
 - **Roles** run `cargo run -q -p specengine-cli -- export index && cargo run -q -p specengine-cli -- check` before handing in (`CLAUDE.md`, "Process").
 - **Pre-commit hook** (`scripts/hooks-install.sh` enables `.githooks/`): when the staged names (renames split, `--diff-filter=ACDMT`) include a `.md` file or the top-level `specengine.toml` or `.spec-debt.toml`, it runs `cargo run -q -p specengine-cli -- check --staged --root .`, judged against `HEAD`: a new `.spec-debt.toml` entry or a later `expires` is new debt and blocks, so it takes the owner's `--no-verify`. Fail closed: any non-zero exit (errors, cannot check, a failed build, no toolchain) refuses the commit; only `--no-verify` skips. The checker is built from the working tree. Only form errors block: the convention's (ADR-0022) and the project's declared `[[check.rules]]` (ADR-0031, here a decision's "Cost" and own text, a shipped feature's "Implementation": `docs/canon/spec-check-process.md`); content never does (ADR-0006).
 - **Merges**: a clean `git merge` runs `pre-merge-commit`, not `pre-commit`; merged documents are judged by CI alone.

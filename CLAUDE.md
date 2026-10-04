@@ -3,18 +3,18 @@ class: canon
 tier: 0
 scope: [root]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-05
 ---
 
 # SpecEngine
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, later a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phase 0 done; **Phase 1** (reading core) in progress: parser, index, CLI reads, graph and bundle, MCP stdio reads, `spec check` 1–4 (`--staged`, `--changed`), sharded `export index`, layer A identity shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phase 0 done; **Phase 1** (reading core) in progress: parser, index, CLI reads, graph and bundle, MCP stdio reads, `spec check` 1–4, sharded `export index`, layer A identity shipped; UI begun on mocks (ADR-0033). Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
-`CLAUDE.md` → `docs/index.md` → at most three documents. Needing a third step is a defect of the index or the canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
+`CLAUDE.md` → `docs/index.md` → at most three documents. A third step is a defect of the index or the canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
 
 ## Rules that must not be broken
 
@@ -41,7 +41,7 @@ Code and documentation change **only through the pipeline** `/feature <requireme
 | `requirement-analyst` | requirement analysis, assumptions, questions, criteria | — (nothing) |
 | `spec-writer` | task specs, ADR + canon diff, index | `docs/`, `CLAUDE.md`, `*/README.md`, `README.md`, `specengine.toml`, `.spec-debt.toml` |
 | `rust-developer` | Rust code | `Cargo.toml`, `crates/*/src`, `plugin/`, `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/` |
-| `ui-developer` | web UI (Phase 4+) | `ui/**`, except generated types |
+| `ui-developer` | web UI | `ui/**`, except generated types |
 | `test-engineer` | tests and running checks | `crates/*/tests`, `fixtures/`, `#[cfg(test)]` |
 | `code-reviewer` | review against the spec and the rules | — (no Write/Edit) |
 
@@ -63,7 +63,7 @@ The pre-commit hook and CI reject a red check (`docs/README.md` "Enforcement").
 - `crates/specengine-{model,core,store,cli,code,eval,import,mcp,ra}` — the corpus model and reference grammar, the spec parser and check, the spec index (SQLite + FTS5), the `spec` binary, layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, layer C (outside `default-members`); each has a Tier 1 `README.md`.
 - `fixtures/` — test corpora with `expected.json`; `bevy-mini` and `ra-mini` are workspace-excluded.
 - `.claude/` — pipeline roles and commands.
-- Planned: `crates/specengine-http`, `ui/`, `plugin/`.
+- `ui/` — the web UI; planned: `crates/specengine-http`, `plugin/`.
 
 ## Owner's machine
 

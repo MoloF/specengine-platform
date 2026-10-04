@@ -9,7 +9,7 @@ ref: research-2026-09-28
 
 ## 1. SpecEngine repository layout
 
-Built: `CLAUDE.md` "Layout" and each crate's README; the crates' planned roles: 05 §1. Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `ui/` (Vite + React 19 + TS, Phase 4), `plugin/` (the Claude Code plugin: `plugin.json`, `.mcp.json`, hooks, skills, agents), the `spec` binary's alias `specengine`.
+Built: `CLAUDE.md` "Layout" and each subtree's README; the crates' planned roles: 05 §1. Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `plugin/` (the Claude Code plugin: `plugin.json`, `.mcp.json`, hooks, skills, agents), the `spec` binary's alias `specengine`.
 
 ## 2. Phases
 
@@ -19,7 +19,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 - ADR-0001…ADR-0025 with canon diffs; spikes: `docs/features/phase-0-spikes.md`.
 - Carried to Phase 1: pre-code reading (tracey sources and a run on one pilot crate, input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift, amiss, `/speckit.converge`).
-- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ≈ 109 KB against ≤ 40 KB, driven by 05, 04 and 06.
+- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ≈ 109 KB against ≤ 40 KB, driven by 05 and 04.
 
 ### Phase 1. Reading core — ~2-3 weeks
 
@@ -49,7 +49,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 4. Web UI — ~2-3 weeks
 
-Screens per 07 §3: Tree, Node, Graph, Queue (with diff and in-place editing), Tasks, Health, Round. Live updates over SSE.
+Screens and SSE per 07 §3; begun on mocks before the daemon (ADR-0033): `docs/features/ui-shell.md`.
 
 ### Phase 5. Maturity — ~2 weeks
 
@@ -124,7 +124,7 @@ Each finding became a per-corpus import config setting or rule, not core code (A
 | Migration breaks sentinel tests and verbatim corpus texts | high | harness adapter before the move; text hashes in the report; AC-6 |
 | The queue grows faster than the owner processes it | medium | nothing is blocked (ADR-0012), sorting by `severity` and number of dependent `@assumes`; batched rounds; metric "decided differently from the working answer" |
 | Agents do not add markers | medium | rules in plugin roles; `unbound` on the panel; `SubagentStop` reminder; check in `spec verify` |
-| The tool eats time from the main projects (scope creep) | high | MVP = CLI + MCP; UI only after validation on live tasks; "enforcement first, the bot never first"; multi-user server mode out of plan (ADR-0017) |
+| The tool eats time from the main projects (scope creep) | high | MVP = CLI + MCP; live UI only after live-task validation; "enforcement first, the bot never first"; multi-user server mode out of plan (ADR-0017) |
 | The core silently bends toward one project | medium | pilot projects of different nature are connected from Phase 1 (ADR-0008); specifics only in `specengine.toml` and the importer; core tests on fixtures of all pilots |
 | Bevy 0.20 changes the schedule API | medium | tree-sitter detector covered by `fixtures/bevy-mini`; observers behind a Bevy-version gate (05 §5.1); the `schedule_data` dump schema is unstable across minors — re-run `specengine-eval bevy-detector --dump` on every Bevy upgrade |
 | The MCP protocol changes again | medium | rmcp + both eras; logic in core, MCP is a thin adapter; Claude Code behaviour verified on 2.1.283 (MCP README), re-run the checks on upgrade; Streamable HTTP without GET → 405 not measured (stdio-only build) |

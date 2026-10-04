@@ -39,6 +39,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
 - [docs/canon/spec-cli-bundle.md](canon/spec-cli-bundle.md) spec bundle and bundle_hash · crates/specengine-cli, crates/specengine-core, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
+- [ui/README.md](../ui/README.md) ui — the web UI · ui · tier 1
 
 ## Decisions
 
@@ -73,12 +74,14 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0030](decisions/ADR-0030.md) Configured index shards · docs · accepted
 - [ADR-0031](decisions/ADR-0031.md) Kinds and process rules are project config · architecture · accepted
 - [ADR-0032](decisions/ADR-0032.md) A proposal applies where it was raised · architecture · accepted
+- [ADR-0033](decisions/ADR-0033.md) UI starts before the daemon · ui · accepted
 
 ## Specs
 
 - [docs/features/pilot-w.md](features/pilot-w.md) Pilot W: every task, before and after · crates/specengine-eval, fixtures, docs · draft
 - [docs/features/proposal-apply.md](features/proposal-apply.md) Proposal apply: the one write door · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
+- [docs/features/ui-shell.md](features/ui-shell.md) UI shell: the Inbox on mocks · ui, crates/specengine-eval · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress
