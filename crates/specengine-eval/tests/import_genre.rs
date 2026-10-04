@@ -5,7 +5,10 @@
 //! literal equal (case-insensitive) to a key, regex, map entry, prefix,
 //! separator or path of either fixture config, of the AC-05 generated
 //! config, or to a class, prefix or pattern of the fixtures' runs; and every
-//! recognizer is non-zero in both fixtures' `expected.json`.
+//! recognizer is non-zero in both fixtures' `expected.json`. The
+//! `[documents]` keys and the titled lead-ins, document records and
+//! document precedence of docs/features/import-gaps.md (AC-09) are covered
+//! the same way.
 //!
 //! String literals are read with a small lexer that skips comments (the one
 //! of `identity_literals.rs`), so a doc comment may cite anything; the
@@ -216,6 +219,21 @@ fn the_forbidden_set_holds_every_kind_of_convention_string() {
             "{sample:?} is in the forbidden set"
         );
     }
+    // docs/features/import-gaps.md AC-09: the `[documents]` values and the
+    // key-map entries reaching them.
+    for sample in [
+        "ident",  // documents.id_key (import-one), a key-map target
+        "Number", // key-map key reaching documents.id_key
+        "docid",  // documents.id_key (import-two)
+        "Doc",    // field-table key reaching documents.id_key
+        "owner",  // identity key-map entry
+        r"^log/(?P<id>[A-Z]{3}-[0-9]{4})\.markdown$", // documents.id_path
+    ] {
+        assert!(
+            forbidden.contains(sample),
+            "{sample:?} is in the forbidden set"
+        );
+    }
     assert!(
         forbidden.contains(&legacy_prefix()),
         "the generated legacy prefix"
@@ -366,11 +384,13 @@ fn cyrillic_escapes_only_in_the_look_alike_table_of_script_rs() {
 /// The recognizer counts each fixture must exercise; zero is allowed only
 /// for `front_matter.unclosed`, `records.empty_text`, `broken_links.wiki`,
 /// `code.roots_missing` and `detail.*`.
-const RECOGNIZERS: [&str; 30] = [
+const RECOGNIZERS: [&str; 33] = [
+    "records/titled",
     "records/per_form/table_row",
     "records/per_form/headerless_row",
     "records/per_form/list_item",
     "records/per_form/section",
+    "records/per_form/document",
     "front_matter/yaml",
     "front_matter/field_table",
     "front_matter/non_latin_keys",
@@ -383,6 +403,7 @@ const RECOGNIZERS: [&str; 30] = [
     "definitions",
     "references/total",
     "references/unresolved",
+    "references/by_document",
     "duplicate_definitions",
     "rows_without_id/local_number",
     "rows_without_id/none",

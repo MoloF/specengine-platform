@@ -33,8 +33,8 @@ pub const FIXTURE: &str = "import-one";
 /// Diagnostics echoed on stderr; the rest are in `diagnostics.json`.
 const DIAGNOSTICS_ON_STDERR: usize = 10;
 
-/// The `result` object: exactly the keys of the "before" report whitelist
-/// (`docs/features/import-records.md` AC-09).
+/// The `result` object: exactly the keys of the whitelist in
+/// `crates/specengine-import/README.md` "Before report".
 #[derive(Serialize)]
 pub struct ImportResult {
     pub documents: Documents,
@@ -80,6 +80,8 @@ pub struct MapCounts {
 pub struct Records {
     pub total: usize,
     pub empty_text: usize,
+    /// Records carrying a title (titled list items).
+    pub titled: usize,
     pub per_form: PerForm,
     /// `prefix-N` by descending count of the Latin prefix.
     pub per_prefix: BTreeMap<String, usize>,
@@ -91,12 +93,15 @@ pub struct PerForm {
     pub headerless_row: usize,
     pub list_item: usize,
     pub section: usize,
+    pub document: usize,
 }
 
 #[derive(Serialize)]
 pub struct References {
     pub total: usize,
     pub unresolved: usize,
+    /// Record-position definitions a document demoted, within `total`.
+    pub by_document: usize,
 }
 
 #[derive(Serialize)]
@@ -251,11 +256,13 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
         records: Records {
             total: found.records.len(),
             empty_text: found.empty_text(),
+            titled: found.titled(),
             per_form: PerForm {
                 table_row: found.per_form(Form::TableRow),
                 headerless_row: found.per_form(Form::HeaderlessRow),
                 list_item: found.per_form(Form::ListItem),
                 section: found.per_form(Form::Section),
+                document: found.per_form(Form::Document),
             },
             per_prefix,
         },
@@ -263,6 +270,7 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
         references: References {
             total: found.role(Role::Reference),
             unresolved: found.unresolved.len(),
+            by_document: found.by_document,
         },
         duplicate_definitions: found.duplicates.len(),
         rows_without_id: RowsWithoutId {
@@ -310,20 +318,23 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
 fn summarize(result: &ImportResult, found: &Import, label: &str, out_dir: &Path) {
     let forms = &result.records.per_form;
     eprintln!(
-        "import [{label}]: {} documents ({} skipped), {} records: {} table rows, {} headerless rows, {} list items, {} sections",
+        "import [{label}]: {} documents ({} skipped), {} records: {} table rows, {} headerless rows, {} list items ({} titled), {} sections, {} documents",
         result.documents.total,
         result.detail.files_skipped,
         result.records.total,
         forms.table_row,
         forms.headerless_row,
         forms.list_item,
-        forms.section
+        result.records.titled,
+        forms.section,
+        forms.document
     );
     eprintln!(
-        "  definitions {}, references {} ({} unresolved), duplicate definitions {}",
+        "  definitions {}, references {} ({} unresolved, {} demoted by a document), duplicate definitions {}",
         result.definitions,
         result.references.total,
         result.references.unresolved,
+        result.references.by_document,
         result.duplicate_definitions
     );
     eprintln!(

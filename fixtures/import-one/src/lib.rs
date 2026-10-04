@@ -3,3 +3,4 @@
 pub const REGISTER: &str = "spec/requirements.md";
 pub const REGISTER_STRIPPED: &str = "requirements.md";
 pub const UNBOUNDED: &str = "xa.md";
+pub const OTHER: &str = "other/requirements.md";

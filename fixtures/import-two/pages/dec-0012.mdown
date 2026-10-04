@@ -1,0 +1,8 @@
+# Report layout
+
+| Title | Report layout |
+|---|---|
+| Doc | DEC-0012 |
+| Outcome | Agreed |
+
+The report lists every decision once.

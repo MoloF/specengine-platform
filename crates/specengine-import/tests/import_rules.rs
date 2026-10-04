@@ -1,14 +1,17 @@
-//! Rules of the import engine, `crates/specengine-import/README.md` "Import",
-//! outside the fixture ACs of docs/features/import-records.md: the list-item
-//! separator (Positions, Text; AC-07), unmapped non-Latin prefixes
-//! under a config whose `ids.like` is ASCII-only and hyphenless overlaps
-//! (IDs, Hyphenless; AC-05), the unclaimed counter over front-matter values,
-//! feature scope and emphasis (Unclaimed; AC-06), and the first definition
-//! of a duplicate in (path, line) order (Role).
+//! Rules of the import engine outside the fixture ACs of
+//! docs/features/import-records.md: the list-item separator
+//! (`docs/canon/import.md` "Positions", "Text and hash"; AC-07), unmapped
+//! non-Latin prefixes under a config whose `ids.like` is ASCII-only and
+//! hyphenless overlaps (`docs/canon/import.md` "IDs and tokens"; AC-05),
+//! the unclaimed counter over front-matter values, feature scope and
+//! emphasis (`docs/canon/import.md` "IDs and tokens"; AC-06), and the first
+//! definition of a duplicate in (path, line) order
+//! (`docs/canon/import.md` "Roles and precedence").
 //!
 //! Every corpus is written into a fresh temporary directory by the test; the
 //! convention is invented (prefixes `CRT`, `DEC`). Non-Latin characters are
-//! Unicode escapes only (ADR-0024, A4).
+//! Unicode escapes only (ADR-0024,
+//! `docs/canon/architecture.md` "Repository language").
 
 use std::fs;
 use std::path::PathBuf;

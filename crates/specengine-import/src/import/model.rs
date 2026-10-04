@@ -1,6 +1,7 @@
 //! The record model and the detail of the "before" report
-//! (`docs/features/import-records.md` AC-03, AC-07); aggregates are methods
-//! of [`Import`].
+//! (`docs/features/import-records.md` AC-03, AC-07; titles and document
+//! records: `docs/features/import-gaps.md` AC-01, AC-02); aggregates are
+//! methods of [`Import`].
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,14 +21,17 @@ pub enum Form {
     HeaderlessRow,
     ListItem,
     Section,
+    /// A document defining its own ID through `[documents]`.
+    Document,
 }
 
 impl Form {
-    pub const ALL: [Form; 4] = [
+    pub const ALL: [Form; 5] = [
         Form::TableRow,
         Form::HeaderlessRow,
         Form::ListItem,
         Form::Section,
+        Form::Document,
     ];
 }
 
@@ -60,7 +64,7 @@ pub struct Field {
 pub struct ImportRecord {
     /// Corpus-relative, `/`-separated.
     pub path: String,
-    /// 1-based line of the ID.
+    /// 1-based line of the ID; a document's: of its defining key, else 1.
     pub line: usize,
     pub form: Form,
     /// Latin: legacy prefix mapped, then look-alikes normalised.
@@ -72,6 +76,10 @@ pub struct ImportRecord {
     pub script: IdScript,
     pub role: Role,
     pub scope: Scope,
+    /// A titled list item's title as written in its lead-in span, outside
+    /// `text` and `hash`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Verbatim text: bytes as written, lines joined by LF.
     pub text: String,
     /// BLAKE3 of `text`, hex.
@@ -234,6 +242,9 @@ pub struct Import {
     pub duplicates: Vec<Duplicate>,
     /// References whose ID no definition carries.
     pub unresolved: Vec<Token>,
+    /// Record-position definitions turned into references because a
+    /// document defines their ID.
+    pub by_document: usize,
     pub legacy: Legacy,
     /// ID-like tokens whose ID is defined (a feature-scoped one in the
     /// citing document).
@@ -291,6 +302,14 @@ impl Import {
         self.records
             .iter()
             .filter(|record| record.text.is_empty())
+            .count()
+    }
+
+    /// Records carrying a title.
+    pub fn titled(&self) -> usize {
+        self.records
+            .iter()
+            .filter(|record| record.title.is_some())
             .count()
     }
 

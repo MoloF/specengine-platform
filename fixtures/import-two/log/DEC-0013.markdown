@@ -1,0 +1,3 @@
+# Cache policy
+
+The cache keeps one entry per run; the report layout is DEC-0012.

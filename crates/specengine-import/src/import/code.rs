@@ -1,9 +1,11 @@
 //! The code scan (`docs/features/import-records.md` AC-09): files under the
 //! `[code]` roots are read as bytes, never built, and searched for each
 //! document path and each form of it minus a `strip` prefix; an occurrence
-//! counts when no letter, digit, `_`, `-` or `.` precedes it and no letter,
-//! digit or `_` follows it, once, as its longest form. Dot-directories and
-//! build directories (a name starting `target`) are not entered.
+//! counts when no letter, digit, `_`, `-` or `.` precedes it (nor a `/`
+//! before a stripped form: `docs/features/import-gaps.md` gap 3) and no
+//! letter, digit or `_` follows it, once, as its longest form.
+//! Dot-directories and build directories (a name starting `target`) are not
+//! entered.
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -49,9 +51,12 @@ impl CodeScan {
     }
 }
 
+/// Form → (document, the document's own path rather than a stripped form).
+type FormMap = HashMap<Vec<u8>, (usize, bool)>;
+
 /// Every form of every document, by length, longest first.
 struct Forms {
-    by_length: Vec<(usize, HashMap<Vec<u8>, usize>)>,
+    by_length: Vec<(usize, FormMap)>,
     /// The extensions of the documents as written, with the dot: where an
     /// occurrence can end.
     suffixes: Vec<Vec<u8>>,
@@ -61,7 +66,7 @@ impl Forms {
     /// A document's own path beats a stripped form of another document;
     /// otherwise the first document in path order keeps a shared form.
     fn new(documents: &[String], strip: &[String]) -> Self {
-        let mut forms: HashMap<Vec<u8>, (usize, bool)> = HashMap::new();
+        let mut forms = FormMap::new();
         let mut suffixes = BTreeSet::new();
         for (index, document) in documents.iter().enumerate() {
             let name = document.rsplit('/').next().unwrap_or(document);
@@ -84,12 +89,12 @@ impl Forms {
                 }
             }
         }
-        let mut by_length: BTreeMap<Reverse<usize>, HashMap<Vec<u8>, usize>> = BTreeMap::new();
-        for (form, (index, _)) in forms {
+        let mut by_length: BTreeMap<Reverse<usize>, FormMap> = BTreeMap::new();
+        for (form, found) in forms {
             by_length
                 .entry(Reverse(form.len()))
                 .or_default()
-                .insert(form, index);
+                .insert(form, found);
         }
         Self {
             by_length: by_length
@@ -118,8 +123,8 @@ impl Forms {
                         continue;
                     }
                     let start = end - length;
-                    if let Some(&document) = forms.get(&bytes[start..end])
-                        && left_bounded(bytes, start)
+                    if let Some(&(document, full)) = forms.get(&bytes[start..end])
+                        && left_bounded(bytes, start, full)
                     {
                         candidates.push((start, end, document));
                         break;
@@ -193,8 +198,11 @@ pub(crate) fn scan(
     result
 }
 
-fn left_bounded(bytes: &[u8], start: usize) -> bool {
-    !char_before(bytes, start).is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+/// A stripped form (`full` false) never counts right after a `/`: the
+/// path continues to the left and names another document.
+fn left_bounded(bytes: &[u8], start: usize, full: bool) -> bool {
+    !char_before(bytes, start)
+        .is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.') || (!full && c == '/'))
 }
 
 fn right_bounded(bytes: &[u8], end: usize) -> bool {

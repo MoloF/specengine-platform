@@ -302,11 +302,11 @@ The coverage requirement is set **on the node**, not globally (OpenFastTrace `Ne
 
 ## 6. Context bundle (`get_context_bundle`)
 
-Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, the budget, fitting, the not-included tail and `bundle_hash` in `docs/canon/spec-cli-bundle.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9 (Phase 3); the `bundles` log and the follow-up-reads signal: more than three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete" (the convention's reading protocol: a third step is an index defect).
+Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, budget, fitting, the tail and `bundle_hash`: `docs/canon/spec-cli-bundle.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9 (Phase 3); the `bundles` log and the follow-up-reads signal: more than three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete".
 
 ## 7. Proposals, owner queue and gates
 
-The full scenario is in `06-workflows.md`. Here are the engine invariants:
+The full scenario is in `06-workflows.md`. The engine invariants:
 
 1. A proposal is created **with evidence** (`evidence`: file, symbol, lines, "what the code says", "what the spec says"), a **gap type** `gap_type: missing | partial | contradicts | unrequested` (Spec Kit converge vocabulary; `unrequested` — code nobody asked for) and **options with a price** (`options`). A `question`/`discrepancy` proposal without options is rejected: a question without options shifts the work onto the owner.
 2. Before the owner sees it, a proposal is validated: the patch is applied to a temporary copy, `spec check` runs, and the diagnostics are attached to the proposal.
@@ -320,7 +320,7 @@ The full scenario is in `06-workflows.md`. Here are the engine invariants:
 
 **SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk: shipped, `crates/specengine-store/README.md`. Still to come: migrations by `rusqlite_migration` 2.6 (never `sqlx` or `refinery`: `libsqlite3-sys` `links = "sqlite3"`); `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID).
 
-- `spec export` writes `docs/generated/queue.md` (queue and tasks, human-readable, generated, in git) and `state.jsonl` (full queue dump; to a backup directory or into git — ADR-0003).
+- `spec export` writes `docs/generated/queue.md` (queue and tasks, generated, in git) and `state.jsonl` (full queue dump; to a backup directory or into git — ADR-0003).
 - `spec import-state` restores the state from JSONL.
 
 ## 9. Technology stack (versions — in `04-prior-art-and-stack.md` §6)

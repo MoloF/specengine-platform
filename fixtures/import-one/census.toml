@@ -11,6 +11,8 @@ header_table = '^Field$'
 [front_matter.key_map]
 "Phase" = "status"
 "Résumé" = "summary"
+"Number" = "ident"
+"owner" = "owner"
 [front_matter.value_map.status]
 "Done" = "shipped"
 "Open" = "draft"
@@ -30,6 +32,8 @@ id_attr = true
 [lists]
 lead_in = true
 separators = [":"]
+[documents]
+id_key = "ident"
 [definitions]
 reference_paths = ["spec/map.md"]
 reference_headers = ['^Source$']

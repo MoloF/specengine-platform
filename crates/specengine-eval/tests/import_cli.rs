@@ -6,7 +6,8 @@
 //! The corpora are the two committed invented conventions
 //! `fixtures/import-one` (the default fixture, config `census.toml` at its
 //! root) and `fixtures/import-two`, scratch copies of them, and the AC-05
-//! copy generated at test time (non-Latin text from `\u{...}` escapes, A4).
+//! copy generated at test time (non-Latin text from `\u{...}` escapes,
+//! `docs/canon/architecture.md` "Repository language").
 //! The fixtures are only read; every run writes under a scratch `--out`.
 
 mod import_support;
@@ -214,6 +215,10 @@ fn expected_json_pins_every_form_header_and_row_count() {
             ("front_matter/values/mapped", 1),
             ("rows_without_id/local_number", 2),
             ("rows_without_id/none", 1),
+            // docs/features/import-gaps.md AC-09.
+            ("records/titled", 1),
+            ("records/per_form/document", 1),
+            ("references/by_document", 1),
         ] {
             assert!(count(path) >= at_least, "{name}: {path} >= {at_least}");
         }
@@ -273,13 +278,14 @@ fn the_two_fixtures_are_two_conventions() {
         ("code", "roots"),
         ("code", "extensions"),
         ("code", "strip"),
+        ("documents", "id_key"),
     ] {
         let a = &one[table][key];
         let b = &two[table][key];
         assert_ne!(a, b, "{table}.{key} is the same in both fixtures");
         compared += 1;
     }
-    assert_eq!(compared, 17);
+    assert_eq!(compared, 18);
 }
 
 // ----------------------------------------------------------------- AC-04
@@ -573,9 +579,21 @@ fn unmapped_prefixes_are_counted_under_an_ascii_only_like() {
         ]),
         "{legacy}"
     );
-    // The fixture's own prefix without an ASCII letter (requirements.md) too.
-    assert_eq!(run.count("legacy/unmapped"), 3, "{legacy}");
-    assert_eq!(run.count("legacy/mapped"), 2, "{legacy}");
+    // The fixture's own prefix without an ASCII letter (requirements.md) and
+    // legacy IDs (a table row, a titled lead-in) too.
+    let fixture = expected("import-one");
+    let fixture_count = |key: &str| fixture["legacy"][key].as_u64().unwrap();
+    assert_eq!(fixture_count("unmapped"), 1);
+    assert_eq!(
+        run.count("legacy/unmapped"),
+        fixture_count("unmapped") + 2,
+        "{legacy}"
+    );
+    assert_eq!(
+        run.count("legacy/mapped"),
+        fixture_count("mapped") + 1,
+        "{legacy}"
+    );
     let records = run.records();
     let in_document: Vec<&str> = records
         .iter()
@@ -873,8 +891,10 @@ fn out_inside_the_corpus_is_refused_and_nothing_is_created() {
 }
 
 /// The stdout `result` keys of the "before" report: the whitelist of
-/// docs/features/import-records.md AC-09; `*` is a map of anonymous labels.
-const WHITELIST: [&str; 47] = [
+/// docs/features/import-records.md AC-09 plus `records.titled`,
+/// `records.per_form.document` and `references.by_document`
+/// (docs/features/import-gaps.md AC-09); `*` is a map of anonymous labels.
+const WHITELIST: [&str; 50] = [
     "documents/total",
     "documents/per_class/*",
     "front_matter/yaml",
@@ -890,14 +910,17 @@ const WHITELIST: [&str; 47] = [
     "front_matter/values/unmapped",
     "records/total",
     "records/empty_text",
+    "records/titled",
     "records/per_form/table_row",
     "records/per_form/headerless_row",
     "records/per_form/list_item",
     "records/per_form/section",
+    "records/per_form/document",
     "records/per_prefix/*",
     "definitions",
     "references/total",
     "references/unresolved",
+    "references/by_document",
     "duplicate_definitions",
     "rows_without_id/local_number",
     "rows_without_id/none",
@@ -1301,6 +1324,9 @@ roots = ["src"]
 extensions = ["rs"]
 exclude = ["src/generated/**"]
 strip = ["spec/"]
+[documents]
+id_key = "ident"
+id_path = '^spec/(?P<id>[A-Z]{2,3}-[0-9]{3})\.md$'
 "#;
 
 /// AC-02: `census` and `import` accept every new key.
@@ -1600,7 +1626,7 @@ fn census_on_corpus_mini_still_matches_expected_json() {
 }
 
 /// Import keys of the config: whole tables and keys of shared tables.
-const IMPORT_TABLES: [&str; 3] = ["[lists]", "[definitions]", "[code]"];
+const IMPORT_TABLES: [&str; 4] = ["[lists]", "[definitions]", "[code]", "[documents]"];
 const IMPORT_TABLE_PREFIXES: [&str; 3] = [
     "[front_matter.key_map]",
     "[front_matter.value_map",

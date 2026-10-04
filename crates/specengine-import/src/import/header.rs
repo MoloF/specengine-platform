@@ -1,6 +1,9 @@
 //! Document headers at import: YAML top-level keys and the field/value table
 //! opening a body, mapped through `front_matter.key_map` and `value_map`
-//! (`docs/features/import-records.md` AC-03).
+//! (`docs/features/import-records.md` AC-03). A key or value the maps rename
+//! is `mapped`; one equal to a target (an identity entry included) is
+//! `kept`; any other, whatever its script, `unmapped`
+//! (`docs/features/import-gaps.md` gap 4).
 
 use serde::Serialize;
 
@@ -12,9 +15,9 @@ use crate::markdown::Table;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MapOutcome {
-    /// Written as a map key: replaced by its target.
+    /// Written as a map key with another target: renamed.
     Mapped,
-    /// Already a target.
+    /// Equal to a target (an identity map entry included).
     Kept,
     Unmapped,
 }
@@ -55,7 +58,7 @@ impl HeaderKeys {
             self.non_latin_key = true;
         }
         let (target, outcome) = match import.key_map.get(key) {
-            Some(target) => (Some(target.clone()), MapOutcome::Mapped),
+            Some(target) => (Some(target.clone()), renamed(key, target)),
             None if is_target_key(import, key) => (Some(key.to_owned()), MapOutcome::Kept),
             None => (None, MapOutcome::Unmapped),
         };
@@ -63,7 +66,7 @@ impl HeaderKeys {
             && let Some(values) = import.value_map.get(target)
         {
             let (mapped, value_outcome) = match values.get(value) {
-                Some(mapped) => (Some(mapped.clone()), MapOutcome::Mapped),
+                Some(mapped) => (Some(mapped.clone()), renamed(value, mapped)),
                 None if values.values().any(|known| known == value) => {
                     (Some(value.to_owned()), MapOutcome::Kept)
                 }
@@ -86,9 +89,21 @@ impl HeaderKeys {
     }
 }
 
-/// A key is a target when a key map entry or a value map names it.
+/// A map entry renames unless it is an identity.
+fn renamed(written: &str, target: &str) -> MapOutcome {
+    if written == target {
+        MapOutcome::Kept
+    } else {
+        MapOutcome::Mapped
+    }
+}
+
+/// A key is a target when a key map entry, a value map or
+/// `documents.id_key` names it.
 fn is_target_key(import: &ImportConfig, key: &str) -> bool {
-    import.key_map.values().any(|target| target == key) || import.value_map.contains_key(key)
+    import.key_map.values().any(|target| target == key)
+        || import.value_map.contains_key(key)
+        || import.documents.id_key.as_deref() == Some(key)
 }
 
 /// Whether a table is the document's field table: it opens the body, has a

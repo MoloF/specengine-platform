@@ -27,9 +27,10 @@
 //! as a trailing part of it after a `/` (case ignored), or when it
 //! exists relative to the linking document.
 //!
-//! The import keys (`docs/features/import-records.md` AC-02) live in the
-//! same file and are compiled into [`ImportConfig`]; the census validates
-//! them and reads none of them.
+//! The import keys (`docs/features/import-records.md` AC-02, `[documents]`
+//! of `docs/features/import-gaps.md` AC-08) live in the same file and are
+//! compiled into [`ImportConfig`]; the census validates them and reads none
+//! of them.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -126,6 +127,7 @@ pub struct ImportConfig {
     /// Corpus-relative directory a missing file link is retried from.
     pub link_base: Option<PathBuf>,
     pub code: CodeConfig,
+    pub documents: DocumentsConfig,
 }
 
 /// A configured regex and its text as written (for `labels.json`).
@@ -133,6 +135,16 @@ pub struct ImportConfig {
 pub struct Pattern {
     pub source: String,
     pub regex: Regex,
+}
+
+/// `[documents]`: where a document names the ID it defines itself
+/// (`docs/features/import-gaps.md` AC-02). No defaults: absent is off.
+#[derive(Debug, Clone, Default)]
+pub struct DocumentsConfig {
+    /// A header target (after `key_map`) whose value is the document's ID.
+    pub id_key: Option<String>,
+    /// Over the corpus-relative `/`-separated path; group `id` is the ID.
+    pub id_path: Option<Regex>,
 }
 
 /// `[code]`: files scanned for literal document paths, never built.
@@ -181,6 +193,8 @@ struct RawConfig {
     definitions: RawDefinitions,
     #[serde(default)]
     code: RawCode,
+    #[serde(default)]
+    documents: RawDocuments,
 }
 
 #[derive(Deserialize)]
@@ -270,6 +284,15 @@ struct RawCode {
     exclude: Vec<Spanned<String>>,
     #[serde(default)]
     strip: Vec<Spanned<String>>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct RawDocuments {
+    #[serde(default)]
+    id_key: Option<Spanned<String>>,
+    #[serde(default)]
+    id_path: Option<Spanned<String>>,
 }
 
 #[derive(Deserialize)]
@@ -709,6 +732,39 @@ fn compile_import(
             .collect::<Result<Vec<_>, _>>()?,
     };
 
+    let documents = &raw.documents;
+    let id_key = match &documents.id_key {
+        Some(value) if value.get_ref().trim().is_empty() => {
+            return Err(error_at(
+                Some(value.span()),
+                "`documents.id_key` is empty".to_owned(),
+            ));
+        }
+        // Header keys are read trimmed: a key with blanks around it would
+        // never match.
+        Some(value) if value.get_ref().trim() != value.get_ref() => {
+            return Err(error_at(
+                Some(value.span()),
+                "`documents.id_key` has blanks around it; no header key would match".to_owned(),
+            ));
+        }
+        Some(value) => Some(value.get_ref().clone()),
+        None => None,
+    };
+    let id_path = match &documents.id_path {
+        Some(value) => {
+            let compiled = non_empty_regex("documents.id_path", value)?;
+            if !compiled.capture_names().any(|name| name == Some("id")) {
+                return Err(error_at(
+                    Some(value.span()),
+                    "`documents.id_path` has no group `id`".to_owned(),
+                ));
+            }
+            Some(compiled)
+        }
+        None => None,
+    };
+
     Ok(ImportConfig {
         header_table,
         header_row_field: front.header_row_field,
@@ -727,6 +783,7 @@ fn compile_import(
         reference_headers,
         link_base,
         code,
+        documents: DocumentsConfig { id_key, id_path },
     })
 }
 

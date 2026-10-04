@@ -1,7 +1,9 @@
 //! The import engine (`docs/features/import-records.md` AC-03): the census
 //! scanner plus record recognizers — `{#ID}` sections, record-table rows
-//! (with and without a header row), list items opening with a strong ID —
-//! the definition / reference rule, legacy prefixes, header maps, local
+//! (with and without a header row), list items opening with a strong ID
+//! (optionally titled), documents defining their own ID
+//! (`docs/features/import-gaps.md` AC-01–AC-03) — the definition /
+//! reference rule and its document precedence, legacy prefixes, header maps, local
 //! numbers, the unclaimed counter, hyphenless codes, link base and the code
 //! scan, into a record model with verbatim hashes. Read-only; every
 //! convention comes from the [`CensusConfig`] (ADR-0008).
@@ -13,6 +15,7 @@ mod lead_in;
 mod model;
 
 use std::collections::{HashMap, HashSet};
+use std::ops::RangeInclusive;
 use std::path::Path;
 
 use crate::census::{Diagnostic, LinkCheck, WikiIndex, check_link, clean_cell, heading_anchor};
@@ -31,7 +34,7 @@ pub use model::{
 
 use header::HeaderKeys;
 use ids::{Resolution, Resolved, Resolver};
-use lead_in::LeadIn;
+use lead_in::{LeadIn, Split};
 
 /// Runs the import over the corpus at `root`. Fails only when `root` itself
 /// cannot be read; every per-file problem becomes a [`Diagnostic`].
@@ -119,9 +122,26 @@ pub fn run_walked(root: &Path, config: &CensusConfig, walk: Walk) -> Import {
     import
 }
 
-/// Duplicates, unresolved references and claimed tokens, once every
-/// definition is known.
+/// Precedence, duplicates, unresolved references and claimed tokens, once
+/// every definition is known.
 fn settle(import: &mut Import, pending: Vec<Pending>) {
+    // An ID a document defines turns every record-position definition of it
+    // into a reference (`docs/features/import-gaps.md` AC-03).
+    let by_document: HashSet<String> = import
+        .records
+        .iter()
+        .filter(|record| record.form == Form::Document && record.role == Role::Definition)
+        .map(|record| record.id.clone())
+        .collect();
+    for record in &mut import.records {
+        if record.form != Form::Document
+            && record.role == Role::Definition
+            && by_document.contains(&record.id)
+        {
+            record.role = Role::Reference;
+            import.by_document += 1;
+        }
+    }
     let mut first: HashMap<(Option<&str>, &str), (&str, usize)> = HashMap::new();
     let mut duplicates = Vec::new();
     let mut defined: HashSet<&str> = HashSet::new();
@@ -238,12 +258,22 @@ impl DocumentRun<'_, '_> {
                     body_line,
                 } => (HeaderForm::Yaml, class, body_start, body_line),
             };
-        let scan = markdown::scan(text, body_start, body_line, wiki.is_some());
+        let scan = markdown::scan_import(text, body_start, body_line, wiki.is_some());
 
+        // Header keys whose target is `documents.id_key`: (line, value).
+        let id_key = config.import.documents.id_key.as_deref();
+        let mut id_values: Vec<(usize, Option<&str>)> = Vec::new();
         let mut keys = HeaderKeys::default();
+        let mut add_key = |keys: &mut HeaderKeys, line, key, value| {
+            keys.add(&config.import, line, key, value);
+            if id_key.is_some() && keys.keys.last().and_then(|key| key.target.as_deref()) == id_key
+            {
+                id_values.push((line, value));
+            }
+        };
         if header == HeaderForm::Yaml {
             for entry in frontmatter::entries(text) {
-                keys.add(&config.import, entry.line, entry.key, entry.value);
+                add_key(&mut keys, entry.line, entry.key, entry.value);
             }
         }
         let field_table = scan
@@ -252,7 +282,7 @@ impl DocumentRun<'_, '_> {
             .position(|table| header::is_field_table(config, table));
         if let Some(index) = field_table {
             for (line, key, value) in header::field_table_entries(config, &scan.tables[index]) {
-                keys.add(&config.import, line, key, value);
+                add_key(&mut keys, line, key, value);
             }
         }
         let header = match (header, field_table) {
@@ -266,21 +296,41 @@ impl DocumentRun<'_, '_> {
             .iter()
             .any(|glob| glob.is_match(self.relative));
         let mut record_ids: HashMap<usize, Vec<String>> = HashMap::new();
+        // The field table's lines: header row, delimiter row, rows.
+        let field_table_lines = field_table.map(|index| {
+            let table = &scan.tables[index];
+            let end = table
+                .rows
+                .last()
+                .map_or(table.header_line + 1, |row| row.line);
+            table.header_line..=end
+        });
+        self.document(
+            &id_values,
+            || document_body(text, &scan, body_start, field_table_lines),
+            reference_document,
+            &mut record_ids,
+        );
         for (index, table) in scan.tables.iter().enumerate() {
             if Some(index) != field_table {
                 self.table(table, reference_document, &mut record_ids);
             }
         }
+        let table_lines = table_lines(&scan.tables);
+        let items = if config.import.list_lead_in {
+            self.list_items(&scan, &table_lines)
+        } else {
+            Vec::new()
+        };
         if config.section_ids {
             self.sections(&scan, reference_document, &mut record_ids);
         }
-        let table_lines = table_lines(&scan.tables);
-        if config.import.list_lead_in {
-            self.list_items(&scan, &table_lines, reference_document, &mut record_ids);
-        }
+        self.list_records(items, reference_document, &mut record_ids);
         if header == HeaderForm::Yaml {
             for (line, value) in frontmatter::values(text) {
-                self.tokens(line, value, None, Vec::new());
+                // The value defining the document's ID is no token.
+                let excluded = record_ids.remove(&line).unwrap_or_default();
+                self.tokens(line, value, None, excluded);
             }
         }
         self.text_tokens(&scan, &table_lines, record_ids);
@@ -314,19 +364,10 @@ impl DocumentRun<'_, '_> {
             .rows
             .iter()
             .map(|row| {
-                let cell = row.cells.get(column).map_or("", |cell| clean_cell(cell));
-                if cell.is_empty() {
-                    Resolution::None
-                } else {
-                    match self.resolver.resolve(cell) {
-                        Resolution::Id(resolved)
-                            if self.resolver.is_hyphenless(&resolved.written) =>
-                        {
-                            Resolution::None
-                        }
-                        other => other,
-                    }
-                }
+                cell_resolution(
+                    self.resolver,
+                    row.cells.get(column).map_or("", String::as_str),
+                )
             })
             .collect();
         let any_id = resolutions
@@ -384,6 +425,7 @@ impl DocumentRun<'_, '_> {
                         form,
                         role,
                         resolved,
+                        None,
                         text.to_owned(),
                         fields,
                         record_ids,
@@ -423,13 +465,16 @@ impl DocumentRun<'_, '_> {
         } else {
             Role::Definition
         };
-        for (index, heading) in scan.headings.iter().enumerate() {
+        // The import's scan reads no heading on a line opening inside a
+        // comment: no section starts or ends there.
+        let headings = &scan.headings;
+        for (index, heading) in headings.iter().enumerate() {
             let Some(anchor) = heading_anchor(&heading.text) else {
                 continue;
             };
             match self.resolver.resolve(anchor) {
                 Resolution::Id(resolved) if !self.resolver.is_hyphenless(&resolved.written) => {
-                    let end = scan.headings[index + 1..]
+                    let end = headings[index + 1..]
                         .iter()
                         .find(|next| next.level <= heading.level)
                         .map_or(self.text.len(), |next| next.start);
@@ -443,6 +488,7 @@ impl DocumentRun<'_, '_> {
                         Form::Section,
                         role,
                         resolved,
+                        None,
                         lf_lines(section),
                         Vec::new(),
                         record_ids,
@@ -454,45 +500,48 @@ impl DocumentRun<'_, '_> {
         }
     }
 
-    /// List items whose strong lead-in, minus one separator, is an ID. The
-    /// text is taken from the line as written (HTML comments kept), from
-    /// where the span and separator end in the comment-free line.
-    fn list_items(
-        &mut self,
-        scan: &Scan<'_>,
-        table_lines: &HashSet<usize>,
-        reference_document: bool,
-        record_ids: &mut HashMap<usize, Vec<String>>,
-    ) {
-        let config = self.config;
+    /// List items whose strong lead-in holds an ID, optionally followed by a
+    /// separator and a title. The text is taken from the line as written (HTML
+    /// comments kept), from where the span and separator end in the
+    /// comment-free line; the title, outside the text, from the span. No
+    /// item is read on a line opening inside a comment.
+    fn list_items(&self, scan: &Scan<'_>, table_lines: &HashSet<usize>) -> Vec<ListItem> {
         let resolver = self.resolver;
-        let separators = &config.import.separators;
-        let role = if reference_document {
-            Role::Reference
-        } else {
-            Role::Definition
-        };
+        let separators = &self.config.import.separators;
         let nested_record = |visible: &str| {
-            matches!(
-                list_lead_in(resolver, separators, visible),
-                Some((_, _, Resolution::Id(_)))
-            )
+            list_lead_in(resolver, separators, visible)
+                .is_some_and(|found| matches!(found.resolution, Resolution::Id(_)))
         };
+        let mut items = Vec::new();
         for (index, line) in scan.lines.iter().enumerate() {
+            if line.opens_in_comment || table_lines.contains(&line.number) {
+                continue;
+            }
             let Some(visible) = &line.visible else {
                 continue;
             };
-            if table_lines.contains(&line.number) {
-                continue;
-            }
-            let Some((lead, stripped_inside, resolution)) =
-                list_lead_in(resolver, separators, visible)
+            let Some(ListLeadIn {
+                lead,
+                split,
+                resolution,
+            }) = list_lead_in(resolver, separators, visible)
             else {
                 continue;
             };
             match resolution {
                 Resolution::Id(resolved) => {
-                    let after = lead_in::after_span(visible, &lead, separators, stripped_inside);
+                    // The title as written: a comment right after the
+                    // separator or before the closing delimiter is kept.
+                    let title = split.title_from.and_then(|from| {
+                        let end = line.raw_offset_past(lead.content.end);
+                        line.raw
+                            .get(line.raw_offset(from)..end)
+                            .map(str::trim)
+                            .filter(|title| !title.is_empty())
+                            .map(str::to_owned)
+                    });
+                    let after =
+                        lead_in::after_span(visible, &lead, separators, split.stripped_inside);
                     let first = line.raw.get(line.raw_offset(after)..).unwrap_or("");
                     let mut text = first.trim_start_matches([' ', '\t']).to_owned();
                     for continued in lead_in::item_continuation(
@@ -503,27 +552,62 @@ impl DocumentRun<'_, '_> {
                         &nested_record,
                     ) {
                         text.push('\n');
-                        text.push_str(continued);
+                        text.push_str(continued.raw);
                     }
-                    let text = text.trim_end().to_owned();
-                    self.record(
-                        line.number,
-                        Form::ListItem,
-                        role,
+                    items.push(ListItem::Record {
+                        line: line.number,
                         resolved,
-                        text,
-                        Vec::new(),
-                        record_ids,
-                    );
+                        title,
+                        text: text.trim_end().to_owned(),
+                    });
                 }
-                Resolution::Unmapped(written) => self.unmapped(line.number, written),
+                Resolution::Unmapped(written) => items.push(ListItem::Unmapped {
+                    line: line.number,
+                    written,
+                }),
                 Resolution::None => {}
+            }
+        }
+        items
+    }
+
+    /// The records and unmapped legacy IDs of [`Self::list_items`].
+    fn list_records(
+        &mut self,
+        items: Vec<ListItem>,
+        reference_document: bool,
+        record_ids: &mut HashMap<usize, Vec<String>>,
+    ) {
+        let role = if reference_document {
+            Role::Reference
+        } else {
+            Role::Definition
+        };
+        for item in items {
+            match item {
+                ListItem::Record {
+                    line,
+                    resolved,
+                    title,
+                    text,
+                } => self.record(
+                    line,
+                    Form::ListItem,
+                    role,
+                    resolved,
+                    title,
+                    text,
+                    Vec::new(),
+                    record_ids,
+                ),
+                ListItem::Unmapped { line, written } => self.unmapped(line, written),
             }
         }
     }
 
     /// Hyphenless matches and ID-like tokens over the body text the scanner
-    /// sees, record IDs excluded.
+    /// sees, record IDs excluded. No lead-in or heading is read on a line
+    /// opening inside a comment.
     fn text_tokens(
         &mut self,
         scan: &Scan<'_>,
@@ -540,8 +624,8 @@ impl DocumentRun<'_, '_> {
                 previous_blank = true;
                 continue;
             }
-            let heading = markdown::heading_level(visible).is_some();
-            let lead = if heading || table_lines.contains(&line.number) {
+            let heading = !line.opens_in_comment && markdown::heading_level(visible).is_some();
+            let lead = if heading || line.opens_in_comment || table_lines.contains(&line.number) {
                 None
             } else {
                 lead_in::list_item(visible).or_else(|| {
@@ -645,6 +729,7 @@ impl DocumentRun<'_, '_> {
         form: Form,
         role: Role,
         resolved: Resolved,
+        title: Option<String>,
         text: String,
         fields: Vec<Field>,
         record_ids: &mut HashMap<usize, Vec<String>>,
@@ -695,9 +780,159 @@ impl DocumentRun<'_, '_> {
             script: resolved.script,
             role,
             scope,
+            title,
             text,
             hash,
             fields,
+        });
+    }
+
+    /// The document's own ID (`[documents]`, `docs/features/import-gaps.md`
+    /// AC-02): the first header key reaching `id_key`, else the `id_path`
+    /// group `id`, each read as a record-table ID cell; the header's wins.
+    /// One `document` record whose text is `body()`. The header value read
+    /// is no citation: it is no token (`record_ids`) whether it defines the
+    /// document, resolves to no ID or to a feature-scoped one.
+    fn document(
+        &mut self,
+        id_values: &[(usize, Option<&str>)],
+        body: impl FnOnce() -> String,
+        reference_document: bool,
+        record_ids: &mut HashMap<usize, Vec<String>>,
+    ) {
+        let resolver = self.resolver;
+        if let Some(&(line, _)) = id_values.get(1) {
+            self.diagnostic(
+                Some(line),
+                "another header key reaches `documents.id_key`; the first one's value is read"
+                    .to_owned(),
+            );
+        }
+        let header_id = match id_values.first() {
+            Some(&(line, value)) => {
+                match value.map_or(Resolution::None, |value| cell_resolution(resolver, value)) {
+                    Resolution::Id(resolved) => Some((line, resolved)),
+                    _ => {
+                        self.diagnostic(
+                            Some(line),
+                            "the `documents.id_key` value is no single-line ID".to_owned(),
+                        );
+                        self.exclude_value(line, value, record_ids);
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+        // `Some(None)`: the path matches, group `id` takes no part in it.
+        let path_id = self
+            .config
+            .import
+            .documents
+            .id_path
+            .as_ref()
+            .and_then(|pattern| pattern.captures(self.relative))
+            .map(|captures| {
+                captures
+                    .name("id")
+                    .map(|found| cell_resolution(resolver, found.as_str()))
+            });
+        let (line, resolved, from_header) = match (header_id, path_id) {
+            (Some((line, header)), path) => {
+                if let Some(Some(Resolution::Id(path))) = path
+                    && path.id != header.id
+                {
+                    self.diagnostic(
+                        Some(line),
+                        format!(
+                            "the header names `{}`, the path `{}`; the header's ID is read",
+                            header.written, path.written
+                        ),
+                    );
+                }
+                (line, header, true)
+            }
+            (None, Some(Some(Resolution::Id(path)))) => (1, path, false),
+            (None, Some(Some(_))) => {
+                self.diagnostic(
+                    None,
+                    "the `documents.id_path` group `id` is no ID".to_owned(),
+                );
+                return;
+            }
+            (None, Some(None)) => {
+                self.diagnostic(
+                    None,
+                    "the path matches `documents.id_path` without its group `id`".to_owned(),
+                );
+                return;
+            }
+            (None, None) => return,
+        };
+        if self
+            .config
+            .import
+            .feature_prefixes
+            .contains(&resolved.prefix)
+        {
+            self.diagnostic(
+                from_header.then_some(line),
+                format!(
+                    "`{}` is feature-scoped: no document record",
+                    resolved.written
+                ),
+            );
+            if let Some(&(line, value)) = id_values.first().filter(|_| from_header) {
+                self.exclude_value(line, value, record_ids);
+            }
+            return;
+        }
+        let role = if reference_document {
+            Role::Reference
+        } else {
+            Role::Definition
+        };
+        // An ID read from the path stands on no line: it excludes no token.
+        let mut path_ids = HashMap::new();
+        let record_ids = if from_header {
+            record_ids
+        } else {
+            &mut path_ids
+        };
+        self.record(
+            line,
+            Form::Document,
+            role,
+            resolved,
+            None,
+            body(),
+            Vec::new(),
+            record_ids,
+        );
+    }
+
+    /// Excludes every ID-like token of a header value at `line` that defines
+    /// no record: the value is no citation.
+    fn exclude_value(
+        &self,
+        line: usize,
+        value: Option<&str>,
+        record_ids: &mut HashMap<usize, Vec<String>>,
+    ) {
+        let Some(value) = value else { return };
+        record_ids.entry(line).or_default().extend(
+            self.resolver
+                .like_tokens(value)
+                .into_iter()
+                .map(|range| value[range].to_owned()),
+        );
+    }
+
+    fn diagnostic(&mut self, line: Option<usize>, message: String) {
+        self.import.diagnostics.push(Diagnostic {
+            path: self.relative.to_owned(),
+            line,
+            message,
         });
     }
 
@@ -710,21 +945,123 @@ impl DocumentRun<'_, '_> {
     }
 }
 
-/// A list item whose strong lead-in, minus one separator, is a candidate:
-/// the lead-in, whether the span held the separator, and what the
-/// candidate resolves to; `None` for any other line.
+/// A list item read before any record is made.
+enum ListItem {
+    Record {
+        line: usize,
+        resolved: Resolved,
+        title: Option<String>,
+        text: String,
+    },
+    /// The lead-in holds an unmapped legacy ID.
+    Unmapped { line: usize, written: String },
+}
+
+/// A list item's strong lead-in read as ID [separator [title]].
+struct ListLeadIn {
+    lead: LeadIn,
+    split: Split,
+    /// An ID or an unmapped legacy prefix, never [`Resolution::None`].
+    resolution: Resolution,
+}
+
+/// A list item whose strong lead-in holds a resolving ID candidate: the
+/// longest (a hyphenless one is none); `None` for any other line.
 fn list_lead_in(
     resolver: &Resolver<'_>,
     separators: &[String],
     visible: &str,
-) -> Option<(LeadIn, bool, Resolution)> {
+) -> Option<ListLeadIn> {
     let lead = lead_in::list_item(visible)?;
-    let (candidate, stripped_inside) =
-        lead_in::strip_separator(&visible[lead.content.clone()], separators);
-    if candidate.is_empty() || resolver.is_hyphenless(candidate) {
-        return None;
+    let (split, resolution) = lead_in::splits(visible, &lead, separators)
+        .into_iter()
+        .find_map(|split| {
+            let candidate = &visible[split.id.clone()];
+            if resolver.is_hyphenless(candidate) {
+                return None;
+            }
+            match resolver.resolve_whole(candidate) {
+                Resolution::None => None,
+                resolution => Some((split, resolution)),
+            }
+        })?;
+    Some(ListLeadIn {
+        lead,
+        split,
+        resolution,
+    })
+}
+
+/// What a record-table ID cell holds: decoration removed, legacy map,
+/// look-alikes, `ids.regex`; a hyphenless ID is none.
+fn cell_resolution(resolver: &Resolver<'_>, cell: &str) -> Resolution {
+    let cell = clean_cell(cell);
+    if cell.is_empty() {
+        return Resolution::None;
     }
-    Some((lead, stripped_inside, resolver.resolve_whole(candidate)))
+    match resolver.resolve(cell) {
+        Resolution::Id(resolved) if resolver.is_hyphenless(&resolved.written) => Resolution::None,
+        other => other,
+    }
+}
+
+/// A document's text without its header: the body after a closed YAML
+/// block, less the lines of a field table opening it (`field_table`) and
+/// the blank lines right after them; headings before the field table are
+/// text, kept in order. Normalised by [`document_text`].
+fn document_body(
+    text: &str,
+    scan: &Scan<'_>,
+    body_start: usize,
+    field_table: Option<RangeInclusive<usize>>,
+) -> String {
+    let body = match field_table {
+        Some(lines) => {
+            let line_start = |number: usize| {
+                scan.lines
+                    .iter()
+                    .find(|line| line.number == number)
+                    .map_or(text.len(), |line| line.start)
+            };
+            let after = scan
+                .lines
+                .iter()
+                .find(|line| line.number > *lines.end() && !is_blank(line.raw))
+                .map_or(text.len(), |line| line.start);
+            let before = text
+                .get(body_start..line_start(*lines.start()))
+                .unwrap_or("");
+            format!("{before}{}", text.get(after..).unwrap_or(""))
+        }
+        None => text.get(body_start..).unwrap_or("").to_owned(),
+    };
+    document_text(&body)
+}
+
+/// Blanks as Markdown reads them: spaces, tabs and line terminators, not
+/// every Unicode white space.
+const BLANKS: [char; 4] = [' ', '\t', '\r', '\n'];
+
+/// A `document` record's `text` from a document's body after its header
+/// (`docs/canon/import.md` "Text and hash"): a leading BOM
+/// excluded, a CR before an LF dropped, leading blank lines (only spaces and
+/// tabs) and trailing spaces, tabs, CRs and LFs trimmed, nothing else
+/// changed (no other Unicode white space is a blank). `import-layout`
+/// normalises an emitted file's body with it, so that the two hash alike.
+pub fn document_text(body: &str) -> String {
+    let body = lf_lines(body.strip_prefix('\u{FEFF}').unwrap_or(body));
+    let mut rest = body.as_str();
+    while let Some(newline) = rest.find('\n')
+        && is_blank(&rest[..newline])
+    {
+        rest = &rest[newline + 1..];
+    }
+    rest.trim_end_matches(BLANKS).to_owned()
+}
+
+/// A line (its CR before an LF dropped) of only spaces and tabs.
+fn is_blank(line: &str) -> bool {
+    line.bytes().all(|byte| byte == b' ' || byte == b'\t')
 }
 
 /// Lines of every table: header, delimiter and rows.

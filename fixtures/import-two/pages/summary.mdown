@@ -1,0 +1,8 @@
+# Summary
+
+| # | Code | Decision |
+|---|---|---|
+| 1 | DEC-0013 | Cache policy, in one line. |
+
+1. __DEC-0013 - Cache policy__ - summarised again in a list.
+2. __OLD-0014; Legacy title__; A decision with the legacy prefix and a title.

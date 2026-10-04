@@ -105,16 +105,72 @@ impl Line<'_> {
         }
         self.raw.len()
     }
+
+    /// The byte offset in `raw` of byte `offset` of `visible`, past any
+    /// comment removed right before it, so that a part ending there keeps
+    /// the comment.
+    pub(crate) fn raw_offset_past(&self, offset: usize) -> usize {
+        if !matches!(self.visible, Some(Cow::Owned(_))) {
+            return offset.min(self.raw.len());
+        }
+        let mut in_comment = self.opens_in_comment;
+        let mut before = 0;
+        for range in kept_ranges(self.raw, &mut in_comment) {
+            if offset < before + range.len() {
+                return range.start + (offset - before);
+            }
+            before += range.len();
+        }
+        self.raw.len()
+    }
 }
 
 /// Scans the body of a document that starts at byte `body_start`, whose first
-/// line is line `body_line`; `wiki` enables `[[target]]` links.
+/// line is line `body_line`; `wiki` enables `[[target]]` links. A fence, a
+/// heading or a table line is read after a `-->` closing a comment the line
+/// opened in (the census reads them there, a frozen minor).
 pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan<'_> {
-    let lines = classify_lines(text, body_start, body_line);
+    scan_lines(
+        classify_lines(text, body_start, body_line, true),
+        wiki,
+        true,
+    )
+}
+
+/// [`scan`] for the import: a line opening inside an HTML comment opens no
+/// fence, heading or table, whatever follows `-->` (`docs/features/import-gaps.md`
+/// gaps 5-6); a BOM leading the document is no content, so a field table
+/// right after it opens the body (the census keeps it, frozen).
+pub(crate) fn scan_import(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan<'_> {
+    let body_start = if body_start == 0 && text.starts_with('\u{FEFF}') {
+        '\u{FEFF}'.len_utf8()
+    } else {
+        body_start
+    };
+    scan_lines(
+        classify_lines(text, body_start, body_line, false),
+        wiki,
+        false,
+    )
+}
+
+/// `comment_blocks`: a line opening inside an HTML comment may hold a heading
+/// or a table line after its `-->` (the census reads them there, frozen).
+fn scan_lines(lines: Vec<Line<'_>>, wiki: bool, comment_blocks: bool) -> Scan<'_> {
     let mut result = Scan::default();
     let mut index = 0;
     // Whether a line other than a blank one or a heading came before.
     let mut content_before = false;
+    // Whether a line may hold a heading or a table line.
+    let block = |line: &Line<'_>| comment_blocks || !line.opens_in_comment;
+    // The comment-free text of the line after `index`, if it may hold a
+    // table line.
+    let next_visible = |index: usize| {
+        lines
+            .get(index + 1)
+            .filter(|next| block(next))
+            .and_then(|next| next.visible.as_deref())
+    };
     while index < lines.len() {
         let line = &lines[index];
         let Some(visible) = &line.visible else {
@@ -123,6 +179,12 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
             continue;
         };
         if visible.trim().is_empty() {
+            index += 1;
+            continue;
+        }
+        if !block(line) {
+            collect_links(visible, line.number, wiki, &mut result.links);
+            content_before = true;
             index += 1;
             continue;
         }
@@ -137,16 +199,14 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
             index += 1;
             continue;
         }
-        let delimiter = lines
-            .get(index + 1)
-            .and_then(|next| next.visible.as_deref());
-        let header = table_header(visible, delimiter);
+        let header = table_header(visible, next_visible(index));
         if header.is_none() && !is_pipe_row(visible) {
             collect_links(visible, line.number, wiki, &mut result.links);
             content_before = true;
             index += 1;
             continue;
         }
+        let start = index;
         let mut table = Table {
             header,
             header_line: line.number,
@@ -160,6 +220,13 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
         }
         while let Some(row) = lines.get(index) {
             let Some(visible) = &row.visible else { break };
+            // A line opening inside a comment a row opened is neither a row
+            // nor the table's end (import only).
+            if !block(row) {
+                collect_links(visible, row.number, wiki, &mut result.links);
+                index += 1;
+                continue;
+            }
             if visible.trim().is_empty() || heading_level(visible).is_some() {
                 break;
             }
@@ -168,10 +235,7 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
                     break;
                 }
             } else {
-                let next = lines
-                    .get(index + 1)
-                    .and_then(|next| next.visible.as_deref());
-                if !is_pipe_row(visible) || table_header(visible, next).is_some() {
+                if !is_pipe_row(visible) || table_header(visible, next_visible(index)).is_some() {
                     break;
                 }
                 if is_delimiter_row(visible) {
@@ -187,6 +251,11 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
             });
             index += 1;
         }
+        if index == start {
+            // Progress guard: a line no row took is plain text.
+            collect_links(visible, line.number, wiki, &mut result.links);
+            index += 1;
+        }
         if table.header.is_some() || !table.rows.is_empty() {
             result.tables.push(table);
         }
@@ -195,8 +264,15 @@ pub fn scan(text: &str, body_start: usize, body_line: usize, wiki: bool) -> Scan
     result
 }
 
-/// Splits the body into lines and hides fenced code and HTML comments.
-fn classify_lines(text: &str, body_start: usize, body_line: usize) -> Vec<Line<'_>> {
+/// Splits the body into lines and hides fenced code and HTML comments;
+/// `fence_after_comment`: a line opening inside a comment may open a fence
+/// after its `-->`.
+fn classify_lines(
+    text: &str,
+    body_start: usize,
+    body_line: usize,
+    fence_after_comment: bool,
+) -> Vec<Line<'_>> {
     let body = text.get(body_start..).unwrap_or("");
     let mut lines = Vec::new();
     let mut offset = body_start;
@@ -223,7 +299,9 @@ fn classify_lines(text: &str, body_start: usize, body_line: usize) -> Vec<Line<'
             continue;
         }
         let visible = strip_comments(raw, &mut in_comment);
-        if let Some(open) = opens_fence(&visible) {
+        if let Some(open) = opens_fence(&visible)
+            && (fence_after_comment || !opens_in_comment)
+        {
             fence = Some(open);
             lines.push(Line {
                 number,

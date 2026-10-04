@@ -2,7 +2,8 @@
 //! (docs/features/import-records.md): the two invented fixtures
 //! `fixtures/import-one` and `fixtures/import-two`, scratch directories, the
 //! real `specengine-eval` binary, and the test-generated corpus of AC-05 with
-//! its config (non-Latin text built from `\u{...}` escapes at test time, A4).
+//! its config (non-Latin text built from `\u{...}` escapes at test time,
+//! `docs/canon/architecture.md` "Repository language").
 //!
 //! Nothing here names a pilot.
 

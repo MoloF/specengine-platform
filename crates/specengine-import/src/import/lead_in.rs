@@ -1,7 +1,8 @@
 //! Strong lead-ins: a list item (after an optional task box) or a paragraph
 //! opening with `**…**` / `__…__`, and the extent of a list item's text
-//! (`docs/features/import-records.md` AC-03, AC-07). Markdown syntax only;
-//! what counts as an ID is the config's.
+//! (`docs/features/import-records.md` AC-03, AC-07); a span read as ID
+//! [separator [title]] (`docs/features/import-gaps.md` AC-01). Markdown
+//! syntax only; what counts as an ID is the config's.
 
 use std::collections::HashSet;
 use std::ops::Range;
@@ -118,15 +119,18 @@ fn columns(blanks: &str) -> usize {
 /// the item's container owns (up to the marker's column), so an item
 /// indented four columns or by a tab ends where one at column 0 would, and
 /// a fence opened on a deeper line holds code (no heading, no paragraph) up
-/// to its closing fence. A line blank as written is blank; a comment opened
-/// in the item's paragraph text continues the item.
-pub(crate) fn item_continuation<'a>(
-    lines: &[Line<'a>],
+/// to its closing fence. A line blank as written is blank. A line opening
+/// inside a comment the item's text opened (the item's own line opens in
+/// none: no record is read there) is the item's paragraph text whatever
+/// follows `-->`: no heading, list marker, nested record or fence is read
+/// on it, and it ends nothing (`docs/features/import-gaps.md` gaps 5-6).
+pub(crate) fn item_continuation<'l, 'a>(
+    lines: &'l [Line<'a>],
     index: usize,
     marker_indent: usize,
     table_lines: &HashSet<usize>,
     nested_record: &dyn Fn(&str) -> bool,
-) -> Vec<&'a str> {
+) -> Vec<&'l Line<'a>> {
     let mut taken = Vec::new();
     let mut pending = Vec::new();
     // The last line taken, or the item's own, is paragraph text.
@@ -136,14 +140,19 @@ pub(crate) fn item_continuation<'a>(
     let mut fence: Option<(u8, usize)> = None;
     for line in lines.iter().skip(index + 1) {
         if line.raw.trim().is_empty() {
-            pending.push(line.raw);
+            pending.push(line);
+            continue;
+        }
+        // Inside a fence a comment is code; the line classification hides
+        // a fence's lines (`visible` is `None`).
+        if fence.is_none() && line.opens_in_comment && line.visible.is_some() {
+            taken.append(&mut pending);
+            taken.push(line);
+            paragraph = true;
             continue;
         }
         let table = table_lines.contains(&line.number);
         let visible = line.visible.as_deref().filter(|_| !table);
-        // A `<!--` opening the line as written starts an HTML block, though
-        // the comment-free line no longer shows it.
-        let comment_block = |text: &str| !line.opens_in_comment && html_block(text);
         if fence.is_none()
             && line.visible.as_deref().is_some_and(|visible| {
                 heading_level(past_columns(visible, marker_indent)).is_some()
@@ -153,24 +162,23 @@ pub(crate) fn item_continuation<'a>(
         }
         if indent_columns(line.raw) <= marker_indent {
             // At or left of the marker the indentation is the container's;
-            // a line opening inside the item's comment shows no block start.
+            // a `<!--` opening the line as written starts an HTML block,
+            // though the comment-free line no longer shows it.
             let lazy = pending.is_empty()
                 && paragraph
-                && !comment_block(line.raw.trim_start_matches([' ', '\t']))
-                && visible.is_some_and(|text| {
-                    line.opens_in_comment || !opens_block(text.trim_start_matches([' ', '\t']))
-                });
+                && !html_block(line.raw.trim_start_matches([' ', '\t']))
+                && visible.is_some_and(|text| !opens_block(text.trim_start_matches([' ', '\t'])));
             if !lazy {
                 break;
             }
-            taken.push(line.raw);
+            taken.push(line);
             continue;
         }
         if visible.is_some_and(nested_record) {
             break;
         }
         taken.append(&mut pending);
-        taken.push(line.raw);
+        taken.push(line);
         if let Some((marker, length)) = fence {
             // Code: `paragraph` stays false up to the closing fence.
             if closes_fence(past_columns(line.raw, marker_indent), marker, length) {
@@ -180,7 +188,7 @@ pub(crate) fn item_continuation<'a>(
         }
         fence = visible.and_then(|text| opens_fence(past_columns(text, marker_indent)));
         paragraph = fence.is_none()
-            && !comment_block(past_columns(line.raw, marker_indent))
+            && !html_block(past_columns(line.raw, marker_indent))
             && visible.is_some_and(|text| {
                 let text = past_columns(text, marker_indent);
                 !thematic_break(text) && !html_block(text)
@@ -263,16 +271,59 @@ fn html_block(line: &str) -> bool {
     })
 }
 
-/// Strips one separator: from the end of the lead-in content when it ends
-/// with one (`Some(content)`, `true`), else nothing (`content`, `false`).
-pub(crate) fn strip_separator<'t>(content: &'t str, separators: &[String]) -> (&'t str, bool) {
+/// One reading of a strong span's content as ID [separator [title]], in
+/// offsets of the line (`docs/features/import-gaps.md` AC-01).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Split {
+    /// The ID candidate, trimmed, not empty.
+    pub id: Range<usize>,
+    /// Right after the separator ending the ID, when the rest of the
+    /// content up to the closing delimiter holds a title (not blank).
+    pub title_from: Option<usize>,
+    /// The ID ends right before a separator and no title follows it: the
+    /// span held the separator, none is stripped after it.
+    pub stripped_inside: bool,
+}
+
+/// The readings of a lead-in span's trimmed content, longest ID candidate
+/// first: the whole content, then the part before each start of a listed
+/// separator from the right (the longest separator starting there), each
+/// candidate trimmed; empty candidates are none.
+pub(crate) fn splits(line: &str, lead_in: &LeadIn, separators: &[String]) -> Vec<Split> {
+    let content = &line[lead_in.content.clone()];
+    let start = lead_in.content.start + (content.len() - content.trim_start().len());
     let trimmed = content.trim();
-    for separator in separators {
-        if let Some(rest) = trimmed.strip_suffix(separator.as_str()) {
-            return (rest.trim(), true);
+    let mut splits = vec![Split {
+        id: start..start + trimmed.len(),
+        title_from: None,
+        stripped_inside: false,
+    }];
+    for at in (1..trimmed.len()).rev() {
+        if !trimmed.is_char_boundary(at) {
+            continue;
         }
+        let Some(separator) = separators
+            .iter()
+            .filter(|separator| {
+                !separator.is_empty() && trimmed[at..].starts_with(separator.as_str())
+            })
+            .max_by_key(|separator| separator.len())
+        else {
+            continue;
+        };
+        let id = trimmed[..at].trim_end();
+        if id.is_empty() {
+            continue;
+        }
+        let after = at + separator.len();
+        let titled = !trimmed[after..].trim().is_empty();
+        splits.push(Split {
+            id: start..start + id.len(),
+            title_from: titled.then_some(start + after),
+            stripped_inside: !titled,
+        });
     }
-    (trimmed, false)
+    splits
 }
 
 /// Where the text after a lead-in span starts in `line`: past one separator

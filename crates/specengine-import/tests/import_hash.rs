@@ -1,5 +1,5 @@
 //! Verbatim text and hashes of the import record model
-//! (`crates/specengine-import/README.md` "Import", Text; AC-07 of
+//! (`docs/canon/import.md` "Text and hash"; AC-07 of
 //! docs/features/import-records.md): per form — table row, headerless
 //! row, list item, section — one inner change gives another hash, the
 //! document with CRLF gives equal hashes, a cell's surrounding blanks give

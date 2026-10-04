@@ -23,7 +23,8 @@ pub use census::{
     RecordKind, run,
 };
 pub use config::{
-    CensusConfig, CodeConfig, ConfigError, IdMatch, IdPattern, ImportConfig, Pattern,
+    CensusConfig, CodeConfig, ConfigError, DocumentsConfig, IdMatch, IdPattern, ImportConfig,
+    Pattern,
 };
 pub use script::IdScript;
 pub use walk::Walk;

@@ -1,48 +1,51 @@
 {
   "documents": {
-    "total": 11,
+    "total": 14,
     "per_class": {
       "class-1": 2,
       "class-2": 1,
       "class-3": 1,
-      "unclassified": 7
+      "unclassified": 10
     }
   },
   "front_matter": {
     "yaml": 4,
-    "field_table": 1,
-    "none": 6,
+    "field_table": 2,
+    "none": 8,
     "unclosed": 0,
     "non_latin_keys": 1,
     "keys": {
-      "mapped": 4,
-      "kept": 2,
+      "mapped": 6,
+      "kept": 3,
       "unmapped": 6
     },
     "values": {
-      "mapped": 2,
+      "mapped": 3,
       "kept": 1,
       "unmapped": 1
     }
   },
   "records": {
-    "total": 17,
+    "total": 24,
     "empty_text": 0,
+    "titled": 4,
     "per_form": {
-      "table_row": 6,
+      "table_row": 7,
       "headerless_row": 2,
-      "list_item": 7,
-      "section": 2
+      "list_item": 11,
+      "section": 2,
+      "document": 2
     },
     "per_prefix": {
-      "prefix-1": 12,
-      "prefix-2": 5
+      "prefix-1": 17,
+      "prefix-2": 7
     }
   },
-  "definitions": 13,
+  "definitions": 18,
   "references": {
-    "total": 4,
-    "unresolved": 1
+    "total": 6,
+    "unresolved": 1,
+    "by_document": 2
   },
   "duplicate_definitions": 1,
   "rows_without_id": {
@@ -50,7 +53,7 @@
     "none": 1
   },
   "legacy": {
-    "mapped": 1,
+    "mapped": 2,
     "unmapped": 1,
     "homoglyph_fixes": 1,
     "hyphenless": {
@@ -63,7 +66,7 @@
     }
   },
   "id_like": {
-    "claimed": 4,
+    "claimed": 7,
     "unclaimed": 2,
     "feature_outside": 1,
     "files_with_unclaimed": 1
