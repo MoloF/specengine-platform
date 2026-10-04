@@ -72,10 +72,12 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [ADR-0029](decisions/ADR-0029.md) One pipeline; role write areas for the gate · process · accepted
 - [ADR-0030](decisions/ADR-0030.md) Configured index shards · docs · accepted
 - [ADR-0031](decisions/ADR-0031.md) Kinds and process rules are project config · architecture · accepted
+- [ADR-0032](decisions/ADR-0032.md) A proposal applies where it was raised · architecture · accepted
 
 ## Specs
 
 - [docs/features/pilot-w.md](features/pilot-w.md) Pilot W: every task, before and after · crates/specengine-eval, fixtures, docs · draft
+- [docs/features/proposal-apply.md](features/proposal-apply.md) Proposal apply: the one write door · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
