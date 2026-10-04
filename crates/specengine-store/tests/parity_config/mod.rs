@@ -62,6 +62,70 @@ pub fn mutated(toml: &str, from: &str, to: &str) -> String {
     toml.replacen(from, to, 1)
 }
 
+/// The byte range of the value of the one `roots = [...]` line of the
+/// `[paths]` table of `toml` (from `[` to `]` inclusive), found by the
+/// table and the key, never by the list's order or its last element.
+fn roots_value(toml: &str) -> std::ops::Range<usize> {
+    let mut table = "";
+    let mut found = Vec::new();
+    let mut offset = 0;
+    for line in toml.split_inclusive('\n') {
+        let body = line.trim_end_matches(['\n', '\r']);
+        let trimmed = body.trim_start();
+        if trimmed.starts_with('[') {
+            table = trimmed.split('#').next().unwrap().trim();
+        } else if table == "[paths]"
+            && let Some(rest) = trimmed.strip_prefix("roots")
+            && let Some(value) = rest.trim_start().strip_prefix('=')
+        {
+            let value = value.split('#').next().unwrap().trim();
+            assert!(
+                value.starts_with('[') && value.ends_with(']'),
+                "`[paths] roots` is a one-line array: {body:?}"
+            );
+            let start = offset + body.find(value).expect("the value is on the line");
+            found.push(start..start + value.len());
+        }
+        offset += line.len();
+    }
+    assert_eq!(found.len(), 1, "one `[paths] roots` line in the config");
+    found.pop().unwrap()
+}
+
+/// The `[paths] roots` list of `toml`, its quoted entries in order.
+pub fn roots(toml: &str) -> Vec<String> {
+    let value = &toml[roots_value(toml)];
+    value[1..value.len() - 1]
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            assert!(
+                entry.len() >= 2 && entry.starts_with('"') && entry.ends_with('"'),
+                "a quoted `roots` entry: {entry:?}"
+            );
+            entry[1..entry.len() - 1].to_owned()
+        })
+        .collect()
+}
+
+/// `toml` with its `[paths] roots` list replaced by `edit` of it (the
+/// in-test mutations of `roots`, whatever the list's current order and
+/// length; the committed file is never written).
+pub fn with_roots(toml: &str, edit: impl FnOnce(&mut Vec<String>)) -> String {
+    let range = roots_value(toml);
+    let mut list = roots(toml);
+    edit(&mut list);
+    let quoted: Vec<String> = list.iter().map(|root| format!("\"{root}\"")).collect();
+    let mut out = String::with_capacity(toml.len() + 16);
+    out.push_str(&toml[..range.start]);
+    out.push('[');
+    out.push_str(&quoted.join(", "));
+    out.push(']');
+    out.push_str(&toml[range.end..]);
+    out
+}
+
 /// The finding the pin mutation must give, by (code, path, subject): a
 /// five-digit mention that resolves nowhere.
 pub const DANGLING: (&str, &str, &str) =

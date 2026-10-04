@@ -42,7 +42,8 @@ use std::process::Command;
 
 use common::{Scratch, repository_root};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, mutated, root_toml, std_walk,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, mutated, root_toml, roots,
+    std_walk, with_roots,
 };
 use specengine_core::check::{
     CheckConfig, CheckInput, Mode, Report, Verdict, is_tier3_file, render_index, render_index_set,
@@ -199,7 +200,16 @@ fn the_walk_is_the_std_walk_of_this_repository() {
     // Mutation: `crates` out of `roots` — exactly the crate READMEs leave.
     let crates = under(&expected, "crates");
     assert!(crates.len() >= 8, "{crates:?}");
-    let without_crates = walked(&repository, &mutated(&toml, "\"crates\", ", ""));
+    let listed_roots = roots(&toml);
+    assert!(
+        listed_roots.iter().any(|root| root == "crates")
+            && listed_roots.iter().any(|root| root == "docs"),
+        "{listed_roots:?}"
+    );
+    let without_crates = walked(
+        &repository,
+        &with_roots(&toml, |roots| roots.retain(|root| root != "crates")),
+    );
     let missing: BTreeSet<String> = expected.difference(&without_crates).cloned().collect();
     assert_eq!(missing, crates, "`crates` out of `roots`");
 
@@ -233,7 +243,12 @@ fn the_walk_is_the_std_walk_of_this_repository() {
         "a new top-level README"
     );
     assert!(walked_copy.is_subset(&std_copy));
-    let listed = mutated(&toml, "\"docs\"]", "\"docs\", \"newtop\"]");
+    assert!(!listed_roots.iter().any(|root| root == "newtop"));
+    let listed = with_roots(&toml, |roots| roots.push("newtop".to_owned()));
+    assert_eq!(
+        roots(&listed),
+        [&listed_roots[..], &["newtop".to_owned()]].concat()
+    );
     assert_eq!(walked(&copy, &listed), std_copy, "listed in `roots`");
 }
 
