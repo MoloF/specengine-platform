@@ -20,7 +20,10 @@ use common::bundle::{
     item, literals, names, split_text, tail_names, via,
 };
 use common::graph::{keys, spec30};
-use common::{FIXTURES, Scratch, fixture, read_text, replace, repository_root, write};
+use common::{
+    FIXTURES, SPAN_SUFFIX, Scratch, fixture, read_text, replace, repository_root,
+    show_without_span, write,
+};
 use serde_json::Value;
 use specengine_core::IdSchemeToml as _;
 use specengine_model::IdScheme;
@@ -80,14 +83,22 @@ fn each_once(json: &Value) {
 }
 
 /// The text bundle's body starts with the title, `## Targets` and exactly
-/// `spec show`'s stdout of `reference`, then `next`.
+/// `spec show`'s stdout of `reference`, its header without the span suffix
+/// (docs/features/proposal-apply.md Q1: a bundle target's header carries no
+/// span hash), then `next`.
 fn target_text_is_show(home: &Path, root: &Path, reference: &str, title: &str, next: &str) {
     let show = spec30(home, root, &["show", reference]);
     show.code(0);
+    let shown = show_without_span(&show.stdout);
     let run = bundle(home, root, &[reference, "--budget", "10000"]);
     run.code(0);
     let text = split_text(&run.stdout);
-    let expected = format!("# Bundle: {title}\n\n## Targets\n{}\n{next}", show.stdout);
+    assert!(
+        !text.body.contains(SPAN_SUFFIX),
+        "a bundle carries no span hash:\n{}",
+        text.body
+    );
+    let expected = format!("# Bundle: {title}\n\n## Targets\n{shown}\n{next}");
     assert!(
         text.body.starts_with(&expected),
         "the target is not `spec show`'s text:\n--- bundle\n{}\n--- show\n{}",
@@ -1066,6 +1077,7 @@ fn ac14_both_fixtures_give_one_key_set() {
             "archived",
             "utf8",
             "sections",
+            "span_hash",
             "text",
             "truncated",
             "omitted",

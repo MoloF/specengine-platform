@@ -26,6 +26,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/pilot-schemes.md](features/pilot-schemes.md) shipped
 - [docs/features/pilot-w.md](features/pilot-w.md) shipped
 - [docs/features/pointer-sweep.md](features/pointer-sweep.md) shipped
+- [docs/features/proposal-apply.md](features/proposal-apply.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
 - [docs/features/spec-check-process.md](features/spec-check-process.md) shipped

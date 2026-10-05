@@ -3,25 +3,34 @@
 //! exit 0 and 1, nothing for exit 2 but `spec check`'s cannot-check
 //! report); stderr carries `note:`, `warning:` and error lines. No colour,
 //! no timing.
+//!
+//! The one check that stays here: `spec approve` and `spec reject` run only
+//! when stdin is a terminal (else exit 2, nothing read or logged); the
+//! library asks its question through a callback, which prints it on stderr
+//! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
+//! (`now`, UTC) and the process's variables for git are passed in as well.
 
-use std::io::Write as _;
+use std::io::{BufRead as _, IsTerminal as _, Read as _, Write as _};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    BundleRequest, CheckRequest, CheckedTree, CliError, Env, Exit, ExportIndexRequest, Globals,
-    GraphRequest, IndexRequest, InitRequest, Outcome, SearchRequest, ShowRequest, TreeRequest,
-    render_json, render_text,
+    ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError, Env, Exit,
+    ExportIndexRequest, Globals, GraphRequest, InboxRequest, IndexRequest, InitRequest, Outcome,
+    ProposeRequest, ProposedText, RejectRequest, ReviewRequest, SearchRequest, ShowRequest,
+    TEXT_MAX_BYTES, TreeRequest, render_json, render_text,
 };
+use specengine_core::proposal::utc_timestamp;
 use specengine_store::GitEnv;
 
 #[derive(Parser)]
 #[command(
     name = "spec",
     version,
-    about = "SpecEngine: find and read a project's spec nodes by ID, over an always-fresh index; check its documents",
+    about = "SpecEngine: find and read a project's spec nodes by ID, over an always-fresh index; check its documents; propose changes and apply them as commits",
     color = ColorChoice::Never
 )]
 struct Cli {
@@ -140,6 +149,66 @@ enum Command {
     Export {
         #[command(subcommand)]
         what: Export,
+    },
+    /// Propose a change to one node; no file is touched until the owner approves it.
+    Propose {
+        #[command(subcommand)]
+        kind: Propose,
+    },
+    /// List the current repository's open and approved proposals, by ID.
+    Inbox {
+        /// Every state, applied and rejected included.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Print one proposal: its target, place, author, rationale, diff, and what approving it now would do (apply it, or complete it by its own commit already on its branch).
+    Review {
+        #[arg(value_name = "PR")]
+        id: String,
+    },
+    /// Apply an open proposal in its worktree as one commit, or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask).
+    Approve {
+        #[arg(value_name = "PR")]
+        id: String,
+        /// A note kept with the decision.
+        #[arg(long, value_name = "T")]
+        note: Option<String>,
+    },
+    /// Reject an open or approved proposal, never one whose `Proposal:` commit is on its branch; asks for consent on the terminal.
+    Reject {
+        #[arg(value_name = "PR")]
+        id: String,
+        /// Why the proposal is rejected (non-empty).
+        #[arg(long, value_name = "T")]
+        reason: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum Propose {
+    /// Replace the text of node ID (a section's heading to its end, or a document's whole file).
+    Update {
+        /// An ID or `slug/ID`.
+        #[arg(value_name = "ID")]
+        target: String,
+        /// The span hash the text was written against (`spec show`: `span b3:…`, JSON `span_hash`).
+        #[arg(long, value_name = "HASH")]
+        base: String,
+        /// The new text: a file, or `-` for stdin (UTF-8, at most 1 MiB).
+        #[arg(long = "text-file", value_name = "F")]
+        text_file: PathBuf,
+        /// Why; the commit's body when applied.
+        #[arg(long, value_name = "T")]
+        rationale: String,
+        /// The proposing agent's role (any of the three: an agent's proposal).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The proposing agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The proposing agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
     },
 }
 
@@ -308,7 +377,142 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &ExportIndexRequest { stdout },
         )?),
+        Command::Propose {
+            kind:
+                Propose::Update {
+                    target,
+                    base,
+                    text_file,
+                    rationale,
+                    author_role,
+                    author_model,
+                    run,
+                },
+        } => {
+            let text = if text_file.as_os_str() == "-" {
+                ProposedText::Given(read_stdin_text()?)
+            } else {
+                ProposedText::File(text_file)
+            };
+            Outcome::Proposal(Box::new(specengine_cli::propose(
+                env,
+                globals,
+                &ProposeRequest {
+                    target,
+                    base,
+                    text,
+                    rationale,
+                    author_role,
+                    author_model,
+                    run,
+                    now: now(),
+                    git: process_git(env),
+                },
+            )?))
+        }
+        Command::Inbox { all } => Outcome::Inbox(specengine_cli::inbox(
+            env,
+            globals,
+            &InboxRequest {
+                all,
+                git: process_git(env),
+            },
+        )?),
+        Command::Review { id } => Outcome::Proposal(Box::new(specengine_cli::review(
+            env,
+            globals,
+            &ReviewRequest {
+                id,
+                git: process_git(env),
+            },
+        )?)),
+        Command::Approve { id, note } => {
+            require_terminal("approve")?;
+            let mut consent = ask;
+            Outcome::Proposal(Box::new(specengine_cli::approve(
+                env,
+                globals,
+                &ApproveRequest {
+                    id,
+                    note,
+                    now: now(),
+                    git: process_git(env),
+                },
+                &mut consent,
+            )?))
+        }
+        Command::Reject { id, reason } => {
+            require_terminal("reject")?;
+            let mut consent = ask;
+            Outcome::Proposal(Box::new(specengine_cli::reject(
+                env,
+                globals,
+                &RejectRequest {
+                    id,
+                    reason,
+                    now: now(),
+                    git: process_git(env),
+                },
+                &mut consent,
+            )?))
+        }
     })
+}
+
+/// The process's directory and variables, for git (the library drops the
+/// local `GIT_*` ones before running it in a proposal's worktree).
+fn process_git(env: &Env) -> GitEnv {
+    GitEnv::new(env.cwd.clone(), std::env::vars_os())
+}
+
+/// The clock: now, UTC, `YYYY-MM-DDTHH:MM:SSZ`.
+fn now() -> String {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
+        });
+    utc_timestamp(seconds)
+}
+
+/// `--text-file -`: stdin, at most one byte more than the library takes.
+fn read_stdin_text() -> Result<Vec<u8>, CliError> {
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .lock()
+        .take(TEXT_MAX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            CliError::cannot(format!("spec: cannot read the text from stdin: {error}"))
+        })?;
+    Ok(bytes)
+}
+
+/// `spec approve` and `spec reject` decide on a terminal only: a stdin
+/// that is no terminal (a pipe, an agent's shell) exits 2 before anything
+/// is read or logged.
+fn require_terminal(command: &str) -> Result<(), CliError> {
+    if std::io::stdin().is_terminal() {
+        return Ok(());
+    }
+    Err(CliError::cannot(format!(
+        "spec: `spec {command}` asks the owner for consent on a terminal, and stdin is not one \
+         (a pipe, a script or an agent's shell): run it in a terminal; nothing changed"
+    )))
+}
+
+/// The consent prompt: `question` on stderr, one answer line from the
+/// terminal; only `y` or `yes` consents.
+fn ask(question: &str) -> bool {
+    let mut stderr = std::io::stderr().lock();
+    let _ = write!(stderr, "{question} ");
+    let _ = stderr.flush();
+    drop(stderr);
+    let mut answer = String::new();
+    match std::io::stdin().lock().read_line(&mut answer) {
+        Ok(_) => matches!(answer.trim(), "y" | "yes"),
+        Err(_) => false,
+    }
 }
 
 /// Help and version go to stdout, exit 0; any other parse error is a usage

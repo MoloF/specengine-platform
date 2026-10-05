@@ -164,6 +164,9 @@ pub(crate) struct ShowNode {
     pub utf8: bool,
     /// A cut node: only the sections whose heading line its `text` holds.
     pub sections: Vec<String>,
+    /// `b3:` and the BLAKE3 of the node's whole span bytes, even when
+    /// `text` is cut: the base hash a proposal names.
+    pub span_hash: String,
     pub text: String,
     pub truncated: bool,
     pub omitted: Option<ShowOmitted>,

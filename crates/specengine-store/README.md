@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-05
 ---
 
 # specengine-store — the spec index
 
-A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). Derived data outside the repository (ADR-0001, ADR-0003). A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`: bit-exact floats). Callers: the CLI (updating before every read; checks parse afresh), `specengine-eval`.
+A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). The DB, outside the repository (ADR-0001, ADR-0003), also holds the proposal queue, not derived. A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`: bit-exact floats). Callers: the CLI (updating before every read; checks parse afresh), `specengine-eval`.
 
 ## API
 
@@ -20,7 +20,8 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `trait SpecIndex {files, file -> IndexedFile {parsed?, blake3?, size, read_error?}, lookup_id -> [IdHit {path, ord, node}], search(&SearchQuery {text, kinds, limit, archive}) -> SearchResults {hits: [SearchHit {path, ord, id?, kind?, title?, line, tier3, snippet}], short_query, tier3_left_out}, indexed_input -> CheckInput}`; `lookup_id`: every node with exactly that `id`; `indexed_input`: the stored worktree as a `CheckInput`, one snapshot, empty `bytes` (`spec show`'s resolver).
 - `spec check`, no database (`docs/canon/spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` → `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) → `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic → a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)` (the config by file name, a baseline as passed); `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}` against `HEAD`, config (`CONFIG_FILE`) and baseline staged unless given, `check_changed_with_notes` alike from disk; `check_staged`: the report. `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 7`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
-- `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form; `spec bundle`'s `bundle_hash` (`docs/canon/spec-cli-bundle.md`), nothing stored.
+- `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`.
+- Proposals (`docs/canon/proposal-{queue,apply}.md`): `ProposalQueue`, `SqliteQueue::open(db, project)` (step 10's recording, a completion: no compare-and-set); `WorktreeGit::new(dir, &GitEnv)`, the write side (`git.rs`: the check's), with `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch, base pruned; a range-like name passes here: callers decode); `replace_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
 
 ## Rows
 
@@ -32,7 +33,7 @@ Tables (columns: `schema.rs`), `STRICT`, no `CHECK`: `index_meta`; `worktrees` (
 
 ## Cache key and format stamp
 
-Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fingerprint (BLAKE3 of the JSON of `IdScheme::prefixes()`; an `[ids]` comment or another table leaves it) or the DB's stamp changed. Stamp = `INDEX_FORMAT` in `index_meta` (`user_version`: Phase 2's `rusqlite_migration`). When it differs, the first write recreates the tables in its transaction (other worktrees: `NotIndexed` until updated), dropping only the index's objects (append-only lists in `schema.rs`): Phase 2 tables survive. `tests/format_history.txt`: `<INDEX_FORMAT> <BLAKE3 of the spec-a + spec-b dump, root masked>`; a changed dump needs a new line and number (reasons: `INDEX_FORMAT`'s doc).
+Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fingerprint (BLAKE3 of the JSON of `IdScheme::prefixes()`; an `[ids]` comment or another table leaves it) or the DB's stamp changed. Stamp = `INDEX_FORMAT` in `index_meta` (`user_version` is the queue's own schema step). When it differs, the first write recreates the tables in its transaction (other worktrees: `NotIndexed` until updated), dropping only the index's objects (append-only lists in `schema.rs`): the queue's tables survive. `tests/format_history.txt`: `<INDEX_FORMAT> <BLAKE3 of the spec-a + spec-b dump, root masked>`; a changed dump needs a new line and number (reasons: `INDEX_FORMAT`'s doc).
 
 ## Walk
 
@@ -43,11 +44,11 @@ Re-parse iff `(path, BLAKE3(bytes))` differs from the row, or the worktree's fin
 - Parse outside any transaction against a snapshot of stored hashes; one `Immediate` transaction re-checks and applies (a file whose row moved is re-parsed in place); the next update catches a concurrent edit. A rebuild swaps the worktree's rows in one transaction, never seen empty. A read = one deferred transaction.
 - A changed file's rows are deleted and re-inserted: `INSERT OR REPLACE` on `nodes` fires no `nodes_fts_delete`, leaving the FTS malformed (on `files`, safe only through the `foreign_keys` cascade).
 - Nothing is fatal (ADR-0012): a non-UTF-8 file, broken front-matter or YAML keeps its row and diagnostics; an unreadable file or a caught parser panic → `blake3` NULL, `read_error`, `size` 0, re-read every update.
-- Search: whitespace splits the query; terms of ≥ 3 characters become quoted FTS5 strings (`"` doubled), ANDed, never syntax; shorter ones dropped, none left → no hits, `short_query`. Trigram matches substrings (`R-12` → also `R-123`; exact IDs: `lookup_id`), case-folded, no stemmer. The handle's worktree, `kinds` (empty = any), Tier 3 files dropped before the limit unless `archive`, `ORDER BY bm25(nodes_fts, 10.0, 5.0, 1.0), path, ord`, `limit` clamped, a 64-token `snippet` marked `**`. No order depends on rowid; bm25 statistics are DB-wide.
+- Search: whitespace splits the query; terms of ≥ 3 characters become quoted FTS5 strings (`"` doubled), ANDed, never syntax; shorter ones dropped, none left → no hits, `short_query`. Trigram matches substrings (`R-12` → also `R-123`; exact IDs: `lookup_id`), case-folded, no stemmer. The handle's worktree, `kinds` (empty = any), Tier 3 files dropped before the limit unless `archive`, `ORDER BY bm25(nodes_fts, 10.0, 5.0, 1.0), path, ord`, `limit` clamped, a 64-token `snippet` marked `**`. bm25 statistics are DB-wide.
 
 ## Connection, location, concurrency
 
-At creation, before the first table: `journal_mode=WAL`, `auto_vacuum=INCREMENTAL`; per connection `busy_timeout=5000`, `foreign_keys=ON`, `synchronous=NORMAL`, `journal_size_limit` 64 MiB, `trusted_schema=OFF` (FTS5 is innocuous), `recursive_triggers=OFF`. `open` gives `DbInsideWorktree`, creating nothing, when the DB's canonical parent or file is inside the worktree; no parent → `DbDirMissing`. Until the Phase 2 daemon is the sole writer (05 §1 principle 6), handles in any processes write directly: WAL, `Immediate`, `busy_timeout` (`BUSY`/`LOCKED` → `Busy`), no lock file or global state. Index updates are derived data, not `events`.
+At creation, before the first table: `journal_mode=WAL`, `auto_vacuum=INCREMENTAL`; per connection `busy_timeout=5000`, `foreign_keys=ON`, `synchronous=NORMAL` (the queue's `FULL`), `journal_size_limit` 64 MiB, `trusted_schema=OFF` (FTS5 is innocuous), `recursive_triggers=OFF`. `open` gives `DbInsideWorktree`, creating nothing, when the DB's canonical parent or file is inside the worktree; no parent → `DbDirMissing`. Until the daemon is the sole writer (05 §1 principle 6), handles in any process write directly: WAL, `Immediate`, `busy_timeout` (`BUSY`/`LOCKED` → `Busy`), no lock file. Index updates are derived data, not `events`.
 
 ## Open owner questions
 
@@ -56,7 +57,7 @@ Working answer (the code) → what the other answer triggers.
 - Q1 the pins above, transitive crates pending (04 §6) → other pins change `build_graph.rs`.
 - Q2 `trigram case_sensitive 0` (`remove_diacritics 1` if `fts.rs` stays green), exact IDs outside FTS → `unicode61`: prefix, substring, stem tests rewritten; a stemmer by `[project] language`: an ADR on `#universal`.
 - Q3 role keys + `roots` + `exclude` → role keys only: spec-b rewritten, READMEs outside `docs/` unreachable (08 §4.1); `roots` only: role keys leave the walk.
-- Q4 `norm_hash`, 08 AC-13, `spec bump`: own increment after the tracey reading (Q5, outside the pipeline), before Phase 2 → now: Q5 blocks it.
+- Q4 `norm_hash`, 08 AC-13, `spec bump`: own increment after the tracey reading (Q5, outside the pipeline) → now: Q5 blocks it.
 
 ## Open minors
 
@@ -66,4 +67,4 @@ Working answer (the code) → what the other answer triggers.
 - Races, accepted: `read` checks components, then reads; `resolve` names the parent when an entry's type cannot be read.
 - `GitIndex` holds each blob twice (`read` returns owned bytes); untested: `RootGone` by a spawn race, a file-system boundary.
 
-Tests: `tests/`, by `docs/features/spec-index.md`, `spec-check.md` criteria; scratch corpora in temp dirs.
+Tests: `tests/`, by `docs/features/{spec-index,spec-check,proposal-apply}.md` criteria; scratch corpora in temp dirs.

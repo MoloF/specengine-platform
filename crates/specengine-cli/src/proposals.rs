@@ -1,0 +1,566 @@
+//! What the proposal queue's commands share (task spec `proposal-apply`):
+//! `spec propose`, `spec review`, `spec approve` and `spec reject` answer
+//! with one review document ([`ProposalDocument`], the later MCP
+//! `get_proposal`); `spec inbox` lists ([`crate::inbox`]).
+//!
+//! - **Place** ([`open_context`]): the project found as every command
+//!   finds it, but `--config` must be the root's own `specengine.toml`; an
+//!   `[ids]` that takes the engine's `PR` prefix stops every queue command;
+//!   the current repository is the git common dir of the project root, git
+//!   run with every local `GIT_*` variable of the caller dropped; the queue
+//!   lives in the project's database (`<slug>.db`, shared by every
+//!   worktree of the repository and every repository of the slug).
+//! - **Proposal ID** ([`written_id`]): `PR-` and 4 or more digits, as the
+//!   queue writes it; look-alike letters or digits stop the command naming
+//!   the Latin form; anything else is "no proposal" (exit 1).
+//! - **Repository** ([`find`]): a proposal of another repository of the
+//!   same slug stops the command, naming that repository; `spec reject`
+//!   alone takes one whose recorded repository no longer exists (moved or
+//!   deleted), `open` or `approved` (nothing can be applied any more), so
+//!   an orphan can leave the inbox.
+//! - **Document**: every key present, absent = `null`; times as stored;
+//!   `diff` the span's base → new hunks of `git diff --no-index`, headers
+//!   `--- base <path>` and `+++ proposed <path>`; `notes` the reasons a
+//!   preview is unavailable and a refusal's reason.
+//!
+//! - **Terminal**: the text output and stderr of the queue's commands
+//!   carry agent-written text (rationale, texts, paths): every C0 and C1
+//!   control character but LF and TAB is printed escaped
+//!   ([`crate::escape_controls`]); JSON escapes them itself.
+//!
+//! Exit codes: 0 done; 1 refused by the proposal or its target (the
+//! document's `notes` and stderr say why); 2 cannot run here.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde::Serialize;
+use specengine_core::proposal::{
+    Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
+};
+use specengine_store::{
+    GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue, WorktreeGit,
+    same_repository,
+};
+
+use crate::location::prepared_data_dir;
+use crate::project::{CONFIG_FILE, ProjectRoot, discover};
+use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
+
+/// Which command answered with a review document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueCommand {
+    Propose,
+    Review,
+    Approve,
+    Reject,
+}
+
+/// What applying an open or approved proposal now would do: apply steps
+/// 2–6, read-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Preview {
+    /// The span is as proposed against: the new text replaces it.
+    Applies,
+    /// The span changed since; the three-way merge is clean.
+    Rebases,
+    /// The span changed since and the edits overlap (`conflict`).
+    Conflicts,
+    /// A step refused; `notes` says which and why.
+    Unavailable,
+}
+
+impl Preview {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Applies => "applies",
+            Self::Rebases => "rebases",
+            Self::Conflicts => "conflicts",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+/// The review document: every key, in this order, absent = `null`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct ProposalDocument {
+    pub id: Option<String>,
+    pub project: Option<String>,
+    pub kind: Option<String>,
+    pub status: Option<String>,
+    pub target_id: Option<String>,
+    /// Root-relative.
+    pub target_path: Option<String>,
+    pub worktree: Option<String>,
+    pub branch: Option<String>,
+    pub base_commit: Option<String>,
+    pub base_hash: Option<String>,
+    pub base_text: Option<String>,
+    pub new_text: Option<String>,
+    pub patch_hash: Option<String>,
+    pub rationale: Option<String>,
+    /// `{type, role, model, run}`.
+    pub author: Option<Author>,
+    /// The findings the edit introduced at creation.
+    pub diagnostics: Option<Vec<ProposalFinding>>,
+    /// Base → new hunks, with the two header lines; `""` when equal.
+    pub diff: Option<String>,
+    /// Open and approved proposals only.
+    pub preview: Option<Preview>,
+    /// `git merge-file`'s text when the preview conflicts.
+    pub conflict: Option<String>,
+    pub decided_by: Option<String>,
+    pub decided_at: Option<String>,
+    pub decision_note: Option<String>,
+    pub applied_commit: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    /// Why the preview is unavailable, what a reader should know, and a
+    /// refusal's reason last; each one line.
+    pub notes: Vec<String>,
+}
+
+impl ProposalDocument {
+    /// The stored proposal's keys; `diff`, `preview`, `conflict` and
+    /// `notes` left for the caller.
+    pub fn of(proposal: &Proposal) -> Self {
+        Self {
+            id: Some(proposal.id.clone()),
+            project: Some(proposal.project.clone()),
+            kind: Some(proposal.kind.as_str().to_owned()),
+            status: Some(proposal.status.as_str().to_owned()),
+            target_id: Some(proposal.target_id.clone()),
+            target_path: Some(proposal.target_path.clone()),
+            worktree: Some(proposal.place.worktree.clone()),
+            branch: Some(proposal.place.branch.clone()),
+            base_commit: Some(proposal.place.base_commit.clone()),
+            base_hash: Some(proposal.base_hash.clone()),
+            base_text: Some(proposal.base_text.clone()),
+            new_text: Some(proposal.new_text.clone()),
+            patch_hash: Some(proposal.patch_hash.clone()),
+            rationale: Some(proposal.rationale.clone()),
+            author: Some(proposal.author.clone()),
+            diagnostics: Some(proposal.diagnostics.clone()),
+            diff: None,
+            preview: None,
+            conflict: None,
+            decided_by: proposal.decided_by.clone(),
+            decided_at: proposal.decided_at.clone(),
+            decision_note: proposal.decision_note.clone(),
+            applied_commit: proposal.applied_commit.clone(),
+            created_at: Some(proposal.created_at.clone()),
+            updated_at: Some(proposal.updated_at.clone()),
+            notes: Vec::new(),
+        }
+    }
+}
+
+/// What `spec propose`, `spec review`, `spec approve` or `spec reject`
+/// answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProposalOutcome {
+    pub command: QueueCommand,
+    pub document: ProposalDocument,
+    /// Why the command was refused (exit 1); also the document's last note.
+    pub refusal: Option<String>,
+    pub messages: Vec<Message>,
+}
+
+impl ProposalOutcome {
+    /// Exit 0, or 1 when refused.
+    pub fn exit(&self) -> Exit {
+        if self.refusal.is_some() {
+            Exit::NotFound
+        } else {
+            Exit::Answered
+        }
+    }
+
+    /// A refused command: `reason` (one line) is the refusal and the
+    /// document's last note.
+    pub(crate) fn refused(
+        command: QueueCommand,
+        mut document: ProposalDocument,
+        reason: &str,
+        messages: Vec<Message>,
+    ) -> Self {
+        let reason = one_line(reason);
+        document.notes.push(reason.clone());
+        Self {
+            command,
+            document,
+            refusal: Some(reason),
+            messages,
+        }
+    }
+
+    /// A command that did what it was asked.
+    pub(crate) fn done(
+        command: QueueCommand,
+        document: ProposalDocument,
+        messages: Vec<Message>,
+    ) -> Self {
+        Self {
+            command,
+            document,
+            refusal: None,
+            messages,
+        }
+    }
+}
+
+impl Serialize for ProposalOutcome {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.document.serialize(serializer)
+    }
+}
+
+/// Where the queue's commands run: the project, its database and the
+/// current repository.
+pub(crate) struct QueueContext {
+    pub project: ProjectRoot,
+    pub slug: String,
+    /// The data directory: the database's, and the scratch files' of git.
+    pub data_dir: PathBuf,
+    pub queue: SqliteQueue,
+    /// Git at the project root, the caller's local variables dropped.
+    pub git: WorktreeGit,
+    /// The current repository's canonical git common dir.
+    pub common_dir: PathBuf,
+}
+
+/// Finds the project and opens its queue (see the module documentation):
+/// exit 2 for a `--config` other than the root's `specengine.toml`, an
+/// `[ids]` taking `PR`, a root in no git worktree, and what the read
+/// commands refuse (no project, no slug, `HOME`, the database).
+pub(crate) fn open_context(
+    env: &Env,
+    globals: &Globals,
+    git_env: &GitEnv,
+) -> Result<QueueContext, CliError> {
+    let project = discover(env, globals)?;
+    if let Some(config) = &globals.config {
+        let given = fs::canonicalize(env.cwd.join(config)).ok();
+        let own = fs::canonicalize(project.root.join(CONFIG_FILE)).ok();
+        if given.is_none() || given != own {
+            return Err(CliError::spec(format!(
+                "--config {}: the proposal queue reads only the project root's {CONFIG_FILE} \
+                 (the config proposals are checked and applied under); drop --config",
+                config.display()
+            )));
+        }
+    }
+    let slug = project.slug()?.to_owned();
+    if let Some(clash) = prefix_clash(&project.config.scheme) {
+        return Err(CliError::spec(format!("{}: {clash}", project.config_label)));
+    }
+    let git = WorktreeGit::new(&project.root, git_env)
+        .map_err(|error| CliError::spec(format!("cannot run git: {error}")))?;
+    let common_dir = git.common_dir().map_err(|error| {
+        CliError::spec(format!(
+            "the project root {} lies in no git worktree ({error}): proposals are bound to a \
+             git worktree and applied as commits",
+            project.root.display()
+        ))
+    })?;
+    let data_dir = prepared_data_dir(env, &project)?;
+    let queue =
+        SqliteQueue::open(data_dir.join(format!("{slug}.db")), &slug).map_err(queue_cannot)?;
+    Ok(QueueContext {
+        project,
+        slug,
+        data_dir,
+        queue,
+        git,
+        common_dir,
+    })
+}
+
+/// A queue command's error with its control characters escaped: it may
+/// quote stored, agent-written text.
+pub(crate) fn escaped_error(error: CliError) -> CliError {
+    CliError {
+        exit: error.exit,
+        message: escape_controls(&error.message),
+    }
+}
+
+/// A queue error that is no refusal: exit 2.
+pub(crate) fn queue_cannot(error: QueueError) -> CliError {
+    CliError::spec(error)
+}
+
+/// A queue error: a refusal (no such proposal, a state that does not allow
+/// the change) as `Ok(reason)`, anything else exit 2.
+pub(crate) fn queue_refusal(error: QueueError) -> Result<String, CliError> {
+    match error {
+        QueueError::Unknown { .. } | QueueError::Status { .. } | QueueError::Changed { .. } => {
+            Ok(error.to_string())
+        }
+        other => Err(queue_cannot(other)),
+    }
+}
+
+/// The proposal ID as written: `Some` when it is one, `None` when it is
+/// none in any script (exit 1 once the queue is open: every queue command
+/// first refuses a clashing `[ids]`); look-alikes exit 2 naming the fix.
+pub(crate) fn written_id(written: &str) -> Result<Option<String>, CliError> {
+    match parse_proposal_id(written) {
+        Ok(id) => Ok(Some(id)),
+        Err(ProposalIdError::LookAlike { fix }) => {
+            Err(CliError::spec(look_alike_message(written.trim(), &fix)))
+        }
+        Err(ProposalIdError::NotAnId) => Ok(None),
+    }
+}
+
+/// Exit 1: `written` names no proposal.
+pub(crate) fn no_proposal(written: &str) -> String {
+    format!(
+        "no proposal `{}`: a proposal ID is `PR-` and 4 or more digits, as `spec inbox` lists it",
+        written.trim()
+    )
+}
+
+/// Which proposals [`find`] gives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Find {
+    /// The current repository's only.
+    SameRepository,
+    /// Also one whose recorded common dir no longer exists (`spec
+    /// reject`: the orphan rule).
+    OrGoneRepository,
+}
+
+/// The proposal's recorded common dir no longer exists (the orphan rule).
+pub(crate) fn repository_gone(proposal: &Proposal) -> bool {
+    fs::symlink_metadata(&proposal.place.git_common_dir).is_err()
+}
+
+/// The proposal `id` of the current repository: `Ok(Err(reason))` when
+/// the queue has none (exit 1); another repository's (the same slug) exit
+/// 2, naming it, unless `which` takes a gone repository's and the recorded
+/// common dir no longer exists.
+pub(crate) fn find(
+    context: &QueueContext,
+    id: &str,
+    which: Find,
+) -> Result<Result<Proposal, String>, CliError> {
+    let proposal = match context.queue.get(id) {
+        Ok(Some(proposal)) => proposal,
+        Ok(None) => {
+            return Ok(Err(format!("no proposal `{id}` in this project's queue")));
+        }
+        Err(error) => return Err(queue_cannot(error)),
+    };
+    if !same_repository(&proposal.place.git_common_dir, &context.common_dir) {
+        let gone = repository_gone(&proposal);
+        if gone && which == Find::OrGoneRepository {
+            return Ok(Ok(proposal));
+        }
+        if gone {
+            return Err(CliError::spec(format!(
+                "`{id}` belongs to the repository {} (worktree {}), which no longer exists: \
+                 `spec reject {id} --reason …` takes it out of the inbox unless its commit is in \
+                 history",
+                proposal.place.git_common_dir, proposal.place.worktree
+            )));
+        }
+        return Err(CliError::spec(format!(
+            "`{id}` belongs to another repository of the project `{}`: {} (worktree {}); this \
+             one is {}: run the command there",
+            context.slug,
+            proposal.place.git_common_dir,
+            proposal.place.worktree,
+            context.common_dir.display()
+        )));
+    }
+    Ok(Ok(proposal))
+}
+
+/// The injected clock's time stamp must be `YYYY-MM-DDTHH:MM:SSZ`.
+pub(crate) fn checked_now(now: &str) -> Result<&str, CliError> {
+    if is_utc_timestamp(now) {
+        Ok(now)
+    } else {
+        Err(CliError::spec(format!(
+            "the clock gave `{now}`, not a UTC time stamp YYYY-MM-DDTHH:MM:SSZ"
+        )))
+    }
+}
+
+/// The target's path from the worktree's top: `root_rel/target_path`.
+pub(crate) fn top_path(proposal: &Proposal) -> String {
+    if proposal.place.root_rel.is_empty() {
+        proposal.target_path.clone()
+    } else {
+        format!("{}/{}", proposal.place.root_rel, proposal.target_path)
+    }
+}
+
+/// The document's `diff`: the span's base → new hunks (`git diff
+/// --no-index`, scratch files in `scratch`), headed `--- base <path>` and
+/// `+++ proposed <path>`; `""` when the texts are equal. A git failure is a
+/// note and no diff.
+pub(crate) fn fill_diff(
+    document: &mut ProposalDocument,
+    proposal: &Proposal,
+    git_env: &GitEnv,
+    scratch: &Path,
+) {
+    let hunks = WorktreeGit::new(scratch, git_env).and_then(|git| {
+        git.diff_hunks(
+            scratch,
+            proposal.base_text.as_bytes(),
+            proposal.new_text.as_bytes(),
+        )
+    });
+    match hunks {
+        Ok(hunks) if hunks.is_empty() => document.diff = Some(String::new()),
+        Ok(hunks) => {
+            document.diff = Some(format!(
+                "--- base {path}\n+++ proposed {path}\n{}",
+                String::from_utf8_lossy(&hunks),
+                path = proposal.target_path
+            ));
+        }
+        Err(error) => document.notes.push(one_line(&format!("no diff: {error}"))),
+    }
+}
+
+/// [`ProposalDocument::of`] with its `diff` ([`fill_diff`]).
+pub(crate) fn with_diff(proposal: &Proposal, git_env: &GitEnv, scratch: &Path) -> ProposalDocument {
+    let mut document = ProposalDocument::of(proposal);
+    fill_diff(&mut document, proposal, git_env, scratch);
+    document
+}
+
+/// One introduced finding as a line: `<severity>  <path>:<line>: <code>:
+/// <message>` (the check's report line).
+pub(crate) fn finding_line(finding: &ProposalFinding) -> String {
+    let severity = match finding.severity {
+        specengine_model::Severity::Error => "error",
+        specengine_model::Severity::Warning => "warning",
+    };
+    one_line(&format!(
+        "{severity}  {}:{}: {}: {}",
+        finding.path, finding.line, finding.code, finding.message
+    ))
+}
+
+/// The outcome as stdout text: `spec review`'s `key: value` lines; `spec
+/// propose`'s ID, `introduced: <n>` and the finding lines; `spec
+/// approve`'s and `spec reject`'s one line. A refused command prints only
+/// the conflict, when there is one. Control characters escaped.
+pub(crate) fn render_text(outcome: &ProposalOutcome) -> String {
+    escape_controls(&raw_text(outcome))
+}
+
+fn raw_text(outcome: &ProposalOutcome) -> String {
+    let document = &outcome.document;
+    let mut out = String::new();
+    if outcome.refusal.is_some() {
+        if let Some(conflict) = &document.conflict {
+            out.push_str(conflict);
+            if !conflict.is_empty() && !conflict.ends_with('\n') {
+                out.push('\n');
+            }
+        }
+        return out;
+    }
+    let id = document.id.as_deref().unwrap_or_default();
+    match outcome.command {
+        QueueCommand::Review => return review_text(document),
+        QueueCommand::Propose => {
+            let findings = document.diagnostics.as_deref().unwrap_or_default();
+            out.push_str(&format!("{id}\nintroduced: {}\n", findings.len()));
+            for finding in findings {
+                out.push_str(&finding_line(finding));
+                out.push('\n');
+            }
+        }
+        QueueCommand::Approve => out.push_str(&format!(
+            "applied {id} as {} on {}\n",
+            document.applied_commit.as_deref().unwrap_or_default(),
+            document.branch.as_deref().unwrap_or_default()
+        )),
+        QueueCommand::Reject => out.push_str(&format!("rejected {id}\n")),
+    }
+    out
+}
+
+/// `spec review`'s text: every key of the document in its order, `key:
+/// value`; texts as indented blocks (`key:` then each line indented by
+/// two spaces); lists as `key: <count>` and an indented line each; an
+/// absent value `key: -`.
+fn review_text(document: &ProposalDocument) -> String {
+    let mut out = String::new();
+    let line = |out: &mut String, key: &str, value: Option<&str>| {
+        out.push_str(&format!(
+            "{key}: {}\n",
+            value.map_or_else(|| "-".to_owned(), one_line)
+        ));
+    };
+    let block = |out: &mut String, key: &str, value: Option<&str>| match value {
+        None => out.push_str(&format!("{key}: -\n")),
+        Some(text) => {
+            out.push_str(&format!("{key}:\n"));
+            for text_line in text.split_terminator('\n') {
+                if text_line.is_empty() {
+                    out.push('\n');
+                } else {
+                    out.push_str(&format!("  {text_line}\n"));
+                }
+            }
+        }
+    };
+    let list = |out: &mut String, key: &str, lines: Option<Vec<String>>| match lines {
+        None => out.push_str(&format!("{key}: -\n")),
+        Some(lines) => {
+            out.push_str(&format!("{key}: {}\n", lines.len()));
+            for text_line in lines {
+                out.push_str(&format!("  {text_line}\n"));
+            }
+        }
+    };
+    line(&mut out, "id", document.id.as_deref());
+    line(&mut out, "project", document.project.as_deref());
+    line(&mut out, "kind", document.kind.as_deref());
+    line(&mut out, "status", document.status.as_deref());
+    line(&mut out, "target_id", document.target_id.as_deref());
+    line(&mut out, "target_path", document.target_path.as_deref());
+    line(&mut out, "worktree", document.worktree.as_deref());
+    line(&mut out, "branch", document.branch.as_deref());
+    line(&mut out, "base_commit", document.base_commit.as_deref());
+    line(&mut out, "base_hash", document.base_hash.as_deref());
+    block(&mut out, "base_text", document.base_text.as_deref());
+    block(&mut out, "new_text", document.new_text.as_deref());
+    line(&mut out, "patch_hash", document.patch_hash.as_deref());
+    block(&mut out, "rationale", document.rationale.as_deref());
+    let author = document.author.as_ref().map(Author::provenance);
+    line(&mut out, "author", author.as_deref());
+    list(
+        &mut out,
+        "diagnostics",
+        document
+            .diagnostics
+            .as_ref()
+            .map(|findings| findings.iter().map(finding_line).collect()),
+    );
+    block(&mut out, "diff", document.diff.as_deref());
+    line(&mut out, "preview", document.preview.map(Preview::as_str));
+    block(&mut out, "conflict", document.conflict.as_deref());
+    line(&mut out, "decided_by", document.decided_by.as_deref());
+    line(&mut out, "decided_at", document.decided_at.as_deref());
+    block(&mut out, "decision_note", document.decision_note.as_deref());
+    line(
+        &mut out,
+        "applied_commit",
+        document.applied_commit.as_deref(),
+    );
+    line(&mut out, "created_at", document.created_at.as_deref());
+    line(&mut out, "updated_at", document.updated_at.as_deref());
+    list(&mut out, "notes", Some(document.notes.clone()));
+    out
+}

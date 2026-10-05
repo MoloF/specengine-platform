@@ -8,7 +8,11 @@
 //! tree`, `spec graph` and `spec show --links`, over the index-fed spec
 //! graph of core ([`specengine_core::check::SpecGraph`]); pass 4 (task spec
 //! `spec-cli-bundle`), `spec bundle`: the context around named targets
-//! within a budget of estimated tokens, named by its `bundle_hash`.
+//! within a budget of estimated tokens, named by its `bundle_hash`; task
+//! spec `proposal-apply`, the proposal queue: `spec propose update`, `spec
+//! inbox`, `spec review`, `spec approve` (the one write door: the target
+//! file replaced in the proposal's recorded worktree and committed there)
+//! and `spec reject`.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -26,23 +30,35 @@
 //!   each giving its outcome or a [`CliError`];
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
+//! - [`propose`], [`inbox`], [`review`], [`approve`], [`reject`]: the
+//!   queue's commands; all but `inbox` answer with the review document
+//!   ([`ProposalDocument`]); `approve` and `reject` take the owner's
+//!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt), and every
+//!   request carries the caller's git environment and, where the queue
+//!   records a time, the clock's `now`;
 //! - [`render_text`], [`render_json`]: an [`Outcome`] as stdout (JSON: one
 //!   document, every key present, absent = `null`; `check`: the report's
 //!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded;
 //!   `bundle`: its body fitted within it, never cut);
 //!   [`Outcome::stderr_lines`]: its `note:` and `warning:` lines;
-//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`) or
-//!   blocked (`check`), 2 could not run (`check`: could not check).
+//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`),
+//!   blocked (`check`) or refused by the proposal or its target (the queue's
+//!   commands), 2 could not run (`check`: could not check).
 //!
 //! One database state gives one stdout, byte for byte: nothing depends on
 //! time, storage order or the absolute root (`check`: one tree, config,
-//! baseline and date). No command writes under the project root but
-//! `spec init`, which creates its one file, and `spec export index`, which
-//! writes only `[paths] index`; `index`, `search`, `show`, `tree`, `graph`
-//! and `bundle` write only the data directory, `check` nothing. Nothing found in the corpus is fatal
+//! baseline and date; the queue's commands print stored times, never
+//! relative ones, and their worktree's absolute path). No command writes
+//! under the project root but `spec init`, which creates its one file,
+//! `spec export index`, which writes only `[paths] index`, and `spec
+//! approve`, which writes only the proposal's target file and commits it in
+//! the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
+//! `bundle`, `propose`, `inbox`, `review` and `reject` write only the data
+//! directory, `check` nothing. Nothing found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
+mod apply;
 mod bundle;
 mod cap;
 mod check;
@@ -50,11 +66,16 @@ mod corpus;
 mod documents;
 mod export;
 mod graph;
+mod inbox;
 mod init;
 mod links;
 mod location;
+mod preflight;
 mod project;
+mod proposals;
+mod propose;
 mod refresh;
+mod review;
 mod search;
 mod show;
 mod tree;
@@ -63,6 +84,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 
+pub use apply::{ApproveRequest, Consent, RejectRequest, approve, reject};
 pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
     ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
@@ -73,11 +95,15 @@ pub use corpus::LeftOut;
 pub use documents::{DocumentEntry, documents};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use graph::{FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph};
+pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
 pub use project::{CONFIG_FILE, Located, ProjectRoot, discover, locate};
+pub use proposals::{Preview, ProposalDocument, ProposalOutcome, QueueCommand};
+pub use propose::{ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose};
 pub use refresh::{IndexOutcome, IndexRequest, index};
+pub use review::{ReviewRequest, review};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show};
 pub use specengine_core::ProjectConfig;
@@ -96,7 +122,8 @@ pub enum Exit {
     Answered = 0,
     /// `spec show`, `spec tree`, `spec graph`, `spec bundle` found nothing: a dangling
     /// reference, no configured prefix, a `.md` path that is not indexed.
-    /// `spec check`: blocked.
+    /// `spec check`: blocked. The queue's commands: refused by the proposal
+    /// or its target (nothing stored, written or committed).
     NotFound = 1,
     /// The command could not run: usage, project, config, environment,
     /// database. Nothing is printed on stdout, but `spec check`'s report
@@ -222,11 +249,15 @@ pub enum Outcome {
     Bundle(BundleOutcome),
     Check(CheckOutcome),
     Export(ExportOutcome),
+    /// `propose`, `review`, `approve`, `reject`: the review document.
+    Proposal(Box<ProposalOutcome>),
+    Inbox(InboxOutcome),
 }
 
 impl Outcome {
-    /// 0, or 1 for a `show`, `tree`, `graph` or `bundle` that found nothing; `check`:
-    /// its verdict's exit (1 blocked, 2 could not check).
+    /// 0, or 1 for a `show`, `tree`, `graph` or `bundle` that found nothing
+    /// or a refused queue command; `check`: its verdict's exit (1 blocked,
+    /// 2 could not check).
     pub fn exit(&self) -> Exit {
         match self {
             Self::Show(show) if show.nodes.is_empty() => Exit::NotFound,
@@ -234,13 +265,14 @@ impl Outcome {
             Self::Graph(graph) if graph.reason.is_some() => Exit::NotFound,
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
             Self::Check(check) => check.exit(),
+            Self::Proposal(proposal) => proposal.exit(),
             _ => Exit::Answered,
         }
     }
 
     /// The stderr lines: notes and warnings in the order they arose, then,
-    /// for a `show`, `tree`, `graph` or `bundle` that found nothing,
-    /// `spec: <reason>`.
+    /// for a `show`, `tree`, `graph` or `bundle` that found nothing or a
+    /// refused queue command, `spec: <reason>`.
     pub fn stderr_lines(&self) -> Vec<String> {
         let (messages, reason) = match self {
             Self::Init(outcome) => (&outcome.messages, None),
@@ -252,10 +284,18 @@ impl Outcome {
             Self::Bundle(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
+            Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Inbox(outcome) => (&outcome.messages, None),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
             lines.push(format!("spec: {}", one_line(reason)));
+        }
+        // The queue's commands quote agent-written text.
+        if matches!(self, Self::Proposal(_) | Self::Inbox(_)) {
+            for line in &mut lines {
+                *line = escape_controls(line);
+            }
         }
         lines
     }
@@ -273,6 +313,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Bundle(outcome) => bundle::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
+        Outcome::Proposal(outcome) => proposals::render_text(outcome),
+        Outcome::Inbox(outcome) => inbox::render_text(outcome),
     }
 }
 
@@ -290,6 +332,8 @@ impl serde::Serialize for Outcome {
             Self::Bundle(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
+            Self::Proposal(outcome) => outcome.serialize(serializer),
+            Self::Inbox(outcome) => outcome.serialize(serializer),
         }
     }
 }
@@ -317,4 +361,37 @@ pub(crate) fn store_error(error: specengine_store::StoreError) -> CliError {
 /// A header or table field on one line: line breaks become spaces.
 pub(crate) fn one_line(text: &str) -> String {
     text.replace("\r\n", " ").replace(['\n', '\r'], " ")
+}
+
+/// `text` for a terminal: every C0 control character but LF, TAB and the
+/// CR of a CRLF pair, DEL, every C1 control character and the Unicode
+/// bidirectional marks, embeddings, overrides and isolates (U+061C,
+/// U+200E, U+200F, U+202A–U+202E, U+2066–U+2069) written as `\u{XX}`
+/// (lower-case hex), so agent-written text cannot move the cursor, erase,
+/// recolour or reorder what the owner reads. Everything else is kept (a
+/// CRLF file's lines read as they are).
+pub(crate) fn escape_controls(text: &str) -> String {
+    if !text.chars().any(is_escaped) {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len() + 16);
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        let crlf = c == '\r' && chars.peek() == Some(&'\n');
+        if is_escaped(c) && !crlf {
+            out.push_str(&format!("\\u{{{:x}}}", u32::from(c)));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// A character [`escape_controls`] escapes (a CR followed by LF aside).
+fn is_escaped(c: char) -> bool {
+    (c.is_control() && c != '\n' && c != '\t')
+        || matches!(
+            c,
+            '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+        )
 }

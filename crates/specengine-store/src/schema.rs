@@ -6,7 +6,8 @@
 //! `id` (a node is keyed by `(file, ord)`, uniqueness is `spec check`'s).
 //! FTS5 is external-content over `nodes` with triggers, trigram-tokenised,
 //! case-folded, no stemmer. The stamp is `INDEX_FORMAT` in `index_meta`;
-//! `user_version` is left to the migrations of Phase 2.
+//! `user_version` belongs to the proposal queue's own schema steps
+//! (`crate::queue`), whose tables no list here names.
 
 use rusqlite::{Connection, OptionalExtension, Transaction};
 
@@ -150,18 +151,7 @@ pub(crate) fn ensure(conn: &mut Connection) -> Result<(), StoreError> {
     if has_table(conn, "index_meta")? {
         return Ok(());
     }
-    if !has_any_table(conn)? {
-        conn.pragma_update(None, "auto_vacuum", "INCREMENTAL")
-            .db()?;
-        let mode: String = conn
-            .pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get(0))
-            .db()?;
-        if !mode.eq_ignore_ascii_case("wal") {
-            return Err(StoreError::Sqlite(format!(
-                "the database refused WAL mode (journal_mode stays {mode})"
-            )));
-        }
-    }
+    prepare_new(conn)?;
     let tx = conn
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .db()?;
@@ -169,6 +159,27 @@ pub(crate) fn ensure(conn: &mut Connection) -> Result<(), StoreError> {
         create(&tx)?;
     }
     tx.commit().db()
+}
+
+/// On a DB without any table (a new file), the creation PRAGMAs: first
+/// `auto_vacuum=INCREMENTAL` (before any table exists), then WAL. A DB that
+/// has a table is left as it is. Shared by the index and the queue
+/// (`crate::queue`), whichever makes the first table.
+pub(crate) fn prepare_new(conn: &Connection) -> Result<(), StoreError> {
+    if has_any_table(conn)? {
+        return Ok(());
+    }
+    conn.pragma_update(None, "auto_vacuum", "INCREMENTAL")
+        .db()?;
+    let mode: String = conn
+        .pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get(0))
+        .db()?;
+    if !mode.eq_ignore_ascii_case("wal") {
+        return Err(StoreError::Sqlite(format!(
+            "the database refused WAL mode (journal_mode stays {mode})"
+        )));
+    }
+    Ok(())
 }
 
 /// The stamp stored in the DB; `None` when absent or unreadable.
@@ -223,7 +234,7 @@ fn create(tx: &Transaction<'_>) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn has_table(conn: &Connection, name: &str) -> Result<bool, StoreError> {
+pub(crate) fn has_table(conn: &Connection, name: &str) -> Result<bool, StoreError> {
     conn.query_row(
         "SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name = ?1",
         [name],

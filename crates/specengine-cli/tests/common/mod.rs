@@ -13,6 +13,7 @@ pub mod bundle;
 pub mod check;
 pub mod git;
 pub mod graph;
+pub mod proposal;
 pub mod staged;
 
 use std::collections::BTreeMap;
@@ -388,4 +389,35 @@ pub fn header_fields(line: &str) -> Vec<&str> {
 /// `HOME` as an `OsString`, for [`spec_with`].
 pub fn os(text: &str) -> OsString {
     OsString::from(text)
+}
+
+/// The ` | span b3:<64 hex>` suffix every `spec show` text header ends with
+/// (docs/features/proposal-apply.md, "Data", `spec show`).
+pub const SPAN_SUFFIX: &str = " | span b3:";
+
+/// `header` (one `spec show` header line) without its span suffix, which
+/// must be there, last, with 64 lower-case hex digits: the header a bundle
+/// target carries (docs/features/spec-cli-bundle.md, as amended by
+/// proposal-apply Q1).
+pub fn header_without_span(header: &str) -> &str {
+    let (before, hex) = header
+        .rsplit_once(SPAN_SUFFIX)
+        .unwrap_or_else(|| panic!("no `{SPAN_SUFFIX}` in the header {header:?}"));
+    assert!(
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+        "the span hash of {header:?} is not 64 lower-case hex digits"
+    );
+    before
+}
+
+/// `stdout` of `spec show` with its first line (the header) stripped of
+/// the span suffix ([`header_without_span`]).
+pub fn show_without_span(stdout: &str) -> String {
+    let (header, rest) = stdout
+        .split_once('\n')
+        .unwrap_or_else(|| panic!("no header line in {stdout:?}"));
+    format!("{}\n{rest}", header_without_span(header))
 }

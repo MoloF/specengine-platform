@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 
+use common::bundle::blake3_hex;
 use common::{FIXTURES, Scratch, assert_plain, data_dir, md_files, spec, write};
 use specengine_store::UpdateReport;
 
@@ -183,8 +184,14 @@ fn broken_files_are_counted_never_fatal() {
         let bytes = spec(&home, &root, &["show", "docs/records/broken/bytes.md"]);
         bytes.code(0);
         let header = bytes.stdout.lines().next().unwrap();
+        // docs/features/proposal-apply.md: the header ends with the span
+        // hash of the raw bytes (the whole file), after the flags.
+        let hash = format!(
+            "b3:{}",
+            blake3_hex(b"# Bad \xff\xfe bytes\n\nMore.\n".as_slice())
+        );
         assert!(
-            header.ends_with(" | not UTF-8"),
+            header.ends_with(&format!(" | not UTF-8 | span {hash}")),
             "{fixture}: {}",
             bytes.show()
         );

@@ -1,7 +1,8 @@
 //! The output cap of `spec show` and its two renderings.
 //!
-//! Text: per node a header line, then its text (a line end added when it
-//! has none), an empty line between nodes. Everything before the tail line
+//! Text: per node a header line (ending ` | span b3:<hex>`, the node's
+//! `span_hash`), then its text (a line end added when it has none), an
+//! empty line between nodes. Everything before the tail line
 //! is at most [`OUTPUT_CAP_CHARS`] characters (JSON: the sum of the `text`
 //! values). The node where the cap falls is cut at the last line end within
 //! it; when its first line alone is longer than the room left, at the cap
@@ -91,7 +92,8 @@ struct Omitted {
 
 /// `<ID else path> | <kind or -> | <title or -> | <path>:<line> | <n> tokens`
 /// and, when they apply, ` | status <s>`, ` | rev <n>`, ` | archived`,
-/// ` | not UTF-8`. Also `spec bundle`'s target headers.
+/// ` | not UTF-8`. Also `spec bundle`'s target headers, which carry no
+/// span hash (task spec `proposal-apply` names `spec show` only).
 pub(crate) fn header(node: &ShownNode) -> String {
     let name = node.id.as_deref().unwrap_or(&node.path);
     let kind = node.kind.as_deref().unwrap_or("-");
@@ -120,6 +122,12 @@ pub(crate) fn header(node: &ShownNode) -> String {
         header.push_str(" | not UTF-8");
     }
     header
+}
+
+/// `spec show`'s header line of a node: [`header`], then
+/// ` | span b3:<hex>` (its `span_hash`).
+fn shown_header(node: &ShownNode) -> String {
+    format!("{} | span {}", header(node), one_line(&node.span_hash))
 }
 
 /// The lines of a node's links block (none without `--links`).
@@ -151,7 +159,7 @@ pub(crate) fn lines_within(
 fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
     let mut used = 0;
     for (index, node) in nodes.iter().enumerate() {
-        let head = usize::from(index > 0) + header(node).chars().count() + 1;
+        let head = usize::from(index > 0) + shown_header(node).chars().count() + 1;
         let block = block(node);
         let links: usize = block.iter().map(|line| line.chars().count() + 1).sum();
         let body = node.text.chars().count() + usize::from(!node.text.ends_with('\n'));
@@ -164,7 +172,7 @@ fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
             // line, cut at the cap less its line end. Else the cut falls at
             // the line end that ends the previous node.
             let header = if used == 0 {
-                Header::Cut(cut_text(&header(node), OUTPUT_CAP_CHARS, true))
+                Header::Cut(cut_text(&shown_header(node), OUTPUT_CAP_CHARS, true))
             } else {
                 Header::Dropped
             };
@@ -309,7 +317,7 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
     let mut out = String::new();
     for (index, node) in nodes.iter().enumerate() {
         let this_cut = cut.filter(|cut| cut.node == index);
-        let header = header(node);
+        let header = shown_header(node);
         match this_cut.map(|cut| cut.header) {
             Some(Header::Dropped) => break,
             Some(Header::Cut(bytes)) => {
@@ -387,6 +395,7 @@ struct NodeJson<'a> {
     archived: bool,
     utf8: bool,
     sections: Vec<&'a str>,
+    span_hash: &'a str,
     text: &'a str,
     truncated: bool,
     omitted: Option<OmittedJson>,
@@ -436,6 +445,7 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                     .filter(|section| this_cut.is_none_or(|cut| section_shown(section, cut)))
                     .map(|section| section.id.as_str())
                     .collect(),
+                span_hash: &node.span_hash,
                 text: match this_cut {
                     Some(cut) => &node.text[..cut.shown],
                     None => &node.text,

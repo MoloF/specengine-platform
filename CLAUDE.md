@@ -10,7 +10,7 @@ reviewed: 2026-10-05
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, later a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phase 0 done; **Phase 1** (reading core: parser, index, CLI reads, graph and bundle, MCP stdio reads, `spec check` 1–4, sharded `export index`, layer A identity, pilot W) done 2026-10-05, pilot A migrates first, then B; **Phase 2** (queue and tasks) in progress; UI begun on mocks (ADR-0033). Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phases 0–1 done (reading core: parser, index, CLI reads, graph and bundle, MCP stdio reads, `spec check` 1–4, sharded `export index`, layer A identity, pilot W; 2026-10-05), pilot A migrates before B; **Phase 2** in progress, proposal apply shipped; UI begun on mocks (ADR-0033). Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
@@ -21,7 +21,7 @@ State: Phase 0 done; **Phase 1** (reading core: parser, index, CLI reads, graph 
 Full list with reasons: `docs/canon/architecture.md`; every rule changes only through a new ADR.
 
 - The source of truth is files in the project's git; SQLite is an index and a queue, outside the repository (ADR-0001, ADR-0003).
-- Spec files are written only by `apply_proposal` on the owner's action, in the task branch's worktree, as a separate commit with provenance (ADR-0004, ADR-0005).
+- Spec files are written only by `apply_proposal` on the owner's action, where the proposal was raised, as a separate commit with provenance (ADR-0004, ADR-0005, ADR-0032).
 - **Nothing is blocked by a discrepancy.** The only control point is the owner approving a task; the hook is closed when the daemon is unavailable (ADR-0006, ADR-0012).
 - The core knows no subject domain: project specifics live in its `specengine.toml` and importer (ADR-0008).
 - IDs are Latin-only, no mixed scripts; legacy IDs are aliases (ADR-0009).

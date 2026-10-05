@@ -28,7 +28,12 @@
 //!   shared by the store's walker and the check's link scope;
 //! - `glob` — the `[paths] exclude` matcher behind it;
 //! - [`own_spans`] — a node's own text as spans (its body minus nested ID
-//!   sections): the index's `own_text` and the check's `text` rule.
+//!   sections): the index's `own_text` and the check's `text` rule;
+//! - [`patch`] — the pure half of a proposal's `update`: a node's span by
+//!   ID, the splice, the structure check, the creation refusals and the
+//!   findings an edit introduces (task spec `proposal-apply`);
+//! - [`proposal`] — the queue's own words: `PR-NNNN` and its look-alikes,
+//!   the `[ids]` clash, the author, the apply commit's message.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -38,8 +43,10 @@ mod glob;
 mod lines;
 mod markdown;
 mod own_text;
+pub mod patch;
 pub mod paths_toml;
 pub mod project_toml;
+pub mod proposal;
 pub mod scheme_toml;
 pub mod tokens;
 pub mod walk_scope;

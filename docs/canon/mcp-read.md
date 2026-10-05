@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-03
+reviewed: 2026-10-05
 ---
 
 # MCP read tools and resources
@@ -12,18 +12,18 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1–1.3): agents read th
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the four tools and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output`, `probe_sleep` and a paragraph of `instructions`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (the `probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the four tools and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output`, `probe_sleep` and a paragraph of `instructions`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
 
 ## Tools
 
 | Tool (types as the flags) | ≙ `spec` |
 |---|---|
 | `get_tree {root?, depth?, kinds?, archive?}` | `tree [ROOT] [--depth N] [--kind K]… [--archive]` |
-| `get_node {id, with?: ["links"], archive?}` | `show REF [--links] [--archive]` |
+| `get_node {id, with?: ["links"], archive?}` | `show REF [--links] [--archive]`; `span_hash` names a proposal's base |
 | `search {query, kinds?, limit?, archive?}` | `search "QUERY" [--kind K]… [--limit N] [--archive]`, `query` one term |
 | `get_context_bundle {node_ids: [REF…], budget?}` | `bundle REF… [--budget N]` |
 
-**Parity.** `content` = one text block, byte-equal to `spec <…> 2>&1`: `Outcome::stderr_lines` (each + `\n`), then `render_text`. `structuredContent` = the `--json` document (`render_json`, parsed). Exit 0 → success, zero hits too; exit 1 → `isError`, the text and the exit-1 document; exit 2 → `isError`, the `CliError` line(s) + `\n`, no `structuredContent`. An argument the input schema refuses (a wrong type, an unknown name, a value outside `with`'s enum) is rmcp `Parameters`' error result before any call: `isError`, `failed to deserialize parameters: …`, no `structuredContent`, never a JSON-RPC error (MCP 2025-11-25, SEP-1303: the model corrects itself). A panic in the call → `isError`, `internal error: <tool> failed` (no `\n`); a `--json` that does not parse (never expected) → `internal error: <tool> failed: its --json document does not parse: <e>`. No error ends the session. Determinism is the CLI's: no result holds the root, `HOME` or a date.
+**Parity.** `content` = one text block, byte-equal to `spec <…> 2>&1`: `Outcome::stderr_lines` (each + `\n`), then `render_text`. `structuredContent` = the `--json` document (`render_json`, parsed). Exit 0 → success, zero hits too; exit 1 → `isError`, the text and the exit-1 document; exit 2 → `isError`, the `CliError` line(s) + `\n`, no `structuredContent`. An argument the input schema refuses (a wrong type, an unknown name, a value outside `with`'s enum) is rmcp `Parameters`' error result before any call: `isError`, `failed to deserialize parameters: …`, no `structuredContent`, never a JSON-RPC error (SEP-1303: the model corrects itself). A panic in the call → `isError`, `internal error: <tool> failed` (no `\n`); a `--json` that does not parse (never expected) → `internal error: <tool> failed: its --json document does not parse: <e>`. No error ends the session. Determinism is the CLI's: no result holds the root, `HOME` or a date.
 
 **Annotations** exactly `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false`; `_meta {"anthropic/maxResultSizeChars": 500000}` (Size).
 

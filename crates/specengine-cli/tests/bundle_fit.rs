@@ -21,7 +21,7 @@ use common::bundle::{
     split_text, tail_names,
 };
 use common::graph::spec30;
-use common::{Scratch, fixture, replace, snapshot, spec, write};
+use common::{Scratch, fixture, header_without_span, replace, snapshot, spec, write};
 use serde_json::Value;
 use specengine_core::tokens_est;
 
@@ -682,7 +682,9 @@ fn the_minimum_is_the_frame() {
         let mut children = 0;
         for (index, target) in targets.iter().enumerate() {
             let show = spec30(&home, &root, &["show", target]);
-            let header = show.stdout.lines().next().unwrap();
+            // A bundle target's header is show's without the span suffix
+            // (docs/features/proposal-apply.md Q1).
+            let header = header_without_span(show.stdout.lines().next().unwrap());
             if index > 0 {
                 frame.push('\n');
             }

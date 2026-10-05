@@ -16,7 +16,9 @@
 //! `#SECTION`, that section. Several → all, by (path, position), and one
 //! warning citing each. Spans come from a parse of the very bytes printed,
 //! read once after the update, never from the index; a file that is not
-//! UTF-8 is printed with U+FFFD and marked.
+//! UTF-8 is printed with U+FFFD and marked. Each node carries its
+//! `span_hash`, the store's `b3_hash` of the exact span bytes read (task
+//! spec `proposal-apply`: what `spec propose --base` takes).
 //!
 //! `--links` (task spec `spec-cli-graph`): each shown node also carries its
 //! links, one hop both ways, from the index-fed spec graph
@@ -29,7 +31,7 @@ use specengine_core::check::{NodeAt, Resolution, Resolver, SpecGraph, is_tier3_f
 use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
 use specengine_model::script::normalize_char;
 use specengine_model::{IdScheme, IdScript, ParsedFile, Reference, grammar};
-use specengine_store::{Source as _, WorkingTree};
+use specengine_store::{Source as _, WorkingTree, b3_hash, span_hash};
 
 use crate::corpus::{Admission, indexed};
 use crate::links::{ShownLinks, node_links};
@@ -82,6 +84,10 @@ pub struct ShownNode {
     pub utf8: bool,
     /// The ID sections nested in it, in source order.
     pub sections: Vec<NestedSection>,
+    /// `b3:` and the BLAKE3 of the exact span bytes read (no line end
+    /// added, no U+FFFD; the whole span even when the output is cut): the
+    /// `--base` of `spec propose`.
+    pub span_hash: String,
     /// Its bytes: a section's span, a document's whole file.
     pub text: String,
     /// Its links with `--links`, else `None`.
@@ -320,7 +326,7 @@ pub(crate) fn classify(
 }
 
 /// Exit 1: `written` is no reference; the configured prefixes listed.
-fn no_reference(written: &str, scheme: &IdScheme) -> String {
+pub(crate) fn no_reference(written: &str, scheme: &IdScheme) -> String {
     let prefixes: Vec<&str> = scheme
         .prefixes()
         .iter()
@@ -346,7 +352,7 @@ fn no_reference(written: &str, scheme: &IdScheme) -> String {
 }
 
 /// Exit 2: look-alike letters or mixed scripts, with the Latin form.
-fn latin_fix(written: &str, homoglyphs: &[specengine_model::Homoglyph]) -> String {
+pub(crate) fn latin_fix(written: &str, homoglyphs: &[specengine_model::Homoglyph]) -> String {
     let fix: String = if homoglyphs.is_empty() {
         written.chars().map(normalize_char).collect()
     } else {
@@ -496,6 +502,7 @@ pub(crate) fn shown(
         archived,
         utf8,
         sections,
+        span_hash: span_hash(bytes, node),
         text,
         links: None,
     }
@@ -517,6 +524,7 @@ fn whole_file(path: &str, bytes: &[u8], archived: bool, utf8: bool) -> ShownNode
         archived,
         utf8,
         sections: Vec::new(),
+        span_hash: b3_hash(bytes),
         text,
         links: None,
     }

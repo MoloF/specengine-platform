@@ -195,8 +195,8 @@ A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependen
 | `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer) / importer ID patterns; `regex` is already in the graph through tree-sitter |
 | `blake3` | =1.8.7 | node and AST hashes |
 | `notify` + `notify-debouncer-full` | 8.2.0 + 0.7.0 | file watching; **not** 9.0-rc; debouncer-full coalesces atomic saves |
-| `rusqlite_migration` | 2.6.0 | schema migrations (`refinery` and `sqlx` conflict with rusqlite 0.40 over `libsqlite3-sys`) |
-| `similar` | 3.2.0 | proposal diffs |
+| `rusqlite_migration` | — | not taken: the queue's `user_version` steps; `refinery`, `sqlx` conflict |
+| `similar` | — | not taken: `git diff`, `merge-file` |
 | `petgraph` | =0.8.3 (no default features) | `depends-cycle` (`tarjan_scc`; owner, Q-C); new to the default members: `fixedbitset` 0.5.7, `hashbrown` 0.15.5, `foldhash` 0.1.5 |
 | `gix` | 0.88.0 | later; system `git` at the start |
 | `rust-embed` | 8.12.0 | UI inside the binary |

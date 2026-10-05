@@ -97,7 +97,7 @@ Project (project.md: vision, goals, constraints)
 
 Before showing it to the owner, SpecEngine:
 1. checks whether these nodes already have a decision (FTS + `answers`/`decision` graph). If so, it replies "already decided: DEC-0081" and **does not create** a duplicate;
-2. applies `proposed_patch` to a temporary copy and runs `spec check`, attaching diagnostics;
+2. validates `proposed_patch` as `spec propose` does: introduced findings attached, never refusing (`docs/canon/proposal-queue.md` "Creation");
 3. sets the informational flag `has_open_proposal` on the nodes. **Nothing is blocked** (ADR-0012): the node stays open for reading, editing and other proposals, the task keeps its status;
 4. emits an SSE event (UI updates), optionally an OS notification.
 
@@ -107,18 +107,7 @@ The agent receives `PR-0042` and **keeps working** on the current spec or on the
 
 One queue in three places:
 
-**CLI**
-```
-$ spec inbox
- PR-0042  discrepancy  ⛔ block.  T-0107  RULE-STAM-REGEN  Regeneration delay not implemented…      12 min
- Q-12     question     ▶ work.a.  T-0107  MEC-STAMINA      Should swimming consume stamina?         1 h
-$ spec review PR-0042
-  ── evidence ──────── src/sim/stamina.rs:41-58 (signature + fragment)
-  ── spec ──────────── RULE-STAM-REGEN (current text)
-  ── options ───────── [0] Code to spec (recommended) … [1] Spec to code …
-  ── diff ──────────── (if attached)
-  [a] accept option  [e] edit and accept  [r] reject  [c] needs clarification  [d] defer
-```
+**CLI** (shipped for `update`: `docs/canon/proposal-queue.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts`; `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`. To come: evidence, priced options, edit and accept, clarification, defer.
 
 **Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting.
 
@@ -128,9 +117,9 @@ $ spec review PR-0042
 
 | Decision | Effect |
 |---|---|
-| **Accept "spec to code"** / edit and accept | `apply_proposal`: the diff is written to the spec file in the task worktree (rebased if the node was already changed by another proposal); a `DEC-*` decision record is created (`answers: PR-0042`, `cost`, `canon:`); `spec_hash` is recomputed; the task's `spec_snapshot` is updated, since the edit is its own; commit `spec: apply PR-0042` (ADR-0005) |
-| **Accept "code to spec"** | spec unchanged; an item is added to the task plan; `DEC-*` records that the discrepancy is a code defect |
-| **Reject** | proposal closed with a reason; the reason is indexed, and an agent's repeated attempt to propose the same returns it |
+| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): the edit lands in the worktree it was raised in (ADR-0032; a task's: its worktree), rebased if the node changed meanwhile, always committed `spec: apply PR-0042` (ADR-0005); to come: a decision record (`answers: PR-0042`, `cost`, `canon:`), `spec_hash` recomputed, the task's `spec_snapshot` updated (its own edit) |
+| **Accept "code to spec"** | spec unchanged; an item is added to the task plan; a decision record says the discrepancy is a code defect |
+| **Reject** | closed with a reason (`spec reject`); to come: the reason indexed, an agent's repeated attempt gets it back |
 | **Needs clarification** | `changes_requested` with the owner's question → the agent sees it in `get_proposal`/`get_task` and extends |
 | **Defer** | the proposal stays in the queue with a mark; work continues on the working answer |
 

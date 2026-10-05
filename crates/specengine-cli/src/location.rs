@@ -77,6 +77,16 @@ pub struct OpenIndex {
 /// outside the root.
 pub fn open_index(env: &Env, project: &ProjectRoot) -> Result<OpenIndex, CliError> {
     let slug = project.slug()?.to_owned();
+    let dir = prepared_data_dir(env, project)?;
+    let db = dir.join(format!("{slug}.db"));
+    let index = SqliteIndex::open(&db, &slug, &project.root).map_err(store_error)?;
+    Ok(OpenIndex { index, db, slug })
+}
+
+/// The data directory, created when absent, refused when it lies inside
+/// the project root (nothing created then): where the database and the
+/// proposal queue's scratch files go.
+pub(crate) fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
     let dir = data_dir(env)?;
     let resolved = resolve_nonexistent(&dir).map_err(|error| {
         CliError::spec(format!(
@@ -98,9 +108,7 @@ pub fn open_index(env: &Env, project: &ProjectRoot) -> Result<OpenIndex, CliErro
             dir.display()
         ))
     })?;
-    let db = dir.join(format!("{slug}.db"));
-    let index = SqliteIndex::open(&db, &slug, &project.root).map_err(store_error)?;
-    Ok(OpenIndex { index, db, slug })
+    Ok(dir)
 }
 
 /// `path` with its nearest existing ancestor canonicalised and the missing

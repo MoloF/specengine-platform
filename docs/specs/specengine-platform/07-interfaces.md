@@ -89,10 +89,11 @@ spec refs ID                             # reverse lookup
 spec unmapped [PATH]                     # spec coverage of sources
 spec bundle REF… [--budget N]            # shipped, default 2000: docs/canon/spec-cli-bundle.md; --task T: Phase 2
 
-# owner queue
-spec inbox [--severity high] [--task T]
-spec review PR-ID                        # interactive: approve/edit/reject/changes/defer
-spec approve PR-ID [--option N] [--note ...]
+# owner queue: shipped for kind update, docs/canon/proposal-queue.md
+spec propose update ID --base HASH --text-file F|- --rationale T
+spec inbox [--all]                       # to come: --severity, --task
+spec review PR-ID                        # to come: interactive edit/changes/defer
+spec approve PR-ID [--note ...]          # a terminal's [y/N]; to come: --option N
 spec reject PR-ID --reason ...
 
 # tasks

@@ -7,7 +7,7 @@
 
 mod common;
 
-use common::{Scratch, index, spec, write};
+use common::{Scratch, header_without_span, index, spec, write};
 
 /// `(fixture, a word found only in its Tier 3 record, that record's ID)`.
 const CASES: [(&str, &str, &str); 2] = [
@@ -59,8 +59,10 @@ fn a_word_only_in_a_superseded_record_is_left_out_and_counted() {
 
         let run = spec(&home, &root, &["show", id]);
         run.code(0);
+        // The flag is the last field before the span hash
+        // (docs/features/proposal-apply.md).
         assert!(
-            run.stdout.lines().next().unwrap().ends_with(" | archived"),
+            header_without_span(run.stdout.lines().next().unwrap()).ends_with(" | archived"),
             "{fixture}: {}",
             run.show()
         );

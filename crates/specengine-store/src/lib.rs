@@ -40,6 +40,16 @@
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
 //!
+//! - the proposal queue (docs/features/proposal-apply.md): [`SqliteQueue`]
+//!   ([`ProposalQueue`]) keeps the operational tables `proposals` and
+//!   `events` in the same DB, made by their own schema steps on
+//!   `user_version` and never dropped by the index; [`WorktreeGit`] is the
+//!   write side of one recorded worktree's git (its place, the dirty check,
+//!   `merge-file`, `commit --only`, the trailer lookup), every `GIT_*`
+//!   local variable dropped; [`replace_file`] the atomic write;
+//!   [`update_file`], [`span_hash`], [`introduced_findings`] the update of
+//!   one span over core's pure half.
+//!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
 //! the traits over as the sole writer (05 §1 principle 6). Until then any
@@ -52,11 +62,14 @@ mod dump;
 mod error;
 mod git;
 mod index;
+mod queue;
 mod read;
 mod rows;
 mod schema;
 mod search;
 mod source;
+mod update;
+mod worktree;
 mod write;
 
 use serde::Serialize;
@@ -71,7 +84,17 @@ pub use check::{
 pub use error::StoreError;
 pub use git::GitEnv;
 pub use index::{DbSettings, SqliteIndex};
+pub use queue::{
+    APPLY_VERIFY_STEP, ApplyFailure, Decision, EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED,
+    EVENT_CREATED, EVENT_REJECTED, Event, NewProposal, Place, Proposal, ProposalFilter,
+    ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
+    QUEUE_SCHEMA_VERSION, QueueError, Seen, SqliteQueue, UnreadableRow, patch_hash,
+};
 pub use source::{GitIndex, Listing, Source, WorkingTree};
+pub use update::{UpdateError, introduced_findings, span_hash, update_file};
+pub use worktree::{
+    GitError, Merge, Operation, PlaceError, WorktreeGit, replace_file, same_repository,
+};
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change
 /// of what a fresh index stores for the same corpus — schema, row

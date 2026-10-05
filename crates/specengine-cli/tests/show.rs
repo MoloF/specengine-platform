@@ -2,6 +2,9 @@
 //! node and the node's bytes (a section's span, a document's file) from a
 //! parse of the very bytes it prints; its JSON has exactly the keys of
 //! "Data". Every ID of both fixtures is checked against the parser (AC-17).
+//! Since docs/features/proposal-apply.md ("Data", `spec show`; AC-01) a node
+//! carries `span_hash`, `b3:` and the BLAKE3 of its span's raw bytes, and
+//! the text header ends ` | span b3:<hex>`.
 
 #![cfg(unix)]
 
@@ -9,6 +12,7 @@ mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use common::bundle::blake3_hex;
 use common::{FIXTURES, Scratch, index, lines, md_files, read, read_text, spec, write};
 use specengine_core::ProjectConfig;
 use specengine_model::ParsedFile;
@@ -29,6 +33,25 @@ fn tokens_of(parsed: &ParsedFile, id: &str) -> u32 {
         .tokens_est
 }
 
+/// docs/features/proposal-apply.md, "Data", `spec show`: `b3:` and the
+/// BLAKE3 (the tests' own implementation) of exactly `bytes`.
+fn b3(bytes: &[u8]) -> String {
+    format!("b3:{}", blake3_hex(bytes))
+}
+
+/// The `span_hash` of node `id` in `path`: its span's raw bytes, from the
+/// parser's span (no line end added, no U+FFFD).
+fn span_hash_of(root: &std::path::Path, path: &str, id: &str) -> String {
+    let bytes = read(root, path);
+    let parsed = parse(root, path);
+    let node = parsed
+        .nodes
+        .iter()
+        .find(|node| node.id.as_deref() == Some(id))
+        .unwrap_or_else(|| panic!("{id} in the parse"));
+    b3(&bytes[node.span.range()])
+}
+
 #[test]
 fn a_section_prints_its_header_then_its_lines_byte_for_byte() {
     let scratch = Scratch::new("show-section");
@@ -39,11 +62,18 @@ fn a_section_prints_its_header_then_its_lines_byte_for_byte() {
     run.code(0);
     assert_eq!(run.stderr, "", "{}", run.show());
     let tokens = tokens_of(&parse(&root, STAMINA), "RULE-STAM-REGEN");
+    let body = lines(&read(&root, STAMINA), 21, 23);
+    // The span ends before the section's last line end: the hash is of the
+    // span, not of the printed lines (M: hash the printed text).
+    let span = body.strip_suffix(b"\n").expect("a line end");
+    let hash = b3(span);
+    assert_eq!(hash, span_hash_of(&root, STAMINA, "RULE-STAM-REGEN"));
+    assert_ne!(hash, b3(&body), "the printed text differs from the span");
     let mut want = format!(
-        "RULE-STAM-REGEN | rule | Regeneration | docs/spec/movement/stamina.md:21 | {tokens} tokens\n"
+        "RULE-STAM-REGEN | rule | Regeneration | docs/spec/movement/stamina.md:21 | {tokens} tokens | span {hash}\n"
     )
     .into_bytes();
-    want.extend(lines(&read(&root, STAMINA), 21, 23));
+    want.extend(body);
     assert_eq!(
         run.stdout.as_bytes(),
         want.as_slice(),
@@ -63,8 +93,11 @@ fn a_document_and_a_path_print_the_whole_file() {
     let run = spec(&home, &root, &["show", "MEC-STAMINA"]);
     run.code(0);
     let tokens = tokens_of(&parse(&root, STAMINA), "MEC-STAMINA");
+    // A document's span is its whole file.
+    let hash = b3(&read(&root, STAMINA));
+    assert_eq!(hash, span_hash_of(&root, STAMINA, "MEC-STAMINA"));
     let mut want = format!(
-        "MEC-STAMINA | mechanic | Stamina | docs/spec/movement/stamina.md:1 | {tokens} tokens | status accepted\n"
+        "MEC-STAMINA | mechanic | Stamina | docs/spec/movement/stamina.md:1 | {tokens} tokens | status accepted | span {hash}\n"
     )
     .into_bytes();
     want.extend(read(&root, STAMINA));
@@ -76,6 +109,10 @@ fn a_document_and_a_path_print_the_whole_file() {
         let (header, body) = run.stdout.split_once('\n').unwrap();
         assert!(
             header.contains(&format!(" | {path}:1 | ")),
+            "{path}: {header}"
+        );
+        assert!(
+            header.ends_with(&format!(" | span {}", b3(&read(&root, path)))),
             "{path}: {header}"
         );
         assert_eq!(body.as_bytes(), read(&root, path).as_slice(), "{path}");
@@ -133,6 +170,8 @@ fn show_json_has_exactly_the_data_keys() {
             "archived",
             "utf8",
             "sections",
+            // docs/features/proposal-apply.md, "Data", `spec show`.
+            "span_hash",
             "text",
             "truncated",
             "omitted",
@@ -160,6 +199,7 @@ fn show_json_has_exactly_the_data_keys() {
         serde_json::json!(["RULE-STAM-REGEN", "EDGE-STAM-ZERO"])
     );
     assert_eq!(node["text"], read_text(&root, STAMINA));
+    assert_eq!(node["span_hash"], b3(&read(&root, STAMINA)), "{json}");
     assert_eq!(node["truncated"], false);
     assert!(node["omitted"].is_null());
 
@@ -170,6 +210,22 @@ fn show_json_has_exactly_the_data_keys() {
     assert_eq!(node["line"], 21);
     assert_eq!(node["end_line"], 23);
     assert_eq!(node["sections"], serde_json::json!([]));
+    assert_eq!(
+        node["span_hash"],
+        span_hash_of(&root, STAMINA, "RULE-STAM-REGEN"),
+        "{json}"
+    );
+    // The text header's suffix is the JSON's key.
+    let text = spec(&home, &root, &["show", "RULE-STAM-REGEN"]);
+    assert!(
+        text.stdout
+            .lines()
+            .next()
+            .unwrap()
+            .ends_with(&format!(" | span {}", node["span_hash"].as_str().unwrap())),
+        "{}",
+        text.show()
+    );
     assert!(node["links"].is_null(), "{json}");
     // `@rev` is a note, also in JSON.
     let json = spec(&home, &root, &["--json", "show", "R-12@3"]).json();
@@ -255,8 +311,11 @@ fn the_header_flags_come_in_order() {
     let run = spec(&home, &root, &["show", "DEC-0099"]);
     run.code(0);
     let header = run.stdout.lines().next().unwrap();
+    let hash = b3(&read(&root, "docs/records/DEC/DEC-0099.md"));
     assert!(
-        header.ends_with(" tokens | status rejected | rev 3 | archived"),
+        header.ends_with(&format!(
+            " tokens | status rejected | rev 3 | archived | span {hash}"
+        )),
         "{header}"
     );
     let json = spec(&home, &root, &["--json", "show", "DEC-0099"]).json();
@@ -265,11 +324,16 @@ fn the_header_flags_come_in_order() {
     let run = spec(&home, &root, &["show", "docs/records/DEC/raw.md"]);
     run.code(0);
     let header = run.stdout.lines().next().unwrap();
+    // The raw bytes are hashed: never the U+FFFD the text shows.
+    let raw = b3(b"# Raw \xff bytes\n");
+    assert_ne!(raw, b3("# Raw \u{fffd} bytes\n".as_bytes()));
     assert!(
         header.starts_with("docs/records/DEC/raw.md | - | - | docs/records/DEC/raw.md:1 | ")
-            && header.ends_with(" tokens | not UTF-8"),
+            && header.ends_with(&format!(" tokens | not UTF-8 | span {raw}")),
         "{header}"
     );
+    let json = spec(&home, &root, &["--json", "show", "docs/records/DEC/raw.md"]).json();
+    assert_eq!(json["nodes"][0]["span_hash"], raw, "{json}");
     assert_eq!(
         run.stdout.split_once('\n').unwrap().1,
         "# Raw \u{fffd} bytes\n"
@@ -339,6 +403,11 @@ fn every_id_of_both_fixtures_shows_its_span() {
             assert_eq!(
                 shown["text"],
                 String::from_utf8_lossy(&bytes[node.span.range()]).as_ref(),
+                "{fixture}: {id}"
+            );
+            assert_eq!(
+                shown["span_hash"],
+                b3(&bytes[node.span.range()]),
                 "{fixture}: {id}"
             );
             checked += 1;

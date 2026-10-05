@@ -29,11 +29,10 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `docs/features/proposal-apply.md` (slice 1) in implementation; `ui-shell` (Phase 4 begun on mocks, ADR-0033) shipped 2026-10-05.
-- Proposals (all kinds), questions with deduplication, decisions with `cost` and `canon:`, `apply_proposal` (patch by section, optional commit with provenance).
+- Slices: `proposal-apply` (1: queue and `apply_proposal` for `update`, one commit with provenance: `docs/canon/proposal-{queue,apply}.md`) and `ui-shell` (Phase 4 begun on mocks, ADR-0033) shipped 2026-10-05; next `queue-export` (export, backup, `import-state`), `agent-intake` (MCP write tools, every kind, questions with dedup, decisions with `cost` and `canon:`), `task-package` (ADR-0027).
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
-- CLI: `inbox`, `review`, `approve/reject`, `task …`, `round new/answer`.
-- MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; on 2.1.288 the read tools pass, content alone caps at 48-60 k; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check").
+- CLI: `task …`, `round new/answer`.
+- MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_discrepancy`, `ask_question`, `propose_change`, `get_proposal`, `report_run`; `review_proposal`/`approve_task` with `requiresUserInteraction` and the consent-tool requirements of 07 §1.2 (the Phase 0 `review_proposal` is a demo skeleton, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE; MCP for agents is the `spec mcp` stdio bridge to the daemon (MCP HTTP transport after MVP, 07 §1.1).
 - **Plugin**: `.mcp.json`, hooks (`gate` fail-closed, session-start, touched, subagent-stop), prompts, stack-neutral roles and `/feature` (06 §8); stack roles come from a stack-profile plugin or the project (ADR-0027).

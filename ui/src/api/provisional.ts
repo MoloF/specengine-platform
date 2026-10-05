@@ -38,13 +38,13 @@ export type KnownGapType = "missing" | "partial" | "contradicts" | "unrequested"
 /** A gap type as sent; other strings kept. Source: `docs/features/ui-shell.md` "Data". */
 export type GapType = KnownGapType | Unlisted;
 
-/** Read-only apply preview of an open proposal. Source: `docs/features/proposal-apply.md` "Data". */
+/** Read-only apply preview of an open proposal. Source: `docs/canon/proposal-queue.md` "Commands". */
 export type KnownPreview = "applies" | "rebases" | "conflicts" | "unavailable";
 
 /** A preview as sent; other strings kept. Source: `docs/features/ui-shell.md` "Data". */
 export type Preview = KnownPreview | Unlisted;
 
-/** Who wrote a proposal. Source: `docs/features/proposal-apply.md` "Data". */
+/** Who wrote a proposal. Source: `docs/canon/proposal-queue.md` "Store". */
 export interface Author {
   type: "human" | "agent" | Unlisted;
   role: string | null;
@@ -83,7 +83,7 @@ export interface Finding {
 
 /**
  * A queue card: the `review` JSON plus the queue fields and the agent's summary.
- * Sources: `docs/features/proposal-apply.md` "Data"; `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)";
+ * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)";
  * `docs/specs/specengine-platform/07-interfaces.md` "1.2. Tools (`core` set)".
  */
 export interface Proposal {
@@ -127,7 +127,7 @@ export interface Proposal {
   summary: string | null;
 }
 
-/** The owner's queue, as `spec inbox --json`. Source: `docs/features/proposal-apply.md` "Data". */
+/** The owner's queue, as `spec inbox --json`. Source: `docs/canon/proposal-queue.md` "Commands". */
 export interface Inbox {
   proposals: Proposal[];
   notes: string[];
@@ -214,7 +214,7 @@ export type Decision =
   | { decision: "needs_clarification"; note: string }
   | { decision: "defer"; note: string | null };
 
-/** The commit `apply_proposal` made. Source: `docs/features/proposal-apply.md` "Data". */
+/** The commit `apply_proposal` made. Source: `docs/canon/proposal-apply.md` "Apply steps". */
 export interface Commit {
   sha: string;
   subject: string;

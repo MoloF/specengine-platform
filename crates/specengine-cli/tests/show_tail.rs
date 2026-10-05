@@ -10,8 +10,11 @@
 //! The JSON's cut counts the `text` values only, the text's also the header
 //! line, so the two may hide different sections: spec-a's glossary (one
 //! body line per section) is cut one heading later in JSON than in text,
-//! spec-b's (two body lines) at the same heading, where the JSON names
-//! exactly the tail's 20 and its `k`.
+//! spec-b's (six body lines) at the same heading, where the JSON names
+//! exactly the tail's 20 and its `k`. Which heading each cut falls on
+//! depends on the header's length: since docs/features/proposal-apply.md
+//! the header ends ` | span b3:<64 hex>`, and two body lines no longer
+//! give spec-b one cut (six do, as two did before).
 //!
 //! M: the tail listing every section; `sections` uncut in JSON;
 //! `sections_more` off by one.
@@ -150,7 +153,7 @@ fn ac22_eight_thousand_sections_name_twenty_then_count_the_rest() {
     let cyrillic = "\u{0421}\u{043b}\u{043e}\u{0432}\u{043e} \u{0433}\u{043b}\u{043e}\u{0441}\u{0441}\u{0430}\u{0440}\u{0438}\u{044f}";
     for (fixture, prefix, line, body, same_cut) in [
         ("spec-a", "TERM", "Entry explained", 1, false),
-        ("spec-b", "GLS", cyrillic, 2, true),
+        ("spec-b", "GLS", cyrillic, 6, true),
     ] {
         let scratch = Scratch::new("show-tail");
         let home = scratch.home("h");

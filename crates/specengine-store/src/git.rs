@@ -278,7 +278,7 @@ fn rev_parse_path(output: &[u8]) -> Result<PathBuf, Cause> {
 /// (symbolic links, `/tmp` and `/private/tmp`) or, on Unix, one inode of
 /// one device (case and Unicode forms on a case-insensitive or normalising
 /// file system). A side that cannot be resolved compares as given.
-fn same_dir(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_dir(a: &Path, b: &Path) -> bool {
     match (fs::canonicalize(a), fs::canonicalize(b)) {
         (Ok(a), Ok(b)) => a == b || same_inode(&a, &b),
         _ => a == b,
