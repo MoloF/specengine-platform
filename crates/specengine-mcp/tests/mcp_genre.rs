@@ -18,15 +18,27 @@
 //! literal.
 //!
 //! M: a `kinds` enum; "mechanic" in an example.
+//!
+//! AC-11 of docs/features/agent-intake.md: the garden corpus, committed in
+//! a scratch git repository, through the queue tools — a question hit by
+//! an accepted ruling (`CHOICE-001`, the decision class of the garden's own
+//! prefixes), a question stored, asked again (a queue hit), `get_proposal`
+//! of it, a discrepancy and a change stored, their reviews — and every
+//! tool's text: no P2-3 word. The kind scan above covers the queue tools'
+//! sources (spec-a's kinds hold `question` and `decision`). M: a
+//! `"question"` literal in `specengine-mcp/src`.
 
 #![cfg(unix)]
 
 mod common;
 
+#[path = "../../specengine-cli/tests/common/git.rs"]
+mod git;
+
 use std::fs;
 use std::path::Path;
 
-use common::read::{ERAS, READ_TOOLS, STACK_WORDS, Session, has_word};
+use common::read::{ERAS, STACK_WORDS, Session, TOOLS, has_word};
 use common::*;
 use serde_json::json;
 
@@ -263,9 +275,10 @@ fn ac12_a_non_rust_corpus_gets_no_stack_word() {
         let mut session = Session::open(era, &[], Some(&root), Home::At(&home));
         let mut texts = Vec::new();
         let list = session.tools();
-        for name in READ_TOOLS {
-            texts.push(tool(&list, name).to_string());
+        for name in tool_names(&list) {
+            texts.push(tool(&list, &name).to_string());
         }
+        assert!(tool_names(&list).len() >= TOOLS.len(), "{era:?}");
         if era == common::read::Era::Stateless {
             texts.push(result(&session.request("server/discover", json!({}))).to_string());
         }
@@ -308,6 +321,125 @@ fn ac12_a_non_rust_corpus_gets_no_stack_word() {
         assert!(
             !has_word(instructions, word),
             "{word:?} in the instructions"
+        );
+    }
+}
+
+/// The words of P2-3 in `text` (JSON unescaped once), as the read test
+/// checks them.
+fn stack_words(text: &str) -> Vec<&'static str> {
+    let plain = text.replace("\\n", " ").replace("\\\"", " ");
+    STACK_WORDS
+        .into_iter()
+        .filter(|word| has_word(&plain, word))
+        .collect()
+}
+
+/// AC-11 of docs/features/agent-intake.md: the garden corpus in git, the
+/// queue tools in both eras: `CARE-WATER` asked → the accepted ruling
+/// `CHOICE-001` (its title the answer), nothing stored; `CROP-BASIL` asked
+/// → stored; asked again → its hit; `get_proposal` of it; a discrepancy
+/// and a change stored and reviewed. No P2-3 word in any answer or tool
+/// text. M: a `"question"` literal in `specengine-mcp/src` (the kind scan).
+#[test]
+fn ac11_the_garden_through_the_queue_tools_gets_no_stack_word() {
+    let scratch = Scratch::new("genre-intake");
+    let home = scratch.home("h");
+    let root = scratch.dir("garden");
+    garden(&root);
+    let sandbox = git::Sandbox::new(scratch.path());
+    sandbox.init(&root);
+    sandbox.add_all(&root);
+    sandbox.commit(&root, "the garden");
+    let ask = |node: &str, text: &str| {
+        json!({"node_ids": [node], "text": text, "working_answer": "only when dry",
+            "price_of_other": "a second hose", "author_role": "gardener"})
+    };
+    let mut texts = Vec::new();
+    for (round, era) in ERAS.into_iter().enumerate() {
+        let mut session = Session::open(era, &[], Some(&root), Home::At(&home));
+        let list = session.tools();
+        for name in TOOLS {
+            texts.push(tool(&list, name).to_string());
+        }
+        let reply = session.call("ask_question", ask("CARE-WATER", "Water twice a day?"));
+        let document = result(&reply)["structuredContent"].clone();
+        assert_eq!(
+            document["hits"],
+            json!([{"id": "CHOICE-001", "source": "corpus", "status": "accepted",
+                "path": "docs/records/CHOICE-001.md", "answer": "Drip lines for the beds"}]),
+            "{era:?}: {document}"
+        );
+        assert_eq!(document["created"], json!(false));
+        texts.push(reply.to_string());
+        let reply = session.call(
+            "ask_question",
+            ask("CROP-BASIL", "Basil beside the tomato?"),
+        );
+        let document = result(&reply)["structuredContent"].clone();
+        if round == 0 {
+            assert_eq!(document["id"], json!("PR-0001"), "{document}");
+        } else {
+            assert_eq!(document["hits"][0]["id"], json!("PR-0001"), "{document}");
+        }
+        texts.push(reply.to_string());
+        let reply = session.call(
+            "ask_question",
+            ask("CROP-BASIL", "basil  BESIDE the tomato?"),
+        );
+        assert_eq!(
+            result(&reply)["structuredContent"]["hits"][0]["id"],
+            json!("PR-0001"),
+            "{era:?}"
+        );
+        texts.push(reply.to_string());
+        let base = result(&session.call("get_node", json!({"id": "CROP-BASIL"})))
+            ["structuredContent"]["nodes"][0]["span_hash"]
+            .clone();
+        let report = json!({
+            "node_ids": ["CROP-BASIL", "CROP-TOMATO"],
+            "summary": format!("Basil grows in the shade ({era:?})."),
+            "gap_type": "partial", "severity": "normal",
+            "evidence": [{"file": "notes/bed.txt", "lines": "4", "observed": "shade",
+                "documented": "sun"}],
+            "options": [{"label": "move", "effect": "move the basil", "price": "an hour"},
+                {"label": "keep", "effect": "note the shade", "price": "none"}],
+            "recommendation": 1, "distinct_from": ["CHOICE-001"],
+            "author_role": "gardener"
+        });
+        let reply = session.call("report_discrepancy", report);
+        assert_eq!(result(&reply)["isError"], json!(false), "{reply}");
+        texts.push(reply.to_string());
+        let reply = session.call(
+            "propose_change",
+            json!({"kind": "update", "target": "CROP-BASIL", "base": base,
+                "text": "---\nid: CROP-BASIL\nclass: canon\nparent: PLOT-GARDEN\nlinks:\n  constrains: [CROP-TOMATO]\nowner: gardener\nreviewed: 2026-09-20\n---\n\n# Basil\n\nBasil shades the tomato roots in July.\n",
+                "rationale": "When.", "author_role": "gardener"}),
+        );
+        assert_eq!(result(&reply)["isError"], json!(false), "{reply}");
+        texts.push(reply.to_string());
+        for number in 1..=4 {
+            let reply = session.call(
+                "get_proposal",
+                json!({"proposal_id": format!("PR-{number:04}")}),
+            );
+            texts.push(reply.to_string());
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+    let kinds: Vec<String> = texts
+        .iter()
+        .filter(|text| text.contains("\"kind\":\"discrepancy\""))
+        .cloned()
+        .collect();
+    assert!(!kinds.is_empty(), "a discrepancy was reviewed");
+    for text in &texts {
+        assert!(
+            stack_words(text).is_empty(),
+            "{:?} in {}",
+            stack_words(text),
+            clip(text)
         );
     }
 }

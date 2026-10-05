@@ -75,7 +75,7 @@ Project (project.md: vision, goals, constraints)
 
 ### 3.2. What the agent sends
 
-MCP `report_discrepancy` (or `ask_question`): the nodes, a summary, gap type, severity, evidence `[{file, qpath, lines, observed, documented}]`, priced options `[{label, effect, price}]` with a recommendation, optionally a `proposed_patch` for "spec to code". Arguments, validation and deduplication (an accepted decision on the nodes: "already decided", nothing created): `docs/features/agent-intake.md`. To come: the informational flag `has_open_proposal` on the nodes (**nothing is blocked**, ADR-0012: the node stays open for reading, editing and other proposals, the task keeps its status); an SSE event, optionally an OS notification.
+MCP `report_discrepancy` (or `ask_question`): the nodes, a summary, gap type, severity, evidence `[{file, qpath, lines, observed, documented}]`, priced options `[{label, effect, price}]` with a recommendation, optionally a `proposed_patch` for "spec to code". Arguments, validation and deduplication (an accepted decision on the nodes: "already decided", nothing created): `docs/canon/agent-intake.md`. To come: the informational flag `has_open_proposal` on the nodes (**nothing is blocked**, ADR-0012: the node stays open for reading, editing and other proposals, the task keeps its status); an SSE event, optionally an OS notification.
 
 The agent receives `PR-0042` and **keeps working** on the current spec or on the working answer it named in the proposal. Next to the code it places `// @assumes PR-0042`, so after the decision it is visible what to revisit. The agent must not wait for approval. It may stop only by its own judgement, if the task loses meaning without an answer, and then says so in `report_run`.
 
@@ -83,7 +83,7 @@ The agent receives `PR-0042` and **keeps working** on the current spec or on the
 
 One queue in three places:
 
-**CLI** (shipped for `update`: `docs/canon/proposal-queue.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts`; `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`. To come: evidence, priced options, edit and accept, clarification, defer.
+**CLI** (shipped: `docs/canon/proposal-queue.md`, `agent-intake.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts` (a discrepancy: evidence, priced options); `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`. To come: edit and accept, clarification, defer.
 
 **Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting.
 
@@ -95,7 +95,7 @@ One queue in three places:
 |---|---|
 | **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): the edit lands in the worktree it was raised in (ADR-0032; a task's: its worktree), rebased if the node changed meanwhile, always committed `spec: apply PR-0042` (ADR-0005); to come: a decision record (`answers: PR-0042`, `cost`, `canon:`), `spec_hash` recomputed, the task's `spec_snapshot` updated (its own edit) |
 | **Accept "code to spec"** | spec unchanged; an item is added to the task plan; a decision record says the discrepancy is a code defect |
-| **Reject** | closed with a reason (`spec reject`); to come: the reason indexed, an agent's repeated attempt gets it back |
+| **Reject** | closed with a reason (`spec reject`); a repeated question or discrepancy gets it back as a hit; to come: the reason indexed, for `update` too |
 | **Needs clarification** | `changes_requested` with the owner's question → the agent sees it in `get_proposal`/`get_task` and extends |
 | **Defer** | the proposal stays in the queue with a mark; work continues on the working answer |
 

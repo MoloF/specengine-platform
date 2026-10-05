@@ -14,6 +14,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 - [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) abandoned
 - [ADR-0002](decisions/ADR-0002.md) superseded-by ADR-0026
+- [docs/features/agent-intake.md](features/agent-intake.md) shipped
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped
 - [docs/features/import-layout.md](features/import-layout.md) shipped
 - [docs/features/import-records.md](features/import-records.md) shipped

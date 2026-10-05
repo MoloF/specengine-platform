@@ -13,7 +13,10 @@
 //! inbox`, `spec review`, `spec approve` (the one write door: the target
 //! file replaced in the proposal's recorded worktree and committed there)
 //! and `spec reject`; the queue's backup (canon `queue-backup`,
-//! "Commands"): `spec export state` and `spec import-state`.
+//! "Commands"): `spec export state` and `spec import-state`; the agent
+//! intake (canon `agent-intake`, "Tools"): `spec propose question`, `spec
+//! propose discrepancy` and the `--brief` answers of `spec propose update`
+//! and `spec review` (MCP's intake tools call these).
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -35,8 +38,12 @@
 //!   queue's commands; all but `inbox` answer with the review document
 //!   ([`ProposalDocument`]); `approve` and `reject` take the owner's
 //!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt), and every
-//!   request carries the caller's git environment and, where the queue
-//!   records a time, the clock's `now`;
+//!   request carries the caller's git environment ([`process_git`]) and,
+//!   where the queue records a time, the clock's `now` ([`utc_now`]);
+//!   [`propose_brief`], [`review_brief`]: their brief answers;
+//! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
+//!   discrepancy stored as a queue record that never applies, unless what
+//!   is decided or asked already answers it ([`IntakeDocument`]);
 //! - [`export_state`], [`import_state`]: the queue's dump ([`STATE_FORMAT`])
 //!   written outside the worktree, and restored into an empty queue after
 //!   the owner's [`Consent`];
@@ -60,8 +67,9 @@
 //! approve`, which writes only the proposal's target file and commits it in
 //! the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
 //! `bundle`, `propose`, `inbox`, `review`, `reject` and `import-state` write
-//! only the data directory, `export state` only its dump (never inside the
-//! worktree), `check` nothing. Nothing found in the corpus is fatal
+//! only the data directory (`propose question` and `propose discrepancy`
+//! too), `export state` only its dump (never inside the worktree), `check`
+//! nothing. Nothing found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
@@ -75,6 +83,7 @@ mod export;
 mod graph;
 mod inbox;
 mod init;
+mod intake;
 mod links;
 mod location;
 mod preflight;
@@ -106,16 +115,32 @@ pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use graph::{FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
+pub use intake::{
+    DiscrepancyRequest, INTAKE_INPUT_MAX_BYTES, INTAKE_MATCHES_MAX, IntakeDocument, IntakeMatch,
+    IntakeOutcome, IntakeSource, MatchSource, QuestionRequest, propose_discrepancy,
+    propose_question, read_discrepancy_input,
+};
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
 pub use project::{CONFIG_FILE, Located, ProjectRoot, discover, locate};
 pub use proposals::{Preview, ProposalDocument, ProposalOutcome, QueueCommand};
-pub use propose::{ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose};
+pub use propose::{ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief};
 pub use refresh::{IndexOutcome, IndexRequest, index};
-pub use review::{ReviewRequest, review};
+pub use review::{ReviewRequest, review, review_brief};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show};
 pub use specengine_core::ProjectConfig;
+/// The intake's input types, enums and caps (core's), for the bridges.
+pub use specengine_core::intake::{
+    ANSWER_MAX, DISTINCT_ITEM_MAX, DISTINCT_MAX, DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX,
+    Evidence, GapType, IntakeOption, IntakeSeverity, LABEL_MAX, LINE_LIMIT, LOCATION_MAX,
+    NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, RATIONALE_MAX,
+    SUMMARY_MAX,
+};
+/// The most bytes of an author's `role`, `model` or `run`.
+pub use specengine_core::proposal::AUTHOR_FIELD_MAX;
+/// The caller's git environment a queue request carries.
+pub use specengine_store::GitEnv;
 /// `search`'s `--limit` bounds and default, its shortest term (the store's).
 pub use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
@@ -265,6 +290,8 @@ pub enum Outcome {
     Export(ExportOutcome),
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
+    /// `propose question`, `propose discrepancy`: the intake document.
+    Intake(Box<IntakeOutcome>),
     Inbox(InboxOutcome),
     /// `export state`: the dump written.
     StateExport(ExportStateOutcome),
@@ -284,6 +311,7 @@ impl Outcome {
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
+            Self::Intake(intake) => intake.exit(),
             Self::StateImport(import) => import.exit(),
             _ => Exit::Answered,
         }
@@ -304,6 +332,7 @@ impl Outcome {
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Inbox(outcome) => (&outcome.messages, None),
             Self::StateExport(outcome) => (&outcome.messages, None),
             Self::StateImport(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -315,7 +344,11 @@ impl Outcome {
         // The queue's commands quote agent-written text.
         if matches!(
             self,
-            Self::Proposal(_) | Self::Inbox(_) | Self::StateExport(_) | Self::StateImport(_)
+            Self::Proposal(_)
+                | Self::Intake(_)
+                | Self::Inbox(_)
+                | Self::StateExport(_)
+                | Self::StateImport(_)
         ) {
             for line in &mut lines {
                 *line = escape_controls(line);
@@ -338,6 +371,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
+        Outcome::Intake(outcome) => intake::render_text(outcome),
         Outcome::Inbox(outcome) => inbox::render_text(outcome),
         Outcome::StateExport(outcome) => state::render_export_text(outcome),
         Outcome::StateImport(outcome) => state::render_import_text(outcome),
@@ -359,6 +393,7 @@ impl serde::Serialize for Outcome {
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
+            Self::Intake(outcome) => outcome.serialize(serializer),
             Self::Inbox(outcome) => outcome.serialize(serializer),
             Self::StateExport(outcome) => outcome.serialize(serializer),
             Self::StateImport(outcome) => outcome.serialize(serializer),
@@ -379,6 +414,24 @@ pub fn render_json(outcome: &Outcome) -> String {
     });
     json.push('\n');
     json
+}
+
+/// The clock of a queue request: now, UTC, `YYYY-MM-DDTHH:MM:SSZ` (`main`
+/// and the MCP server; tests inject their own `now`).
+pub fn utc_now() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
+        });
+    specengine_core::proposal::utc_timestamp(seconds)
+}
+
+/// The git environment of a queue request from this process: `env`'s
+/// directory and the process's variables (the library drops the local
+/// `GIT_*` ones before running git in a proposal's worktree).
+pub fn process_git(env: &Env) -> GitEnv {
+    GitEnv::new(env.cwd.clone(), std::env::vars_os())
 }
 
 /// A store error: exit 2.

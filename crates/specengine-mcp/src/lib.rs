@@ -10,19 +10,25 @@
 //!
 //! Tools: the four reads `get_tree`, `get_node`, `search`,
 //! `get_context_bundle`, each one call into the CLI library (`spec tree`,
-//! `show`, `search`, `bundle`), answering what the CLI answers; resources
-//! `spec://<slug>/tree` and `spec://<slug>/node/<id>` over the same calls.
+//! `show`, `search`, `bundle`), answering what the CLI answers; the queue
+//! tools `propose_change`, `ask_question`, `report_discrepancy` (writing
+//! only the proposal queue in the data directory, as `spec propose` does)
+//! and `get_proposal` (`spec review --brief`;
+//! `docs/canon/agent-intake.md` "Tools"); resources `spec://<slug>/tree`
+//! and `spec://<slug>/node/<id>` over the same calls.
 //! Behind feature `probes`, the measurement build: the Phase 0 consent demo
 //! `review_proposal` (`_meta["anthropic/requiresUserInteraction"]: true`,
 //! a form through `elicitation/create` or a multi round-trip request) and
 //! `probe_output`, `probe_sleep` for the owner checklist.
 //!
 //! Reads refresh the project's index in SpecEngine's data directory, as the
-//! CLI's reads do; nothing under the project root is ever written: spec
-//! files change only through `apply_proposal` on an owner action (ADR-0004,
-//! ADR-0005). Stdout is the protocol channel: nothing else is ever printed
+//! CLI's reads do; the queue tools add the queue's rows there; nothing under
+//! the project root is ever written: spec files change only through
+//! `apply_proposal` on an owner action (ADR-0004, ADR-0005), which no tool
+//! here runs. Stdout is the protocol channel: nothing else is ever printed
 //! there.
 
+mod intake;
 mod mirror;
 #[cfg(feature = "probes")]
 mod probes;

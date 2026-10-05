@@ -1,10 +1,17 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1; a higher version is a newer build's: refused), in
-//! one `Immediate` transaction, and no list of `schema` names them, so an
+//! user_version` (0 → 1 → 2; a higher version is a newer build's: refused),
+//! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
+//!
+//! - **Kinds** (`docs/canon/agent-intake.md` "Stored"): `update` applies; a
+//!   `question` and a `discrepancy` never do ([`ProposalQueue::approve_from`]
+//!   and [`ProposalQueue::applied_with`] refuse them): their fields live in
+//!   the eleven columns step 2 adds ([`Intake`]), the update's five text
+//!   columns NULL. They are stored by [`ProposalQueue::create_intake`], whose
+//!   dedup reads the queue inside the inserting transaction.
 //!
 //! - **IDs**: `PR-NNNN`, the highest number in the table plus one, taken in
 //!   the inserting transaction; rows are never deleted, so an ID is never
@@ -62,6 +69,10 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension, Row, Transaction, Trans
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specengine_core::check::Finding;
+use specengine_core::intake::{
+    DISCREPANCY_KIND, Evidence, GapType, IntakeOption, IntakeSeverity, QUESTION_KIND,
+    normalized_summary,
+};
 use specengine_core::proposal::{
     Author, author_field_problem, is_utc_timestamp, patch_hash_input, proposal_id, proposal_number,
 };
@@ -72,11 +83,12 @@ use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
 pub use state::{
-    EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, Restore, StoredEvent, StoredProposal, StoredQueue,
+    EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, Restore, StoredEvent, StoredProposal,
+    StoredQueue, proposal_columns,
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 1;
+pub const QUEUE_SCHEMA_VERSION: i64 = 2;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -102,11 +114,28 @@ CREATE TABLE events (
 ) STRICT;
 ";
 
+/// Step 1 → 2: the intake columns, appended in this order
+/// (`docs/canon/agent-intake.md` "Stored").
+const STEP_2: &str = "
+ALTER TABLE proposals ADD COLUMN target_ids TEXT;
+ALTER TABLE proposals ADD COLUMN severity TEXT;
+ALTER TABLE proposals ADD COLUMN gap_type TEXT;
+ALTER TABLE proposals ADD COLUMN summary TEXT;
+ALTER TABLE proposals ADD COLUMN working_answer TEXT;
+ALTER TABLE proposals ADD COLUMN price_of_other TEXT;
+ALTER TABLE proposals ADD COLUMN evidence TEXT;
+ALTER TABLE proposals ADD COLUMN options TEXT;
+ALTER TABLE proposals ADD COLUMN recommendation TEXT;
+ALTER TABLE proposals ADD COLUMN distinct_from TEXT;
+ALTER TABLE proposals ADD COLUMN linked TEXT;
+";
+
 /// Every column of `proposals`, in table order.
 const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_common_dir, \
      worktree, root_rel, branch, base_commit, base_hash, base_text, new_text, patch_hash, \
      rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
-     created_at, updated_at";
+     created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
+     price_of_other, evidence, options, recommendation, distinct_from, linked";
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -122,23 +151,37 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
-/// What a proposal does; slice 1 has one kind.
+/// What a proposal does: `update` applies; the intake kinds are queue
+/// records the owner settles by rejecting them with the answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
     /// Replace one node's span.
     Update,
+    /// A question to the owner, with the agent's working answer.
+    Question,
+    /// A discrepancy with evidence and priced options.
+    Discrepancy,
 }
 
 impl ProposalKind {
+    pub const ALL: [Self; 3] = [Self::Update, Self::Question, Self::Discrepancy];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Update => "update",
+            Self::Question => QUESTION_KIND,
+            Self::Discrepancy => DISCREPANCY_KIND,
         }
     }
 
     pub fn parse(text: &str) -> Option<Self> {
-        (text == "update").then_some(Self::Update)
+        Self::ALL.into_iter().find(|kind| kind.as_str() == text)
+    }
+
+    /// Only an `update` is ever applied.
+    pub const fn applies(self) -> bool {
+        matches!(self, Self::Update)
     }
 }
 
@@ -241,6 +284,70 @@ pub struct NewProposal {
     pub diagnostics: Vec<ProposalFinding>,
 }
 
+/// The fields of a `question` or a `discrepancy`
+/// (`docs/canon/agent-intake.md` "Stored").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Intake {
+    /// The canonical IDs, in the order given; `target_id` is the first and
+    /// `target_path` its holder.
+    pub target_ids: Vec<String>,
+    pub severity: IntakeSeverity,
+    /// A discrepancy's.
+    pub gap_type: Option<GapType>,
+    /// A question's text, a discrepancy's summary.
+    pub summary: String,
+    /// A question's; a discrepancy's when given.
+    pub working_answer: Option<String>,
+    /// A question's.
+    pub price_of_other: Option<String>,
+    /// A discrepancy's; `[]` for a question.
+    pub evidence: Vec<Evidence>,
+    /// A discrepancy's; `[]` for a question.
+    pub options: Vec<IntakeOption>,
+    /// A discrepancy's: an index into `options`.
+    pub recommendation: Option<u64>,
+    /// The hits the author declared this item distinct from.
+    pub distinct_from: Vec<String>,
+}
+
+/// What an intake stores ([`ProposalQueue::create_intake`]); the queue adds
+/// the ID, project, status and times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewIntake {
+    /// [`ProposalKind::Question`] or [`ProposalKind::Discrepancy`].
+    pub kind: ProposalKind,
+    /// Root-relative: the first target's holder.
+    pub target_path: String,
+    pub place: Place,
+    pub author: Author,
+    pub intake: Intake,
+}
+
+/// A stored item the dedup found: of the same kind and project, sharing a
+/// target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueMatch {
+    pub id: String,
+    pub status: ProposalStatus,
+    /// The rejection's reason (`decision_note`) of a rejected one.
+    pub reason: Option<String>,
+}
+
+/// What [`ProposalQueue::create_intake`] found and did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntakeResult {
+    /// Same kind and project (any repository, any state), sharing a target,
+    /// the normalised summary equal: by ID number.
+    pub hits: Vec<QueueMatch>,
+    /// Same kind and project, sharing a target, other text: by ID number.
+    pub related: Vec<QueueMatch>,
+    /// The stored item; `None` when a hit was not named in
+    /// `distinct_from` (nothing stored, no ID taken).
+    pub created: Option<Proposal>,
+    /// The stored linked update.
+    pub linked: Option<Proposal>,
+}
+
 /// A stored proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Proposal {
@@ -251,6 +358,8 @@ pub struct Proposal {
     pub target_id: String,
     pub target_path: String,
     pub place: Place,
+    /// `update` only: the intake kinds store these five NULL and read
+    /// them as `""`.
     pub base_hash: String,
     pub base_text: String,
     pub new_text: String,
@@ -267,6 +376,11 @@ pub struct Proposal {
     pub applied_commit: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// A `question`'s or a `discrepancy`'s fields; `None` for an `update`.
+    pub intake: Option<Intake>,
+    /// The other proposal of a discrepancy and its proposed patch (an
+    /// `update`), both ways.
+    pub linked: Option<String>,
 }
 
 impl Proposal {
@@ -449,8 +563,24 @@ pub fn patch_hash(target_id: &str, base_hash: &str, new_text: &str) -> String {
 pub trait ProposalQueue {
     /// Stores `proposal` as `open` under the next ID (highest + 1, taken in
     /// this transaction), with `created_at` = `updated_at` = `now`, and
-    /// logs `proposal.created`.
+    /// logs `proposal.created`. A kind that never applies is
+    /// [`QueueError::Invalid`] ([`Self::create_intake`] stores it).
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError>;
+    /// The intake's step 7, one `Immediate` transaction: the queue's hits
+    /// and related items read under the write lock ([`IntakeResult`]);
+    /// when every hit, `corpus_hits` (names) and the queue's (IDs), is
+    /// named byte for byte in its `distinct_from` (none found included),
+    /// `intake` stored `open` under the next ID, then `patch` (an
+    /// `update`) under the one after, `linked` both ways, a
+    /// `proposal.created` each, committed; else nothing written. A kind
+    /// that applies is [`QueueError::Invalid`].
+    fn create_intake(
+        &mut self,
+        intake: &NewIntake,
+        corpus_hits: &[String],
+        patch: Option<&NewProposal>,
+        now: &str,
+    ) -> Result<IntakeResult, QueueError>;
     /// The project's proposal `id`; `Ok(None)` when there is none.
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError>;
     /// The project's proposals `filter` admits, by ID number.
@@ -469,7 +599,8 @@ pub trait ProposalQueue {
     /// `approved` → `approved` with the decision replaced (no event) when
     /// `now` is later than `seen.updated_at` (else [`QueueError::Invalid`]).
     /// The stored state not `seen`: [`QueueError::Changed`], nothing
-    /// written; `applied`, `rejected`: [`QueueError::Status`].
+    /// written; `applied`, `rejected`: [`QueueError::Status`]; a kind that
+    /// never applies: [`QueueError::Invalid`].
     fn approve_from(
         &mut self,
         id: &str,
@@ -486,7 +617,8 @@ pub trait ProposalQueue {
     /// reopened meanwhile): `open` → `applied` with `decision` (`decided_at`
     /// = `now`) and `applied_commit`, logging `proposal.approved` then
     /// `proposal.applied` (`commit`); `approved` → `applied`, its decision
-    /// kept. `applied`, `rejected`: [`QueueError::Status`].
+    /// kept. `applied`, `rejected`: [`QueueError::Status`]; a kind that
+    /// never applies: [`QueueError::Invalid`].
     fn applied_with(
         &mut self,
         id: &str,
@@ -695,6 +827,7 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
+        never_applies(&current)?;
         match current.status {
             ProposalStatus::Open | ProposalStatus::Approved => {}
             _ => return Err(status_error(current)),
@@ -791,6 +924,7 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
+        never_applies(&current)?;
         match (current.status, decision) {
             (ProposalStatus::Approved, _) => {}
             (ProposalStatus::Open, Some(decision)) => {
@@ -894,8 +1028,8 @@ enum Hold<'a> {
 }
 
 /// The queue's schema steps, in one `Immediate` transaction: 0 → 1 makes
-/// the tables; [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is
-/// refused.
+/// the tables, 1 → 2 adds the intake columns (0 → 2 runs both);
+/// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
     if version > QUEUE_SCHEMA_VERSION {
@@ -916,6 +1050,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 0 {
         tx.execute_batch(STEP_1).db()?;
         version = 1;
+    }
+    if version == 1 {
+        tx.execute_batch(STEP_2).db()?;
+        version = 2;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -981,8 +1119,8 @@ struct RawRow {
 
 impl RawRow {
     fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
-        let mut text = Vec::with_capacity(24);
-        for column in 0..24 {
+        let mut text = Vec::with_capacity(PROPOSAL_COLUMNS.len());
+        for column in 0..PROPOSAL_COLUMNS.len() {
             text.push(row.get::<_, Option<String>>(column)?);
         }
         Ok(Self { text })
@@ -994,27 +1132,28 @@ impl RawRow {
         self.text[3].as_deref().and_then(ProposalStatus::parse)
     }
 
-    fn decode(mut self) -> Result<Proposal, UnreadableRow> {
-        let mut take = |index: usize| self.text[index].take();
-        let id = take(0).unwrap_or_default();
+    fn decode(self) -> Result<Proposal, UnreadableRow> {
+        let mut values = self.text.into_iter();
+        let mut take = || values.next().flatten();
+        let id = take().unwrap_or_default();
         let required = |value: Option<String>, column: &str| {
             value.ok_or_else(|| corrupt(&id, column, "it is NULL"))
         };
-        let project = required(take(1), "project")?;
-        let kind_text = required(take(2), "kind")?;
+        let project = required(take(), "project")?;
+        let kind_text = required(take(), "kind")?;
         let kind = ProposalKind::parse(&kind_text)
             .ok_or_else(|| corrupt(&id, "kind", format!("`{kind_text}` is no kind")))?;
-        let status_text = required(take(3), "status")?;
+        let status_text = required(take(), "status")?;
         let status = ProposalStatus::parse(&status_text)
             .ok_or_else(|| corrupt(&id, "status", format!("`{status_text}` is no state")))?;
-        let target_id = required(take(4), "target_id")?;
-        let target_path = required(take(5), "target_path")?;
+        let target_id = required(take(), "target_id")?;
+        let target_path = required(take(), "target_path")?;
         let place = Place {
-            git_common_dir: required(take(6), "git_common_dir")?,
-            worktree: required(take(7), "worktree")?,
-            root_rel: required(take(8), "root_rel")?,
-            branch: required(take(9), "branch")?,
-            base_commit: required(take(10), "base_commit")?,
+            git_common_dir: required(take(), "git_common_dir")?,
+            worktree: required(take(), "worktree")?,
+            root_rel: required(take(), "root_rel")?,
+            branch: required(take(), "branch")?,
+            base_commit: required(take(), "base_commit")?,
         };
         if !is_branch_name(&place.branch) {
             return Err(corrupt(
@@ -1030,12 +1169,21 @@ impl RawRow {
                 format!("{:?} is no object ID", place.base_commit),
             ));
         }
-        let base_hash = required(take(11), "base_hash")?;
-        let base_text = required(take(12), "base_text")?;
-        let new_text = required(take(13), "new_text")?;
-        let patch_hash = required(take(14), "patch_hash")?;
-        let rationale = required(take(15), "rationale")?;
-        let author_text = required(take(16), "author")?;
+        // An update's texts; the intake kinds store them NULL.
+        let mut update_text = |column: &str| {
+            let value = take();
+            if kind.applies() {
+                required(value, column)
+            } else {
+                Ok(String::new())
+            }
+        };
+        let base_hash = update_text("base_hash")?;
+        let base_text = update_text("base_text")?;
+        let new_text = update_text("new_text")?;
+        let patch_hash = update_text("patch_hash")?;
+        let rationale = update_text("rationale")?;
+        let author_text = required(take(), "author")?;
         let author: Author =
             serde_json::from_str(&author_text).map_err(|error| corrupt(&id, "author", error))?;
         for field in [&author.role, &author.model, &author.run] {
@@ -1043,15 +1191,42 @@ impl RawRow {
                 return Err(corrupt(&id, "author", problem));
             }
         }
-        let diagnostics_text = required(take(17), "diagnostics")?;
+        let diagnostics_text = required(take(), "diagnostics")?;
         let diagnostics: Vec<ProposalFinding> = serde_json::from_str(&diagnostics_text)
             .map_err(|error| corrupt(&id, "diagnostics", error))?;
-        let decided_by = take(18);
-        let decided_at = take(19);
-        let decision_note = take(20);
-        let applied_commit = take(21);
-        let created_at = required(take(22), "created_at")?;
-        let updated_at = required(take(23), "updated_at")?;
+        let decided_by = take();
+        let decided_at = take();
+        let decision_note = take();
+        let applied_commit = take();
+        let created_at = required(take(), "created_at")?;
+        let updated_at = required(take(), "updated_at")?;
+        let columns = IntakeColumns {
+            target_ids: take(),
+            severity: take(),
+            gap_type: take(),
+            summary: take(),
+            working_answer: take(),
+            price_of_other: take(),
+            evidence: take(),
+            options: take(),
+            recommendation: take(),
+            distinct_from: take(),
+        };
+        let linked = take();
+        let intake = if kind.applies() {
+            None
+        } else {
+            Some(columns.decode(&id, kind, &target_id)?)
+        };
+        if let Some(linked) = &linked
+            && proposal_number(linked).is_none()
+        {
+            return Err(corrupt(
+                &id,
+                "linked",
+                format!("{linked:?} is no proposal ID"),
+            ));
+        }
         Ok(Proposal {
             id,
             project,
@@ -1073,6 +1248,117 @@ impl RawRow {
             applied_commit,
             created_at,
             updated_at,
+            intake,
+            linked,
+        })
+    }
+}
+
+/// The intake columns of a row, before decoding.
+struct IntakeColumns {
+    target_ids: Option<String>,
+    severity: Option<String>,
+    gap_type: Option<String>,
+    summary: Option<String>,
+    working_answer: Option<String>,
+    price_of_other: Option<String>,
+    evidence: Option<String>,
+    options: Option<String>,
+    recommendation: Option<String>,
+    distinct_from: Option<String>,
+}
+
+impl IntakeColumns {
+    /// The fields of a `question` or `discrepancy` row: a column its kind
+    /// requires NULL, JSON not of its shape, an enum or `recommendation`
+    /// out of range make the row corrupt, named.
+    fn decode(
+        self,
+        id: &str,
+        kind: ProposalKind,
+        target_id: &str,
+    ) -> Result<Intake, UnreadableRow> {
+        let question = kind == ProposalKind::Question;
+        let required = |value: Option<String>, column: &str| {
+            value.ok_or_else(|| corrupt(id, column, "it is NULL"))
+        };
+        fn json<T: serde::de::DeserializeOwned>(
+            id: &str,
+            column: &str,
+            text: &str,
+        ) -> Result<T, UnreadableRow> {
+            serde_json::from_str(text).map_err(|error| corrupt(id, column, error))
+        }
+        let target_ids: Vec<String> =
+            json(id, "target_ids", &required(self.target_ids, "target_ids")?)?;
+        if target_ids.first().map(String::as_str) != Some(target_id) {
+            return Err(corrupt(
+                id,
+                "target_ids",
+                "its first ID is not the row's `target_id`",
+            ));
+        }
+        let severity_text = required(self.severity, "severity")?;
+        let severity = IntakeSeverity::parse(&severity_text)
+            .ok_or_else(|| corrupt(id, "severity", format!("`{severity_text}` is no severity")))?;
+        let gap_type = if question {
+            None
+        } else {
+            let text = required(self.gap_type, "gap_type")?;
+            Some(
+                GapType::parse(&text)
+                    .ok_or_else(|| corrupt(id, "gap_type", format!("`{text}` is no gap type")))?,
+            )
+        };
+        let summary = required(self.summary, "summary")?;
+        let working_answer = if question {
+            Some(required(self.working_answer, "working_answer")?)
+        } else {
+            self.working_answer
+        };
+        let price_of_other = if question {
+            Some(required(self.price_of_other, "price_of_other")?)
+        } else {
+            None
+        };
+        let (evidence, options, recommendation) = if question {
+            (Vec::new(), Vec::new(), None)
+        } else {
+            let evidence: Vec<Evidence> =
+                json(id, "evidence", &required(self.evidence, "evidence")?)?;
+            let options: Vec<IntakeOption> =
+                json(id, "options", &required(self.options, "options")?)?;
+            let text = required(self.recommendation, "recommendation")?;
+            let recommendation = text
+                .parse::<u64>()
+                .ok()
+                .filter(|number| number.to_string() == text)
+                .filter(|&number| usize::try_from(number).is_ok_and(|index| index < options.len()))
+                .ok_or_else(|| {
+                    corrupt(
+                        id,
+                        "recommendation",
+                        format!("`{text}` is no index into its {} options", options.len()),
+                    )
+                })?;
+            (evidence, options, Some(recommendation))
+        };
+        let distinct_from: Vec<String> = json(
+            id,
+            "distinct_from",
+            &required(self.distinct_from, "distinct_from")?,
+        )?;
+        Ok(Intake {
+            target_ids,
+            severity,
+            gap_type,
+            summary,
+            working_answer,
+            price_of_other,
+            evidence,
+            options,
+            recommendation,
+            distinct_from,
         })
     }
 }
@@ -1092,6 +1378,19 @@ fn select_one(conn: &Connection, project: &str, id: &str) -> Result<Option<Propo
 /// The proposal `id` inside a write transaction, or [`QueueError::Unknown`].
 fn existing(tx: &Transaction<'_>, project: &str, id: &str) -> Result<Proposal, QueueError> {
     select_one(tx, project, id)?.ok_or_else(|| QueueError::Unknown { id: id.to_owned() })
+}
+
+/// A kind that never applies refuses the apply's state changes, nothing
+/// written.
+fn never_applies(proposal: &Proposal) -> Result<(), QueueError> {
+    if proposal.kind.applies() {
+        return Ok(());
+    }
+    Err(QueueError::Invalid(format!(
+        "`{}` is a {} and never applies: rejecting it with the answer settles it",
+        proposal.id,
+        proposal.kind.as_str()
+    )))
 }
 
 fn status_error(proposal: Proposal) -> QueueError {
@@ -1145,48 +1444,267 @@ fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
     Ok(proposal_id(next))
 }
 
+/// Inserts `proposal` (an `update`) as `open` under the next ID, `linked`
+/// to the given proposal; its ID.
+fn insert_update(
+    tx: &Transaction<'_>,
+    project: &str,
+    proposal: &NewProposal,
+    linked: Option<&str>,
+    now: &str,
+) -> Result<String, QueueError> {
+    let author = to_json(&proposal.author)?;
+    let diagnostics = to_json(&proposal.diagnostics)?;
+    let id = next_id(tx)?;
+    let place = &proposal.place;
+    tx.execute(
+        &format!(
+            "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
+             ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
+             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20)"
+        ),
+        rusqlite::params![
+            id,
+            project,
+            proposal.kind.as_str(),
+            ProposalStatus::Open.as_str(),
+            proposal.target_id,
+            proposal.target_path,
+            place.git_common_dir,
+            place.worktree,
+            place.root_rel,
+            place.branch,
+            place.base_commit,
+            proposal.base_hash,
+            proposal.base_text,
+            proposal.new_text,
+            proposal.patch_hash,
+            proposal.rationale,
+            author,
+            diagnostics,
+            now,
+            linked,
+        ],
+    )
+    .db()?;
+    Ok(id)
+}
+
+/// Inserts a question or a discrepancy as `open` under the next ID: the
+/// update's five text columns NULL, `diagnostics` `[]`, JSON lists as
+/// given (an evidence item's absent keys `null`); its ID.
+fn insert_intake(
+    tx: &Transaction<'_>,
+    project: &str,
+    new: &NewIntake,
+    now: &str,
+) -> Result<String, QueueError> {
+    let intake = &new.intake;
+    let discrepancy = new.kind == ProposalKind::Discrepancy;
+    let author = to_json(&new.author)?;
+    let diagnostics = to_json(&Vec::<ProposalFinding>::new())?;
+    let target_ids = to_json(&intake.target_ids)?;
+    let evidence = discrepancy.then(|| to_json(&intake.evidence)).transpose()?;
+    let options = discrepancy.then(|| to_json(&intake.options)).transpose()?;
+    let recommendation = intake.recommendation.map(|index| index.to_string());
+    let distinct_from = to_json(&intake.distinct_from)?;
+    let id = next_id(tx)?;
+    let place = &new.place;
+    tx.execute(
+        &format!(
+            "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
+             ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
+             ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL)"
+        ),
+        rusqlite::params![
+            id,
+            project,
+            new.kind.as_str(),
+            ProposalStatus::Open.as_str(),
+            intake.target_ids[0],
+            new.target_path,
+            place.git_common_dir,
+            place.worktree,
+            place.root_rel,
+            place.branch,
+            place.base_commit,
+            author,
+            diagnostics,
+            now,
+            target_ids,
+            intake.severity.as_str(),
+            intake.gap_type.map(GapType::as_str),
+            intake.summary,
+            intake.working_answer,
+            intake.price_of_other,
+            evidence,
+            options,
+            recommendation,
+            distinct_from,
+        ],
+    )
+    .db()?;
+    Ok(id)
+}
+
+/// The project's rows of the intake's kind (any repository, any state)
+/// that share a target with it, by ID number: hits when the normalised
+/// summary is equal, else related. A row whose targets or state do not
+/// read shares nothing.
+fn queue_matches(
+    tx: &Transaction<'_>,
+    project: &str,
+    intake: &NewIntake,
+) -> Result<(Vec<QueueMatch>, Vec<QueueMatch>), QueueError> {
+    let wanted = normalized_summary(&intake.intake.summary);
+    let mut statement = tx
+        .prepare(&format!(
+            "SELECT id, status, target_ids, summary, decision_note FROM main.proposals \
+             WHERE project = ?1 AND kind = ?2 {ID_ORDER}"
+        ))
+        .db()?;
+    let rows: Vec<MatchRow> = statement
+        .query_map([project, intake.kind.as_str()], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })
+        .db()?
+        .collect::<rusqlite::Result<_>>()
+        .db()?;
+    let (mut hits, mut related) = (Vec::new(), Vec::new());
+    for (id, status, target_ids, summary, decision_note) in rows {
+        let (Some(id), Some(status)) = (id, status.as_deref().and_then(ProposalStatus::parse))
+        else {
+            continue;
+        };
+        let targets: Vec<String> = target_ids
+            .as_deref()
+            .and_then(|text| serde_json::from_str(text).ok())
+            .unwrap_or_default();
+        if !targets
+            .iter()
+            .any(|target| intake.intake.target_ids.contains(target))
+        {
+            continue;
+        }
+        let same = summary
+            .as_deref()
+            .is_some_and(|summary| normalized_summary(summary) == wanted);
+        if same {
+            let reason = (status == ProposalStatus::Rejected)
+                .then_some(decision_note)
+                .flatten();
+            hits.push(QueueMatch { id, status, reason });
+        } else {
+            related.push(QueueMatch {
+                id,
+                status,
+                reason: None,
+            });
+        }
+    }
+    Ok((hits, related))
+}
+
+/// A row [`queue_matches`] reads: `id`, `status`, `target_ids`, `summary`,
+/// `decision_note`.
+type MatchRow = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 impl ProposalQueue for SqliteQueue {
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError> {
         check_time(now)?;
-        let author = to_json(&proposal.author)?;
-        let diagnostics = to_json(&proposal.diagnostics)?;
+        if !proposal.kind.applies() {
+            return Err(QueueError::Invalid(format!(
+                "`create` stores a proposal that applies, not a {}: `create_intake` stores it",
+                proposal.kind.as_str()
+            )));
+        }
         let project = self.project.clone();
         let tx = self.write()?;
-        let id = next_id(&tx)?;
-        let place = &proposal.place;
-        tx.execute(
-            &format!(
-                "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, \
-                 ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, \
-                 ?19)"
-            ),
-            [
-                id.as_str(),
-                &project,
-                proposal.kind.as_str(),
-                ProposalStatus::Open.as_str(),
-                &proposal.target_id,
-                &proposal.target_path,
-                &place.git_common_dir,
-                &place.worktree,
-                &place.root_rel,
-                &place.branch,
-                &place.base_commit,
-                &proposal.base_hash,
-                &proposal.base_text,
-                &proposal.new_text,
-                &proposal.patch_hash,
-                &proposal.rationale,
-                &author,
-                &diagnostics,
-                now,
-            ],
-        )
-        .db()?;
+        let id = insert_update(&tx, &project, proposal, None, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let stored = existing(&tx, &project, &id)?;
         tx.commit().db()?;
         Ok(stored)
+    }
+
+    fn create_intake(
+        &mut self,
+        intake: &NewIntake,
+        corpus_hits: &[String],
+        patch: Option<&NewProposal>,
+        now: &str,
+    ) -> Result<IntakeResult, QueueError> {
+        check_time(now)?;
+        if intake.kind.applies() {
+            return Err(QueueError::Invalid(format!(
+                "an intake stores a question or a discrepancy, not an {}",
+                intake.kind.as_str()
+            )));
+        }
+        if intake.intake.target_ids.is_empty() {
+            return Err(QueueError::Invalid("an intake names no target".to_owned()));
+        }
+        if patch.is_some_and(|patch| !patch.kind.applies()) {
+            return Err(QueueError::Invalid(
+                "a linked proposal is an update".to_owned(),
+            ));
+        }
+        let project = self.project.clone();
+        let tx = self.write()?;
+        // The dedup reads under the write lock it inserts under: a parallel
+        // intake of the same item waits, then finds this one.
+        let (hits, related) = queue_matches(&tx, &project, intake)?;
+        let named = |name: &str| {
+            intake
+                .intake
+                .distinct_from
+                .iter()
+                .any(|entry| entry == name)
+        };
+        let all_named =
+            corpus_hits.iter().all(|name| named(name)) && hits.iter().all(|hit| named(&hit.id));
+        if !all_named {
+            drop(tx);
+            return Ok(IntakeResult {
+                hits,
+                related,
+                created: None,
+                linked: None,
+            });
+        }
+        let id = insert_intake(&tx, &project, intake, now)?;
+        log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
+        let mut linked = None;
+        if let Some(patch) = patch {
+            let update = insert_update(&tx, &project, patch, Some(&id), now)?;
+            tx.execute(
+                "UPDATE main.proposals SET linked = ?1 WHERE id = ?2 AND project = ?3",
+                [update.as_str(), id.as_str(), project.as_str()],
+            )
+            .db()?;
+            log(&tx, &project, EVENT_CREATED, &json!({ "id": update }), now)?;
+            linked = Some(existing(&tx, &project, &update)?);
+        }
+        let created = existing(&tx, &project, &id)?;
+        tx.commit().db()?;
+        Ok(IntakeResult {
+            hits,
+            related,
+            created: Some(created),
+            linked,
+        })
     }
 
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError> {

@@ -33,13 +33,17 @@
 //!   ID, the splice, the structure check, the creation refusals and the
 //!   findings an edit introduces (task spec `proposal-apply`);
 //! - [`proposal`] — the queue's own words: `PR-NNNN` and its look-alikes,
-//!   the `[ids]` clash, the author, the apply commit's message.
+//!   the `[ids]` clash, the author, the apply commit's message;
+//! - [`intake`] — the pure half of the agent intake: the two kinds that
+//!   never apply, their enums, caps and field checks, the dedup's
+//!   normalised text (`docs/canon/agent-intake.md` "Rules", "Dedup").
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod check;
 mod front_matter;
 mod glob;
+pub mod intake;
 mod lines;
 mod markdown;
 mod own_text;

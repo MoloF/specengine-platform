@@ -24,6 +24,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [crates/specengine-ra/README.md](../crates/specengine-ra/README.md) specengine-ra — layer C: rust-analyzer as a library · crates/specengine-ra · tier 1
 - [crates/specengine-store/README.md](../crates/specengine-store/README.md) specengine-store — the spec index · crates/specengine-store · tier 1
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
+- [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
@@ -82,7 +83,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
-- [docs/features/agent-intake.md](features/agent-intake.md) Agent intake over MCP · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress

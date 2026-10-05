@@ -8,6 +8,15 @@
 //!
 //! M: a tool writing under the root; a new tool without a call.
 //!
+//! AC-01 of docs/features/agent-intake.md: the queue tools join the door —
+//! a change to `RULE-STAM-REGEN` against `get_node`'s `span_hash` (stored),
+//! a stale one, questions (stored, then a hit), a discrepancy with a
+//! proposed patch (stored with its linked update), `get_proposal` on them,
+//! and invalid calls of each; the repository stays byte-identical (`.git`
+//! included: no commit, no ref), `git status` empty, every new path under
+//! `HOME`, and the queue holds what was proposed. M: `propose_change`
+//! writes its target.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -19,7 +28,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use common::read::{ERAS, Era, Session, assert_bad_arguments};
+use common::read::{ERAS, Era, Session, TOOLS, assert_bad_arguments, content_text};
 use common::*;
 use serde_json::{Value, json};
 
@@ -57,9 +66,10 @@ fn git(dir: &Path, home: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("UTF-8 git output")
 }
 
-/// Valid and invalid calls of each read tool; a tool missing here fails
-/// the test when it is listed.
-fn calls_of(tool: &str) -> Option<(Vec<Value>, Vec<Value>)> {
+/// Valid and invalid calls of each tool (`base`: `RULE-STAM-REGEN`'s
+/// `span_hash`); a tool missing here fails the test when it is listed.
+fn calls_of(tool: &str, base: &str) -> Option<(Vec<Value>, Vec<Value>)> {
+    let regen = "## Regeneration {#RULE-STAM-REGEN}\n\nStamina regenerates only at rest.\n";
     let calls = match tool {
         "get_tree" => (
             vec![
@@ -96,6 +106,101 @@ fn calls_of(tool: &str) -> Option<(Vec<Value>, Vec<Value>)> {
             ],
             vec![json!({"node_ids": "MEC-STAMINA"}), json!({"budget": 100})],
         ),
+        "propose_change" => (
+            vec![
+                json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": base,
+                    "text": regen, "rationale": "Rest only.", "author_role": "writer"}),
+                json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": "b3:00",
+                    "text": regen, "rationale": "Stale.", "author_role": "writer"}),
+                json!({"kind": "update", "target": "RULE-NOPE", "base": base,
+                    "text": regen, "rationale": "None.", "author_role": "writer",
+                    "author_model": "m-1", "run": "r-1"}),
+            ],
+            vec![
+                json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": base,
+                    "text": regen, "rationale": "No author."}),
+                json!({"kind": "delete", "target": "RULE-STAM-REGEN", "base": base,
+                    "text": regen, "rationale": "Kind.", "author_role": "writer"}),
+                json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": base,
+                    "text_file": "x.md", "rationale": "Path.", "author_role": "writer"}),
+            ],
+        ),
+        "ask_question" => (
+            vec![
+                json!({"node_ids": ["EDGE-STAM-ZERO"], "text": "Does the sprint stop at zero?",
+                    "working_answer": "Yes.", "price_of_other": "A new case.",
+                    "author_role": "writer"}),
+                json!({"node_ids": ["EDGE-STAM-ZERO"], "text": "does the sprint  stop at zero?",
+                    "working_answer": "Yes.", "price_of_other": "A new case.",
+                    "severity": "high", "author_role": "writer"}),
+                json!({"node_ids": ["RULE-STAM-REGEN"], "text": "Rest only?",
+                    "working_answer": "Yes.", "price_of_other": "A new case.",
+                    "author_role": "writer"}),
+                json!({"node_ids": [], "text": "None?", "working_answer": "Yes.",
+                    "price_of_other": "A new case.", "author_role": "writer"}),
+            ],
+            vec![
+                json!({"node_ids": "EDGE-STAM-ZERO", "text": "T", "working_answer": "W",
+                    "price_of_other": "P", "author_role": "writer"}),
+                json!({"node_ids": ["EDGE-STAM-ZERO"], "text": "T", "working_answer": "W",
+                    "price_of_other": "P", "author_role": "writer", "bogus": true}),
+                json!({"node_ids": ["EDGE-STAM-ZERO"], "text": "T", "working_answer": "W",
+                    "price_of_other": "P", "author_role": "writer", "severity": "urgent"}),
+            ],
+        ),
+        "report_discrepancy" => {
+            let discrepancy = |patch: Option<Value>| {
+                let mut args = json!({
+                    "node_ids": ["RULE-STAM-REGEN", "EDGE-STAM-ZERO"],
+                    "summary": "Regeneration starts while walking.",
+                    "gap_type": "contradicts", "severity": "normal",
+                    "evidence": [{"file": "src/stamina.rs", "qpath": "regen", "lines": "3-9",
+                        "observed": "regenerates while walking", "documented": "only at rest"}],
+                    "options": [{"label": "code", "effect": "fix the code", "price": "1 item"},
+                        {"label": "spec", "effect": "allow walking", "price": "a rebalance"}],
+                    "recommendation": 0, "distinct_from": ["DEC-0023"], "author_role": "writer"
+                });
+                if let Some(patch) = patch {
+                    args["proposed_patch"] = patch;
+                }
+                args
+            };
+            (
+                vec![
+                    discrepancy(Some(json!({"target": "RULE-STAM-REGEN", "base": base,
+                        "text": regen, "rationale": "Rest only."}))),
+                    discrepancy(None),
+                    discrepancy(Some(json!({"target": "RULE-STAM-REGEN", "base": "b3:00",
+                        "text": regen, "rationale": "Stale."}))),
+                ],
+                vec![
+                    {
+                        let mut args = discrepancy(None);
+                        args["gap_type"] = json!("bogus");
+                        args
+                    },
+                    {
+                        let mut args = discrepancy(None);
+                        args["options"] = json!([{"label": "only"}]);
+                        args
+                    },
+                    {
+                        let mut args = discrepancy(None);
+                        args.as_object_mut().unwrap().remove("author_role");
+                        args
+                    },
+                ],
+            )
+        }
+        "get_proposal" => (
+            vec![
+                json!({"proposal_id": "PR-0001"}),
+                json!({"proposal_id": "PR-0003"}),
+                json!({"proposal_id": "PR-9999"}),
+                json!({"proposal_id": "\u{0420}R-0001"}),
+            ],
+            vec![json!({}), json!({"proposal_id": 1})],
+        ),
         _ => return None,
     };
     Some(calls)
@@ -126,13 +231,23 @@ fn ac08_reads_write_nothing_under_the_project_root() {
     let tree_before = snapshot(&root);
     let paths_before: BTreeSet<String> = snapshot(scratch.path()).into_keys().collect();
     let cwd = root.join("docs").join("spec");
+    let mut base = None;
 
     let mut called = BTreeSet::new();
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&cwd), Home::At(&home));
         let list = session.tools();
+        let base = base
+            .get_or_insert_with(|| {
+                let reply = session.call("get_node", json!({"id": "RULE-STAM-REGEN"}));
+                result(&reply)["structuredContent"]["nodes"][0]["span_hash"]
+                    .as_str()
+                    .expect("a span_hash")
+                    .to_owned()
+            })
+            .clone();
         for name in tool_names(&list) {
-            let (valid, invalid) = calls_of(&name)
+            let (valid, invalid) = calls_of(&name, &base)
                 .unwrap_or_else(|| panic!("{name} is listed but this test has no call for it"));
             for args in valid {
                 let reply = session.call(&name, args.clone());
@@ -176,10 +291,50 @@ fn ac08_reads_write_nothing_under_the_project_root() {
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
         assert_eq!(done.stderr, "", "{era:?}");
     }
+    assert_eq!(called.into_iter().collect::<Vec<_>>(), TOOLS);
+
+    // The queue holds what the valid calls proposed, in call order: the
+    // first era's question (its repeat a hit), change, and discrepancy with
+    // its linked update (its repeat a hit); the second era's change only.
+    let mut session = Session::open(Era::Legacy, &[], Some(&cwd), Home::At(&home));
+    let mut stored = Vec::new();
+    for number in 1..=6 {
+        let id = format!("PR-{number:04}");
+        let reply = session.call("get_proposal", json!({"proposal_id": id}));
+        let result = result(&reply);
+        let document = &result["structuredContent"];
+        if result["isError"] == json!(true) {
+            assert!(
+                content_text(result).contains(&format!("`{id}`")),
+                "{id}: {result}"
+            );
+            break;
+        }
+        stored.push((
+            document["kind"].as_str().expect("kind").to_owned(),
+            document["status"].as_str().expect("status").to_owned(),
+            document["linked"].as_str().map(str::to_owned),
+        ));
+    }
     assert_eq!(
-        called.into_iter().collect::<Vec<_>>(),
-        ["get_context_bundle", "get_node", "get_tree", "search"]
+        stored,
+        [
+            ("question".to_owned(), "open".to_owned(), None),
+            ("update".to_owned(), "open".to_owned(), None),
+            (
+                "discrepancy".to_owned(),
+                "open".to_owned(),
+                Some("PR-0004".to_owned())
+            ),
+            (
+                "update".to_owned(),
+                "open".to_owned(),
+                Some("PR-0003".to_owned())
+            ),
+            ("update".to_owned(), "open".to_owned(), None),
+        ]
     );
+    drop(session.finish());
 
     assert_eq!(snapshot(&root), tree_before, "the repository changed");
     assert_eq!(

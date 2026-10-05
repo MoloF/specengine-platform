@@ -27,18 +27,38 @@ use std::fs;
 use std::path::Path;
 use std::process::Stdio;
 
-use common::read::{ERAS, Era, READ_TOOLS, Session, checked_call, cli_env, output_schemas};
+use common::read::{ERAS, Era, READ_TOOLS, Session, TOOLS, checked_call, cli_env, output_schemas};
 use common::*;
 use serde_json::{Value, json};
 use specengine_cli::Globals;
 
-/// Valid arguments of every read tool, for a spec-a project.
+/// Valid arguments of every tool, for a spec-a project (the queue tools'
+/// of task spec `agent-intake` too).
 fn valid_args(tool: &str) -> Value {
     match tool {
         "get_tree" => json!({}),
         "get_node" => json!({"id": "MEC-STAMINA"}),
         "search" => json!({"query": "stamina"}),
         "get_context_bundle" => json!({"node_ids": ["MEC-STAMINA"]}),
+        "get_proposal" => json!({"proposal_id": "PR-0001"}),
+        "propose_change" => json!({
+            "kind": "update", "target": "EDGE-STAM-ZERO", "base": "b3:00", "text": "x",
+            "rationale": "Why.", "author_role": "writer"
+        }),
+        "ask_question" => json!({
+            "node_ids": ["EDGE-STAM-ZERO"], "text": "Why?", "working_answer": "Yes.",
+            "price_of_other": "None.", "author_role": "writer"
+        }),
+        "report_discrepancy" => json!({
+            "node_ids": ["EDGE-STAM-ZERO"], "summary": "It departs.", "gap_type": "partial",
+            "severity": "low",
+            "evidence": [{"file": "src/a.rs", "observed": "a", "documented": "b"}],
+            "options": [
+                {"label": "one", "effect": "e", "price": "p"},
+                {"label": "two", "effect": "e", "price": "p"}
+            ],
+            "recommendation": 0, "author_role": "writer"
+        }),
         other => panic!("no arguments for {other}"),
     }
 }
@@ -121,10 +141,11 @@ fn ac06_no_project_starts_both_eras_and_every_tool_names_spec_init() {
                 "{era:?}: {names:?}"
             );
         } else {
-            assert_eq!(names, READ_TOOLS, "{era:?}");
+            assert_eq!(names, TOOLS, "{era:?}");
         }
         let schemas = output_schemas(&list);
-        for tool in READ_TOOLS {
+        // Every tool, the queue tools of task spec `agent-intake` too.
+        for tool in TOOLS {
             let result = checked_call(
                 &mut session,
                 &schemas,

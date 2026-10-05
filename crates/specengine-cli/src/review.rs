@@ -8,14 +8,18 @@
 //! so in `notes` (`spec approve` completes it; no new apply is needed),
 //! its preview `unavailable`, steps 2–6 not run; its branch read in the
 //! current repository when the recorded worktree is not there; a lookup git
-//! cannot make is a note too.
+//! cannot make is a note too. A question or a discrepancy (canon
+//! `agent-intake`, "Review document") never applies: no diff, no preview,
+//! no step run.
+//! `--brief` ([`review_brief`], MCP `get_proposal`): the same document,
+//! brief.
 
 use specengine_store::{GitEnv, Proposal, ProposalStatus};
 
 use crate::preflight::{completing, prepare, trailer_lookup};
 use crate::proposals::{
-    Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, escaped_error,
-    find, no_proposal, open_context, with_diff, written_id,
+    Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed,
+    escaped_error, find, no_proposal, open_context, with_diff, written_id,
 };
 use crate::{CliError, Env, Globals, Message, one_line};
 
@@ -36,6 +40,17 @@ pub fn review(
     request: &ReviewRequest,
 ) -> Result<ProposalOutcome, CliError> {
     run_review(env, globals, request).map_err(escaped_error)
+}
+
+/// `spec review PR --brief` (MCP `get_proposal`): [`review`], its answer
+/// brief: the texts, `diff` and `conflict` dropped, at most 20 introduced
+/// findings, the text cut at the output cap. Reads only, as `review`.
+pub fn review_brief(
+    env: &Env,
+    globals: &Globals,
+    request: &ReviewRequest,
+) -> Result<ProposalOutcome, CliError> {
+    review(env, globals, request).map(briefed)
 }
 
 fn run_review(
@@ -80,10 +95,12 @@ pub(crate) fn previewed(
     messages: &mut Vec<Message>,
 ) -> ProposalDocument {
     let mut document = with_diff(proposal, git_env, &context.data_dir);
-    if !matches!(
-        proposal.status,
-        ProposalStatus::Open | ProposalStatus::Approved
-    ) {
+    if !proposal.kind.applies()
+        || !matches!(
+            proposal.status,
+            ProposalStatus::Open | ProposalStatus::Approved
+        )
+    {
         return document;
     }
     // Its branch read in the current repository when the recorded worktree

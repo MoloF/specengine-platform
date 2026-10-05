@@ -21,7 +21,7 @@ use std::path::Path;
 use common::bundle::blake3_hex;
 use common::proposal::{CASES, NOW, Pair, cannot, edit, json_of, printed, printed_inbox, refused};
 use common::{read, read_text, replace, spec, write};
-use specengine_cli::{Exit, Outcome, ProposedText, TEXT_MAX_BYTES};
+use specengine_cli::{Exit, Globals, Outcome, ProposedText, TEXT_MAX_BYTES, propose_brief};
 use specengine_core::ProjectConfig;
 
 fn b3(bytes: &[u8]) -> String {
@@ -396,6 +396,96 @@ fn non_canonical_targets_and_bad_inputs() {
     );
 }
 
+/// Creation 1 with agent-intake (iteration 2): an author field outside its
+/// grammar exits 2 naming it as the intake commands and the MCP tools name
+/// it — `author_role`, `author_model`, `run`, the first in that order —
+/// never the flag; the library, `--brief` and the binary alike (stderr
+/// `spec: <field>: <problem>`), nothing stored, nothing changed. M:
+/// `Author::new`'s flag naming restored.
+#[test]
+fn a_bad_author_field_exits_2_naming_its_field() {
+    let pair = Pair::new("pa-author", "spec-a");
+    let before = pair.state();
+    let (hash, text) = pair.span(&pair.main, "EDGE-SPRINT-EMPTY");
+    let new_text = edit(&text, "the sprint ends;", "the sprint ends at once;");
+    let long = "m".repeat(129);
+    let ascii = "printable ASCII without spaces only";
+    let cases = [
+        (Some("a b"), None, None, format!("author_role: {ascii}")),
+        (None, Some("m m"), None, format!("author_model: {ascii}")),
+        (
+            None,
+            Some(long.as_str()),
+            None,
+            "author_model: 129 bytes; at most 128".to_owned(),
+        ),
+        (
+            None,
+            None,
+            Some(""),
+            "run: empty; give a value or leave the option out".to_owned(),
+        ),
+        (
+            Some("\u{e9}t\u{e9}"),
+            None,
+            Some(""),
+            format!("author_role: {ascii}"),
+        ),
+        (
+            None,
+            Some("m m"),
+            Some(""),
+            format!("author_model: {ascii}"),
+        ),
+    ];
+    for (role, model, run, problem) in cases {
+        let want = format!("spec: {problem}");
+        let mut request = pair.request(&pair.linked, "EDGE-SPRINT-EMPTY", &hash, &new_text);
+        request.author_role = role.map(str::to_owned).or(request.author_role);
+        request.author_model = model.map(str::to_owned).or(request.author_model);
+        request.run = run.map(str::to_owned);
+        let message = cannot(&pair.propose_with(&pair.linked, request.clone()), &want);
+        assert_eq!(message, want);
+        let message = cannot(
+            &propose_brief(&pair.env(&pair.linked), &Globals::default(), &request),
+            &want,
+        );
+        assert_eq!(message, want, "--brief");
+
+        let mut args = vec![
+            "propose",
+            "update",
+            "EDGE-SPRINT-EMPTY",
+            "--base",
+            &hash,
+            "--text-file",
+            "-",
+            "--rationale",
+            "Bad author.",
+        ];
+        for (flag, value) in [
+            ("--author-role", role),
+            ("--author-model", model),
+            ("--run", run),
+        ] {
+            if let Some(value) = value {
+                args.extend([flag, value]);
+            }
+        }
+        for brief in [false, true] {
+            if brief {
+                args.push("--brief");
+            }
+            let run = pair.spec_piped(&pair.linked, &args, new_text.as_bytes());
+            run.code(2);
+            assert_eq!(run.stderr, format!("{want}\n"), "{}", run.show());
+            assert_eq!(run.stdout, "", "{}", run.show());
+        }
+        assert_eq!(pair.state(), before, "{want}: nothing changed");
+    }
+    assert!(!pair.db().exists() || pair.proposals().is_empty());
+}
+
 /// AC-04: a text citing an undeclared ID: `review` lists that finding as
 /// introduced (and `propose` prints it); a clean text: none; a finding the
 /// tree already had, in the edited file and even inside the edited span,
@@ -459,7 +549,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 }
 
 /// The Data keys of `review` in order.
-const REVIEW_KEYS: [&str; 26] = [
+const REVIEW_KEYS: [&str; 37] = [
     "id",
     "project",
     "kind",
@@ -485,6 +575,17 @@ const REVIEW_KEYS: [&str; 26] = [
     "applied_commit",
     "created_at",
     "updated_at",
+    "target_ids",
+    "severity",
+    "gap_type",
+    "summary",
+    "working_answer",
+    "price_of_other",
+    "evidence",
+    "options",
+    "recommendation",
+    "distinct_from",
+    "linked",
     "notes",
 ];
 
@@ -566,7 +667,9 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
                 "id",
                 "kind",
                 "rationale",
+                "severity",
                 "status",
+                "summary",
                 "target_id"
             ]
         );

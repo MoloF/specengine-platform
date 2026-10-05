@@ -76,7 +76,7 @@ fn new_proposal(target: &str, common_dir: &str) -> NewProposal {
 /// column `<column>-<id>`, `decision_note` `NULL`, `base_commit` `HEAD`
 /// (a value `get` refuses) when `unreadable`.
 fn row(id: &str, project: &str, unreadable: bool) -> StoredProposal {
-    let mut columns: [Option<String>; PROPOSAL_COLUMNS.len()] = Default::default();
+    let mut columns: [Option<String>; PROPOSAL_COLUMNS.len()] = std::array::from_fn(|_| None);
     for (slot, column) in columns.iter_mut().zip(PROPOSAL_COLUMNS) {
         *slot = Some(format!("{column}-{id}"));
     }
@@ -149,7 +149,7 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
     let db = scratch.db("q");
     let mut queue = SqliteQueue::open(&db, "project").expect("open");
     let mut proposal = StoredProposal {
-        columns: Default::default(),
+        columns: std::array::from_fn(|_| None),
     };
     for (slot, column) in proposal.columns.iter_mut().zip(PROPOSAL_COLUMNS) {
         *slot = Some(column.to_owned());
@@ -174,7 +174,7 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
     );
     let want = format!(
         "proposals\t{}\nevents\t{}\n",
-        serde_json::json!(PROPOSAL_COLUMNS),
+        serde_json::json!(PROPOSAL_COLUMNS.as_slice()),
         serde_json::Value::Array(events)
     );
     assert_eq!(queue.dump().expect("dump"), want);
@@ -242,9 +242,9 @@ fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    sqlite3(&db, "PRAGMA user_version = 2");
+    sqlite3(&db, "PRAGMA user_version = 3");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 2 }) => {}
+        Err(QueueError::SchemaTooNew { found: 3 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }

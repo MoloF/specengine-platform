@@ -21,8 +21,9 @@ use crate::error::{Db, StoreError};
 use crate::schema;
 
 /// Every column of `proposals`, in table order (canon `proposal-queue.md`,
-/// "Store").
-pub const PROPOSAL_COLUMNS: [&str; 24] = [
+/// "Store"): queue schema 1's 24, then the eleven step 2 appends
+/// (`docs/canon/agent-intake.md` "Stored").
+pub const PROPOSAL_COLUMNS: [&str; 35] = [
     "id",
     "project",
     "kind",
@@ -47,7 +48,33 @@ pub const PROPOSAL_COLUMNS: [&str; 24] = [
     "applied_commit",
     "created_at",
     "updated_at",
+    "target_ids",
+    "severity",
+    "gap_type",
+    "summary",
+    "working_answer",
+    "price_of_other",
+    "evidence",
+    "options",
+    "recommendation",
+    "distinct_from",
+    "linked",
 ];
+
+/// The columns of queue schema 1's `proposals`: the first of
+/// [`PROPOSAL_COLUMNS`].
+const SCHEMA_1_COLUMNS: usize = 24;
+
+/// The `proposals` columns of queue schema `schema`, in table order: 1 and
+/// 2 (this build's) are known, a dump of either restores; `None` for any
+/// other.
+pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
+    match schema {
+        1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
+        QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
+        _ => None,
+    }
+}
 
 /// Every column of `events`, in table order: `seq` (`INTEGER`), then the
 /// `TEXT` ones.
@@ -163,20 +190,35 @@ impl SqliteQueue {
 
     /// Every row of both tables, every project's, as stored, in one read
     /// transaction: `proposals` by ID number, `events` by `seq`. A `TEXT`
-    /// column that holds no UTF-8 text fails, naming row and column.
+    /// column that holds no UTF-8 text fails, naming row and column. A DB
+    /// still at queue schema 1 (no step runs here) reads its 24 columns,
+    /// the eleven later ones `None`.
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
         if has_queue_tables(&tx)? {
+            let version = user_version(&tx)?;
+            let columns = match proposal_columns(version) {
+                Some(columns) => columns,
+                None if version > QUEUE_SCHEMA_VERSION => {
+                    return Err(QueueError::SchemaTooNew { found: version });
+                }
+                None => {
+                    return Err(QueueError::Invalid(format!(
+                        "the queue's tables stand at user_version {version}, which no SpecEngine \
+                         writes"
+                    )));
+                }
+            };
             let mut statement = tx
                 .prepare(&format!(
                     "SELECT {} FROM main.proposals {ID_ORDER}",
-                    PROPOSAL_COLUMNS.join(", ")
+                    columns.join(", ")
                 ))
                 .db()?;
             let mut rows = statement.query([]).db()?;
             while let Some(row) = rows.next().db()? {
-                state.proposals.push(stored_proposal(row)?);
+                state.proposals.push(stored_proposal(row, columns.len())?);
             }
             drop(rows);
             drop(statement);
@@ -296,15 +338,16 @@ fn counts_in(conn: &Connection) -> Result<QueueCounts, QueueError> {
     })
 }
 
-/// A `proposals` row as stored; a value that is no UTF-8 text fails,
-/// naming the row (its `id`, as far as it reads) and the column.
-fn stored_proposal(row: &Row<'_>) -> Result<StoredProposal, QueueError> {
+/// A `proposals` row as stored, its first `width` columns read (the rest
+/// `None`); a value that is no UTF-8 text fails, naming the row (its `id`,
+/// as far as it reads) and the column.
+fn stored_proposal(row: &Row<'_>, width: usize) -> Result<StoredProposal, QueueError> {
     let name = match row.get_ref(0).db()? {
         ValueRef::Text(bytes) => String::from_utf8_lossy(bytes).into_owned(),
         _ => "NULL".to_owned(),
     };
-    let mut columns: [Option<String>; PROPOSAL_COLUMNS.len()] = Default::default();
-    for (index, column) in PROPOSAL_COLUMNS.iter().enumerate() {
+    let mut columns: [Option<String>; PROPOSAL_COLUMNS.len()] = std::array::from_fn(|_| None);
+    for (index, column) in PROPOSAL_COLUMNS.iter().enumerate().take(width) {
         columns[index] = stored_text(row, index)?.map_err(|why| corrupt(&name, column, why))?;
     }
     Ok(StoredProposal { columns })

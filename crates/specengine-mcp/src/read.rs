@@ -48,7 +48,7 @@ pub const MAX_RESULT_CHARS: u64 = 500_000;
 
 /// Claude Code truncates tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").
-const DESCRIPTION_LIMIT: usize = 2048;
+pub(crate) const DESCRIPTION_LIMIT: usize = 2048;
 
 /// Every read tool's description ends with this sentence (07 §1.1).
 macro_rules! common_tail {
@@ -520,7 +520,7 @@ pub(crate) enum Answer {
 
 impl Answer {
     /// The tool result of the mapping table (task spec, "Data").
-    fn into_tool_result(self, tool: &str) -> CallToolResult {
+    pub(crate) fn into_tool_result(self, tool: &str) -> CallToolResult {
         match self {
             Self::Rendered {
                 exit,

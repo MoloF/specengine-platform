@@ -2,20 +2,22 @@
 //! current repository's proposals by ID number, `open` and `approved`
 //! (`--all`: every state), one line each: `<id> | <kind> | <status> |
 //! <target_id> | <branch> | <created_at> | <rationale's first line, at most
-//! 80 characters>`. Proposals of another repository of the same slug (the
-//! database is the slug's) are never listed: those of an existing one are
-//! counted in a note; those of a repository that no longer exists (orphans)
-//! are named in another (at most 10, the rest counted), with the `spec
-//! reject` that takes them out unless a commit of theirs is in history. A
-//! row of the queue that does not decode is
-//! skipped with a note naming it and its column (exit 0; `spec review` of
-//! it exits 2 naming it). Times as stored; nothing is written but the data
-//! directory. Control characters in the text output are escaped
-//! ([`crate::escape_controls`]).
+//! 80 characters>`; a question's or a discrepancy's last column
+//! `<severity>: <summary's first line>` (canon `agent-intake`,
+//! "Review document").
+//! Proposals of another repository of the same slug (the database is the
+//! slug's) are never listed: those of an existing one are counted in a
+//! note; those of a repository that no longer exists (orphans) are named
+//! in another (at most 10, the rest counted), with the `spec reject` that
+//! takes them out unless a commit of theirs is in history. A row of the
+//! queue that does not decode is skipped with a note naming it and its
+//! column (exit 0; `spec review` of it exits 2 naming it). Times as
+//! stored; nothing is written but the data directory. Control characters
+//! in the text output are escaped ([`crate::escape_controls`]).
 
 use serde::Serialize;
 use specengine_store::{
-    GitEnv, ProposalFilter, ProposalQueue as _, ProposalStatus, same_repository,
+    GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, same_repository,
 };
 
 use crate::proposals::{escaped_error, open_context, queue_cannot, repository_gone};
@@ -47,9 +49,15 @@ pub struct InboxEntry {
     pub target_id: String,
     pub branch: String,
     pub created_at: String,
-    /// The rationale's first line, at most [`INBOX_RATIONALE_CHARS`]
-    /// characters (a longer one cut, ending in `…`).
-    pub rationale: String,
+    /// An update's rationale's first line, at most
+    /// [`INBOX_RATIONALE_CHARS`] characters (a longer one cut, ending in
+    /// `…`); `null` for the intake kinds.
+    pub rationale: Option<String>,
+    /// A question's or a discrepancy's severity; `null` for an update.
+    pub severity: Option<String>,
+    /// A question's text's or a discrepancy's summary's first line, cut as
+    /// the rationale; `null` for an update.
+    pub summary: Option<String>,
 }
 
 /// What `spec inbox` listed.
@@ -109,18 +117,7 @@ fn run_inbox(
         .proposals
         .into_iter()
         .partition(|proposal| same_repository(&proposal.place.git_common_dir, &context.common_dir));
-    let proposals = ours
-        .iter()
-        .map(|proposal| InboxEntry {
-            id: proposal.id.clone(),
-            kind: proposal.kind.as_str().to_owned(),
-            status: proposal.status.as_str().to_owned(),
-            target_id: proposal.target_id.clone(),
-            branch: proposal.place.branch.clone(),
-            created_at: proposal.created_at.clone(),
-            rationale: first_line(&proposal.rationale),
-        })
-        .collect();
+    let proposals = ours.iter().map(entry).collect();
     let mut notes: Vec<String> = listed
         .unreadable
         .iter()
@@ -160,6 +157,22 @@ fn run_inbox(
     })
 }
 
+/// One proposal's line.
+fn entry(proposal: &Proposal) -> InboxEntry {
+    let intake = proposal.intake.as_ref();
+    InboxEntry {
+        id: proposal.id.clone(),
+        kind: proposal.kind.as_str().to_owned(),
+        status: proposal.status.as_str().to_owned(),
+        target_id: proposal.target_id.clone(),
+        branch: proposal.place.branch.clone(),
+        created_at: proposal.created_at.clone(),
+        rationale: intake.is_none().then(|| first_line(&proposal.rationale)),
+        severity: intake.map(|intake| intake.severity.as_str().to_owned()),
+        summary: intake.map(|intake| first_line(&intake.summary)),
+    }
+}
+
 /// The first line of `text` (a `\r` before its end dropped), at most
 /// [`INBOX_RATIONALE_CHARS`] characters: a longer one keeps one less and
 /// ends in `…`.
@@ -182,15 +195,13 @@ pub(crate) fn render_text(outcome: &InboxOutcome) -> String {
 fn raw_text(outcome: &InboxOutcome) -> String {
     let mut out = String::new();
     for entry in &outcome.proposals {
+        let last = match (&entry.severity, &entry.summary) {
+            (Some(severity), Some(summary)) => format!("{severity}: {summary}"),
+            _ => entry.rationale.clone().unwrap_or_default(),
+        };
         out.push_str(&one_line(&format!(
-            "{} | {} | {} | {} | {} | {} | {}",
-            entry.id,
-            entry.kind,
-            entry.status,
-            entry.target_id,
-            entry.branch,
-            entry.created_at,
-            entry.rationale
+            "{} | {} | {} | {} | {} | {} | {last}",
+            entry.id, entry.kind, entry.status, entry.target_id, entry.branch, entry.created_at,
         )));
         out.push('\n');
     }

@@ -20,33 +20,32 @@ use crate::resources;
 /// characters and defers tool definitions behind tool search, so this is the
 /// server's most important text. ASCII only, so bytes equal characters.
 pub const INSTRUCTIONS: &str = "\
-SpecEngine keeps a project's specification (requirements, assumptions, questions, \
-decisions, acceptance criteria) as Markdown files in git next to the code. These \
-tools read it as the `spec` command line does: content is what `spec <command> 2>&1` \
-prints, structuredContent its --json document.
+SpecEngine keeps a project's specification as Markdown files in git next to the code. \
+Each tool is a spec command: content is what `spec <command> 2>&1` prints, \
+structuredContent its --json document.
 
-Tools:
-- get_tree(root?, depth?, kinds?, archive?) = spec tree: the containment tree, no \
-bodies.
-- get_node(id, with?, archive?) = spec show: a node's current text; with [\"links\"] \
-adds its links both ways.
-- search(query, kinds?, limit?, archive?) = spec search: full-text search.
-- get_context_bundle(node_ids, budget?) = spec bundle: the context of nodes within a \
-token budget, named by its bundle_hash.
+Reads:
+- get_tree(root?, depth?, kinds?, archive?) = spec tree: the node tree.
+- get_node(id, with?, archive?) = spec show: a node's text; with [\"links\"] its links.
+- search(query, kinds?, limit?, archive?) = spec search.
+- get_context_bundle(node_ids, budget?) = spec bundle: nodes' context within a budget.
+- get_proposal(proposal_id) = spec review --brief.
+Queue (writes only the proposal queue; the owner decides on a terminal):
+- propose_change = spec propose update: a node's new text against its span_hash.
+- ask_question, report_discrepancy = spec propose question|discrepancy: what is decided \
+or asked comes back as hits, nothing stored unless distinct_from names each; keep \
+working on your working answer.
 
-A node is named by any REF: an ID, an alias, slug/ID, ID#SECTION or a root-relative \
-.md path. Hints in answers use the command's flags: --kind is kinds, ROOT is root, \
---links is with [\"links\"]; --depth, --limit, --budget and --archive keep their \
-names. Answers are cut at 40000 characters, with a tail saying how to narrow them. A \
-REF naming nothing, or a call that cannot run (no specengine.toml: run `spec init`), \
-is an error result with the reason. Resources for @-mentions: spec://<slug>/tree and \
-spec://<slug>/node/<REF, percent-encoded>.
+REF: an ID, an alias, slug/ID, ID#SECTION or a root-relative .md path. Hints use the \
+command's flags: --kind is kinds, ROOT is root, --links is with [\"links\"]. Answers are \
+cut at 40000 characters, with a tail on how to narrow them. A REF naming nothing, or \
+a call that cannot run (no specengine.toml: run `spec init`), is an error result with \
+the reason. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.
 
 Rules:
 - Deterministic: one state, one result; no LLM inside.
-- Each call reads the files as they are now. Reads refresh SpecEngine's index in its \
-data directory; nothing under the project root is written. Spec files change only \
-through apply_proposal on an owner action.
+- Reads refresh SpecEngine's index in its data directory; nothing under the project \
+root is written. Spec files change only when the owner approves a change.
 - Nothing is blocked by a discrepancy.
 - IDs are Latin only; a look-alike ID is refused with its Latin fix.";
 
@@ -126,7 +125,7 @@ impl SpecEngineServer {
     /// consent demo from the OS; without one, stateless reviews answer with a
     /// tool error and everything else keeps working.
     pub fn new(lifecycle: Lifecycle, globals: Globals) -> Self {
-        let tool_router = Self::read_tools();
+        let tool_router = Self::read_tools() + Self::intake_tools();
         #[cfg(feature = "probes")]
         let tool_router = tool_router + Self::review_tools() + Self::probe_tools();
         Self {

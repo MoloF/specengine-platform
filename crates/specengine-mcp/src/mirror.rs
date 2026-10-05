@@ -1,4 +1,7 @@
-//! The JSON Schemas of the read tools (task spec `mcp-read`, "Data").
+//! The JSON Schemas of the read tools (task spec `mcp-read`, "Data") and of
+//! the queue tools (`docs/canon/agent-intake.md` "Review document",
+//! "Intake document", "Tools": the review and intake documents; the closed
+//! objects of `report_discrepancy`'s input).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -380,4 +383,205 @@ pub(crate) enum LayerKey {
     Neighbours,
     Terms,
     Tests,
+}
+
+// ------------------------------------------------------------------- queue
+
+/// The review document: `spec review --brief --json`, `spec propose update
+/// --brief --json` (`docs/canon/agent-intake.md` "Review document").
+#[derive(JsonSchema)]
+pub(crate) struct ReviewDocument {
+    pub id: Option<String>,
+    pub project: Option<String>,
+    /// Free: the queue's kinds.
+    pub kind: Option<String>,
+    pub status: Option<ProposalState>,
+    pub target_id: Option<String>,
+    pub target_path: Option<String>,
+    pub worktree: Option<String>,
+    pub branch: Option<String>,
+    pub base_commit: Option<String>,
+    pub base_hash: Option<String>,
+    /// `null` in a brief answer.
+    pub base_text: Option<String>,
+    /// `null` in a brief answer.
+    pub new_text: Option<String>,
+    pub patch_hash: Option<String>,
+    pub rationale: Option<String>,
+    pub author: Option<ProposalAuthor>,
+    pub diagnostics: Option<Vec<ProposalFinding>>,
+    /// `null` in a brief answer.
+    pub diff: Option<String>,
+    pub preview: Option<Preview>,
+    /// `null` in a brief answer.
+    pub conflict: Option<String>,
+    pub decided_by: Option<String>,
+    pub decided_at: Option<String>,
+    pub decision_note: Option<String>,
+    pub applied_commit: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub target_ids: Vec<String>,
+    pub severity: Option<IntakeSeverity>,
+    pub gap_type: Option<GapType>,
+    pub summary: Option<String>,
+    pub working_answer: Option<String>,
+    pub price_of_other: Option<String>,
+    pub evidence: Vec<Evidence>,
+    pub options: Vec<IntakeOption>,
+    pub recommendation: Option<u64>,
+    pub distinct_from: Vec<String>,
+    pub linked: Option<String>,
+    pub notes: Vec<String>,
+}
+
+/// A proposal's state.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum ProposalState {
+    Open,
+    Approved,
+    Applied,
+    Rejected,
+}
+
+/// Who raised it.
+#[derive(JsonSchema)]
+pub(crate) struct ProposalAuthor {
+    #[schemars(rename = "type")]
+    pub author_type: AuthorType,
+    pub role: Option<String>,
+    pub model: Option<String>,
+    pub run: Option<String>,
+}
+
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum AuthorType {
+    Human,
+    Agent,
+}
+
+/// One finding an update introduces.
+#[derive(JsonSchema)]
+pub(crate) struct ProposalFinding {
+    pub code: String,
+    pub severity: FindingSeverity,
+    pub path: String,
+    pub line: usize,
+    pub subject: String,
+    pub message: String,
+}
+
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum FindingSeverity {
+    Error,
+    Warning,
+}
+
+/// What approving an open or approved update now would do.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum Preview {
+    Applies,
+    Rebases,
+    Conflicts,
+    Unavailable,
+}
+
+/// How much an item matters; it only orders the queue.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum IntakeSeverity {
+    High,
+    Normal,
+    Low,
+}
+
+/// How the observed state departs from the spec.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum GapType {
+    Missing,
+    Partial,
+    Contradicts,
+    Unrequested,
+}
+
+/// One piece of evidence, as the agent gave it (agent-written data).
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct Evidence {
+    /// Where it was observed.
+    pub file: String,
+    /// The symbol's qualified path.
+    pub qpath: Option<String>,
+    /// `N` or `N-M`.
+    pub lines: Option<String>,
+    /// What is there.
+    pub observed: String,
+    /// What the spec says.
+    pub documented: String,
+}
+
+/// One priced way to settle a discrepancy (agent-written data).
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct IntakeOption {
+    pub label: String,
+    /// What choosing it does.
+    pub effect: String,
+    /// What it costs.
+    pub price: String,
+}
+
+/// A proposed patch, as `propose_change` takes it (input only).
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct ProposedPatch {
+    /// One of `node_ids`.
+    pub target: String,
+    /// get_node's `span_hash` of the target.
+    pub base: String,
+    /// The new text, inline.
+    pub text: String,
+    /// Why.
+    pub rationale: String,
+}
+
+/// The intake document: `spec propose question --json`, `spec propose
+/// discrepancy --json`.
+#[derive(JsonSchema)]
+pub(crate) struct IntakeDocument {
+    /// The stored item's proposal ID; `null` when nothing was stored.
+    pub id: Option<String>,
+    pub created: bool,
+    pub hits: Vec<IntakeMatch>,
+    pub related: Vec<IntakeMatch>,
+    /// The linked update of a proposed patch.
+    pub linked: Option<String>,
+    pub diagnostics: Vec<ProposalFinding>,
+    pub notes: Vec<String>,
+}
+
+/// A hit or related item.
+#[derive(JsonSchema)]
+pub(crate) struct IntakeMatch {
+    /// A decision's `id:` or a proposal's ID.
+    pub id: Option<String>,
+    pub source: MatchSource,
+    /// `accepted`, or the proposal's state.
+    pub status: String,
+    /// A decision's path; `null` for a proposal.
+    pub path: Option<String>,
+    /// A hit's answer: the decision's title, a rejected proposal's reason.
+    pub answer: Option<String>,
+}
+
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum MatchSource {
+    Corpus,
+    Queue,
 }

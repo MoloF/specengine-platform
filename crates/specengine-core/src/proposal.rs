@@ -20,6 +20,10 @@ pub const PROPOSAL_PREFIX: &str = "PR";
 /// The fewest digits of a proposal ID: `PR-0001`; more past `PR-9999`.
 pub const PROPOSAL_DIGITS: usize = 4;
 
+/// The most bytes of a proposed text (`propose update`, a proposed patch):
+/// 1 MiB.
+pub const TEXT_MAX_BYTES: usize = 1 << 20;
+
 /// The most bytes of an author's `role`, `model` or `run`.
 pub const AUTHOR_FIELD_MAX: usize = 128;
 

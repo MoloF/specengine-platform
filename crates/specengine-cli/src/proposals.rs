@@ -18,10 +18,16 @@
 //!   alone takes one whose recorded repository no longer exists (moved or
 //!   deleted), `open` or `approved` (nothing can be applied any more), so
 //!   an orphan can leave the inbox.
-//! - **Document**: every key present, absent = `null`; times as stored;
-//!   `diff` the span's base → new hunks of `git diff --no-index`, headers
-//!   `--- base <path>` and `+++ proposed <path>`; `notes` the reasons a
-//!   preview is unavailable and a refusal's reason.
+//! - **Document**: every key present, absent = `null` (a list `[]`); times
+//!   as stored; `diff` the span's base → new hunks of `git diff
+//!   --no-index`, headers `--- base <path>` and `+++ proposed <path>`;
+//!   `notes` the reasons a preview is unavailable and a refusal's reason.
+//!   The intake kinds (canon `agent-intake`, "Review document") fill the
+//!   eleven keys after `updated_at` instead of an update's texts, `diff`,
+//!   `preview`.
+//! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts,
+//!   `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
+//!   (the rest counted in a note), the text cut at [`OUTPUT_CAP_CHARS`].
 //!
 //! - **Terminal**: the text output and stderr of the queue's commands
 //!   carry agent-written text (rationale, texts, paths): every C0 and C1
@@ -35,6 +41,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity};
 use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
@@ -43,6 +50,7 @@ use specengine_store::{
     same_repository,
 };
 
+use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
 use crate::location::prepared_data_dir;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
@@ -116,6 +124,21 @@ pub struct ProposalDocument {
     pub applied_commit: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    /// The canonical IDs: an update's `[target_id]`.
+    pub target_ids: Vec<String>,
+    pub severity: Option<IntakeSeverity>,
+    pub gap_type: Option<GapType>,
+    /// A question's text, a discrepancy's summary.
+    pub summary: Option<String>,
+    pub working_answer: Option<String>,
+    pub price_of_other: Option<String>,
+    pub evidence: Vec<Evidence>,
+    pub options: Vec<IntakeOption>,
+    /// An index into `options`.
+    pub recommendation: Option<u64>,
+    pub distinct_from: Vec<String>,
+    /// The other proposal of a discrepancy and its proposed patch.
+    pub linked: Option<String>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -123,8 +146,12 @@ pub struct ProposalDocument {
 
 impl ProposalDocument {
     /// The stored proposal's keys; `diff`, `preview`, `conflict` and
-    /// `notes` left for the caller.
+    /// `notes` left for the caller. An update's texts, hashes and rationale;
+    /// an intake kind's fields instead (those `null`).
     pub fn of(proposal: &Proposal) -> Self {
+        let applies = proposal.kind.applies();
+        let text = |value: &str| applies.then(|| value.to_owned());
+        let intake = proposal.intake.as_ref();
         Self {
             id: Some(proposal.id.clone()),
             project: Some(proposal.project.clone()),
@@ -135,11 +162,11 @@ impl ProposalDocument {
             worktree: Some(proposal.place.worktree.clone()),
             branch: Some(proposal.place.branch.clone()),
             base_commit: Some(proposal.place.base_commit.clone()),
-            base_hash: Some(proposal.base_hash.clone()),
-            base_text: Some(proposal.base_text.clone()),
-            new_text: Some(proposal.new_text.clone()),
-            patch_hash: Some(proposal.patch_hash.clone()),
-            rationale: Some(proposal.rationale.clone()),
+            base_hash: text(&proposal.base_hash),
+            base_text: text(&proposal.base_text),
+            new_text: text(&proposal.new_text),
+            patch_hash: text(&proposal.patch_hash),
+            rationale: text(&proposal.rationale),
             author: Some(proposal.author.clone()),
             diagnostics: Some(proposal.diagnostics.clone()),
             diff: None,
@@ -151,6 +178,26 @@ impl ProposalDocument {
             applied_commit: proposal.applied_commit.clone(),
             created_at: Some(proposal.created_at.clone()),
             updated_at: Some(proposal.updated_at.clone()),
+            target_ids: intake.map_or_else(
+                || vec![proposal.target_id.clone()],
+                |intake| intake.target_ids.clone(),
+            ),
+            severity: intake.map(|intake| intake.severity),
+            gap_type: intake.and_then(|intake| intake.gap_type),
+            summary: intake.map(|intake| intake.summary.clone()),
+            working_answer: intake.and_then(|intake| intake.working_answer.clone()),
+            price_of_other: intake.and_then(|intake| intake.price_of_other.clone()),
+            evidence: intake
+                .map(|intake| intake.evidence.clone())
+                .unwrap_or_default(),
+            options: intake
+                .map(|intake| intake.options.clone())
+                .unwrap_or_default(),
+            recommendation: intake.and_then(|intake| intake.recommendation),
+            distinct_from: intake
+                .map(|intake| intake.distinct_from.clone())
+                .unwrap_or_default(),
+            linked: proposal.linked.clone(),
             notes: Vec::new(),
         }
     }
@@ -165,6 +212,9 @@ pub struct ProposalOutcome {
     /// Why the command was refused (exit 1); also the document's last note.
     pub refusal: Option<String>,
     pub messages: Vec<Message>,
+    /// `--brief` ([`briefed`]): how many introduced findings past
+    /// [`SHOW_TAIL_NAMES`] were dropped; `None` without it.
+    pub brief: Option<usize>,
 }
 
 impl ProposalOutcome {
@@ -192,6 +242,7 @@ impl ProposalOutcome {
             document,
             refusal: Some(reason),
             messages,
+            brief: None,
         }
     }
 
@@ -206,8 +257,40 @@ impl ProposalOutcome {
             document,
             refusal: None,
             messages,
+            brief: None,
         }
     }
+}
+
+/// `--brief`: `base_text`, `new_text`, `diff` and `conflict` dropped; at
+/// most [`SHOW_TAIL_NAMES`] introduced findings, the rest counted in a note
+/// (`<k> more introduced finding(s): spec review PR`, before a refusal's
+/// reason, also on stderr); the text cut at [`OUTPUT_CAP_CHARS`]
+/// ([`render_text`]).
+pub(crate) fn briefed(mut outcome: ProposalOutcome) -> ProposalOutcome {
+    let document = &mut outcome.document;
+    document.base_text = None;
+    document.new_text = None;
+    document.diff = None;
+    document.conflict = None;
+    let mut omitted = 0;
+    if let Some(findings) = &mut document.diagnostics
+        && findings.len() > SHOW_TAIL_NAMES
+    {
+        omitted = findings.len() - SHOW_TAIL_NAMES;
+        findings.truncate(SHOW_TAIL_NAMES);
+        let note = more_findings_note(omitted, document.id.as_deref().unwrap_or("PR"));
+        let at = document.notes.len() - usize::from(outcome.refusal.is_some());
+        document.notes.insert(at, note.clone());
+        outcome.messages.push(Message::Note(note));
+    }
+    outcome.brief = Some(omitted);
+    outcome
+}
+
+/// The note on the introduced findings a brief answer leaves out.
+pub(crate) fn more_findings_note(omitted: usize, id: &str) -> String {
+    format!("{omitted} more introduced finding(s): spec review {id}")
 }
 
 impl Serialize for ProposalOutcome {
@@ -421,6 +504,10 @@ pub(crate) fn fill_diff(
     git_env: &GitEnv,
     scratch: &Path,
 ) {
+    // The intake kinds have no texts: no diff.
+    if !proposal.kind.applies() {
+        return;
+    }
     let hunks = WorktreeGit::new(scratch, git_env).and_then(|git| {
         git.diff_hunks(
             scratch,
@@ -464,9 +551,46 @@ pub(crate) fn finding_line(finding: &ProposalFinding) -> String {
 /// The outcome as stdout text: `spec review`'s `key: value` lines; `spec
 /// propose`'s ID, `introduced: <n>` and the finding lines; `spec
 /// approve`'s and `spec reject`'s one line. A refused command prints only
-/// the conflict, when there is one. Control characters escaped.
+/// the conflict, when there is one. Control characters escaped; a brief
+/// answer cut at [`OUTPUT_CAP_CHARS`] ([`cut_brief`]).
 pub(crate) fn render_text(outcome: &ProposalOutcome) -> String {
-    escape_controls(&raw_text(outcome))
+    let text = escape_controls(&raw_text(outcome));
+    match outcome.brief {
+        Some(_) => cut_brief(text, outcome.document.id.as_deref().unwrap_or("PR")),
+        None => text,
+    }
+}
+
+/// A brief text over [`OUTPUT_CAP_CHARS`] characters: the lines that fit
+/// (a first line longer than the cap cut at it), then `[truncated: <k> of
+/// <n> lines not shown: spec review PR]`.
+pub(crate) fn cut_brief(text: String, id: &str) -> String {
+    if text.chars().count() <= OUTPUT_CAP_CHARS {
+        return text;
+    }
+    let total = text.lines().count();
+    let mut kept = String::new();
+    let mut chars = 0;
+    let mut shown = 0;
+    for line in text.split_inclusive('\n') {
+        let length = line.chars().count();
+        if chars + length > OUTPUT_CAP_CHARS {
+            if shown == 0 {
+                kept.extend(line.chars().take(OUTPUT_CAP_CHARS - 1));
+                kept.push('\n');
+                shown = 1;
+            }
+            break;
+        }
+        kept.push_str(line);
+        chars += length;
+        shown += 1;
+    }
+    kept.push_str(&format!(
+        "[truncated: {} of {total} lines not shown: spec review {id}]\n",
+        total - shown
+    ));
+    kept
 }
 
 fn raw_text(outcome: &ProposalOutcome) -> String {
@@ -486,7 +610,8 @@ fn raw_text(outcome: &ProposalOutcome) -> String {
         QueueCommand::Review => return review_text(document),
         QueueCommand::Propose => {
             let findings = document.diagnostics.as_deref().unwrap_or_default();
-            out.push_str(&format!("{id}\nintroduced: {}\n", findings.len()));
+            let introduced = findings.len() + outcome.brief.unwrap_or(0);
+            out.push_str(&format!("{id}\nintroduced: {introduced}\n"));
             for finding in findings {
                 out.push_str(&finding_line(finding));
                 out.push('\n');
@@ -573,6 +698,81 @@ fn review_text(document: &ProposalDocument) -> String {
     );
     line(&mut out, "created_at", document.created_at.as_deref());
     line(&mut out, "updated_at", document.updated_at.as_deref());
+    list(&mut out, "target_ids", Some(document.target_ids.clone()));
+    line(
+        &mut out,
+        "severity",
+        document.severity.map(IntakeSeverity::as_str),
+    );
+    line(&mut out, "gap_type", document.gap_type.map(GapType::as_str));
+    line(&mut out, "summary", document.summary.as_deref());
+    line(
+        &mut out,
+        "working_answer",
+        document.working_answer.as_deref(),
+    );
+    line(
+        &mut out,
+        "price_of_other",
+        document.price_of_other.as_deref(),
+    );
+    list(
+        &mut out,
+        "evidence",
+        Some(document.evidence.iter().map(evidence_line).collect()),
+    );
+    list(
+        &mut out,
+        "options",
+        Some(
+            document
+                .options
+                .iter()
+                .enumerate()
+                .map(|(index, option)| option_line(index, option, document.recommendation))
+                .collect(),
+        ),
+    );
+    let recommendation = document.recommendation.map(|index| index.to_string());
+    line(&mut out, "recommendation", recommendation.as_deref());
+    list(
+        &mut out,
+        "distinct_from",
+        Some(document.distinct_from.clone()),
+    );
+    line(&mut out, "linked", document.linked.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
+}
+
+/// One evidence item: `<file>[:<lines>][ <qpath>] | <observed> |
+/// <documented>`, on one line.
+pub(crate) fn evidence_line(item: &Evidence) -> String {
+    let mut place = item.file.clone();
+    if let Some(lines) = &item.lines {
+        place.push(':');
+        place.push_str(lines);
+    }
+    if let Some(qpath) = &item.qpath {
+        place.push(' ');
+        place.push_str(qpath);
+    }
+    one_line(&format!(
+        "{place} | {} | {}",
+        item.observed, item.documented
+    ))
+}
+
+/// One option: `[<i>] <label> | <effect> | <price>`, ` (recommended)` on
+/// the recommended one, on one line.
+pub(crate) fn option_line(index: usize, option: &IntakeOption, recommended: Option<u64>) -> String {
+    let mark = if recommended.and_then(|at| usize::try_from(at).ok()) == Some(index) {
+        " (recommended)"
+    } else {
+        ""
+    };
+    one_line(&format!(
+        "[{index}] {} | {} | {}{mark}",
+        option.label, option.effect, option.price
+    ))
 }

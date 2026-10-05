@@ -44,6 +44,12 @@
 //! <worktree>` (that lookup: `-C` the current project root), stdin null,
 //! never with the caller's local `GIT_*` variables; nothing outside the
 //! recorded worktree and the data directory is written.
+//!
+//! A question or a discrepancy (canon `agent-intake`, "Settling") never
+//! applies: approve refuses it before any lookup or prompt (exit 1, naming
+//! `spec reject`); reject settles it with the answer as its reason, no
+//! history read (no commit of it can exist), `decided_by` the current
+//! repository's committer.
 
 use std::path::Path;
 
@@ -162,6 +168,18 @@ fn run_approve(
             ));
         }
         ProposalStatus::Open | ProposalStatus::Approved => {}
+    }
+    if !proposal.kind.applies() {
+        let reason = format!(
+            "`{id}` never applies: `spec reject {id} --reason <answer>` settles it; nothing \
+             changed"
+        );
+        return Ok(ProposalOutcome::refused(
+            COMMAND,
+            document(&proposal, &context.data_dir),
+            &reason,
+            messages,
+        ));
     }
     // The proposal's own commit already on its branch: completed, no new
     // commit. Its branch read in the current repository when the recorded
@@ -874,16 +892,19 @@ fn run_reject(
         ));
     }
     // A proposal with a commit in history is never recorded as rejected;
-    // nor one whose history git cannot read.
-    if let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
+    // nor one whose history git cannot read. A kind that never applies has
+    // no commit: its history is not read.
+    let applies = proposal.kind.applies();
+    if applies && let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
         return Ok(ProposalOutcome::refused(
             COMMAND, document, &reason, messages,
         ));
     }
     // The committer of the proposal's history ([`History`]), else of the
     // current repository.
-    let decided_by = history(&request.git, &context, &proposal)
-        .ok()
+    let decided_by = applies
+        .then(|| history(&request.git, &context, &proposal).ok())
+        .flatten()
         .and_then(|history| history.git().committer_ident().ok())
         .or_else(|| context.git.committer_ident().ok())
         .ok_or_else(|| {
@@ -914,7 +935,7 @@ fn run_reject(
         ));
     }
     // Its commit may have landed while the owner was asked.
-    if let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
+    if applies && let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
         return Ok(ProposalOutcome::refused(
             COMMAND, document, &reason, messages,
         ));

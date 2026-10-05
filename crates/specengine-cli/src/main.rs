@@ -14,18 +14,17 @@
 use std::io::{BufRead as _, IsTerminal as _, Read as _, Write as _};
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError, Env, Exit,
-    ExportIndexRequest, ExportStateRequest, Globals, GraphRequest, ImportStateRequest,
-    InboxRequest, IndexRequest, InitRequest, Outcome, ProposeRequest, ProposedText, RejectRequest,
-    ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES, TreeRequest, render_json,
-    render_text,
+    ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError, DiscrepancyRequest, Env,
+    Exit, ExportIndexRequest, ExportStateRequest, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES,
+    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
+    Outcome, ProposeRequest, ProposedText, QuestionRequest, RejectRequest, ReviewRequest,
+    SearchRequest, ShowRequest, TEXT_MAX_BYTES, TreeRequest, render_json, render_text,
 };
-use specengine_core::proposal::utc_timestamp;
 use specengine_store::GitEnv;
 
 #[derive(Parser)]
@@ -152,7 +151,7 @@ enum Command {
         #[command(subcommand)]
         what: Export,
     },
-    /// Propose a change to one node; no file is touched until the owner approves it.
+    /// Propose a change to one node, ask the owner a question or report a discrepancy; no file is touched until the owner approves a change.
     Propose {
         #[command(subcommand)]
         kind: Propose,
@@ -163,10 +162,13 @@ enum Command {
         #[arg(long)]
         all: bool,
     },
-    /// Print one proposal: its target, place, author, rationale, diff, and what approving it now would do (apply it, or complete it by its own commit already on its branch).
+    /// Print one proposal: its target, place, author, rationale, diff, and what approving it now would do (apply it, or complete it by its own commit already on its branch); a question's or a discrepancy's fields.
     Review {
         #[arg(value_name = "PR")]
         id: String,
+        /// Leave out the texts, the diff and the conflict, list at most 20 introduced findings, and cut the text at 40000 characters.
+        #[arg(long)]
+        brief: bool,
     },
     /// Apply an open proposal in its worktree as one commit, or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask).
     Approve {
@@ -215,6 +217,54 @@ enum Propose {
         #[arg(long = "author-model", value_name = "M")]
         author_model: Option<String>,
         /// The proposing agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
+        #[arg(long)]
+        brief: bool,
+    },
+    /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question already answers it.
+    Question {
+        /// The IDs (or `slug/ID`) the question is about: 1 to 16.
+        #[arg(value_name = "ID")]
+        node_ids: Vec<String>,
+        /// The question.
+        #[arg(long, value_name = "T")]
+        text: String,
+        /// The answer worked on until the owner answers.
+        #[arg(long = "working-answer", value_name = "W")]
+        working_answer: String,
+        /// What another answer would cost.
+        #[arg(long = "price-of-other", value_name = "P")]
+        price_of_other: String,
+        /// How much it matters (default normal); it never blocks anything.
+        #[arg(long, value_name = "S", value_parser = PossibleValuesParser::new(IntakeSeverity::ALL.map(IntakeSeverity::as_str)))]
+        severity: Option<String>,
+        /// A hit (its ID, else its path) this question is distinct from; name every hit to store it anyway.
+        #[arg(long = "distinct-from", value_name = "X")]
+        distinct_from: Vec<String>,
+        /// The asking agent's role (any of the three: an agent's question).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The asking agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The asking agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+    },
+    /// Report a discrepancy between the spec and what was observed, with evidence and priced options; stored in the queue unless an accepted decision or a queued report already covers it.
+    Discrepancy {
+        /// A JSON document of the report (`node_ids`, `summary`, `gap_type`, `severity`, `evidence`, `options`, `recommendation`, optional `working_answer`, `proposed_patch`, `distinct_from`), or `-` for stdin; at most 8 MiB.
+        #[arg(long, value_name = "F")]
+        input: PathBuf,
+        /// The reporting agent's role (any of the three: an agent's report).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The reporting agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The reporting agent's run.
         #[arg(long, value_name = "ID")]
         run: Option<String>,
     },
@@ -412,21 +462,82 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_role,
                     author_model,
                     run,
+                    brief,
                 },
         } => {
             let text = if text_file.as_os_str() == "-" {
-                ProposedText::Given(read_stdin_text()?)
+                ProposedText::Given(read_stdin(TEXT_MAX_BYTES, "the text")?)
             } else {
                 ProposedText::File(text_file)
             };
-            Outcome::Proposal(Box::new(specengine_cli::propose(
+            let request = ProposeRequest {
+                target,
+                base,
+                text,
+                rationale,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            };
+            Outcome::Proposal(Box::new(if brief {
+                specengine_cli::propose_brief(env, globals, &request)?
+            } else {
+                specengine_cli::propose(env, globals, &request)?
+            }))
+        }
+        Command::Propose {
+            kind:
+                Propose::Question {
+                    node_ids,
+                    text,
+                    working_answer,
+                    price_of_other,
+                    severity,
+                    distinct_from,
+                    author_role,
+                    author_model,
+                    run,
+                },
+        } => Outcome::Intake(Box::new(specengine_cli::propose_question(
+            env,
+            globals,
+            &QuestionRequest {
+                node_ids,
+                text,
+                working_answer,
+                price_of_other,
+                // clap took only a listed value.
+                severity: severity.as_deref().and_then(IntakeSeverity::parse),
+                distinct_from,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            },
+        )?)),
+        Command::Propose {
+            kind:
+                Propose::Discrepancy {
+                    input,
+                    author_role,
+                    author_model,
+                    run,
+                },
+        } => {
+            let source = if input.as_os_str() == "-" {
+                IntakeSource::Given(read_stdin(INTAKE_INPUT_MAX_BYTES, "the input")?)
+            } else {
+                IntakeSource::File(input)
+            };
+            let input = specengine_cli::read_discrepancy_input(env, &source)?;
+            Outcome::Intake(Box::new(specengine_cli::propose_discrepancy(
                 env,
                 globals,
-                &ProposeRequest {
-                    target,
-                    base,
-                    text,
-                    rationale,
+                &DiscrepancyRequest {
+                    input,
                     author_role,
                     author_model,
                     run,
@@ -443,14 +554,17 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 git: process_git(env),
             },
         )?),
-        Command::Review { id } => Outcome::Proposal(Box::new(specengine_cli::review(
-            env,
-            globals,
-            &ReviewRequest {
+        Command::Review { id, brief } => {
+            let request = ReviewRequest {
                 id,
                 git: process_git(env),
-            },
-        )?)),
+            };
+            Outcome::Proposal(Box::new(if brief {
+                specengine_cli::review_brief(env, globals, &request)?
+            } else {
+                specengine_cli::review(env, globals, &request)?
+            }))
+        }
         Command::Approve { id, note } => {
             require_terminal("approve")?;
             let mut consent = ask;
@@ -497,28 +611,24 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
 /// The process's directory and variables, for git (the library drops the
 /// local `GIT_*` ones before running it in a proposal's worktree).
 fn process_git(env: &Env) -> GitEnv {
-    GitEnv::new(env.cwd.clone(), std::env::vars_os())
+    specengine_cli::process_git(env)
 }
 
 /// The clock: now, UTC, `YYYY-MM-DDTHH:MM:SSZ`.
 fn now() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| {
-            i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
-        });
-    utc_timestamp(seconds)
+    specengine_cli::utc_now()
 }
 
-/// `--text-file -`: stdin, at most one byte more than the library takes.
-fn read_stdin_text() -> Result<Vec<u8>, CliError> {
+/// `--text-file -`, `--input -`: stdin, at most one byte more than the
+/// library takes (`max`).
+fn read_stdin(max: usize, what: &str) -> Result<Vec<u8>, CliError> {
     let mut bytes = Vec::new();
     std::io::stdin()
         .lock()
-        .take(TEXT_MAX_BYTES as u64 + 1)
+        .take(max as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| {
-            CliError::cannot(format!("spec: cannot read the text from stdin: {error}"))
+            CliError::cannot(format!("spec: cannot read {what} from stdin: {error}"))
         })?;
     Ok(bytes)
 }

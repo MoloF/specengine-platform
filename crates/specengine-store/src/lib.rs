@@ -88,10 +88,11 @@ pub use git::GitEnv;
 pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Decision, EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED,
-    EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, Event, NewProposal, PROPOSAL_COLUMNS, Place,
-    Proposal, ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue,
-    ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, Restore, Seen, SqliteQueue,
-    StoredEvent, StoredProposal, StoredQueue, UnreadableRow, patch_hash,
+    EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, Event, Intake, IntakeResult, NewIntake,
+    NewProposal, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind,
+    ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError,
+    QueueMatch, Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue,
+    UnreadableRow, patch_hash, proposal_columns,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};

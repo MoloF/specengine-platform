@@ -1,17 +1,21 @@
 //! AC-01 of docs/features/mcp-read.md: the default build of
-//! `specengine-mcp` (no feature `probes`) lists exactly the four read tools
-//! in both protocol eras, each read-only (three annotations), with an
-//! `outputSchema`, `_meta["anthropic/maxResultSizeChars"]` =
+//! `specengine-mcp` (no feature `probes`) lists exactly its tools in both
+//! protocol eras — the four read tools and, since task spec `agent-intake`
+//! (AC-02, "Tools"), `get_proposal` (read-only too) and the three queue
+//! writers (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
+//! `openWorldHint` all `false`, no `requiresUserInteraction`) — each with
+//! an `outputSchema`, `_meta["anthropic/maxResultSizeChars"]` =
 //! `MAX_RESULT_CHARS` and a description of at most 2 048 characters holding
 //! the determinism sentence; `instructions` are at most 2 048 bytes, name
-//! the four and mention neither `review_proposal` nor a probe. The probe
+//! the eight and mention neither `review_proposal` nor a probe. The probe
 //! tools are absent (Phase 0 behaviour kept), and `probes` is no default
 //! feature of the manifest.
 //!
 //! M: the demo in the default build (`default = ["probes"]` in the
 //! manifest: `probes_is_not_a_default_feature` turns red, the list tests
 //! compile out); a 2 049-character description (the build's const assert
-//! fails; without it `default_build_lists_exactly_the_four_read_tools`).
+//! fails; without it `default_build_lists_exactly_its_tools`); a queue
+//! writer with `readOnlyHint: true` (agent-intake AC-12).
 //!
 //! The list tests compile to nothing with `--features probes`, where
 //! `mcp_stdio.rs` checks the measurement build.
@@ -22,17 +26,26 @@ use common::*;
 
 #[cfg(not(feature = "probes"))]
 mod default_build {
-    use super::common::read::{ERAS, Era, READ_TOOLS, Session};
+    use super::common::read::{ERAS, Era, READ_TOOLS, Session, TOOLS, WRITE_TOOLS};
     use super::common::*;
     use serde_json::{Value, json};
 
     const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
 
-    fn assert_read_tool(tool: &Value, era: Era) {
+    fn assert_tool(tool: &Value, era: Era) {
         let name = tool["name"].as_str().expect("name");
+        let annotations = if WRITE_TOOLS.contains(&name) {
+            json!({
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": false,
+                "openWorldHint": false
+            })
+        } else {
+            json!({"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false})
+        };
         assert_eq!(
-            tool["annotations"],
-            json!({"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false}),
+            tool["annotations"], annotations,
             "{era:?} {name}: annotations"
         );
         assert_eq!(
@@ -68,7 +81,7 @@ mod default_build {
             "{context}: instructions of {} bytes",
             instructions.len()
         );
-        for name in READ_TOOLS {
+        for name in TOOLS {
             assert!(
                 instructions.contains(name),
                 "{context}: instructions do not name {name}"
@@ -88,13 +101,14 @@ mod default_build {
     }
 
     #[test]
-    fn default_build_lists_exactly_the_four_read_tools() {
+    fn default_build_lists_exactly_its_tools() {
         for era in ERAS {
             let mut session = Session::open(era, &[], None, Home::Fresh);
             let list = session.tools();
-            assert_eq!(tool_names(&list), READ_TOOLS, "{era:?} tools/list");
-            for name in READ_TOOLS {
-                assert_read_tool(tool(&list, name), era);
+            assert_eq!(tool_names(&list), TOOLS, "{era:?} tools/list");
+            assert!(READ_TOOLS.iter().all(|name| TOOLS.contains(name)));
+            for name in TOOLS {
+                assert_tool(tool(&list, name), era);
             }
             match era {
                 Era::Stateless => {

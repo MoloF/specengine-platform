@@ -10,14 +10,38 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 use specengine_cli::{
-    BundleRequest, CliError, Env, Exit, Globals, Outcome, SearchRequest, ShowRequest, TreeRequest,
-    render_json, render_text,
+    BundleRequest, CliError, DiscrepancyInput, DiscrepancyRequest, Env, Exit, GitEnv, Globals,
+    IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, ReviewRequest,
+    SearchRequest, ShowRequest, TreeRequest, render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
 
 /// The four read tools, in `tools/list` order.
 pub const READ_TOOLS: [&str; 4] = ["get_context_bundle", "get_node", "get_tree", "search"];
+
+/// The queue tools of task spec `agent-intake`, in `tools/list` order.
+pub const QUEUE_TOOLS: [&str; 4] = [
+    "ask_question",
+    "get_proposal",
+    "propose_change",
+    "report_discrepancy",
+];
+
+/// The three queue tools that write the queue.
+pub const WRITE_TOOLS: [&str; 3] = ["ask_question", "propose_change", "report_discrepancy"];
+
+/// Every tool of the default build, in `tools/list` order (by name).
+pub const TOOLS: [&str; 8] = [
+    "ask_question",
+    "get_context_bundle",
+    "get_node",
+    "get_proposal",
+    "get_tree",
+    "propose_change",
+    "report_discrepancy",
+    "search",
+];
 
 /// The words of P2-3 (07 §1.2): stack words and this repository's role
 /// names.
@@ -203,10 +227,125 @@ fn strings(value: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The caller's git environment of a server spawned by [`Server`]: its
+/// working directory and its only variable, `HOME`.
+pub fn server_git(env: &Env) -> GitEnv {
+    let vars: Vec<(String, std::ffi::OsString)> = env
+        .home
+        .iter()
+        .map(|home| ("HOME".to_owned(), home.clone()))
+        .collect();
+    GitEnv::new(env.cwd.clone(), vars)
+}
+
+/// An optional string argument.
+fn optional_text(args: &Value, key: &str) -> Option<String> {
+    args[key].as_str().map(str::to_owned)
+}
+
+/// The queue tools' twins (task spec `agent-intake`, the tool table), with
+/// the clock `now` and the caller's git environment `git`:
+/// `propose_change` = `propose update … --brief`, `ask_question` =
+/// `propose question`, `report_discrepancy` = `propose discrepancy` (the
+/// arguments but the author's as its `--input`), `get_proposal` = `review
+/// --brief`; the author's role always passed.
+pub fn queue_library(
+    tool: &str,
+    args: &Value,
+    env: &Env,
+    globals: &Globals,
+    now: &str,
+    git: &GitEnv,
+) -> Expected {
+    let text = |key: &str| args[key].as_str().unwrap_or_default().to_owned();
+    let outcome = match tool {
+        "propose_change" => specengine_cli::propose_brief(
+            env,
+            globals,
+            &ProposeRequest {
+                target: text("target"),
+                base: text("base"),
+                text: ProposedText::Given(text("text").into_bytes()),
+                rationale: text("rationale"),
+                author_role: optional_text(args, "author_role"),
+                author_model: optional_text(args, "author_model"),
+                run: optional_text(args, "run"),
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+        )
+        .map(|outcome| Outcome::Proposal(Box::new(outcome))),
+        "ask_question" => specengine_cli::propose_question(
+            env,
+            globals,
+            &QuestionRequest {
+                node_ids: strings(&args["node_ids"]),
+                text: text("text"),
+                working_answer: text("working_answer"),
+                price_of_other: text("price_of_other"),
+                severity: args["severity"]
+                    .as_str()
+                    .map(|name| IntakeSeverity::parse(name).expect("a severity")),
+                distinct_from: strings(&args["distinct_from"]),
+                author_role: optional_text(args, "author_role"),
+                author_model: optional_text(args, "author_model"),
+                run: optional_text(args, "run"),
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+        )
+        .map(|outcome| Outcome::Intake(Box::new(outcome))),
+        "report_discrepancy" => {
+            let mut input = args.clone();
+            let object = input.as_object_mut().expect("arguments object");
+            for key in ["author_role", "author_model", "run"] {
+                object.remove(key);
+            }
+            let input: DiscrepancyInput =
+                serde_json::from_value(input).expect("a discrepancy's --input document");
+            specengine_cli::propose_discrepancy(
+                env,
+                globals,
+                &DiscrepancyRequest {
+                    input,
+                    author_role: optional_text(args, "author_role"),
+                    author_model: optional_text(args, "author_model"),
+                    run: optional_text(args, "run"),
+                    now: now.to_owned(),
+                    git: git.clone(),
+                },
+            )
+            .map(|outcome| Outcome::Intake(Box::new(outcome)))
+        }
+        "get_proposal" => specengine_cli::review_brief(
+            env,
+            globals,
+            &ReviewRequest {
+                id: text("proposal_id"),
+                git: git.clone(),
+            },
+        )
+        .map(|outcome| Outcome::Proposal(Box::new(outcome))),
+        other => panic!("no queue twin for tool {other}"),
+    };
+    expected(outcome)
+}
+
 /// The same request through the CLI library (task spec, the tool table):
 /// `get_tree` = `tree`, `get_node` = `show`, `search` = `search` with the
-/// query as one word, `get_context_bundle` = `bundle`.
+/// query as one word, `get_context_bundle` = `bundle`; a queue tool as
+/// [`queue_library`] with the wall clock and the server's git environment.
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
+    if QUEUE_TOOLS.contains(&tool) {
+        return queue_library(
+            tool,
+            args,
+            env,
+            globals,
+            &specengine_cli::utc_now(),
+            &server_git(env),
+        );
+    }
     let flag = |key: &str| args[key].as_bool().unwrap_or(false);
     let number = |key: &str| args[key].as_i64();
     let text = |key: &str| args[key].as_str().map(str::to_owned);

@@ -1,12 +1,14 @@
 //! The queue's dump, format 1 (canon `queue-backup`, "Format"): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":1,"queue_schema":1,"project":"<slug>","proposals":<p>,"events":<e>}`
+//! `{"format":1,"queue_schema":2,"project":"<slug>","proposals":<p>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number and every `events` row by `seq`, each
 //! `{"<table>":{…}}` with every column in table order: `TEXT` a string,
 //! `NULL` `null`, `seq` a number; `author`, `diagnostics`, `payload` stay
 //! the strings stored. No export time and no host inside: equal queues give
-//! equal bytes.
+//! equal bytes. A dump of queue schema 1 (canon `queue-backup`, "Format")
+//! still restores: its rows hold schema 1's 24 columns, the eleven later
+//! ones restored `NULL`.
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's
@@ -19,7 +21,8 @@ use std::io::{self, Write as _};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use specengine_core::proposal::proposal_number;
 use specengine_store::{
-    EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, StoredEvent, StoredProposal, StoredQueue,
+    EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, StoredEvent, StoredProposal,
+    StoredQueue, proposal_columns,
 };
 
 use crate::CliError;
@@ -105,7 +108,9 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
             header = Some(read_header(value, slug).map_err(|defect| at(number, &defect))?);
             continue;
         };
-        match read_row(value, &header.project).map_err(|defect| at(number, &defect))? {
+        match read_row(value, &header.project, header.columns)
+            .map_err(|defect| at(number, &defect))?
+        {
             Row::Proposal(row) => {
                 // `read_row` took only an ID as the queue writes it.
                 let id = row.id().unwrap_or_default().to_owned();
@@ -145,6 +150,8 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
 /// The header's values that the rows are checked against.
 struct Header {
     project: String,
+    /// The `proposals` columns of its queue schema.
+    columns: &'static [&'static str],
     proposals: u64,
     events: u64,
 }
@@ -225,12 +232,12 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
              {QUEUE_SCHEMA_VERSION}): upgrade SpecEngine"
         ));
     }
-    if schema != QUEUE_SCHEMA_VERSION {
+    let Some(columns) = proposal_columns(schema) else {
         return Err(format!(
-            "the dump's queue schema is {schema}, which this build does not restore (its queue \
-             schema is {QUEUE_SCHEMA_VERSION})"
+            "the dump's queue schema is {schema}, which this build does not restore (it \
+             restores queue schemas 1 to {QUEUE_SCHEMA_VERSION})"
         ));
-    }
+    };
     let Some(Json::String(project)) = named("project") else {
         return Err("the header's `project` is not a string".to_owned());
     };
@@ -248,22 +255,28 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     };
     Ok(Header {
         project: project.clone(),
+        columns,
         proposals: count("proposals")?,
         events: count("events")?,
     })
 }
 
 /// A row line: `{"proposals":{…}}` or `{"events":{…}}`, every column of
-/// the table once and no other, `TEXT` a string or `null`, `seq` an
-/// integer ≥ 1, `id` as the queue writes it, `project` the header's.
-fn read_row(mut entries: Vec<(String, Json)>, project: &str) -> Result<Row, String> {
+/// the table (`proposals`: of the header's queue schema) once and no other,
+/// `TEXT` a string or `null`, `seq` an integer ≥ 1, `id` as the queue writes
+/// it, `project` the header's.
+fn read_row(
+    mut entries: Vec<(String, Json)>,
+    project: &str,
+    proposal_columns: &[&str],
+) -> Result<Row, String> {
     const SHAPE: &str = "not a row `{\"proposals\":{…}}` or `{\"events\":{…}}`";
     if entries.len() != 1 {
         return Err(SHAPE.to_owned());
     }
     let (table, value) = entries.remove(0);
     let columns: &[&str] = match table.as_str() {
-        "proposals" => &PROPOSAL_COLUMNS,
+        "proposals" => proposal_columns,
         "events" => &EVENT_COLUMNS,
         _ => {
             return Err(
@@ -309,7 +322,7 @@ fn read_row(mut entries: Vec<(String, Json)>, project: &str) -> Result<Row, Stri
         }
         return Ok(Row::Event(row));
     }
-    let mut columns: [Option<String>; PROPOSAL_COLUMNS.len()] = Default::default();
+    let mut columns: [Option<String>; PROPOSAL_COLUMNS.len()] = std::array::from_fn(|_| None);
     for (slot, (column, value)) in columns.iter_mut().zip(taken) {
         *slot = text(column, value)?;
     }
