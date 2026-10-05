@@ -40,7 +40,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2
 - [docs/canon/spec-check-links.md](canon/spec-check-links.md) spec check: feature scopes and links · crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-check-process.md](canon/spec-check-process.md) spec check: process rules · crates/specengine-core · tier 2
-- [docs/canon/spec-check.md](canon/spec-check.md) spec check: what the documentation check enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
+- [docs/canon/spec-check.md](canon/spec-check.md) spec check: what it enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
 - [docs/canon/spec-cli-bundle.md](canon/spec-cli-bundle.md) spec bundle and bundle_hash · crates/specengine-cli, crates/specengine-core, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/w-measurement.md](canon/w-measurement.md) W measurement: every task, before and after · crates/specengine-eval · tier 2
@@ -84,12 +84,13 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/decision-apply.md](features/decision-apply.md) Decision apply: records from the queue · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · draft
+- [docs/features/queue-path-targets.md](features/queue-path-targets.md) Queue path targets · crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
+- [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress
 - [docs/specs/specengine-platform/07-interfaces.md](specs/specengine-platform/07-interfaces.md) 07. Interfaces: MCP, CLI, HTTP, hooks, config · specengine · in-progress
-- [docs/specs/specengine-platform/08-roadmap.md](specs/specengine-platform/08-roadmap.md) 08. Implementation plan, importing existing corpora, acceptance criteria, risks · specengine · in-progress
+- [docs/specs/specengine-platform/08-roadmap.md](specs/specengine-platform/08-roadmap.md) 08. Roadmap: phases, import, criteria, risks · specengine · in-progress
 - [docs/specs/specengine-platform/README.md](specs/specengine-platform/README.md) SpecEngine — research and platform concept · specengine · in-progress
 
 ## Shards

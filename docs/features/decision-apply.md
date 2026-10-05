@@ -2,7 +2,7 @@
 class: spec
 status: draft
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp]
-ref: decision-apply analysis 2026-10-05; 08 §2 Phase 2, slice 4
+ref: decision-apply analysis 2026-10-05; 08 §2 Phase 2, slice 5 (after queue-path-targets)
 ---
 
 # Decision apply: records from the queue

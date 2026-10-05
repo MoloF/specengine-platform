@@ -6,7 +6,7 @@ owner: owner
 reviewed: 2026-10-02
 ---
 
-# spec check: what the documentation check enforces
+# spec check: what it enforces
 
 Increments 1–4: one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline, the project's process rules (`docs/canon/spec-check-process.md`) — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::load_check` (fresh parse), commands: `docs/canon/spec-check-cli.md`, measurement `specengine-eval check` (APIs: their READMEs). Nothing is written, no status or flag set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. It gates this repository (`docs/README.md` "Enforcement").
 

@@ -5,7 +5,7 @@ scope: [specengine]
 ref: research-2026-09-28
 ---
 
-# 04. Prior art, the MCP protocol, Claude Code, the stack
+# 04. Prior art, MCP, Claude Code, the stack
 
 > External research as of 2026-09-28. ⚠ — not confirmed against a primary source.
 > One-line conclusion: **no ready product exists**. Well-covered pieces: SDD processes, AST fingerprints, code graphs, task trackers for agents,
