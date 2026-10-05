@@ -5,7 +5,8 @@
 //! registered export and gate commands of its `[[generators]]` entry, and
 //! AC-03's independent std walk: every `*.md` under the root outside
 //! `.`-named directories and the frozen [`SKIP_DIRS`], its name not
-//! starting with `_`.
+//! starting with `_`, its path not matching the frozen [`SKIP_FILES`]
+//! (docs/features/plugin-skills.md AC-12).
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -34,6 +35,27 @@ pub const SKIP_DIRS: [&str; 5] = [
     "node_modules",
     "dist",
 ];
+
+/// The files the std walk never lists, by a root-relative glob whose `*`
+/// is one whole path segment (docs/features/plugin-skills.md AC-12;
+/// frozen beside [`SKIP_DIRS`]): the plugin's skill bodies, whose
+/// front-matter is Claude Code's (`name`, `description`), not a document
+/// class. The root config's `exclude` holds the same glob.
+pub const SKIP_FILES: [&str; 1] = ["plugin/specengine/skills/*/SKILL.md"];
+
+/// Whether the root-relative `/` path `relative` matches one of
+/// [`SKIP_FILES`]: as many segments, each equal or a `*` one.
+pub fn skipped_file(relative: &str) -> bool {
+    SKIP_FILES.iter().any(|glob| {
+        let pattern: Vec<&str> = glob.split('/').collect();
+        let path: Vec<&str> = relative.split('/').collect();
+        pattern.len() == path.len()
+            && pattern
+                .iter()
+                .zip(&path)
+                .all(|(want, got)| *want == *got || (*want == "*" && !got.is_empty()))
+    })
+}
 
 /// This repository (both including crates live at `crates/<name>`).
 pub fn repository() -> PathBuf {
@@ -153,9 +175,29 @@ pub fn add_dangling_mention(root: &Path) -> usize {
     text[..at].matches('\n').count() + 1
 }
 
-/// AC-03's std walk of `root`: root-relative `/` paths, sorted. Symlinks
-/// are neither followed nor listed.
+/// AC-03's std walk of `root`: root-relative `/` paths, sorted, the
+/// [`SKIP_FILES`] left out. Symlinks are neither followed nor listed.
 pub fn std_walk(root: &Path) -> BTreeSet<String> {
+    markdown_walk(root)
+        .into_iter()
+        .filter(|path| !skipped_file(path))
+        .collect()
+}
+
+/// The files of `root` the std walk leaves out by [`SKIP_FILES`] alone.
+/// A scratch copy of the walked documents takes them too: they keep the
+/// copy's `plugin` root present (a listed root that is missing cannot be
+/// checked) and the config's `exclude` exercised.
+pub fn skipped_files(root: &Path) -> BTreeSet<String> {
+    markdown_walk(root)
+        .into_iter()
+        .filter(|path| skipped_file(path))
+        .collect()
+}
+
+/// Every `*.md` of `root` outside `.`-named directories and [`SKIP_DIRS`],
+/// its name not starting with `_`: root-relative `/` paths, sorted.
+fn markdown_walk(root: &Path) -> BTreeSet<String> {
     let mut found = BTreeSet::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {

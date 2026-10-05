@@ -194,8 +194,34 @@ pub fn repository_copy(scratch: &Scratch, dir: &str) -> PathBuf {
     for file in &input.files {
         write(&copy, &file.path, read(&repository, &file.path));
     }
+    // A listed root that holds only files the config excludes (`plugin`:
+    // the skill bodies, docs/features/plugin-skills.md AC-12) comes with
+    // its `.md` files: a listed root missing from the copy cannot be walked.
+    for root in &project.paths.roots {
+        if repository.join(root).is_dir() && !copy.join(root).exists() {
+            copy_markdown(&repository, &copy, Path::new(root));
+        }
+    }
     write(&copy, "specengine.toml", &toml);
     copy
+}
+
+/// Every `*.md` under `from/dir` outside `.`-named directories, copied to
+/// the same path under `to`.
+fn copy_markdown(from: &Path, to: &Path, dir: &Path) {
+    let entries = std::fs::read_dir(from.join(dir)).expect("a readable root");
+    for entry in entries {
+        let entry = entry.expect("a directory entry");
+        let name = entry.file_name();
+        let relative = dir.join(&name);
+        let kind = entry.file_type().expect("a file type");
+        if kind.is_dir() && !name.to_string_lossy().starts_with('.') {
+            copy_markdown(from, to, &relative);
+        } else if kind.is_file() && name.to_string_lossy().ends_with(".md") {
+            let relative = relative.to_str().expect("a UTF-8 path");
+            write(to, relative, read(from, relative));
+        }
+    }
 }
 
 /// `HOME` for [`super::spec_with`] callers.

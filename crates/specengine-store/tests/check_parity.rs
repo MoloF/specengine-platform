@@ -9,7 +9,10 @@
 //! `.`-named and the frozen skipped directories, not `_*`); its named
 //! mutations are run in the test on the config text or a scratch copy:
 //! `crates` out of `roots`, no `**/_*.md`, a new top-level directory with a
-//! README. AC-02: `enforce` → `clean`, 0 errors, debt, expired and stale;
+//! README; docs/features/plugin-skills.md AC-12: `plugin` in `roots`,
+//! the skill exclude dropped → exactly the three skill bodies join (and
+//! three `class-missing`), `plugin` out of `roots` → none. AC-02:
+//! `enforce` → `clean`, 0 errors, debt, expired and stale;
 //! every finding pinned by (code, path, subject): none, the repository has
 //! no finding; mutations in the test: `mode = "observe"`, an `[ids]` prefix
 //! matching prose, the five-digit mention `ADR-00011` put back into
@@ -42,8 +45,8 @@ use std::process::Command;
 
 use common::{Scratch, repository_root};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, mutated, root_toml, roots,
-    std_walk, with_roots,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, SKIP_FILES, add_dangling_mention, mutated,
+    root_toml, roots, skipped_file, skipped_files, std_walk, with_roots,
 };
 use specengine_core::check::{
     CheckConfig, CheckInput, Mode, Report, Verdict, is_tier3_file, render_index, render_index_set,
@@ -185,6 +188,34 @@ fn under(files: &BTreeSet<String>, dir: &str) -> BTreeSet<String> {
 
 // ------------------------------------------------------------------ AC-03
 
+/// The plugin's three skill bodies (the root `README.md` "Claude Code plugin",
+/// its Files bullet):
+/// under `roots` through `plugin`, kept out of the walk by `exclude` alone.
+const SKILL_FILES: [&str; 3] = [
+    "plugin/specengine/skills/ask-owner/SKILL.md",
+    "plugin/specengine/skills/propose-spec-change/SKILL.md",
+    "plugin/specengine/skills/read-spec/SKILL.md",
+];
+
+/// `toml` with the quoted `glob` taken out of `exclude` (with the comma
+/// after it, if any; a comma left before `]` is TOML's trailing comma).
+fn without_exclude(toml: &str, glob: &str) -> String {
+    let quoted = format!("\"{glob}\"");
+    assert_eq!(
+        toml.matches(&quoted).count(),
+        1,
+        "{quoted} once in the config"
+    );
+    let at = toml.find(&quoted).unwrap();
+    let rest = &toml[at + quoted.len()..];
+    let after = rest.trim_start();
+    let rest = match after.strip_prefix(',') {
+        Some(tail) => tail,
+        None => rest,
+    };
+    format!("{}{rest}", &toml[..at])
+}
+
 #[test]
 fn the_walk_is_the_std_walk_of_this_repository() {
     let repository = repository_root();
@@ -212,6 +243,54 @@ fn the_walk_is_the_std_walk_of_this_repository() {
     );
     let missing: BTreeSet<String> = expected.difference(&without_crates).cloned().collect();
     assert_eq!(missing, crates, "`crates` out of `roots`");
+
+    // docs/features/plugin-skills.md AC-12: `plugin` is a root; the
+    // skill bodies stay out by `exclude` (the std walk's frozen
+    // `SKIP_FILES`), and dropping that exclude makes exactly the three join.
+    // Mutation: `plugin` out of `roots` — the first assertion fails, and
+    // without the exclude nothing joins.
+    assert!(
+        listed_roots.iter().any(|root| root == "plugin"),
+        "`plugin` in `roots`: {listed_roots:?}"
+    );
+    assert_eq!(SKIP_FILES, ["plugin/specengine/skills/*/SKILL.md"]);
+    assert_eq!(
+        skipped_files(&repository),
+        SKILL_FILES.map(str::to_owned).into_iter().collect(),
+        "the files the frozen rule leaves out"
+    );
+    for skill in SKILL_FILES {
+        assert!(repository.join(skill).is_file(), "{skill} exists");
+        assert!(skipped_file(skill), "{skill} matches the frozen rule");
+        assert!(!expected.contains(skill), "{skill} in the std walk");
+    }
+    for other in [
+        "plugin/specengine/SKILL.md",
+        "plugin/specengine/skills/SKILL.md",
+        "plugin/specengine/skills/x/y/SKILL.md",
+        "plugin/specengine/skills/x/README.md",
+        "plugin/other/skills/x/SKILL.md",
+        "docs/skills/x/SKILL.md",
+    ] {
+        assert!(!skipped_file(other), "{other} is not a skill body");
+    }
+    let no_exclude = without_exclude(&toml, SKIP_FILES[0]);
+    let joined: BTreeSet<String> = walked(&repository, &no_exclude)
+        .difference(&expected)
+        .cloned()
+        .collect();
+    assert_eq!(
+        joined,
+        SKILL_FILES.map(str::to_owned).into_iter().collect(),
+        "the skill exclude dropped"
+    );
+    assert!(walked(&repository, &no_exclude).is_superset(&expected));
+    let unrooted = with_roots(&no_exclude, |roots| roots.retain(|root| root != "plugin"));
+    assert_eq!(
+        walked(&repository, &unrooted),
+        expected,
+        "`plugin` out of `roots`, the exclude dropped: nothing joins"
+    );
 
     // Mutation: no `**/_*.md` — the templates join, nothing else.
     let without_templates = walked(&repository, &mutated(&toml, "\"**/_*.md\", ", ""));
@@ -339,6 +418,33 @@ fn this_repository_is_clean_under_the_root_config() {
         .collect();
     assert!(beyond.len() > 10, "{:#?}", noisy.lines(true));
     assert_ne!(pin_of(&noisy), PIN, "{:#?}", noisy.lines(true));
+
+    // Mutation (docs/features/plugin-skills.md AC-12): the skill exclude
+    // dropped — exactly three `class-missing`, one per skill body (their
+    // front-matter is Claude Code's); every other finding is on a skill
+    // body (its `name`, `description` keys) or an index one.
+    let unexcluded = write_config(
+        &scratch.join("unexcluded"),
+        &without_exclude(&toml, SKIP_FILES[0]),
+    );
+    let skills = check_worktree(&repository, &unexcluded, None, TODAY);
+    assert!(skills.cannot_check.is_empty(), "{:?}", skills.cannot_check);
+    let class_missing: Vec<&str> = skills
+        .findings
+        .iter()
+        .filter(|f| f.code == "class-missing")
+        .map(|f| f.path.as_str())
+        .collect();
+    assert_eq!(class_missing, SKILL_FILES, "{:#?}", skills.lines(true));
+    assert!(
+        skills
+            .findings
+            .iter()
+            .all(|f| SKILL_FILES.contains(&f.path.as_str()) || f.code.starts_with("index-")),
+        "{:#?}",
+        skills.lines(true)
+    );
+    assert_ne!(skills.verdict, Verdict::Clean, "{:#?}", skills.lines(true));
 
     // Mutation (a scratch copy): the five-digit mention back in
     // docs/canon/spec-check.md — exactly that one warning, at its line, so
@@ -895,10 +1001,12 @@ fn resolve_relative(path: &str) -> String {
 
 // ------------------------------------------------------------------ AC-05
 
-/// A scratch copy of the repository's documents (the std walk's list).
+/// A scratch copy of the repository's documents (the std walk's list) and
+/// of the files the walk leaves out by `SKIP_FILES` (the skill bodies under
+/// the `plugin` root).
 fn scratch_copy(scratch: &Scratch, documents: &BTreeSet<String>, dir: &str) -> PathBuf {
     let root = scratch.join(dir);
-    for path in documents {
+    for path in documents.iter().chain(&skipped_files(&repository_root())) {
         let to = root.join(path);
         fs::create_dir_all(to.parent().unwrap()).unwrap();
         fs::copy(repository_root().join(path), &to).unwrap();

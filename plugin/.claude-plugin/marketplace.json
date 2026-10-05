@@ -1,0 +1,16 @@
+{
+  "name": "specengine",
+  "owner": {
+    "name": "MoloF"
+  },
+  "metadata": {
+    "description": "SpecEngine for agents: the spec MCP server and skills to read the spec, raise questions and discrepancies, and propose spec changes."
+  },
+  "plugins": [
+    {
+      "name": "specengine",
+      "source": "./specengine",
+      "description": "SpecEngine for agents: the spec MCP server and skills to read the spec, raise questions and discrepancies, and propose spec changes."
+    }
+  ]
+}

@@ -4,6 +4,12 @@
 //! `ui/dist` (build output) and every `node_modules` (installed packages);
 //! `ui_tree_is_scanned_but_its_build_output_and_packages_are_not` pins that
 //! on a scratch tree (mutations: `ui` unscanned, `dist` unskipped).
+//! AC-09 of docs/features/plugin-skills.md: `plugin/` is scanned too, its
+//! walk entering the dot-named `.claude-plugin` (other dot directories stay
+//! skipped); `plugin_tree_is_scanned_with_its_manifests` pins that on a
+//! scratch tree, a Cyrillic letter in each of the six plugin files flagging
+//! all six (mutations: `plugin` out of `AREAS`; `.claude-plugin` skipped as
+//! a dot directory), and on this repository's six files.
 //! The ID prefixes of a runtime census config (08 §4.3;
 //! `crates/specengine-import/README.md`) are not grepped here: such a
 //! config may name single letters or prefixes this repository uses itself,
@@ -24,7 +30,22 @@ fn repository_root() -> PathBuf {
 }
 
 /// The scanned top-level areas of the repository.
-const AREAS: [&str; 4] = ["docs", "crates", "fixtures", "ui"];
+const AREAS: [&str; 5] = ["docs", "crates", "fixtures", "plugin", "ui"];
+
+/// The dot-named directories the walk enters (every other one is skipped):
+/// the plugin's manifest directories.
+const ENTERED_DOT_DIRS: [&str; 1] = [".claude-plugin"];
+
+/// The six files of the plugin (the root `README.md` "Claude Code plugin",
+/// its Files bullet).
+const PLUGIN_FILES: [&str; 6] = [
+    "plugin/.claude-plugin/marketplace.json",
+    "plugin/specengine/.claude-plugin/plugin.json",
+    "plugin/specengine/.mcp.json",
+    "plugin/specengine/skills/ask-owner/SKILL.md",
+    "plugin/specengine/skills/propose-spec-change/SKILL.md",
+    "plugin/specengine/skills/read-spec/SKILL.md",
+];
 
 /// Directories under the scanned areas that hold generated or installed text
 /// (repository-relative, matched by whole path components): the UI's build
@@ -63,7 +84,8 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(PathBuf, String)>) {
             continue;
         }
         if file_type.is_dir() {
-            if name.starts_with('.') || name.starts_with("target") || name == "node_modules" {
+            let dot = name.starts_with('.') && !ENTERED_DOT_DIRS.contains(&name.as_str());
+            if dot || name.starts_with("target") || name == "node_modules" {
                 continue;
             }
             let relative = path.strip_prefix(root).unwrap_or(&path);
@@ -323,4 +345,55 @@ fn the_repository_walk_reads_ui_sources_and_skips_dist_and_node_modules() {
         leaked.is_empty(),
         "scanned build output or packages: {leaked:?}"
     );
+}
+
+/// AC-09 of docs/features/plugin-skills.md on a scratch tree: a raw
+/// Cyrillic letter in each of the six plugin files is found, in the two
+/// `.claude-plugin` directories too; the same letter under another
+/// dot-named directory of `plugin/` (`.git`, `.cache`) is not. The letter
+/// is assembled at run time.
+#[test]
+fn plugin_tree_is_scanned_with_its_manifests() {
+    let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
+    let line = format!("\"{letter}\"\n");
+    let tree = Scratch::new("plugin-tree");
+    for relative in PLUGIN_FILES {
+        tree.write(relative, &line);
+    }
+    for skipped in [
+        "plugin/.git/HEAD",
+        "plugin/specengine/.cache/x.json",
+        "plugin/specengine/skills/read-spec/.hidden/x.md",
+    ] {
+        tree.write(skipped, &line);
+    }
+    let hits = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &RUSSIAN_TEST_TEXT,
+        "cyrillic",
+        has_cyrillic,
+    );
+    let mut want: Vec<String> = PLUGIN_FILES
+        .iter()
+        .map(|path| format!("{path}:1: cyrillic"))
+        .collect();
+    want.sort();
+    assert_eq!(hits, want);
+}
+
+/// The real walk reads each of this repository's six plugin files.
+#[test]
+fn the_repository_walk_reads_the_plugin_files() {
+    let root = repository_root();
+    let relatives: Vec<PathBuf> = text_files()
+        .into_iter()
+        .map(|(path, _)| path.strip_prefix(&root).unwrap_or(&path).to_path_buf())
+        .collect();
+    for expected in PLUGIN_FILES {
+        assert!(
+            relatives.iter().any(|path| path == Path::new(expected)),
+            "{expected} is not scanned"
+        );
+    }
 }

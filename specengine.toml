@@ -3,12 +3,14 @@
 slug = "specengine-platform"   # names the index database of the read commands
 
 [paths]
-roots      = ["CLAUDE.md", "README.md", "crates", "docs", "ui"]
+roots      = ["CLAUDE.md", "README.md", "crates", "docs", "plugin", "ui"]
 records    = "docs/decisions"
 tier0      = "CLAUDE.md"
 tier1_name = "README.md"
 index      = "docs/index.md"
-exclude    = ["**/_*.md", "**/fixtures/**", "**/target/**", "**/target.noindex/**", "**/node_modules/**", "**/dist/**"]
+exclude    = ["**/_*.md", "**/fixtures/**", "**/target/**", "**/target.noindex/**", "**/node_modules/**", "**/dist/**",
+              # Skill bodies carry Claude Code's own front-matter (name, description), not a document class.
+              "plugin/specengine/skills/*/SKILL.md"]
 
 [ids]
 ADR = { kind = "decision", width = 4 }

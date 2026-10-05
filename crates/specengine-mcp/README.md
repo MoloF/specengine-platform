@@ -36,6 +36,7 @@ Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checke
 - `_meta["anthropic/requiresUserInteraction"]: true` (≥ 2.1.199): a permission prompt on every call, even in `bypassPermissions`; no "don't ask again", allow rules ignored, a `PreToolUse` hook cannot approve it — the strongest consent primitive.
 - A call longer than 120 s goes to the background, runs to its end and returns its result as a notification; one held by an open elicitation form is exempt (≥ 11 min observed).
 - `@server:uri` (`@specengine:spec://<slug>/node/<id>`) inserts a resource without a tool call: `PreToolUse` hooks do not fire. MCP prompts are slash commands (`/specengine:<prompt>`).
+- The plugin (root `README.md` "Claude Code plugin") runs this binary from `PATH` as `specengine`, no arguments; its skills name tools and arguments: changing either updates them and the plugin's `version`.
 
 ## Feature `probes`
 
@@ -73,4 +74,4 @@ The measurement build, never default: the consent demo below (its `requestState`
 
 ## Tests
 
-`tests/common/mod.rs`: a spawned-binary JSON-RPC client, each spawn with a cleared environment, its own working directory and a fresh scratch `HOME`; `common/read.rs` the CLI-side expectations, `common/blake3.rs` a BLAKE3 written from the specification. The read files: `docs/canon/mcp-read.md` "Tests"; `mcp_intake.rs`: the queue tools (`mcp_door`, `mcp_genre` cover them too). `tests/mcp_stdio.rs` (`probes`: both eras, elicitation round trips, `requiresUserInteraction`, a 104 000-byte output, ID refusals, cancellation, empty stdin, bad first message, working directory untouched, `mcp.json` shape). Run: `cargo nextest run -p specengine-mcp --test <file>`, `--features probes` for `mcp_stdio`.
+`tests/common/mod.rs`: a spawned-binary JSON-RPC client, each spawn with a cleared environment, its own working directory and a fresh scratch `HOME`; `common/read.rs` the CLI-side expectations, `common/blake3.rs` a BLAKE3 written from the specification. The read files: `docs/canon/mcp-read.md` "Tests"; `mcp_intake.rs`: the queue tools (`mcp_door`, `mcp_genre` cover them too); `plugin_files.rs`, `plugin_skills.rs`: the plugin. `tests/mcp_stdio.rs` (`probes`: both eras, elicitation round trips, `requiresUserInteraction`, a 104 000-byte output, ID refusals, cancellation, empty stdin, bad first message, working directory untouched, `mcp.json` shape). Run: `cargo nextest run -p specengine-mcp --test <file>`, `--features probes` for `mcp_stdio`.

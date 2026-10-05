@@ -38,7 +38,8 @@ use std::process::Command;
 use common::check::{library, library_with, text};
 use common::{Scratch, repository_root, snapshot, spec, write};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, root_toml, std_walk,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, root_toml, skipped_files,
+    std_walk,
 };
 use specengine_core::ProjectConfig;
 use specengine_core::check::{CheckConfig, Verdict, worst_w};
@@ -62,6 +63,18 @@ fn git_status(root: &Path) -> String {
         .expect("git runs");
     assert!(output.status.success(), "git status");
     String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+/// The files the root config's `exclude` keeps out of the walk under the
+/// `plugin` root (the skill bodies; the store's `parity_config`
+/// `SKIP_FILES`), copied to `copy`: a listed root missing from the copy
+/// cannot be checked (docs/features/plugin-skills.md AC-12).
+fn copy_skipped(repository: &Path, copy: &Path) {
+    let skipped = skipped_files(repository);
+    assert!(!skipped.is_empty(), "the skill bodies");
+    for path in &skipped {
+        write(copy, path, fs::read(repository.join(path)).unwrap());
+    }
 }
 
 /// The documents the root config walks under `root`, and W of that walk
@@ -131,6 +144,7 @@ fn export_index_recreates_this_repository_s_index() {
             write(&copy, path, fs::read(repository.join(path)).unwrap());
         }
     }
+    copy_skipped(&repository, &copy);
     write(&copy, "specengine.toml", root_toml());
     for output in outputs {
         assert!(!copy.join(output).exists(), "{output} on the copy");
@@ -320,6 +334,7 @@ fn g_from_the_top_is_clean_with_no_finding() {
     for path in &documents {
         write(&copy, path, fs::read(repository.join(path)).unwrap());
     }
+    copy_skipped(&repository, &copy);
     write(&copy, "specengine.toml", root_toml());
     let line = add_dangling_mention(&copy);
     let (code, path, subject) = DANGLING;

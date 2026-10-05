@@ -31,7 +31,7 @@ use std::process::Command;
 
 use common::check::library;
 use common::{Scratch, read, repository_root, snapshot, spec, write};
-use parity_config::{EXPORT, GATE, INDEX, root_toml};
+use parity_config::{EXPORT, GATE, INDEX, root_toml, skipped_files};
 use specengine_core::ProjectConfig;
 use specengine_core::check::{
     CheckConfig, CheckInput, IndexOutput, Verdict, is_tier3_file, render_index_set, worst_w,
@@ -164,6 +164,11 @@ fn shipping_copy(scratch: &Scratch) -> (std::path::PathBuf, String) {
                 fs::read(repository.join(&file.path)).unwrap(),
             );
         }
+    }
+    // The skill bodies the config's `exclude` keeps out, so the `plugin`
+    // root exists on the copy (docs/features/plugin-skills.md AC-12).
+    for path in &skipped_files(&repository) {
+        write(&copy, path, fs::read(repository.join(path)).unwrap());
     }
     let toml = with_generators(&repo_toml, SHIPPING);
     write(&copy, "specengine.toml", &toml);
