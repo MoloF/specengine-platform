@@ -11,7 +11,7 @@ adrs: []
 
 ## Why
 
-08 §3 AC-1 wants task W (`docs/canon/documentation-system.md` §1, §3) on both pilots; Phase 1 closes when the owner picks the migration order (08 §2). `specengine-eval w` replays **every task document** (shipped included, owner's rule) twice on the same targets: the pilot's reading protocol on the untouched corpus (**W_before**), the shipped `spec bundle` on the after-tree (**W_after**), plus the follow-up reads the capped bundle leaves (**W_after_followups**). How it works now: `docs/canon/w-measurement.md`. No ADR (ADR-0008, ADR-0009, ADR-0012: 40 KB recorded, never enforced, ADR-0022, ADR-0026, ADR-0027).
+08 §3 AC-1 wants task W (`docs/canon/documentation-system.md` §1, §3) on both pilots; Phase 1 closed when the owner named the migration order, 2026-10-05 (08 §2). `specengine-eval w` replays **every task document** (shipped included, owner's rule) twice on the same targets: the pilot's reading protocol on the untouched corpus (**W_before**), the shipped `spec bundle` on the after-tree (**W_after**), plus the follow-up reads the capped bundle leaves (**W_after_followups**). How it works now: `docs/canon/w-measurement.md`. No ADR (ADR-0008, ADR-0009, ADR-0012: 40 KB recorded, never enforced, ADR-0022, ADR-0026, ADR-0027).
 
 ## Acceptance criteria
 
@@ -34,11 +34,11 @@ Owner's check, by an agent the owner instructs:
 At shipping:
 
 - [x] AC-11 Rules in a new Tier 2 canon `docs/canon/w-measurement.md` (≤ 12 288 B); eval README `w` row (≤ 10 020 B, largest Tier 1); 08 §2 "10 tasks" → "every task document", the MCP lever → Phase 2, "Next" closed; §3 AC-1 filled, AC-7 "re-confirmed on both pilots"; check clean, worst W ≤ 109 484 B; nextest `-p specengine-eval`, clippy, fmt, mutations red; manifest and lock diff = the eval → cli edge; fixtures: only `pilot-w`.
-- [ ] AC-12 Phase 1 closes when the owner names the order from the table: 08 §2 records it (no ADR), Phase 1 "done <date>"; `CLAUDE.md` "State", root README updated. `pilot-w` may ship before.
+- [x] AC-12 Phase 1 closes when the owner names the order from the table: 08 §2 records it (no ADR), Phase 1 "done <date>"; `CLAUDE.md` "State", root README updated. `pilot-w` may ship before.
 
 ## Migration order: decision table (AC-10, 2026-10-05)
 
-Facts only; the owner names the order (AC-12).
+Facts; the last row is the owner's order, named 2026-10-05 (AC-12).
 
 | | A | B |
 |---|---|---|
@@ -53,7 +53,7 @@ Facts only; the owner names the order (AC-12).
 | baseline debt (`import-layout.md`) | 5 336 | 340 |
 | documents cited from code / citations (`import-records.md`) | 92 / 911 | 16 / 44 |
 | what limits W_after | the budget: fill 99.9 %, 3.0 B/token; Tier 0 + 1 ≈ 13.7 KB on a full bundle | document size: fill 60.9 %, 12 tasks without a text item; follow-ups are whole documents (median 47 KB, 56 cut at the `show` cap) |
-| **Owner's choice: migrates first** | | |
+| **Owner's choice: migrates first** | first | second, after an ADR on hyphenless codes superseding ADR-0009 |
 
 ## Implementation
 

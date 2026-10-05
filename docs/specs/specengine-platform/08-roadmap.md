@@ -21,14 +21,15 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 - Carried to Phase 1: pre-code reading (tracey sources and a run on one pilot crate, input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift, amiss, `/speckit.converge`).
 - **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ≈ 109 KB against ≤ 40 KB, driven by 05 and 04.
 
-### Phase 1. Reading core — ~2-3 weeks
+### Phase 1. Reading core — done 2026-10-05
 
 - Shipped (open questions: crate READMEs, `docs/canon/*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 and 4 (`bundle`), check increments 1–4 (`check` to `--changed`, the gate, process rules ADR-0031), index compaction, shards (ADR-0028, ADR-0030), MCP stdio reads, layer A identity, pilot schemes (§3 AC-10), import records, gaps and layout (§3 AC-6, §4.3), token calibration, pilot W (§3 AC-1, `docs/canon/w-measurement.md`).
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W on every task document.
-- Next: the owner names the migration order (decision table in `docs/features/pilot-w.md`).
+- **Migration order** (owner, 2026-10-05; no ADR, `docs/features/pilot-w.md` AC-12): pilot A first, then B, after an ADR on hyphenless codes superseding ADR-0009 (decision table there).
 
-### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner
+### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
+- Slices: `docs/features/proposal-apply.md` (slice 1) in implementation; `ui-shell` (Phase 4 begun on mocks, ADR-0033) shipped 2026-10-05.
 - Proposals (all kinds), questions with deduplication, decisions with `cost` and `canon:`, `apply_proposal` (patch by section, optional commit with provenance).
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `inbox`, `review`, `approve/reject`, `task …`, `round new/answer`.
@@ -52,7 +53,7 @@ Screens and SSE per 07 §3, begun on mocks before the daemon (ADR-0033, `ui/READ
 
 ### Phase 5. Maturity — ~2 weeks
 
-- Full migration of the remaining pilot projects (the first one migrates in Phase 2-3, order per Phase 1 results).
+- Full migration of the remaining pilot projects (A migrates first in Phase 2-3, then B; order: Phase 1).
 - A `shared` project (common library) linked from several projects.
 - Metrics and compaction, notifications, URL-mode elicitation onto UI cards.
 - Optional: queue export to Beads/Task Master, spec digest into `AGENTS.md`/`CLAUDE.md` for external reviewers. No vector search (04 §2.1).
