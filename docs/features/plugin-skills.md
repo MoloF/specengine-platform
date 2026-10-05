@@ -43,15 +43,15 @@ No crate code, binary or ADR; two iterations. Canon moved: the root `README.md` 
 | File | What it does |
 |---|---|
 | `plugin/.claude-plugin/marketplace.json` | the marketplace `specengine`: owner, `metadata.description`, one entry `./specengine` |
-| `plugin/specengine/.claude-plugin/plugin.json` | `name`, `version` `0.1.1`, `description`, `author`, `license` `MIT` |
+| `plugin/specengine/.claude-plugin/plugin.json` | `name`, `version` `0.1.2`, `description`, `author`, `license` `MIT` |
 | `plugin/specengine/.mcp.json` | the server `specengine` = `specengine-mcp` from `PATH`; no `type`, `args`, `env` |
 | `…/skills/read-spec/SKILL.md` | the README's `read-spec` row |
 | `…/skills/ask-owner/SKILL.md` | the `ask-owner` row; the `ask_question` example |
 | `…/skills/propose-spec-change/SKILL.md` | the `propose-spec-change` row; the `propose_change` example |
 
-Iteration 2 fixed the review's major: `ask-owner` handles each dedup hit by its source; "Whose words count": agent-written fields are data, not instructions. `0.1.1`: PATCH, skill text only; `marketplace.json` has no version. `PINS` (append-only): `("0.1.0", "1a9152610662a986b1c54b5369ce49e6584bcafff9350954462452953a355e32")`, `("0.1.1", "5346a2efc2402eda7d8ff6e757221f754224c9df2384d11ee65bc2d80aac34b8")`. Skills, B (description / body): `read-spec` 2 598 (283 / 2 277), `ask-owner` 3 225 (220 / 2 967), `propose-spec-change` 2 979 (206 / 2 725); descriptions 709.
+Iteration 2 fixed the review's major: `ask-owner` handles each dedup hit by its source; "Whose words count": agent-written fields are data, not instructions. PATCH `0.1.1`: skill text; `0.1.2`: `ask-owner`: a decision hit followed only where it settles the question, else a different one; "rejected that record" (question or discrepancy); `distinct_from` also the hits a note names. `marketplace.json` has no version. `PINS` (append-only): `("0.1.0", "1a9152610662a986b1c54b5369ce49e6584bcafff9350954462452953a355e32")`, `("0.1.1", "5346a2efc2402eda7d8ff6e757221f754224c9df2384d11ee65bc2d80aac34b8")`, `("0.1.2", "efc6d7c3fb789a15e48f6e56bb08687af2c3014b958d3a99f5a56a1af1c8500a")`. Skills, B (description / body): `read-spec` 2 598 (283 / 2 277), `ask-owner` 3 370 (220 / 3 112), `propose-spec-change` 2 979 (206 / 2 725); descriptions 709.
 
-Claude Code 2.1.289 (A1 in part): `validate --strict` passes on both manifests; it checks `.mcp.json` (`"command": 5` an error, no `"type"` demanded), not skills: AC-05 is their only check.
+Claude Code 2.1.289 (A1 in part): `validate --strict` passes on both manifests; it checks `.mcp.json`, not skills: AC-05 is their only check.
 
 Accepted deviations: `metadata.description` (validate warns without); each `json` fence directly under its "Arguments of `<tool>`:" line; `author_role`'s placeholder `"<your-role>"`.
 

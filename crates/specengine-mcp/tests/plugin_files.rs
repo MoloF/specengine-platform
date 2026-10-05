@@ -59,6 +59,10 @@ const PINS: &[(&str, &str)] = &[
         "0.1.1",
         "5346a2efc2402eda7d8ff6e757221f754224c9df2384d11ee65bc2d80aac34b8",
     ),
+    (
+        "0.1.2",
+        "efc6d7c3fb789a15e48f6e56bb08687af2c3014b958d3a99f5a56a1af1c8500a",
+    ),
 ];
 
 /// The README's closed file set (its Files bullet), relative to `plugin/`.

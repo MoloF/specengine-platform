@@ -24,10 +24,10 @@ Always give a working answer and go on with it: nothing waits for the owner. Nam
 
 Not `created`: nothing was stored, because the `hits` already cover it. A hit's `source` tells an accepted decision of the spec from a record in the queue:
 
-- A decision: its `answer` is only the decision's title. Read the decision with `get_node` (its `id`, else its `path`) and follow it.
-- A queue record with an `answer`: the owner rejected that question, and the answer is the owner's. Follow it.
+- A decision: its `answer` is only the decision's title. Read the decision with `get_node` (its `id`, else its `path`) and follow it where it settles your question; where it does not, yours is a different question (below).
+- A queue record with an `answer`: the owner rejected that record, and the answer is the owner's. Follow it.
 - A queue record with no `answer`: it is asked already. Do not ask again: keep your working answer and cite the hit's `id` in your report.
-- Yours is truly a different question: send it again with every hit in `distinct_from`, each by its `id`, else its `path`.
+- Yours is truly a different question: send it again with every hit in `distinct_from`, each by its `id`, else its `path`; that includes the hits a note names past the listed ones.
 
 Also:
 
