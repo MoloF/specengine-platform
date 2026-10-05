@@ -22,7 +22,7 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::PathBuf;
 
 use common::git::Sandbox;
-use common::{SPEC, Scratch, read_text, repository_root, snapshot, write};
+use common::{SPEC, Scratch, copy_file, read_text, repository_root, snapshot, write};
 
 const PREFIX: &str = "run -q -p specengine-cli --";
 const CALL: &str = "run -q -p specengine-cli -- check --staged --root .";
@@ -74,7 +74,7 @@ impl HookRepo {
         }
         let hook = top.join(".githooks/pre-commit");
         fs::create_dir_all(hook.parent().unwrap()).unwrap();
-        fs::copy(repository_root().join(".githooks/pre-commit"), &hook).unwrap();
+        copy_file(repository_root().join(".githooks/pre-commit"), &hook);
         git.init(&top);
         git.git(&top, &["config", "core.hooksPath", ".githooks"]);
         git.add_all(&top);

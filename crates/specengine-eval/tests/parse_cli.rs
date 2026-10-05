@@ -662,7 +662,7 @@ fn pilot_labels_take_the_census_config_from_the_environment() {
     copy_dir(&corpus_mini(), &corpus, &["census.toml"]);
     assert!(!corpus.join("census.toml").exists());
     let good = scratch.join("census-a.toml");
-    fs::copy(corpus_mini().join("census.toml"), &good).unwrap();
+    fs::write(&good, fs::read(corpus_mini().join("census.toml")).unwrap()).unwrap();
     let bad = scratch.join("census-bad.toml");
     fs::write(&bad, "[corpus]\nroots = [\"design\"]\nsurprise = true\n").unwrap();
     let parse =
@@ -769,7 +769,11 @@ fn pilot_label_refusals_name_the_variable_they_looked_for() {
     copy_dir(&corpus_mini(), &corpus, &["census.toml", "specengine.toml"]);
     let before = snapshot(&corpus);
     let config = scratch.join("census-a.toml");
-    fs::copy(corpus_mini().join("census.toml"), &config).unwrap();
+    fs::write(
+        &config,
+        fs::read(corpus_mini().join("census.toml")).unwrap(),
+    )
+    .unwrap();
     let census_text = |letter: &str| {
         format!(
             "parse: refused: no --config given, no SPECENGINE_CENSUS_CONFIG_{letter} and no census.toml at the corpus root"

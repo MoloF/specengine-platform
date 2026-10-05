@@ -2042,7 +2042,11 @@ fn an_empty_corpus_is_counted_not_a_panic() {
     let corpus = scratch.join("corpus");
     fs::create_dir_all(corpus.join("book")).unwrap();
     for file in ["census.toml", "specengine.toml"] {
-        fs::copy(fixture_dir(ONE).join(file), corpus.join(file)).unwrap();
+        fs::write(
+            corpus.join(file),
+            fs::read(fixture_dir(ONE).join(file)).unwrap(),
+        )
+        .unwrap();
     }
     let out = scratch.join("out");
     let output = run(&[

@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use common::check::{FAR, baseline_covering, dangling_document, library};
 use common::git::Sandbox;
 use common::staged::{Superproject, assert_same, spec_in};
-use common::{FIXTURES, SPEC, Scratch, copy_dir, fixture, write};
+use common::{FIXTURES, SPEC, Scratch, copy_dir, copy_file, fixture, write};
 
 fn clean_document(title: &str) -> String {
     format!("---\nclass: spec\nstatus: draft\nscope: [docs/spec]\n---\n\n# {title}\n\nText.\n")
@@ -708,7 +708,7 @@ fn a_relative_alternate_index_resolves_against_the_top() {
         let top = &hooked.top;
         let proj = top.join("proj");
         let alternate = ".git/next-index-test.lock";
-        fs::copy(top.join(".git/index"), top.join(alternate)).unwrap();
+        copy_file(top.join(".git/index"), top.join(alternate));
         write(top, OTHER, dangling_document(name));
         git.git_env(
             top,

@@ -1289,7 +1289,7 @@ fn export_refuses_another_projects_row_and_both_refuse_another_config() {
     }
 
     let other_config = outside.join("other.toml");
-    fs::copy(pair.main.join("specengine.toml"), &other_config).unwrap();
+    common::copy_file(pair.main.join("specengine.toml"), &other_config);
     let globals = Globals {
         root: None,
         config: Some(other_config.clone()),
@@ -1496,7 +1496,7 @@ fn ac10_import_needs_a_terminal_and_a_yes() {
 
     // The question escapes control characters as the queue's prompts do.
     let odd = pair.scratch.dir("dumps").join("a\u{1b}[31mb.jsonl");
-    fs::copy(&file, &odd).unwrap();
+    common::copy_file(&file, &odd);
     let (outcome, questions) = import_at(&fresh, &pair.main, &odd, false);
     assert_eq!(outcome.unwrap().exit(), Exit::NotFound);
     assert_eq!(questions.len(), 1);

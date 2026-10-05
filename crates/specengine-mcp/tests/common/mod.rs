@@ -158,9 +158,24 @@ pub fn copy_dir(from: &Path, to: &Path, reversed: bool) {
         if kind.is_dir() {
             copy_dir(&entry.path(), &target, reversed);
         } else if kind.is_file() {
-            fs::copy(entry.path(), &target).expect("copy file");
+            copy_file(entry.path(), &target);
         }
     }
+}
+
+/// Copies the file `from` to `to`: its bytes and its permission bits. Not
+/// `fs::copy`: on macOS it clones first (`fclonefileat`), which a sandboxed
+/// run refuses with `EPERM` without falling back, and it carries extended
+/// attributes along.
+pub fn copy_file(from: impl AsRef<Path>, to: impl AsRef<Path>) {
+    let (from, to) = (from.as_ref(), to.as_ref());
+    let bytes = fs::read(from).unwrap_or_else(|error| panic!("{}: {error}", from.display()));
+    fs::write(to, bytes).unwrap_or_else(|error| panic!("{}: {error}", to.display()));
+    let permissions = fs::metadata(from)
+        .unwrap_or_else(|error| panic!("{}: {error}", from.display()))
+        .permissions();
+    fs::set_permissions(to, permissions)
+        .unwrap_or_else(|error| panic!("{}: {error}", to.display()));
 }
 
 /// Writes `bytes` to `root/relative`, creating its directories.

@@ -132,7 +132,8 @@ fn copy_dir(from: &Path, to: &Path) {
         if entry.path().is_dir() {
             copy_dir(&entry.path(), &target);
         } else {
-            fs::copy(entry.path(), target).expect("copy");
+            // The bytes, not `fs::copy`: on macOS it clones, which a sandbox refuses.
+            fs::write(target, fs::read(entry.path()).expect("read")).expect("copy");
         }
     }
 }
@@ -770,7 +771,7 @@ fn an_unreadable_pilot_is_refused() {
 fn pilot_labels_take_the_census_config_from_the_environment() {
     let guard = GuardCorpus::without_census_toml("census-env");
     let good = guard.scratch.join("census-a.toml");
-    fs::copy(fixture_dir().join("census.toml"), &good).unwrap();
+    fs::write(&good, fs::read(fixture_dir().join("census.toml")).unwrap()).unwrap();
     let bad = guard.scratch.join("census-bad.toml");
     fs::write(&bad, "[corpus]\nroots = [\"design\"]\nsurprise = true\n").unwrap();
     let absent = guard.scratch.join("absent-census.toml");
@@ -938,7 +939,7 @@ fn pilot_labels_take_the_census_config_from_the_environment() {
 
     // With census.toml at the corpus root the variable still comes first;
     // unset, the root's file is read under a pilot label as before.
-    fs::copy(&good, guard.corpus.join("census.toml")).unwrap();
+    fs::write(guard.corpus.join("census.toml"), fs::read(&good).unwrap()).unwrap();
     let (output, out) = census(
         Some("pilot-a"),
         Some(("SPECENGINE_CENSUS_CONFIG_A", &bad)),

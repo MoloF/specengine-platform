@@ -300,7 +300,7 @@ fn a_listed_directory_swapped_for_a_symlink_is_neither_read_nor_probed() {
         .expect("a file under docs/records/R")
         .as_str();
     let copy = scratch.join("outside-r.md");
-    std::fs::copy(corpus.root.join(file), &copy).expect("copy");
+    common::copy_file(corpus.root.join(file), &copy);
     std::fs::remove_file(corpus.root.join(file)).expect("remove");
     symlink(&copy, corpus.root.join(file)).expect("symlink");
     assert!(tree.read(file).is_err(), "a symlinked file is not read");

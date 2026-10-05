@@ -35,7 +35,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use common::git::Sandbox;
-use common::{SPEC, Scratch, repository_root, snapshot, write};
+use common::{SPEC, Scratch, copy_file, repository_root, snapshot, write};
 
 /// The argument prefix of the registered commands, then G `--staged`.
 const PREFIX: &str = "run -q -p specengine-cli --";
@@ -100,7 +100,7 @@ impl HookRepo {
         write(&top, "notes.txt", "not a document\n");
         let hook = top.join(".githooks/pre-commit");
         fs::create_dir_all(hook.parent().unwrap()).unwrap();
-        fs::copy(repository_root().join(".githooks/pre-commit"), &hook).unwrap();
+        copy_file(repository_root().join(".githooks/pre-commit"), &hook);
         if let Some(mode) = mode {
             fs::set_permissions(&hook, fs::Permissions::from_mode(mode)).unwrap();
         }

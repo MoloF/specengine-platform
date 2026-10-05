@@ -4047,7 +4047,8 @@ mod tamper_tests {
             if entry.is_dir() {
                 copy_tree(&entry, &target);
             } else {
-                fs::copy(&entry, &target).expect("copy");
+                // The bytes, not `fs::copy`: on macOS it clones, which a sandbox refuses.
+                fs::write(&target, fs::read(&entry).expect("read")).expect("copy");
             }
         }
     }

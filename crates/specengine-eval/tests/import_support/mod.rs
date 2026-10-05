@@ -161,7 +161,8 @@ pub fn copy_dir(from: &Path, to: &Path) {
         if entry.path().is_dir() {
             copy_dir(&entry.path(), &target);
         } else {
-            fs::copy(entry.path(), target).expect("copy");
+            // The bytes, not `fs::copy`: on macOS it clones, which a sandbox refuses.
+            fs::write(target, fs::read(entry.path()).expect("read")).expect("copy");
         }
     }
 }
