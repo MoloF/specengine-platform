@@ -4,8 +4,9 @@
 //! report); stderr carries `note:`, `warning:` and error lines. No colour,
 //! no timing.
 //!
-//! The one check that stays here: `spec approve` and `spec reject` run only
-//! when stdin is a terminal (else exit 2, nothing read or logged); the
+//! The one check that stays here: `spec approve`, `spec reject` and `spec
+//! import-state` run only when stdin is a terminal (else exit 2, nothing
+//! read or logged, `import-state`'s file not opened); the
 //! library asks its question through a callback, which prints it on stderr
 //! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
 //! (`now`, UTC) and the process's variables for git are passed in as well.
@@ -19,9 +20,10 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError, Env, Exit,
-    ExportIndexRequest, Globals, GraphRequest, InboxRequest, IndexRequest, InitRequest, Outcome,
-    ProposeRequest, ProposedText, RejectRequest, ReviewRequest, SearchRequest, ShowRequest,
-    TEXT_MAX_BYTES, TreeRequest, render_json, render_text,
+    ExportIndexRequest, ExportStateRequest, Globals, GraphRequest, ImportStateRequest,
+    InboxRequest, IndexRequest, InitRequest, Outcome, ProposeRequest, ProposedText, RejectRequest,
+    ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES, TreeRequest, render_json,
+    render_text,
 };
 use specengine_core::proposal::utc_timestamp;
 use specengine_store::GitEnv;
@@ -145,7 +147,7 @@ enum Command {
         #[arg(long)]
         debt: bool,
     },
-    /// Export generated output (`index`: the registered index generator's document).
+    /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
         #[command(subcommand)]
         what: Export,
@@ -181,6 +183,12 @@ enum Command {
         /// Why the proposal is rejected (non-empty).
         #[arg(long, value_name = "T")]
         reason: String,
+    },
+    /// Restore a dump written by `export state` into the project's empty proposal queue, rows as stored; asks for consent on the terminal.
+    ImportState {
+        /// The dump, relative to the current directory.
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
     },
 }
 
@@ -219,6 +227,12 @@ enum Export {
         /// Print the render instead of writing it.
         #[arg(long, conflicts_with = "json")]
         stdout: bool,
+    },
+    /// Write the project's whole proposal queue (every row of `proposals` and `events`) as a JSONL dump outside the repository, to restore with `import-state`.
+    State {
+        /// The new file to write, relative to the current directory (default: `<data dir>/backups/<slug>-<UTC time>.jsonl`).
+        #[arg(long, value_name = "PATH")]
+        out: Option<PathBuf>,
     },
 }
 
@@ -377,6 +391,17 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &ExportIndexRequest { stdout },
         )?),
+        Command::Export {
+            what: Export::State { out },
+        } => Outcome::StateExport(specengine_cli::export_state(
+            env,
+            globals,
+            &ExportStateRequest {
+                out,
+                now: now(),
+                git: process_git(env),
+            },
+        )?),
         Command::Propose {
             kind:
                 Propose::Update {
@@ -456,6 +481,16 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &mut consent,
             )?))
         }
+        Command::ImportState { file } => {
+            require_terminal("import-state")?;
+            let mut consent = ask;
+            Outcome::StateImport(specengine_cli::import_state(
+                env,
+                globals,
+                &ImportStateRequest { file },
+                &mut consent,
+            )?)
+        }
     })
 }
 
@@ -488,9 +523,9 @@ fn read_stdin_text() -> Result<Vec<u8>, CliError> {
     Ok(bytes)
 }
 
-/// `spec approve` and `spec reject` decide on a terminal only: a stdin
-/// that is no terminal (a pipe, an agent's shell) exits 2 before anything
-/// is read or logged.
+/// `spec approve`, `spec reject` and `spec import-state` decide on a
+/// terminal only: a stdin that is no terminal (a pipe, an agent's shell)
+/// exits 2 before anything is read or logged.
 fn require_terminal(command: &str) -> Result<(), CliError> {
     if std::io::stdin().is_terminal() {
         return Ok(());

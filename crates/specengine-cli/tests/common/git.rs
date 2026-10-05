@@ -288,3 +288,46 @@ impl Sandbox {
         output.stdout
     }
 }
+
+impl Sandbox {
+    /// Writes `<dir>/git` (created when absent), a stand-in for a git
+    /// built with translations, as gettext picks them: when the message
+    /// locale (`LANGUAGE`, else `LC_ALL`, `LC_MESSAGES`, `LANG`) is German
+    /// and `LC_ALL` is not `C` or `POSIX`, git's "not a git repository (or
+    /// any ...)" line comes out in German; everything else, and every
+    /// other run, is the real git's, exit status included. `dir`, put
+    /// first on `PATH`, makes every `git` a process starts this one.
+    /// macOS's git ships no translations; this shows what a translated
+    /// one does.
+    pub fn translating_git(&self, dir: &Path) -> PathBuf {
+        fs::create_dir_all(dir).expect("the shim's directory");
+        let real = self.git.to_str().expect("a UTF-8 git path");
+        let stash = dir.to_str().expect("a UTF-8 scratch path");
+        let script = format!(
+            "#!/bin/sh\n\
+             locale=\"${{LC_ALL:-${{LC_MESSAGES:-${{LANG-}}}}}}\"\n\
+             case \"${{LC_ALL-}}\" in C|POSIX|C.*) exec '{real}' \"$@\";; esac\n\
+             case \"${{LANGUAGE:-$locale}}\" in de*) ;; *) exec '{real}' \"$@\";; esac\n\
+             err='{stash}'/stderr.$$\n\
+             '{real}' \"$@\" 2>\"$err\"\n\
+             code=$?\n\
+             sed 's/^fatal: not a git repository (or any .*$/fatal: Kein \
+             Git-Repository (oder irgendeines der Elternverzeichnisse): .git/' \"$err\" >&2\n\
+             rm -f \"$err\"\n\
+             exit $code\n"
+        );
+        let shim = dir.join("git");
+        fs::write(&shim, script).expect("the shim");
+        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).expect("chmod the shim");
+        dir.to_path_buf()
+    }
+
+    /// `PATH` with `first` before the sandbox's own entries.
+    pub fn path_with(&self, first: &Path) -> OsString {
+        let mut dirs = vec![first.to_path_buf()];
+        dirs.extend(std::env::split_paths(
+            self.var("PATH").expect("the sandbox's PATH"),
+        ));
+        std::env::join_paths(dirs).expect("a PATH value")
+    }
+}

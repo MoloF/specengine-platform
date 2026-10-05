@@ -474,14 +474,14 @@ fn same_file(a: &fs::Metadata, b: &fs::Metadata) -> bool {
 
 /// The file's identity: device and inode.
 #[cfg(unix)]
-fn identity(metadata: &fs::Metadata) -> Option<(u64, u64)> {
+pub(crate) fn identity(metadata: &fs::Metadata) -> Option<(u64, u64)> {
     use std::os::unix::fs::MetadataExt as _;
     Some((metadata.dev(), metadata.ino()))
 }
 
 /// No file identities here.
 #[cfg(not(unix))]
-fn identity(_: &fs::Metadata) -> Option<(u64, u64)> {
+pub(crate) fn identity(_: &fs::Metadata) -> Option<(u64, u64)> {
     None
 }
 

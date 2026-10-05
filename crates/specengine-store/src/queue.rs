@@ -43,8 +43,14 @@
 //!   comparison of places is [`crate::same_repository`].
 //! - **Time**: every time stamp is given by the caller (an injected clock),
 //!   `YYYY-MM-DDTHH:MM:SSZ`, stored as given.
+//! - **Backup** (`docs/canon/queue-backup.md` "Store", `queue/state.rs`):
+//!   every row of both tables read as stored in one snapshot
+//!   ([`SqliteQueue::stored_rows`]), and inserted as given into an empty
+//!   queue ([`SqliteQueue::restore`]).
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
+
+mod state;
 
 use std::fmt;
 use std::fs;
@@ -64,6 +70,10 @@ use specengine_model::Severity;
 use crate::error::{Db, StoreError};
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
+
+pub use state::{
+    EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, Restore, StoredEvent, StoredProposal, StoredQueue,
+};
 
 /// The `user_version` the queue's steps bring a DB to.
 pub const QUEUE_SCHEMA_VERSION: i64 = 1;

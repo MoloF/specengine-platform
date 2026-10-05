@@ -57,6 +57,12 @@ const LOCAL_ENV_VARS: [&str; 15] = [
 /// The most bytes of git's stderr an error keeps.
 const STDERR_MAX: usize = 4096;
 
+/// The start of git's one message for "no repository found from here"
+/// (`setup.c`: up to the file system root or a ceiling directory, or up to
+/// a mount point), untranslated (`LC_ALL=C`). A broken `.git` file, a
+/// dubious owner, a refused bare repository die with other words.
+const NOT_A_REPOSITORY: &str = "fatal: not a git repository (or any ";
+
 /// The state files of an operation in progress, by `git rev-parse
 /// --git-path`.
 const OPERATION_PATHS: [(&str, Operation); 7] = [
@@ -210,6 +216,17 @@ impl fmt::Display for PlaceError {
 
 impl std::error::Error for PlaceError {}
 
+/// One worktree `git worktree list` names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedWorktree {
+    /// Its directory: canonical when it exists, else as git prints it
+    /// (absolute; a pruned worktree's directory may be gone).
+    pub path: PathBuf,
+    /// The main entry of a bare repository: the repository itself, no
+    /// files checked out.
+    pub bare: bool,
+}
+
 /// A three-way merge's result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Merge {
@@ -325,6 +342,62 @@ impl WorktreeGit {
     pub fn common_dir(&self) -> Result<PathBuf, GitError> {
         let output = self.read("rev-parse", &["rev-parse", "--git-common-dir"])?;
         self.path_of("rev-parse", &output)
+    }
+
+    /// [`Self::top`], but `None` when git finds no repository from the
+    /// directory: the one failure read so, by git's own message under
+    /// `LC_ALL=C` ([`NOT_A_REPOSITORY`], exit 128). Any other failure — a
+    /// dubious owner, a broken `.git` file, the directory inside a git dir,
+    /// no `git` to run — is an error.
+    pub fn top_if_repository(&self) -> Result<Option<PathBuf>, GitError> {
+        const COMMAND: &str = "rev-parse";
+        let args = [OsStr::new("rev-parse"), OsStr::new("--show-toplevel")];
+        let output = self
+            .command(&args, true)
+            .env("LC_ALL", "C")
+            .env_remove("LANGUAGE")
+            .output()
+            .map_err(GitError::NotRunnable)?;
+        if output.status.success() {
+            return self.path_of(COMMAND, &output.stdout).map(Some);
+        }
+        let no_repository = output.status.code() == Some(128)
+            && String::from_utf8_lossy(&output.stderr)
+                .lines()
+                .any(|line| line.starts_with(NOT_A_REPOSITORY));
+        if no_repository {
+            Ok(None)
+        } else {
+            Err(failed(COMMAND, &output))
+        }
+    }
+
+    /// Every worktree of the repository (`worktree list --porcelain -z`,
+    /// git 2.36 or later): the main one first (for a bare repository, the
+    /// repository itself, `bare`), then the linked ones, a pruned one
+    /// included.
+    pub fn worktrees(&self) -> Result<Vec<ListedWorktree>, GitError> {
+        const COMMAND: &str = "worktree";
+        let unreadable = || GitError::Unreadable { command: COMMAND };
+        let output = self.read(COMMAND, &["worktree", "list", "--porcelain", "-z"])?;
+        let mut listed: Vec<ListedWorktree> = Vec::new();
+        for field in output.split(|&byte| byte == 0) {
+            if let Some(path) = field.strip_prefix(b"worktree ") {
+                let path = self.dir.join(os_path(path).ok_or_else(unreadable)?);
+                listed.push(ListedWorktree {
+                    path: fs::canonicalize(&path).unwrap_or(path),
+                    bare: false,
+                });
+            } else if field == b"bare" {
+                listed.last_mut().ok_or_else(unreadable)?.bare = true;
+            } else if !field.is_empty() && listed.is_empty() {
+                return Err(unreadable());
+            }
+        }
+        if listed.is_empty() {
+            return Err(unreadable());
+        }
+        Ok(listed)
     }
 
     /// The branch `HEAD` names (`symbolic-ref -q HEAD`, `refs/heads/`

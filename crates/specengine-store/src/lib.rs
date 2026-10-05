@@ -43,7 +43,9 @@
 //! - the proposal queue (docs/features/proposal-apply.md): [`SqliteQueue`]
 //!   ([`ProposalQueue`]) keeps the operational tables `proposals` and
 //!   `events` in the same DB, made by their own schema steps on
-//!   `user_version` and never dropped by the index; [`WorktreeGit`] is the
+//!   `user_version` and never dropped by the index, and gives them raw for
+//!   their backup ([`StoredQueue`], `docs/canon/queue-backup.md` "Store");
+//!   [`WorktreeGit`] is the
 //!   write side of one recorded worktree's git (its place, the dirty check,
 //!   `merge-file`, `commit --only`, the trailer lookup), every `GIT_*`
 //!   local variable dropped; [`replace_file`] the atomic write;
@@ -86,14 +88,16 @@ pub use git::GitEnv;
 pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Decision, EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED,
-    EVENT_CREATED, EVENT_REJECTED, Event, NewProposal, Place, Proposal, ProposalFilter,
-    ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
-    QUEUE_SCHEMA_VERSION, QueueError, Seen, SqliteQueue, UnreadableRow, patch_hash,
+    EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, Event, NewProposal, PROPOSAL_COLUMNS, Place,
+    Proposal, ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue,
+    ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, Restore, Seen, SqliteQueue,
+    StoredEvent, StoredProposal, StoredQueue, UnreadableRow, patch_hash,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use worktree::{
-    GitError, Merge, Operation, PlaceError, WorktreeGit, replace_file, same_repository,
+    GitError, ListedWorktree, Merge, Operation, PlaceError, WorktreeGit, replace_file,
+    same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

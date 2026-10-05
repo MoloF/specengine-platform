@@ -14,7 +14,7 @@ The rules all code is written by. Each rule was introduced by a decision (ADR) a
 ## Storage
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
-- The operational database lives outside the repository: `~/Library/Application Support/specengine/`. Git receives the generated `docs/generated/queue.md`; the full `spec export --state` dump goes to a backup directory. ADR-0003.
+- The operational database lives outside the repository: `~/Library/Application Support/specengine/`. Git will receive the generated `docs/generated/queue.md`; the queue's full dump, `spec export state` (ADR-0003's `export --state`), goes to a backup directory, never into the repository, and `spec import-state` restores it into an empty queue (`docs/canon/queue-backup.md`). ADR-0003.
 
 <a id="layout"></a>
 ## Spec layout in a project

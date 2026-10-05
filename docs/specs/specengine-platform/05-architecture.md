@@ -283,7 +283,7 @@ The full scenario is in `06-workflows.md`. The engine invariants:
 
 ## 8. Operational-state reliability
 
-**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk, the queue's own `user_version` steps: shipped (store README, `docs/canon/proposal-queue.md`). Still to come: `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID). Queue backup: `docs/features/queue-export.md`, never in git; `docs/generated/queue.md`: `task-package`.
+**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk, the queue's own `user_version` steps: shipped (store README, `docs/canon/proposal-queue.md`). Still to come: `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID). Queue backup: `docs/canon/queue-backup.md`, never in git; `docs/generated/queue.md`: `task-package`.
 
 ## 9. Technology stack (versions — in `04-prior-art-and-stack.md` §6)
 

@@ -87,6 +87,20 @@ pub fn open_index(env: &Env, project: &ProjectRoot) -> Result<OpenIndex, CliErro
 /// the project root (nothing created then): where the database and the
 /// proposal queue's scratch files go.
 pub(crate) fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
+    let dir = checked_data_dir(env, project)?;
+    fs::create_dir_all(&dir).map_err(|error| {
+        CliError::spec(format!(
+            "cannot create the data directory {}: {error}",
+            dir.display()
+        ))
+    })?;
+    Ok(dir)
+}
+
+/// The data directory, refused as [`prepared_data_dir`] refuses it, but
+/// never created: `spec export state` and `spec import-state` write nothing
+/// before their own writes.
+pub(crate) fn checked_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
     let dir = data_dir(env)?;
     let resolved = resolve_nonexistent(&dir).map_err(|error| {
         CliError::spec(format!(
@@ -102,18 +116,12 @@ pub(crate) fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<Path
             dir.display()
         )));
     }
-    fs::create_dir_all(&dir).map_err(|error| {
-        CliError::spec(format!(
-            "cannot create the data directory {}: {error}",
-            dir.display()
-        ))
-    })?;
     Ok(dir)
 }
 
 /// `path` with its nearest existing ancestor canonicalised and the missing
 /// rest appended as written. Creates nothing.
-fn resolve_nonexistent(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn resolve_nonexistent(path: &Path) -> io::Result<PathBuf> {
     let mut missing: Vec<&OsStr> = Vec::new();
     let mut existing = path;
     loop {

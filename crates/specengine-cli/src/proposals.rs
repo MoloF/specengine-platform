@@ -240,17 +240,7 @@ pub(crate) fn open_context(
     git_env: &GitEnv,
 ) -> Result<QueueContext, CliError> {
     let project = discover(env, globals)?;
-    if let Some(config) = &globals.config {
-        let given = fs::canonicalize(env.cwd.join(config)).ok();
-        let own = fs::canonicalize(project.root.join(CONFIG_FILE)).ok();
-        if given.is_none() || given != own {
-            return Err(CliError::spec(format!(
-                "--config {}: the proposal queue reads only the project root's {CONFIG_FILE} \
-                 (the config proposals are checked and applied under); drop --config",
-                config.display()
-            )));
-        }
-    }
+    require_root_config(env, globals, &project)?;
     let slug = project.slug()?.to_owned();
     if let Some(clash) = prefix_clash(&project.config.scheme) {
         return Err(CliError::spec(format!("{}: {clash}", project.config_label)));
@@ -275,6 +265,28 @@ pub(crate) fn open_context(
         git,
         common_dir,
     })
+}
+
+/// `--config`, when given, must name the project root's own
+/// `specengine.toml`: the queue is the root slug's (exit 2 otherwise).
+pub(crate) fn require_root_config(
+    env: &Env,
+    globals: &Globals,
+    project: &ProjectRoot,
+) -> Result<(), CliError> {
+    let Some(config) = &globals.config else {
+        return Ok(());
+    };
+    let given = fs::canonicalize(env.cwd.join(config)).ok();
+    let own = fs::canonicalize(project.root.join(CONFIG_FILE)).ok();
+    if given.is_none() || given != own {
+        return Err(CliError::spec(format!(
+            "--config {}: the proposal queue reads only the project root's {CONFIG_FILE} \
+             (the config proposals are checked and applied under); drop --config",
+            config.display()
+        )));
+    }
+    Ok(())
 }
 
 /// A queue command's error with its control characters escaped: it may

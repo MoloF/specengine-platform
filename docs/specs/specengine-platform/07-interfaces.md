@@ -113,7 +113,9 @@ spec check [--staged | --changed] [--baseline F] [--debt]
 spec round new | round answer FILE
 spec ship SLUG [--accepted]
 spec compact --dry-run
-spec export [--state]                                # generated/queue.md and state.jsonl
+spec export                                          # to come (task-package): generated/queue.md
+spec export state [--out PATH]                       # shipped: the queue's JSONL dump, docs/canon/queue-backup.md
+spec import-state FILE                               # shipped: restore it into an empty queue, a terminal's [y/N]
 spec export index [--stdout]                         # [paths] index by its registered generator (Q3)
 ```
 

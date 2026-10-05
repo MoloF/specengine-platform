@@ -12,7 +12,7 @@ reviewed: 2026-10-05
 
 ## Consent
 
-`spec approve` and `spec reject` run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none (checked at shipping), the owner's `!` commands presumably neither: decide in a separate terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
+`spec approve`, `spec reject` and `spec import-state` (`docs/canon/queue-backup.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none (checked at shipping), the owner's `!` commands presumably neither: decide in a separate terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
 
 - `apply PR-0001 to <path from the worktree top> on <branch> in <worktree> (applies|rebases)? [y/N]`, after steps 2–6 and the identity;
 - `complete PR-0001 by its commit <sha> on <branch> in <worktree>? [y/N]` (an `open` proposal's own commit; `in` the current project root when the lookup read the current repository);
@@ -74,7 +74,7 @@ Then `reject_from` on the state read (changed since → exit 1); `decision_note`
 
 Accepted at shipping (2026-10-05); none blocks (ADR-0012).
 
-- No queue backup until slice 2; a pseudo-terminal passes consent; racing terminals meet git's `index.lock` (reported); hooks or signing needing stdin fail (bytes restored); Phase 3's rev rule (08 AC-13) will refuse apply commits without a rev bump.
+- A pseudo-terminal passes consent; racing terminals meet git's `index.lock` (reported); hooks or signing needing stdin fail (bytes restored); Phase 3's rev rule (08 AC-13) will refuse apply commits without a rev bump.
 - A reject running while a live apply commits between reject's second check and its write leaves it rejected with its commit in history (the apply's step 10 exits 1, `rejected`): needs a cross-process lock (daemon).
 - An end-of-line or clean/smudge filter on spec files (`core.autocrlf`, `eol=crlf`): completion compares raw blobs with worktree bytes, so an apply interrupted at step 10 can be neither completed nor rejected (later: `cat-file --filters`).
 - The trailer names no project: with several SpecEngine roots in a repository, or a reset data directory, another proposal's same-ID commit on the branch blocks reject; with the base pruned the whole-branch read (its cost grows with history) finds older ones too; approve refuses only when that commit applied the text.

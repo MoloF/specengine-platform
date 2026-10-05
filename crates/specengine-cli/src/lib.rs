@@ -12,7 +12,8 @@
 //! spec `proposal-apply`, the proposal queue: `spec propose update`, `spec
 //! inbox`, `spec review`, `spec approve` (the one write door: the target
 //! file replaced in the proposal's recorded worktree and committed there)
-//! and `spec reject`.
+//! and `spec reject`; the queue's backup (canon `queue-backup`,
+//! "Commands"): `spec export state` and `spec import-state`.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -36,6 +37,9 @@
 //!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt), and every
 //!   request carries the caller's git environment and, where the queue
 //!   records a time, the clock's `now`;
+//! - [`export_state`], [`import_state`]: the queue's dump ([`STATE_FORMAT`])
+//!   written outside the worktree, and restored into an empty queue after
+//!   the owner's [`Consent`];
 //! - [`render_text`], [`render_json`]: an [`Outcome`] as stdout (JSON: one
 //!   document, every key present, absent = `null`; `check`: the report's
 //!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded;
@@ -48,13 +52,16 @@
 //! One database state gives one stdout, byte for byte: nothing depends on
 //! time, storage order or the absolute root (`check`: one tree, config,
 //! baseline and date; the queue's commands print stored times, never
-//! relative ones, and their worktree's absolute path). No command writes
+//! relative ones, and their worktree's absolute path; `export state`: its
+//! dump's bytes, and its default file name the injected clock's time). No
+//! command writes
 //! under the project root but `spec init`, which creates its one file,
 //! `spec export index`, which writes only `[paths] index`, and `spec
 //! approve`, which writes only the proposal's target file and commits it in
 //! the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
-//! `bundle`, `propose`, `inbox`, `review` and `reject` write only the data
-//! directory, `check` nothing. Nothing found in the corpus is fatal
+//! `bundle`, `propose`, `inbox`, `review`, `reject` and `import-state` write
+//! only the data directory, `export state` only its dump (never inside the
+//! worktree), `check` nothing. Nothing found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
@@ -78,6 +85,8 @@ mod refresh;
 mod review;
 mod search;
 mod show;
+mod state;
+mod state_file;
 mod tree;
 
 use std::ffi::OsString;
@@ -111,6 +120,11 @@ pub use specengine_core::ProjectConfig;
 pub use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
 };
+pub use state::{
+    ExportStateOutcome, ExportStateRequest, ImportStateOutcome, ImportStateRequest, export_state,
+    import_state,
+};
+pub use state_file::STATE_FORMAT;
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
@@ -252,6 +266,10 @@ pub enum Outcome {
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
     Inbox(InboxOutcome),
+    /// `export state`: the dump written.
+    StateExport(ExportStateOutcome),
+    /// `import-state`: the rows restored, or the owner's refusal.
+    StateImport(ImportStateOutcome),
 }
 
 impl Outcome {
@@ -266,6 +284,7 @@ impl Outcome {
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
+            Self::StateImport(import) => import.exit(),
             _ => Exit::Answered,
         }
     }
@@ -286,13 +305,18 @@ impl Outcome {
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Inbox(outcome) => (&outcome.messages, None),
+            Self::StateExport(outcome) => (&outcome.messages, None),
+            Self::StateImport(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
             lines.push(format!("spec: {}", one_line(reason)));
         }
         // The queue's commands quote agent-written text.
-        if matches!(self, Self::Proposal(_) | Self::Inbox(_)) {
+        if matches!(
+            self,
+            Self::Proposal(_) | Self::Inbox(_) | Self::StateExport(_) | Self::StateImport(_)
+        ) {
             for line in &mut lines {
                 *line = escape_controls(line);
             }
@@ -315,6 +339,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Inbox(outcome) => inbox::render_text(outcome),
+        Outcome::StateExport(outcome) => state::render_export_text(outcome),
+        Outcome::StateImport(outcome) => state::render_import_text(outcome),
     }
 }
 
@@ -334,6 +360,8 @@ impl serde::Serialize for Outcome {
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Inbox(outcome) => outcome.serialize(serializer),
+            Self::StateExport(outcome) => outcome.serialize(serializer),
+            Self::StateImport(outcome) => outcome.serialize(serializer),
         }
     }
 }
