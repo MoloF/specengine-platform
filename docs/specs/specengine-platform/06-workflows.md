@@ -93,8 +93,8 @@ One queue in three places:
 
 | Decision | Effect |
 |---|---|
-| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): the edit lands in the worktree it was raised in (ADR-0032; a task's: its worktree), rebased if the node changed meanwhile, always committed `spec: apply PR-0042` (ADR-0005); to come: a decision record (`answers: PR-0042`, `cost`, `canon:`), `spec_hash` recomputed, the task's `spec_snapshot` updated (its own edit) |
-| **Accept "code to spec"** | spec unchanged; an item is added to the task plan; a decision record says the discrepancy is a code defect |
+| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): committed `spec: apply PR-0042` where raised (ADR-0005, ADR-0032), rebased if the node changed; a question or discrepancy: one decision record (`decision-apply`); to come: `spec_hash` recomputed, the task's `spec_snapshot` updated |
+| **Accept "code to spec"** | spec unchanged; the decision record says the code is wrong; to come: an item in the task plan |
 | **Reject** | closed with a reason (`spec reject`); a repeated question or discrepancy gets it back as a hit; to come: the reason indexed, for `update` too |
 | **Needs clarification** | `changes_requested` with the owner's question → the agent sees it in `get_proposal`/`get_task` and extends |
 | **Defer** | the proposal stays in the queue with a mark; work continues on the working answer |
