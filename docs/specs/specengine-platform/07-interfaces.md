@@ -56,10 +56,7 @@ The MCP server remembers nothing between calls: the owner's decision is stored b
 
 ### 1.4. Prompts (= slash commands in Claude Code)
 
-- `/specengine:analyze <task>` — analyst scenario (06 §2).
-- `/specengine:implement <task>` — developer scenario with marker rules and `report_discrepancy`.
-- `/specengine:prepare-task <node…>` — create a task draft from nodes.
-- `/specengine:round` — build the question sheet for the owner (06 §5).
+Plugin skills carry them (`plugin-skills`: `read-spec`, `ask-owner`, `propose-spec-change`). Reserved for tasks: `/specengine:analyze <task>` (analyst, 06 §2), `implement <task>` (markers, `report_discrepancy`), `prepare-task <node…>` (a task draft), `round` (the owner's question sheet, 06 §5).
 
 ### 1.5. Notifications
 

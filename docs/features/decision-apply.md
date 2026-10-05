@@ -15,7 +15,7 @@ Working answers (the owner's, 2026-10-05, session rule): Q1 these two kinds only
 
 ## Description and interactions
 
-`spec approve PR [--note T] [--option N | --answer T]` on a `question` or `discrepancy` (`ProposalKind::decides()`); `update`, `reject` unchanged (items rejected earlier stay so); no follow-up task. Writes: the record and one commit in the recorded worktree, the queue, the data directory. Core: config, template, render, ID format; store: schema 3, ops, intent-to-add; CLI: flags, steps, outputs, backup; MCP: `mirror.rs`, descriptions, no new tool.
+`spec approve PR [--note T] [--option N | --answer T]` on a `question` or `discrepancy` (`ProposalKind::decides()`); `update`, `reject` unchanged (items rejected earlier stay so); no follow-up task. Writes: the record and one commit in the recorded worktree, the queue, the data directory. Core: config, template, render, ID format; store: schema 3, ops, intent-to-add; CLI: flags, steps, outputs, backup; MCP: `mirror.rs`, descriptions, no new tool. If `plugin-skills` shipped first: its `ask-owner` settling text and the plugin version in the same change (`plugin-skills.md` "Rules and edge cases" 4).
 
 ## Data
 
