@@ -62,9 +62,8 @@ Verifiers: Vitest (`ui/src/**/*.test.ts(x)`), `ui_policy.rs`, the gates. M: the 
 ## Open
 
 - **Decision precondition** (daemon contract, `ui-live`): `Decision.option` indexes the options as shown; the request should carry the shown proposal's `updated_at` (or `patch_hash`) so the daemon refuses a decision on a revised one. Today only the dialog guards it.
-- **Missing endpoints** (`rust-developer`, `ui-live`; shapes in "Data"): `GET /api/projects`; full queue cards in `inbox`, or `GET …/proposals/:id`; `POST …/proposals/:id/decision` (`Decision` → `DecisionResult`); states `changes_requested`, `deferred`; the `ApiError` body (409; a refused apply, the mock's 422); `GET …/nodes/:id`; the generator writing `src/api/generated/`.
+- **Endpoints** (shapes in "Data"): `GET /api/projects`, `GET …/proposals/:id`, `GET …/nodes/{*ref}`, the error body: settled by `docs/features/daemon-read.md` "Data", built with it. Open (`rust-developer`, `ui-live`): deciding (its POST answers 403 until its Q4; `Decision` → `DecisionResult`, 409, a refused apply); states `changes_requested`, `deferred`; the generator writing `src/api/generated/`.
 - **Owner's `.claude/` edits** (Q1, due now): `.claude/agents/ui-developer.md` lines 47–48 → "Called from ADR-0033 on; slice specs list exceptions until `src/api/generated/` exists"; `.claude/commands/feature.md` line 25 drops "(Phase 4+)".
-- **Comments to repoint** (`ui-developer`, next slice): `scenario.ts`, `MockClient.test.ts`, `tokens.css`, `tokens.test.ts`, `Dialog.test.tsx` cite this spec's compacted sections "Mocks", "Tokens", "Rules and edge cases" (plain form, unchecked) → `ui/README.md` "Screen rules", "Owner's manual steps".
 - After the manual check: the card's section order (diff last). jsdom 30 after a Node ≥ 24.15 upgrade (`ui/README.md` "Held back").
 
 ## Implementation

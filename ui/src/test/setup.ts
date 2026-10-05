@@ -22,3 +22,9 @@ afterEach(() => {
     throw new Error(`The test wrote to the console:\n${calls.join("\n")}`);
   }
 });
+
+// jsdom lays nothing out and has no scrollIntoView; the views call it to bring a row or a line
+// into sight. A no-op keeps them honest about calling it without a layout to scroll.
+Element.prototype.scrollIntoView = function scrollIntoView() {
+  return undefined;
+};

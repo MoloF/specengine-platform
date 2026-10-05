@@ -29,7 +29,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 
 - **Tier 0** — `CLAUDE.md`, always read.
 - **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), `ui/README.md`. Canon lives next to the code it describes.
-- **Tier 2** — the index root `docs/index.md` and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
+- **Tier 2** — the index root `docs/index.md`, its live shards, and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
 - **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document. Its index line keeps only the id link and the status (ADR-0028) and lives in the archive shard `docs/index-archive.md`, read by id only, outside W (ADR-0030).
 
 ## Budgets (bytes of the whole file, front-matter included)
@@ -96,7 +96,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here one shard: `docs/index-archive.md`, every Tier 3 line. All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
+The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here three: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-decisions.md` (`docs/decisions/*.md`, cited and read by id) and `docs/index-crates.md` (`crates/*/README.md`, read by path), so the root keeps the canon and specs a task routes by and a read costs the root plus at most one live shard. All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
 
 ## Enforcement
 

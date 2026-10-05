@@ -101,6 +101,52 @@ describe("source policy", () => {
     expect(offending(words)).toEqual([]);
   });
 
+  it("writes no HTML from data: no HTML sink anywhere in src (AC-07 of ui-tree-node)", () => {
+    // The sinks of docs/features/ui-tree-node.md "Rules and edge cases", spelled in pieces.
+    const sinks = [
+      ["dangerously", "SetInnerHTML"],
+      ["inner", "HTML"],
+      ["outer", "HTML"],
+      ["insertAdjacent", "HTML"],
+      ["document", ".write"],
+      ["createContextual", "Fragment"],
+      ["src", "doc"],
+    ].map((parts) => parts.join("").replace(".", "\\."));
+    expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
+  });
+
+  it("takes every href in the views of spec data from sectionHash (AC-07 of ui-tree-node)", () => {
+    const views = (path: string) => !(path.startsWith("/src/tree/") || path.startsWith("/src/inbox/")) || /\.test\.tsx?$/.test(path);
+    expect(offending(/\bhref=(?!\{sectionHash\()/, views)).toEqual([]);
+  });
+
+  it("reads the network only through src/api (AC-01 of ui-tree-node)", () => {
+    const outsideApi = (path: string) => path.startsWith("/src/api/") || path.endsWith(".css") || /\.test\.tsx?$/.test(path);
+    expect(offending(/\b(fetch|XMLHttpRequest|EventSource|WebSocket)\s*\(/, outsideApi)).toEqual([]);
+    expect(offending(/\bnew\s+(XMLHttpRequest|EventSource|WebSocket)\b/, outsideApi)).toEqual([]);
+  });
+
+  it("quotes no link type in app code but the weak one, `mentions` (AC-14 of ui-tree-node)", () => {
+    // The built-in table of docs/canon/spec-cli-graph.md "Link types".
+    const types = [
+      "depends_on",
+      "derived_from",
+      "verifies",
+      "uses_term",
+      "constrains",
+      "supersedes",
+      "revises",
+      "amends",
+      "answers",
+      "working_answer",
+      "canon",
+      "adopts",
+    ];
+    const appCode = (path: string) =>
+      path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
+    expect(offending(new RegExp(`["'\`](${types.join("|")})["'\`]`), appCode)).toEqual([]);
+  });
+
   it("holds no raw Cyrillic letter: non-Latin test text is escaped (ADR-0024)", () => {
     const cyrillic = new RegExp(`[${String.fromCodePoint(0x400)}-${String.fromCodePoint(0x4ff)}]`);
     expect(offending(cyrillic)).toEqual([]);

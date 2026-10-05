@@ -359,19 +359,44 @@ fn the_registry_example_loads() {
     let example = registry_example();
     let config = CheckConfig::from_toml(&example)
         .unwrap_or_else(|e| panic!("{}\n{example}", e.at("specengine.toml")));
-    // This repository's block (#index-shards): the root plus the archive shard.
+    // This repository's block (#index-shards): the root, the archive shard
+    // and two live shards. `writes` and `shards` span lines: each shard's
+    // `line` is the line of its own inline table, not of the `shards` key
+    // (line 10), the header on line 4.
     let want = Generator {
         command: "cargo run -q -p specengine-cli -- export index".to_owned(),
-        writes: strings(&["docs/index.md", "docs/index-archive.md"]),
+        writes: strings(&[
+            "docs/index.md",
+            "docs/index-archive.md",
+            "docs/index-decisions.md",
+            "docs/index-crates.md",
+        ]),
         index: true,
         gate: Some("cargo run -q -p specengine-cli -- check".to_owned()),
         line: 4,
-        shards: vec![Shard {
-            path: "docs/index-archive.md".to_owned(),
-            kind: ShardKind::Tier3,
-            line: 9,
-        }],
+        shards: vec![
+            Shard {
+                path: "docs/index-archive.md".to_owned(),
+                kind: ShardKind::Tier3,
+                line: 11,
+            },
+            Shard {
+                path: "docs/index-decisions.md".to_owned(),
+                kind: ShardKind::Claims(strings(&["docs/decisions/*.md"])),
+                line: 12,
+            },
+            Shard {
+                path: "docs/index-crates.md".to_owned(),
+                kind: ShardKind::Claims(strings(&["crates/*/README.md"])),
+                line: 13,
+            },
+        ],
     };
+    assert_eq!(
+        example.lines().nth(9).map(str::trim_end),
+        Some("shards  = [  # optional, index entry only (#index-shards)"),
+        "line 10 of the example is the `shards` key"
+    );
     assert_eq!(
         config.generators.as_deref(),
         Some(std::slice::from_ref(&want))

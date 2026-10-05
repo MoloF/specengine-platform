@@ -44,7 +44,10 @@ parts = ["Implementation"]
 
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"
-writes  = ["docs/index.md", "docs/index-archive.md"]
+writes  = ["docs/index.md", "docs/index-archive.md", "docs/index-decisions.md", "docs/index-crates.md"]
 index   = true
 gate    = "cargo run -q -p specengine-cli -- check"
-shards  = [{ path = "docs/index-archive.md", tier3 = true }]
+# Live shards hold what is read by id (decisions) or by path (crate READMEs): docs/README.md "Generated".
+shards  = [{ path = "docs/index-archive.md", tier3 = true },
+           { path = "docs/index-decisions.md", claims = ["docs/decisions/*.md"] },
+           { path = "docs/index-crates.md", claims = ["crates/*/README.md"] }]

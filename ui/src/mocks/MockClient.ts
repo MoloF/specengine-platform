@@ -1,7 +1,27 @@
-import { ClientError, DECIDED_ELSEWHERE, type SpecEngineClient } from "../api/client";
-import type { Decision, DecisionResult, Inbox, NodeView, Project, Proposal } from "../api/types";
-import { stamp, type MockProject } from "./build";
+import {
+  ClientError,
+  DECIDED_ELSEWHERE,
+  type BundleOptions,
+  type NodeOptions,
+  type SearchOptions,
+  type SpecEngineClient,
+  type TreeOptions,
+} from "../api/client";
+import type {
+  BundleView,
+  Decision,
+  DecisionResult,
+  Inbox,
+  NodeView,
+  Project,
+  Proposal,
+  SearchResults,
+  TreeView,
+} from "../api/types";
+import { fakeHex, stamp, type MockProject } from "./build";
+import { bundleOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
+import { largeDocuments } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { SLOW_MS, type Scenario } from "./scenario";
 
@@ -14,23 +34,20 @@ export interface MockOptions {
 
 const DECIDED_BY = "Mock Owner <owner@example.org>";
 
-/** A stable 40-hex fake commit id for a proposal (FNV-1a over the text, repeated). */
+/** The tree's note for a project with no spec document, as `spec tree` words it. */
+export const EMPTY_TREE_NOTE = 'no document under [paths] spec "docs/spec"; give a ROOT';
+
+/** A stable 40-hex fake commit id for a proposal. */
 function fakeSha(text: string): string {
-  let hash = 0x811c9dc5;
-  let out = "";
-  for (let round = 0; out.length < 40; round += 1) {
-    for (const char of `${text}:${round}`) {
-      hash ^= char.charCodeAt(0);
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-    out += hash.toString(16).padStart(8, "0");
-  }
-  return out.slice(0, 40);
+  return fakeHex(text, 40);
 }
 
 /**
- * The typed mock behind SpecEngineClient: two invented projects, their queues in memory
- * (decisions change them until reload), and the scenario picked at bootstrap.
+ * The typed mock behind SpecEngineClient: two invented projects, their spec and their queues in
+ * memory (decisions change the queues until reload; an accepted change is applied in the
+ * proposal's worktree, so no node text changes here: ADR-0032), and the scenario picked at
+ * bootstrap. Reads answer as `spec serve` does for a browser: uncut, an unknown REF as its exit-1
+ * document, a refusal (exit 2) as 503 with the CLI's words.
  */
 export class MockClient implements SpecEngineClient {
   readonly dataSource = "mock";
@@ -49,7 +66,12 @@ export class MockClient implements SpecEngineClient {
       for (const project of this.projects) {
         project.proposals = [];
         project.notes = [];
+        project.corpus = { documents: [], links: [], treeNotes: [EMPTY_TREE_NOTE] };
       }
+    }
+    if (scenario === "large") {
+      const harbor = this.project("harbor-sim");
+      harbor.corpus = { ...harbor.corpus, documents: [...harbor.corpus.documents, ...largeDocuments()] };
     }
   }
 
@@ -64,16 +86,25 @@ export class MockClient implements SpecEngineClient {
     return structuredClone({ proposals: entry.proposals, notes: entry.notes });
   }
 
-  async getNode(project: string, id: string): Promise<NodeView> {
+  async getTree(project: string, options: TreeOptions = {}): Promise<TreeView> {
     await this.read();
-    const entry = this.project(project);
-    const nodes = entry.nodes.filter((node) => node.id === id);
-    return structuredClone({
-      ref: id,
-      reason: nodes.length === 0 ? `no node ${id} in ${project}` : null,
-      notes: [],
-      nodes,
-    });
+    return treeOf(this.project(project).corpus, options);
+  }
+
+  async getNode(project: string, ref: string, options: NodeOptions = {}): Promise<NodeView> {
+    await this.read();
+    return nodeViewOf(this.project(project).corpus, ref, options);
+  }
+
+  async search(project: string, options: SearchOptions): Promise<SearchResults> {
+    await this.read();
+    return searchOf(this.project(project).corpus, options);
+  }
+
+  /** Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). */
+  async getBundle(project: string, options: BundleOptions): Promise<BundleView> {
+    await this.read();
+    return bundleOf(this.project(project).corpus, options);
   }
 
   async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {
@@ -106,7 +137,7 @@ export class MockClient implements SpecEngineClient {
           });
         }
         if (decision.option !== null && current.options[decision.option] === undefined) {
-          throw new ClientError({ status: 422, message: `${id} has no option ${decision.option}` });
+          throw new ClientError({ status: 422, message: `${id} has no option ${String(decision.option)}` });
         }
         const sha = fakeSha(id);
         const applied: Proposal = { ...decided, status: "applied", applied_commit: sha, decision_note: decision.note };

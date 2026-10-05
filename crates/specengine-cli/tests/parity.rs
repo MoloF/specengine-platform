@@ -5,12 +5,14 @@
 //!
 //! AC-04 (on a scratch copy of the walked documents and the root config;
 //! the export never runs in this repository; index-shards AC-12): with
-//! `docs/index.md` and its archive shard `docs/index-archive.md` deleted, X
-//! recreates both byte-identical to the working tree's, one `wrote` line
-//! each; run again it reports both `unchanged` and keeps the mtimes, the
-//! JSON with `shards`; `--stdout` prints the same bytes, one
-//! `==> <path> <==` block per output; one byte edited in an output →
-//! `spec check` exit 1, one `index-drift` naming X on that output only.
+//! `docs/index.md`, its archive shard `docs/index-archive.md` and its live
+//! shards `docs/index-decisions.md` and `docs/index-crates.md` deleted, X
+//! recreates all four byte-identical to the working tree's, one `wrote`
+//! line each in config order; run again it reports all `unchanged` and
+//! keeps the mtimes, the JSON with `shards` (the three, in order);
+//! `--stdout` prints the same bytes, one `==> <path> <==` block per output;
+//! one byte edited in an output → `spec check` exit 1, one `index-drift`
+//! naming X on that output only.
 //! AC-02: G from the top (`spec check` in this
 //! repository, no `--root`): exit 0, `— clean`, the stdout the library's;
 //! `--json` has 0 errors, debt, expired and stale; `--debt` lists no
@@ -38,7 +40,7 @@ use std::process::Command;
 use common::check::{library, library_with, text};
 use common::{Scratch, repository_root, snapshot, spec, write};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, INDEX_SHARD, add_dangling_mention, root_toml, skipped_files,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_OUTPUTS, add_dangling_mention, root_toml, skipped_files,
     std_walk,
 };
 use specengine_core::ProjectConfig;
@@ -121,7 +123,7 @@ fn stdout_blocks(stdout: &str) -> Vec<(String, String)> {
 fn export_index_recreates_this_repository_s_index() {
     let repository = repository_root();
     let (documents, _) = walked_documents(&repository);
-    let outputs = [INDEX, INDEX_SHARD];
+    let outputs = INDEX_OUTPUTS;
     for output in outputs {
         assert!(
             documents.iter().any(|path| path == output),
@@ -150,17 +152,18 @@ fn export_index_recreates_this_repository_s_index() {
         assert!(!copy.join(output).exists(), "{output} on the copy");
     }
 
-    // Both recreated, one line each, in config order.
+    // `<verb> <path>: <n> bytes`, one line per output in config order.
+    let lines = |verb: &str| -> String {
+        outputs
+            .iter()
+            .zip(&working)
+            .map(|(output, bytes)| format!("{verb} {output}: {} bytes\n", bytes.len()))
+            .collect()
+    };
+    // All recreated, one line each, in config order.
     let run = spec(&home, &copy, &["export", "index"]);
     run.code(0);
-    assert_eq!(
-        run.stdout,
-        format!(
-            "wrote {INDEX}: {} bytes\nwrote {INDEX_SHARD}: {} bytes\n",
-            working[0].len(),
-            working[1].len()
-        )
-    );
+    assert_eq!(run.stdout, lines("wrote"));
     assert_eq!(run.stderr, "");
     for (output, working) in outputs.iter().zip(&working) {
         let recreated = fs::read(copy.join(output)).unwrap();
@@ -180,22 +183,25 @@ fn export_index_recreates_this_repository_s_index() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     let run = spec(&home, &copy, &["export", "index"]);
     run.code(0);
-    assert_eq!(
-        run.stdout,
-        format!(
-            "unchanged {INDEX}: {} bytes\nunchanged {INDEX_SHARD}: {} bytes\n",
-            working[0].len(),
-            working[1].len()
-        )
-    );
+    assert_eq!(run.stdout, lines("unchanged"));
     let run = spec(&home, &copy, &["--json", "export", "index"]);
     run.code(0);
+    let shards: Vec<String> = outputs[1..]
+        .iter()
+        .zip(&working[1..])
+        .map(|(output, bytes)| {
+            format!(
+                "{{\"path\":\"{output}\",\"bytes\":{},\"written\":false}}",
+                bytes.len()
+            )
+        })
+        .collect();
     assert_eq!(
         run.stdout,
         format!(
-            "{{\"path\":\"{INDEX}\",\"bytes\":{},\"written\":false,\"shards\":[{{\"path\":\"{INDEX_SHARD}\",\"bytes\":{},\"written\":false}}]}}\n",
+            "{{\"path\":\"{INDEX}\",\"bytes\":{},\"written\":false,\"shards\":[{}]}}\n",
             working[0].len(),
-            working[1].len()
+            shards.join(",")
         )
     );
     for (output, mtime) in outputs.iter().zip(&mtimes) {
@@ -246,6 +252,8 @@ fn export_index_recreates_this_repository_s_index() {
         .zip([
             "# Documentation index",
             "## Archive \u{2014} Tier 3, by id only",
+            "## Decisions",
+            "## Canon",
         ])
         .enumerate()
     {

@@ -3,7 +3,8 @@
  * Dark navy surfaces, blue-tinted greys, one azure accent; status colours are their own roles.
  * Contrast (WCAG 2.2 AA, checked by src/styles/tokens.test.ts): text primary, secondary and accent
  * at least 4.5:1 on every surface, primary also on the diff surfaces, on-accent on accent; focus
- * ring, control border and every status colour at least 3:1 on every surface. Dark theme only.
+ * ring, control border and every status colour at least 3:1 on every surface; primary text on the
+ * search highlight. Dark theme only.
  */
 :root {
   color-scheme: dark;
@@ -69,6 +70,22 @@
   --sync-unbound: #a8b6cd;
   --sync-predated: #f59ac2;
   --sync-cannot-verify: #c2b0f5;
+
+  /* Link states (spec show --links); unchecked takes cannot-verify's colour, never ok's. */
+  --link-resolved: var(--sync-ok);
+  --link-dangling: var(--sync-conflict);
+  --link-skipped: var(--sync-unbound);
+  --link-unchecked: var(--sync-cannot-verify);
+  --link-unknown: var(--severity-unknown);
+
+  /* Tree marks: a root although its document names a parent. */
+  --mark-dangling-parent: var(--sync-broken-binding);
+  --mark-parent-cycle: var(--sync-predated);
+  --mark-unknown: var(--severity-unknown);
+
+  /* A search hit inside a snippet (with weight and an underline, never colour alone). */
+  --highlight-surface: #4a3a10;
+  --highlight-line: var(--attention);
 
   /* Section diffs. */
   --diff-added-surface: #123628;

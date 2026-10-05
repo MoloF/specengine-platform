@@ -1,11 +1,27 @@
 import { vi } from "vitest";
-import type { SpecEngineClient } from "../api/client";
-import type { Decision, DecisionResult, Inbox, NodeView, Project, Proposal } from "../api/types";
-import { aNode } from "./builders";
+import type { BundleOptions, NodeOptions, SearchOptions, SpecEngineClient, TreeOptions } from "../api/client";
+import type {
+  BundleView,
+  Decision,
+  DecisionResult,
+  Inbox,
+  NodeView,
+  Project,
+  Proposal,
+  SearchResults,
+  TreeView,
+} from "../api/types";
+import { aBundle, aNode, aSearchResults, aTreeNode, aTreeView } from "./builders";
 
 export const PROJECTS: Project[] = [
   { slug: "alpha", name: "Alpha" },
   { slug: "beta", name: "Beta" },
+];
+
+/** The stub's tree: a document holding R-1. */
+export const STUB_TREE = [
+  aTreeNode({ id: "DOC-1", depth: 0, path: "docs/spec/doc-1.md" }),
+  aTreeNode({ id: "R-1", depth: 1, parent: "DOC-1", path: "docs/spec/doc-1.md", line: 5 }),
 ];
 
 /**
@@ -21,9 +37,17 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getInbox: vi.fn(
       (): Promise<Inbox> => Promise.resolve({ proposals: state.proposals.map((p) => ({ ...p })), notes: [...state.notes] }),
     ),
-    getNode: vi.fn(
-      (_project: string, id: string): Promise<NodeView> =>
-        Promise.resolve({ ref: id, reason: null, notes: [], nodes: [aNode({ id })] }),
+    getTree: vi.fn<(project: string, options?: TreeOptions) => Promise<TreeView>>(() =>
+      Promise.resolve(aTreeView(STUB_TREE.map((row) => ({ ...row })))),
+    ),
+    getNode: vi.fn<(project: string, ref: string, options?: NodeOptions) => Promise<NodeView>>((_project, id) =>
+      Promise.resolve({ ref: id, reason: null, notes: [], nodes: [aNode({ id })] }),
+    ),
+    search: vi.fn<(project: string, options: SearchOptions) => Promise<SearchResults>>((_project, options) =>
+      Promise.resolve(aSearchResults([], { query: options.query, archive: options.archive ?? false })),
+    ),
+    getBundle: vi.fn<(project: string, options: BundleOptions) => Promise<BundleView>>((_project, options) =>
+      Promise.resolve(aBundle(options.node_ids, { budget: options.budget ?? 2000 })),
     ),
     decideProposal: vi.fn((_project: string, id: string, decision: Decision): Promise<DecisionResult> => {
       const current = state.proposals.find((proposal) => proposal.id === id);

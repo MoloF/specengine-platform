@@ -4,6 +4,7 @@ import { useDataSource } from "../api/provider";
 import { useProjects } from "../api/queries";
 import type { Project } from "../api/types";
 import { InboxView } from "../inbox/InboxView";
+import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -226,6 +227,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <NotFound reason={`There is no project ${route.project}.`} inboxHref={inboxHref} />;
   } else if (route.section === "inbox") {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
+  } else if (route.section === "tree") {
+    view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
   } else {
     const section = SECTIONS.find((candidate) => candidate.id === route.section);
     view = section !== undefined && section.slice !== null ? <NotBuilt section={section} /> : null;
@@ -283,7 +286,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
             </ErrorBoundary>
           </main>
         </div>
-        {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
+        {shortcutsOpen && <ShortcutsDialog section={route.type === "section" ? route.section : null} onClose={closeShortcuts} />}
       </Announcer>
     </ShortcutsOpener>
   );

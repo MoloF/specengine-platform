@@ -189,6 +189,8 @@ export interface ShownNode {
   archived: boolean;
   utf8: boolean;
   sections: string[];
+  /** `b3:` of the whole span's bytes read: a proposal's base (`propose --base`). */
+  span_hash: string;
   text: string;
   truncated: boolean;
   omitted: Omitted | null;
@@ -201,6 +203,161 @@ export interface NodeView {
   reason: string | null;
   notes: string[];
   nodes: ShownNode[];
+}
+
+/** Why a tree row is a root although its document declares a parent. Source: `docs/canon/spec-cli-graph.md` "spec tree". */
+export type TreeMark = "dangling-parent" | "parent-cycle" | Unlisted;
+
+/** One line of `spec tree --json`, flat pre-order. Source: `docs/canon/spec-cli-graph.md` "spec tree". */
+export interface TreeNode {
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  /** Counted from the roots (0); a row's parent is the nearest earlier row one level up. */
+  depth: number;
+  /** The name of the node this row is listed under; null for a root. */
+  parent: string | null;
+  mark: TreeMark | null;
+  status: string | null;
+  rev: number | null;
+  tokens_est: number;
+  archived: boolean;
+}
+
+/** `spec tree --json`: the containment tree, or the reason ROOT names nothing. Source: `docs/canon/spec-cli-graph.md` "spec tree". */
+export interface TreeView {
+  /** ROOT as given; null for the whole tree. */
+  ref: string | null;
+  reason: string | null;
+  notes: string[];
+  depth: number | null;
+  kinds: string[];
+  archive: boolean;
+  left_out: LeftOut;
+  truncated: boolean;
+  nodes: TreeNode[];
+}
+
+/** One run of a search snippet: a hit or the text around it. Source: `docs/features/ui-tree-node.md` "Data". */
+export interface SnippetSegment {
+  text: string;
+  hit: boolean;
+}
+
+/**
+ * A search snippet as structure, in place of the store's `**` markers
+ * (`crates/specengine-store/README.md` "Writes, reads, search"); `cut_start`, `cut_end`: text
+ * goes on before or after it. Source: `docs/features/ui-tree-node.md` "Data".
+ */
+export interface Snippet {
+  segments: SnippetSegment[];
+  cut_start: boolean;
+  cut_end: boolean;
+}
+
+/** One search hit. Source: `crates/specengine-cli/README.md` "Output and the cap". */
+export interface SearchHit {
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  ord: number;
+  archived: boolean;
+  snippet: Snippet | null;
+}
+
+/** `spec search --json`, as the browser view gets it: uncut. Source: `crates/specengine-cli/README.md` "Output and the cap". */
+export interface SearchResults {
+  archive: boolean;
+  hits: SearchHit[];
+  kinds: string[];
+  limit: number;
+  notes: string[];
+  query: string;
+  /** Archived matches left out of `hits` (without `archive`). */
+  tier3_left_out: number;
+  truncated: boolean;
+}
+
+/** The form a bundle item takes. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export type BundleForm = "text" | "outline" | "header" | "summary" | Unlisted;
+
+/** The way a link is followed from the target. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export type Direction = "in" | "out" | Unlisted;
+
+/** A link type an item came in by. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export interface BundleVia {
+  type: string;
+  direction: Direction;
+}
+
+/** An open question's working answer. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export interface WorkingAnswer {
+  name: string | null;
+  written: string;
+  path: string;
+  line: number;
+  state: LinkState;
+}
+
+/** One item of a bundle layer, without its text. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export interface BundleItem {
+  name: string;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  form: BundleForm;
+  status: string | null;
+  via: BundleVia[] | null;
+  working_answer: WorkingAnswer | null;
+  tokens_est: number;
+  archived: boolean;
+}
+
+/** The nine layers in print order, each `[]` when empty. Sources: `docs/canon/spec-cli-bundle.md` "Layers", "Output". */
+export interface BundleLayers {
+  targets: BundleItem[];
+  open_questions: BundleItem[];
+  ancestors: BundleItem[];
+  criteria: BundleItem[];
+  bindings: BundleItem[];
+  decisions: BundleItem[];
+  neighbours: BundleItem[];
+  terms: BundleItem[];
+  tests: BundleItem[];
+}
+
+/** A node the budget left out, named for a follow-up read. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export interface TailEntry {
+  name: string;
+  title: string | null;
+  path: string;
+  line: number;
+  tokens_est: number;
+  /** The layer key it stands in. */
+  layer: keyof BundleLayers | Unlisted;
+}
+
+/** `spec bundle --json`; exit 1 sets `refs`, `reason`, `notes` and leaves the rest null. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+export interface BundleView {
+  refs: string[];
+  reason: string | null;
+  notes: string[];
+  /** Phase 2's task bundles: always null. */
+  task: null;
+  budget: number | null;
+  tokens: number | null;
+  chars: number | null;
+  bytes: number | null;
+  bundle_hash: string | null;
+  body: string | null;
+  layers: BundleLayers | null;
+  tail: TailEntry[] | null;
+  more: number | null;
 }
 
 /**

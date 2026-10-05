@@ -21,7 +21,7 @@ describe("the UI over the mock", () => {
     const ids = within(list)
       .getAllByRole("option")
       .map((option) => option.dataset.proposal);
-    expect(ids).toEqual(["PR-0041", "PR-0042", "PR-0046", "PR-0043", "PR-0045", "PR-0044"]);
+    expect(ids).toEqual(["PR-0041", "PR-0042", "PR-0046", "PR-0043", "PR-0047", "PR-0045", "PR-0044"]);
     expect(within(list).getByText(new RegExp(BASIN_NAME_DECOMPOSED))).toBeTruthy();
     fireEvent.click(within(list).getByText(/undocumented sample format/));
     expect(await screen.findByText(new RegExp(LONG_TOKEN))).toBeTruthy();

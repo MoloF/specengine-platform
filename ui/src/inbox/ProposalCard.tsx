@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode } from "../api/queries";
 import type { Proposal } from "../api/types";
+import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -13,6 +14,17 @@ import { DiffView } from "./DiffView";
 import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
+
+/** The target in the Spec tree: its text, links, bundle and other proposals. */
+function OpenInTree({ project, id }: { project: string; id: string }) {
+  return (
+    <p className="target-open">
+      <a href={sectionHash(project, "tree", id)}>
+        Open in spec tree<span className="sr-only">: {id}</span>
+      </a>
+    </p>
+  );
+}
 
 /**
  * One target and its current section, with its own error and Retry. After a successful retry the
@@ -64,6 +76,7 @@ function TargetNode({ project, id }: { project: string; id: string }) {
           {id}
         </p>
         <p className="muted">{view.reason ?? "No node answers this ID."}</p>
+        <OpenInTree project={project} id={id} />
       </li>
     );
   }
@@ -87,6 +100,7 @@ function TargetNode({ project, id }: { project: string; id: string }) {
               Cut at the output cap: lines {node.omitted.lines[0]}-{node.omitted.lines[1]} not shown.
             </p>
           )}
+          {index === 0 && <OpenInTree project={project} id={id} />}
         </li>
       ))}
     </>

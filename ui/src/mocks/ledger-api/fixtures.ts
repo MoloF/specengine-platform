@@ -1,7 +1,8 @@
-import { node, proposal, stamp, type MockProject } from "../build";
-import { nodeKinds } from "./kinds";
+import { frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
+import { nodeKinds, specStatuses } from "./kinds";
 
-// ledger-api: an invented payments service, with a node vocabulary disjoint from harbor-sim's.
+// ledger-api: an invented payments service, with a node vocabulary disjoint from harbor-sim's:
+// a smaller tree three levels deep, nested sections, an archived endpoint, a few links.
 
 const SLUG = "ledger-api";
 const WINDOW_FILE = "docs/spec/refunds/window.md";
@@ -29,72 +30,141 @@ const ENDPOINT_DIFF = [
   "+  422 when the amount exceeds the captured rest.",
 ].join("\n");
 
+function ledgerCorpus(): MockCorpus {
+  const documents = [
+    specFile({
+      path: "docs/spec/README.md",
+      id: "SVC-LEDGER",
+      kind: "service",
+      title: "Ledger API",
+      status: "accepted",
+      summary: "The payments ledger and its public API.",
+      lines: [
+        ...frontMatter({ id: "SVC-LEDGER", kind: "service", status: "accepted", summary: "The payments ledger and its public API." }),
+        "",
+        "# Ledger API",
+        "",
+        "Every money movement is one balanced ledger entry; the API never edits an entry, it adds one.",
+      ],
+    }),
+    specFile({
+      path: "docs/spec/api/idempotency.md",
+      id: "POL-WRITES",
+      kind: "policy",
+      title: "Write rules",
+      status: "accepted",
+      parent: "SVC-LEDGER",
+      lines: [
+        ...frontMatter({ id: "POL-WRITES", kind: "policy", status: "accepted", parent: "SVC-LEDGER" }),
+        "",
+        "# Write rules",
+        "",
+        "## POL-IDEMPOTENCY: Idempotency keys",
+        "",
+        "Every write endpoint takes an Idempotency-Key header and answers a repeated key",
+        "with the first result.",
+      ],
+      sections: [{ id: "POL-IDEMPOTENCY", kind: "policy", title: "Idempotency keys" }],
+    }),
+    specFile({
+      path: "docs/spec/refunds/README.md",
+      id: "SVC-REFUNDS",
+      kind: "service",
+      title: "Refund service",
+      status: "accepted",
+      rev: 5,
+      parent: "SVC-LEDGER",
+      lines: [
+        ...frontMatter({ id: "SVC-REFUNDS", kind: "service", status: "accepted", parent: "SVC-LEDGER", rev: 5 }),
+        "",
+        "# Refund service",
+        "",
+        "Owns refunds of captured card payments; writes one ledger entry per refund.",
+      ],
+    }),
+    specFile({
+      path: ENDPOINT_FILE,
+      id: "EP-REFUNDS",
+      kind: "endpoint",
+      title: "Refund endpoints",
+      status: "accepted",
+      rev: 2,
+      parent: "SVC-REFUNDS",
+      lines: [
+        ...frontMatter({ id: "EP-REFUNDS", kind: "endpoint", status: "accepted", parent: "SVC-REFUNDS", depends_on: "POL-WRITES" }),
+        "",
+        "# Refund endpoints",
+        "",
+        ...ENDPOINT_TEXT.split("\n"),
+        "See POL-IDEMPOTENCY for repeated requests.",
+      ],
+      sections: [{ id: "EP-REFUND-CREATE", kind: "endpoint", title: "POST /v1/refunds" }],
+    }),
+    specFile({
+      path: "docs/spec/api/legacy-v0.md",
+      id: "EP-REFUND-V0",
+      kind: "endpoint",
+      title: "POST /v0/refund",
+      status: "deprecated",
+      parent: "EP-REFUNDS",
+      archived: true,
+      lines: [
+        ...frontMatter({ id: "EP-REFUND-V0", kind: "endpoint", status: "deprecated", parent: "EP-REFUNDS" }),
+        "",
+        "# POST /v0/refund",
+        "",
+        "The first refund endpoint; replaced by EP-REFUND-CREATE.",
+      ],
+    }),
+    specFile({
+      path: WINDOW_FILE,
+      id: "POL-REFUND-RULES",
+      kind: "policy",
+      title: "Refund rules",
+      status: "draft",
+      parent: "SVC-REFUNDS",
+      lines: [
+        ...frontMatter({ id: "POL-REFUND-RULES", kind: "policy", status: "draft", parent: "SVC-REFUNDS", constrains: "EP-REFUNDS" }),
+        "",
+        "# Refund rules",
+        "",
+        "## POL-REFUND-WINDOW: Refund window",
+        "",
+        "A payment is refundable within 30 days of capture; later requests go to support.",
+      ],
+      sections: [{ id: "POL-REFUND-WINDOW", kind: "policy", title: "Refund window" }],
+    }),
+  ];
+  const lineOf = (path: string, needle: string): number =>
+    (documents.find((file) => file.path === path)?.lines.findIndex((line) => line.includes(needle)) ?? -1) + 1;
+  return {
+    treeNotes: [],
+    documents,
+    links: [
+      link({ type: "depends_on", origin: "frontmatter", written: "POL-WRITES", path: ENDPOINT_FILE, line: lineOf(ENDPOINT_FILE, "depends_on:"), to: "POL-WRITES" }),
+      link({ type: "mentions", origin: "inline", written: "POL-IDEMPOTENCY", path: ENDPOINT_FILE, line: lineOf(ENDPOINT_FILE, "See POL-IDEMPOTENCY"), to: "POL-IDEMPOTENCY" }),
+      link({ type: "constrains", origin: "frontmatter", written: "EP-REFUNDS", path: WINDOW_FILE, line: lineOf(WINDOW_FILE, "constrains:"), to: "EP-REFUNDS" }),
+      link({
+        type: "mentions",
+        origin: "inline",
+        written: "EP-REFUND-CREATE",
+        path: "docs/spec/api/legacy-v0.md",
+        line: lineOf("docs/spec/api/legacy-v0.md", "replaced by"),
+        to: "EP-REFUND-CREATE",
+      }),
+    ],
+  };
+}
+
 export function ledgerApi(now: number): MockProject {
   const at = (minutesAgo: number) => stamp(now, minutesAgo);
   const agent = (role: string, run: string) => ({ type: "agent", role, model: "claude-opus-5-5", run });
   return {
     project: { slug: SLUG, name: "Ledger API" },
     nodeKinds,
+    specStatuses,
     notes: ["2 proposals of an archived task are left out (spec inbox --all lists them)"],
-    nodes: [
-      node({
-        id: "SVC-REFUNDS",
-        kind: "service",
-        title: "Refund service",
-        path: "docs/spec/refunds/README.md",
-        line: 1,
-        status: "accepted",
-        rev: 5,
-        text: [
-          "---",
-          "id: SVC-REFUNDS",
-          "kind: service",
-          "status: accepted",
-          "rev: 5",
-          "---",
-          "",
-          "# Refund service",
-          "",
-          "Owns refunds of captured card payments; writes one ledger entry per refund.",
-        ].join("\n"),
-      }),
-      node({
-        id: "EP-REFUND-CREATE",
-        kind: "endpoint",
-        title: "POST /v1/refunds",
-        path: ENDPOINT_FILE,
-        line: 5,
-        rev: 2,
-        text: ENDPOINT_TEXT,
-      }),
-      node({
-        id: "POL-REFUND-WINDOW",
-        kind: "policy",
-        title: "Refund window",
-        path: WINDOW_FILE,
-        line: 7,
-        rev: 1,
-        text: [
-          "## POL-REFUND-WINDOW: Refund window",
-          "",
-          "A payment is refundable within 30 days of capture; later requests go to support.",
-        ].join("\n"),
-      }),
-      node({
-        id: "POL-IDEMPOTENCY",
-        kind: "policy",
-        title: "Idempotency keys",
-        path: "docs/spec/api/idempotency.md",
-        line: 3,
-        rev: 1,
-        text: [
-          "## POL-IDEMPOTENCY: Idempotency keys",
-          "",
-          "Every write endpoint takes an Idempotency-Key header and answers a repeated key",
-          "with the first result.",
-        ].join("\n"),
-      }),
-    ],
+    corpus: ledgerCorpus(),
     proposals: [
       proposal({
         id: "PR-0007",

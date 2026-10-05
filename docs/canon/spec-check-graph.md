@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-03
+reviewed: 2026-10-06
 ---
 
 # spec check: index render, generators, graph warnings
@@ -41,7 +41,7 @@ Line `- [<label>](<link>) <title> · <scope> · <status>`; a Tier 3 line is only
 **Tier 3** is decided once, by status, never by folder: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules. Front-matter failing strict YAML lists under `No class — fix`; a key of the wrong type renders absent.
 
 <a id="index-shards"></a>
-**Shards** (ADR-0030). The index is the root at `[paths] index` plus the `shards` of the `index = true` entry (config order, each in its `writes`); the root is the one entry point. Each walked document but a generated one has one line across the set; no output is listed. Placement: Tier 3 → the archive shard (`tier3 = true`) if any; else the first shard with a `claims` glob (the `exclude` grammar) matching the path; else the root. So a claimed failed front-matter lists under that shard's `No class — fix`; with no archive shard, Tier 3 follows the claims into that file's Archive section. Sections and lines as above. The root ends with `## Shards`: per shard, empty or not, `- [<path>](<link>) <label>`, no count; label `Archive — Tier 3, by id only`, else the claims in backticks joined by `, `. A shard: the header above, H1 `# Documentation index: <label>`, and `A shard of [<root path>](<link>), the index's one entry point.` for the protocol line. Caps: the root and each live shard `index_bytes`, the archive none (read by id, §3). W's index term: the root + the largest live shard. The cap, not §9's "~500 entries", decides when to shard; `scope:` never does. No shard (`shards = []` too): the single file above, byte for byte.
+**Shards** (ADR-0030). The index is the root at `[paths] index` plus the `shards` of the `index = true` entry (config order, each in its `writes`); the root is the one entry point. Each walked document but a generated one has one line across the set. Placement: Tier 3 → the archive shard (`tier3 = true`) if any; else the first shard with a `claims` glob (the `exclude` grammar) matching the path; else the root. So a claimed failed front-matter lists under that shard's `No class — fix`; with no archive shard, Tier 3 follows the claims into that file's Archive section. Sections and lines as above. The root ends with `## Shards`: per shard, empty or not, `- [<path>](<link>) <label>`, no count; label `Archive — Tier 3, by id only`, else the claims in backticks joined by `, `. A shard: the header above, H1 `# Documentation index: <label>`, and `A shard of [<root path>](<link>), the index's one entry point.` for the protocol line. Caps: the root and each live shard `index_bytes`, the archive none (read by id, §3). W's index term: the root + the largest live shard. The cap, not §9's "~500 entries", decides when to shard; `scope:` never does. No shard (`shards = []` too): the single file above, byte for byte.
 
 ## §11.5: index drift
 
@@ -54,15 +54,19 @@ None compared on a `walk_gap` (a `read_error`, an `UnreadableDir`, a written `Mi
 This repository's root `specengine.toml` has:
 
 ```toml
-[[generators]]                                              # absent → §11.5–6 off; `generators = []` → §11.6 on
+[[generators]]
 command = "cargo run -q -p specengine-cli -- export index"  # a `generator:` value, compared byte for byte
-writes  = ["docs/index.md", "docs/index-archive.md"]        # root-relative, the [paths] path rules
-index   = true                                              # optional: SpecEngine renders this output (§11.5)
-gate    = "cargo run -q -p specengine-cli -- check"         # optional, index entry only; default "spec check"
-shards  = [{ path = "docs/index-archive.md", tier3 = true }] # optional, index entry only (#index-shards)
+writes  = ["docs/index.md", "docs/index-archive.md",  # root-relative, the [paths] path rules
+  "docs/index-decisions.md", "docs/index-crates.md"]
+index   = true  # optional: SpecEngine renders this output (§11.5)
+gate    = "cargo run -q -p specengine-cli -- check"  # optional, index entry only; default "spec check"
+shards  = [  # optional, index entry only (#index-shards)
+  { path = "docs/index-archive.md", tier3 = true },
+  { path = "docs/index-decisions.md", claims = ["docs/decisions/*.md"] },
+  { path = "docs/index-crates.md", claims = ["crates/*/README.md"] }]
 ```
 
-`specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; an index entry `writes` path neither `[paths] index` nor a shard, with or without shards; `shards` off the index entry; a shard with an unknown key, no `path`, both or neither of `tier3` and `claims`, `tier3` not `true`, `claims` empty; a shard `path` or claim breaking the `[paths]` or `exclude` rules or holding a control character or a backtick (rendered into Markdown); a shard `path` equal to `[paths] index` or another's, or not in `writes`; `tier3 = true` twice (the first shard error only; claims matching nothing or overlapping: fine); `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as the same string through the crate's own front-matter reader (`read_back`): null, booleans, numbers, and `.inf`, `-.inf`, `.nan`, the texts the reader gives non-finite floats. The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
+`specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; an index entry `writes` path neither `[paths] index` nor a shard; `shards` off the index entry; a shard with an unknown key, no `path`, both or neither of `tier3` and `claims`, `tier3` not `true`, `claims` empty; a shard `path` or claim breaking the `[paths]` or `exclude` rules or holding a control character or a backtick (rendered into Markdown); a shard `path` equal to `[paths] index` or another's, or not in `writes`; `tier3 = true` twice (the first shard error only; claims matching nothing or overlapping: fine); `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as the same string through the crate's own front-matter reader (`read_back`): null, booleans, numbers, and `.inf`, `-.inf`, `.nan`, the texts the reader gives non-finite floats. The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
 
 WHEN the table is present (even empty), each `class: generated` document whose front-matter was read SHALL name a registered `command` in `generator:`, else `generator-unknown` (subject: the value, `""` if absent), and its path SHALL be in that entry's `writes`, else `generator-path` (the message names `writes`). Both errors sit on the `generator:` line, else line 1. A failed front-matter gives only its parser findings. Project generators are registered, never run.
 

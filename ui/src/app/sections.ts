@@ -10,8 +10,8 @@ export const SECTIONS = [
   {
     id: "tree",
     label: "Spec tree",
-    slice: "ui-tree-node",
-    about: "The business-logic tree and each node's text, links and bindings.",
+    slice: null,
+    about: "The business-logic tree and each node's text, links, bundle and proposals.",
   },
   { id: "graph", label: "Graph", slice: "ui-graph", about: "Nodes and their links, with an impact mode." },
   { id: "health", label: "Health", slice: "ui-health-round", about: "What is left, drift, budgets and W metrics." },

@@ -18,11 +18,17 @@
 //!   exported type, `kind` and `contour` plain strings. The cited headings
 //!   themselves are checked by `doc_pointers.rs`.
 //!
+//! - docs/features/ui-tree-node.md AC-07: no HTML sink of its "Rules and edge
+//!   cases" in `ui/src/**/*.ts(x)`, word-bounded, so the names spelled in
+//!   pieces by `ui/src/policy.test.ts` stay clean.
+//!
 //! Named mutations (each turns this red): `globals` added; one `^`; the
 //! lockfile deleted; `node-linker=hoisted`; a `postinstall`; `window.confirm`
 //! in a component; `color: #fff` in a component; a "Blocking" label;
 //! `kind === "mechanic"` in a component; the header dropped; `kind` a union;
-//! `test` = `vitest`; the worker cap removed; `ui` out of roots.
+//! `test` = `vitest`; the worker cap removed; `ui` out of roots; the snippet
+//! rendered through `dangerouslySetInnerHTML` (run on a scratch copy of `ui/`
+//! named by `UI_POLICY_SINK_UI_DIR`, never by editing `ui/src`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -482,6 +488,12 @@ fn tests_run_once_with_at_most_two_workers() {
 /// Every file under `ui/src`, as (path relative to `ui/` with `/`, text),
 /// sorted by path.
 fn ui_sources() -> Vec<(String, String)> {
+    ui_sources_in(&ui_dir())
+}
+
+/// Every file under `<ui>/src`, as (path relative to `ui` with `/`, text),
+/// sorted by path.
+fn ui_sources_in(ui: &Path) -> Vec<(String, String)> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
         let mut entries: Vec<PathBuf> = fs::read_dir(dir)
             .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
@@ -506,9 +518,8 @@ fn ui_sources() -> Vec<(String, String)> {
             }
         }
     }
-    let ui = ui_dir();
     let mut out = Vec::new();
-    walk(&ui, &ui.join("src"), &mut out);
+    walk(ui, &ui.join("src"), &mut out);
     assert!(
         out.len() > 20 && out.iter().any(|(path, _)| path == "src/main.tsx"),
         "the walk found only {} files under ui/src",
@@ -563,6 +574,103 @@ fn no_browser_dialog_is_called() {
     assert!(
         found.is_empty(),
         "browser dialogs (AC-04):\n{}",
+        found.join("\n")
+    );
+}
+
+/// The HTML sinks of `docs/features/ui-tree-node.md` "Rules and edge cases":
+/// corpus and daemon text is shown as text, never parsed as HTML.
+const HTML_SINKS: [&str; 7] = [
+    "dangerouslySetInnerHTML",
+    "innerHTML",
+    "outerHTML",
+    "insertAdjacentHTML",
+    "document.write",
+    "createContextualFragment",
+    "srcdoc",
+];
+
+/// The first sink `line` names: word-bounded (no identifier byte on either
+/// side) and ASCII case-insensitive, so React's `srcDoc` prop counts while a
+/// name spelled in pieces (`"inner", "HTML"`) or inside a longer identifier
+/// (`SetInnerHTML`, `innerHTMLLength`) does not.
+fn html_sink(line: &str) -> Option<&'static str> {
+    let lower = line.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    HTML_SINKS.into_iter().find(|sink| {
+        let needle = sink.to_ascii_lowercase();
+        lower.match_indices(&needle).any(|(at, _)| {
+            let end = at + needle.len();
+            (at == 0 || !is_identifier_byte(bytes[at - 1]))
+                && (end == bytes.len() || !is_identifier_byte(bytes[end]))
+        })
+    })
+}
+
+#[test]
+fn the_sink_detector_flags_each_use_and_no_name_in_pieces() {
+    let uses = [
+        (
+            "<pre dangerouslySetInnerHTML={{ __html: snippet }} />",
+            "dangerouslySetInnerHTML",
+        ),
+        ("element.innerHTML = text;", "innerHTML"),
+        ("innerHTML", "innerHTML"),
+        ("const html = node.outerHTML;", "outerHTML"),
+        (
+            "list.insertAdjacentHTML(\"beforeend\", row);",
+            "insertAdjacentHTML",
+        ),
+        ("window.document.write(text);", "document.write"),
+        ("range.createContextualFragment(text);", "createContextualFragment"),
+        ("<iframe srcDoc={text} />", "srcdoc"),
+        ("frame.srcdoc = text;", "srcdoc"),
+    ];
+    for (line, sink) in uses {
+        assert_eq!(html_sink(line), Some(sink), "{line}");
+    }
+    let clean = [
+        // The pieces `ui/src/policy.test.ts` joins at run time.
+        "      [\"dangerously\", \"SetInnerHTML\"],",
+        "      [\"inner\", \"HTML\"],",
+        "      [\"outer\", \"HTML\"],",
+        "      [\"insertAdjacent\", \"HTML\"],",
+        "      [\"document\", \".write\"],",
+        "      [\"createContextual\", \"Fragment\"],",
+        "      [\"src\", \"doc\"],",
+        // A sink's name inside a longer identifier.
+        "const myInnerHTML = 1;",
+        "const innerHTMLLength = 1;",
+        "documentWriter.write(text);",
+        "const srcdocs = [];",
+        "<a href={sectionHash(slug, id)}>{title}</a>",
+    ];
+    for line in clean {
+        assert_eq!(html_sink(line), None, "{line}");
+    }
+}
+
+/// The `ui/` the sink scan reads: this repository's, or a scratch copy (with
+/// its `src/`) named by `UI_POLICY_SINK_UI_DIR` for the named-mutation run.
+fn sink_scan_ui_dir() -> PathBuf {
+    std::env::var_os("UI_POLICY_SINK_UI_DIR").map_or_else(ui_dir, PathBuf::from)
+}
+
+#[test]
+fn no_html_sink_in_ui_sources() {
+    let files: Vec<(String, String)> = ui_sources_in(&sink_scan_ui_dir())
+        .into_iter()
+        .filter(|(path, _)| path.ends_with(".ts") || path.ends_with(".tsx"))
+        .collect();
+    assert!(
+        files.len() > 50,
+        "only {} .ts/.tsx files read under ui/src",
+        files.len()
+    );
+    let found = hits(&files, |_| false, |line| html_sink(line).is_some());
+    assert!(
+        found.is_empty(),
+        "HTML sinks in ui/src (ui-tree-node AC-07):\n{}",
         found.join("\n")
     );
 }

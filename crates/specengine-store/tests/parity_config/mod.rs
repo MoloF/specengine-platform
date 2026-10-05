@@ -16,9 +16,27 @@ use std::path::{Path, PathBuf};
 /// index set.
 pub const INDEX: &str = "docs/index.md";
 
-/// The one shard of the root config's index entry, the archive (`shards`,
-/// `tier3 = true`; ADR-0030, docs/features/index-shards.md).
+/// The archive shard of the root config's index entry, its first shard
+/// (`shards`, `tier3 = true`; ADR-0030, docs/features/index-shards.md).
 pub const INDEX_SHARD: &str = "docs/index-archive.md";
+
+/// The live shards of the root config's index entry after the archive, in
+/// config order, each with its one claim (`shards`, `claims`; docs/README.md
+/// "Generated"): what is read by id (decisions) or by path (crate READMEs).
+pub const INDEX_LIVE_SHARDS: [(&str, &str); 2] = [
+    ("docs/index-decisions.md", "docs/decisions/*.md"),
+    ("docs/index-crates.md", "crates/*/README.md"),
+];
+
+/// The index set of the root config in config order: the root, then the
+/// shards. The index entry's `writes`, the render's outputs and the export's
+/// lines, all in this order.
+pub const INDEX_OUTPUTS: [&str; 4] = [
+    INDEX,
+    INDEX_SHARD,
+    INDEX_LIVE_SHARDS[0].0,
+    INDEX_LIVE_SHARDS[1].0,
+];
 
 /// X: the registered export command of the index (`[[generators]] command`).
 pub const EXPORT: &str = "cargo run -q -p specengine-cli -- export index";
@@ -70,11 +88,41 @@ pub fn repository() -> PathBuf {
 pub fn root_toml() -> String {
     let toml =
         fs::read_to_string(repository().join("specengine.toml")).expect("the root specengine.toml");
-    for registered in [EXPORT, GATE, INDEX, INDEX_SHARD] {
+    let live = INDEX_LIVE_SHARDS
+        .iter()
+        .flat_map(|(path, claim)| [*path, *claim]);
+    for registered in [EXPORT, GATE, INDEX, INDEX_SHARD].into_iter().chain(live) {
         let quoted = format!("\"{registered}\"");
         assert!(toml.contains(&quoted), "{quoted} in:\n{toml}");
     }
     toml
+}
+
+/// Whether the root-relative `/` path `relative` matches the claim `glob`
+/// as the root config writes them: as many segments, each matching its
+/// glob segment, where `*` stands for any run of characters within the
+/// segment (no `**` in the root config's claims).
+pub fn claimed(glob: &str, relative: &str) -> bool {
+    fn segment(want: &str, got: &str) -> bool {
+        match want.split_once('*') {
+            None => want == got,
+            Some((head, tail)) => {
+                got.starts_with(head)
+                    && (0..=got.len() - head.len()).any(|skip| {
+                        got.is_char_boundary(head.len() + skip)
+                            && segment(tail, &got[head.len() + skip..])
+                    })
+            }
+        }
+    }
+    assert!(!glob.contains("**"), "{glob}: no `**` here");
+    let pattern: Vec<&str> = glob.split('/').collect();
+    let path: Vec<&str> = relative.split('/').collect();
+    pattern.len() == path.len()
+        && pattern
+            .iter()
+            .zip(&path)
+            .all(|(want, got)| !got.is_empty() && segment(want, got))
 }
 
 /// `toml` with the one occurrence of `from` replaced by `to` (the in-test

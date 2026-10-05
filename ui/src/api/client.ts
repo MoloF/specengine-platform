@@ -1,10 +1,53 @@
-import type { ApiError, Decision, DecisionResult, Inbox, NodeView, Project } from "./types";
+import type {
+  ApiError,
+  BundleView,
+  Decision,
+  DecisionResult,
+  Inbox,
+  NodeView,
+  Project,
+  SearchResults,
+  TreeView,
+} from "./types";
+
+// Option types of the reads: the MCP tools' arguments, which are the daemon's query names
+// (`docs/canon/mcp-read.md` "Tools"). An absent option is omitted from the request, an array
+// repeats its key, `archive` is sent only as true.
+
+/** `get_tree`: ROOT, `--depth N`, `--kind K`…, `--archive`. */
+export interface TreeOptions {
+  root?: string;
+  depth?: number;
+  kinds?: string[];
+  archive?: boolean;
+}
+
+/** `get_node`: `--links`, and with it `--archive` (the daemon refuses `archive` without `links`). */
+export interface NodeOptions {
+  with?: "links"[];
+  archive?: boolean;
+}
+
+/** `search`: the query as typed, `--kind K`…, `--limit N`, `--archive`. */
+export interface SearchOptions {
+  query: string;
+  kinds?: string[];
+  limit?: number;
+  archive?: boolean;
+}
+
+/** `get_context_bundle`: the REFs and `--budget N` (absent: the project's default). */
+export interface BundleOptions {
+  node_ids: string[];
+  budget?: number;
+}
 
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/specs/specengine-platform/07-interfaces.md` "3. HTTP (daemon)"). Only the
- * bootstrap, src/main.tsx, picks the implementation. Every method rejects with a ClientError
- * carrying the daemon's status and message verbatim.
+ * bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for tree,
+ * nodes, bundle) resolves to its document, `reason` set; every other failure rejects with a
+ * ClientError carrying the daemon's status and message verbatim (exit 2: 503).
  */
 export interface SpecEngineClient {
   /** Drives the permanent "Mock data" indicator. */
@@ -13,8 +56,14 @@ export interface SpecEngineClient {
   getProjects(): Promise<Project[]>;
   /** GET /api/projects/:p/inbox */
   getInbox(project: string): Promise<Inbox>;
-  /** GET /api/projects/:p/nodes/:id */
-  getNode(project: string, id: string): Promise<NodeView>;
+  /** GET /api/projects/:p/tree */
+  getTree(project: string, options?: TreeOptions): Promise<TreeView>;
+  /** GET /api/projects/:p/nodes/:ref */
+  getNode(project: string, ref: string, options?: NodeOptions): Promise<NodeView>;
+  /** GET /api/projects/:p/search */
+  search(project: string, options: SearchOptions): Promise<SearchResults>;
+  /** MISSING ENDPOINT GET /api/projects/:p/bundle (07 §3 lacks it; rust-developer, daemon-read) */
+  getBundle(project: string, options: BundleOptions): Promise<BundleView>;
   /** POST /api/projects/:p/proposals/:id/decision */
   decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;
 }

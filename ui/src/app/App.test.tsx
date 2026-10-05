@@ -12,7 +12,6 @@ import { App } from "./App";
 
 const UNBUILT = [
   ["tasks", "Tasks", "ui-tasks"],
-  ["tree", "Spec tree", "ui-tree-node"],
   ["graph", "Graph", "ui-graph"],
   ["health", "Health", "ui-health-round"],
   ["questions", "Questions", "ui-health-round"],
@@ -220,7 +219,14 @@ describe("the console guard (AC-16)", () => {
 });
 
 describe("Mock data (AC-17)", () => {
-  const routes = ["#/alpha/inbox", ...UNBUILT.map(([section]) => `#/alpha/${section}`), "#/alpha/nowhere", "#/zeta/inbox"];
+  const routes = [
+    "#/alpha/inbox",
+    "#/alpha/tree",
+    "#/alpha/tree/R-1",
+    ...UNBUILT.map(([section]) => `#/alpha/${section}`),
+    "#/alpha/nowhere",
+    "#/zeta/inbox",
+  ];
 
   it.each(routes)("is shown on %s", async (hash) => {
     renderApp(stubClient(), hash);

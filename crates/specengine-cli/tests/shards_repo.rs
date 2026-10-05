@@ -1,20 +1,25 @@
 //! docs/features/index-shards.md AC-12 and AC-13 on a scratch copy of this
-//! repository's walked documents with the spec's shipping config (the root
-//! `specengine.toml` with its `[[generators]]` entry replaced by the one in
-//! the spec's "Data", which since shipping step 2 is the root config byte
-//! for byte). `spec export index` never runs in this repository; every run
-//! gets a scratch `HOME`; `git status` is the same before and after.
+//! repository's walked documents with the root config's index entry (the
+//! root `specengine.toml` with its `[[generators]]` entry replaced by
+//! [`SHIPPING`], the root config byte for byte: since 2026-10-06 the
+//! archive shard of the spec's "Data" plus two live shards beside it, the
+//! spec's AC-12 and AC-13 holding for that config). `spec export index`
+//! never runs in this repository; every run gets a scratch `HOME`;
+//! `git status` is the same before and after.
 //!
-//! AC-12: export creates the root and `docs/index-archive.md` as
-//! `render_index_set` has them; the shard lists exactly the walked Tier 3
-//! documents, the root none; both are this repository's committed files
-//! byte for byte; both deleted → recreated byte-identical; a rerun → both
+//! AC-12: export creates the root, `docs/index-archive.md`,
+//! `docs/index-decisions.md` and `docs/index-crates.md` as
+//! `render_index_set` has them; the archive lists exactly the walked Tier 3
+//! documents, each live shard exactly the live documents its claim matches,
+//! the root none of either; all are this repository's committed files byte
+//! for byte; all deleted → recreated byte-identical; a rerun → all
 //! `unchanged`; `--stdout` deterministic; `spec check` on the copy clean, W
 //! the library's = this repository's.
 //!
 //! AC-13: a live spec set to `shipped` → the root loses exactly its line
-//! (byte for byte), the shard gains exactly one; a new shipped spec → the
-//! root `unchanged`, the shard gains one line.
+//! (byte for byte), the archive gains exactly one, the live shards
+//! `unchanged`; a new shipped spec → the root and the live shards
+//! `unchanged`, the archive gains one line.
 
 #![cfg(unix)]
 
@@ -31,7 +36,9 @@ use std::process::Command;
 
 use common::check::library;
 use common::{Scratch, read, repository_root, snapshot, spec, write};
-use parity_config::{EXPORT, GATE, INDEX, root_toml, skipped_files};
+use parity_config::{
+    EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, claimed, root_toml, skipped_files,
+};
 use specengine_core::ProjectConfig;
 use specengine_core::check::{
     CheckConfig, CheckInput, IndexOutput, Verdict, is_tier3_file, render_index_set, worst_w,
@@ -40,17 +47,30 @@ use specengine_store::{WorkingTree, check_input};
 
 const SHARD: &str = "docs/index-archive.md";
 const ARCHIVE_HEADING: &str = "## Archive \u{2014} Tier 3, by id only";
-const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n";
+const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n";
 
-/// The spec's shipping entry, verbatim.
+/// The root config's index entry, verbatim: the spec's shipping entry
+/// (the archive shard) with the two live shards after it.
 const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
-writes  = [\"docs/index.md\", \"docs/index-archive.md\"]
+writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\"]
 index   = true
 gate    = \"cargo run -q -p specengine-cli -- check\"
-shards  = [{ path = \"docs/index-archive.md\", tier3 = true }]
+# Live shards hold what is read by id (decisions) or by path (crate READMEs): docs/README.md \"Generated\".
+shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
+           { path = \"docs/index-decisions.md\", claims = [\"docs/decisions/*.md\"] },
+           { path = \"docs/index-crates.md\", claims = [\"crates/*/README.md\"] }]
 ";
+
+/// The export's report of the index set, one `<verb> <path>: <n> bytes`
+/// line per output in config order.
+fn export_lines(lines: &[(&str, &str, usize)]) -> String {
+    lines
+        .iter()
+        .map(|(verb, path, bytes)| format!("{verb} {path}: {bytes} bytes\n"))
+        .collect()
+}
 
 /// `toml` with its `[[generators]]` tables replaced by `block`.
 fn with_generators(toml: &str, block: &str) -> String {
@@ -157,7 +177,7 @@ fn shipping_copy(scratch: &Scratch) -> (std::path::PathBuf, String) {
     let input = check_input(&tree, &project.scheme);
     let copy = scratch.dir("copy");
     for file in &input.files {
-        if file.path != INDEX && file.path != SHARD {
+        if !INDEX_OUTPUTS.contains(&file.path.as_str()) {
             write(
                 &copy,
                 &file.path,
@@ -171,6 +191,12 @@ fn shipping_copy(scratch: &Scratch) -> (std::path::PathBuf, String) {
         write(&copy, path, fs::read(repository.join(path)).unwrap());
     }
     let toml = with_generators(&repo_toml, SHIPPING);
+    // Both criteria run on the root config: a shard dropped from it or
+    // added to it fails here, not only in AC-12.
+    assert!(
+        toml == repo_toml,
+        "the root config is not the shipping config:\n{repo_toml}"
+    );
     write(&copy, "specengine.toml", &toml);
     (copy, toml)
 }
@@ -184,12 +210,15 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
     let scratch = Scratch::new("shards-repo");
     let home = scratch.home("h");
     let (copy, toml) = shipping_copy(&scratch);
-    // The shipping entry is the root config's (step 2 of "Roles and order").
+    // The shipping entry is the root config's (step 2 of "Roles and order";
+    // the live shards since 2026-10-06).
     assert!(
         toml == repo_toml,
         "the root config is not the shipping config:\n{repo_toml}"
     );
-    assert!(!copy.join(INDEX).exists() && !copy.join(SHARD).exists());
+    for output in INDEX_OUTPUTS {
+        assert!(!copy.join(output).exists(), "{output} on the copy");
+    }
 
     let run = spec(&home, &copy, &["export", "index"]);
     run.code(0);
@@ -197,26 +226,21 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
     let (input, outputs, w) = walk(&copy, &toml);
     assert_eq!(
         outputs.iter().map(|o| o.path.as_str()).collect::<Vec<_>>(),
-        [INDEX, SHARD]
+        INDEX_OUTPUTS
     );
-    assert_eq!(
-        run.stdout,
-        format!(
-            "wrote {INDEX}: {} bytes\nwrote {SHARD}: {} bytes\n",
-            outputs[0].bytes.len(),
-            outputs[1].bytes.len()
-        )
-    );
-    let root_bytes = read(&copy, INDEX);
-    let shard_bytes = read(&copy, SHARD);
-    assert!(
-        root_bytes == outputs[0].bytes.as_bytes(),
-        "the root is the render"
-    );
-    assert!(
-        shard_bytes == outputs[1].bytes.as_bytes(),
-        "the shard is the render"
-    );
+    let wrote: Vec<(&str, &str, usize)> = outputs
+        .iter()
+        .map(|o| ("wrote", o.path.as_str(), o.bytes.len()))
+        .collect();
+    assert_eq!(run.stdout, export_lines(&wrote));
+    let written: Vec<Vec<u8>> = INDEX_OUTPUTS.iter().map(|path| read(&copy, path)).collect();
+    for (output, bytes) in outputs.iter().zip(&written) {
+        assert!(
+            *bytes == output.bytes.as_bytes(),
+            "{} is the render",
+            output.path
+        );
+    }
     let root = outputs[0].bytes.as_str();
     let shard = outputs[1].bytes.as_str();
 
@@ -254,14 +278,50 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
     assert_eq!(listed.len(), in_root.len(), "each once in the root");
     assert!(listed.is_disjoint(&in_shard));
 
+    // Each live shard: its header with its claim, one section, exactly the
+    // walked live documents its claim matches (none Tier 3, none in the
+    // root or another output).
+    let mut seen = listed.union(&in_shard).cloned().collect::<BTreeSet<_>>();
+    for (output, (path, claim)) in outputs[2..].iter().zip(INDEX_LIVE_SHARDS) {
+        assert_eq!(output.path, path);
+        let text = output.bytes.as_str();
+        assert!(
+            text.starts_with(&format!(
+                "---\nclass: generated\ngenerator: {EXPORT}\nsource: front-matter of the repository's documents\n---\n\n# Documentation index: `{claim}`\n\n<!-- Built by `{EXPORT}`. Manual edits are overwritten on rebuild, and `{GATE}` rejects them. -->\n\nA shard of [docs/index.md](index.md), the index's one entry point.\n\n## "
+            )),
+            "{path}: {text}"
+        );
+        assert_eq!(text.matches("\n## ").count(), 1, "{path}: one section");
+        let claimed_live: BTreeSet<String> = input
+            .files
+            .iter()
+            .filter(|f| claimed(claim, &f.path))
+            .filter(|f| !f.parsed.as_ref().is_some_and(is_tier3_file))
+            .map(|f| f.path.clone())
+            .collect();
+        assert!(claimed_live.len() > 5, "{claim}: {claimed_live:?}");
+        let in_live: Vec<String> = entries(text).into_iter().map(|(_, t, _)| t).collect();
+        assert_eq!(
+            in_live.iter().cloned().collect::<BTreeSet<_>>(),
+            claimed_live,
+            "{path} lists exactly the live documents `{claim}` matches"
+        );
+        assert_eq!(in_live.len(), claimed_live.len(), "{path}: each once");
+        for target in in_live {
+            assert!(seen.insert(target.clone()), "{target} in two outputs");
+        }
+    }
+
     // Against this repository: the committed files themselves.
-    let committed = fs::read_to_string(repository.join(INDEX)).expect("the committed index");
-    assert!(root == committed, "the committed root is the render");
-    let committed_shard = fs::read_to_string(repository.join(SHARD)).expect("the committed shard");
-    assert!(
-        shard == committed_shard,
-        "the committed shard is the render"
-    );
+    for output in &outputs {
+        let committed = fs::read_to_string(repository.join(&output.path))
+            .unwrap_or_else(|e| panic!("the committed {}: {e}", output.path));
+        assert!(
+            output.bytes == committed,
+            "the committed {} is the render",
+            output.path
+        );
+    }
 
     // W: the library's with the entry, the same as this repository's.
     let w_here = {
@@ -284,33 +344,37 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
         run.stdout
     );
 
-    // A rerun: both unchanged.
+    // A rerun: all unchanged.
     let run = spec(&home, &copy, &["export", "index"]);
     run.code(0);
-    assert_eq!(
-        run.stdout,
-        format!(
-            "unchanged {INDEX}: {} bytes\nunchanged {SHARD}: {} bytes\n",
-            root.len(),
-            shard.len()
-        )
-    );
-    // `--stdout`, twice: the same bytes, both outputs.
+    let unchanged: Vec<(&str, &str, usize)> = outputs
+        .iter()
+        .map(|o| ("unchanged", o.path.as_str(), o.bytes.len()))
+        .collect();
+    assert_eq!(run.stdout, export_lines(&unchanged));
+    // `--stdout`, twice: the same bytes, every output.
     let first = spec(&home, &copy, &["export", "index", "--stdout"]);
     first.code(0);
     let second = spec(&home, &copy, &["export", "index", "--stdout"]);
     assert_eq!(first.stdout, second.stdout);
     assert_eq!(
         first.stdout,
-        format!("==> {INDEX} <==\n{root}==> {SHARD} <==\n{shard}")
+        outputs
+            .iter()
+            .map(|o| format!("==> {} <==\n{}", o.path, o.bytes))
+            .collect::<String>()
     );
 
-    // Both deleted: recreated byte for byte.
-    fs::remove_file(copy.join(INDEX)).unwrap();
-    fs::remove_file(copy.join(SHARD)).unwrap();
-    spec(&home, &copy, &["export", "index"]).code(0);
-    assert!(read(&copy, INDEX) == root_bytes, "the root recreated");
-    assert!(read(&copy, SHARD) == shard_bytes, "the shard recreated");
+    // All deleted: recreated byte for byte.
+    for output in INDEX_OUTPUTS {
+        fs::remove_file(copy.join(output)).unwrap();
+    }
+    let run = spec(&home, &copy, &["export", "index"]);
+    run.code(0);
+    assert_eq!(run.stdout, export_lines(&wrote));
+    for (output, bytes) in INDEX_OUTPUTS.iter().zip(&written) {
+        assert!(read(&copy, output) == *bytes, "{output} recreated");
+    }
 
     assert!(snapshot(&home).is_empty(), "something under HOME");
     assert_eq!(
@@ -352,6 +416,18 @@ fn shipping_a_spec_costs_the_root_nothing() {
     spec(&home, &copy, &["export", "index"]).code(0);
     let root_before = String::from_utf8(read(&copy, INDEX)).unwrap();
     let shard_before = String::from_utf8(read(&copy, SHARD)).unwrap();
+    let live_before: Vec<Vec<u8>> = INDEX_OUTPUTS[2..]
+        .iter()
+        .map(|path| read(&copy, path))
+        .collect();
+    // `<verb> <path>: <n> bytes` for every live shard, unchanged.
+    let live_unchanged = || -> String {
+        INDEX_OUTPUTS[2..]
+            .iter()
+            .zip(&live_before)
+            .map(|(path, bytes)| format!("unchanged {path}: {} bytes\n", bytes.len()))
+            .collect()
+    };
 
     // The first live spec, in path order, set to `shipped`.
     let (input, _, _) = walk(&copy, &toml);
@@ -380,6 +456,15 @@ fn shipping_a_spec_costs_the_root_nothing() {
     run.code(0);
     let root_after = String::from_utf8(read(&copy, INDEX)).unwrap();
     let shard_after = String::from_utf8(read(&copy, SHARD)).unwrap();
+    assert_eq!(
+        run.stdout,
+        format!(
+            "wrote {INDEX}: {} bytes\nwrote {SHARD}: {} bytes\n{}",
+            root_after.len(),
+            shard_after.len(),
+            live_unchanged()
+        )
+    );
     assert!(
         root_after == root_before.replacen(&format!("{line}\n"), "", 1),
         "the root loses exactly the line of {live_spec}:\n{}",
@@ -419,12 +504,16 @@ fn shipping_a_spec_costs_the_root_nothing() {
     assert_eq!(
         run.stdout,
         format!(
-            "unchanged {INDEX}: {} bytes\nwrote {SHARD}: {} bytes\n",
+            "unchanged {INDEX}: {} bytes\nwrote {SHARD}: {} bytes\n{}",
             root_after.len(),
-            shard_new.len()
+            shard_new.len(),
+            live_unchanged()
         )
     );
     assert!(read(&copy, INDEX) == root_after.as_bytes());
+    for (path, bytes) in INDEX_OUTPUTS[2..].iter().zip(&live_before) {
+        assert!(read(&copy, path) == *bytes, "{path} rewritten");
+    }
     let (added, gone) = line_diff(&shard_after, &shard_new);
     assert!(gone.is_empty(), "{gone:?}");
     assert_eq!(

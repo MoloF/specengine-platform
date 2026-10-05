@@ -193,6 +193,15 @@ describe("the Inbox on a stub client", () => {
     expect(others?.textContent).toContain("PR-2");
   });
 
+  it("links each target to the spec tree, its REF encoded once (ui-tree-node)", async () => {
+    await openInbox([aProposal({ id: "PR-7", target_ids: ["R-1", "docs/spec/b.md"] })]);
+    const card = await screen.findByRole("article");
+    await within(card).findAllByText(/Title of/);
+    const links = within(card).getAllByRole("link", { name: /^Open in spec tree/ });
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["#/alpha/tree/R-1", "#/alpha/tree/docs%2Fspec%2Fb.md"]);
+    expect(links.map((link) => link.textContent)).toEqual(["Open in spec tree: R-1", "Open in spec tree: docs/spec/b.md"]);
+  });
+
   it("counts a proposal naming its node only by target_id as open on the same node", async () => {
     await openInbox([...QUEUE, aProposal({ id: "PR-9", target_id: "R-1", summary: "Single target" })]);
     const card = await screen.findByRole("article");

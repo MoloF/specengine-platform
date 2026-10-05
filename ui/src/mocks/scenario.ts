@@ -1,5 +1,5 @@
 /** The mock's scenarios, picked by `?scenario=` at bootstrap (`ui/README.md` "Owner's manual steps"). */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

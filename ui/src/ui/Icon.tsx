@@ -18,6 +18,18 @@ const PATHS = {
   retry: "M13 8a5 5 0 1 1-1.5-3.6 M13 2.8v2.6h-2.6",
   recommended: "M8 2.3l1.7 3.6 3.9.5-2.9 2.7.8 3.9L8 11.1 4.5 13l.8-3.9-2.9-2.7 3.9-.5L8 2.3Z",
   info: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M8 7.2v3.8 M8 5v.2",
+  chevronRight: "M6 3.5 10.5 8 6 12.5",
+  chevronDown: "M3.5 6 8 10.5 12.5 6",
+  linkResolved: "M6.5 9.5l3-3 M7 4.5l1-1a2.5 2.5 0 0 1 3.5 3.5l-1 1 M9 11.5l-1 1a2.5 2.5 0 0 1-3.5-3.5l1-1",
+  linkDangling: "M7 4.5l1-1a2.5 2.5 0 0 1 3.5 3.5l-1 1 M9 11.5l-1 1a2.5 2.5 0 0 1-3.5-3.5l1-1 M2.5 2.5l2 2 M13.5 13.5l-2-2",
+  linkSkipped: "M9 2.5h4.5V7 M13.5 2.5 7.5 8.5 M11.5 9.5v4h-9v-9h4",
+  linkUnchecked: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M4.2 11.8l7.6-7.6",
+  parentDangling: "M8 13.5V6.5 M5 9.5l3-3 3 3 M2.5 2.5h4 M9.5 2.5h4",
+  parentCycle: "M12.5 6.5A4.6 4.6 0 0 0 4 5.2 M4 2.4v2.8h2.8 M3.5 9.5a4.6 4.6 0 0 0 8.5 1.3 M12 13.6v-2.8H9.2",
+  archived: "M2.5 3h11v3.2h-11z M3.5 6.2v6.8h9V6.2 M6.5 9h3",
+  search: "M7 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z M10.3 10.3l3.2 3.2",
+  inbox: "M2.5 9h3l1 2h3l1-2h3 M2.5 9 4.5 3.5h7L13.5 9v4h-11Z",
+  back: "M6.5 3.5 2.5 8l4 4.5 M2.5 8h11",
 } as const;
 
 export type IconName = keyof typeof PATHS;

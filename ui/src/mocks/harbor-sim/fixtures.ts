@@ -1,10 +1,17 @@
-import { node, proposal, stamp, type MockProject } from "../build";
-import { nodeKinds } from "./kinds";
+import { frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
+import { nodeKinds, specStatuses } from "./kinds";
 
 // harbor-sim: an invented harbour-simulation game. English text; non-Latin script only as
 // escapes. The normal queue holds every severity and an unknown one, an unknown proposal kind
 // and status, options with a recommendation, proposals without options, two proposals on one
-// node, section diffs, a 300-character unbroken token and decomposed non-Latin text.
+// node, section diffs, a 300-character unbroken token and decomposed non-Latin text; targets by
+// ID, by an ID-less document's path and by a second `target_ids` entry.
+//
+// The spec (docs/features/ui-tree-node.md "Data", Mocks): a tree five levels deep with nested
+// sections; an ID-less document; an ID with two holders; an archived document; a generated one; a
+// dangling parent; a two-document parent cycle; a document over 40 000 characters, whole; links
+// in four states and mentions, both ways, with reasons; hostile markup in a title, a text and a
+// link's written form (escaped here so no source line spells a dialog call).
 
 const SLUG = "harbor-sim";
 
@@ -15,8 +22,9 @@ export const BASIN_NAME_DECOMPOSED =
 /** One unbroken 300-character token, as a loader error prints it. */
 export const LONG_TOKEN = "tide_table_sample_v3".padEnd(300, "k7Qm2Xr9Lp4Zt8Wn");
 
-const TIDE_FILE = "docs/spec/tides/tide-cycle.md";
-const DRAFT_FILE = "docs/spec/berths/draft-limits.md";
+export const TIDE_FILE = "docs/spec/tides/tide-cycle.md";
+/** The ID-less document: the tree names it by its path. */
+export const DRAFT_FILE = "docs/spec/berths/draft-limits.md";
 const PILOT_FILE = "docs/spec/pilotage/boarding.md";
 
 const DRAFT_TEXT = [
@@ -73,119 +81,500 @@ const PILOT_CONFLICT = [
   ">>>>>>> proposed",
 ].join("\n");
 
+
+/** Markup an author pasted into a title; shown as text, never parsed. */
+export const HOSTILE_TITLE = "<img src=x onerror=\u0061lert(1)>";
+
+/** A link's written form that must never become an href. */
+export const HOSTILE_LINK = "javascript:\u0061lert(1)";
+
+/** Over 40 000 characters: the browser reads it whole (daemon-read: uncut). */
+const TIDE_TABLE_ROWS = Array.from({ length: 520 }, (_, day) => {
+  const date = new Date(Date.UTC(2026, 0, 1) + day * 86_400_000).toISOString().slice(0, 10);
+  const minutes = (base: number) => {
+    const at = (base + day * 50) % 1440;
+    return `${String(Math.floor(at / 60)).padStart(2, "0")}:${String(at % 60).padStart(2, "0")}`;
+  };
+  const height = (base: number, swing: number) => (base + ((day * 37) % 41) * swing).toFixed(2);
+  return `| ${date} | HW ${minutes(192)} ${height(3.9, 0.012)} m | LW ${minutes(565)} ${height(0.4, 0.008)} m | HW ${minutes(937)} ${height(3.8, 0.011)} m | LW ${minutes(1310)} ${height(0.5, 0.007)} m |`;
+});
+
+function harborCorpus(): MockCorpus {
+  const documents = [
+    specFile({
+      path: "docs/spec/cranes.md",
+      id: "MEC-CARGO-CRANES",
+      kind: "mechanic",
+      title: "Cargo cranes",
+      status: "draft",
+      mark: "dangling-parent",
+      lines: [
+        ...frontMatter({ id: "MEC-CARGO-CRANES", kind: "mechanic", status: "draft", parent: "DOM-CARGO", rev: 1 }),
+        "",
+        "# Cargo cranes",
+        "",
+        "Two gantry cranes serve the container quay; each lifts one box per 90 simulated seconds.",
+      ],
+    }),
+    specFile({
+      path: "docs/spec/generated/index.md",
+      id: null,
+      kind: null,
+      title: "Spec index",
+      generated: true,
+      lines: [...frontMatter({ class: "generated" }), "", "# Spec index", "", "Written by the index export; never edited."],
+    }),
+    specFile({
+      path: "docs/spec/harbor.md",
+      id: "DOM-HARBOR",
+      kind: "domain",
+      title: "Harbor simulation",
+      status: "accepted",
+      rev: 4,
+      summary: "The harbour as one simulation: ships, water, berths and pilots on one clock.",
+      lines: [
+        ...frontMatter({
+          id: "DOM-HARBOR",
+          kind: "domain",
+          status: "accepted",
+          rev: 4,
+          summary: "The harbour as one simulation: ships, water, berths and pilots on one clock.",
+        }),
+        "",
+        "# Harbor simulation",
+        "",
+        "The simulation models one harbour: ships arrive, wait for water and a berth, moor, unload and leave.",
+        "Every system reads the same clock; nothing advances on its own.",
+        "",
+        "## RULE-HARBOR-CLOCK: One simulated clock",
+        "",
+        "One tick is one simulated minute. Systems run in a fixed order each tick:",
+        "tides, arrivals, pilotage, berthing, cargo.",
+      ],
+      sections: [{ id: "RULE-HARBOR-CLOCK", kind: "rule", title: "One simulated clock" }],
+    }),
+    specFile({
+      path: "docs/spec/archive/old-quays.md",
+      id: "MEC-OLD-QUAYS",
+      kind: "mechanic",
+      title: "Old quay layout",
+      status: "accepted",
+      parent: "DOM-BERTHS",
+      archived: true,
+      lines: [
+        ...frontMatter({ id: "MEC-OLD-QUAYS", kind: "mechanic", status: "accepted", parent: "DOM-BERTHS", rev: 1 }),
+        "",
+        "# Old quay layout",
+        "",
+        "Before the 2026 dredging the quays followed MEC-TIDES alone; kept for the record.",
+        "",
+        "## RULE-OLD-QUAY-DEPTH: Quay depth before dredging",
+        "",
+        "Every quay had 10.5 m of water at low tide.",
+      ],
+      sections: [{ id: "RULE-OLD-QUAY-DEPTH", kind: "rule", title: "Quay depth before dredging" }],
+    }),
+    specFile({
+      path: "docs/spec/berths/README.md",
+      id: "DOM-BERTHS",
+      kind: "domain",
+      title: "Berths and moorings",
+      status: "accepted",
+      rev: 2,
+      parent: "DOM-HARBOR",
+      summary: "Where ships moor and what limits them.",
+      lines: [
+        ...frontMatter({
+          id: "DOM-BERTHS",
+          kind: "domain",
+          status: "accepted",
+          parent: "DOM-HARBOR",
+          rev: 2,
+          summary: "Where ships moor and what limits them.",
+        }),
+        "",
+        "# Berths and moorings",
+        "",
+        "Ships wait at anchor until a berth with enough depth and length is free.",
+        "A berth holds one ship; mooring takes a crew of four and 20 simulated minutes.",
+        "Deep ships also wait for the tide window (MEC-TIDES#RULE-TIDE-WINDOW).",
+        "",
+        `## RULE-BASIN-NAME: ${BASIN_NAME_DECOMPOSED}`,
+        "",
+        `The north basin is called "${BASIN_NAME_DECOMPOSED}" in the owner's notes.`,
+        "Berth plans show the name as written.",
+      ],
+      sections: [{ id: "RULE-BASIN-NAME", kind: "rule", title: BASIN_NAME_DECOMPOSED }],
+    }),
+    specFile({
+      path: DRAFT_FILE,
+      id: null,
+      kind: null,
+      title: "Berth limits",
+      rev: 4,
+      parent: "DOM-BERTHS",
+      lines: [
+        ...frontMatter({ parent: "DOM-BERTHS", rev: 4 }),
+        "",
+        "# Berth limits",
+        "",
+        "Limits every berth checks when a ship asks to moor.",
+        "",
+        ...DRAFT_TEXT.split("\n"),
+      ],
+      sections: [{ id: "RULE-BERTH-DRAFT", kind: "rule", title: "Draft limit at a berth" }],
+    }),
+    specFile({
+      path: "docs/spec/berths/mooring.md",
+      id: "MEC-MOORING",
+      kind: "mechanic",
+      title: "Mooring",
+      status: "proposed",
+      rev: 2,
+      parent: "DOM-BERTHS",
+      lines: [
+        ...frontMatter({ id: "MEC-MOORING", kind: "mechanic", status: "proposed", parent: "DOM-BERTHS", rev: 2 }),
+        "",
+        "# Mooring",
+        "",
+        "A free berth takes the first ship in the anchorage queue whose draft and length fit.",
+        "",
+        "## RULE-MOOR-CREW: Mooring crew",
+        "",
+        "Mooring takes a crew of four and 20 simulated minutes; a crew serves one berth at a time.",
+        "",
+        `### RULE-MOOR-NIGHT: ${HOSTILE_TITLE}`,
+        "",
+        "At night mooring takes 30 minutes. A note pasted from a web page kept its markup:",
+        "<script>window.location = 'https://example.org/'</script><b>bold?</b> **not bold either**",
+        `The old planning tool lives at ${HOSTILE_LINK}.`,
+      ],
+      sections: [
+        { id: "RULE-MOOR-CREW", kind: "rule", title: "Mooring crew" },
+        { id: "RULE-MOOR-NIGHT", kind: "rule", title: HOSTILE_TITLE },
+      ],
+    }),
+    specFile({
+      path: "docs/spec/fairway/README.md",
+      id: "MEC-FAIRWAY",
+      kind: "mechanic",
+      title: "Fairway",
+      status: "accepted",
+      parent: "DOM-HARBOR",
+      lines: [
+        ...frontMatter({ id: "MEC-FAIRWAY", kind: "mechanic", status: "accepted", parent: "DOM-HARBOR", rev: 1 }),
+        "",
+        "# Fairway",
+        "",
+        "The fairway runs from the outer buoy to the inner basin; one ship passes at a time.",
+        "",
+        "## RULE-FAIRWAY-SPEED: Speed in the fairway",
+        "",
+        "Ships keep to 8 knots in the fairway.",
+      ],
+      sections: [{ id: "RULE-FAIRWAY-SPEED", kind: "rule", title: "Speed in the fairway" }],
+    }),
+    specFile({
+      path: "docs/spec/fairway/night.md",
+      id: "MEC-NIGHT-PASSAGE",
+      kind: "mechanic",
+      title: "Night passage",
+      status: "draft",
+      parent: "MEC-FAIRWAY",
+      lines: [
+        ...frontMatter({ id: "MEC-NIGHT-PASSAGE", kind: "mechanic", status: "draft", parent: "MEC-FAIRWAY", rev: 1 }),
+        "",
+        "# Night passage",
+        "",
+        "At night the fairway is lit buoy to buoy.",
+        "",
+        "## RULE-FAIRWAY-SPEED: Speed in the fairway at night",
+        "",
+        "Ships keep to 6 knots in the fairway at night. (The same ID as in the fairway's README: two holders.)",
+      ],
+      sections: [{ id: "RULE-FAIRWAY-SPEED", kind: "rule", title: "Speed in the fairway at night" }],
+    }),
+    specFile({
+      path: "docs/spec/locks/lock-a.md",
+      id: "MEC-LOCK-A",
+      kind: "mechanic",
+      title: "Outer lock gate",
+      status: "draft",
+      mark: "parent-cycle",
+      lines: [
+        ...frontMatter({ id: "MEC-LOCK-A", kind: "mechanic", status: "draft", parent: "MEC-LOCK-B", rev: 1 }),
+        "",
+        "# Outer lock gate",
+        "",
+        "The outer gate opens when the lock level matches the sea.",
+      ],
+    }),
+    specFile({
+      path: "docs/spec/locks/lock-b.md",
+      id: "MEC-LOCK-B",
+      kind: "mechanic",
+      title: "Inner lock gate",
+      status: "draft",
+      parent: "MEC-LOCK-A",
+      lines: [
+        ...frontMatter({ id: "MEC-LOCK-B", kind: "mechanic", status: "draft", parent: "MEC-LOCK-A", rev: 1 }),
+        "",
+        "# Inner lock gate",
+        "",
+        "The inner gate opens when the lock level matches the basin.",
+      ],
+    }),
+    specFile({
+      path: PILOT_FILE,
+      id: "MEC-PILOTAGE",
+      kind: "mechanic",
+      title: "Pilot boarding",
+      status: "proposed",
+      parent: "DOM-HARBOR",
+      lines: [
+        ...frontMatter({
+          id: "MEC-PILOTAGE",
+          kind: "mechanic",
+          status: "proposed",
+          parent: "DOM-HARBOR",
+          depends_on: "[[MEC-TIDES]]",
+          rev: 1,
+        }),
+        "",
+        "# Pilot boarding",
+        "",
+        ...PILOT_TEXT.split("\n"),
+      ],
+      sections: [{ id: "RULE-PILOT-REQ", kind: "rule", title: "Pilot required above 120 m" }],
+    }),
+    specFile({
+      path: "docs/spec/tides/spring-window.md",
+      id: "RULE-SPRING-WINDOW",
+      kind: "rule",
+      title: "Spring tides: a wider window?",
+      status: "draft",
+      parent: "MEC-TIDES",
+      lines: [
+        ...frontMatter({
+          id: "RULE-SPRING-WINDOW",
+          kind: "rule",
+          status: "draft",
+          parent: "MEC-TIDES",
+          working_answer: "RULE-TIDE-WINDOW",
+        }),
+        "",
+        "# Spring tides: a wider window?",
+        "",
+        "At spring tides high water is higher; MEC-TIDES may allow a wider entry window then.",
+      ],
+    }),
+    specFile({
+      path: TIDE_FILE,
+      id: "MEC-TIDES",
+      kind: "mechanic",
+      title: "Tide cycle",
+      status: "accepted",
+      rev: 3,
+      parent: "DOM-WATER",
+      lines: [
+        ...frontMatter({
+          id: "MEC-TIDES",
+          kind: "mechanic",
+          status: "accepted",
+          parent: "DOM-WATER",
+          depends_on: "[DOM-BERTHS, harbor-ops:MEC-SHIFTS]",
+          constrains: "[RULE-BERTH-DRAFT]",
+          uses_term: "[RULE-HIGH-WATER, TERM-SLACK-WATER]",
+          canon: "docs/canon/tides.md",
+          rev: 3,
+        }),
+        "",
+        "# Tide cycle",
+        "",
+        "Water level follows a 12 h 25 min cycle read from the tide table of the scenario (MEC-TIDE-TABLES).",
+        "",
+        "## RULE-TIDE-WINDOW: Entry only inside the tide window",
+        "",
+        "A ship with more than 11 m draft enters only from 90 minutes before",
+        "to 60 minutes after high water.",
+        "The window also bounds pilot boarding (MEC-PILOTAGE).",
+      ],
+      sections: [{ id: "RULE-TIDE-WINDOW", kind: "rule", title: "Entry only inside the tide window" }],
+    }),
+    specFile({
+      path: "docs/spec/tides/tide-tables.md",
+      id: "MEC-TIDE-TABLES",
+      kind: "mechanic",
+      title: "Tide tables",
+      status: "accepted",
+      parent: "MEC-TIDES",
+      lines: [
+        ...frontMatter({ id: "MEC-TIDE-TABLES", kind: "mechanic", status: "accepted", parent: "MEC-TIDES", depends_on: "MEC-TIDES" }),
+        "",
+        "# Tide tables",
+        "",
+        "Each scenario carries a year and a half of tide events, high water (HW) and low water (LW).",
+        `The loader also accepts samples such as ${LONG_TOKEN} without a schema.`,
+        "",
+        "| Date | First | Second | Third | Fourth |",
+        "|---|---|---|---|---|",
+        ...TIDE_TABLE_ROWS,
+      ],
+    }),
+    specFile({
+      path: "docs/spec/water/README.md",
+      id: "DOM-WATER",
+      kind: "domain",
+      title: "Water and weather",
+      status: "accepted",
+      parent: "DOM-HARBOR",
+      summary: "Tides, wind and visibility: what the water lets ships do.",
+      lines: [
+        ...frontMatter({
+          id: "DOM-WATER",
+          kind: "domain",
+          status: "accepted",
+          parent: "DOM-HARBOR",
+          depends_on: "docs/spec/tides/tide-cycle.md#slack",
+          summary: "Tides, wind and visibility: what the water lets ships do.",
+        }),
+        "",
+        "# Water and weather",
+        "",
+        "Water and weather decide when ships may move.",
+      ],
+    }),
+    specFile({
+      path: "docs/spec/water/high-water.md",
+      id: "RULE-HIGH-WATER",
+      kind: "rule",
+      title: "High water",
+      status: "accepted",
+      parent: "DOM-WATER",
+      lines: [
+        ...frontMatter({ id: "RULE-HIGH-WATER", kind: "rule", status: "accepted", parent: "DOM-WATER" }),
+        "",
+        "# High water",
+        "",
+        "High water is the highest level of one tide cycle, read from the tide table.",
+      ],
+    }),
+  ];
+  const linkAt = (path: string, needle: string): number => {
+    const file = documents.find((candidate) => candidate.path === path);
+    const at = file?.lines.findIndex((line) => line.includes(needle)) ?? -1;
+    if (at < 0) {
+      throw new Error(`${path}: no line holds ${needle}`);
+    }
+    return at + 1;
+  };
+  const frontmatter = "frontmatter";
+  const inline = "inline";
+  return {
+    treeNotes: [],
+    documents,
+    links: [
+      link({ type: "depends_on", origin: frontmatter, written: "DOM-BERTHS", path: TIDE_FILE, line: linkAt(TIDE_FILE, "depends_on:"), to: "DOM-BERTHS" }),
+      link({
+        type: "depends_on",
+        origin: frontmatter,
+        written: "harbor-ops:MEC-SHIFTS",
+        path: TIDE_FILE,
+        line: linkAt(TIDE_FILE, "depends_on:"),
+        state: "skipped",
+      }),
+      link({ type: "constrains", origin: frontmatter, written: "RULE-BERTH-DRAFT", path: TIDE_FILE, line: linkAt(TIDE_FILE, "constrains:"), to: "RULE-BERTH-DRAFT" }),
+      link({ type: "uses_term", origin: frontmatter, written: "RULE-HIGH-WATER", path: TIDE_FILE, line: linkAt(TIDE_FILE, "uses_term:"), to: "RULE-HIGH-WATER" }),
+      link({
+        type: "uses_term",
+        origin: frontmatter,
+        written: "TERM-SLACK-WATER",
+        path: TIDE_FILE,
+        line: linkAt(TIDE_FILE, "uses_term:"),
+        reason: "`TERM-SLACK-WATER` resolves to no ID and no alias",
+      }),
+      link({
+        type: "canon",
+        origin: frontmatter,
+        written: "docs/canon/tides.md",
+        path: TIDE_FILE,
+        line: linkAt(TIDE_FILE, "canon:"),
+        state: "unchecked",
+        reason: "`canon:` names docs/canon/tides.md, no walked document; not checked",
+      }),
+      link({ type: "mentions", origin: inline, written: "MEC-TIDE-TABLES", path: TIDE_FILE, line: linkAt(TIDE_FILE, "(MEC-TIDE-TABLES)"), to: "MEC-TIDE-TABLES" }),
+      link({ type: "mentions", origin: inline, written: "MEC-PILOTAGE", path: TIDE_FILE, line: linkAt(TIDE_FILE, "(MEC-PILOTAGE)"), to: "MEC-PILOTAGE" }),
+      link({ type: "depends_on", origin: frontmatter, written: "[[MEC-TIDES]]", path: PILOT_FILE, line: linkAt(PILOT_FILE, "depends_on:"), to: "MEC-TIDES" }),
+      link({
+        type: "mentions",
+        origin: inline,
+        written: "MEC-TIDES#RULE-TIDE-WINDOW",
+        path: "docs/spec/berths/README.md",
+        line: linkAt("docs/spec/berths/README.md", "MEC-TIDES#RULE-TIDE-WINDOW"),
+        to: "RULE-TIDE-WINDOW",
+      }),
+      link({
+        type: "depends_on",
+        origin: frontmatter,
+        written: "MEC-TIDES",
+        path: "docs/spec/tides/tide-tables.md",
+        line: linkAt("docs/spec/tides/tide-tables.md", "depends_on:"),
+        to: "MEC-TIDES",
+      }),
+      link({
+        type: "working_answer",
+        origin: frontmatter,
+        written: "RULE-TIDE-WINDOW",
+        path: "docs/spec/tides/spring-window.md",
+        line: linkAt("docs/spec/tides/spring-window.md", "working_answer:"),
+        to: "RULE-TIDE-WINDOW",
+      }),
+      link({
+        type: "mentions",
+        origin: inline,
+        written: "MEC-TIDES",
+        path: "docs/spec/tides/spring-window.md",
+        line: linkAt("docs/spec/tides/spring-window.md", "MEC-TIDES may"),
+        to: "MEC-TIDES",
+      }),
+      link({
+        type: "mentions",
+        origin: inline,
+        written: "MEC-TIDES",
+        path: "docs/spec/archive/old-quays.md",
+        line: linkAt("docs/spec/archive/old-quays.md", "MEC-TIDES alone"),
+        to: "MEC-TIDES",
+      }),
+      link({
+        type: "depends_on",
+        origin: frontmatter,
+        written: "docs/spec/tides/tide-cycle.md#slack",
+        path: "docs/spec/water/README.md",
+        line: linkAt("docs/spec/water/README.md", "depends_on:"),
+        to: "MEC-TIDES",
+        reason: "`#slack` names no anchor in docs/spec/tides/tide-cycle.md; lands on the document",
+      }),
+      link({
+        type: "depends_on",
+        origin: inline,
+        written: HOSTILE_LINK,
+        path: "docs/spec/berths/mooring.md",
+        line: linkAt("docs/spec/berths/mooring.md", "old planning tool"),
+        reason: `\`${HOSTILE_LINK}\` resolves to no ID and no alias`,
+      }),
+    ],
+  };
+}
+
 export function harborSim(now: number): MockProject {
   const at = (minutesAgo: number) => stamp(now, minutesAgo);
   const agent = (role: string, run: string) => ({ type: "agent", role, model: "claude-opus-5-5", run });
   return {
     project: { slug: SLUG, name: "Harbor Sim" },
     nodeKinds,
+    specStatuses,
     notes: [],
-    nodes: [
-      node({
-        id: "DOM-BERTHS",
-        kind: "domain",
-        title: "Berths and moorings",
-        path: "docs/spec/berths/README.md",
-        line: 1,
-        status: "accepted",
-        rev: 2,
-        text: [
-          "---",
-          "id: DOM-BERTHS",
-          "kind: domain",
-          "status: accepted",
-          "rev: 2",
-          "---",
-          "",
-          "# Berths and moorings",
-          "",
-          "Ships wait at anchor until a berth with enough depth and length is free.",
-          "A berth holds one ship; mooring takes a crew of four and 20 simulated minutes.",
-          `The north basin is called "${BASIN_NAME_DECOMPOSED}" in the owner's notes.`,
-        ].join("\n"),
-      }),
-      node({
-        id: "MEC-TIDES",
-        kind: "mechanic",
-        title: "Tide cycle",
-        path: TIDE_FILE,
-        line: 1,
-        status: "accepted",
-        rev: 3,
-        sections: ["RULE-TIDE-WINDOW"],
-        text: [
-          "---",
-          "id: MEC-TIDES",
-          "kind: mechanic",
-          "status: accepted",
-          "rev: 3",
-          "---",
-          "",
-          "# Tide cycle",
-          "",
-          "Water level follows a 12 h 25 min cycle read from the tide table of the scenario.",
-          "",
-          "## RULE-TIDE-WINDOW: Entry only inside the tide window",
-          "",
-          "A ship with more than 11 m draft enters only from 90 minutes before",
-          "to 60 minutes after high water.",
-        ].join("\n"),
-      }),
-      node({
-        id: "RULE-TIDE-WINDOW",
-        kind: "rule",
-        title: "Entry only inside the tide window",
-        path: TIDE_FILE,
-        line: 12,
-        rev: 3,
-        text: [
-          "## RULE-TIDE-WINDOW: Entry only inside the tide window",
-          "",
-          "A ship with more than 11 m draft enters only from 90 minutes before",
-          "to 60 minutes after high water.",
-        ].join("\n"),
-      }),
-      node({
-        id: "RULE-BERTH-DRAFT",
-        kind: "rule",
-        title: "Draft limit at a berth",
-        path: DRAFT_FILE,
-        line: 8,
-        rev: 4,
-        text: DRAFT_TEXT,
-      }),
-      node({
-        id: "MEC-PILOTAGE",
-        kind: "mechanic",
-        title: "Pilot boarding",
-        path: PILOT_FILE,
-        line: 1,
-        status: "review",
-        rev: 1,
-        sections: ["RULE-PILOT-REQ"],
-        text: [
-          "---",
-          "id: MEC-PILOTAGE",
-          "kind: mechanic",
-          "status: review",
-          "rev: 1",
-          "---",
-          "",
-          "# Pilot boarding",
-          "",
-          PILOT_TEXT,
-        ].join("\n"),
-      }),
-      node({
-        id: "RULE-PILOT-REQ",
-        kind: "rule",
-        title: "Pilot required above 120 m",
-        path: PILOT_FILE,
-        line: 10,
-        rev: 1,
-        text: PILOT_TEXT,
-      }),
-    ],
+    corpus: harborCorpus(),
     proposals: [
       proposal({
         id: "PR-0041",
@@ -286,7 +675,7 @@ export function harborSim(now: number): MockProject {
         task_id: "T-0112",
         target_id: "RULE-BERTH-DRAFT",
         target_path: DRAFT_FILE,
-        target_ids: ["RULE-BERTH-DRAFT"],
+        target_ids: ["RULE-BERTH-DRAFT", "DOM-BERTHS"],
         branch: "task/T-0112",
         summary: "berths.ron gives berth 4 a 13.0 m draft limit; the spec says 12.0 m",
         evidence: [
@@ -379,6 +768,24 @@ export function harborSim(now: number): MockProject {
         decision_note: "Wait for the pilotage rework.",
         author: agent("rust-developer", "R-2105"),
         created_at: at(5 * 24 * 60),
+      }),
+      proposal({
+        id: "PR-0047",
+        project: SLUG,
+        kind: "question",
+        severity: "low",
+        target_id: DRAFT_FILE,
+        target_path: DRAFT_FILE,
+        target_ids: [DRAFT_FILE],
+        summary: "Give the berth limits page an ID so tasks can cite it?",
+        options: [
+          { label: "Add an ID", effect: "The page gets an ID of its own.", price: "Every citation of its path is rewritten once." },
+          { label: "Keep the path", effect: "Tasks cite the page by its path.", price: "A move of the file breaks those citations." },
+        ],
+        recommendation: 0,
+        working_answer: "Tasks cite the page by its path for now.",
+        author: agent("spec-writer", "R-2240"),
+        created_at: at(90),
       }),
     ],
   };

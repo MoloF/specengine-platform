@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type MouseEvent } from "react";
 
 // The hash is the route. Section and project changes push a history entry (links, pushHash);
 // a selection inside a view replaces the current one (replaceHash).
@@ -37,4 +37,22 @@ export function pushHash(hash: string): void {
 export function replaceHash(hash: string): void {
   window.history.replaceState(window.history.state, "", hash);
   notify();
+}
+
+/**
+ * Whether a click on an in-app anchor moves this page to another hash, as the browser follows it:
+ * the primary button with no modifier (Cmd, Ctrl, Shift or Alt open it elsewhere) and a hash other
+ * than the current one (the same hash moves nothing, no hashchange). Tells a followed link from one
+ * that went nowhere here.
+ */
+export function movesHere(event: MouseEvent<HTMLAnchorElement>): boolean {
+  return (
+    event.button === 0 &&
+    !event.defaultPrevented &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.currentTarget.hash !== window.location.hash
+  );
 }

@@ -14,9 +14,17 @@ export function createQueryClient(): QueryClient {
   });
 }
 
-/** Gives the tree the client the bootstrap picked and a query cache of its own. */
-export function ApiProvider({ client, children }: { client: SpecEngineClient; children: ReactNode }) {
-  const [queryClient] = useState(createQueryClient);
+/** Gives the tree the client the bootstrap picked and a query cache of its own (a test may pass one). */
+export function ApiProvider({
+  client,
+  queryClient: given,
+  children,
+}: {
+  client: SpecEngineClient;
+  queryClient?: QueryClient;
+  children: ReactNode;
+}) {
+  const [queryClient] = useState(() => given ?? createQueryClient());
   return (
     <ClientContext value={client}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

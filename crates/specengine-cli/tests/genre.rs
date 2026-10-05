@@ -18,7 +18,7 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// `cargo xtask`, docs/features/spec-cli-check.md AC-13; pass 2b this
 /// repository's registered command prefix, docs/features/spec-cli-switch.md
 /// AC-15).
-const FORBIDDEN: [&str; 15] = [
+const FORBIDDEN: [&str; 17] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -32,6 +32,8 @@ const FORBIDDEN: [&str; 15] = [
     // docs/features/index-shards.md AC-11: the shard names of this
     // repository and of the fixtures' scratch configs.
     "index-archive",
+    "index-decisions",
+    "index-crates",
     "index-records",
     // docs/features/spec-cli-graph.md AC-03: no root rule by a prefix of
     // either fixture's scheme.

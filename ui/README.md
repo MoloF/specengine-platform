@@ -3,22 +3,22 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # ui — the web UI
 
-The owner's screens over SpecEngine: the proposal queue, tasks, the spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State: slice 1 `ui-shell` shipped 2026-10-05, the shell and the Inbox on mock data (`docs/features/ui-shell.md`); next slices: 08 §2 Phase 4. Screens' meaning: 07 §3 "Web UI — screens"; the owner's flow: 06 §3.3–3.4.
+The owner's screens over SpecEngine: the proposal queue, tasks, the spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State, on mock data: slices `ui-shell` (shell, Inbox) shipped 2026-10-05 and `ui-tree-node` (Spec tree) 2026-10-06, specs in `docs/features/`; the rest: 08 §2 Phase 4. Screens' meaning: 07 §3 "Web UI — screens"; the owner's flow: 06 §3.3–3.4.
 
 ## Stack
 
-A standalone pnpm project on strict TypeScript, packages in "Dependencies": no root `package.json`, no workspace with the Rust crates. Hash routing, hand-written (no router package). Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`. Not approved, each decided at its slice: a graph layout (dagre, ELK), CodeMirror 6 and `@codemirror/merge` (in-place editing), a TS type generator, `rust-embed` (embedding), `user-event`, an a11y lint plugin, router, markdown, icon or webfont packages.
+A standalone pnpm project on strict TypeScript, packages in "Dependencies": no root `package.json`, no workspace with the Rust crates. Hash routing, hand-written (no router package). Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`. Not approved, each decided at its slice: a graph layout (dagre, ELK), CodeMirror 6 and `@codemirror/merge`, a TS type generator, `rust-embed`, `user-event`, an a11y lint plugin, router, markdown, icon or webfont packages.
 
 ## Contract seam
 
 - One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 §3); the bootstrap `src/main.tsx` alone picks the implementation and the only place importing `src/mocks/`.
 - App code imports domain types only from `src/api/types.ts`, which re-exports `src/api/provisional.ts` today and the generated types (`src/api/generated/`, from a Rust-side generator) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" ``; they are replaced, never extended, and the generated ones win.
-- An endpoint the UI needs and 07 §3 lacks is named for `rust-developer`, never invented as a URL; the mock may serve it, flagged in the interface. The list so far: `docs/features/ui-shell.md` "Open".
+- An endpoint the UI needs and 07 §3 lacks is named for `rust-developer`, never invented as a URL; the mock may serve it, flagged in the interface. The list so far: "Open" in `docs/features/ui-shell.md`, `ui-tree-node.md`.
 - The UI renders what the daemon returns: diffs arrive as hunks, decisions are applied by `apply_proposal`; the daemon's refusals are shown in its own words.
 - Switching to the daemon: add an HTTP implementation, switch the bootstrap, re-point `types.ts`.
 
@@ -27,12 +27,12 @@ A standalone pnpm project on strict TypeScript, packages in "Dependencies": no r
 Every slice keeps these (the UI tests, `ui_policy.rs`).
 
 - **Tokens**: `src/styles/tokens.css` holds every colour literal, as semantic roles, and the spacing, type, motion (0 under reduced motion) and `--target-min: 24px` tokens; dark only. WCAG 2.2 AA on every surface: text ≥ 4.5:1; focus ring, control border, statuses ≥ 3:1. `cannot-verify` has its own colour and icon.
-- **Status** never by colour alone: label and icon. An unknown value is a neutral badge with the raw text, sorted last; `kind` and `contour` stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests.
+- **Status** never by colour alone: label and icon. An unknown value is a neutral badge with the raw text, sorted last; `kind`, `contour`, spec statuses, link types (but `mentions`) stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests.
 - **States**: loading, a skeleton and `aria-busy`; empty, the meaning and the next step; error, the daemon's message verbatim and Retry.
 - **Dialogs** in-app only (`role="dialog"`, `aria-modal`, focus trap, Esc, focus back to the trigger; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while it is pending nothing closes or opens a dialog; a refusal keeps the dialog, the typed text and a `role="alert"` message; a proposal revised meanwhile is shown as changed and needs a fresh submit.
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, without modifiers (WCAG 2.1.4); `?` lists them. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus is never left on `body`.
 - **Live regions**, polite for results and assertive for a 409, sit outside any inert subtree.
-- **Text** wraps (`overflow-wrap: anywhere`), nothing cut without a way to see it whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012).
+- **Text**: data is text, no HTML sink, each `href` from `sectionHash`; wraps (`overflow-wrap: anywhere`), nothing cut without a way to see it whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012).
 - **Shell**: hash routes `#/<project>/<section>[/<id>]`; "Mock data" on every route while the mock serves; an unbuilt section says "Not built yet: arrives in slice `<slug>`"; a root error boundary and one per view.
 
 ## Dependencies
@@ -72,18 +72,18 @@ Run in `ui/` by `ui-developer` and `test-engineer`, each exits on its own:
 | `pnpm build` | `tsc --noEmit` and `vite build` into `ui/dist/` (git-ignored) |
 | `pnpm test` | `vitest run`, never watch; a test calling `console.error` or `console.warn` fails |
 
-From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. The pre-commit hook and CI do not run the UI gates (no UI CI job).
+From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. The pre-commit hook and CI do not run the UI gates.
 
 ## Laptop rules
 
 - Role runs never start `pnpm dev`, `vite`, `vite preview`, bare `vitest` or any watcher: they do not exit. Wrap each gate: `perl -e 'alarm 600; exec @ARGV' pnpm --dir ui test`.
 - Vitest: `watch: false`, at most 2 workers, in the config.
-- The docs walk (`crates/specengine-store/src/source.rs` `walk`) skips dot entries and symlinks but descends every other directory, `node_modules` included: pnpm's isolated layout (`.pnpm` and symlinks) keeps that cheap; a hoisted layout would not.
+- The docs walk (`crates/specengine-store/src/source.rs` `walk`) skips dot entries and symlinks but descends every other directory, `node_modules` included: pnpm's isolated layout (`.pnpm`, symlinks) keeps that cheap, a hoisted one would not.
 
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
-2. `pnpm --dir ui dev`, open the printed local URL; stop with Ctrl-C. Mock projects `harbor-sim` and `ledger-api`; decisions live in memory until a reload. Scenarios, before the `#`: `?scenario=empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409).
+2. `pnpm --dir ui dev`, open the printed local URL; stop with Ctrl-C. Mock projects `harbor-sim` and `ledger-api`; decisions live in memory until a reload. Scenarios, before the `#`: `?scenario=empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes).
 3. The slice's own check list: its spec, "Owner's manual check".
 4. Optional: add `ui/node_modules` to Spotlight's privacy list (System Settings, Spotlight).
 

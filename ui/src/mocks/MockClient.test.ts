@@ -37,6 +37,7 @@ describe("scenarioFromSearch", () => {
     ["?scenario=error", "error"],
     ["?scenario=slow", "slow"],
     ["?scenario=conflict", "conflict"],
+    ["?scenario=large", "large"],
     ["?scenario=bogus", "normal"],
     ["?other=1", "normal"],
   ])("reads %j as %s", (search, scenario) => {
@@ -156,7 +157,14 @@ describe("the other scenarios", () => {
 
   it("error: every read rejects with 503 and a message", async () => {
     const client = new MockClient("error", { now: clock });
-    for (const call of [client.getProjects(), client.getInbox("harbor-sim"), client.getNode("harbor-sim", "MEC-TIDES")]) {
+    for (const call of [
+      client.getProjects(),
+      client.getInbox("harbor-sim"),
+      client.getNode("harbor-sim", "MEC-TIDES"),
+      client.getTree("harbor-sim"),
+      client.search("harbor-sim", { query: "tide" }),
+      client.getBundle("harbor-sim", { node_ids: ["MEC-TIDES"] }),
+    ]) {
       const error = await rejection(call);
       expect(error.status).toBe(503);
       expect(error.message.length).toBeGreaterThan(0);

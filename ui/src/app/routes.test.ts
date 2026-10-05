@@ -30,3 +30,25 @@ describe("hash routes", () => {
     });
   });
 });
+
+// AC-05 of docs/features/ui-tree-node.md: a REF is one segment, encoded by sectionHash, decoded
+// once by parseHash: an ID, `slug/ID`, `ID#SECTION` (%23) or a root-relative path (%2F).
+describe("the tree's REF in the hash", () => {
+  it.each([
+    ["MEC-TIDES", "#/harbor-sim/tree/MEC-TIDES"],
+    ["MEC-TIDES#RULE-TIDE-WINDOW", "#/harbor-sim/tree/MEC-TIDES%23RULE-TIDE-WINDOW"],
+    ["tide-cycle/MEC-TIDES", "#/harbor-sim/tree/tide-cycle%2FMEC-TIDES"],
+    ["docs/spec/tides/tide-cycle.md", "#/harbor-sim/tree/docs%2Fspec%2Ftides%2Ftide-cycle.md"],
+  ])("writes %s as one segment and reads it back", (ref, hash) => {
+    expect(sectionHash("harbor-sim", "tree", ref)).toBe(hash);
+    expect(parseHash(hash)).toEqual({ type: "section", project: "harbor-sim", section: "tree", id: ref });
+  });
+
+  it("decodes once: %2523 stays %23", () => {
+    expect(parseHash("#/p/tree/A%2523B")).toEqual({ type: "section", project: "p", section: "tree", id: "A%23B" });
+  });
+
+  it("refuses an unencoded slash as an extra segment", () => {
+    expect(parseHash("#/p/tree/docs/spec/a.md")).toEqual({ type: "not_found" });
+  });
+});

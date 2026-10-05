@@ -79,8 +79,13 @@ const SYNC = [
   "predated",
   "cannot-verify",
 ];
+const LINK = ["resolved", "dangling", "skipped", "unchecked", "unknown"];
+const MARK = ["dangling-parent", "parent-cycle", "unknown"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
+  ...LINK.map((value) => `--link-${value}`),
+  ...MARK.map((value) => `--mark-${value}`),
+  "--highlight-line",
   ...PROPOSAL.map((value) => `--proposal-${value}`),
   ...TASK.map((value) => `--task-${value}`),
   ...SYNC.map((value) => `--sync-${value}`),
@@ -93,6 +98,7 @@ const pairs: [string, string, number][] = [
   ),
   ["--text-primary", "--diff-added-surface", 4.5],
   ["--text-primary", "--diff-removed-surface", 4.5],
+  ["--text-primary", "--highlight-surface", 4.5],
   ["--text-on-accent", "--accent", 4.5],
   ...["--focus-ring", "--border-control", ...STATUS].flatMap((token) =>
     SURFACES.map((surface): [string, string, number] => [token, surface, 3]),
@@ -114,6 +120,7 @@ describe("tokens.css (AC-09)", () => {
       ...STATUS,
       "--diff-added-surface",
       "--diff-removed-surface",
+      "--highlight-surface",
       ...[1, 2, 3, 4, 5, 6].map((step) => `--space-${String(step)}`),
       "--radius-s",
       "--radius-m",
@@ -134,6 +141,13 @@ describe("tokens.css (AC-09)", () => {
 
   it.each(pairs)("%s on %s reaches %f:1", (foreground, background, minimum) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(minimum);
+  });
+
+  it("never gives an unchecked or skipped link a resolved link's colour", () => {
+    const resolved = resolve("--link-resolved").toLowerCase();
+    for (const state of ["unchecked", "skipped", "dangling", "unknown"]) {
+      expect(resolve(`--link-${state}`).toLowerCase()).not.toBe(resolved);
+    }
   });
 
   it("gives cannot-verify its own colour, never ok's or another sync state's", () => {
