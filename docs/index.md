@@ -81,7 +81,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/features/proposal-apply.md](features/proposal-apply.md) Proposal apply: the one write door · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/features/ui-shell.md](features/ui-shell.md) UI shell: the Inbox on mocks · ui, crates/specengine-eval · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, the MCP protocol, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

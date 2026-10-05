@@ -8,43 +8,58 @@ reviewed: 2026-10-05
 
 # ui — the web UI
 
-The owner's screens over SpecEngine: the proposal queue, tasks, the spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State: slice 1 `ui-shell` (draft), the shell and the Inbox on mock data: `docs/features/ui-shell.md`. Screens' meaning: 07 §3 "Web UI — screens"; the owner's flow: 06 §3.3–3.4.
+The owner's screens over SpecEngine: the proposal queue, tasks, the spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State: slice 1 `ui-shell` shipped 2026-10-05, the shell and the Inbox on mock data (`docs/features/ui-shell.md`); next slices: 08 §2 Phase 4. Screens' meaning: 07 §3 "Web UI — screens"; the owner's flow: 06 §3.3–3.4.
 
 ## Stack
 
-React 19, TypeScript (strict), Vite, TanStack Query; `@xyflow/react` from the graph slice. A standalone pnpm project: no root `package.json`, no workspace with the Rust crates. Hash routing, hand-written (no router package). Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`. Not approved, each decided at its slice: a graph layout (dagre, ELK), CodeMirror 6 and `@codemirror/merge` (in-place editing), a TS type generator, `rust-embed` (embedding), `user-event`, an a11y lint plugin, router, markdown, icon or webfont packages.
+A standalone pnpm project on strict TypeScript, packages in "Dependencies": no root `package.json`, no workspace with the Rust crates. Hash routing, hand-written (no router package). Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`. Not approved, each decided at its slice: a graph layout (dagre, ELK), CodeMirror 6 and `@codemirror/merge` (in-place editing), a TS type generator, `rust-embed` (embedding), `user-event`, an a11y lint plugin, router, markdown, icon or webfont packages.
 
 ## Contract seam
 
 - One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 §3); the bootstrap `src/main.tsx` alone picks the implementation and the only place importing `src/mocks/`.
-- App code imports domain types only from `src/api/types.ts`, which re-exports `src/api/provisional.ts` today and the generated types (`src/api/generated/`, written by a Rust-side generator, outside `ui-developer`'s hand edits) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" ``; they are replaced, never extended, and the generated ones win.
-- An endpoint the UI needs and 07 §3 lacks is named for `rust-developer`, never invented as a URL; the mock may serve it, flagged in the interface.
+- App code imports domain types only from `src/api/types.ts`, which re-exports `src/api/provisional.ts` today and the generated types (`src/api/generated/`, from a Rust-side generator) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" ``; they are replaced, never extended, and the generated ones win.
+- An endpoint the UI needs and 07 §3 lacks is named for `rust-developer`, never invented as a URL; the mock may serve it, flagged in the interface. The list so far: `docs/features/ui-shell.md` "Open".
 - The UI renders what the daemon returns: diffs arrive as hunks, decisions are applied by `apply_proposal`; the daemon's refusals are shown in its own words.
 - Switching to the daemon: add an HTTP implementation, switch the bootstrap, re-point `types.ts`.
 
+## Screen rules
+
+Every slice keeps these (the UI tests, `ui_policy.rs`).
+
+- **Tokens**: `src/styles/tokens.css` holds every colour literal, as semantic roles, and the spacing, type, motion (0 under reduced motion) and `--target-min: 24px` tokens; dark only. WCAG 2.2 AA on every surface: text ≥ 4.5:1; focus ring, control border, statuses ≥ 3:1. `cannot-verify` has its own colour and icon.
+- **Status** never by colour alone: label and icon. An unknown value is a neutral badge with the raw text, sorted last; `kind` and `contour` stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests.
+- **States**: loading, a skeleton and `aria-busy`; empty, the meaning and the next step; error, the daemon's message verbatim and Retry.
+- **Dialogs** in-app only (`role="dialog"`, `aria-modal`, focus trap, Esc, focus back to the trigger; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while it is pending nothing closes or opens a dialog; a refusal keeps the dialog, the typed text and a `role="alert"` message; a proposal revised meanwhile is shown as changed and needs a fresh submit.
+- **Keyboard**: hotkeys act only with focus in their region, outside text fields, without modifiers (WCAG 2.1.4); `?` lists them. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus is never left on `body`.
+- **Live regions**, polite for results and assertive for a 409, sit outside any inert subtree.
+- **Text** wraps (`overflow-wrap: anywhere`), nothing cut without a way to see it whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012).
+- **Shell**: hash routes `#/<project>/<section>[/<id>]`; "Mock data" on every route while the mock serves; an unbuilt section says "Not built yet: arrives in slice `<slug>`"; a root error boundary and one per view.
+
 ## Dependencies
 
-The owner's allowlist of 2026-10-05: exactly these 15 names in `package.json` (dependencies and devDependencies together), each at an exact version. `ui-developer` reports the versions it pinned at the first install; `spec-writer` records them here, and `crates/specengine-eval/tests/ui_policy.rs` compares this table with `package.json`.
+The owner's allowlist of 2026-10-05: exactly these 15 names in `package.json` (dependencies and devDependencies together), each at the exact version below; `packageManager` `pnpm@10.28.2`. `crates/specengine-eval/tests/ui_policy.rs` compares this table with `package.json` and the lockfile.
 
 | Package | Version | Role |
 |---|---|---|
-| `react` | pinned at install | runtime, 19.x |
-| `react-dom` | pinned at install | runtime, 19.x |
-| `@tanstack/react-query` | pinned at install | data fetching through the client |
-| `@xyflow/react` | pinned at install | graph view (from `ui-graph`) |
-| `vite` | pinned at install | dev server, build |
-| `@vitejs/plugin-react` | pinned at install | React transform for Vite |
-| `typescript` | pinned at install | type check, within `typescript-eslint`'s peer range |
-| `@types/react` | pinned at install | types |
-| `@types/react-dom` | pinned at install | types |
-| `eslint` | pinned at install | lint, flat config |
-| `typescript-eslint` | pinned at install | TS lint rules and parser |
-| `eslint-plugin-react-hooks` | pinned at install | hooks rules |
-| `vitest` | pinned at install | test runner, matching Vite |
-| `@testing-library/react` | pinned at install | component tests (its peer `@testing-library/dom` is installed, imported only through it) |
-| `jsdom` | pinned at install | test DOM |
+| `react` | 19.3.0 | runtime |
+| `react-dom` | 19.3.0 | runtime |
+| `@tanstack/react-query` | 5.104.0 | data fetching |
+| `@xyflow/react` | 12.12.0 | graph view (from `ui-graph`) |
+| `vite` | 8.3.1 | dev server, build |
+| `@vitejs/plugin-react` | 6.1.1 | React transform for Vite |
+| `typescript` | 6.0.3 | type check |
+| `@types/react` | 19.3.0 | types |
+| `@types/react-dom` | 19.3.0 | types |
+| `eslint` | 10.11.0 | lint, flat config |
+| `typescript-eslint` | 8.70.1 | TS lint rules and parser |
+| `eslint-plugin-react-hooks` | 7.1.1 | hooks rules |
+| `vitest` | 5.0.2 | test runner |
+| `@testing-library/react` | 16.3.3 | component tests; its peer `@testing-library/dom` is installed (lockfile only), never imported |
+| `jsdom` | 29.1.1 | test DOM |
 
-**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. At the first install each is the newest stable version that satisfies React 19 and every peer range of the set, published at least 7 days earlier (pnpm's `minimumReleaseAge` = 10080 where the pinned pnpm supports it, else checked by hand). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `packageManager` names the exact pnpm. After the first install roles run only `pnpm install --frozen-lockfile`; `ui/pnpm-lock.yaml` is committed. A new package, a removal or a version change, security patches included, is an owner decision recorded in this table. Dependency install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`; pnpm's "ignored build scripts" notice (esbuild) is expected.
+**Held back.** TypeScript 7 is outside `typescript-eslint`'s peer range; jsdom 30 needs Node ≥ 24.15 (the laptop has 24.14): its bump is an owner decision after a Node upgrade.
+
+**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Each pin was the newest stable version satisfying React 19 and every peer range of the set, published at least 7 days earlier: `ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080` (minutes) keeps pnpm from resolving a younger one. `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). Roles run only `pnpm install --frozen-lockfile`; `ui/pnpm-lock.yaml` is committed. A new package, a removal or a version change, security patches included, is an owner decision recorded in this table. Dependency install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
 
 ## Gates
 
@@ -57,7 +72,7 @@ Run in `ui/` by `ui-developer` and `test-engineer`, each exits on its own:
 | `pnpm build` | `tsc --noEmit` and `vite build` into `ui/dist/` (git-ignored) |
 | `pnpm test` | `vitest run`, never watch; a test calling `console.error` or `console.warn` fails |
 
-From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity`. The pre-commit hook and CI do not run the UI gates (no UI CI job).
+From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. The pre-commit hook and CI do not run the UI gates (no UI CI job).
 
 ## Laptop rules
 
@@ -68,10 +83,10 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
-2. `pnpm --dir ui dev`, open the printed local URL; stop with Ctrl-C. Scenarios: `?scenario=empty`, `error`, `slow`, `conflict` before the `#`.
+2. `pnpm --dir ui dev`, open the printed local URL; stop with Ctrl-C. Mock projects `harbor-sim` and `ledger-api`; decisions live in memory until a reload. Scenarios, before the `#`: `?scenario=empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409).
 3. The slice's own check list: its spec, "Owner's manual check".
 4. Optional: add `ui/node_modules` to Spotlight's privacy list (System Settings, Spotlight).
 
 ## Roles here
 
-`ui-developer` writes `ui/**` and the UI tests, never this README or `src/api/generated/`; `test-engineer` owns `ui_policy.rs` and the `ui/` part of `anonymity.rs`, runs the gates and the slice's mutations; `spec-writer` keeps this README.
+`ui-developer` writes `ui/**` and the UI tests, never this README or `src/api/generated/`; `test-engineer` owns `ui_policy.rs` and the `ui/` part of `anonymity.rs`, runs the gates and the slice's mutations; `spec-writer` keeps this README. Until `src/api/generated/` exists, each slice spec lists its exceptions to `.claude/agents/ui-developer.md` (ADR-0033).

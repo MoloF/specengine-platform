@@ -1,5 +1,9 @@
 //! AC-13 of docs/features/phase-0-spikes.md: `docs/`, `crates/` and
 //! `fixtures/` carry no absolute paths, no pilot names and no non-English text.
+//! AC-18 of docs/features/ui-shell.md: `ui/` is scanned the same way, except
+//! `ui/dist` (build output) and every `node_modules` (installed packages);
+//! `ui_tree_is_scanned_but_its_build_output_and_packages_are_not` pins that
+//! on a scratch tree (mutations: `ui` unscanned, `dist` unskipped).
 //! The ID prefixes of a runtime census config (08 §4.3;
 //! `crates/specengine-import/README.md`) are not grepped here: such a
 //! config may name single letters or prefixes this repository uses itself,
@@ -19,17 +23,29 @@ fn repository_root() -> PathBuf {
         .expect("repository root exists")
 }
 
-/// Every UTF-8 text file under `docs/`, `crates/` and `fixtures/`, skipping
-/// build directories and version-control internals.
-fn text_files() -> Vec<(PathBuf, String)> {
-    let root = repository_root();
+/// The scanned top-level areas of the repository.
+const AREAS: [&str; 4] = ["docs", "crates", "fixtures", "ui"];
+
+/// Directories under the scanned areas that hold generated or installed text
+/// (repository-relative, matched by whole path components): the UI's build
+/// output. `node_modules` is skipped wherever it is, see [`walk`].
+const SKIPPED: [&str; 1] = ["ui/dist"];
+
+/// Every UTF-8 text file under the [`AREAS`] of `root`, skipping build
+/// directories, installed packages and version-control internals.
+fn text_files_under(root: &Path) -> Vec<(PathBuf, String)> {
     let mut files = Vec::new();
-    for area in ["docs", "crates", "fixtures"] {
+    for area in AREAS {
         let dir = root.join(area);
         if dir.is_dir() {
-            walk(&dir, &mut files);
+            walk(root, &dir, &mut files);
         }
     }
+    files
+}
+
+fn text_files() -> Vec<(PathBuf, String)> {
+    let files = text_files_under(&repository_root());
     assert!(
         !files.is_empty(),
         "no text files found under the scanned areas"
@@ -37,7 +53,7 @@ fn text_files() -> Vec<(PathBuf, String)> {
     files
 }
 
-fn walk(dir: &Path, out: &mut Vec<(PathBuf, String)>) {
+fn walk(root: &Path, dir: &Path, out: &mut Vec<(PathBuf, String)>) {
     for entry in fs::read_dir(dir).expect("readable directory") {
         let entry = entry.expect("directory entry");
         let path = entry.path();
@@ -50,7 +66,11 @@ fn walk(dir: &Path, out: &mut Vec<(PathBuf, String)>) {
             if name.starts_with('.') || name.starts_with("target") || name == "node_modules" {
                 continue;
             }
-            walk(&path, out);
+            let relative = path.strip_prefix(root).unwrap_or(&path);
+            if SKIPPED.iter().any(|skipped| relative == Path::new(skipped)) {
+                continue;
+            }
+            walk(root, &path, out);
         } else if let Ok(text) = fs::read_to_string(&path) {
             out.push((path, text));
         }
@@ -69,22 +89,31 @@ fn offending_lines_outside(
     needle: impl Fn(&str) -> bool,
 ) -> Vec<String> {
     let root = repository_root();
+    lines_matching(&root, text_files(), exempt, pattern, needle)
+}
+
+/// `path:line: pattern` for every line of `files` (under `root`) that
+/// `needle` accepts, files under `exempt` skipped.
+fn lines_matching(
+    root: &Path,
+    files: Vec<(PathBuf, String)>,
+    exempt: &[&str],
+    pattern: &str,
+    needle: impl Fn(&str) -> bool,
+) -> Vec<String> {
     let mut hits = Vec::new();
-    for (path, text) in text_files() {
-        let relative = path.strip_prefix(&root).unwrap_or(&path);
+    for (path, text) in files {
+        let relative = path.strip_prefix(root).unwrap_or(&path);
         if exempt.iter().any(|dir| relative.starts_with(dir)) {
             continue;
         }
         for (index, line) in text.lines().enumerate() {
             if needle(line) {
-                hits.push(format!(
-                    "{}:{}: {pattern}",
-                    path.strip_prefix(&root).unwrap_or(&path).display(),
-                    index + 1
-                ));
+                hits.push(format!("{}:{}: {pattern}", relative.display(), index + 1));
             }
         }
     }
+    hits.sort();
     hits
 }
 
@@ -189,5 +218,109 @@ fn cyrillic_exemption_is_exactly_the_two_russian_fixture_directories() {
             .iter()
             .any(|hit| hit.starts_with(&format!("{dir}/")))),
         "each exempt directory holds Russian text: {unexempted:?}"
+    );
+}
+
+/// A scratch directory under the system temp dir, removed on drop.
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "specengine-eval-anonymity-{name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).expect("scratch directory");
+        Self(path)
+    }
+
+    fn write(&self, relative: &str, text: &str) {
+        let path = self.0.join(relative);
+        fs::create_dir_all(path.parent().expect("a parent")).expect("parent directory");
+        fs::write(&path, text).expect("scratch file written");
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// AC-18 of docs/features/ui-shell.md on a scratch tree: a raw Cyrillic
+/// letter in `ui/src` is found; the same letter in `ui/dist` or in a
+/// `node_modules` is not; `dist` elsewhere (a crate, `ui/src/dist`) is still
+/// scanned. The letter is assembled at run time.
+#[test]
+fn ui_tree_is_scanned_but_its_build_output_and_packages_are_not() {
+    let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
+    let line = format!("const label = \"{letter}\";\n");
+    let tree = Scratch::new("ui-tree");
+    for relative in [
+        "ui/src/mocks/harbor-sim/fixtures.ts",
+        "ui/src/dist/x.ts",
+        "ui/index.html",
+        "ui/dist/x.js",
+        "ui/dist/assets/index.js",
+        "ui/node_modules/react/index.js",
+        "ui/node_modules/.pnpm/react@19.3.0/node_modules/react/index.js",
+        "ui/src/node_modules/x.js",
+        "crates/x/dist/y.rs",
+        "docs/x/dist/y.md",
+    ] {
+        tree.write(relative, &line);
+    }
+    tree.write("docs/english.md", "plain English\n");
+    let hits = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &RUSSIAN_TEST_TEXT,
+        "cyrillic",
+        has_cyrillic,
+    );
+    assert_eq!(
+        hits,
+        [
+            "crates/x/dist/y.rs:1: cyrillic",
+            "docs/x/dist/y.md:1: cyrillic",
+            "ui/index.html:1: cyrillic",
+            "ui/src/dist/x.ts:1: cyrillic",
+            "ui/src/mocks/harbor-sim/fixtures.ts:1: cyrillic",
+        ]
+    );
+}
+
+/// The real walk reads the UI sources and never its build output or its
+/// installed packages, whether or not they exist right now.
+#[test]
+fn the_repository_walk_reads_ui_sources_and_skips_dist_and_node_modules() {
+    let root = repository_root();
+    let relatives: Vec<PathBuf> = text_files()
+        .into_iter()
+        .map(|(path, _)| path.strip_prefix(&root).unwrap_or(&path).to_path_buf())
+        .collect();
+    for expected in [
+        "ui/package.json",
+        "ui/src/main.tsx",
+        "ui/src/styles/tokens.css",
+    ] {
+        assert!(
+            relatives.iter().any(|path| path == Path::new(expected)),
+            "{expected} is not scanned"
+        );
+    }
+    let leaked: Vec<&PathBuf> = relatives
+        .iter()
+        .filter(|path| {
+            path.starts_with("ui/dist")
+                || path
+                    .components()
+                    .any(|component| component.as_os_str() == "node_modules")
+        })
+        .collect();
+    assert!(
+        leaked.is_empty(),
+        "scanned build output or packages: {leaked:?}"
     );
 }

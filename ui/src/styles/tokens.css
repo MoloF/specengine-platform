@@ -1,0 +1,106 @@
+/*
+ * SpecEngine design tokens: the only colour literals of the UI (`ui/README.md` "Screen rules").
+ * Dark navy surfaces, blue-tinted greys, one azure accent; status colours are their own roles.
+ * Contrast (WCAG 2.2 AA, checked by src/styles/tokens.test.ts): text primary, secondary and accent
+ * at least 4.5:1 on every surface, primary also on the diff surfaces, on-accent on accent; focus
+ * ring, control border and every status colour at least 3:1 on every surface. Dark theme only.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, back to front. */
+  --surface-canvas: #0b1322;
+  --surface-panel: #111c30;
+  --surface-raised: #17253d;
+  --surface-overlay: #1d2d49;
+  --scrim: rgba(3, 8, 17, 0.72);
+
+  /* Lines and focus. */
+  --border-subtle: #22344f;
+  --border-control: #6c82a6;
+  --focus-ring: #9ccaff;
+
+  /* Text. */
+  --text-primary: #e4ebf7;
+  --text-secondary: #a8b6cd;
+  --text-on-accent: #04101f;
+
+  /* The one accent. */
+  --accent: #72b2ff;
+
+  /* Attention without a status: the "Mock data" indicator. */
+  --attention: #f2bb5c;
+
+  /* Severity: queue order, never a hold on work. */
+  --severity-high: #ff7d88;
+  --severity-normal: #f2bb5c;
+  --severity-low: #8fb3e0;
+  --severity-unknown: #a3acbd;
+
+  /* Proposal states (05 §3.3) and unknown. */
+  --proposal-open: var(--accent);
+  --proposal-changes-requested: #f2bb5c;
+  --proposal-approved: #7fd4f0;
+  --proposal-applied: #4cc995;
+  --proposal-rejected: #ff7d88;
+  --proposal-deferred: #c2b0f5;
+  --proposal-superseded: #97a3b8;
+  --proposal-unknown: var(--severity-unknown);
+
+  /* Task states (05 §3.3) and unknown. */
+  --task-draft: #97a3b8;
+  --task-analysis: #6fcbdc;
+  --task-review: #c2b0f5;
+  --task-changes-requested: #f2bb5c;
+  --task-ready: var(--accent);
+  --task-in-progress: #8fc1ff;
+  --task-in-review: #d4a6ef;
+  --task-done: #4cc995;
+  --task-accepted: #7ad9b0;
+  --task-cancelled: #8e99ad;
+  --task-unknown: var(--severity-unknown);
+
+  /* Sync states (05, "Markers and the sync matrix"); cannot-verify has its own colour, never ok's. */
+  --sync-ok: #4cc995;
+  --sync-spec-ahead: #6fcbdc;
+  --sync-code-ahead: #f2bb5c;
+  --sync-conflict: #ff7d88;
+  --sync-broken-binding: #ff9a6b;
+  --sync-unbound: #a8b6cd;
+  --sync-predated: #f59ac2;
+  --sync-cannot-verify: #c2b0f5;
+
+  /* Section diffs. */
+  --diff-added-surface: #123628;
+  --diff-removed-surface: #3d1c25;
+
+  /* Space, shape, type, motion, layers, targets. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono", "Liberation Mono", monospace;
+  --font-size-s: 0.8125rem;
+  --font-size-m: 0.9375rem;
+  --font-size-l: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --line-height-body: 1.5;
+  --line-height-tight: 1.25;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --z-header: 10;
+  --z-dialog: 100;
+  --target-min: 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+  }
+}

@@ -1,6 +1,9 @@
 //! Comment pointers from code into the docs (docs/features/pointer-sweep.md
 //! AC-04, enforcing AC-01, AC-02 and AC-03): every `.rs` file under
-//! `crates/*/src` and `crates/*/tests` is scanned as text.
+//! `crates/*/src` and `crates/*/tests` is scanned as text; the stale-pointer
+//! and Data-form checks also read every `.ts` and `.tsx` file under `ui/src`
+//! (docs/features/ui-shell.md "Roles", AC-06: each provisional type cites an
+//! existing heading).
 //!
 //! - No pointer to a spec section that now only delegates (the stale
 //!   patterns are assembled below so this file never matches itself).
@@ -77,6 +80,55 @@ fn rust_files() -> Vec<(String, String)> {
     out
 }
 
+/// Every `.ts` and `.tsx` file under `ui/src` (installed packages skipped),
+/// as (repository-relative path with `/`, text), sorted by path.
+fn ui_sources() -> Vec<(String, String)> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
+        let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+            .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
+            .map(|entry| entry.expect("directory entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name != "node_modules") {
+                    walk(root, &path, out);
+                }
+            } else if path
+                .extension()
+                .is_some_and(|ext| ext == "ts" || ext == "tsx")
+            {
+                let bytes = fs::read(&path).expect("readable source file");
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("under the repository")
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/");
+                out.push((relative, String::from_utf8_lossy(&bytes).into_owned()));
+            }
+        }
+    }
+    let root = repository_root();
+    let mut out = Vec::new();
+    walk(&root, &root.join("ui").join("src"), &mut out);
+    assert!(
+        out.iter()
+            .any(|(path, _)| path == "ui/src/api/provisional.ts"),
+        "the ui walk missed ui/src/api/provisional.ts ({} files)",
+        out.len()
+    );
+    out
+}
+
+/// [`rust_files`] and then [`ui_sources`].
+fn source_files() -> Vec<(String, String)> {
+    let mut out = rust_files();
+    out.extend(ui_sources());
+    out
+}
+
 /// Pointers to spec sections that now only delegate to the canon or a README.
 const STALE: [&str; 3] = [
     concat!("05 §", "5.3"),
@@ -93,7 +145,7 @@ const LAYER_A_SPEC: &str = concat!("layer-a-identity", ".md");
 #[test]
 fn no_stale_section_pointer_is_left() {
     let mut hits = Vec::new();
-    for (path, text) in rust_files() {
+    for (path, text) in source_files() {
         for (index, line) in text.lines().enumerate() {
             for pattern in STALE {
                 if line.contains(pattern) {
@@ -253,11 +305,11 @@ struct Citation {
     headings: Vec<String>,
 }
 
-/// The comment text of `line`: after `//!`, `///` or `//` when the line is a
-/// comment, else the whole line.
+/// The comment text of `line`: after `//!`, `///`, `//` or a block
+/// comment's leading `*` when the line is a comment, else the whole line.
 fn comment_text(line: &str) -> &str {
     let trimmed = line.trim_start();
-    for prefix in ["//!", "///", "//"] {
+    for prefix in ["//!", "///", "//", "*"] {
         if let Some(rest) = trimmed.strip_prefix(prefix) {
             return rest.trim_start();
         }
@@ -364,9 +416,18 @@ fn every_quoted_heading_of_a_data_form_citation_exists_in_its_file() {
     let root = repository_root();
     let mut broken = Vec::new();
     let mut all = Vec::new();
-    for (path, text) in rust_files() {
+    for (path, text) in source_files() {
         all.extend(citations(&path, &text, &mut broken));
     }
+    // The UI's provisional types cite their sources (ui-shell AC-06).
+    let ui_citations = all
+        .iter()
+        .filter(|citation| citation.at.starts_with("ui/src/api/provisional.ts:"))
+        .count();
+    assert!(
+        ui_citations >= 20,
+        "only {ui_citations} citations read in ui/src/api/provisional.ts"
+    );
     let mut headings_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut missing = Vec::new();
     let mut quoted_headings = 0;
@@ -416,6 +477,9 @@ fn the_citation_scanner_reads_lists_and_rejects_a_wrapped_heading() {
         "/// \"Four\" and more\n",
         "// `e.md` \"Wrapped\n",
         "// heading\"\n",
+        " * Sources: `f.md` \"Five\";\n",
+        " * `g.md` \"Six\",\n",
+        " * \"Seven\".\n",
     );
     let found = citations("t.rs", text, &mut broken);
     let shape: Vec<(&str, &str, Vec<&str>)> = found
@@ -434,6 +498,8 @@ fn the_citation_scanner_reads_lists_and_rejects_a_wrapped_heading() {
             ("t.rs:1", "a/b.md", vec!["One", "Two `x`"]),
             ("t.rs:2", "d.md", vec!["Three", "Four"]),
             ("t.rs:4", "e.md", vec![]),
+            ("t.rs:6", "f.md", vec!["Five"]),
+            ("t.rs:7", "g.md", vec!["Six", "Seven"]),
         ]
     );
     assert_eq!(broken.len(), 1, "{broken:?}");

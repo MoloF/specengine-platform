@@ -9,7 +9,7 @@ ref: research-2026-09-28
 
 ## 1. SpecEngine repository layout
 
-Built: `CLAUDE.md` "Layout" and each subtree's README; the crates' planned roles: 05 §1. Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `plugin/` (the Claude Code plugin: `plugin.json`, `.mcp.json`, hooks, skills, agents), the `spec` binary's alias `specengine`.
+Built: `CLAUDE.md` "Layout" and each subtree's README; the crates' planned roles: 05 §1. Still to come: `crates/specengine-http/` (axum: REST, SSE, `/mcp`, the embedded UI), `plugin/` (the Claude Code plugin, 06 §8), the `spec` binary's alias `specengine`.
 
 ## 2. Phases
 
@@ -23,8 +23,8 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 1. Reading core — ~2-3 weeks
 
-- Shipped (open questions: crate READMEs, `docs/canon/*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 and 4 (`bundle`), check increments 1–4 (`check` to `--changed`, the gate, process rules ADR-0031), index compaction, shards (ADR-0028, ADR-0030), MCP stdio reads, layer A identity (pilots 0.0–0.2 % ambiguous, was 16.5–32.2 %), pilot schemes (§3 AC-10), import records, gaps and layout (§3 AC-6, §4.3), token calibration, pilot W (§3 AC-1, `docs/canon/w-measurement.md`).
-- **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W on every task document. The owner picks the full-migration order (§4) from the reports.
+- Shipped (open questions: crate READMEs, `docs/canon/*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 and 4 (`bundle`), check increments 1–4 (`check` to `--changed`, the gate, process rules ADR-0031), index compaction, shards (ADR-0028, ADR-0030), MCP stdio reads, layer A identity, pilot schemes (§3 AC-10), import records, gaps and layout (§3 AC-6, §4.3), token calibration, pilot W (§3 AC-1, `docs/canon/w-measurement.md`).
+- **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W on every task document.
 - Next: the owner names the migration order (decision table in `docs/features/pilot-w.md`).
 
 ### Phase 2. Queue and tasks — ~2 weeks  ⟵ value for the owner
@@ -48,7 +48,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 4. Web UI — ~2-3 weeks
 
-Screens and SSE per 07 §3; begun on mocks before the daemon (ADR-0033): `docs/features/ui-shell.md`.
+Screens and SSE per 07 §3, begun on mocks before the daemon (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05; next `ui-tasks`, `ui-tree-node`, `ui-graph`, `ui-health-round`, `ui-live` (endpoints: `docs/features/ui-shell.md` "Open").
 
 ### Phase 5. Maturity — ~2 weeks
 
