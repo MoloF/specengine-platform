@@ -29,7 +29,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: queue and `apply_proposal` for `update`, one commit with provenance: `docs/canon/proposal-{queue,apply}.md`) and `ui-shell` (Phase 4 begun on mocks, ADR-0033) shipped 2026-10-05; next `queue-export` (export, backup, `import-state`), `agent-intake` (MCP write tools, every kind, questions with dedup, decisions with `cost` and `canon:`), `task-package` (ADR-0027).
+- Slices: `proposal-apply` (1: queue and `apply_proposal` for `update`, one commit with provenance: `docs/canon/proposal-{queue,apply}.md`) and `ui-shell` (Phase 4 begun on mocks, ADR-0033) shipped 2026-10-05; next `queue-export` (backup, restore), `agent-intake` (MCP write tools, every kind, questions with dedup, decisions with `cost` and `canon:`), `task-package` (ADR-0027).
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `task …`, `round new/answer`.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
