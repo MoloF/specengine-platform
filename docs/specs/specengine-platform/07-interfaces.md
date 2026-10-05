@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6).
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `ask_question`, `get_proposal`): `docs/features/agent-intake.md`; `task_id` on them: `task-package`; kinds `create`, `decision`, `interpretation`: `decision-apply`.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
@@ -34,10 +34,6 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`; `content` = the neutral brief | `next` — first `ready` by priority (as `bd ready` / `next_task`) |
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | only `ready`; records the run in `runs` |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | analyst; → `review` (waits for the owner) |
-| `report_discrepancy` | `task_id?`, `node_ids[]`, `gap_type`, `severity`, `working_answer`, `summary`, `evidence[]`, `options[]`, `recommendation`, `proposed_patch?` | `proposal_id` \| "already decided: DEC-…" | 06 §3.2 |
-| `ask_question` | `node_ids[]`, `text`, `working_answer`, `price_of_other?`, `severity` | `Q-id` \| "already answered" | deduplication |
-| `propose_change` | `kind: update\|create\|decision\|interpretation`, `target`, `patch`, `rationale` | `proposal_id` + diagnostics | validated before display |
-| `get_proposal` | `proposal_id` | status, decision, owner comment | to continue after the decision |
 | `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only |
 | `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | `verified` is set by `spec verify`, not by this call |
 

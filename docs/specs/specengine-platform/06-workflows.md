@@ -75,31 +75,7 @@ Project (project.md: vision, goals, constraints)
 
 ### 3.2. What the agent sends
 
-```jsonc
-// MCP: report_discrepancy
-{
-  "task_id": "T-0107",
-  "node_ids": ["RULE-STAM-REGEN"],
-  "severity": "high",
-  "summary": "Regeneration delay is not implemented and contradicts A-101",
-  "evidence": [
-    { "qpath": "sim::stamina::regen_system", "file": "src/sim/stamina.rs",
-      "lines": "41-58", "observed": "regeneration starts immediately", "documented": "after 1.5 s of rest" }
-  ],
-  "options": [
-    { "label": "Code to spec", "effect": "add a rest timer",  "price": "+1 component, test AC-3" },
-    { "label": "Spec to code", "effect": "drop the delay from RULE-STAM-REGEN", "price": "running gets cheaper; balance R-28" }
-  ],
-  "recommendation": 0,
-  "proposed_patch": null            // for "spec to code" the agent may attach a section diff
-}
-```
-
-Before showing it to the owner, SpecEngine:
-1. checks whether these nodes already have a decision (FTS + `answers`/`decision` graph). If so, it replies "already decided: DEC-0081" and **does not create** a duplicate;
-2. validates `proposed_patch` as `spec propose` does: introduced findings attached, never refusing (`docs/canon/proposal-queue.md` "Creation");
-3. sets the informational flag `has_open_proposal` on the nodes. **Nothing is blocked** (ADR-0012): the node stays open for reading, editing and other proposals, the task keeps its status;
-4. emits an SSE event (UI updates), optionally an OS notification.
+MCP `report_discrepancy` (or `ask_question`): the nodes, a summary, gap type, severity, evidence `[{file, qpath, lines, observed, documented}]`, priced options `[{label, effect, price}]` with a recommendation, optionally a `proposed_patch` for "spec to code". Arguments, validation and deduplication (an accepted decision on the nodes: "already decided", nothing created): `docs/features/agent-intake.md`. To come: the informational flag `has_open_proposal` on the nodes (**nothing is blocked**, ADR-0012: the node stays open for reading, editing and other proposals, the task keeps its status); an SSE event, optionally an OS notification.
 
 The agent receives `PR-0042` and **keeps working** on the current spec or on the working answer it named in the proposal. Next to the code it places `// @assumes PR-0042`, so after the decision it is visible what to revisit. The agent must not wait for approval. It may stop only by its own judgement, if the task loses meaning without an answer, and then says so in `report_run`.
 

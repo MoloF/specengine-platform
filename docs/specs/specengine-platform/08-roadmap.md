@@ -29,11 +29,11 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: queue and `apply_proposal` for `update`, one commit with provenance: `docs/canon/proposal-{queue,apply}.md`), `ui-shell` (Phase 4 begun on mocks, ADR-0033), `queue-export` (2: backup, restore) shipped 2026-10-05; next `agent-intake` (MCP write tools, every kind, questions with dedup, decisions with `cost` and `canon:`), `task-package` (ADR-0027).
+- Slices: `proposal-apply` (1: queue and `apply_proposal` for `update`, one commit with provenance: `docs/canon/proposal-{queue,apply}.md`), `ui-shell` (Phase 4 begun on mocks, ADR-0033), `queue-export` (2: backup, restore) shipped 2026-10-05; next `agent-intake` (MCP intake: `update`, questions, discrepancies), `decision-apply` (decisions with `cost`, `canon:`), `task-package` (ADR-0027).
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `task …`, `round new/answer`.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
-- MCP: `get_task`, `claim_task`, `submit_plan`, `report_discrepancy`, `ask_question`, `propose_change`, `get_proposal`, `report_run`; `review_proposal`/`approve_task` with `requiresUserInteraction` and the consent-tool requirements of 07 §1.2 (the Phase 0 `review_proposal` is a demo skeleton, `crates/specengine-mcp/README.md`).
+- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`; `review_proposal`/`approve_task` with `requiresUserInteraction` and the consent-tool requirements of 07 §1.2 (the Phase 0 `review_proposal` is a demo skeleton, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE; MCP for agents is the `spec mcp` stdio bridge to the daemon (MCP HTTP transport after MVP, 07 §1.1).
 - **Plugin**: `.mcp.json`, hooks (`gate` fail-closed, session-start, touched, subagent-stop), prompts, stack-neutral roles and `/feature` (06 §8); stack roles come from a stack-profile plugin or the project (ADR-0027).
 - Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality: a synthetic non-Rust fixture in tests (07 §1.2, P2-5).
