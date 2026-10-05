@@ -48,9 +48,11 @@ structuredContent its --json document: the brief review (no texts, diff or confl
 
 kind: update: replace the node's span (a section with its subsections, or a document's whole \
 file).
-target: the node's ID or slug/ID (not an alias, a path, ID#SECTION or ID@rev).
-base: get_node's span_hash of the node: the text written against; a stale one is refused \
-naming the current hash.
+target: the node's ID or slug/ID (not an alias, ID#SECTION or ID@rev), or a root-relative \
+.md path naming its file's document, the whole file: stored as the document's id, else as the \
+path.
+base: get_node's span_hash of the node (of the path for a path): the text written against; a \
+stale one is refused naming the current hash.
 text: the new text, inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body when applied.
 author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \
@@ -70,8 +72,9 @@ ROLE`. It is first checked against what is already decided and asked, and stored
 item only when nothing answers it. content is the command's output, structuredContent its \
 --json document {id, created, hits, related, linked, diagnostics, notes}.
 
-node_ids: 1 to 16 IDs (or slug/ID) it is about; an alias is refused naming the ID, a \
-look-alike with its Latin fix.
+node_ids: 1 to 16 IDs (or slug/ID) it is about, or root-relative .md paths naming their \
+files' documents (stored as the document's id, else the path), each node once; an alias is \
+refused naming the ID, a look-alike with its Latin fix.
 text: the question, at most 1024 bytes.
 working_answer: the answer worked on until the owner answers, at most 2048 bytes: keep \
 working on it.
@@ -96,7 +99,7 @@ Checked and stored as ask_question is (hits, distinct_from); content is the comm
 structuredContent its --json document {id, created, hits, related, linked, diagnostics, \
 notes}.
 
-node_ids: 1 to 16 IDs (or slug/ID) it is about.
+node_ids: 1 to 16 IDs (or slug/ID, or .md paths) it is about, as ask_question takes them.
 summary: what departs, at most 1024 bytes; gap_type: missing, partial, contradicts or \
 unrequested; severity: high, normal or low.
 evidence: 1 to 8 items {file, qpath?, lines? (N or N-M), observed, documented}: file and \
@@ -317,7 +320,8 @@ impl schemars::JsonSchema for ChangeKind {
 pub(crate) struct ChangeArgs {
     /// `update`: replace the node's span.
     pub kind: ChangeKind,
-    /// The node's ID or `slug/ID`.
+    /// The node's ID or `slug/ID`, or a root-relative `.md` path (its
+    /// document).
     pub target: String,
     /// get_node's `span_hash` of the node.
     pub base: String,
@@ -337,7 +341,7 @@ pub(crate) struct ChangeArgs {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct QuestionArgs {
-    /// The IDs (or `slug/ID`) it is about.
+    /// The IDs (or `slug/ID`, or root-relative `.md` paths) it is about.
     pub node_ids: Vec<String>,
     /// The question.
     pub text: String,
@@ -362,7 +366,7 @@ pub(crate) struct QuestionArgs {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DiscrepancyArgs {
-    /// The IDs (or `slug/ID`) it is about.
+    /// The IDs (or `slug/ID`, or root-relative `.md` paths) it is about.
     pub node_ids: Vec<String>,
     /// What departs from the spec.
     pub summary: String,

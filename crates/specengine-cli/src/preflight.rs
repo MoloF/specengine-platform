@@ -12,7 +12,9 @@
 //!    clean (`git status` of the path empty) (exit 1);
 //! 4. resolve: the target held by one file, at its recorded path, in the
 //!    recorded root's refreshed index, located in a fresh parse of the
-//!    bytes just read, never by stored offsets (exit 1);
+//!    bytes just read, never by stored offsets (exit 1); a path target
+//!    (task spec `queue-path-targets`): the document of that parse, no
+//!    holder lookup;
 //! 5. text: the span hashes to `base_hash` → the new text (`applies`);
 //!    else `git merge-file -p -L current -L base -L proposed` over scratch
 //!    files in the data directory: clean → the merge (`rebases`), conflict
@@ -68,6 +70,7 @@ use specengine_store::{
 use crate::location::{OpenIndex, open_index};
 use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
 use crate::proposals::{Preview, QueueContext, top_path};
+use crate::propose::is_path_target;
 use crate::refresh::refresh;
 use crate::{Env, Exit, Message, one_line};
 
@@ -285,56 +288,11 @@ pub(crate) fn prepare(
         .map_err(|error| StepFailure::cannot(4, error.to_string()))?;
     let resolver = Resolver::new(&input, scheme, &recorded.config.paths);
     let target = proposal.target_id.as_str();
-    let Some(found) = grammar::parse_reference(target, 0, scheme) else {
-        return Err(StepFailure::refused(
-            4,
-            format!(
-                "`{target}` is no reference under the `[ids]` of {}",
-                recorded.root.display()
-            ),
-        ));
+    let ord = if is_path_target(target) {
+        document_of(&parsed, target, path).map_err(|reason| StepFailure::refused(4, reason))?
+    } else {
+        held_by_id(&resolver, &recorded, &parsed, path, target)?
     };
-    let reference = found.reference;
-    match one_holder(&resolver, &reference, target) {
-        Ok(file) if resolver.paths()[file] == path => {}
-        Ok(file) => {
-            return Err(StepFailure::refused(
-                4,
-                format!(
-                    "`{target}` is held by `{}` now, not by `{path}`",
-                    resolver.paths()[file]
-                ),
-            ));
-        }
-        Err(HolderError::Dangling(reason)) => {
-            return Err(StepFailure::refused(4, format!("`{target}` {reason}")));
-        }
-        Err(HolderError::Several(paths)) => {
-            return Err(StepFailure::refused(
-                4,
-                format!(
-                    "`{target}` is held by {} files now: {}",
-                    paths.len(),
-                    paths.join(", ")
-                ),
-            ));
-        }
-        Err(HolderError::Project) => {
-            return Err(StepFailure::refused(
-                4,
-                format!("`{target}` names another project"),
-            ));
-        }
-    }
-    let ord = locate(&parsed, &reference.id).map_err(|_| {
-        StepFailure::refused(
-            4,
-            format!(
-                "`{path}` as read does not hold `{}` exactly once",
-                reference.id
-            ),
-        )
-    })?;
     if let Some(refusal) = update_refusal(&parsed, ord, scheme) {
         return Err(StepFailure::refused(3, format!("`{target}`: {refusal}")));
     }
@@ -396,6 +354,82 @@ pub(crate) fn prepare(
         patched: update.bytes,
         preview,
     })
+}
+
+/// Step 4 for a target by ID: held by one file in the refreshed index,
+/// `path`, and declared once in `parsed` (its fresh parse): its position.
+fn held_by_id(
+    resolver: &Resolver<'_>,
+    recorded: &ProjectRoot,
+    parsed: &ParsedFile,
+    path: &str,
+    target: &str,
+) -> Result<usize, StepFailure> {
+    let scheme = &recorded.config.scheme;
+    let Some(found) = grammar::parse_reference(target, 0, scheme) else {
+        return Err(StepFailure::refused(
+            4,
+            format!(
+                "`{target}` is no reference under the `[ids]` of {}",
+                recorded.root.display()
+            ),
+        ));
+    };
+    let reference = found.reference;
+    match one_holder(resolver, &reference, target) {
+        Ok(file) if resolver.paths()[file] == path => {}
+        Ok(file) => {
+            return Err(StepFailure::refused(
+                4,
+                format!(
+                    "`{target}` is held by `{}` now, not by `{path}`",
+                    resolver.paths()[file]
+                ),
+            ));
+        }
+        Err(HolderError::Dangling(reason)) => {
+            return Err(StepFailure::refused(4, format!("`{target}` {reason}")));
+        }
+        Err(HolderError::Several(paths)) => {
+            return Err(StepFailure::refused(
+                4,
+                format!(
+                    "`{target}` is held by {} files now: {}",
+                    paths.len(),
+                    paths.join(", ")
+                ),
+            ));
+        }
+        Err(HolderError::Project) => {
+            return Err(StepFailure::refused(
+                4,
+                format!("`{target}` names another project"),
+            ));
+        }
+    }
+    locate(parsed, &reference.id).map_err(|_| {
+        StepFailure::refused(
+            4,
+            format!(
+                "`{path}` as read does not hold `{}` exactly once",
+                reference.id
+            ),
+        )
+    })
+}
+
+/// Step 4 for a path target: the document of `parsed` (the fresh parse of
+/// `path`, the stored target itself), no holder lookup.
+fn document_of(parsed: &ParsedFile, target: &str, path: &str) -> Result<usize, String> {
+    if target != path {
+        return Err(format!(
+            "`{target}` names a document by its path, not the recorded `{path}`"
+        ));
+    }
+    match parsed.document() {
+        Some(_) => Ok(0),
+        None => Err(format!("`{path}` as read has no node")),
+    }
 }
 
 /// Right before step 8: the place still as step 2 found it, `HEAD` on the
@@ -972,14 +1006,20 @@ fn held_at(
     }))
     .map_err(|_| format!("the spec parser failed on {whose} `{path}`"))?;
     let target = proposal.target_id.as_str();
-    let Some(found) = grammar::parse_reference(target, 0, scheme) else {
-        return Err(format!(
-            "`{target}` is no reference under the `[ids]` of {config_label}"
-        ));
+    let ord = if is_path_target(target) {
+        // A path target: the document.
+        document_of(&parsed, target, target_path)
+            .map_err(|reason| format!("{whose} blob: {reason}"))?
+    } else {
+        let Some(found) = grammar::parse_reference(target, 0, scheme) else {
+            return Err(format!(
+                "`{target}` is no reference under the `[ids]` of {config_label}"
+            ));
+        };
+        let id = &found.reference.id;
+        locate(&parsed, id)
+            .map_err(|_| format!("{whose} `{path}` does not hold `{id}` exactly once"))?
     };
-    let id = &found.reference.id;
-    let ord = locate(&parsed, id)
-        .map_err(|_| format!("{whose} `{path}` does not hold `{id}` exactly once"))?;
     let node = parsed.nodes[ord].clone();
     Ok(Held { bytes, node })
 }

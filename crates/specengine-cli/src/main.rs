@@ -196,10 +196,10 @@ enum Command {
 
 #[derive(Subcommand)]
 enum Propose {
-    /// Replace the text of node ID (a section's heading to its end, or a document's whole file).
+    /// Replace the text of node TARGET (a section's heading to its end, or a document's whole file).
     Update {
-        /// An ID or `slug/ID`.
-        #[arg(value_name = "ID")]
+        /// An ID, `slug/ID`, or a root-relative `.md` path (its document: the whole file).
+        #[arg(value_name = "TARGET")]
         target: String,
         /// The span hash the text was written against (`spec show`: `span b3:…`, JSON `span_hash`).
         #[arg(long, value_name = "HASH")]
@@ -225,8 +225,8 @@ enum Propose {
     },
     /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question already answers it.
     Question {
-        /// The IDs (or `slug/ID`) the question is about: 1 to 16.
-        #[arg(value_name = "ID")]
+        /// The nodes the question is about, each an ID, `slug/ID`, or a root-relative `.md` path (its document): 1 to 16.
+        #[arg(value_name = "TARGET")]
         node_ids: Vec<String>,
         /// The question.
         #[arg(long, value_name = "T")]

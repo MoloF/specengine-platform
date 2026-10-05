@@ -9,9 +9,10 @@
 //!
 //! 1. form: clap, `--input` not UTF-8 JSON of the shape (exit 2);
 //! 2. caps, enums, the author's grammar (core [`specengine_core::intake`]);
-//! 3. `node_ids` resolved as `propose update` step 1 resolves its target,
-//!    generated and `immutable_text` holders allowed, each node once;
-//!    stored canonical, in the order given;
+//! 3. `node_ids` resolved as `propose update` step 1 resolves its target
+//!    (a `.md` path: its file's document, by its `id:`, else by its path),
+//!    generated and `immutable_text` holders allowed, each node once
+//!    canonical; stored canonical, in the order given;
 //! 4. a discrepancy's `proposed_patch`: its target among them, then
 //!    `propose update` steps 1–4 (refusals prefixed `proposed_patch: `;
 //!    the findings it introduces stored with it, never refusing);
@@ -20,8 +21,9 @@
 //!    link `spec show --links` lists (both ways, resolved, any type but
 //!    `mentions`) whose other end lies in a live `class: decision` document
 //!    with `status: accepted`, and that document when the target lies in
-//!    one; such a document only mentioned: related. Node kinds are never
-//!    consulted: the engine knows no subject domain;
+//!    one; such a document only mentioned: related. A document's links
+//!    include its sections'. Node kinds are never consulted: the engine
+//!    knows no subject domain;
 //! 7. the queue's hits and the insert in one `Immediate` transaction
 //!    ([`specengine_store::ProposalQueue::create_intake`]): stored only when
 //!    every hit is named in `distinct_from`; a patch becomes a linked
@@ -55,7 +57,7 @@ use crate::corpus::{Admission, indexed};
 use crate::proposals::{
     checked_now, escaped_error, finding_line, more_findings_note, open_context, queue_cannot,
 };
-use crate::propose::{checked_update, resolved_node, written_reference};
+use crate::propose::{checked_update, is_path_target, resolved_node, written_reference};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The most bytes of a discrepancy's `--input` document: 8 MiB.
@@ -408,7 +410,7 @@ struct Item<'a> {
 
 /// A target resolved at step 3.
 struct Target {
-    /// Canonical: `ID` or `slug/ID`.
+    /// Canonical: `ID`, `slug/ID`, or an id-less document's path.
     id: String,
     /// Its holder, root-relative.
     path: String,
@@ -756,9 +758,12 @@ fn corpus_matches(
 }
 
 /// The graph node of a resolved target: the node of its holder declaring
-/// its bare ID.
+/// its bare ID; a path's, its holder's document.
 fn node_of(graph: &SpecGraph<'_>, target: &Target) -> Option<NodeAt> {
     let file = graph.file_of(&target.path)?;
+    if is_path_target(&target.id) {
+        return graph.document(file);
+    }
     let bare = target
         .id
         .rsplit_once('/')

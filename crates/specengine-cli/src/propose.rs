@@ -5,9 +5,13 @@
 //!
 //! 1. `ID` (an ID or `slug/ID`) resolves as `spec show` resolves it to one
 //!    holder, not a `class: generated` file, its prefix (and for a section
-//!    its document's) without `immutable_text`; an alias, a path, `#SECTION`,
+//!    its document's) without `immutable_text`; an alias, `#SECTION`,
 //!    `@rev` or `[[…]]` is refused naming the canonical ID when known; a
-//!    look-alike exits 2 naming the Latin form;
+//!    look-alike exits 2 naming the Latin form. A root-relative `.md` path
+//!    (task spec `queue-path-targets`) names its file's document, the whole
+//!    file, found as `spec show` finds a path (not clean: exit 2; no file of
+//!    the walk, or a file with no node: refused): its `id:` stands for it,
+//!    as if written; a document without one is stored by its path;
 //! 2. `--base` is the span's current hash (`spec show`'s `span_hash`); a
 //!    stale one is refused printing the current;
 //! 3. the text (UTF-8, at most 1 MiB; verbatim, a section's trailing
@@ -29,7 +33,6 @@ use std::io::Read as _;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 
-use specengine_core::DOCUMENT_EXTENSION;
 use specengine_core::check::{CheckInput, Resolver};
 use specengine_core::intake::{AuthorInput, author_problem, rationale_problem};
 use specengine_core::patch::{
@@ -37,6 +40,7 @@ use specengine_core::patch::{
     update_refusal,
 };
 use specengine_core::proposal::Author;
+use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative};
 use specengine_model::{IdScheme, IdScope, IdScript, ParsedFile, Reference, grammar};
 use specengine_store::{
     GitEnv, NamedBytes, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _,
@@ -51,7 +55,7 @@ use crate::proposals::{
     open_context, queue_cannot,
 };
 use crate::review::previewed;
-use crate::show::{latin_fix, no_reference, project_qualified};
+use crate::show::{latin_fix, no_reference, not_indexed, project_qualified, unclean_path};
 use crate::{CliError, Env, Globals, Message, store_error};
 
 /// The most bytes of a proposed text (core's).
@@ -197,7 +201,8 @@ fn run_propose(
 /// `update` stores but its place, rationale and author.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CheckedUpdate {
-    /// Canonical: `ID`, or `slug/ID` for a feature-scoped one.
+    /// Canonical: `ID`, or `slug/ID` for a feature-scoped one; for a
+    /// document without an `id:`, its root-relative path.
     pub target_id: String,
     /// Root-relative.
     pub path: String,
@@ -232,16 +237,25 @@ impl CheckedUpdate {
     }
 }
 
+/// A stored target names a document by its path: it ends in `.md`, the
+/// test `spec show` applies to what it is given (no ID does).
+pub(crate) fn is_path_target(target: &str) -> bool {
+    target.ends_with(DOCUMENT_EXTENSION)
+}
+
 /// Step 1 before the index is read: `written` (trimmed) parsed as a
-/// reference in its canonical form; `Ok(Ok(None))` for a `.md` path (refused
-/// once resolved, naming its ID). An alias, `#SECTION`, `@rev`, `[[…]]` or
-/// no reference at all is a refusal (`Ok(Err)`); a look-alike, mixed script
-/// or `project:` exits 2.
+/// reference in its canonical form; `Ok(Ok(None))` for a clean root-relative
+/// `.md` path (read over the index by [`named`]), exit 2 for one that is
+/// not. An alias, `#SECTION`, `@rev`, `[[…]]` or no reference at all is a
+/// refusal (`Ok(Err)`); a look-alike, mixed script or `project:` exits 2.
 pub(crate) fn written_reference(
     written: &str,
     scheme: &IdScheme,
 ) -> Result<Result<Option<Reference>, String>, CliError> {
-    if written.ends_with(DOCUMENT_EXTENSION) {
+    if is_path_target(written) {
+        if !is_clean_relative(written) {
+            return Err(unclean_path(written));
+        }
         return Ok(Ok(None));
     }
     let Some(found) = grammar::parse_reference(written, 0, scheme) else {
@@ -276,36 +290,89 @@ pub(crate) fn written_reference(
     })
 }
 
-/// Step 1 over the index: the one holder of `reference` (`None`: the path
-/// `written`, refused naming its ID), as `spec show` resolves it.
-fn holder_path(
+/// What a target names over the index this call refreshed (step 1).
+pub(crate) enum Named {
+    /// A node by ID: `written` is the ID as written, or the canonical ID a
+    /// path's document declares (`at`: that path), `reference` its parse.
+    Id {
+        written: String,
+        reference: Box<Reference>,
+        at: Option<String>,
+    },
+    /// The document of a file of the walk that declares no `id:`: its
+    /// root-relative path, the stored target.
+    Document { path: String },
+}
+
+/// Step 1 over the index: `reference` from [`written_reference`] as is;
+/// for a path (`None`), the file of the walk named byte for byte (else
+/// refused, as `spec show` refuses it), with a node (else refused), its
+/// document's `id:` canonical as by ID, else the document by its path.
+pub(crate) fn named(
     input: &CheckInput,
     resolver: &Resolver<'_>,
     scheme: &IdScheme,
     written: &str,
-    reference: Option<&Reference>,
-) -> Result<Result<String, String>, CliError> {
-    let Some(reference) = reference else {
-        let known = input
-            .files
-            .iter()
-            .find(|file| file.path == written)
-            .and_then(|file| file.parsed.as_ref())
-            .and_then(ParsedFile::document)
-            .and_then(|document| document.id.clone());
-        return Ok(Err(match known {
-            Some(id) => format!(
-                "`{written}` is a path: a proposal names its node by ID, `{}`",
-                canonical_id(resolver, scheme, written, &id, None)
-            ),
-            None => format!(
-                "`{written}` is a path: a proposal names its node by ID, and no indexed \
-                 document with an ID lies there"
-            ),
+    reference: Option<Reference>,
+) -> Result<Result<Named, String>, CliError> {
+    if let Some(reference) = reference {
+        return Ok(Ok(Named::Id {
+            written: written.to_owned(),
+            reference: Box::new(reference),
+            at: None,
+        }));
+    }
+    let Some(file) = input.files.iter().find(|file| file.path == written) else {
+        return Ok(Err(not_indexed(written)));
+    };
+    let Some(parsed) = file.parsed.as_ref() else {
+        return Ok(Err(format!(
+            "`{written}` could not be read: it has no node to name"
+        )));
+    };
+    let Some(document) = parsed.document() else {
+        return Ok(Err(format!(
+            "`{written}` is not UTF-8: it has no node to name"
+        )));
+    };
+    let Some(id) = document.id.as_deref() else {
+        return Ok(Ok(Named::Document {
+            path: written.to_owned(),
         }));
     };
+    let canonical = canonical_id(resolver, scheme, written, id, None);
+    Ok(match written_reference(&canonical, scheme)? {
+        Ok(Some(reference)) => Ok(Named::Id {
+            written: canonical,
+            reference: Box::new(reference),
+            at: Some(written.to_owned()),
+        }),
+        Ok(None) => Err(format!(
+            "`{written}` declares `{canonical}`, which names no node by ID"
+        )),
+        Err(reason) => Err(format!("`{written}` declares `{canonical}`: {reason}")),
+    })
+}
+
+/// Step 1 over the index: the one holder of `reference`, as `spec show`
+/// resolves it; for an ID a path's document declares (`at`), that path.
+fn holder_path(
+    resolver: &Resolver<'_>,
+    written: &str,
+    reference: &Reference,
+    at: Option<&str>,
+) -> Result<Result<String, String>, CliError> {
     match one_holder(resolver, reference, written) {
-        Ok(file) => Ok(Ok(resolver.paths()[file].to_owned())),
+        Ok(file) => {
+            let holder = resolver.paths()[file];
+            Ok(match at {
+                Some(at) if at != holder => Err(format!(
+                    "`{at}` declares `{written}`, which resolves to `{holder}`; a proposal \
+                     names one node"
+                )),
+                _ => Ok(holder.to_owned()),
+            })
+        }
         Err(HolderError::Dangling(reason)) => Ok(Err(format!("`{written}` {reason}"))),
         Err(HolderError::Several(paths)) => Ok(Err(format!(
             "`{written}` is held by {} files: {}; a proposal names one node",
@@ -356,7 +423,8 @@ fn node_position(
 /// The intake's step 3 (canon `agent-intake`, "Rules"): `written`
 /// resolved as `propose update` step 1 resolves its target, over the index
 /// this call refreshed, generated and `immutable_text` holders allowed: its
-/// canonical ID and its holder's path, or the refusal.
+/// canonical target (an ID, `slug/ID`, or an id-less document's path) and
+/// its holder's path, or the refusal.
 pub(crate) fn resolved_node(
     project: &ProjectRoot,
     input: &CheckInput,
@@ -369,13 +437,19 @@ pub(crate) fn resolved_node(
         Err(reason) => return Ok(Err(reason)),
     };
     let resolver = Resolver::new(input, scheme, &project.config.paths);
-    let path = match holder_path(input, &resolver, scheme, written, reference.as_ref())? {
-        Ok(path) => path,
+    let (written, reference, at) = match named(input, &resolver, scheme, written, reference)? {
+        Ok(Named::Document { path }) => return Ok(Ok((path.clone(), path))),
+        Ok(Named::Id {
+            written,
+            reference,
+            at,
+        }) => (written, reference, at),
         Err(reason) => return Ok(Err(reason)),
     };
-    // `holder_path` refuses a path: a reference is left.
-    let Some(reference) = reference else {
-        return Ok(Err(format!("`{written}` names no node by ID")));
+    let written = written.as_str();
+    let path = match holder_path(&resolver, written, &reference, at.as_deref())? {
+        Ok(path) => path,
+        Err(reason) => return Ok(Err(reason)),
     };
     let Some(parsed) = input
         .files
@@ -402,9 +476,9 @@ pub(crate) fn resolved_node(
 
 /// Steps 1–4 of `propose update` over the index this call refreshed
 /// (`input`), `reference` from [`written_reference`]: the target resolved
-/// to one updatable node, `base` its span's hash now, `text` spliced and
-/// parsed afresh, the introduced findings (never a refusal). `Ok(Err)`: the
-/// refusal.
+/// to one updatable node (a path: its file's document, the whole file),
+/// `base` its span's hash now, `text` spliced and parsed afresh, the
+/// introduced findings (never a refusal). `Ok(Err)`: the refusal.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn checked_update(
     project: &ProjectRoot,
@@ -418,12 +492,18 @@ pub(crate) fn checked_update(
 ) -> Result<Result<CheckedUpdate, String>, CliError> {
     let scheme = &project.config.scheme;
     let resolver = Resolver::new(input, scheme, &project.config.paths);
-    let path = match holder_path(input, &resolver, scheme, written, reference.as_ref())? {
-        Ok(path) => path,
+    // The holder, and what names the node in it: an ID, else the document.
+    let (path, by_id) = match named(input, &resolver, scheme, written, reference)? {
+        Ok(Named::Document { path }) => (path, None),
+        Ok(Named::Id {
+            written,
+            reference,
+            at,
+        }) => match holder_path(&resolver, &written, &reference, at.as_deref())? {
+            Ok(path) => (path, Some((written, reference))),
+            Err(reason) => return Ok(Err(reason)),
+        },
         Err(reason) => return Ok(Err(reason)),
-    };
-    let Some(reference) = reference else {
-        return Ok(Err(format!("`{written}` names no node by ID")));
     };
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let bytes = match tree.read(&path) {
@@ -441,17 +521,33 @@ pub(crate) fn checked_update(
         Ok(parsed) => parsed,
         Err(_) => return Ok(Err(format!("the spec parser failed on `{path}`"))),
     };
-    let ord = match node_position(&resolver, scheme, &parsed, &path, written, &reference) {
-        Ok(ord) => ord,
-        Err(reason) => return Ok(Err(reason)),
+    let (ord, target_id) = match &by_id {
+        // The document as read now, still without an `id:`.
+        None => match parsed.document() {
+            Some(document) if document.id.is_none() => (0, path.clone()),
+            _ => {
+                return Ok(Err(format!(
+                    "`{path}` is not as read in the index (an `id:` or no node now); run it \
+                     again"
+                )));
+            }
+        },
+        Some((written, reference)) => {
+            match node_position(&resolver, scheme, &parsed, &path, written, reference) {
+                Ok(ord) => (
+                    ord,
+                    canonical_id(
+                        &resolver,
+                        scheme,
+                        &path,
+                        &reference.id,
+                        reference.scope.as_deref(),
+                    ),
+                ),
+                Err(reason) => return Ok(Err(reason)),
+            }
+        }
     };
-    let target_id = canonical_id(
-        &resolver,
-        scheme,
-        &path,
-        &reference.id,
-        reference.scope.as_deref(),
-    );
     if let Some(refusal) = update_refusal(&parsed, ord, scheme) {
         return Ok(Err(format!("`{target_id}`: {refusal}")));
     }

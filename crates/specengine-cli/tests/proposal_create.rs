@@ -286,10 +286,12 @@ fn ac03_creation_refusals() {
 }
 
 /// "Rules and edge cases", creation 1 (owner's answers 2, 3): a legacy
-/// alias, a document path, `ID#SECTION`, `ID@rev` and `[[ID]]` are refused
-/// (exit 1) naming the canonical ID; `project:ID`, a bad author field, an
-/// unreadable text file exit 2; a text over 1 MiB or not UTF-8 is refused.
-/// A bare feature-scoped ID is stored as `slug/ID`.
+/// alias, `ID#SECTION`, `ID@rev` and `[[ID]]` are refused (exit 1) naming
+/// the canonical ID; `project:ID`, a bad author field, an unreadable text
+/// file exit 2; a text over 1 MiB or not UTF-8 is refused. A bare
+/// feature-scoped ID is stored as `slug/ID`. A document's path is no
+/// refused form (task spec `queue-path-targets`): it names the whole file,
+/// stored under the document's `id:`; a section's base on it is stale.
 #[test]
 fn non_canonical_targets_and_bad_inputs() {
     let pair = Pair::new("pa-forms", "spec-a");
@@ -298,7 +300,6 @@ fn non_canonical_targets_and_bad_inputs() {
     let new_text = edit(&text, "the sprint ends;", "the sprint ends at once;");
     for (written, canonical) in [
         ("QST-031", "Q-031"),
-        ("docs/spec/movement/sprint.md", "MEC-SPRINT"),
         ("MEC-SPRINT#EDGE-SPRINT-EMPTY", "EDGE-SPRINT-EMPTY"),
         ("EDGE-SPRINT-EMPTY@2", "EDGE-SPRINT-EMPTY"),
         ("[[EDGE-SPRINT-EMPTY]]", "EDGE-SPRINT-EMPTY"),
@@ -376,6 +377,34 @@ fn non_canonical_targets_and_bad_inputs() {
         outcome.refusal
     );
     assert_eq!(pair.proposal("PR-0002").new_text.len(), TEXT_MAX_BYTES);
+
+    // A document's path: the section's base is stale for the whole file
+    // (refused naming the document's ID and its hash); the document's own
+    // base stores the update under `MEC-SPRINT`, the path its holder.
+    let path = "docs/spec/movement/sprint.md";
+    let (doc_hash, doc_text) = pair.span(&pair.main, path);
+    assert_eq!(
+        pair.span(&pair.main, "MEC-SPRINT"),
+        (doc_hash.clone(), doc_text.clone())
+    );
+    let reason = refused(&pair.propose(&pair.main, path, &hash, &new_text), path);
+    assert!(
+        reason.contains("`MEC-SPRINT`") && reason.contains(&doc_hash),
+        "a stale base names the document and its hash: {reason}"
+    );
+    assert_eq!(pair.proposals().len(), 2, "the stale base stored nothing");
+    let doc_new = edit(&doc_text, "the sprint ends;", "the sprint ends at once;");
+    let outcome = pair.propose(&pair.main, path, &doc_hash, &doc_new).unwrap();
+    assert_eq!(outcome.exit(), Exit::Answered, "{:?}", outcome.refusal);
+    let row = pair.proposal("PR-0003");
+    assert_eq!(
+        (row.target_id.as_str(), row.target_path.as_str()),
+        ("MEC-SPRINT", path)
+    );
+    assert_eq!(
+        (row.base_hash.as_str(), row.new_text.as_str()),
+        (doc_hash.as_str(), doc_new.as_str())
+    );
 
     // spec-b: the bare feature-scoped `CRIT-01` is stored as its slug's.
     let pair = Pair::new("pa-forms-b", "spec-b");

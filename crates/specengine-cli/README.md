@@ -8,7 +8,7 @@ reviewed: 2026-10-05
 
 # specengine-cli — the spec binary
 
-The CLI: the agent read loop, search, then read by ID, over an index refreshed on every call (07 §1.2); `check`, `export index` over a fresh parse; the proposal queue. Binary `spec`, a default member, `cargo install --path crates/specengine-cli` (ADR-0015). Dependencies: `specengine-{model,core,store}`, `clap` (derive), `serde`, `serde_json`, all workspace entries; never `rusqlite` nor `specengine-{code,import,mcp,eval,ra}` (eval `build_graph.rs`). `main.rs` parses and prints (+ the queue's terminal check); commands live in the library, which MCP stdio and the Phase 2 daemon bridge reuse. Tests: `tests/`, over temp copies of `fixtures/spec-a`, `-b`, each with its own `HOME`.
+The CLI: the agent read loop, search, then read by ID, over an index refreshed on every call (07 §1.2); `check`, `export index` over a fresh parse; the proposal queue. Binary `spec`, a default member, `cargo install --path crates/specengine-cli` (ADR-0015). Dependencies: `specengine-{model,core,store}`, `clap` (derive), `serde`, `serde_json`, all workspace entries; never `rusqlite` nor `specengine-{code,import,mcp,eval,ra}` (eval `build_graph.rs`). `main.rs` parses and prints (+ the queue's terminal check); commands live in the library, which MCP stdio and the Phase 2 daemon bridge reuse. Tests: `tests/`, over temp copies of `fixtures/spec-a`, `-b`, each its own `HOME`.
 
 ## API
 
@@ -36,13 +36,13 @@ The CLI: the agent read loop, search, then read by ID, over an index refreshed o
 - Writes: `index`, the reads (`search`, `show`, `tree`, `graph`, `bundle`) and the queue (`import-state` too) only the data directory, `approve` also its target and commit in the proposal's worktree; `init` only its file; `export index` only the index and its shards; `export state` only its dump, outside the repository; `check` nothing; nothing else under the root (`docs/canon/architecture.md#storage`).
 - Freshness: the reads run `update` first; a missing root → a `warning:` if `[paths]` is written, else silent; never exit 2.
 - Indexing is never fatal: broken or unreadable files are indexed with diagnostics and change no exit code.
-- Resolution is the check's: a `*.md` argument is a path (not `is_clean_relative` → exit 2); else `grammar::parse_reference` (none → exit 1 listing the prefixes; look-alike or mixed-script → exit 2 naming the Latin fix; `project:` → exit 2), then `Resolver::resolve_detached` over `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 → U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
+- Resolution is the check's: a `*.md` argument (queue targets too) is a path, a walked name exactly (not `is_clean_relative` → exit 2; none → exit 1 `is no indexed document`); else `grammar::parse_reference` (none → exit 1 listing the prefixes; look-alike or mixed-script → exit 2 naming the Latin fix; `project:` → exit 2), then `Resolver::resolve_detached` over `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 → U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
 - Tier 3 (`check::is_tier3_file`): `search` drops it in the query, before the limit, unless `--archive`; `show` reaches it, marked ` | archived`.
 - Determinism: one DB state (`check`: one tree and one date), byte-identical stdout; nothing depends on rowid, insertion, time or the absolute root.
 
 ## Exit codes and streams
 
-0 answered, zero hits too. 1 `show` found nothing: dangling, no configured prefix, a `.md` path not indexed or unreadable (`cannot be read`), every holder unreadable (`none of its files could be read`) or changed while read; `check` blocked. 2 could not run: usage, no project or slug, a config error, `HOME`, the data directory, a `StoreError`, each exit 2 named above; `check` cannot-check; an `export index` refusal.
+0 answered, zero hits too. 1 `show` found nothing: dangling, no configured prefix, a `.md` path unreadable (`cannot be read`), every holder unreadable (`none of its files could be read`) or changed while read; `check` blocked. 2 could not run: usage, no project or slug, a config error, `HOME`, the data directory, a `StoreError`, each exit 2 named above; `check` cannot-check; an `export index` refusal.
 
 stdout: results only; `--json`: one compact document for exit 0 and 1, none for 2 (`check`: its report); every key present, absent = `null` (`check`: `Report::to_json` verbatim). stderr: `note:`, `warning:` lines (JSON `notes`: the notes only), then exit 1's `spec: <reason>` or exit 2's error (`export index`: `docs/canon/spec-check-cli.md`). No colour, no timing; paths root-relative but `db`. **One-line rule**: every stderr message and JSON `reason`, `notes` is one line (CR, LF → space); JSON `ref`, `path`, `holders` stay raw; a clap usage error keeps its `Usage:` block after the `spec:` line.
 
@@ -58,9 +58,9 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 
 ## Open
 
-- The note and tail say "title and snippet cut" when the name or kind was; a cut first hit's JSON `id`, marked only by `truncated: true` (never cut it, or mark it).
+- The note and tail say "title and snippet cut" for a cut name or kind too; a cut first hit's JSON `id` is marked only by `truncated: true`.
 - `one_line` flattens only CR, LF: VT, FF, NEL, U+2028/2029, ESC in quoted input reach stderr and `reason`.
 - A caught parser panic prints Rust's panic message (fix: a quiet panic hook).
-- `show` reads over a concrete `WorkingTree`, so exit 1's `cannot be read`, `none of its files could be read` are untested (fix: `&dyn Source`).
+- `show`'s `cannot be read` exits are untested: it reads a concrete `WorkingTree` (fix: `&dyn Source`).
 - The reads decode every index row per call (fix: a lighter resolver input; `docs/canon/mcp-read.md` "Latency").
 - bm25 statistics span the DB: ranks shift across worktrees; moved or deleted roots' rows stay (no prune).

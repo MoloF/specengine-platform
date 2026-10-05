@@ -140,11 +140,7 @@ pub fn show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
             if input.files.iter().any(|file| file.path == *path) {
                 vec![path.clone()]
             } else {
-                let reason = format!(
-                    "`{path}` is no indexed document: not under the `[paths]` roots, \
-                     excluded, or missing"
-                );
-                return Ok(not_found(request, reason, messages));
+                return Ok(not_found(request, not_indexed(path), messages));
             }
         }
         Target::Reference(reference) => match resolver.resolve_detached(reference, written) {
@@ -302,10 +298,7 @@ pub(crate) fn classify(
 ) -> Result<Result<Target, String>, CliError> {
     if written.ends_with(DOCUMENT_EXTENSION) {
         if !is_clean_relative(written) {
-            return Err(CliError::spec(format!(
-                "`{written}` is no clean root-relative path: no leading `/`, \
-                 no `.`, `..` or empty component"
-            )));
+            return Err(unclean_path(written));
         }
         return Ok(Ok(Target::Path(written.to_owned())));
     }
@@ -323,6 +316,24 @@ pub(crate) fn classify(
         messages.push(Message::Note(format!("`@{rev}` is ignored: {ignored_rev}")));
     }
     Ok(Ok(Target::Reference(reference)))
+}
+
+/// Exit 2: `written`, a `.md` path, is not clean and root-relative
+/// ([`is_clean_relative`]).
+pub(crate) fn unclean_path(written: &str) -> CliError {
+    CliError::spec(format!(
+        "`{written}` is no clean root-relative path: no leading `/`, \
+         no `.`, `..` or empty component"
+    ))
+}
+
+/// Exit 1: `path` is no file of the walk this call refreshed (outside the
+/// `[paths]` roots, excluded, missing, or another case).
+pub(crate) fn not_indexed(path: &str) -> String {
+    format!(
+        "`{path}` is no indexed document: not under the `[paths]` roots, \
+         excluded, or missing"
+    )
 }
 
 /// Exit 1: `written` is no reference; the configured prefixes listed.

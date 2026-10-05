@@ -27,7 +27,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 1. Consent (above).
 2. **Place**: the worktree exists, top and common dir as recorded, `HEAD` on the recorded branch with a commit, no merge, rebase, cherry-pick, revert, bisect or sequencer state; else exit 2 (`the proposal's worktree <w> no longer exists`, `a <operation> is in progress in <w>: finish or abort it first`, …).
 3. **File**: the recorded root's own `specengine.toml`, its slug the queue's (else exit 2); the target listed by its walk, read by `WorkingTree` of `<worktree>/<root_rel>` with no symlink component, UTF-8, not generated nor immutable, tracked, `git status --porcelain=v1 -z --untracked-files=all` of it empty; else exit 1.
-4. **Resolve**: one holder in the recorded root's refreshed index (data directory), at `target_path`, located in a fresh parse of the bytes just read, never by stored offsets.
+4. **Resolve**: one holder in the recorded root's refreshed index (data directory), at `target_path`, located in a fresh parse of the bytes just read, never by stored offsets; a path target: that parse's document, no holder lookup (one ≠ `target_path` refused; completion alike).
 5. **Text**: span hash = `base_hash` → the new text (`applies`); else `git merge-file -p -L current -L base -L proposed` over scratch files: clean → the merge (`rebases`), conflict → exit 1, its text on stdout. The patched file equal to the file as read → exit 1, already in place (its own commit: completed; another `Proposal:` commit named with why). A text to write and a `Proposal:` commit that applied it on its parent without completing it → exit 1 naming it, never merged again on top.
 6. **Structure**: creation's check 3 on this file. Then the identity, `git var GIT_COMMITTER_IDENT` minus the date in the worktree; none → exit 2 (logged as step 7), before the prompt.
 7. **Approved**: `approve_from` on the state read; another run's change since → exit 1, nothing written.
@@ -80,6 +80,7 @@ Accepted at shipping (2026-10-05); none blocks (ADR-0012).
 - The trailer names no project: with several SpecEngine roots in a repository, or a reset data directory, another proposal's same-ID commit on the branch blocks reject; with the base pruned the whole-branch read (its cost grows with history) finds older ones too; approve refuses only when that commit applied the text.
 - After a repository move, approve exits 2 and reject refuses on the commit: move back, `git worktree repair`, approve.
 - A reverted apply commit: approve refused at step 5, reject refused; way out: a completing commit (the hint).
+- A path target follows no rename (step 3 refuses; no re-targeting).
 - An orphan whose branch was renamed and base pruned is rejected without the lookup, even with its commit on the renamed branch.
 - An orphan rejected from a clone that never had its branch refuses (branch missing): `git branch <branch> HEAD`, `spec reject`, delete the branch; the texts' "unless its commit is in history" then misleads.
 - A transient failure of only step 5's lookup is dropped (no note); consent still precedes the write.
