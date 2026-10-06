@@ -15,6 +15,13 @@
 //! - AC-04, AC-08, AC-15, AC-19: forbidden text in `ui/src` (browser
 //!   dialogs, colour literals outside `tokens.css`, the words for a hold on
 //!   work, a mock kind quoted outside the mocks and tests).
+//! - docs/features/ui-health.md AC-11, narrowing AC-15: `blocked` passes
+//!   only on the single `KnownCheckVerdict` line of `src/api/provisional.ts`,
+//!   under `src/mocks/` and `src/test/` and in `*.test.ts(x)`; any other
+//!   `blocked`, and `blocking`, `blocker`, `unblock` anywhere, case-insensitive,
+//!   still fail; no provisional key starts with `block`. The exempt `blocked`
+//!   is a verdict value of `spec check` the UI reads and labels, not a hold on
+//!   work: nothing is blocked by a discrepancy (ADR-0012).
 //! - AC-05, AC-06: the seam's imports, the provisional header, a citation per
 //!   exported type, `kind` and `contour` plain strings. The cited headings
 //!   themselves are checked by `doc_pointers.rs`.
@@ -37,7 +44,9 @@
 //! rendered through `dangerouslySetInnerHTML` (run on a scratch copy of `ui/`
 //! named by `UI_POLICY_SINK_UI_DIR`, never by editing `ui/src`);
 //! `react-markdown` at `^10.1.0`; an 18th package; `import "react-markdown"`
-//! in `ui/src/tree/TextPanel.tsx`; `allowDangerousHtml` in a component.
+//! in `ui/src/tree/TextPanel.tsx`; `allowDangerousHtml` in a component; the
+//! `blocked` exemption widened to all of `src`, to all of `provisional.ts` or
+//! to the other hold words.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -776,19 +785,150 @@ fn hold_words() -> [String; 4] {
     ]
 }
 
+/// The one file outside the mocks and tests whose text may spell the first
+/// hold word, and the start of its one line that may: the verdict list of
+/// `spec check` (docs/features/ui-health.md AC-11), a value the UI reads and
+/// labels, not a hold on work.
+const VERDICT_FILE: &str = "src/api/provisional.ts";
+const VERDICT_LINE: &str = "export type KnownCheckVerdict";
+
+/// `line` declares the verdict type: it starts with [`VERDICT_LINE`], not
+/// with a longer name of which that is the head.
+fn is_verdict_line(line: &str) -> bool {
+    line.strip_prefix(VERDICT_LINE)
+        .is_some_and(|rest| !rest.bytes().next().is_some_and(is_identifier_byte))
+}
+
+/// `path:line: text` for each line of `files` that words a hold on work
+/// (ui-shell AC-15 as narrowed by ui-health AC-11): the last three hold words
+/// anywhere, case-insensitive; the first one anywhere but in the mocks, the
+/// tests and the single verdict line of [`VERDICT_FILE`].
+fn hold_hits(files: &[(String, String)]) -> Vec<String> {
+    let [first, rest @ ..] = hold_words();
+    let mut out = Vec::new();
+    for (path, text) in files {
+        let verdict_lines = if path == VERDICT_FILE {
+            text.lines().filter(|line| is_verdict_line(line)).count()
+        } else {
+            0
+        };
+        for (index, line) in text.lines().enumerate() {
+            let lower = line.to_lowercase();
+            let exempt = is_mock_or_test(path) || (verdict_lines == 1 && is_verdict_line(line));
+            if rest.iter().any(|word| lower.contains(word.as_str()))
+                || (!exempt && lower.contains(first.as_str()))
+            {
+                out.push(format!("ui/{path}:{}: {}", index + 1, line.trim()));
+            }
+        }
+    }
+    out
+}
+
+/// A scratch `ui/` under the system temp dir, removed on drop: `src/main.tsx`
+/// and enough filler for [`ui_sources_in`], plus `files`.
+struct ScratchUi(PathBuf);
+
+impl ScratchUi {
+    fn new(name: &str, files: &[(&str, &str)]) -> Self {
+        let root = std::env::temp_dir().join(format!(
+            "specengine-eval-ui-policy-{name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let filler: Vec<(String, &str)> = (0..24)
+            .map(|n| (format!("src/filler/f{n:02}.ts"), "export const n = 0;\n"))
+            .collect();
+        let all = filler
+            .iter()
+            .map(|(path, text)| (path.as_str(), *text))
+            .chain([("src/main.tsx", "export {};\n")])
+            .chain(files.iter().copied());
+        for (relative, text) in all {
+            let path = root.join(relative);
+            fs::create_dir_all(path.parent().expect("a parent")).expect("scratch directory");
+            fs::write(&path, text).expect("scratch file written");
+        }
+        Self(root)
+    }
+}
+
+impl Drop for ScratchUi {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// ui-health AC-11 on a scratch `ui/`: the first hold word passes on the
+/// verdict line, in the mocks and in the tests, and fails on any other line,
+/// even of `provisional.ts`; the other three fail everywhere, the mocks and
+/// tests included; a "Blocking" label in `src/health/` fails.
+#[test]
+fn the_hold_scan_exempts_the_verdict_line_mocks_and_tests_only() {
+    let [first, ing, er, un] = hold_words();
+    let verdict = format!(
+        "{VERDICT_LINE} = (typeof KNOWN_CHECK_VERDICTS)[number]; export const KNOWN_CHECK_VERDICTS = [\"clean\", \"observed\", \"{first}\", \"cannot-check\"] as const;"
+    );
+    let provisional = format!(
+        "// Provisional.\n{verdict}\nexport type Hold = \"{first}\";\n{VERDICT_LINE}Hold = \"{first}\";\n"
+    );
+    let label = format!("export const L = () => <span>B{}</span>;\n", &ing[1..]);
+    let mocks = format!("export const v = {{ verdict: \"{first}\" }};\n// A {er}.\n");
+    let unit = format!("expect(v).toBe(\"{first}\");\nit(\"does not {un}\", () => {{}});\n");
+    let capital = format!(
+        "expect(screen.getByText(\"B{}\")).toBeNull();\n",
+        &first[1..]
+    );
+    let setup = format!("export const verdict = \"{first}\";\n");
+    let elsewhere = format!("export const v = \"{first}\";\n");
+    let types = format!("{VERDICT_LINE} = \"{first}\";\n");
+    let ui = ScratchUi::new(
+        "hold",
+        &[
+            ("src/api/provisional.ts", provisional.as_str()),
+            ("src/api/types.ts", types.as_str()),
+            ("src/health/x.tsx", label.as_str()),
+            ("src/health/mocks.ts", elsewhere.as_str()),
+            ("src/mocks/m.ts", mocks.as_str()),
+            ("src/test/setup.ts", setup.as_str()),
+            ("src/a.test.ts", unit.as_str()),
+            ("src/b.test.tsx", capital.as_str()),
+        ],
+    );
+    let mut found = hold_hits(&ui_sources_in(&ui.0));
+    found.sort();
+    let mut want = vec![
+        format!("ui/src/a.test.ts:2: it(\"does not {un}\", () => {{}});"),
+        format!("ui/src/api/provisional.ts:3: export type Hold = \"{first}\";"),
+        format!("ui/src/api/provisional.ts:4: {VERDICT_LINE}Hold = \"{first}\";"),
+        format!("ui/src/api/types.ts:1: {}", types.trim()),
+        format!("ui/src/health/mocks.ts:1: {}", elsewhere.trim()),
+        format!("ui/src/health/x.tsx:1: {}", label.trim()),
+        format!("ui/src/mocks/m.ts:2: // A {er}."),
+    ];
+    want.sort();
+    assert_eq!(found, want);
+
+    // Two verdict lines in `provisional.ts`: neither is the single one.
+    let twice = format!("{verdict}\n{verdict}\n");
+    let ui = ScratchUi::new("hold-twice", &[("src/api/provisional.ts", twice.as_str())]);
+    assert_eq!(
+        hold_hits(&ui_sources_in(&ui.0)),
+        [1, 2]
+            .map(|n| format!("ui/src/api/provisional.ts:{n}: {verdict}"))
+            .to_vec()
+    );
+}
+
 #[test]
 fn nothing_is_worded_as_a_hold_on_work() {
     let files = ui_sources();
-    let words = hold_words();
-    let found = hits(
-        &files,
-        |_| false,
-        |line| {
-            let lower = line.to_lowercase();
-            words.iter().any(|word| lower.contains(word.as_str()))
-        },
+    let found = hold_hits(&files);
+    assert!(
+        found.is_empty(),
+        "ui-shell AC-15, ui-health AC-11:\n{}",
+        found.join("\n")
     );
-    assert!(found.is_empty(), "AC-15:\n{}", found.join("\n"));
     let provisional = read(&ui_dir().join("src/api/provisional.ts"));
     let keys = interface_keys(&provisional);
     assert!(
@@ -847,7 +987,8 @@ fn declared_kinds(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// A path the kind rule leaves alone: the mocks and the tests.
+/// A path the kind rule leaves alone, and whose lines may spell the first
+/// hold word as data (ui-health AC-11): the mocks and the tests.
 fn is_mock_or_test(path: &str) -> bool {
     path.starts_with("src/mocks/")
         || path.starts_with("src/test/")

@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import type { BundleOptions, GraphOptions, NodeOptions, SearchOptions, SpecEngineClient, TreeOptions } from "../api/client";
 import type {
   BundleView,
+  CheckReport,
   Decision,
   DecisionResult,
   GraphView,
@@ -15,7 +16,7 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { aBundle, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
+import { aBundle, aCheckReport, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
 
 /** The stub's live tail: none. */
 const noLiveTail: SpecEngineClient["subscribe"] = () => () => undefined;
@@ -74,6 +75,7 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getTask: vi.fn<(project: string, id: string) => Promise<TaskPackage | TaskNotFound>>((_project, id) =>
       Promise.resolve({ id, reason: `no task ${id} in this repository` }),
     ),
+    getCheck: vi.fn<(project: string) => Promise<CheckReport>>(() => Promise.resolve(aCheckReport())),
     decideProposal: vi.fn((_project: string, id: string, decision: Decision): Promise<DecisionResult> => {
       const current = state.proposals.find((proposal) => proposal.id === id);
       if (current === undefined) {

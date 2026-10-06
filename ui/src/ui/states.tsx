@@ -18,7 +18,8 @@ export function Skeleton({ label, lines = 3 }: { label: string; lines?: number }
  * message are the alert; Retry sits outside it, so its label turning to Retrying never makes the
  * alert speak again. Each failure (`attempt`) is an alert of its own: a failed retry is spoken
  * again, a failure merely kept up while a retry runs is not. While retrying, Retry stays focusable
- * (aria-disabled) and does nothing, so a failed retry leaves focus on it.
+ * (aria-disabled) and does nothing, so a failed retry leaves focus on it. `announce` false: shown,
+ * not spoken, where another panel on the page already speaks the same failure of a shared read.
  */
 export function ErrorPanel({
   title,
@@ -26,6 +27,7 @@ export function ErrorPanel({
   onRetry,
   retrying = false,
   attempt = 0,
+  announce = true,
 }: {
   title: string;
   message: string;
@@ -33,10 +35,11 @@ export function ErrorPanel({
   retrying?: boolean;
   /** Counts the read's failures (the query's errorUpdateCount). */
   attempt?: number;
+  announce?: boolean;
 }) {
   return (
     <div className="error-panel">
-      <div key={attempt} className="error-text" role="alert">
+      <div key={attempt} className="error-text" role={announce ? "alert" : undefined}>
         <p className="error-title">
           <Icon name="alert" />
           <span>{title}</span>
@@ -64,7 +67,7 @@ export function ErrorPanel({
  * A read that failed, as a screen shows it. A read the daemon does not serve yet (ClientError
  * `notServed`: nothing was requested) is not built, not broken: a note, the client's message
  * verbatim, no Retry, since asking again cannot change it. Anything else (the daemon down, no
- * response; a refusal in the daemon's words) is an ErrorPanel with Retry.
+ * response; a refusal in the daemon's words) is an ErrorPanel with Retry. `announce` as ErrorPanel's.
  */
 export function ReadFailure({
   title,
@@ -72,17 +75,19 @@ export function ReadFailure({
   onRetry,
   retrying = false,
   attempt = 0,
+  announce = true,
 }: {
   title: string;
   failure: unknown;
   onRetry: () => void;
   retrying?: boolean;
   attempt?: number;
+  announce?: boolean;
 }) {
   const { message } = apiErrorOf(failure);
   if (isNotServed(failure)) {
     return (
-      <div className="notice notice-not-served" role="status">
+      <div className="notice notice-not-served" role={announce ? "status" : undefined}>
         <p className="notice-title">
           <Icon name="info" />
           <span>Not built yet: the daemon has no endpoint for this read</span>
@@ -91,7 +96,7 @@ export function ReadFailure({
       </div>
     );
   }
-  return <ErrorPanel title={title} message={message} onRetry={onRetry} retrying={retrying} attempt={attempt} />;
+  return <ErrorPanel title={title} message={message} onRetry={onRetry} retrying={retrying} attempt={attempt} announce={announce} />;
 }
 
 /** A section with a small heading inside a card. */

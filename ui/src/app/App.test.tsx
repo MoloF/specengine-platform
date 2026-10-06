@@ -9,12 +9,10 @@ import { stubClient } from "../test/stubClient";
 import { App } from "./App";
 
 // AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph, Tasks
-// since ui-tasks; the home ("Overview", first in the nav) since ui-home, where `#/` lands.
+// since ui-tasks; the home ("Overview", first in the nav) since ui-home, where `#/` lands; Health
+// since ui-health, the question round left to ui-round (AC-12 of ui-health).
 
-const UNBUILT = [
-  ["health", "Health", "ui-health-round"],
-  ["questions", "Questions", "ui-health-round"],
-] as const;
+const UNBUILT = [["questions", "Questions", "ui-round"]] as const;
 
 /** The app's header (several `header` elements count as banners to Testing Library). */
 function appHeader(): HTMLElement {
@@ -66,6 +64,21 @@ describe("the shell (AC-11)", () => {
     expect(screen.queryByText(/Not built yet/)).toBeNull();
     const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Graph");
+  });
+
+  it("builds Health: its heading and four regions, no stand-in (AC-12 of ui-health)", async () => {
+    renderApp(stubClient(), "#/alpha/health");
+    expect(await screen.findByRole("heading", { level: 1, name: "Health" })).toBeTruthy();
+    expect(screen.queryByText(/Not built yet/)).toBeNull();
+    await screen.findByRole("region", { name: "Debt and budgets" });
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      "Check",
+      "What is left",
+      "Findings",
+      "Debt and budgets",
+    ]);
+    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    expect(current?.textContent).toBe("Health");
   });
 
   it("builds Tasks: its heading and list, no stand-in; the about speaks of what waits, not of a board (AC-15 of ui-tasks)", async () => {
@@ -245,6 +258,7 @@ describe("Mock data (AC-17)", () => {
     "#/alpha/graph/R-1",
     "#/alpha/tasks",
     "#/alpha/tasks/T-0001",
+    "#/alpha/health",
     ...UNBUILT.map(([section]) => `#/alpha/${section}`),
     "#/alpha/nowhere",
     "#/zeta/inbox",

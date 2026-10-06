@@ -92,6 +92,17 @@
   --link-unchecked: var(--sync-cannot-verify);
   --link-unknown: var(--severity-unknown);
 
+  /* spec check (docs/features/ui-health.md): the verdicts and a finding's severities, none of them a
+     hold on work; cannot-check takes cannot-verify's colour and icon, never clean's. */
+  --check-clean: var(--sync-ok);
+  --check-observed: var(--attention);
+  --check-fails: var(--sync-conflict);
+  --check-cannot-check: var(--sync-cannot-verify);
+  --check-unknown: var(--severity-unknown);
+  --finding-error: var(--sync-conflict);
+  --finding-warning: var(--attention);
+  --finding-unknown: var(--severity-unknown);
+
   /* Tree marks: a root although its document names a parent. */
   --mark-dangling-parent: var(--sync-broken-binding);
   --mark-parent-cycle: var(--sync-predated);

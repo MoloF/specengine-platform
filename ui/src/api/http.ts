@@ -10,6 +10,7 @@ import {
 import type {
   ApiError,
   BundleView,
+  CheckReport,
   Decision,
   DecisionResult,
   GraphView,
@@ -157,16 +158,20 @@ function emptyAnswer(asked: string, response: Response): string {
   return response.status === 502 ? `${said}: the dev server's proxy reached no daemon; is specengine-http running?` : said;
 }
 
+/** Where daemon-read leaves the graph and the tasks for a later slice. */
+const DAEMON_READ_GAP = 'docs/features/daemon-read.md "Out of scope"';
+
 /**
- * A read the daemon does not serve yet (`docs/features/daemon-read.md` "Out of scope"): refused
- * here, nothing requested; `notServed`, status NOT_SERVED (501), never 0 (no response: the daemon down).
+ * A read the daemon does not serve yet (`docs/features/daemon-read.md` "Out of scope"; the check:
+ * `docs/features/ui-health.md` "Open"): refused here, nothing requested; `notServed`, status
+ * NOT_SERVED (501), never 0 (no response: the daemon down). `where` names the spec that asks for it.
  */
-function notServed(endpoint: string): Promise<never> {
+function notServed(endpoint: string, where = DAEMON_READ_GAP): Promise<never> {
   return Promise.reject(
     new ClientError(
       {
         status: NOT_SERVED,
-        message: `Not served by the daemon yet: ${endpoint} is a missing endpoint (docs/features/daemon-read.md "Out of scope"). The mock serves it: open the UI with ?scenario=normal.`,
+        message: `Not served by the daemon yet: ${endpoint} is a missing endpoint (${where}). The mock serves it: open the UI with ?scenario=normal.`,
       },
       { notServed: true },
     ),
@@ -243,6 +248,11 @@ export class HttpClient implements SpecEngineClient {
 
   getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound> {
     return notServed(`GET /api/projects/${project}/tasks/${id}`);
+  }
+
+  /** `spec check --json` for the project: no endpoint yet (docs/features/ui-health.md "Open"). */
+  getCheck(project: string): Promise<CheckReport> {
+    return notServed(`GET /api/projects/${project}/check`, 'docs/features/ui-health.md "Open"');
   }
 
   /** Always refused by the daemon (403): its message names the terminal command. */

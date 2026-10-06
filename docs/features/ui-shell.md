@@ -40,7 +40,7 @@ Verifiers: Vitest (`ui/src/**/*.test.ts(x)`), `ui_policy.rs`, the gates. M: the 
 - [x] AC-12 — `slow`: skeleton, `aria-busy="true"`; `empty`: meaning and next step; `error`: message verbatim, Retry calls `getInbox` again (M: generic text; Retry inert).
 - [x] AC-13 — Tab: skip link, header, nav, list, card; arrows and `j`/`k` move; `a` typed in the filter opens nothing; Esc closes, focus returns, Tab stays inside (M: a document-wide key listener; no focus return).
 - [x] AC-14 — empty reason or note: no call, a message; double click: one call; success announced with sha and subject; a rejected call keeps dialog and text; `conflict`: message, refetch, proposal gone (M: no pending guard; reset on error; no refetch).
-- [x] AC-15 — no `blocked`, `blocking`, `blocker`, `unblock` (any case) in `ui/src`, no provisional key starting `block` (M: a "Blocking" label).
+- [x] AC-15 — no `blocked`, `blocking`, `blocker`, `unblock` (any case) in `ui/src`, no provisional key starting `block`; narrowed by `ui-health` AC-11 for the check's verdict `blocked` (M: a "Blocking" label).
 - [x] AC-16 — the setup fails a test on `console.error`/`warn`; a throwing view shows its fallback, the nav still works (M: the per-view boundary removed).
 - [x] AC-17 — "Mock data" on every route and scenario, a non-normal one named (M: shown on the Inbox only).
 - [x] AC-18 — a raw Cyrillic letter in `ui/src` fails `anonymity.rs`, one in `ui/dist` or `ui/node_modules` does not; the filter matches a composed query on decomposed text (M: `ui` unscanned; `dist` unskipped; no NFC).

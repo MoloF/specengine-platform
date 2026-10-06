@@ -10,6 +10,7 @@ import {
 } from "../api/client";
 import type {
   BundleView,
+  CheckReport,
   Decision,
   DecisionResult,
   GraphView,
@@ -24,6 +25,7 @@ import type {
   TreeView,
 } from "../api/types";
 import { fakeHex, inboxEntryOf, noReview, stamp, type MockProject, type StoredReview } from "./build";
+import { checkReportOf } from "./check";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
@@ -158,6 +160,16 @@ export class MockClient implements SpecEngineClient {
     const entry = this.project(project);
     const stored = this.taskStore(project).tasks.find((candidate) => candidate.id === id);
     return structuredClone(stored === undefined ? taskNotFound(id) : packageOf(stored, entry.proposals));
+  }
+
+  /**
+   * Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client): the
+   * project's report for the scenario (src/mocks/check.ts), read only; a decision changes nothing in it.
+   */
+  async getCheck(project: string): Promise<CheckReport> {
+    await this.read();
+    this.project(project);
+    return structuredClone(checkReportOf(project, this.scenario));
   }
 
   async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {

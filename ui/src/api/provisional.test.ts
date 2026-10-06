@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import source from "./provisional.ts?raw";
+import { KNOWN_CHECK_VERDICTS } from "./types";
 import type {
   BundleItem,
   BundleLayers,
   BundleVia,
   BundleView,
+  CheckCause,
+  CheckCounts,
+  CheckFinding,
+  CheckReport,
+  DebtEntry,
+  Finding,
   FollowedType,
   GraphEdge,
   GraphNode,
@@ -425,5 +432,99 @@ describe("the task types (AC-02 of ui-tasks)", () => {
     const run: Pick<TaskRun, "role"> = { role: "any-project-role" };
     const pkg: Pick<TaskPackage, "profile"> = { profile: "any-profile" };
     expect([target.kind, run.role, pkg.profile]).toEqual(["any-project-kind", "any-project-role", "any-profile"]);
+  });
+});
+
+/**
+ * AC-02 of docs/features/ui-health.md: the check's types copy the JSON of `docs/canon/spec-check.md`
+ * "Findings, debt, verdict": `{mode, verdict, counts: {documents, errors, warnings, debt, expired,
+ * stale, introduced?, new_debt?, worst_w_bytes}, findings, stale, new_debt?, cannot_check}`; a
+ * finding `{code, severity, path, line, subject, message, fix?: {span, text}, debt?: {reason,
+ * expires, expired}, introduced?}`; a baseline entry the TOML's five keys plus its `line` (core
+ * `check/baseline.rs` `DebtEntry`); a cause `{path, message}`.
+ */
+const CHECK_KEYS = {
+  CheckReport: {
+    mode: true,
+    verdict: true,
+    counts: true,
+    findings: true,
+    stale: true,
+    new_debt: true,
+    cannot_check: true,
+  } satisfies Record<keyof CheckReport, true>,
+  CheckCounts: {
+    documents: true,
+    errors: true,
+    warnings: true,
+    debt: true,
+    expired: true,
+    stale: true,
+    introduced: true,
+    new_debt: true,
+    worst_w_bytes: true,
+  } satisfies Record<keyof CheckCounts, true>,
+  CheckFinding: {
+    code: true,
+    severity: true,
+    path: true,
+    line: true,
+    subject: true,
+    message: true,
+    fix: true,
+    debt: true,
+    introduced: true,
+  } satisfies Record<keyof CheckFinding, true>,
+  DebtEntry: { code: true, path: true, subject: true, reason: true, expires: true, line: true } satisfies Record<keyof DebtEntry, true>,
+  CheckCause: { path: true, message: true } satisfies Record<keyof CheckCause, true>,
+};
+
+/** The key lists as the cited heading writes them (and, for `line`, the core's DebtEntry), copied verbatim. */
+const CHECK_CITED: Record<keyof typeof CHECK_KEYS, string> = {
+  CheckReport: "mode, verdict, counts, findings, stale, new_debt, cannot_check",
+  CheckCounts: "documents, errors, warnings, debt, expired, stale, introduced, new_debt, worst_w_bytes",
+  CheckFinding: "code, severity, path, line, subject, message, fix, debt, introduced",
+  DebtEntry: "code, path, subject, reason, expires, line",
+  CheckCause: "path, message",
+};
+
+const CHECK_HEADING = '`docs/canon/spec-check.md` "Findings, debt, verdict"';
+
+describe("the check's types (AC-02 of ui-health)", () => {
+  it.each(Object.keys(CHECK_KEYS) as (keyof typeof CHECK_KEYS)[])("%s has exactly the cited keys, in order", (name) => {
+    expect(Object.keys(CHECK_KEYS[name]).join(", ")).toBe(CHECK_CITED[name]);
+  });
+
+  it("count 7 report keys, 9 counts, 9 finding keys, 6 baseline keys, 2 cause keys", () => {
+    expect(Object.values(CHECK_KEYS).map((keys) => Object.keys(keys).length)).toEqual([7, 9, 9, 6, 2]);
+  });
+
+  it.each([...Object.keys(CHECK_KEYS), "Finding", "KnownCheckVerdict", "CheckVerdict", "NewDebtEntry", "KnownFindingSeverity", "FindingSeverity"])(
+    "%s cites the canon's heading",
+    (type) => {
+      expect(commentOf(type)).toContain(CHECK_HEADING);
+    },
+  );
+
+  it("cite the canon's Configuration for the modes", () => {
+    for (const type of ["KnownCheckMode", "CheckMode"]) {
+      expect(commentOf(type)).toContain('`docs/canon/spec-check.md` "Configuration"');
+    }
+  });
+
+  it("keep Finding the six keys a proposal's diagnostics carry; the report's finding adds three optional ones (R5)", () => {
+    const six: Record<keyof Finding, true> = { code: true, severity: true, path: true, line: true, subject: true, message: true };
+    expect(Object.keys(six)).toEqual(CHECK_CITED.CheckFinding.split(", ").slice(0, 6));
+    const bare: CheckFinding = { code: "c", severity: "warning", path: "", line: 1, subject: "", message: "m" };
+    expect(Object.keys(bare)).toHaveLength(6);
+  });
+
+  it("list the four verdicts on the one line that spells them (AC-11)", () => {
+    const lines = source.split("\n").filter((line) => line.includes("KNOWN_CHECK_VERDICTS = ["));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^export type KnownCheckVerdict = /);
+    expect(KNOWN_CHECK_VERDICTS).toHaveLength(4);
+    expect(KNOWN_CHECK_VERDICTS[0]).toBe("clean");
+    expect(KNOWN_CHECK_VERDICTS[3]).toBe("cannot-check");
   });
 });

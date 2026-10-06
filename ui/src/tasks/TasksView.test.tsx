@@ -516,11 +516,10 @@ describe("states (AC-11)", () => {
     expect(back.getAttribute("href")).toBe("#/alpha/tasks");
     back.focus();
     fireEvent.click(back);
-    await settle();
     await waitFor(() => {
       expect(window.location.hash).toBe("#/alpha/tasks");
     });
-    expect(document.activeElement).toBe(row("T-0002"));
+    await focused(row("T-0002"));
     expect(client.getTask).toHaveBeenCalledTimes(1);
   });
 
@@ -679,6 +678,24 @@ describe("keyboard (AC-12)", () => {
     expect(rows().filter((item) => item.tabIndex === 0).map((item) => item.dataset.task)).toEqual(["T-0002"]);
     expect(document.activeElement).toBe(field);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("leaves the focus in the filter after Home on the first row or End on the last (no request left pending)", async () => {
+    await openList();
+    const field = screen.getByLabelText("Filter by ID, title or target");
+    for (const [key, id] of [
+      ["Home", "T-0002"],
+      ["End", "T-0009"],
+    ] as const) {
+      row(id).focus();
+      await focused(row(id));
+      fireEvent.keyDown(row(id), { key });
+      field.focus();
+      fireEvent.change(field, { target: { value: "T" } });
+      fireEvent.change(field, { target: { value: "" } });
+      await settle();
+      expect(document.activeElement).toBe(field);
+    }
   });
 
   it("lists the keys with ?", async () => {

@@ -186,10 +186,9 @@ describe("Rendered and Source (AC-09)", () => {
     const source = modeButton("Source");
     source.focus();
     fireEvent.click(source);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => {
+      expect(textPanel().querySelector(".text-line")).not.toBeNull();
     });
-    expect(textPanel().querySelector(".text-line")).not.toBeNull();
     expect(document.activeElement).toBe(source);
     expect(textPanel().querySelector("[data-target]")).toBeNull();
     const rendered = modeButton("Rendered");

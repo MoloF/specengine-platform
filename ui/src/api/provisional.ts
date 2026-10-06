@@ -73,10 +73,16 @@ export interface ProposalOption {
   price: string;
 }
 
-/** A check finding's severity. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
-export type FindingSeverity = "error" | "warning" | Unlisted;
+/** A check finding's two severities. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
+export type KnownFindingSeverity = "error" | "warning";
 
-/** A finding the proposal's patch introduces. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
+/** A check finding's severity as sent; other strings kept. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
+export type FindingSeverity = KnownFindingSeverity | Unlisted;
+
+/**
+ * The six keys every check finding has: a proposal's diagnostics carry these, `spec check --json`
+ * adds three optional ones (CheckFinding). Source: `docs/canon/spec-check.md` "Findings, debt, verdict".
+ */
 export interface Finding {
   code: string;
   severity: FindingSeverity;
@@ -84,6 +90,91 @@ export interface Finding {
   line: number;
   subject: string;
   message: string;
+}
+
+// `spec check --json` (docs/features/ui-health.md "Data"): a key marked `?` is omitted when absent,
+// never null (`docs/canon/spec-check-cli.md` "spec check", W-1); `code`, the budget slot in a
+// `subject` and the mode are the core's strings, shown raw.
+
+/**
+ * The four verdicts of the check. The third is a check outcome, never a hold on work: shown as
+ * "Fails the check". It is spelled on this one line alone in app code (ui-health AC-11), so the
+ * type and the tuple the Health screen labels through share it.
+ * Source: `docs/canon/spec-check.md` "Findings, debt, verdict".
+ */
+export type KnownCheckVerdict = (typeof KNOWN_CHECK_VERDICTS)[number]; export const KNOWN_CHECK_VERDICTS = ["clean", "observed", "blocked", "cannot-check"] as const;
+
+/** A verdict as sent; other strings kept, shown raw. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
+export type CheckVerdict = KnownCheckVerdict | Unlisted;
+
+/** The check's mode, `[check] mode`. Source: `docs/canon/spec-check.md` "Configuration". */
+export type KnownCheckMode = "observe" | "enforce-introduced" | "enforce";
+
+/** A mode as sent; other strings kept, shown raw. Source: `docs/canon/spec-check.md` "Configuration". */
+export type CheckMode = KnownCheckMode | Unlisted;
+
+/**
+ * The summary counts: `errors` and `warnings` exclude live debt; `introduced` and `new_debt` only
+ * with a git base; `worst_w_bytes` 0 on `cannot-check`. Source: `docs/canon/spec-check.md` "Findings, debt, verdict".
+ */
+export interface CheckCounts {
+  documents: number;
+  errors: number;
+  warnings: number;
+  debt: number;
+  expired: number;
+  stale: number;
+  introduced?: number;
+  new_debt?: number;
+  worst_w_bytes: number;
+}
+
+/**
+ * A finding as `spec check --json` prints it: the six keys, then `fix` (data, never applied here),
+ * `debt` (the matched baseline entry; `expires` the last day it holds) and `introduced` (only with
+ * a base). Source: `docs/canon/spec-check.md` "Findings, debt, verdict".
+ */
+export type CheckFinding = Finding & {
+  fix?: { span: { start: number; end: number }; text: string };
+  debt?: { reason: string; expires: string; expired: boolean };
+  introduced?: boolean;
+};
+
+/**
+ * A `.spec-debt.toml` entry; `line` is its line in that file (core `check/baseline.rs` `DebtEntry`),
+ * never a line of `path`. Source: `docs/canon/spec-check.md` "Findings, debt, verdict".
+ */
+export interface DebtEntry {
+  code: string;
+  path: string;
+  subject: string;
+  reason: string;
+  expires: string;
+  line: number;
+}
+
+/** A baseline entry its base lacks or holds with an earlier `expires`: only with a base. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
+export type NewDebtEntry = DebtEntry & { head_expires?: string };
+
+/** Why the check cannot vouch for the corpus; `path` `""` for none. Source: `docs/canon/spec-check.md` "Findings, debt, verdict". */
+export interface CheckCause {
+  path: string;
+  message: string;
+}
+
+/**
+ * `spec check --json`, the daemon's `check`: findings sorted by (path, line, code, subject,
+ * message), `stale` the baseline entries that matched nothing, `cannot_check` non-empty exactly on
+ * `cannot-check`. The report carries no time. Source: `docs/canon/spec-check.md` "Findings, debt, verdict".
+ */
+export interface CheckReport {
+  mode: CheckMode;
+  verdict: CheckVerdict;
+  counts: CheckCounts;
+  findings: CheckFinding[];
+  stale: DebtEntry[];
+  new_debt?: NewDebtEntry[];
+  cannot_check: CheckCause[];
 }
 
 /** The owner's choice a decision record holds (JSON with one key). Source: `docs/features/decision-apply.md` "Data". */

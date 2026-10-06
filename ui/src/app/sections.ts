@@ -14,11 +14,11 @@ export const SECTIONS = [
     about: "The business-logic tree and each node's text, links, bundle and proposals.",
   },
   { id: "graph", label: "Graph", slice: null, about: "Nodes and their links, with an impact mode." },
-  { id: "health", label: "Health", slice: "ui-health-round", about: "What is left, drift, budgets and W metrics." },
+  { id: "health", label: "Health", slice: null, about: "What is left, drift, budgets and W metrics." },
   {
     id: "questions",
     label: "Questions",
-    slice: "ui-health-round",
+    slice: "ui-round",
     about: "The question round: a sheet in the project's language and the pasted answers.",
   },
 ] as const;

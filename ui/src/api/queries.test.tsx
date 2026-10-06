@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { aBundle, aGraphView, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
+import { aBundle, aCheckReport, aGraphView, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, DECIDED_ELSEWHERE } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
@@ -30,6 +30,8 @@ describe("query keys", () => {
     // AC-08 of docs/features/ui-tasks.md.
     expect(queryKeys.tasks("p")).toEqual(["tasks", "p"]);
     expect(queryKeys.task("p", "T-0001")).toEqual(["task", "p", "T-0001"]);
+    // AC-01 of ui-health.
+    expect(queryKeys.check("p")).toEqual(["check", "p"]);
     // AC-03 of docs/features/ui-graph.md.
     expect(queryKeys.graph("p", { ref: "R" })).toEqual(["graph", "p", { ref: "R", impact: false, types: [], depth: null, archive: false }]);
     expect(queryKeys.graph("p", { ref: "R", impact: true, types: ["t2", "t1"], depth: 3, archive: true })).toEqual([
@@ -118,6 +120,7 @@ function seeded(): QueryClient {
   queryClient.setQueryData(queryKeys.tree("beta"), aTreeView([]));
   queryClient.setQueryData(queryKeys.task("beta", "T-0001"), aTaskPackage({ id: "T-0001" }));
   queryClient.setQueryData(queryKeys.graph("beta", { ref: "R-1" }), aGraphView([], []));
+  queryClient.setQueryData(queryKeys.check("alpha"), aCheckReport());
   return queryClient;
 }
 
@@ -166,6 +169,8 @@ describe("after a decision (AC-13)", () => {
     expect(queryClient.getQueryState(queryKeys.proposal("beta", "PR-2"))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(queryKeys.graph("beta", { ref: "R-1" }))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(queryKeys.task("beta", "T-0001"))?.isInvalidated).toBe(false);
+    // AC-01 of ui-health: the check is a full walk, read on entering Health and on Check again only.
+    expect(queryClient.getQueryState(queryKeys.check("alpha"))?.isInvalidated).toBe(false);
   });
 
   it("409: reads them again too", async () => {

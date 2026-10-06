@@ -1,5 +1,6 @@
 /** The mock's scenarios, picked by `?scenario=` at bootstrap (`ui/README.md` "Owner's manual steps"). */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large"] as const;
+/** `cannot-check`: every read as `normal` but the check, which cannot vouch for the corpus (docs/features/ui-health.md "Data"). */
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

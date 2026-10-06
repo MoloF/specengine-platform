@@ -300,8 +300,9 @@ describe("the dialog and its combobox (AC-11)", () => {
     await waitFor(() => {
       expect(palette()).toBeNull();
     });
-    await settle();
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
+    });
     expect(window.location.hash).toBe("#/alpha");
   });
 
@@ -318,8 +319,9 @@ describe("the dialog and its combobox (AC-11)", () => {
     await waitFor(() => {
       expect(palette()).toBeNull();
     });
-    await settle();
-    expect(document.activeElement).toBe(screen.getByRole("main"));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole("main"));
+    });
     expect(window.location.hash).toBe("#/alpha");
   });
 
@@ -542,10 +544,11 @@ describe("matching and jumps (AC-13)", () => {
     await waitFor(() => {
       expect(palette()).toBeNull();
     });
-    await settle();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Overview" }));
+    });
     expect(window.location.hash).toBe("#/alpha");
     expect(window.history.length).toBe(before);
-    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Overview" }));
   });
 
   it("opens a hit with no ID by its path", async () => {

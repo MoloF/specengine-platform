@@ -4,6 +4,7 @@ import { useDataSource } from "../api/provider";
 import { useLiveQueue, useProjects } from "../api/queries";
 import type { Project } from "../api/types";
 import { GraphView } from "../graph/GraphView";
+import { HealthView } from "../health/HealthView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
 import { HomeView } from "../overview/HomeView";
 import { InboxView } from "../inbox/InboxView";
@@ -341,6 +342,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
   } else if (route.section === "graph") {
     view = <GraphView key={route.project} project={route.project} nodeRef={route.id} memory={graphMemory} />;
+  } else if (route.section === "health") {
+    view = <HealthView key={route.project} project={route.project} />;
   } else {
     const section = SECTIONS.find((candidate) => candidate.id === route.section);
     view = section !== undefined && section.slice !== null ? <NotBuilt section={section} /> : null;

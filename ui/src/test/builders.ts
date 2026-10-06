@@ -2,6 +2,9 @@ import type {
   BundleItem,
   BundleLayers,
   BundleView,
+  CheckCounts,
+  CheckFinding,
+  CheckReport,
   GraphEdge,
   GraphNode,
   GraphView,
@@ -394,5 +397,34 @@ export function aTaskRun(fields: Partial<TaskRun> & Pick<TaskRun, "run">): TaskR
     summary: null,
     changed_files: [],
     ...fields,
+  };
+}
+
+/** A check finding for tests: the six keys, no `fix`, `debt` or `introduced` unless given. */
+export function aCheckFinding(fields: Partial<CheckFinding> & Pick<CheckFinding, "code">): CheckFinding {
+  return {
+    severity: "error",
+    path: "docs/spec/doc-1.md",
+    line: 1,
+    subject: "",
+    message: `${fields.code} found`,
+    ...fields,
+  };
+}
+
+/**
+ * A `spec check --json` report for tests: `clean` under `enforce` with no finding unless given;
+ * the counts are the test's own (the UI never derives them), seven of the nine keys by default.
+ */
+export function aCheckReport(fields: Partial<Omit<CheckReport, "counts">> & { counts?: Partial<CheckCounts> } = {}): CheckReport {
+  const { counts, ...rest } = fields;
+  return {
+    mode: "enforce",
+    verdict: "clean",
+    findings: [],
+    stale: [],
+    cannot_check: [],
+    ...rest,
+    counts: { documents: 7, errors: 0, warnings: 0, debt: 0, expired: 0, stale: 0, worst_w_bytes: 4321, ...counts },
   };
 }

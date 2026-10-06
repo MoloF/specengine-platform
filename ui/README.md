@@ -3,16 +3,16 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-07
 ---
 
 # ui -- the web UI
 
-The owner's screens: home, queue, tasks, spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home`, `ui-markdown` shipped on mocks, `daemon-read` on `specengine-http` (2026-10-05, -06); the rest: 08 s2 Phase 4. Meaning: 07 s3 "Web UI — screens"; the owner's flow: 06 s3.3-3.4.
+The owner's screens, meaning 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home`, `ui-markdown`, `ui-health` shipped on mocks, `daemon-read` on `specengine-http` (2026-10-05 to -07); the rest: 08 s2 Phase 4.
 
 ## Stack
 
-A standalone pnpm project on strict TypeScript, packages in "Dependencies": no root `package.json`, no workspace with the Rust crates. Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`, `fetch` and `EventSource` stubbed.
+A standalone pnpm project on strict TypeScript: no root `package.json`, no workspace with the Rust crates. Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`, `fetch` and `EventSource` stubbed.
 
 ## Contract seam
 
@@ -30,13 +30,13 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **States**: loading: a skeleton, `aria-busy`; empty: the meaning, the next step; error: the daemon's message verbatim, Retry. Live regions (polite for results, assertive for a 409) sit outside any inert subtree.
 - **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed, to submit again.
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4); `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never left on `body`.
-- **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012). Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one; Rendered by default, Source a toggle away.
+- **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one; Rendered by default, Source a toggle away.
 - **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
 - **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home); "Mock data" on every route while the mock serves; an unbuilt section says "Not built yet: arrives in slice `<slug>`"; a root error boundary and one per view.
 
 ## Dependencies
 
-The owner's allowlist: the 17 below (2026-10-05; the last two 2026-10-06, ADR-0036). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`. `ui_policy.rs` checks table, `package.json` and lockfile agree.
+The owner's allowlist: the 17 below (2026-10-05; the last two 2026-10-06, ADR-0036). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree.
 
 | Package | Version | Role |
 |---|---|---|
@@ -49,14 +49,14 @@ The owner's allowlist: the 17 below (2026-10-05; the last two 2026-10-06, ADR-00
 | `typescript` | 6.0.3 | type check |
 | `@types/react` | 19.3.0 | types |
 | `@types/react-dom` | 19.3.0 | types |
-| `eslint` | 10.11.0 | lint, flat config |
+| `eslint` | 10.11.0 | lint |
 | `typescript-eslint` | 8.70.1 | TS lint |
 | `eslint-plugin-react-hooks` | 7.1.1 | hooks rules |
 | `vitest` | 5.0.2 | test runner |
 | `@testing-library/react` | 16.3.3 | component tests; peer `@testing-library/dom` in the lockfile only, never imported |
 | `jsdom` | 29.1.1 | test DOM |
-| `react-markdown` | 10.1.0 | markdown to React elements, `src/markdown/` only |
-| `remark-gfm` | 4.0.1 | GFM tables, task lists, footnotes, autolinks |
+| `react-markdown` | 10.1.0 | markdown, `src/markdown/` only |
+| `remark-gfm` | 4.0.1 | GFM for it |
 
 **Held back.** TypeScript 7 (outside `typescript-eslint`'s peer range), jsdom 30 (Node >= 24.15, the laptop 24.14): the owner decides after a Node upgrade.
 
@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
-2. `specengine-http --root <project>`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes); projects `harbor-sim`, `ledger-api`, decisions in memory until a reload.
+2. `specengine-http --root <project>`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes), `cannot-check` (the check's causes); projects `harbor-sim`, `ledger-api`, decisions in memory until a reload.
 3. The slice's own check list: its spec, "Owner's manual check".
 
 ## Roles here

@@ -63,6 +63,25 @@ describe("a read the daemon does not serve yet (R-n7)", () => {
     expect(urlsOf(fetchStub).filter((url) => /\/(tasks|graph)/.test(url))).toEqual([]);
   });
 
+  it("Health on the daemon: the check not built in its three regions, the client's words, no Retry, no fetch of it; the queue read (AC-01 of ui-health)", async () => {
+    const fetchStub = daemon();
+    renderApp(new HttpClient(), "#/alpha/health");
+    await screen.findByRole("region", { name: "Debt and budgets" });
+    const notes = await screen.findAllByText(NOT_BUILT);
+    expect(notes).toHaveLength(3);
+    const words = screen.getAllByText(/^Not served by the daemon yet: /).map((element) => element.textContent);
+    expect(new Set(words)).toEqual(
+      new Set([
+        'Not served by the daemon yet: GET /api/projects/alpha/check is a missing endpoint (docs/features/ui-health.md "Open"). The mock serves it: open the UI with ?scenario=normal.',
+      ]),
+    );
+    expect(notes.map((title) => title.closest(".notice")?.getAttribute("role") ?? null)).toEqual(["status", null, null]);
+    expect(screen.queryAllByRole("button", { name: /^Retry/ })).toEqual([]);
+    expect(urlsOf(fetchStub).filter((url) => url.includes("/check"))).toEqual([]);
+    await screen.findByText("No proposal waits for your decision.");
+    expect(urlsOf(fetchStub)).toContain("/api/projects/alpha/inbox");
+  });
+
   it("the same screen, the daemon down: an alert with Retry, never the not-built note", async () => {
     const client = stubClient();
     client.getTasks.mockImplementation(() =>

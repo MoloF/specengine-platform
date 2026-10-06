@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createElement, type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderApp } from "../test/render";
@@ -37,8 +37,14 @@ describe("the search field's keystrokes (AC-11)", () => {
     const tree = await screen.findByRole("tree", { name: "Spec tree" });
     await within(tree).findAllByRole("treeitem");
     await screen.findByRole("tab", { name: "Text" });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    // Every read on entering has answered and been rendered: the counts hold still between two
+    // looks (a fixed tick could take the snapshot before a late answer's render).
+    let seen = "";
+    await waitFor(() => {
+      const now = JSON.stringify(renders);
+      const still = now === seen;
+      seen = now;
+      expect(still).toBe(true);
     });
     expect(renders.tree).toBeGreaterThan(0);
     expect(renders.node).toBeGreaterThan(0);

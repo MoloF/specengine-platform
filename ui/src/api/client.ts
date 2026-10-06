@@ -1,6 +1,7 @@
 import type {
   ApiError,
   BundleView,
+  CheckReport,
   Decision,
   DecisionResult,
   GraphView,
@@ -91,6 +92,8 @@ export interface SpecEngineClient {
   getTasks(project: string): Promise<TaskList>;
   /** MISSING ENDPOINT GET /api/projects/:p/tasks/:id (07 section 3 lacks it; = spec task show T --json, uncut) */
   getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;
+  /** MISSING ENDPOINT GET /api/projects/:p/check (= spec check --json; rust-developer, ui-live; 07 section 3's health is a later composite) */
+  getCheck(project: string): Promise<CheckReport>;
   /** POST /api/projects/:p/proposals/:id/decision */
   decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;
   /**

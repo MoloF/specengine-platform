@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createElement, type ComponentProps } from "react";
 import type * as ReactMarkdownModule from "react-markdown";
 import { describe, expect, it, vi } from "vitest";
@@ -49,12 +49,15 @@ describe("one parse per text change (AC-13)", () => {
     await screen.findByText("more", { selector: "strong" });
     expect(counts.parses).toBe(1);
     const renders = counts.renders;
+    // The links read lands when released; its render is awaited as observed (the query's
+    // notification and act's exit are timers of their own: a fixed tick races them under load).
     await act(async () => {
       release();
       await held;
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(counts.renders).toBeGreaterThan(renders);
+    await waitFor(() => {
+      expect(counts.renders).toBeGreaterThan(renders);
+    });
     expect(counts.parses).toBe(1);
     const tree = screen.getByRole("tree", { name: "Spec tree" });
     const first = within(tree).getAllByRole("treeitem")[0];
@@ -62,12 +65,14 @@ describe("one parse per text change (AC-13)", () => {
       throw new Error("no row");
     }
     first.focus();
-    for (const key of ["ArrowDown", "ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "End", "Home", "j", "k"]) {
+    // Every move, ending on the second row: the keys are proven handled before parses is read.
+    for (const key of ["ArrowDown", "ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "End", "Home", "j", "k", "j"]) {
       fireEvent.keyDown(document.activeElement ?? first, { key });
     }
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(tree).getAllByRole("treeitem")[1]);
     });
+    expect(document.activeElement).not.toBe(first);
     expect(counts.parses).toBe(1);
   });
 });

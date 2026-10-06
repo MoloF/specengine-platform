@@ -71,6 +71,18 @@ const TASKS_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
+/** Health's keys (docs/features/ui-health.md, keys as Tasks): the findings, one Tab stop; no key changes anything. */
+const HEALTH_KEYS: readonly Shortcut[] = [
+  [["j", "Down arrow"], "Findings: next finding"],
+  [["k", "Up arrow"], "Findings: previous finding"],
+  [["Home", "End"], "Findings: first or last finding shown"],
+  [["Enter"], "Findings: open the finding's document in the spec tree"],
+  [["Enter", "Space"], "A group's heading: show or hide its findings"],
+  JUMP,
+  [["?"], "Show this list"],
+  [["Esc"], "Close a dialog"],
+];
+
 /** Said in every intro: the chord is the one key that acts from anywhere (docs/features/ui-home.md "Keys"). */
 const CHORD_EXCEPTED = "Cmd-K or Ctrl-K excepted: it opens Jump to from anywhere, a text field included.";
 
@@ -81,6 +93,7 @@ const INTRO: Partial<Record<SectionId, string>> = {
   tree: `Keys act where focus is (the tree, the hits, the tabs), outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} Arrows only move; Enter and clicks open, one history entry each.`,
   graph: `Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One box holds the tab stop; arrows only move it. The List view holds every node and edge as text.`,
   tasks: `Keys act where focus is (the task list, the tabs), outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} Arrows only move; Enter and clicks open, one history entry each. No key changes a task: owner actions are commands you copy to a terminal.`,
+  health: `Keys act on the findings' focused row, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One row holds the Tab stop; arrows only move it. Health is read only: nothing here fixes a finding.`,
 };
 
 /** A section's list; with none (the home, a hash naming nothing) the general one. */
@@ -96,6 +109,9 @@ function keysOf(section: SectionId | null): readonly Shortcut[] {
   }
   if (section === "inbox") {
     return INBOX_KEYS;
+  }
+  if (section === "health") {
+    return HEALTH_KEYS;
   }
   return GENERAL_KEYS;
 }

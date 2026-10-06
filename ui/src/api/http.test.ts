@@ -111,6 +111,15 @@ describe("each method hits its URL (AC-09)", () => {
     expect(fetchStub).not.toHaveBeenCalled();
   });
 
+  it("requests no check: the not-served marker (501, notServed), never 0, the spec that asks for it named (AC-01 of ui-health)", async () => {
+    const error = await rejection(new HttpClient().getCheck("alpha"));
+    expect([error.status, error.notServed, isNotServed(error)]).toEqual([NOT_SERVED, true, true]);
+    expect(error.message).toBe(
+      'Not served by the daemon yet: GET /api/projects/alpha/check is a missing endpoint (docs/features/ui-health.md "Open"). The mock serves it: open the UI with ?scenario=normal.',
+    );
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
   it("tells a read not built from the daemon down or refusing (R-n7)", async () => {
     stubFetch(() => {
       throw new TypeError("Failed to fetch");

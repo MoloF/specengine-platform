@@ -52,6 +52,7 @@ export const queryKeys = {
     ] as const,
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
+  check: (project: string) => ["check", project] as const,
 };
 
 /**
@@ -336,6 +337,25 @@ export function useTask(project: string, id: string) {
   const client = useClient();
   return useQuery({ queryKey: queryKeys.task(project, id), queryFn: () => client.getTask(project, id) });
 }
+
+/**
+ * The project's `spec check` (docs/features/ui-health.md "Data"): read on entering Health and on
+ * "Check again" (`refetch`) only: never on window focus, a reconnect or an interval, and not after a
+ * decision (a full walk per read; the report carries no time).
+ */
+export function useCheck(project: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.check(project),
+    queryFn: () => client.getCheck(project),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
+}
+
+/** The check's read as Health shares it among its regions. */
+export type CheckQuery = ReturnType<typeof useCheck>;
 
 /** Accept and reject close a proposal (06 §3.4): it leaves the inbox; the other two keep it there. */
 function closes(decision: Decision): boolean {

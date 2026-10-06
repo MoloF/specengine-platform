@@ -95,10 +95,21 @@ describe("source policy", () => {
     expect(offending(literal, (path) => path === "/src/styles/tokens.css")).toEqual([]);
   });
 
-  it("never words a proposal or a discrepancy as a hold on work (AC-15)", () => {
+  it("never words a proposal or a discrepancy as a hold on work (AC-15, narrowed by AC-11 of ui-health)", () => {
     const stem = "bl" + "ock";
-    const words = new RegExp(`${stem}ed|${stem}ing|${stem}er|un${stem}`, "i");
-    expect(offending(words)).toEqual([]);
+    // These never, tests and mocks included.
+    expect(offending(new RegExp(`${stem}ing|${stem}er|un${stem}`, "i"))).toEqual([]);
+    // `spec check`'s verdict, a check outcome: only on the KnownCheckVerdict line of the provisional
+    // types, under src/mocks/ and in tests.
+    const mockOrTest = (path: string) => path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path);
+    const verdict = new RegExp(`${stem}ed`, "i");
+    expect(offending(verdict, mockOrTest)).toEqual([
+      expect.stringMatching(/^\/src\/api\/provisional\.ts:\d+: export type KnownCheckVerdict = \(typeof KNOWN_CHECK_VERDICTS\)\[number\]; export const KNOWN_CHECK_VERDICTS = \[/),
+    ]);
+    // Health's sources never spell the stem at all: they label a verdict through the tuple.
+    const health = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter((path) => !health(path)).length).toBeGreaterThan(3);
+    expect(offending(new RegExp(stem, "i"), health)).toEqual([]);
   });
 
   it("writes no HTML from data: no HTML sink anywhere in src (AC-07 of ui-tree-node)", () => {
@@ -115,8 +126,8 @@ describe("source policy", () => {
     expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
   });
 
-  it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/"];
+  it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
@@ -152,6 +163,30 @@ describe("source policy", () => {
     const outside = (path: string) => !(path.startsWith("/src/overview/") || path.startsWith("/src/palette/")) || /\.test\.tsx?$/.test(path);
     const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "performance\\.now\\(", "useNow\\b", "formatAge\\b"].join("|"));
     expect(offending(clock, outside)).toEqual([]);
+  });
+
+  it("reads no clock in Health: the report carries no time, dates are shown as stored (AC-05 of ui-health)", () => {
+    const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter((path) => !outside(path)).length).toBeGreaterThan(3);
+    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "Date\\.parse\\(", "performance\\.now\\(", "useNow\\b", "formatAge\\b"].join("|"));
+    expect(offending(clock, outside)).toEqual([]);
+  });
+
+  it("names no check code in Health but `budget`, and no budget slot (R6 of ui-health)", () => {
+    const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+    // The core's CHECK_CODES (crates/specengine-core/src/check/mod.rs) but `budget`, the parser's
+    // two error codes, and the five budget slots of `docs/canon/spec-check.md` "Findings, debt, verdict".
+    const names = [
+      "class-missing", "class-unknown", "key-missing", "key-extra", "scope-empty", "date-invalid", "status-invalid",
+      "shipped-missing", "canon-missing", "tier-invalid", "id-width", "id-taken", "file-name", "canon-form", "canon-file",
+      "canon-anchor", "ref-dangling", "name-skipped", "index-missing", "index-drift", "generator-unknown", "generator-path",
+      "mention-dangling", "depends-cycle", "ref-superseded", "id-scope", "link-dangling", "link-anchor", "key-empty",
+      "value-invalid", "part-missing", "part-empty", "text-empty", "parent-cycle", "homoglyph", "duplicate-id",
+      "tier0", "tier1", "index", "decision", "canon",
+    ];
+    expect(offending(new RegExp(`["'\`](${names.join("|")})["'\`]`), outside)).toEqual([]);
+    // `budget` itself is spelled once, as findings.ts's BUDGET_CODE; comments name it in backticks.
+    expect(offending(/["']budget["']/, outside)).toEqual([expect.stringMatching(/^\/src\/health\/findings\.ts:\d+: export const BUDGET_CODE = "budget";$/)]);
   });
 
   it("reads the network only through src/api (AC-01 of ui-tree-node)", () => {

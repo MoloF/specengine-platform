@@ -53,6 +53,15 @@ const PATHS = {
   terminal: "M2 3h12v10H2Z M4.5 6.5l2 1.5-2 1.5 M8 10h3.5",
   taskItemDone: "M2.5 2.5h11v11h-11Z M5 8.2l2 2 4-4.4",
   taskItemOpen: "M2.5 2.5h11v11h-11Z",
+  // spec check (docs/features/ui-health.md): a verdict each, two finding severities, debt.
+  checkClean: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M5.3 8.2l1.9 1.9 3.6-4",
+  checkObserved: "M1.8 8.6 4.8 11.6 10.4 5 M13.2 3.5v4.4 M13.2 10.6v.2",
+  checkFails: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M6 6l4 4 M10 6l-4 4",
+  cannotCheck: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M4.2 11.8l7.6-7.6",
+  findingError: "M8 1.8 14.2 8 8 14.2 1.8 8Z M8 5.2v3.4 M8 10.6v.2",
+  findingWarning: "M8 2.2 14.3 13.5H1.7L8 2.2Z M8 6.4v3.4 M8 11.6v.2",
+  debt: "M2.5 3.5h11v10h-11Z M2.5 6.5h11 M5.5 2v3 M10.5 2v3",
+  debtExpired: "M2.5 3.5h11v10h-11Z M2.5 6.5h11 M5.5 2v3 M10.5 2v3 M6 8.6l4 3.3 M10 8.6l-4 3.3",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -38,6 +38,7 @@ describe("scenarioFromSearch", () => {
     ["?scenario=slow", "slow"],
     ["?scenario=conflict", "conflict"],
     ["?scenario=large", "large"],
+    ["?scenario=cannot-check", "cannot-check"],
     ["?scenario=bogus", "normal"],
     ["?other=1", "normal"],
   ])("reads %j as %s", (search, scenario) => {

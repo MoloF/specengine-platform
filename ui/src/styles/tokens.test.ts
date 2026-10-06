@@ -84,6 +84,9 @@ const LINK = ["resolved", "dangling", "skipped", "unchecked", "unknown"];
 const RUN = ["completed", "partial", "failed", "abandoned", "unknown"];
 const STALE = ["changed", "unchanged", "unknown"];
 const MARK = ["dangling-parent", "parent-cycle", "unknown"];
+// docs/features/ui-health.md: the check's verdicts (the third spelled as its tone) and a finding's severities.
+const CHECK = ["clean", "observed", "fails", "cannot-check", "unknown"];
+const FINDING = ["error", "warning", "unknown"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
   ...LINK.map((value) => `--link-${value}`),
@@ -94,6 +97,8 @@ const STATUS = [
   ...RUN.map((value) => `--run-${value}`),
   ...STALE.map((value) => `--stale-${value}`),
   ...SYNC.map((value) => `--sync-${value}`),
+  ...CHECK.map((value) => `--check-${value}`),
+  ...FINDING.map((value) => `--finding-${value}`),
   "--attention",
   // The graph canvas (docs/features/ui-graph.md): edges and minimap nodes are read against the surfaces.
   "--graph-edge",
@@ -164,6 +169,15 @@ describe("tokens.css (AC-09)", () => {
     expect(resolve("--stale-unknown").toLowerCase()).toBe(resolve("--sync-cannot-verify").toLowerCase());
     expect(resolve("--stale-changed").toLowerCase()).not.toBe(resolve("--stale-unchanged").toLowerCase());
     expect(resolve("--run-unknown").toLowerCase()).not.toBe(resolve("--run-completed").toLowerCase());
+  });
+
+  it("draws a check that could not vouch for the corpus in cannot-verify's colour, never clean's or another verdict's (AC-03 of ui-health)", () => {
+    const own = resolve("--check-cannot-check").toLowerCase();
+    expect(own).toBe(resolve("--sync-cannot-verify").toLowerCase());
+    for (const verdict of CHECK.filter((value) => value !== "cannot-check")) {
+      expect([verdict, resolve(`--check-${verdict}`).toLowerCase() === own]).toEqual([verdict, false]);
+    }
+    expect(resolve("--check-clean").toLowerCase()).not.toBe(resolve("--check-fails").toLowerCase());
   });
 
   it("gives cannot-verify its own colour, never ok's or another sync state's", () => {
