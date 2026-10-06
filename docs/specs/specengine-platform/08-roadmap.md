@@ -48,7 +48,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 4. Web UI — ~2-3 weeks
 
-Screens and SSE per 07 §3, begun on mocks before the daemon (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks` and `ui-home` 2026-10-06; next `ui-health-round`, `ui-live` (endpoints: each spec's "Open").
+Screens and SSE per 07 §3, begun on mocks before the daemon (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks` and `ui-home` 2026-10-06; next `ui-health`, `ui-live`, `ui-round` (endpoints: their "Open").
 
 ### Phase 5. Maturity — ~2 weeks
 
