@@ -259,6 +259,14 @@ export function NodePane({
         <h1 id={titleId} ref={heading} tabIndex={-1} className="node-heading">
           {title}
         </h1>
+        {holders.length > 0 && (
+          <p className="node-actions">
+            <a className="node-action" href={sectionHash(project, "graph", nodeRef)}>
+              <Icon name="graph" />
+              Show in graph
+            </a>
+          </p>
+        )}
         {single !== undefined && <Facts holder={single} />}
         {holders.length > 1 && (
           <>

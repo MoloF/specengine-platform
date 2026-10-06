@@ -8,11 +8,10 @@ import { renderApp } from "../test/render";
 import { stubClient } from "../test/stubClient";
 import { App } from "./App";
 
-// AC-11, AC-16 and AC-17 of docs/features/ui-shell.md.
+// AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph.
 
 const UNBUILT = [
   ["tasks", "Tasks", "ui-tasks"],
-  ["graph", "Graph", "ui-graph"],
   ["health", "Health", "ui-health-round"],
   ["questions", "Questions", "ui-health-round"],
 ] as const;
@@ -52,6 +51,15 @@ describe("the shell (AC-11)", () => {
     expect(screen.getByText(slice).closest("p")?.textContent).toBe(`Not built yet: arrives in slice ${slice}.`);
     const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe(title);
+  });
+
+  it("builds the Graph: its heading and options, no stand-in", async () => {
+    renderApp(stubClient(), "#/alpha/graph");
+    expect(await screen.findByRole("heading", { level: 1, name: "Graph" })).toBeTruthy();
+    expect(screen.getByRole("form", { name: "Graph options" })).toBeTruthy();
+    expect(screen.queryByText(/Not built yet/)).toBeNull();
+    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    expect(current?.textContent).toBe("Graph");
   });
 
   it("navigates with the nav, and back returns", async () => {
@@ -223,6 +231,8 @@ describe("Mock data (AC-17)", () => {
     "#/alpha/inbox",
     "#/alpha/tree",
     "#/alpha/tree/R-1",
+    "#/alpha/graph",
+    "#/alpha/graph/R-1",
     ...UNBUILT.map(([section]) => `#/alpha/${section}`),
     "#/alpha/nowhere",
     "#/zeta/inbox",

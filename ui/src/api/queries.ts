@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiErrorOf, DECIDED_ELSEWHERE, type BundleOptions, type NodeOptions, type SearchOptions, type TreeOptions } from "./client";
+import { apiErrorOf, DECIDED_ELSEWHERE, type BundleOptions, type GraphOptions, type NodeOptions, type SearchOptions, type TreeOptions } from "./client";
 import { useClient } from "./provider";
 import type { Decision, Inbox } from "./types";
 
@@ -36,10 +36,22 @@ export const queryKeys = {
     ] as const,
   bundle: (project: string, options: BundleOptions) =>
     ["bundle", project, { node_ids: options.node_ids, budget: options.budget ?? null }] as const,
+  graph: (project: string, options: GraphOptions) =>
+    [
+      "graph",
+      project,
+      {
+        ref: options.ref,
+        impact: options.impact ?? false,
+        types: options.types ?? [],
+        depth: options.depth ?? null,
+        archive: options.archive ?? false,
+      },
+    ] as const,
 };
 
 /** The reads a decision can change, by their first key part: each is read again after one. */
-const READS_AFTER_DECISION = ["inbox", "tree", "node", "search", "bundle"] as const;
+const READS_AFTER_DECISION = ["inbox", "tree", "node", "search", "bundle", "graph"] as const;
 
 // What a request carries: absent options omitted, an empty array or a false `archive` too.
 
@@ -78,6 +90,23 @@ function searchRequest(options: SearchOptions): SearchOptions {
   }
   if (options.limit !== undefined) {
     sent.limit = options.limit;
+  }
+  if (options.archive === true) {
+    sent.archive = true;
+  }
+  return sent;
+}
+
+function graphRequest(options: GraphOptions): GraphOptions {
+  const sent: GraphOptions = { ref: options.ref };
+  if (options.impact === true) {
+    sent.impact = true;
+  }
+  if (options.types !== undefined && options.types.length > 0) {
+    sent.types = options.types;
+  }
+  if (options.depth !== undefined) {
+    sent.depth = options.depth;
   }
   if (options.archive === true) {
     sent.archive = true;
@@ -153,6 +182,22 @@ export function useBundle(project: string, options: BundleOptions, enabled: bool
   });
 }
 
+/**
+ * One answer of `spec graph` (`options` null: no REF yet, nothing read). While another REF or
+ * other options are read, the last answer stays up (the view marks it busy): the canvas never
+ * blanks between two answers.
+ */
+export function useGraph(project: string, options: GraphOptions | null) {
+  const client = useClient();
+  const asked = options ?? { ref: "" };
+  return useQuery({
+    queryKey: queryKeys.graph(project, asked),
+    queryFn: () => client.getGraph(project, graphRequest(asked)),
+    enabled: options !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** Accept and reject close a proposal (06 §3.4): it leaves the inbox; the other two keep it there. */
 function closes(decision: Decision): boolean {
   return decision.decision === "accept" || decision.decision === "reject";
@@ -162,7 +207,7 @@ function closes(decision: Decision): boolean {
  * One decideProposal call per submit. On success a closed proposal (accepted, rejected) leaves the
  * cached inbox at once, never written back as applied or rejected; a kept one (needs clarification,
  * deferred) takes the daemon's returned state. After a success or a 409 (decided elsewhere) the
- * project's inbox, tree, nodes, searches and bundles are read again: an apply may change any.
+ * project's inbox, tree, nodes, searches, bundles and graphs are read again: an apply may change any.
  */
 export function useDecideProposal(project: string) {
   const client = useClient();

@@ -1518,3 +1518,579 @@ mark {
 .bundle-body pre {
   margin-top: var(--space-2);
 }
+
+/* Tree node pane: the way to the graph. */
+.node-actions {
+  font-size: var(--font-size-s);
+}
+
+.node-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+}
+
+/* Graph: the options, the answer (Canvas | List), details beside the canvas, stacked below 48em. */
+.graph-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.graph-ref {
+  display: grid;
+  gap: var(--space-1);
+  flex: 1 1 22rem;
+  min-width: min(100%, 16rem);
+}
+
+.graph-ref .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.graph-mode,
+.graph-types {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.graph-mode legend,
+.graph-types legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+}
+
+.graph-types {
+  flex-basis: 100%;
+}
+
+.graph-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  margin-right: var(--space-3);
+  cursor: pointer;
+}
+
+.graph-radio input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.graph-depth {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.graph-depth .field {
+  width: auto;
+  min-width: 6rem;
+}
+
+.graph-archive {
+  min-height: max(var(--target-min), 2.25rem);
+}
+
+.graph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.graph-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: max(var(--target-min), 2rem);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 1px dashed var(--border-control);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-s);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out;
+}
+
+.graph-chip:hover {
+  border-color: var(--focus-ring);
+}
+
+.graph-chip[aria-pressed="true"] {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.graph-chip[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.graph-chip-check {
+  display: inline-flex;
+  width: 16px;
+  color: var(--accent);
+}
+
+.graph-chip-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-secondary);
+}
+
+.graph-types-pending,
+.graph-types-note {
+  font-size: var(--font-size-s);
+}
+
+.graph-results {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.graph-results[aria-busy="true"] .graph-stage,
+.graph-results[aria-busy="true"] .graph-list {
+  opacity: 0.6;
+  transition: opacity var(--duration-normal) ease-out;
+}
+
+.graph-summary {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.graph-count {
+  font-weight: 600;
+}
+
+.graph-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.graph-canvas-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.graph-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.graph-stage.has-details {
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+}
+
+@media (max-width: 48em) {
+  .graph-stage.has-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.graph-canvas {
+  position: relative;
+  height: clamp(22rem, 68vh, 46rem);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-canvas);
+}
+
+/* React Flow's base.css only: every --xy-<name>-default it declares takes a tokens.css role here. */
+.graph-canvas .react-flow {
+  --xy-edge-stroke: var(--graph-edge);
+  --xy-edge-stroke-width: var(--graph-edge-width);
+  --xy-edge-stroke-selected: var(--graph-edge-emphasis);
+  --xy-connectionline-stroke: var(--graph-edge);
+  --xy-connectionline-stroke-width: var(--graph-edge-width);
+  --xy-attribution-background-color: var(--surface-panel);
+  --xy-minimap-background-color: var(--graph-minimap-surface);
+  --xy-minimap-mask-background-color: var(--graph-minimap-mask);
+  --xy-minimap-mask-stroke-color: var(--border-control);
+  --xy-minimap-mask-stroke-width: var(--graph-minimap-stroke-width);
+  --xy-minimap-node-background-color: var(--graph-minimap-node);
+  --xy-minimap-node-stroke-color: var(--graph-minimap-node);
+  --xy-minimap-node-stroke-width: var(--graph-minimap-node-stroke-width);
+  --xy-background-color: var(--surface-canvas);
+  --xy-background-pattern-dots-color: var(--border-subtle);
+  --xy-background-pattern-lines-color: var(--border-subtle);
+  --xy-background-pattern-cross-color: var(--border-subtle);
+  --xy-node-border: var(--graph-box-border);
+  --xy-node-border-selected: var(--graph-box-border-selected);
+  --xy-node-color: var(--text-primary);
+  --xy-handle-background-color: var(--graph-edge);
+  --xy-selection-background-color: var(--graph-selection-surface);
+  --xy-selection-border: var(--graph-selection-border);
+  --xy-resize-background-color: var(--accent);
+  font-family: var(--font-sans);
+}
+
+.graph-canvas .react-flow__node {
+  border-radius: var(--radius-m);
+}
+
+.graph-canvas .react-flow__node:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.graph-canvas .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  min-height: 8px;
+  border: 0;
+  opacity: 0;
+}
+
+.graph-box {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-1) var(--space-3);
+  overflow: hidden;
+  border: var(--xy-node-border);
+  border-radius: var(--radius-m);
+  background: var(--graph-box-surface);
+  color: var(--xy-node-color);
+  font-size: var(--font-size-s);
+  line-height: 1.3;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease-out;
+}
+
+.graph-box p {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.graph-box .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.graph-box.is-focus {
+  border-left: 4px solid var(--graph-edge-emphasis);
+}
+
+.graph-box.is-selected {
+  border: var(--xy-node-border-selected);
+}
+
+.graph-box.is-archived {
+  background: var(--surface-canvas);
+}
+
+.graph-stub,
+.graph-more {
+  border-style: dashed;
+  background: var(--surface-canvas);
+}
+
+.graph-box-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.graph-box p.graph-box-title {
+  display: block;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+}
+
+.graph-box-meta {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.graph-box-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-box-distance {
+  margin-left: auto;
+}
+
+.graph-more-count {
+  font-weight: 600;
+}
+
+.graph-mark,
+.graph-box-flag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.graph-mark {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.graph-mark-focus .icon,
+.graph-mark-selected .icon {
+  color: var(--graph-edge-emphasis);
+}
+
+/* Edge labels above the boxes (React Flow draws the label layer before the nodes, at z-index 0). */
+.graph-canvas .react-flow__edgelabel-renderer {
+  z-index: 1;
+}
+
+.graph-edge-label {
+  position: absolute;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-canvas);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.graph-edge-label.is-emphasis {
+  border-color: var(--graph-edge-emphasis);
+  color: var(--text-primary);
+}
+
+.graph-canvas .react-flow__edge.is-emphasis .react-flow__edge-path {
+  stroke: var(--graph-edge-emphasis);
+  stroke-width: var(--graph-edge-width-emphasis);
+}
+
+/* The emphasis arrowhead's currentColor. */
+.graph-canvas .react-flow__marker {
+  color: var(--graph-edge-emphasis);
+}
+
+.graph-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-s);
+}
+
+.graph-canvas .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  padding: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+/* base.css fills the buttons' icons; the app's icons are strokes. */
+.graph-canvas .react-flow__controls-button svg.icon {
+  fill: none;
+}
+
+.graph-canvas .react-flow__controls-button:hover {
+  background: var(--surface-overlay);
+}
+
+.graph-canvas .react-flow__controls-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.graph-canvas .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+}
+
+.graph-details {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+  max-height: clamp(22rem, 68vh, 46rem);
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.graph-details-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.graph-details-title {
+  flex: 1 1 100%;
+  font-size: var(--font-size-m);
+  overflow-wrap: anywhere;
+}
+
+.graph-details-close {
+  margin-left: auto;
+}
+
+.graph-details-distance,
+.graph-details-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.graph-details-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.graph-holders,
+.graph-edge-lines,
+.graph-list-nodes,
+.graph-legend-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-holders,
+.graph-edge-lines,
+.graph-list-nodes {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.graph-holder {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.graph-edge-lines li {
+  overflow-wrap: anywhere;
+}
+
+.graph-details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.graph-details-actions .button {
+  text-decoration: none;
+}
+
+.graph-legend {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.graph-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  font-size: var(--font-size-s);
+}
+
+.graph-legend-item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.graph-pattern line {
+  stroke: var(--graph-edge);
+  stroke-width: 2;
+}
+
+.graph-legend-stub {
+  padding: 0 var(--space-1);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-s);
+}
+
+.graph-legend-about,
+.graph-legend-credit {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.graph-list {
+  display: grid;
+  gap: var(--space-5);
+  padding-top: var(--space-3);
+}
+
+.graph-list-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.graph-list-node {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.graph-list-node-head,
+.graph-list-node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.graph-list-node-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.graph-list-name {
+  font-weight: 600;
+}

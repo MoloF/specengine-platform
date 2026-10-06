@@ -28,3 +28,21 @@ afterEach(() => {
 Element.prototype.scrollIntoView = function scrollIntoView() {
   return undefined;
 };
+
+// jsdom has no ResizeObserver; React Flow constructs one for its pane unguarded
+// (docs/features/ui-graph.md "Canvas"). It never reports: jsdom measures nothing, so the layout
+// gives every box its size and handles.
+class StillResizeObserver implements ResizeObserver {
+  observe(): void {
+    return undefined;
+  }
+
+  unobserve(): void {
+    return undefined;
+  }
+
+  disconnect(): void {
+    return undefined;
+  }
+}
+globalThis.ResizeObserver = StillResizeObserver;

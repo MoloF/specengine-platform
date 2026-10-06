@@ -1,9 +1,14 @@
-import { ClientError, type BundleOptions, type NodeOptions, type SearchOptions, type TreeOptions } from "../api/client";
+import { ClientError, type BundleOptions, type GraphOptions, type NodeOptions, type SearchOptions, type TreeOptions } from "../api/client";
 import type {
   BundleItem,
   BundleLayers,
   BundleVia,
   BundleView,
+  Direction,
+  FollowedType,
+  GraphEdge,
+  GraphNode,
+  GraphView,
   LeftOut,
   NodeView,
   SearchHit,
@@ -812,4 +817,259 @@ function workingAnswerOf(corpus: MockCorpus, node: MockNode): WorkingAnswer | nu
     line: written.line,
     state: written.state,
   };
+}
+
+// spec graph
+
+/** The shared link types, in `specengine-model`'s `LINK_TYPES` order (`crates/specengine-model/src/link.rs`). */
+const LINK_TYPES = [
+  "derived_from",
+  "depends_on",
+  "constrains",
+  "supersedes",
+  "revises",
+  "amends",
+  "answers",
+  "working_answer",
+  "uses_term",
+  "canon",
+  "verifies",
+  "adopts",
+] as const;
+
+/** `IMPACT_LINK_TYPES`, in the model's order: what an edit of a node reaches, and which way. */
+const IMPACT_LINK_TYPES: readonly (readonly [string, Direction])[] = [
+  ["depends_on", "in"],
+  ["derived_from", "in"],
+  ["verifies", "in"],
+  ["uses_term", "in"],
+  ["constrains", "out"],
+];
+
+const WEAK_LINK = "mentions";
+
+function impactDirection(type: string): Direction | null {
+  return IMPACT_LINK_TYPES.find(([name]) => name === type)?.[1] ?? null;
+}
+
+/** `graph.rs` `follow`: the direction a type is followed in, if at all. */
+function followOf(options: GraphOptions): (type: string) => Direction | null {
+  const given = options.types ?? [];
+  const impact = options.impact === true;
+  return (type) => {
+    if (given.length === 0) {
+      if (impact) {
+        return impactDirection(type);
+      }
+      return type === WEAK_LINK ? null : "out";
+    }
+    if (!given.includes(type)) {
+      return null;
+    }
+    return impact ? (impactDirection(type) ?? "in") : "out";
+  };
+}
+
+/**
+ * `graph.rs` `followed`: the `--type`s in the order given (a repeat once); else the impact table;
+ * else the twelve shared types, then the corpus's unknown declared types by name.
+ */
+function followedOf(corpus: MockCorpus, options: GraphOptions): FollowedType[] {
+  const follow = followOf(options);
+  const given = options.types ?? [];
+  if (given.length > 0) {
+    const seen = new Set<string>();
+    return given.flatMap((type) => {
+      const direction = follow(type);
+      if (seen.has(type) || direction === null) {
+        return [];
+      }
+      seen.add(type);
+      return [{ type, direction }];
+    });
+  }
+  if (options.impact === true) {
+    return IMPACT_LINK_TYPES.map(([type, direction]) => ({ type, direction }));
+  }
+  const shared: readonly string[] = LINK_TYPES;
+  const unknown = [...new Set(corpus.links.map((written) => written.type))]
+    .filter((type) => !shared.includes(type) && type !== WEAK_LINK)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return [...shared, ...unknown].map((type) => ({ type, direction: "out" }));
+}
+
+/** A link with its ends as the spec graph resolves them: the holder of its line, the nodes it lands on. */
+interface WalkLink {
+  written: MockLink;
+  source: MockNode;
+  targets: MockNode[];
+}
+
+interface GraphIndex {
+  /** Links by the node holding their line. */
+  from: Map<MockNode, WalkLink[]>;
+  /** Resolved links by each node they land on. */
+  into: Map<MockNode, WalkLink[]>;
+}
+
+const graphIndexes = new WeakMap<MockCorpus, GraphIndex>();
+
+function graphIndexOf(corpus: MockCorpus): GraphIndex {
+  const known = graphIndexes.get(corpus);
+  if (known !== undefined) {
+    return known;
+  }
+  const byName = new Map<string, MockNode[]>();
+  for (const node of allNodes(corpus)) {
+    byName.set(nameOf(node), [...(byName.get(nameOf(node)) ?? []), node]);
+  }
+  const from = new Map<MockNode, WalkLink[]>();
+  const into = new Map<MockNode, WalkLink[]>();
+  for (const written of corpus.links) {
+    const source = holderOfLine(corpus, written.path, written.line);
+    if (source === null) {
+      continue;
+    }
+    const targets = written.state === "resolved" && written.to !== null ? (byName.get(written.to) ?? []) : [];
+    const resolved: WalkLink = { written, source, targets };
+    from.set(source, [...(from.get(source) ?? []), resolved]);
+    for (const target of targets) {
+      into.set(target, [...(into.get(target) ?? []), resolved]);
+    }
+  }
+  const built: GraphIndex = { from, into };
+  graphIndexes.set(corpus, built);
+  return built;
+}
+
+/** The node and the ID sections nested in it (`spec_graph.rs` `within`). */
+function nested(corpus: MockCorpus, node: MockNode): MockNode[] {
+  return [node, ...fileOf(corpus, node).sections.filter((section) => within(section, node))];
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * `spec graph --json` as the browser reads it, uncut (`crates/specengine-cli/src/graph.rs`, the walk of
+ * `crates/specengine-core/src/check/spec_graph.rs`): breadth-first from the REF's holders (distance 0),
+ * each node visited once, a visited node's edge still listed; a node's links include its nested
+ * sections'; a node at distance `depth` is not expanded. Edges written in a left-out file (generated;
+ * archived without `archive`; never the REF's own files) are counted, not followed. Nodes by
+ * (distance, path, line); edges by (type, path, line, written), in link direction.
+ */
+export function graphOf(corpus: MockCorpus, options: GraphOptions): GraphView {
+  if (options.depth !== undefined && (!Number.isInteger(options.depth) || options.depth < 0)) {
+    throw refusal(`--depth ${String(options.depth)}: the depth is an integer of 0 or more`);
+  }
+  const answer = {
+    ref: options.ref,
+    impact: options.impact ?? false,
+    depth: options.depth ?? null,
+    archive: options.archive ?? false,
+    notes: [],
+    truncated: false,
+  };
+  const resolved = resolveRef(corpus, options.ref);
+  if ("reason" in resolved) {
+    return { ...answer, reason: resolved.reason, types: [], left_out: { generated: 0, tier3: 0 }, nodes: [], edges: [] };
+  }
+  const types = followedOf(corpus, options);
+  const follow = followOf(options);
+  const asked = new Set(resolved.holders.map((holder) => holder.path));
+  const leftOutEdges = new Map<MockLink, MockDocument>();
+  const admits = (written: MockLink): boolean => {
+    const file = indexOf(corpus).files.get(written.path);
+    if (file === undefined || asked.has(written.path)) {
+      return true;
+    }
+    const live = !file.node.generated && !file.node.archived;
+    const admitted = live || (file.node.archived && !file.node.generated && answer.archive);
+    if (!admitted) {
+      leftOutEdges.set(written, file);
+    }
+    return admitted;
+  };
+
+  const index = graphIndexOf(corpus);
+  const distance = new Map<MockNode, number>();
+  const queue: MockNode[] = [];
+  for (const holder of [...resolved.holders].sort(byPlace)) {
+    if (!distance.has(holder)) {
+      distance.set(holder, 0);
+      queue.push(holder);
+    }
+  }
+  const met = new Set<MockLink>();
+  for (let next = 0; next < queue.length; next += 1) {
+    const at = queue[next];
+    if (at === undefined) {
+      break;
+    }
+    const reached = distance.get(at) ?? 0;
+    if (options.depth !== undefined && reached >= options.depth) {
+      continue;
+    }
+    for (const node of nested(corpus, at)) {
+      const out = (index.from.get(node) ?? [])
+        .filter((link) => follow(link.written.type) === "out")
+        .map((link) => [link, link.targets] as const);
+      const back = (index.into.get(node) ?? [])
+        .filter((link) => follow(link.written.type) === "in")
+        .map((link) => [link, [link.source]] as const);
+      for (const [link, far] of [...out, ...back]) {
+        if (!admits(link.written)) {
+          continue;
+        }
+        met.add(link.written);
+        for (const reachedNode of far) {
+          if (!distance.has(reachedNode)) {
+            distance.set(reachedNode, reached + 1);
+            queue.push(reachedNode);
+          }
+        }
+      }
+    }
+  }
+
+  const leftOut: LeftOut = { generated: 0, tier3: 0 };
+  for (const file of leftOutEdges.values()) {
+    if (file.node.generated) {
+      leftOut.generated += 1;
+    } else {
+      leftOut.tier3 += 1;
+    }
+  }
+  const nodes: GraphNode[] = [...distance.entries()]
+    .sort(([a, da], [b, db]) => da - db || byPlace(a, b))
+    .map(([node, at]) => ({
+      id: node.id,
+      kind: node.kind,
+      title: node.title,
+      path: node.path,
+      line: node.line,
+      distance: at,
+      archived: node.archived,
+    }));
+  const edges: GraphEdge[] = corpus.links
+    .filter((written) => met.has(written))
+    .map((written) => {
+      const source = holderOfLine(corpus, written.path, written.line);
+      return {
+        src: source === null ? null : nameOf(source),
+        type: written.type,
+        dst: written.state === "resolved" ? written.to : null,
+        written: written.written,
+        path: written.path,
+        line: written.line,
+        state: written.state,
+        reason: written.reason,
+      };
+    })
+    .sort(
+      (a, b) =>
+        compareText(a.type, b.type) || compareText(a.path, b.path) || a.line - b.line || compareText(a.written, b.written),
+    );
+  return { ...answer, reason: null, types, left_out: leftOut, nodes, edges };
 }

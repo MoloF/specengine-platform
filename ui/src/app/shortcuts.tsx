@@ -36,15 +36,33 @@ const TREE_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
+/** The Graph's keys (docs/features/ui-graph.md "Keyboard"): the canvas, the tabs, the REF field. */
+const GRAPH_KEYS: readonly Shortcut[] = [
+  [["j", "Down arrow"], "Canvas: next box in the column"],
+  [["k", "Up arrow"], "Canvas: previous box in the column"],
+  [["Left arrow", "Right arrow"], "Canvas: the nearest box of the column beside; tabs: the other tab"],
+  [["Home", "End"], "Canvas: first or last box of the column"],
+  [["Enter"], "Canvas: open the box's details; REF field: show its graph"],
+  [["o"], "Canvas: open the box in the spec tree"],
+  [["c"], "Canvas: centre the graph on the box, options kept"],
+  [["Esc"], "Close the details, focus back on the box; a dialog: close it"],
+  [["?"], "Show this list"],
+];
+
 const INTRO: Partial<Record<SectionId, string>> = {
   inbox:
     "Letter keys act while focus is in the Inbox queue, outside a text field, without Ctrl, Alt or Cmd. The decision keys open the dialog of that decision for the selected proposal.",
   tree: "Keys act where focus is (the tree, the hits, the tabs), outside a text field, without Ctrl, Alt or Cmd. Arrows only move; Enter and clicks open, one history entry each.",
+  graph:
+    "Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd. One box holds the tab stop; arrows only move it. The List view holds every node and edge as text.",
 };
 
 function keysOf(section: SectionId | null): readonly Shortcut[] {
   if (section === "tree") {
     return TREE_KEYS;
+  }
+  if (section === "graph") {
+    return GRAPH_KEYS;
   }
   return INBOX_KEYS;
 }
@@ -53,7 +71,7 @@ export function ShortcutsDialog({ section = null, onClose }: { section?: Section
   const keys = keysOf(section);
   return (
     <Dialog title="Keyboard shortcuts" onClose={onClose}>
-      <p className="dialog-text">{INTRO[section === "tree" ? "tree" : "inbox"]}</p>
+      <p className="dialog-text">{INTRO[section === "tree" || section === "graph" ? section : "inbox"]}</p>
       <dl className="shortcut-list">
         {keys.map(([names, action]) => (
           <div key={action} className="shortcut">

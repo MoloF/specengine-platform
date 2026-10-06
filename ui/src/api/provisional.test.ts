@@ -5,6 +5,10 @@ import type {
   BundleLayers,
   BundleVia,
   BundleView,
+  FollowedType,
+  GraphEdge,
+  GraphNode,
+  GraphView,
   Proposal,
   SearchHit,
   SearchResults,
@@ -186,6 +190,70 @@ const KEYS = {
     links: true,
   } satisfies Record<keyof ShownNode, true>,
 };
+
+/**
+ * AC-02 of docs/features/ui-graph.md: `docs/canon/spec-cli-graph.md` "spec graph": JSON {ref,
+ * reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}; `types`
+ * [{type, direction}]; a node {id, kind, title, path, line, distance, archived}; an edge {src,
+ * type, dst, written, path, line, state, reason}.
+ */
+const GRAPH_KEYS = {
+  GraphView: {
+    ref: true,
+    reason: true,
+    impact: true,
+    types: true,
+    depth: true,
+    archive: true,
+    notes: true,
+    left_out: true,
+    truncated: true,
+    nodes: true,
+    edges: true,
+  } satisfies Record<keyof GraphView, true>,
+  FollowedType: { type: true, direction: true } satisfies Record<keyof FollowedType, true>,
+  GraphNode: { id: true, kind: true, title: true, path: true, line: true, distance: true, archived: true } satisfies Record<
+    keyof GraphNode,
+    true
+  >,
+  GraphEdge: {
+    src: true,
+    type: true,
+    dst: true,
+    written: true,
+    path: true,
+    line: true,
+    state: true,
+    reason: true,
+  } satisfies Record<keyof GraphEdge, true>,
+};
+
+const GRAPH_CITED: Record<keyof typeof GRAPH_KEYS, string> = {
+  GraphView: "ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges",
+  FollowedType: "type, direction",
+  GraphNode: "id, kind, title, path, line, distance, archived",
+  GraphEdge: "src, type, dst, written, path, line, state, reason",
+};
+
+describe("the graph's types (AC-02 of ui-graph)", () => {
+  it.each(Object.keys(GRAPH_KEYS) as (keyof typeof GRAPH_KEYS)[])("%s has exactly the canon's keys, in order", (name) => {
+    expect(Object.keys(GRAPH_KEYS[name]).join(", ")).toBe(GRAPH_CITED[name]);
+  });
+
+  it.each(Object.keys(GRAPH_KEYS))("%s cites `docs/canon/spec-cli-graph.md` \"spec graph\"", (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    const comment = source.slice(source.lastIndexOf("/**", at), at);
+    expect(comment).toContain('`docs/canon/spec-cli-graph.md` "spec graph"');
+  });
+
+  it("keeps a link type a plain string", () => {
+    const edge: Pick<GraphEdge, "type"> = { type: "any_project_type" };
+    const followed: Pick<FollowedType, "type"> = { type: "any_project_type" };
+    expect([edge.type, followed.type]).toEqual(["any_project_type", "any_project_type"]);
+    expect(source).not.toMatch(/closed table with the graph slice/);
+  });
+});
 
 /** The key lists as the cited headings write them, copied verbatim. */
 const CITED: Record<keyof typeof KEYS, string> = {

@@ -154,7 +154,7 @@ export interface LeftOut {
   tier3: number;
 }
 
-/** One link of a shown node; `type` becomes a closed table with the graph slice. Source: `docs/canon/spec-cli-graph.md` "spec show --links". */
+/** One link of a shown node; `type` is corpus vocabulary, a plain string (ADR-0031). Source: `docs/canon/spec-cli-graph.md` "spec show --links". */
 export interface ShownLink {
   type: string;
   origin: LinkOrigin;
@@ -255,6 +255,50 @@ export interface Snippet {
   segments: SnippetSegment[];
   cut_start: boolean;
   cut_end: boolean;
+}
+
+/** A link type and the way the walk follows it; `type` a plain string (ADR-0031). Source: `docs/canon/spec-cli-graph.md` "spec graph". */
+export interface FollowedType {
+  type: string;
+  direction: Direction;
+}
+
+/** A node the walk reached, at its distance from the REF's holders. Source: `docs/canon/spec-cli-graph.md` "spec graph". */
+export interface GraphNode {
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  distance: number;
+  archived: boolean;
+}
+
+/** An edge met from a reached node, in link direction; an unresolved end is null, `written` as written. Source: `docs/canon/spec-cli-graph.md` "spec graph". */
+export interface GraphEdge {
+  src: string | null;
+  type: string;
+  dst: string | null;
+  written: string;
+  path: string;
+  line: number;
+  state: LinkState;
+  reason: string | null;
+}
+
+/** `spec graph --json`: what the walk reached, or why REF names nothing (exit 1). Source: `docs/canon/spec-cli-graph.md` "spec graph". */
+export interface GraphView {
+  ref: string;
+  reason: string | null;
+  impact: boolean;
+  types: FollowedType[];
+  depth: number | null;
+  archive: boolean;
+  notes: string[];
+  left_out: LeftOut;
+  truncated: boolean;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 }
 
 /** One search hit. Source: `crates/specengine-cli/README.md` "Output and the cap". */

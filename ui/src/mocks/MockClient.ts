@@ -2,6 +2,7 @@ import {
   ClientError,
   DECIDED_ELSEWHERE,
   type BundleOptions,
+  type GraphOptions,
   type NodeOptions,
   type SearchOptions,
   type SpecEngineClient,
@@ -11,6 +12,7 @@ import type {
   BundleView,
   Decision,
   DecisionResult,
+  GraphView,
   Inbox,
   NodeView,
   Project,
@@ -19,9 +21,9 @@ import type {
   TreeView,
 } from "../api/types";
 import { fakeHex, stamp, type MockProject } from "./build";
-import { bundleOf, nodeViewOf, searchOf, treeOf } from "./corpus";
+import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
-import { largeDocuments } from "./harbor-sim/large";
+import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { SLOW_MS, type Scenario } from "./scenario";
 
@@ -71,7 +73,12 @@ export class MockClient implements SpecEngineClient {
     }
     if (scenario === "large") {
       const harbor = this.project("harbor-sim");
-      harbor.corpus = { ...harbor.corpus, documents: [...harbor.corpus.documents, ...largeDocuments()] };
+      const documents = largeDocuments();
+      harbor.corpus = {
+        ...harbor.corpus,
+        documents: [...harbor.corpus.documents, ...documents],
+        links: [...harbor.corpus.links, ...largeLinks(documents)],
+      };
     }
   }
 
@@ -105,6 +112,12 @@ export class MockClient implements SpecEngineClient {
   async getBundle(project: string, options: BundleOptions): Promise<BundleView> {
     await this.read();
     return bundleOf(this.project(project).corpus, options);
+  }
+
+  /** Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). */
+  async getGraph(project: string, options: GraphOptions): Promise<GraphView> {
+    await this.read();
+    return graphOf(this.project(project).corpus, options);
   }
 
   async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {

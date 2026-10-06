@@ -4,7 +4,8 @@
  * Contrast (WCAG 2.2 AA, checked by src/styles/tokens.test.ts): text primary, secondary and accent
  * at least 4.5:1 on every surface, primary also on the diff surfaces, on-accent on accent; focus
  * ring, control border and every status colour at least 3:1 on every surface; primary text on the
- * search highlight. Dark theme only.
+ * search highlight; the graph's edge and minimap colours at least 3:1 on every surface. Dark
+ * theme only.
  */
 :root {
   color-scheme: dark;
@@ -87,6 +88,24 @@
   --highlight-surface: #4a3a10;
   --highlight-line: var(--attention);
 
+  /* The graph canvas (docs/features/ui-graph.md): edges, boxes, the minimap; styled by role and
+     by a type's position, never by a type's name. Every --xy-* variable of React Flow's base.css
+     takes one of these roles (app.css). */
+  --graph-edge: #7f93b5;
+  --graph-edge-emphasis: var(--accent);
+  --graph-edge-width: 1.5;
+  --graph-edge-width-emphasis: 2.75;
+  --graph-box-surface: var(--surface-panel);
+  --graph-box-border: 1px solid var(--border-control);
+  --graph-box-border-selected: 2px solid var(--accent);
+  --graph-minimap-surface: var(--surface-panel);
+  --graph-minimap-node: #62789e;
+  --graph-minimap-mask: rgba(3, 8, 17, 0.55);
+  --graph-minimap-stroke-width: 1;
+  --graph-minimap-node-stroke-width: 0;
+  --graph-selection-surface: rgba(114, 178, 255, 0.12);
+  --graph-selection-border: 1px dotted var(--accent);
+
   /* Section diffs. */
   --diff-added-surface: #123628;
   --diff-removed-surface: #3d1c25;
@@ -110,6 +129,7 @@
   --line-height-tight: 1.25;
   --duration-fast: 120ms;
   --duration-normal: 200ms;
+  --duration-slow: 400ms;
   --z-header: 10;
   --z-dialog: 100;
   --target-min: 24px;
@@ -119,5 +139,6 @@
   :root {
     --duration-fast: 0ms;
     --duration-normal: 0ms;
+    --duration-slow: 0ms;
   }
 }

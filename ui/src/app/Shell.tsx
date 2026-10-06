@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
 import { useProjects } from "../api/queries";
 import type { Project } from "../api/types";
+import { GraphView } from "../graph/GraphView";
+import type { GraphMemory, GraphSettings } from "../graph/settings";
 import { InboxView } from "../inbox/InboxView";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
@@ -130,6 +132,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
   /** Retry was pressed on the home view's error panel; the answer takes away the Retry that had focus. */
   const homeRetried = useRef(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /** The Graph's options per project for this page's life; never in the hash (docs/features/ui-graph.md). */
+  const graphSettings = useRef(new Map<string, GraphSettings>());
+  const graphMemory = useMemo<GraphMemory>(
+    () => ({
+      recall: (project) => graphSettings.current.get(project),
+      remember: (project, settings) => {
+        graphSettings.current.set(project, settings);
+      },
+    }),
+    [],
+  );
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
 
@@ -229,6 +242,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tree") {
     view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
+  } else if (route.section === "graph") {
+    view = <GraphView key={route.project} project={route.project} nodeRef={route.id} memory={graphMemory} />;
   } else {
     const section = SECTIONS.find((candidate) => candidate.id === route.section);
     view = section !== undefined && section.slice !== null ? <NotBuilt section={section} /> : null;

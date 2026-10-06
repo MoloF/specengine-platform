@@ -1,9 +1,10 @@
 import { vi } from "vitest";
-import type { BundleOptions, NodeOptions, SearchOptions, SpecEngineClient, TreeOptions } from "../api/client";
+import type { BundleOptions, GraphOptions, NodeOptions, SearchOptions, SpecEngineClient, TreeOptions } from "../api/client";
 import type {
   BundleView,
   Decision,
   DecisionResult,
+  GraphView,
   Inbox,
   NodeView,
   Project,
@@ -11,7 +12,7 @@ import type {
   SearchResults,
   TreeView,
 } from "../api/types";
-import { aBundle, aNode, aSearchResults, aTreeNode, aTreeView } from "./builders";
+import { aBundle, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView } from "./builders";
 
 export const PROJECTS: Project[] = [
   { slug: "alpha", name: "Alpha" },
@@ -48,6 +49,16 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     ),
     getBundle: vi.fn<(project: string, options: BundleOptions) => Promise<BundleView>>((_project, options) =>
       Promise.resolve(aBundle(options.node_ids, { budget: options.budget ?? 2000 })),
+    ),
+    getGraph: vi.fn<(project: string, options: GraphOptions) => Promise<GraphView>>((_project, options) =>
+      Promise.resolve(
+        aGraphView([aGraphNode({ id: options.ref, distance: 0 })], [], {
+          ref: options.ref,
+          impact: options.impact ?? false,
+          depth: options.depth ?? null,
+          archive: options.archive ?? false,
+        }),
+      ),
     ),
     decideProposal: vi.fn((_project: string, id: string, decision: Decision): Promise<DecisionResult> => {
       const current = state.proposals.find((proposal) => proposal.id === id);

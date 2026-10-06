@@ -3,6 +3,7 @@ import type {
   BundleView,
   Decision,
   DecisionResult,
+  GraphView,
   Inbox,
   NodeView,
   Project,
@@ -42,11 +43,20 @@ export interface BundleOptions {
   budget?: number;
 }
 
+/** `spec graph`: REF, `--impact`, `--type T`..., `--depth N`, `--archive`. */
+export interface GraphOptions {
+  ref: string;
+  impact?: boolean;
+  types?: string[];
+  depth?: number;
+  archive?: boolean;
+}
+
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/specs/specengine-platform/07-interfaces.md` "3. HTTP (daemon)"). Only the
  * bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for tree,
- * nodes, bundle) resolves to its document, `reason` set; every other failure rejects with a
+ * nodes, bundle, graph) resolves to its document, `reason` set; every other failure rejects with a
  * ClientError carrying the daemon's status and message verbatim (exit 2: 503).
  */
 export interface SpecEngineClient {
@@ -64,6 +74,8 @@ export interface SpecEngineClient {
   search(project: string, options: SearchOptions): Promise<SearchResults>;
   /** MISSING ENDPOINT GET /api/projects/:p/bundle (07 §3 lacks it; rust-developer, daemon-read) */
   getBundle(project: string, options: BundleOptions): Promise<BundleView>;
+  /** MISSING ENDPOINT GET /api/projects/:p/graph (07 section 3 lists it; uncut; rust-developer, daemon-read "Out of scope") */
+  getGraph(project: string, options: GraphOptions): Promise<GraphView>;
   /** POST /api/projects/:p/proposals/:id/decision */
   decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;
 }

@@ -115,8 +115,9 @@ describe("source policy", () => {
     expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
   });
 
-  it("takes every href in the views of spec data from sectionHash (AC-07 of ui-tree-node)", () => {
-    const views = (path: string) => !(path.startsWith("/src/tree/") || path.startsWith("/src/inbox/")) || /\.test\.tsx?$/.test(path);
+  it("takes every href in the views of spec data from sectionHash (AC-07 of ui-tree-node, AC-12 of ui-graph)", () => {
+    const views = (path: string) =>
+      !(path.startsWith("/src/tree/") || path.startsWith("/src/inbox/") || path.startsWith("/src/graph/")) || /\.test\.tsx?$/.test(path);
     expect(offending(/\bhref=(?!\{sectionHash\()/, views)).toEqual([]);
   });
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-10-06
 ---
 
 # spec tree, spec graph, show --links
@@ -67,7 +67,7 @@ A line's tail: ` | status <s>`, ` | archived`, then ` | parent <written> danglin
 nodes <n>, edges <e>[; left out: …]
 ```
 
-Nodes by (distance, path, ord), then edges by (type, path, line, column) in link direction, `path:line` where written. JSON `{ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}`; `types` `[{type, direction}]` as followed (default: the 12 `LINK_TYPES` and every unknown declared type of the corpus, sorted); a node `{id, kind, title, path, line, distance, archived}`; an edge `{src, type, dst, written, path, line, state, reason}`.
+Nodes by (distance, path, ord), then edges by (type, path, line, column) in link direction, `path:line` where written. JSON `{ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}`; `types` `[{type, direction}]` as followed, in order: the `--type`s given (a repeat once); else `IMPACT_LINK_TYPES`; else the 12 `LINK_TYPES`, then every unknown declared type of the corpus by name; a node `{id, kind, title, path, line, distance, archived}`; an edge `{src, type, dst, written, path, line, state, reason}`.
 
 ## spec show --links
 

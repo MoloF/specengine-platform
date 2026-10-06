@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
 import { MockClient } from "./mocks/MockClient";
 import { scenarioFromSearch } from "./mocks/scenario";
+// React Flow's structural styles only (base.css, never style.css); its colours come from tokens.css.
+import "@xyflow/react/dist/base.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
 

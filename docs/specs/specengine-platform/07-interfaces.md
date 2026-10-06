@@ -132,7 +132,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 |---|---|
 | **Tree** | hierarchy Project → Domain → Mechanic → Rule; statuses, `sync`, open-proposal counter; search |
 | **Node** | CodeMirror (markdown) + preview; tabs: links (direct and reverse), bindings (symbol, signature, `sync`), history (git), proposals |
-| **Graph** | `@xyflow/react` + ELK/dagre; filter by link type; "impact" mode |
+| **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; hotkeys a/e/r/c/d |
 | **Tasks** | board: draft → analysis → review ⇄ changes_requested → ready → in_progress → in_review → done → accepted; brief, plan, open proposals, runs |
 | **Health** | "what is left", drift, budgets, W metrics |

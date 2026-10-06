@@ -90,6 +90,10 @@ const STATUS = [
   ...TASK.map((value) => `--task-${value}`),
   ...SYNC.map((value) => `--sync-${value}`),
   "--attention",
+  // The graph canvas (docs/features/ui-graph.md): edges and minimap nodes are read against the surfaces.
+  "--graph-edge",
+  "--graph-edge-emphasis",
+  "--graph-minimap-node",
 ];
 
 const pairs: [string, string, number][] = [

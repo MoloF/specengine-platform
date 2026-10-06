@@ -12,6 +12,12 @@ import { nodeKinds, specStatuses } from "./kinds";
 // dangling parent; a two-document parent cycle; a document over 40 000 characters, whole; links
 // in four states and mentions, both ways, with reasons; hostile markup in a title, a text and a
 // link's written form (escaped here so no source line spells a dialog call).
+//
+// The graph (docs/features/ui-graph.md "Mock"): a link of a type outside the twelve shared ones
+// (MEC-PILOTAGE `precedes` MEC-MOORING), a typed link in a nested section of MEC-TIDES
+// (RULE-TIDE-WINDOW `adopts` RULE-HIGH-WATER), an Impact link landing on a nested section
+// (MEC-NIGHT-PASSAGE `depends_on` MEC-TIDES#RULE-TIDE-WINDOW), the archived document's
+// `depends_on` MEC-TIDES.
 
 const SLUG = "harbor-sim";
 
@@ -162,7 +168,7 @@ function harborCorpus(): MockCorpus {
       parent: "DOM-BERTHS",
       archived: true,
       lines: [
-        ...frontMatter({ id: "MEC-OLD-QUAYS", kind: "mechanic", status: "accepted", parent: "DOM-BERTHS", rev: 1 }),
+        ...frontMatter({ id: "MEC-OLD-QUAYS", kind: "mechanic", status: "accepted", parent: "DOM-BERTHS", depends_on: "MEC-TIDES", rev: 1 }),
         "",
         "# Old quay layout",
         "",
@@ -282,7 +288,14 @@ function harborCorpus(): MockCorpus {
       status: "draft",
       parent: "MEC-FAIRWAY",
       lines: [
-        ...frontMatter({ id: "MEC-NIGHT-PASSAGE", kind: "mechanic", status: "draft", parent: "MEC-FAIRWAY", rev: 1 }),
+        ...frontMatter({
+          id: "MEC-NIGHT-PASSAGE",
+          kind: "mechanic",
+          status: "draft",
+          parent: "MEC-FAIRWAY",
+          depends_on: "MEC-TIDES#RULE-TIDE-WINDOW",
+          rev: 1,
+        }),
         "",
         "# Night passage",
         "",
@@ -338,6 +351,7 @@ function harborCorpus(): MockCorpus {
           status: "proposed",
           parent: "DOM-HARBOR",
           depends_on: "[[MEC-TIDES]]",
+          precedes: "[MEC-MOORING]",
           rev: 1,
         }),
         "",
@@ -398,6 +412,7 @@ function harborCorpus(): MockCorpus {
         "A ship with more than 11 m draft enters only from 90 minutes before",
         "to 60 minutes after high water.",
         "The window also bounds pilot boarding (MEC-PILOTAGE).",
+        "It adopts the high-water mark of RULE-HIGH-WATER.",
       ],
       sections: [{ id: "RULE-TIDE-WINDOW", kind: "rule", title: "Entry only inside the tide window" }],
     }),
@@ -505,6 +520,24 @@ function harborCorpus(): MockCorpus {
       link({ type: "mentions", origin: inline, written: "MEC-TIDE-TABLES", path: TIDE_FILE, line: linkAt(TIDE_FILE, "(MEC-TIDE-TABLES)"), to: "MEC-TIDE-TABLES" }),
       link({ type: "mentions", origin: inline, written: "MEC-PILOTAGE", path: TIDE_FILE, line: linkAt(TIDE_FILE, "(MEC-PILOTAGE)"), to: "MEC-PILOTAGE" }),
       link({ type: "depends_on", origin: frontmatter, written: "[[MEC-TIDES]]", path: PILOT_FILE, line: linkAt(PILOT_FILE, "depends_on:"), to: "MEC-TIDES" }),
+      link({ type: "precedes", origin: frontmatter, written: "MEC-MOORING", path: PILOT_FILE, line: linkAt(PILOT_FILE, "precedes:"), to: "MEC-MOORING" }),
+      link({ type: "adopts", origin: inline, written: "RULE-HIGH-WATER", path: TIDE_FILE, line: linkAt(TIDE_FILE, "high-water mark"), to: "RULE-HIGH-WATER" }),
+      link({
+        type: "depends_on",
+        origin: frontmatter,
+        written: "MEC-TIDES#RULE-TIDE-WINDOW",
+        path: "docs/spec/fairway/night.md",
+        line: linkAt("docs/spec/fairway/night.md", "depends_on:"),
+        to: "RULE-TIDE-WINDOW",
+      }),
+      link({
+        type: "depends_on",
+        origin: frontmatter,
+        written: "MEC-TIDES",
+        path: "docs/spec/archive/old-quays.md",
+        line: linkAt("docs/spec/archive/old-quays.md", "depends_on:"),
+        to: "MEC-TIDES",
+      }),
       link({
         type: "mentions",
         origin: inline,

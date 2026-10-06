@@ -2,6 +2,9 @@ import type {
   BundleItem,
   BundleLayers,
   BundleView,
+  GraphEdge,
+  GraphNode,
+  GraphView,
   Proposal,
   SearchHit,
   SearchResults,
@@ -201,6 +204,51 @@ export function aBundle(refs: string[], fields: Partial<BundleView> = {}): Bundl
     layers: someLayers({ targets: refs.map((name) => aBundleItem({ name })) }),
     tail: [],
     more: 0,
+    ...fields,
+  };
+}
+
+/** One reached node for tests: a live document. */
+export function aGraphNode(fields: Partial<GraphNode> & Pick<GraphNode, "id" | "distance">): GraphNode {
+  return {
+    kind: "widget",
+    title: `Title of ${fields.id ?? "the node"}`,
+    path: `docs/spec/${(fields.id ?? "node").toLowerCase()}.md`,
+    line: 1,
+    archived: false,
+    ...fields,
+  };
+}
+
+/** One edge for tests: resolved, written where its source is. */
+export function aGraphEdge(fields: Partial<GraphEdge> & Pick<GraphEdge, "src" | "type" | "dst">): GraphEdge {
+  return {
+    written: fields.dst ?? "R-404",
+    path: `docs/spec/${(fields.src ?? "node").toLowerCase()}.md`,
+    line: 3,
+    state: "resolved",
+    reason: null,
+    ...fields,
+  };
+}
+
+/** A whole graph answer for tests: every key present; two invented types followed outgoing. */
+export function aGraphView(nodes: GraphNode[], edges: GraphEdge[], fields: Partial<GraphView> = {}): GraphView {
+  return {
+    ref: nodes[0]?.id ?? "R-1",
+    reason: null,
+    impact: false,
+    types: [
+      { type: "zeta_type", direction: "out" },
+      { type: "alpha_type", direction: "out" },
+    ],
+    depth: 2,
+    archive: false,
+    notes: [],
+    left_out: { generated: 0, tier3: 0 },
+    truncated: false,
+    nodes,
+    edges,
     ...fields,
   };
 }

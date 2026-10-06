@@ -13,7 +13,7 @@ export const SECTIONS = [
     slice: null,
     about: "The business-logic tree and each node's text, links, bundle and proposals.",
   },
-  { id: "graph", label: "Graph", slice: "ui-graph", about: "Nodes and their links, with an impact mode." },
+  { id: "graph", label: "Graph", slice: null, about: "Nodes and their links, with an impact mode." },
   { id: "health", label: "Health", slice: "ui-health-round", about: "What is left, drift, budgets and W metrics." },
   {
     id: "questions",
