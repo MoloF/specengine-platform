@@ -13,13 +13,13 @@ ref: research-2026-09-28
 
 | Who | Where | What they can do |
 |---|---|---|
-| **Owner** | Web UI, CLI in a terminal, elicitation forms in Claude Code | everything: edit specs, decide proposals, prepare and approve tasks |
+| **Owner** | CLI in a terminal; Web UI, later forms in Claude Code (both only stage, ADR-0035) | everything: edit specs, decide proposals (confirmed on a terminal), prepare and approve tasks |
 | **Analyst agent** (`requirement-analyst`) | MCP | read; create proposals, questions and a draft plan |
 | **Developer agent** (the project's implementer, e.g. `rust-developer`) | MCP + code | read; claim a `ready` task; report discrepancies; place `@implements` markers |
 | **Tester / reviewer agent** | MCP + tests | read; place `@verifies`; report discrepancies |
 | **CI / pre-commit** | CLI | `spec check`, `spec verify` |
 
-Only `apply_proposal` writes to spec files, on an owner's action, or the owner directly in the UI/editor (an owner's edit is also a proposal, just applied instantly).
+Only `apply_proposal` writes to spec files, once the owner confirms on a terminal (ADR-0035; `docs/canon/decision-staging.md`). An owner's edit is also a proposal: `spec edit` on a terminal applies it at once; one made in the UI is staged like any decision.
 
 ## 1. Describe business logic top-down
 
@@ -83,11 +83,11 @@ The agent receives `PR-0042` and **keeps working** on the current spec or on the
 
 One queue in three places:
 
-**CLI** (shipped: `docs/canon/proposal-queue.md`, `agent-intake.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts` (a discrepancy: evidence, priced options); `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`. To come: edit and accept, clarification, defer.
+**CLI** (shipped: `docs/canon/proposal-queue.md`, `agent-intake.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts` (a discrepancy: evidence, priced options); `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`, the only confirmation of a decision (ADR-0035). To come: a staged choice shown before the question (`decision-staging`), edit and accept, clarification, defer.
 
-**Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting.
+**Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting. Accepting **stages** the choice; the card then shows the `spec approve PR` command to copy (`docs/canon/decision-staging.md`).
 
-**Inside a Claude Code session** (fast path): the `review_proposal` tool is marked `_meta["anthropic/requiresUserInteraction"]: true` and via MRTR/elicitation shows a form (option, comment) or URL mode with a link to the card in the UI. The model cannot answer for the human, and allow rules and hooks cannot bypass this.
+**Inside a Claude Code session** (later, 08 Phase 5): URL-mode elicitation opens the UI card, or a form stages the choice as the UI does; neither confirms. No agent tool stages (ADR-0035); a model cannot answer for the human.
 
 ### 3.4. What happens after the decision
 

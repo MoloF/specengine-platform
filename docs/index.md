@@ -19,6 +19,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a question or discrepancy approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
+- [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
 - [docs/canon/import-layout-verifier.md](canon/import-layout-verifier.md) Import layout: verifier, attribution, output · crates/specengine-eval · tier 2
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2
@@ -40,10 +41,12 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
+- [docs/features/decision-staging.md](features/decision-staging.md) Decision staging · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/features/proposal-kinds.md](features/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/task-package.md](features/task-package.md) Task package · specengine · draft
 - [docs/features/ui-health.md](features/ui-health.md) UI health: the check on mocks · ui · draft
+- [docs/features/ui-markdown.md](features/ui-markdown.md) UI markdown: rendered prose · ui, crates/specengine-eval · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

@@ -8,7 +8,7 @@ reviewed: 2026-10-06
 
 # specengine-http -- the read surface over HTTP
 
-A read-only HTTP adapter over the CLI library: the CLI's `--json` documents and a live tail of the queue's `events`, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The fourth adapter of 05 s1 (one core under CLI, MCP, HTTP and the CI check). Not ADR-0019's daemon: no sole writer, socket bridge, auto-start, gate or watcher (`spec serve` will launch it). No second consent channel: decisions stay on a terminal (ADR-0004, ADR-0012); no hook consults it (ADR-0006). Task spec: `docs/features/daemon-read.md`.
+A read-only HTTP adapter over the CLI library: the CLI's `--json` documents and a live tail of the queue's `events`, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The fourth adapter of 05 s1 (one core under CLI, MCP, HTTP and the CI check). Not ADR-0019's daemon: no sole writer, socket bridge, auto-start, gate or watcher (`spec serve` will launch it). No second consent channel: a decision is confirmed only on a terminal (ADR-0035); no hook consults it (ADR-0006). Task spec: `docs/features/daemon-read.md`.
 
 Dependencies: `specengine-cli` (never the store or `rusqlite`; the reverse edge is forbidden), `axum =0.8.9` (no default features; `http1`, `tokio`), `tokio` (+ `net`, `sync`), `futures-util =0.3.34`, `clap`, `serde`, `serde_json`; a default member; pins and licences: eval `build_graph.rs` (04 s6).
 
@@ -18,7 +18,7 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; the reverse edge 
 
 ## Fence
 
-Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`; any of them sent twice -> 403. No token until the first write endpoint (07 s3, ADR-0017). No `Access-Control-*` header on any response, `OPTIONS` included; `Cache-Control: no-store` on every one.
+Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`; any of them sent twice -> 403. No authentication, ever (ADR-0034): the fence stops other sites' pages and identifies no one. No `Access-Control-*` header on any response, `OPTIONS` included; `Cache-Control: no-store` on every one.
 
 Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 405 `Allow: GET`, ``method <M> is not served on <path>: only GET is served here``; the decision route POST only, else 405 `Allow: POST`, ``...: this path takes only POST (refused): decisions are made on a terminal``; an unknown path -> 404, whatever the method.
 
@@ -46,7 +46,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 One CLI library call per request (`answer.rs`): the process's `Env`, `Globals {root: Some(<root>)}`, `render_json`, the config read again first (a slug changed since the start -> 503 naming both; `/api/projects` -> 503 if any did). Exit 0 -> 200, the document; exit 1 -> 404, the exit-1 document (`reason` set: data, not an error); exit 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys, for 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, compact: the CLI's bytes without the final LF.
 
-**One door.** The decision POST reads no body and answers 403 ``decisions are made on a terminal: `spec approve PR-0004` or `spec reject PR-0004 --reason ...` in <root>; nothing changed`` (`...` is U+2026; an `:id` not `PR-` + digits prints `PR-...`). No handler calls `approve`, `reject`, `propose`, `import_state`, `export_*`, `init`, `index` or `check` (`tests/door.rs` scans `src`); the only writes are the reads' index refresh in the data directory (`docs/canon/architecture.md#storage`): nothing under any root changes.
+**One door.** Until staging ships (`docs/canon/decision-staging.md`), the decision POST reads no body and answers 403 ``decisions are made on a terminal: `spec approve PR-0004` or `spec reject PR-0004 --reason ...` in <root>; nothing changed`` (`...` is U+2026; an `:id` not `PR-` + digits prints `PR-...`). No handler calls `approve`, `reject`, `propose`, `import_state`, `export_*`, `init`, `index` or `check` (`tests/door.rs` scans `src`); the only writes are the reads' index refresh in the data directory (`docs/canon/architecture.md#storage`): nothing under any root changes.
 
 **Worktrees**: `tree`, `nodes`, `search`, `bundle` read the registered root's files on disk (uncommitted edits included, never `HEAD`); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch (`docs/canon/proposal-apply.md`).
 

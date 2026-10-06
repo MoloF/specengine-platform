@@ -8,7 +8,7 @@ reviewed: 2026-10-06
 
 # Agent intake: queue tools, questions, discrepancies
 
-Phase 2 slice 3 (`docs/features/agent-intake.md`): an agent proposes a change, asks a question or reports a discrepancy over MCP or the CLI, a queue record with evidence and priced options checked against what is decided and asked, and works on its working answer (ADR-0012). Only the queue is written (the CLI's data directory): nothing under the root, no commit, no proposal's state changed; the owner decides on a terminal (`proposal-{queue,apply}.md`). The stdio server writes through the CLI library per request, the interim `proposal-queue.md` "Store" grants until the daemon (ADR-0019). Code: core `intake` (kinds, enums, caps, checks), store `create_intake`, CLI and MCP `intake.rs`.
+Phase 2 slice 3: an agent proposes a change, asks a question or reports a discrepancy over MCP or the CLI, a queue record with evidence and priced options checked against what is decided and asked, and works on its working answer (ADR-0012). Only the queue is written (the CLI's data directory): nothing under the root, no commit, no proposal's state changed; the owner decides on a terminal (`proposal-{queue,apply}.md`). The stdio server writes through the CLI library per request, the interim `proposal-queue.md` "Store" grants until the daemon (ADR-0019). Code: core `intake` (kinds, enums, caps, checks), store `create_intake`, CLI and MCP `intake.rs`.
 
 ## Tools
 
@@ -66,7 +66,7 @@ Store: `create_intake(&NewIntake {kind, target_path, place, author, intake: Inta
 
 ## Review document
 
-The eleven keys after `updated_at` (then a record's five: `decision-record.md`): `target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked`; `recommendation` an integer, lists `[]` when absent (an update's `target_ids` `[target_id]`), scalars `null`. Text: `key: <n>`, an indented line per item: `[i] label | effect | price` (+ ` (recommended)`), `file[:lines][ qpath] | observed | documented`. New kinds: `diff`, `preview`, `conflict` `null`, no apply step run.
+The eleven keys after `updated_at` (then a record's five: `decision-record.md`; stages: `decision-staging.md`): `target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked`; `recommendation` an integer, lists `[]` when absent (an update's `target_ids` `[target_id]`), scalars `null`. Text: `key: <n>`, an indented line per item: `[i] label | effect | price` (+ ` (recommended)`), `file[:lines][ qpath] | observed | documented`. New kinds: `diff`, `preview`, `conflict` `null`, no apply step run.
 
 - **`--brief`** (`propose update`, `review`; `propose_change`, `get_proposal`): `base_text`, `new_text`, `diff`, `conflict` `null`; 20 `diagnostics` (`SHOW_TAIL_NAMES`), note `<k> more introduced finding(s): spec review PR`; text over `OUTPUT_CAP_CHARS`: the whole lines that fit (a longer first one cut), then `[truncated: <k> of <n> lines not shown: spec review PR]`.
 - **Inbox**: entries gain `severity`, `summary` (`null` for an update), `rationale` `null` for the new kinds; their last column `<severity>: <summary's first line>`, cut at 80 characters as the rationale.

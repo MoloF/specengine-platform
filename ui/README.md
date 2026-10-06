@@ -8,7 +8,7 @@ reviewed: 2026-10-06
 
 # ui -- the web UI
 
-The owner's screens over SpecEngine: home, queue, tasks, spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State: `ui-shell` (2026-10-05), `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` shipped on mocks, `daemon-read` on `specengine-http`, 2026-10-06; the rest: 08 s2 Phase 4. Screens' meaning: 07 s3 "Web UI — screens"; the owner's flow: 06 s3.3-3.4.
+The owner's screens over SpecEngine: home, queue, tasks, spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` shipped on mocks, `daemon-read` on `specengine-http` (2026-10-05, -06); the rest: 08 s2 Phase 4. Meaning: 07 s3 "Web UI — screens"; the owner's flow: 06 s3.3-3.4.
 
 ## Stack
 
@@ -17,49 +17,48 @@ A standalone pnpm project on strict TypeScript, packages in "Dependencies": no r
 ## Contract seam
 
 - One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 s3). The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`.
-- App code imports domain types only from `src/api/types.ts`, which re-exports `src/api/provisional.ts` today and the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
-- An endpoint the UI needs and 07 s3 lacks is named for `rust-developer` in the slice spec's "Open", never invented as a URL; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
-- The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID).
+- App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
+- An endpoint 07 s3 lacks is named for `rust-developer` in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
+- The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`docs/canon/decision-staging.md`, not built yet).
 
 ## Screen rules
 
 Every slice keeps these (UI tests, `ui_policy.rs`).
 
-- **Tokens**: `src/styles/tokens.css` holds every colour literal, as semantic roles, and the spacing, type, motion (0 under reduced motion) and `--target-min: 24px` tokens; dark only. WCAG 2.2 AA on every surface: text >= 4.5:1; focus ring, control border, statuses >= 3:1. `cannot-verify` has its own colour and icon.
+- **Tokens**: `src/styles/tokens.css` holds every colour literal (semantic roles) and the spacing, type, motion (0 if reduced) and `--target-min: 24px` tokens; dark only. WCAG 2.2 AA everywhere: text >= 4.5:1; focus ring, control border, statuses >= 3:1. `cannot-verify` has its own colour and icon.
 - **Status** never by colour alone: label and icon. An unknown value is a neutral badge with the raw text, sorted last; `kind`, `contour`, `role`, `profile`, spec statuses, link types (but `mentions`) stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests.
-- **States**: loading, a skeleton and `aria-busy`; empty, the meaning and the next step; error, the daemon's message verbatim and Retry.
-- **Dialogs** in-app only (`role="dialog"`, `aria-modal`, focus trap, Esc unless ending an IME composition, focus back to the trigger; a scrim click closes only on opt-in (the palette); no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while it is pending nothing closes or opens a dialog; a refusal keeps the dialog, the typed text and a `role="alert"` message; a proposal revised meanwhile is shown as changed and needs a fresh submit.
-- **Keyboard**: hotkeys act only with focus in their region, outside text fields, without modifiers (WCAG 2.1.4); `?` lists them. Except Cmd-K or Ctrl-K, the palette, anywhere: the shell's one `document` keydown listener, no other on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus is never left on `body`.
-- **Live regions**, polite for results and assertive for a 409, sit outside any inert subtree.
-- **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), nothing cut without a way to see it whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012).
-- **Canvas** (`@xyflow/react`, lazy; hand-written layout, no package): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text (owner question).
+- **States**: loading, a skeleton and `aria-busy`; empty, the meaning and the next step; error, the daemon's message verbatim and Retry. Live regions (polite for results, assertive for a 409) sit outside any inert subtree.
+- **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed, needing a fresh submit.
+- **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4); `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's one `document` keydown listener, none other on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never left on `body`.
+- **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), nothing cut without a way to see it whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012). Prose renders as markdown only via `src/markdown/` (ADR-0036, not built yet: `ui-markdown`): raw HTML as text, an anchor only where the links read resolved one, Source a toggle away.
+- **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
 - **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home); "Mock data" on every route while the mock serves; an unbuilt section says "Not built yet: arrives in slice `<slug>`"; a root error boundary and one per view.
 
 ## Dependencies
 
-The owner's allowlist of 2026-10-05: exactly these 15 names in `package.json` (both dependency lists), each at its version below; `packageManager` `pnpm@10.28.2`. `ui_policy.rs` compares this table with `package.json` and the lockfile.
+The owner's allowlist: the 15 below (2026-10-05), plus `react-markdown` 10.1.0 and `remark-gfm` 4.0.1 (ADR-0036), rows added when `ui-markdown` installs them. `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`. `ui_policy.rs` checks the table against `package.json` and the lockfile.
 
 | Package | Version | Role |
 |---|---|---|
 | `react` | 19.3.0 | runtime |
 | `react-dom` | 19.3.0 | runtime |
 | `@tanstack/react-query` | 5.104.0 | data fetching |
-| `@xyflow/react` | 12.12.0 | graph view (from `ui-graph`) |
+| `@xyflow/react` | 12.12.0 | graph view |
 | `vite` | 8.3.1 | dev server, build |
-| `@vitejs/plugin-react` | 6.1.1 | React transform for Vite |
+| `@vitejs/plugin-react` | 6.1.1 | React for Vite |
 | `typescript` | 6.0.3 | type check |
 | `@types/react` | 19.3.0 | types |
 | `@types/react-dom` | 19.3.0 | types |
 | `eslint` | 10.11.0 | lint, flat config |
-| `typescript-eslint` | 8.70.1 | TS lint rules and parser |
+| `typescript-eslint` | 8.70.1 | TS lint |
 | `eslint-plugin-react-hooks` | 7.1.1 | hooks rules |
 | `vitest` | 5.0.2 | test runner |
 | `@testing-library/react` | 16.3.3 | component tests; peer `@testing-library/dom` in the lockfile only, never imported |
 | `jsdom` | 29.1.1 | test DOM |
 
-**Held back.** TypeScript 7 (outside `typescript-eslint`'s peer range), jsdom 30 (Node >= 24.15; the laptop has 24.14): an owner decision after a Node upgrade.
+**Held back.** TypeScript 7 (outside `typescript-eslint`'s peer range), jsdom 30 (Node >= 24.15; the laptop has 24.14): the owner decides after a Node upgrade.
 
-**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches included, is an owner decision recorded in this table. Dependency install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
+**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
 
 ## Gates
 
@@ -72,18 +71,18 @@ Run in `ui/` by the UI roles, each exits on its own:
 | `pnpm build` | `tsc --noEmit` and `vite build` into `ui/dist/` (git-ignored) |
 | `pnpm test` | `vitest run`, never watch; a test calling `console.error` or `console.warn` fails |
 
-From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. The pre-commit hook and CI do not run the UI gates.
+From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. Neither the pre-commit hook nor CI runs the UI gates.
 
 ## Laptop rules
 
 - Role runs never start `pnpm dev`, `vite`, `vite preview`, bare `vitest` or any watcher: they do not exit. Wrap each gate: `perl -e 'alarm 600; exec @ARGV' pnpm --dir ui test`.
 - Vitest: `watch: false`, at most 2 workers, in the config.
-- The docs walk (`specengine-store` `walk`) descends `node_modules`, symlinks skipped: cheap only in pnpm's isolated layout.
+- The docs walk descends `node_modules`, symlinks skipped: cheap only in pnpm's isolated layout.
 
 ## Owner's manual steps
 
-1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change (`ui/node_modules` on Spotlight's privacy list: optional).
-2. `specengine-http --root <project>`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up; about six tabs exhaust Chrome's HTTP/1.1 per-host limit. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes); projects `harbor-sim`, `ledger-api`, decisions in memory until a reload.
+1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
+2. `specengine-http --root <project>`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes); projects `harbor-sim`, `ledger-api`, decisions in memory until a reload.
 3. The slice's own check list: its spec, "Owner's manual check".
 
 ## Roles here

@@ -12,13 +12,13 @@ reviewed: 2026-10-06
 
 ## Consent
 
-`spec approve`, `spec reject` and `spec import-state` (`docs/canon/queue-backup.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none, the owner's `!` commands presumably neither: decide in a separate terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
+`spec approve`, `spec reject` and `spec import-state` (`queue-backup.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none, nor presumably the owner's `!` commands: decide in another terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
 
 - `apply PR-0001 to <path from the worktree top> on <branch> in <worktree> (applies|rebases)? [y/N]`, after steps 2–6 and the identity;
 - `complete PR-0001 by its commit <sha> on <branch> in <worktree>? [y/N]` (an `open` proposal's own commit; `in` the current project root when the lookup read the current repository);
 - `reject [approved ]PR-0001 (<target_id> in <path> on <branch> in <worktree>)? [y/N]`.
 
-A lookup git could not make is printed above the question (`note: cannot tell whether …`) and again among the outcome's notes. A pseudo-terminal passes: a speed bump, not proof of presence (the consent tool: 08 §3 AC-4).
+A lookup git could not make is printed above the question (`note: cannot tell whether …`) and again among the outcome's notes. A pseudo-terminal passes: a speed bump, not proof of presence (ADR-0034). Staged choices: `decision-staging.md`.
 
 ## Apply steps
 

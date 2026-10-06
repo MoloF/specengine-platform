@@ -8,20 +8,20 @@ reviewed: 2026-10-05
 
 # SpecEngine
 
-A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, later a web UI. The goal: the context cost of a task does not grow with the size of the project.
+A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phases 0-1 done (reading core: parser, index, CLI and MCP reads, graph, bundle, `spec check` 1-4, sharded index, layer A identity, pilot W; 2026-10-05); **Phase 2** in progress, slices 1-5, `daemon-read` shipped; UI on the daemon (ADR-0033). Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phases 0-1 done (reading core: parser, index, CLI and MCP reads, graph, bundle, `spec check` 1-4, shards, layer A, pilot W; 2026-10-05); **Phase 2** in progress, slices 1-5, `daemon-read` shipped; UI on the daemon (ADR-0033). Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
-`CLAUDE.md` → `docs/index.md` → at most three documents. A third step is a defect of the index or the canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
+`CLAUDE.md` → `docs/index.md` → at most three documents. A third step is a defect of the index or canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
 
 ## Rules that must not be broken
 
 Full list with reasons: `docs/canon/architecture.md`; every rule changes only through a new ADR.
 
 - The source of truth is files in the project's git; SQLite is an index and a queue, outside the repository (ADR-0001, ADR-0003).
-- Spec files are written only by `apply_proposal` on the owner's action, where the proposal was raised, as a separate commit with provenance (ADR-0004, ADR-0005, ADR-0032).
+- Spec files are written only by `apply_proposal` once the owner confirms on a terminal, where the proposal was raised, as a separate commit with provenance (ADR-0004, ADR-0005, ADR-0032, ADR-0035).
 - **Nothing is blocked by a discrepancy.** The only control point is the owner approving a task; the hook is closed when the daemon is unavailable (ADR-0006, ADR-0012).
 - The core knows no subject domain: project specifics live in its `specengine.toml` and importer (ADR-0008).
 - IDs are Latin-only, no mixed scripts; legacy IDs are aliases (ADR-0009).

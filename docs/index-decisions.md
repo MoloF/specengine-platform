@@ -44,3 +44,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0031](decisions/ADR-0031.md) Kinds and process rules are project config · architecture · accepted
 - [ADR-0032](decisions/ADR-0032.md) A proposal applies where it was raised · architecture · accepted
 - [ADR-0033](decisions/ADR-0033.md) UI starts before the daemon · ui · accepted
+- [ADR-0034](decisions/ADR-0034.md) No authentication inside SpecEngine · architecture · accepted
+- [ADR-0035](decisions/ADR-0035.md) Staged anywhere, confirmed only on a terminal · architecture · accepted
+- [ADR-0036](decisions/ADR-0036.md) UI markdown through react-markdown and remark-gfm · ui · accepted

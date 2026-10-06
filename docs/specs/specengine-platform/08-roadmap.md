@@ -29,11 +29,11 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: `apply_proposal` for `update`: `docs/canon/proposal-{queue,apply}.md`), `ui-shell` (Phase 4 on mocks, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake: `docs/canon/agent-intake.md`), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; the owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records: `docs/canon/decision-record.md`), `daemon-read` (`crates/specengine-http/README.md`) shipped 2026-10-06; next, in order: `proposal-kinds` (`create`: `docs/features/proposal-kinds.md`; then `interpretation`, `amendment`, `decision`), `task-package` (ADR-0027), `ui-live`.
+- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4 on mocks, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; the owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06 (canon: the index); next, in order: `proposal-kinds` (`create`; then `interpretation`, `amendment`, `decision`), `task-package` (ADR-0027), `decision-staging` (ADR-0035), `ui-live`; UI-only, beside them: `ui-markdown`, `ui-health`.
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `task …`, `round new/answer`.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
-- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`; `review_proposal`/`approve_task` with `requiresUserInteraction` and the consent-tool requirements of 07 §1.2 (the Phase 0 `review_proposal` is a demo skeleton, `crates/specengine-mcp/README.md`).
+- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE (reads: `specengine-http`); agents' MCP is the `spec mcp` stdio bridge to it (MCP HTTP after MVP, 07 s1.1).
 - **Plugin** (06 §8; root `README.md`): hooks (07 §4, `gate` fail-closed), task prompts, stack-neutral roles, `/feature`; stack roles from a stack-profile plugin or the project (ADR-0027).
 - Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality: a synthetic non-Rust fixture in tests (07 §1.2, P2-5).
@@ -48,13 +48,13 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 4. Web UI — ~2-3 weeks
 
-Screens and SSE per 07 §3, begun on mocks before the daemon (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks` and `ui-home` 2026-10-06; next `ui-health`, `ui-live`, `ui-round` (endpoints: their "Open").
+Screens and SSE per 07 §3, begun on mocks before the daemon (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks` and `ui-home` 2026-10-06; next `ui-markdown` (ADR-0036), `ui-health`, `ui-live`, `ui-round` (endpoints: their "Open").
 
 ### Phase 5. Maturity — ~2 weeks
 
 - Full migration of the remaining pilot projects (A migrates first in Phase 2-3, then B; order: Phase 1).
 - A `shared` project (common library) linked from several projects.
-- Metrics and compaction, notifications, URL-mode elicitation onto UI cards.
+- Metrics and compaction, notifications, URL-mode elicitation onto UI cards (staging only, ADR-0035).
 - Optional: queue export to Beads/Task Master, spec digest into `AGENTS.md`/`CLAUDE.md` for external reviewers. No vector search (04 §2.1).
 
 ### Phase 6. Planning: roadmap and pool — ~2-3 weeks (after the main work)

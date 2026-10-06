@@ -41,14 +41,14 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 Phase 2 contract checks (the `task-package` feature spec expands them): P2-1 `get_task` `structuredContent` = `spec task show --json`; P2-2 the pinned schema snapshot fails on a key removed or renamed without a bump; P2-3 a source scan (as `crates/specengine-core/tests/check_genre.rs`) finds no `cargo`, `nextest`, `clippy`, `bevy`, `pnpm`, `npm`, `nest`, `react`, `jira` or this repository's role names in the package and brief sources or `plugin/**`; P2-4 fixtures `spec-a` and `spec-b` give the same key set and `schema_version`; P2-5 a synthetic non-Rust fixture whose records hold no stack words yields none in the JSON or `content`; P2-6 changing `profile` changes only that value; P2-7 `claim_task` with `role = "nest-developer"` succeeds, stored verbatim; P2-8 no key starts with `block` (ADR-0012); P2-9 two projects in one daemon never see each other's tasks, deleting one database leaves the other intact, nothing is written to SpecEngine's repository; P2-10 `get_task` at the 10k budget stays under 48,000 characters; P2-11 the package alone carries the verbatim title, goal, criteria text, target titles and open questions; P2-12 a project without a profile runs `get_task` → `claim_task` → `report_run` → `complete_task` on generic prompts at MCP level.
 
-**Human tools** (`owner` set, `_meta["anthropic/requiresUserInteraction"]: true`):
+**Human tools** (`owner` set, `_meta["anthropic/requiresUserInteraction"]: true`; 08 Phase 5) only **stage** (ADR-0035, `docs/canon/decision-staging.md`): `spec approve|reject` on a terminal confirms, so no form carries consent (no nonce, TTL or sealed `requestState` binding).
 
 | Tool | What it does |
 |---|---|
-| `review_proposal` | MRTR/elicitation: an "option / comment / decision" form or URL mode to the UI card. The human writes the decision |
-| `approve_task` | same, for moving a task to `ready` |
+| `review_proposal` | URL-mode elicitation to the UI card, or a form (option, note) staging the human's choice |
+| `approve_task` | the same for a task; `spec task approve` on a terminal confirms |
 
-The MCP server remembers nothing between calls: the owner's decision is stored by the proposal queue when given, never assumed remembered by the server; a `cancel` records nothing and leaves the proposal pending (the agent does not re-open the form on its own). **A consent tool must** (none of this is in the Phase 0 `review_proposal` skeleton yet): bind the sealed `requestState`'s associated data to the proposal revision / patch hash; carry a single-use nonce persisted in the queue; expire (TTL); share one `requestState` key across processes once a multi-process HTTP server exists; on cancellation send `notifications/cancelled` for the outstanding `elicitation/create`.
+The MCP server remembers nothing between calls; a `cancel` stages nothing (the agent does not re-open the form on its own), sending `notifications/cancelled` for the outstanding `elicitation/create`. No agent tool stages; `get_proposal` shows a stage.
 
 ### 1.3. Resources (for `@`-mentions)
 
@@ -88,8 +88,8 @@ spec propose update ID --base HASH --text-file F|- --rationale T
 spec propose question|discrepancy …     # shipped: docs/canon/agent-intake.md
 spec inbox [--all]                       # to come: --severity, --task
 spec review PR-ID                        # to come: interactive edit/changes/defer
-spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF]  # a terminal's [y/N]
-spec reject PR-ID --reason ...
+spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF]  # a terminal's [y/N]; no flag: the staged choice
+spec reject PR-ID --reason ...          # --reason optional when a reject is staged (decision-staging)
 
 # tasks
 spec task new --nodes ID… [--title ...] [--contour feature]
@@ -118,9 +118,9 @@ spec export index [--stdout]                         # [paths] index by its regi
 
 ## 3. HTTP (daemon)
 
-- `127.0.0.1:7777`, `Origin` check; a local token (`~/.config/specengine/token`) with the first write endpoint. Built, reads only: `specengine-http` (`crates/specengine-http/README.md`), a Host, Origin and Sec-Fetch-Site fence.
+- `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads only: `specengine-http` (`crates/specengine-http/README.md`).
 - `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|inbox|proposals/:id` (built); `graph|tasks|symbols|health` to come
-- `POST /api/projects/:p/proposals/:id/decision` (today always 403: decided on a terminal), `/tasks/:id/transition`, `/nodes/:id` (owner edit)
+- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (`decision-staging`; today POST 403), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)
 - `/` — Web UI (embedded via `rust-embed`)
@@ -133,9 +133,9 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 |---|---|
 | **Home** | per project: tasks waiting for approval or changed since, the queue's counts and first items; a Cmd-K palette to a section, task, proposal, node or project (`docs/features/ui-home.md`) |
 | **Tree** | hierarchy Project → Domain → Mechanic → Rule; statuses, `sync`, open-proposal counter; search |
-| **Node** | CodeMirror (markdown) + preview; tabs: links (direct and reverse), bindings (symbol, signature, `sync`), history (git), proposals |
+| **Node** | rendered markdown, Source a toggle away (ADR-0036; editing: CodeMirror later); tabs: links (direct and reverse), bindings (symbol, signature, `sync`), history (git), proposals |
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
-| **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; hotkeys a/e/r/c/d |
+| **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
 | **Health** | "what is left", drift, budgets, W metrics |
 | **Round** | question sheet in domain language for printing and sending + answer paste |

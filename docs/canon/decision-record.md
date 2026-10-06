@@ -8,13 +8,13 @@ reviewed: 2026-10-06
 
 # Decision records: a question or discrepancy approved
 
-Phase 2 slice 5 (`docs/features/decision-apply.md`): `spec approve` on a `question` or `discrepancy` (`ProposalKind::decides()`) makes the owner's choice an accepted decision record in the project's own shape: one new file and one `spec: apply PR-...` commit in the recorded worktree (ADR-0004, ADR-0005, ADR-0032), the queue and the data directory; nothing else. `reject --reason` still settles one with an answer and no record ("Reject"). The engine names no prefix, directory or heading (ADR-0008): the project's table and tracked template do. Updates, consent, completion: `proposal-apply.md`; intake: `agent-intake.md`. Code: core `record`; store `queue.rs`, `worktree.rs`; CLI `decide.rs`, `apply.rs` (dispatch, reject), `preflight.rs` (completion).
+Phase 2 slice 5 (`decision-apply`): `spec approve` on a `question` or `discrepancy` (`ProposalKind::decides()`) makes the owner's choice an accepted decision record in the project's own shape: one new file and one `spec: apply PR-...` commit in the recorded worktree (ADR-0004, ADR-0005, ADR-0032), the queue and the data directory; nothing else. `reject --reason` still settles one with an answer and no record ("Reject"). The engine names no prefix, directory or heading (ADR-0008): the project's table and tracked template do. Updates, consent, completion: `proposal-apply.md`; intake: `agent-intake.md`. Code: core `record`; store `queue.rs`, `worktree.rs`; CLI `decide.rs`, `apply.rs` (dispatch, reject), `preflight.rs` (completion).
 
 ## Config
 
 ```toml
 [decision_records]
-prefix   = "DEC"                    # an [ids] prefix: shape number, scope project
+prefix   = "DEC"                    # an [ids] prefix
 dir      = "docs/records/DEC"       # root-relative, inside the walk
 template = "templates/decision.md"  # tracked; may lie outside the walk
 ```
@@ -43,7 +43,7 @@ Slots are replaced in **one left-to-right pass**; a value is never scanned again
 
 ## Flags
 
-`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on an update -> exit 2. First, after `main`'s terminal check, no event:
+`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on an update -> exit 2. First, after the terminal check, no event (a stage too: `decision-staging.md`):
 
 - exit 2: `--option` on a question; `--answer` on a discrepancy; an open discrepancy without `--option` (naming the range, `0-2`); no ID target and no `--canon`; `--canon` not `ID`, `ID#SECTION` or `path#anchor` (core `parse_canon`); a blank `--answer`;
 - exit 1: `--option` past the options (naming `0-2`); `--answer` over 2 048 bytes, `--canon` over 512; an escaped character in any free-text source, named (``options[1].label: holds U+202E: a decision record never carries it; nothing changed``).

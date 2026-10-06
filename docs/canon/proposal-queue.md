@@ -8,7 +8,7 @@ reviewed: 2026-10-06
 
 # Proposal queue: commands, states, store
 
-Phase 2 slice 1: an agent or the owner proposes a change, touching no file; the owner lists, reviews and decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a whole file), applied as one commit where it was raised (ADR-0032; how: `proposal-apply.md`). Kinds `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; approved as decision records: `decision-record.md`. Library `propose`, `inbox`, `review`, `approve`, `reject` (`&Env, &Globals, &<Command>Request`, `git: GitEnv`, writers `now`; approve, reject a `Consent`); `main.rs` adds the terminal check, the prompt, the clock. Not yet: re-targeting, `has_open_proposal`, tasks (08 Phase 2).
+Phase 2 slice 1: an agent or the owner proposes a change, touching no file; the owner lists, reviews, decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a whole file), applied as one commit where it was raised (ADR-0032; how: `proposal-apply.md`). Kinds `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; approved as decision records: `decision-record.md`. Library `propose`, `inbox`, `review`, `approve`, `reject` (`&Env, &Globals, &<Command>Request`, `git: GitEnv`, writers `now`; approve, reject a `Consent`); `main.rs` adds the terminal check, the prompt, the clock. Not yet: re-targeting, `has_open_proposal`, tasks, stages (`decision-staging.md`).
 
 ## Commands
 
@@ -33,7 +33,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 ## Place, IDs, repositories
 
-`PR` taken in `[ids]` (a prefix or `aliases_from`) -> exit 2. The queue is the project's `<slug>.db` (CLI README "Database"), shared by every worktree and every repository of the slug; the current repository is the root's git common dir. An ID is `PR-` and 4 or more digits as written by the queue (`PR-9999`, then `PR-10000`); a look-alike (U+0420 for `P`) -> exit 2 naming the Latin form; other text (`PR-1`, `PR-00001`) -> exit 1 `no proposal …`. Another repository's proposal (same slug) -> exit 2 naming it, `run the command there`. One whose recorded common dir no longer exists is an **orphan**: review and approve exit 2 `` `PR` belongs to the repository <dir> (worktree <w>), which no longer exists: `` + the inbox note's hint; only reject takes it (`proposal-apply.md` "Reject").
+`PR` taken in `[ids]` (a prefix or `aliases_from`) -> exit 2. The queue is the project's `<slug>.db` (CLI README "Database"), shared by every worktree and repository of the slug; the current repository is the root's git common dir. An ID is `PR-` and 4 or more digits as written by the queue (`PR-9999`, then `PR-10000`); a look-alike (U+0420 for `P`) -> exit 2 naming the Latin form; other text (`PR-1`, `PR-00001`) -> exit 1 `no proposal …`. Another repository's proposal (same slug) -> exit 2 naming it, `run the command there`. One whose recorded common dir no longer exists is an **orphan**: review and approve exit 2 `` `PR` belongs to the repository <dir> (worktree <w>), which no longer exists: `` + the inbox note's hint; only reject takes it (`proposal-apply.md` "Reject").
 
 ## Exit codes
 
@@ -41,7 +41,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after a crash in it. Each change is one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10). A closed set; `specengine-http` streams it live (SSE).
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after a crash in it. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10). A closed set; `specengine-http` streams it (SSE).
 
 ## Store
 
@@ -57,7 +57,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 `id`: highest number + 1, in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)` (07 s1.2); `author` JSON `{type: human|agent, role, model, run}`; `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
 - **Schema**: the queue's own steps on `PRAGMA user_version` (0 to 3, `QUEUE_SCHEMA_VERSION`; higher -> exit 2, nothing changed), one `Immediate` transaction; step 2's intake columns, `create_intake`, the intake kinds' `Invalid`: `agent-intake.md` "Stored"; step 3's record columns (40 in all), their ops, `Issued`: `decision-record.md`. The index leaves them and `user_version` alone.
-- **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, the CLI and MCP processes write directly, `specengine-http` reads.
+- **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, CLI and MCP processes write directly, `specengine-http` reads.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
 
 `trait ProposalQueue`, `SqliteQueue::open(db, project)`; `QueueError {Store, SchemaTooNew, Unknown, Status, Invalid, Changed, Issued}` (`Status` names an applied one's commit; `Store`, `SchemaTooNew` exit 2). `Seen {status, updated_at}` (`Proposal::seen()`): the state a run read, its compare-and-set key.

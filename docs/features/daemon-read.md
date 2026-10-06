@@ -12,7 +12,7 @@ shipped: 2026-10-06
 
 The UI (ADR-0033) read a mock: the owner saw no real tree or queue in a browser, and an agent's question reached him only on a terminal. `specengine-http`, a read-only HTTP adapter over the CLI library, serves the CLI's documents and a live tail of the queue's `events`: the fourth adapter of 05 s1. It is not ADR-0019's daemon (sole writer, socket bridges, auto-start, the gate) and must not become a second consent channel: decisions stay on the terminal (ADR-0004, ADR-0012). After `decision-apply` (queue schema 3); every binary from one commit.
 
-Working answers (orchestrator, 2026-10-06; no new ADR): Q1 no token until the first write endpoint, the fence instead (ADR-0017); Q2 a separate binary, the CLI keeps no async runtime (`CLI_FORBIDDEN`), `spec serve` later launches it; Q3 repeated `--root`; Q4 no decision from the UI ("Open"); Q5 provisional types corrected, a key-set test; Q6 events per project. **D1** inbox entries gain `target_ids`, CLI and daemon alike (closed `ui-tree-node` "Open"); **D2** the snippet structure, snake_case. Dependencies approved by the owner 2026-10-06.
+Working answers (orchestrator, 2026-10-06; no new ADR): Q1 no token, the fence instead (resolved: no authentication, ever, ADR-0034); Q2 a separate binary, the CLI keeps no async runtime (`CLI_FORBIDDEN`), `spec serve` later launches it; Q3 repeated `--root`; Q4 no decision from the UI (resolved: staged in the UI, confirmed on a terminal, ADR-0035); Q5 provisional types corrected, a key-set test; Q6 events per project. **D1** inbox entries gain `target_ids`, CLI and daemon alike (closed `ui-tree-node` "Open"); **D2** the snippet structure, snake_case. Dependencies approved by the owner 2026-10-06.
 
 ## Description and interactions
 
@@ -52,11 +52,11 @@ Setup: git copies of `fixtures/spec-a` (A) and `fixtures/spec-b` (B), a scratch 
 
 ## Out of scope
 
-Decisions from the UI; 07 s3's token; `spec serve`, the `spec mcp` bridge, the sole writer, a socket, auto-start; a persistent registry, `--config`; serving `ui/dist` (`rust-embed`; CI builds no UI); file-change, drift events; `graph`, `tasks`, `tasks/:id`, `symbols`, `health`, `/mcp`; the hook gate; generated types.
+Decisions from the UI (`decision-staging`); 07 s3's token (retired, ADR-0034); `spec serve`, the `spec mcp` bridge, the sole writer, a socket, auto-start; a persistent registry, `--config`; serving `ui/dist` (`rust-embed`; CI builds no UI); file-change, drift events; `graph`, `tasks`, `tasks/:id`, `symbols`, `health`, `/mcp`; the hook gate; generated types.
 
 ## Open
 
-- **Q4, owner**: how a decision may come from the UI -- the terminal confirming staged decisions, or WebAuthn/Touch ID: an ADR before any write endpoint, the token with it; consent stays terminal-only, never `--yes`. The decision dialog collects a note before its 403; a copy-the-command flow (as Tasks) may fit better.
+- **Q4, owner**: resolved 2026-10-06 -- staged in the UI, confirmed on a terminal (ADR-0035), no authentication (ADR-0034): `docs/features/decision-staging.md`.
 - AC-11, the owner's manual check.
 
 ## Implementation
