@@ -12,7 +12,7 @@ adrs: [ADR-0034, ADR-0035]
 
 The owner reads a proposal best in the browser, but the UI cannot decide: the decision POST answers 403 and the card offers a command to copy (`crates/specengine-http/README.md` "One door"). The owner decided (2026-10-06): no authentication inside SpecEngine, ever (ADR-0034); a decision is **staged anywhere, confirmed only on a terminal** (ADR-0035). The behaviour is canon already, marked not built: `docs/canon/decision-staging.md` (read it first; this spec does not repeat it). This slice builds it: one optional staged choice per open proposal, written by `specengine-http`, shown and confirmed by the existing `spec approve|reject` `[y/N]`.
 
-**Order**: `proposal-kinds`, `task-package` (queue schema 4, 41 proposal columns, review document 43 keys), this, `ui-live`. Roles: `rust-developer` store, CLI library, `specengine-http`, MCP `mirror.rs`; `ui-developer` `ui/src`; `test-engineer` tests, `fixtures/daemon-keys.json` (regenerated). No hook, CI or plugin change; no new crate or package.
+**Order** (08 s2): `proposal-kinds`, `ui-live`, `task-package` (queue schema 4, 41 proposal columns, review document 43 keys), `ui-live-tasks`, this. Roles: `rust-developer` store, CLI library, `specengine-http`, MCP `mirror.rs`; `ui-developer` `ui/src`; `test-engineer` tests, `fixtures/daemon-keys.json` (regenerated). No hook, CI or plugin change; no new crate or package.
 
 **Owner's questions, decided 2026-10-06 as recommended**: Q1 after `task-package`, schema 5; Q2 typed flags win whole; Q3 agents never stage (no MCP tool); Q4 staging requires `Sec-Fetch-Site: same-origin`, labelled "not authentication"; Q5 staleness is a note; Q6 stages travel in backups.
 

@@ -11,7 +11,7 @@ ref: task-package analysis, readiness check 2026-10-06, all accepted; G1-G4 for 
 
 Agents get work as chat text: no approved scope, self-assembled context (W 2.3-2.8x a bundle's), spec edits met by chance, nothing to gate. A task: a per-project queue record only the owner moves to `ready`, on a terminal (ADR-0006, ADR-0012); agents get one versioned, stack-neutral package of the approved spec (ADR-0027); later spec edits raise `stale`, never block.
 
-Working answers (until the owner's review; the accepted order: `proposal-kinds.md` "Why"): no new ADR; the compared place; one claim; criteria; no `approve_task`; tasks backed up; `queue.md` apart; no plan needed; nested spans; the linked update's `task_id`; the `snapshot_diff` cap.
+Working answers (until the owner's review; order: 08 s2): no new ADR; the compared place; one claim; criteria; no `approve_task`; tasks backed up; `queue.md` apart; no plan needed; nested spans; the linked update's `task_id`; the `snapshot_diff` cap.
 
 ## Description and interactions
 
@@ -114,8 +114,8 @@ Setup: temp git repos of `fixtures/spec-a`, `-b`, scratch `HOME`, fixed clock, g
 
 ## Out of scope
 
-MCP `approve_task`, `review_proposal`; `spec gate`, hooks, `--contour`; the daemon's tasks routes, the UI's `task.*` handling, the Inbox "Task" link (`ui-live`; the tail streams `task.*`); rounds; `docs/generated/queue.md`, `spec export`; `spec bundle --task`, `get_context_bundle {task_id}`, the `bundles` log; bindings, `@assumes`, follow-up tasks, `verified` (Phase 3); priority, `depends_on` (Phase 6); a plugin task skill; `spec inbox --task`.
+MCP `approve_task`, `review_proposal`; `spec gate`, hooks, `--contour`; the daemon's tasks routes, the UI's `task.*` handling, the Inbox "Task" link (`ui-live-tasks`; the tail streams `task.*`); rounds; `docs/generated/queue.md`, `spec export`; `spec bundle --task`, `get_context_bundle {task_id}`, the `bundles` log; bindings, `@assumes`, follow-up tasks, `verified` (Phase 3); priority, `depends_on` (Phase 6); a plugin task skill; `spec inbox --task`.
 
 ## Implementation
 
-**At shipping**: new Tier 2 `docs/canon/tasks.md` ("Commands", "Transitions", "Place", "Task-bound proposals", "Store", "Backup"), `docs/canon/task-package.md` ("Package", "Staleness", "Brief", "Caps", "Genre", "MCP", "Versioning"); `crates/*/src` comments cite these, never this spec. Full queue canons get one pointer (`queue-backup.md` "Format": format 2 -> `tasks.md` "Backup"); amended in place: `proposal-queue.md` "Commands", "States and events", "Store" ("0 to 4", "41 in all"); `proposal-apply.md` step 10, "Completion"; `agent-intake.md`, `mcp-read.md` "Tools"; `architecture.md#tasks`; `spec-cli-bundle.md` "Not yet"; 05 s3.3, s7; 07 s1.2, s3 (`spec export`); 08 s2; READMEs; `CLAUDE.md`. "Data", "Description and interactions" stay while `ui/src`, `ui-home.md` cite them (until `ui-live`; per `ui-tasks.md`).
+**At shipping**: new Tier 2 `docs/canon/tasks.md` ("Commands", "Transitions", "Place", "Task-bound proposals", "Store", "Backup"), `docs/canon/task-package.md` ("Package", "Staleness", "Brief", "Caps", "Genre", "MCP", "Versioning"); `crates/*/src` comments cite these, never this spec. Full queue canons get one pointer (`queue-backup.md` "Format": format 2 -> `tasks.md` "Backup"); amended in place: `proposal-queue.md` "Commands", "States and events", "Store" ("0 to 4", "41 in all"); `proposal-apply.md` step 10, "Completion"; `agent-intake.md`, `mcp-read.md` "Tools"; `architecture.md#tasks`; `spec-cli-bundle.md` "Not yet"; 05 s3.3, s7; 07 s1.2, s3 (`spec export`); 08 s2; READMEs; `CLAUDE.md`. "Data", "Description and interactions" stay while `ui/src`, `ui-home.md` cite them (until `ui-live-tasks`; per `ui-tasks.md`).
