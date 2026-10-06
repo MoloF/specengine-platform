@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode, type ProposalQuery } from "../api/queries";
 import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { Prose } from "../markdown/Prose";
+import { DEFAULT_TEXT_MODE, TextModeSwitch, type TextMode } from "../markdown/TextMode";
 import { Badge } from "../ui/Badge";
 import { DiffView } from "../ui/DiffView";
 import { focusIsLost } from "../ui/focus";
@@ -28,11 +30,11 @@ function OpenInTree({ project, id }: { project: string; id: string }) {
 }
 
 /**
- * One target and its current section, with its own error and Retry. After a successful retry the
- * Retry that had focus is gone; focus goes to the target's head instead of the page's body, so the
- * queue's keys keep working.
+ * One target and its current section, rendered or as its source, with its own error and Retry.
+ * After a successful retry the Retry that had focus is gone; focus goes to the target's head
+ * instead of the page's body, so the queue's keys keep working.
  */
-function TargetNode({ project, id }: { project: string; id: string }) {
+function TargetNode({ project, id, mode, onMode }: { project: string; id: string; mode: TextMode; onMode: (mode: TextMode) => void }) {
   const query = useNode(project, id);
   const failure = useRetainedFailure(query.error, query.isFetching);
   const head = useRef<HTMLParagraphElement>(null);
@@ -94,8 +96,23 @@ function TargetNode({ project, id }: { project: string; id: string }) {
             {node.path}:{node.line}
             {node.rev !== null && ` | rev ${String(node.rev)}`}
           </p>
-          <p className="target-label">Current section</p>
-          <pre className="node-text">{node.text}</pre>
+          <div className="target-label-row">
+            <p className="target-label">Current section</p>
+            <TextModeSwitch mode={mode} label={`Show the current section of ${node.id ?? id} as`} onChange={onMode} />
+          </div>
+          {mode === "source" ? (
+            <pre className="node-text">{node.text}</pre>
+          ) : (
+            <Prose
+              className="node-text target-markdown"
+              source={node.text}
+              links={null}
+              project={project}
+              baseLevel={3}
+              frontMatter={node.line === 1}
+              firstLine={node.line}
+            />
+          )}
           {node.truncated && node.omitted !== null && (
             <p className="muted">
               Cut at the output cap: lines {node.omitted.lines[0]}-{node.omitted.lines[1]} not shown.
@@ -179,10 +196,11 @@ function ReviewBody({
                       </span>
                     )}
                   </p>
-                  <p>{choice.effect}</p>
-                  <p>
-                    <span className="price-label">Price:</span> {choice.price}
-                  </p>
+                  <Prose className="option-effect" source={choice.effect} links={null} project={project} baseLevel={3} frontMatter={false} />
+                  <div className="option-price">
+                    <p className="price-label">Price:</p>
+                    <Prose source={choice.price} links={null} project={project} baseLevel={3} frontMatter={false} />
+                  </div>
                 </li>
               );
             })}
@@ -192,18 +210,19 @@ function ReviewBody({
 
       {review.working_answer !== null && (
         <Section title="Working answer">
-          <p className="prose">{review.working_answer}</p>
+          <Prose className="prose" source={review.working_answer} links={null} project={project} baseLevel={3} frontMatter={false} />
           {review.price_of_other !== null && (
-            <p className="prose">
-              <span className="price-label">Price of another answer:</span> {review.price_of_other}
-            </p>
+            <div className="prose">
+              <p className="price-label">Price of another answer:</p>
+              <Prose source={review.price_of_other} links={null} project={project} baseLevel={3} frontMatter={false} />
+            </div>
           )}
         </Section>
       )}
 
       {review.rationale !== null && review.rationale !== review.summary && (
         <Section title="Rationale">
-          <p className="prose">{review.rationale}</p>
+          <Prose className="prose" source={review.rationale} links={null} project={project} baseLevel={3} frontMatter={false} />
         </Section>
       )}
 
@@ -289,7 +308,9 @@ function ReviewBody({
           {review.decision_note !== null && (
             <>
               <dt>Last decision note</dt>
-              <dd>{review.decision_note}</dd>
+              <dd>
+                <Prose source={review.decision_note} links={null} project={project} baseLevel={3} frontMatter={false} />
+              </dd>
             </>
           )}
         </dl>
@@ -394,6 +415,8 @@ export function ProposalCard({
   const reviewed = review.data?.id === null ? undefined : review.data;
   const ready = reviewed !== undefined;
   const id = entry.id;
+  // Rendered or Source for the targets' current sections, kept from proposal to proposal.
+  const [textMode, setTextMode] = useState<TextMode>(DEFAULT_TEXT_MODE);
 
   let content;
   if (review.data === undefined) {
@@ -491,7 +514,7 @@ export function ProposalCard({
           ) : (
             <ul className="target-list">
               {targets.map((target) => (
-                <TargetNode key={target} project={project} id={target} />
+                <TargetNode key={target} project={project} id={target} mode={textMode} onMode={setTextMode} />
               ))}
             </ul>
           )}

@@ -51,6 +51,8 @@ const PATHS = {
   waiting: "M4.5 2.5h7 M4.5 13.5h7 M5.5 2.5V4L8 8l-2.5 4v1.5 M10.5 2.5V4L8 8l2.5 4v1.5",
   copy: "M5.5 5.5h8v8h-8Z M10.5 5.5v-3h-8v8h3",
   terminal: "M2 3h12v10H2Z M4.5 6.5l2 1.5-2 1.5 M8 10h3.5",
+  taskItemDone: "M2.5 2.5h11v11h-11Z M5 8.2l2 2 4-4.4",
+  taskItemOpen: "M2.5 2.5h11v11h-11Z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -171,12 +171,47 @@ describe("the mock's hard cases on screen", () => {
     }
   });
 
-  it("shows the long document whole, the long token in it", async () => {
+  it("shows the long document whole in Source, the long token in it", async () => {
     renderMock("normal", "#/harbor-sim/tree/MEC-TIDE-TABLES");
     await screen.findByText("Tide tables", { selector: ".node-title-text" });
+    fireEvent.click(within(screen.getByRole("group", { name: "Show the text as" })).getByRole("button", { name: "Source" }));
     const text = Array.from(document.querySelectorAll(".text-line-content"), (line) => line.textContent).join("");
     expect(text.length).toBeGreaterThan(40000);
     expect(text).toContain(LONG_TOKEN);
+  });
+
+  it("renders the long document's table whole: header cells, a named focusable region, all 520 rows (ui-markdown AC-11)", async () => {
+    renderMock("normal", "#/harbor-sim/tree/MEC-TIDE-TABLES");
+    const region = await screen.findByRole("region", { name: /^Table at line \d+$/ }, { timeout: 5000 });
+    expect(region.tabIndex).toBe(0);
+    expect(Array.from(region.querySelectorAll("thead th"), (cell) => cell.textContent)).toEqual(["Date", "First", "Second", "Third", "Fourth"]);
+    expect(region.querySelectorAll("tbody tr")).toHaveLength(520);
+    const text = screen.getByRole("tabpanel", { name: "Text" });
+    expect(text.textContent).toContain(LONG_TOKEN);
+    expect(text.querySelector(".md-front-matter")?.textContent.startsWith("---\nid: MEC-TIDE-TABLES\n")).toBe(true);
+  });
+
+  it("anchors a markdown link the links read resolved; a dangling one is text with its label (ui-markdown AC-04)", async () => {
+    renderMock("normal", "#/harbor-sim/tree/DOM-BERTHS");
+    const text = await screen.findByRole("tabpanel", { name: "Text" });
+    const anchor = await within(text).findByRole("link", { name: "the tide cycle" });
+    expect(anchor.getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDES");
+    const quays = within(text).getByText("quay plans");
+    expect(quays.closest("a")).toBeNull();
+    expect(quays.closest(".md-link")?.querySelector(".badge-label")?.textContent).toBe("Dangling");
+  });
+
+  it("shows a section named by a heading attribute: its title, its ID as a label, no braces (ui-markdown AC-07)", async () => {
+    renderMock("normal", "#/harbor-sim/tree/RULE-HARBOR-CLOCK");
+    await waitFor(() => {
+      expect(currentRows()).toEqual(["RULE-HARBOR-CLOCK"]);
+    });
+    const text = await screen.findByRole("tabpanel", { name: "Text" });
+    const heading = await within(text).findByRole("heading", { name: "One simulated clock RULE-HARBOR-CLOCK" });
+    expect(heading.tagName).toBe("H2");
+    expect(heading.querySelector(".md-heading-id")?.textContent).toBe("RULE-HARBOR-CLOCK");
+    expect(text.textContent).not.toContain("{#");
+    expect(text.querySelector("[id]")).toBeNull();
   });
 
   it("finds the decomposed non-Latin name with the same decomposed query", async () => {

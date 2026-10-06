@@ -31,6 +31,14 @@ async function openTab(name: string | RegExp): Promise<HTMLElement> {
   return label === undefined ? screen.getByRole("tabpanel") : screen.findByRole("tabpanel", { name: label });
 }
 
+/**
+ * The Text tab's Source view: the text verbatim, numbered. ui-markdown made Rendered the default
+ * (docs/features/ui-markdown.md "Data", the shipped criteria it changes): AC-06's verbatim text is Source's.
+ */
+function showSource() {
+  fireEvent.click(within(screen.getByRole("group", { name: "Show the text as" })).getByRole("button", { name: "Source" }));
+}
+
 function textLines(root: ParentNode = document): string {
   return Array.from(root.querySelectorAll(".text-line-content"), (line) => line.textContent).join("");
 }
@@ -62,11 +70,12 @@ function nodeOnly(view: NodeView) {
 }
 
 describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
-  it("shows the text verbatim, numbered from its first line, never trimmed", async () => {
+  it("shows the text verbatim in Source, numbered from its first line, never trimmed", async () => {
     const client = treeClient();
     const text = "\n  ---\nid: DOC-A\n---\n\n## DOC-A: Title\n\n    indented, then trailing spaces   \n\n\n";
     client.getNode.mockImplementation(nodeOnly({ ref: "DOC-A", reason: null, notes: [], nodes: [aNode({ id: "DOC-A", line: 7, end_line: 16, text })] }));
     await openNode(client);
+    showSource();
     expect(textLines()).toBe(text);
     const numbers = Array.from(document.querySelectorAll(".text-line-number"), (number) => number.textContent);
     expect(numbers[0]).toBe("7");
@@ -81,6 +90,7 @@ describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
       nodeOnly({ ref: "DOC-A", reason: null, notes: [], nodes: [aNode({ id: "DOC-A", text: `before\n${token}\nafter\n` })] }),
     );
     await openNode(client);
+    showSource();
     const rowWithToken = Array.from(document.querySelectorAll(".text-line-content")).find((line) => line.textContent === `${token}\n`);
     expect(rowWithToken).toBeTruthy();
     const rule = /\.text-line-content\s*\{([^}]*)\}/.exec(appCss)?.[1] ?? "";
@@ -123,6 +133,7 @@ describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
 
   it("holds two holders under one h1, the REF, an h2 and a text each", async () => {
     await openNode(treeClient(), "SEC-DUP");
+    showSource();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SEC-DUP");
     const header = document.querySelector<HTMLElement>(".node-head");
@@ -355,8 +366,9 @@ describe("links (AC-08)", () => {
     expect(within(panel).getByText(/Left out: 1 generated, 2 archived/)).toBeTruthy();
   });
 
-  it("shows an outgoing link in the text: the Text tab, its line focused", async () => {
+  it("shows an outgoing link in the text: the Text tab, its line focused (Source)", async () => {
     await openNode(treeClient());
+    showSource();
     const panel = await openTab("Links");
     await within(panel).findByText("R-404");
     const buttons = within(panel).getAllByRole("button", { name: /Show in text/ });
@@ -441,6 +453,7 @@ describe("proposals (AC-09)", () => {
     const message = "inbox unavailable: queue locked";
     client.getInbox.mockRejectedValueOnce(new ClientError({ status: 503, message }));
     await openNode(client);
+    showSource();
     const panel = await openTab(/^Proposals/);
     expect((await within(panel).findByRole("alert")).textContent).toContain(message);
     expect(screen.getAllByRole("alert")).toHaveLength(1);
@@ -597,7 +610,8 @@ describe("states of the node and its tabs (AC-12)", () => {
     retry.focus();
     fireEvent.click(retry);
     await screen.findByRole("tab", { name: "Text" });
-    expect(client.getNode).toHaveBeenCalledTimes(2);
+    // The plain read twice; the links read beside it once (ui-markdown AC-05).
+    expect(client.getNode.mock.calls.filter((call) => call[2] === undefined)).toHaveLength(2);
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1 }));
     });

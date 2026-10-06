@@ -6,6 +6,7 @@ import { movesHere, pushHash, useHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { DEFAULT_TEXT_MODE, type TextMode } from "../markdown/TextMode";
 import { useAnnounce } from "../ui/announcer";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -171,6 +172,8 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
   const hash = useHash();
   const archiveId = useId();
   const [archive, setArchive] = useState(false);
+  // Rendered or Source, kept from node to node (docs/features/ui-markdown.md AC-09).
+  const [textMode, setTextMode] = useState<TextMode>(DEFAULT_TEXT_MODE);
   const [root, setRoot] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
   const [showHits, setShowHits] = useState(false);
@@ -425,6 +428,8 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
               archive={archive}
               rows={rows}
               inbox={inbox}
+              textMode={textMode}
+              onTextMode={setTextMode}
               arrival={takeArrival}
               onFollow={followed}
             />

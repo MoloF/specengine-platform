@@ -115,8 +115,8 @@ describe("source policy", () => {
     expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
   });
 
-  it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/"];
+  it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown)", () => {
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
@@ -126,6 +126,26 @@ describe("source policy", () => {
     expect(rule.test('<a href={"#/" + project}>')).toBe(true);
     expect(rule.test('<a href={sectionHash(project, "tasks")}>')).toBe(false);
     expect(rule.test("<a href={homeHash(project)}>")).toBe(false);
+  });
+
+  it("renders markdown only in src/markdown, raw HTML never interpreted (AC-02 of ui-markdown)", () => {
+    const markdownPackage = /^(react-markdown|remark-gfm)(\/|$)/;
+    const wrong: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      for (const specifier of importsOf(text)) {
+        if (markdownPackage.test(specifier) && !path.startsWith("/src/markdown/")) {
+          wrong.push(`${path} imports ${specifier}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect(importsOf(sources["/src/markdown/Markdown.tsx"] ?? "")).toEqual(expect.arrayContaining(["react-markdown", "remark-gfm"]));
+    // The packages' raw-HTML switches, spelled in pieces so this file does not match itself.
+    const raw = ["rehype" + "-raw", "rehype" + "Raw", "allowDangerous" + "Html"];
+    expect(offending(new RegExp(raw.join("|")))).toEqual([]);
+    // The lint rule says the same: the packages restricted, src/markdown/ exempt.
+    expect(eslintConfig).toContain(JSON.stringify(markdownPackage.source.replaceAll("\\/", "/")));
+    expect(eslintConfig).toMatch(/files:\s*\["src\/markdown\/\*\*"\]/);
   });
 
   it("reads no clock in the home or the palette: times are shown as stored (AC-07 of ui-home)", () => {
@@ -224,7 +244,7 @@ describe("toolchain policy", () => {
     expect(viteConfig).toMatch(/maxWorkers:\s*[12]\b/);
   });
 
-  it("pins exactly the fifteen allowed packages at exact versions, no install script (AC-01)", () => {
+  it("pins exactly the allowed packages at exact versions, no install script (AC-01; ui-markdown AC-01)", () => {
     const pinned = { ...record(pkg.dependencies), ...record(pkg.devDependencies) };
     expect(Object.keys(pinned).sort()).toEqual(
       [
@@ -243,8 +263,12 @@ describe("toolchain policy", () => {
         "vitest",
         "@testing-library/react",
         "jsdom",
+        // ADR-0036 amends ADR-0033's allowlist: 15 + 2.
+        "react-markdown",
+        "remark-gfm",
       ].sort(),
     );
+    expect([pinned["react-markdown"], pinned["remark-gfm"]]).toEqual(["10.1.0", "4.0.1"]);
     for (const version of Object.values(pinned)) {
       expect(version).toMatch(/^\d+\.\d+\.\d+$/);
     }

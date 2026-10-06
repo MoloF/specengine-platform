@@ -46,7 +46,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/task-package.md](features/task-package.md) Task package · specengine · draft
 - [docs/features/ui-health.md](features/ui-health.md) UI health: the check on mocks · ui · draft
-- [docs/features/ui-markdown.md](features/ui-markdown.md) UI markdown: rendered prose · ui, crates/specengine-eval · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

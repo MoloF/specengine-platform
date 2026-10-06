@@ -152,7 +152,8 @@ function harborCorpus(): MockCorpus {
         "The simulation models one harbour: ships arrive, wait for water and a berth, moor, unload and leave.",
         "Every system reads the same clock; nothing advances on its own.",
         "",
-        "## RULE-HARBOR-CLOCK: One simulated clock",
+        // A section named by a heading attribute (docs/features/ui-markdown.md "Data").
+        "## One simulated clock {#RULE-HARBOR-CLOCK}",
         "",
         "One tick is one simulated minute. Systems run in a fixed order each tick:",
         "tides, arrivals, pilotage, berthing, cargo.",
@@ -204,6 +205,8 @@ function harborCorpus(): MockCorpus {
         "Ships wait at anchor until a berth with enough depth and length is free.",
         "A berth holds one ship; mooring takes a crew of four and 20 simulated minutes.",
         "Deep ships also wait for the tide window (MEC-TIDES#RULE-TIDE-WINDOW).",
+        // Markdown links the rendered text anchors as the links read says (docs/features/ui-markdown.md "Data").
+        "See [the tide cycle](../tides/tide-cycle.md) and the [quay plans](quays.md).",
         "",
         `## RULE-BASIN-NAME: ${BASIN_NAME_DECOMPOSED}`,
         "",
@@ -545,6 +548,22 @@ function harborCorpus(): MockCorpus {
         path: "docs/spec/berths/README.md",
         line: linkAt("docs/spec/berths/README.md", "MEC-TIDES#RULE-TIDE-WINDOW"),
         to: "RULE-TIDE-WINDOW",
+      }),
+      link({
+        type: "mentions",
+        origin: inline,
+        written: "../tides/tide-cycle.md",
+        path: "docs/spec/berths/README.md",
+        line: linkAt("docs/spec/berths/README.md", "[the tide cycle]"),
+        to: "MEC-TIDES",
+      }),
+      link({
+        type: "mentions",
+        origin: inline,
+        written: "quays.md",
+        path: "docs/spec/berths/README.md",
+        line: linkAt("docs/spec/berths/README.md", "[quay plans]"),
+        reason: "`quays.md` names no file under the spec roots",
       }),
       link({
         type: "depends_on",

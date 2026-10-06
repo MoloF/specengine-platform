@@ -3,9 +3,10 @@
 //! `ui/README.md` "Dependencies", "Gates", "Laptop rules"), read as text from
 //! `ui/` without running pnpm: the gates themselves stay commands.
 //!
-//! - AC-01: `package.json` names exactly the owner's 15, each at an exact
-//!   `x.y.z`, equal to the README table once it holds versions ("pinned at
-//!   install" is the placeholder until then); `react` = `react-dom`, 19.x;
+//! - AC-01: `package.json` names exactly the owner's allowlist (17,
+//!   ADR-0036), each at an exact `x.y.z`, equal to the README table once it
+//!   holds versions ("pinned at install" is the placeholder until then);
+//!   `react` = `react-dom`, 19.x;
 //!   `packageManager` an exact pnpm; the lockfile present and its importer
 //!   specifiers equal to `package.json`; `.npmrc` per policy; no install
 //!   script, no `onlyBuiltDependencies`.
@@ -21,6 +22,12 @@
 //! - docs/features/ui-tree-node.md AC-07: no HTML sink of its "Rules and edge
 //!   cases" in `ui/src/**/*.ts(x)`, word-bounded, so the names spelled in
 //!   pieces by `ui/src/policy.test.ts` stay clean.
+//! - docs/features/ui-markdown.md AC-01: the allowlist above, 15 plus
+//!   `react-markdown` and `remark-gfm` (ADR-0036), in `package.json`, the
+//!   README table and the lockfile. AC-02: only `ui/src/markdown/` imports
+//!   the two (and something there does); `rehype-raw`, `rehypeRaw`,
+//!   `allowDangerousHtml` on no line of `ui/src/**`. AC-14: ADR-0036 within
+//!   1 536 B, with a cost and `canon:` at `docs/canon/architecture.md#ui`.
 //!
 //! Named mutations (each turns this red): `globals` added; one `^`; the
 //! lockfile deleted; `node-linker=hoisted`; a `postinstall`; `window.confirm`
@@ -28,7 +35,9 @@
 //! `kind === "mechanic"` in a component; the header dropped; `kind` a union;
 //! `test` = `vitest`; the worker cap removed; `ui` out of roots; the snippet
 //! rendered through `dangerouslySetInnerHTML` (run on a scratch copy of `ui/`
-//! named by `UI_POLICY_SINK_UI_DIR`, never by editing `ui/src`).
+//! named by `UI_POLICY_SINK_UI_DIR`, never by editing `ui/src`);
+//! `react-markdown` at `^10.1.0`; an 18th package; `import "react-markdown"`
+//! in `ui/src/tree/TextPanel.tsx`; `allowDangerousHtml` in a component.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -52,8 +61,9 @@ fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
-/// The owner's allowlist of 2026-10-05 (`ui/README.md` "Dependencies").
-const ALLOWLIST: [&str; 15] = [
+/// The owner's allowlist of 2026-10-05, amended by ADR-0036 (2026-10-06)
+/// with the last two (`ui/README.md` "Dependencies").
+const ALLOWLIST: [&str; 17] = [
     "react",
     "react-dom",
     "@tanstack/react-query",
@@ -69,6 +79,8 @@ const ALLOWLIST: [&str; 15] = [
     "vitest",
     "@testing-library/react",
     "jsdom",
+    "react-markdown",
+    "remark-gfm",
 ];
 
 /// The README's version cell before `spec-writer` records the pins.
@@ -189,7 +201,7 @@ fn lockfile_specifiers(text: &str) -> BTreeMap<String, String> {
 }
 
 #[test]
-fn package_json_pins_exactly_the_fifteen_at_exact_versions() {
+fn package_json_pins_exactly_the_allowlist_at_exact_versions() {
     let package = package_json();
     let declared = declared_dependencies(&package);
     let names: BTreeSet<&str> = declared.keys().map(String::as_str).collect();
@@ -209,7 +221,7 @@ fn package_json_pins_exactly_the_fifteen_at_exact_versions() {
     ] {
         assert!(
             package.get(field).is_none(),
-            "package.json declares {field}: the 15 live in dependencies and devDependencies"
+            "package.json declares {field}: the allowlist lives in dependencies and devDependencies"
         );
     }
     let react = &declared["react"];
@@ -224,7 +236,7 @@ fn package_json_pins_exactly_the_fifteen_at_exact_versions() {
 }
 
 #[test]
-fn the_readme_table_names_the_same_fifteen_and_its_versions_once_filled() {
+fn the_readme_table_names_the_allowlist_and_its_versions_once_filled() {
     let declared = declared_dependencies(&package_json());
     let table = readme_table();
     let table_names: BTreeSet<&str> = table.keys().map(String::as_str).collect();
@@ -918,6 +930,210 @@ fn only_the_bootstrap_imports_the_mocks_and_only_src_api_the_provisional_types()
     );
 }
 
+/// The two packages ADR-0036 adds (docs/features/ui-markdown.md AC-02).
+const MARKDOWN_PACKAGES: [&str; 2] = ["react-markdown", "remark-gfm"];
+
+/// The only folder that may import them, relative to `ui/`.
+const MARKDOWN_DIR: &str = "src/markdown/";
+
+/// The ADR-0036 package a module specifier names, as the ESLint rule reads
+/// it: `^(react-markdown|remark-gfm)(/|$)`.
+fn markdown_package(specifier: &str) -> Option<&'static str> {
+    MARKDOWN_PACKAGES.into_iter().find(|name| {
+        specifier
+            .strip_prefix(name)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
+}
+
+/// The module specifiers a line loads, in any quote style: the string
+/// literal right after the word `from` or `import` (CSS `@import` too), or
+/// as the first argument of `import(`, `require(` or Vitest's `mock(`,
+/// `doMock(`, `importActual(`, `importMock(`. A string anywhere else (an
+/// expected value in a test) loads nothing.
+fn module_specifiers(line: &str) -> Vec<&str> {
+    const WORDS: [&str; 2] = ["from", "import"];
+    const CALLS: [&str; 6] = [
+        "import",
+        "require",
+        "mock",
+        "doMock",
+        "importActual",
+        "importMock",
+    ];
+    let mut out = Vec::new();
+    for (at, quote) in line.char_indices() {
+        if !matches!(quote, '"' | '\'' | '`') {
+            continue;
+        }
+        let before = line[..at].trim_end();
+        let (before, keywords): (&str, &[&str]) = match before.strip_suffix('(') {
+            Some(callee) => (callee.trim_end(), &CALLS),
+            None => (before, &WORDS),
+        };
+        let loads = keywords.iter().any(|keyword| {
+            before.strip_suffix(keyword).is_some_and(|head| {
+                head.as_bytes()
+                    .last()
+                    .is_none_or(|&byte| !is_identifier_byte(byte))
+            })
+        });
+        if !loads {
+            continue;
+        }
+        let rest = &line[at + 1..];
+        if let Some(end) = rest.find(quote) {
+            out.push(&rest[..end]);
+        }
+    }
+    out
+}
+
+#[test]
+fn the_import_reader_takes_each_form_and_quote_and_no_plain_string() {
+    for (line, specifier) in [
+        (
+            "import ReactMarkdown from \"react-markdown\";",
+            "react-markdown",
+        ),
+        ("import remarkGfm from 'remark-gfm';", "remark-gfm"),
+        (
+            "import type { Options } from \"react-markdown\";",
+            "react-markdown",
+        ),
+        ("} from \"remark-gfm\";", "remark-gfm"),
+        (
+            "export { default } from \"react-markdown\";",
+            "react-markdown",
+        ),
+        ("import \"remark-gfm\";", "remark-gfm"),
+        (
+            "const m = await import(`react-markdown`);",
+            "react-markdown",
+        ),
+        (
+            "const m = import( \"react-markdown/lib\" );",
+            "react-markdown/lib",
+        ),
+        (
+            "vi.mock(\"react-markdown\", async (importOriginal) => {",
+            "react-markdown",
+        ),
+        ("const gfm = require(\"remark-gfm\");", "remark-gfm"),
+        (
+            "@import \"react-markdown/style.css\";",
+            "react-markdown/style.css",
+        ),
+    ] {
+        assert_eq!(module_specifiers(line), vec![specifier], "{line}");
+    }
+    for line in [
+        "expect(importsOf(text)).toEqual(expect.arrayContaining([\"react-markdown\", \"remark-gfm\"]));",
+        "const name = \"react-markdown\";",
+        "myimport(\"react-markdown\");",
+        "const reimport = 'remark-gfm';",
+    ] {
+        assert!(module_specifiers(line).is_empty(), "{line}");
+    }
+    for (specifier, package) in [
+        ("react-markdown", Some("react-markdown")),
+        ("remark-gfm/lib/index.js", Some("remark-gfm")),
+        ("react-markdown-extra", None),
+        ("remark-gfm2", None),
+        ("@scope/react-markdown", None),
+        ("rehype-raw", None),
+        ("react", None),
+    ] {
+        assert_eq!(markdown_package(specifier), package, "{specifier}");
+    }
+}
+
+#[test]
+fn only_src_markdown_imports_react_markdown_and_remark_gfm() {
+    let mut wrong = Vec::new();
+    let mut inside: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for (path, text) in ui_sources() {
+        for (index, line) in text.lines().enumerate() {
+            for specifier in module_specifiers(line) {
+                let Some(package) = markdown_package(specifier) else {
+                    continue;
+                };
+                let place = format!("ui/{path}:{}: {specifier}", index + 1);
+                if path.starts_with(MARKDOWN_DIR) {
+                    inside.entry(package).or_default().push(place);
+                } else {
+                    wrong.push(place);
+                }
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "react-markdown or remark-gfm imported outside ui/{MARKDOWN_DIR} (ui-markdown AC-02, ADR-0036):\n{}",
+        wrong.join("\n")
+    );
+    let missing: Vec<&str> = MARKDOWN_PACKAGES
+        .into_iter()
+        .filter(|package| !inside.contains_key(package))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "nothing under ui/{MARKDOWN_DIR} imports {missing:?}: the renderer is gone or the import reader is blind"
+    );
+}
+
+/// The packages' raw-HTML switches (ADR-0036: raw HTML stays text).
+const RAW_HTML_SWITCHES: [&str; 3] = ["rehype-raw", "rehypeRaw", "allowDangerousHtml"];
+
+/// The first raw-HTML switch `line` names, ASCII case-insensitive and not
+/// word-bounded, so an alias (`RehypeRaw`) or a key inside an options
+/// object counts, while a name spelled in pieces (`"rehype" + "Raw"`, as
+/// `ui/src/policy.test.ts` does) does not.
+fn raw_html_switch(line: &str) -> Option<&'static str> {
+    let lower = line.to_ascii_lowercase();
+    RAW_HTML_SWITCHES
+        .into_iter()
+        .find(|name| lower.contains(&name.to_ascii_lowercase()))
+}
+
+#[test]
+fn the_raw_html_reader_flags_each_switch_and_no_name_in_pieces() {
+    for (line, name) in [
+        ("import rehypeRaw from \"rehype-raw\";", "rehype-raw"),
+        ("<ReactMarkdown rehypePlugins={[rehypeRaw]}>", "rehypeRaw"),
+        ("const { default: RehypeRaw } = mod;", "rehypeRaw"),
+        (
+            "remarkRehypeOptions={{ allowDangerousHtml: true }}",
+            "allowDangerousHtml",
+        ),
+        ("<ReactMarkdown allowDangerousHtml>", "allowDangerousHtml"),
+        ("// allowDangerousHtml stays off", "allowDangerousHtml"),
+    ] {
+        assert_eq!(raw_html_switch(line), Some(name), "{line}");
+    }
+    for line in [
+        "const raw = [\"rehype\" + \"-raw\", \"rehype\" + \"Raw\", \"allowDangerous\" + \"Html\"];",
+        "type ToHastOptions = NonNullable<Options[\"remarkRehypeOptions\"]>;",
+        "<ReactMarkdown skipHtml>",
+    ] {
+        assert_eq!(raw_html_switch(line), None, "{line}");
+    }
+}
+
+#[test]
+fn no_raw_html_switch_in_ui_sources() {
+    let found = hits(
+        &ui_sources(),
+        |_| false,
+        |line| raw_html_switch(line).is_some(),
+    );
+    assert!(
+        found.is_empty(),
+        "a raw-HTML switch in ui/src (ui-markdown AC-02, ADR-0036):\n{}",
+        found.join("\n")
+    );
+}
+
 /// The first line of `src/api/provisional.ts` (Data, "Contract seam").
 const HEADER: &str = "// PROVISIONAL — hand-written until `spec serve` generates types from Rust; replace, do not extend; generated types win.";
 
@@ -1014,21 +1230,27 @@ fn the_ui_is_a_documentation_root_with_its_readme_and_adr_in_budget() {
         "ui/README.md is {} B, over 8 192 B",
         readme.len()
     );
-    let adr = read(&root.join("docs/decisions/ADR-0033.md"));
-    assert!(
-        adr.len() <= 1536,
-        "ADR-0033 is {} B, over 1 536 B",
-        adr.len()
-    );
-    let canon = adr
-        .lines()
-        .find_map(|line| line.strip_prefix("canon: "))
-        .expect("ADR-0033 has canon:");
-    let (file, anchor) = canon.split_once('#').expect("canon: names an anchor");
-    assert_eq!(anchor, "ui", "ADR-0033 canon: {canon}");
-    assert!(
-        read(&root.join(file)).contains("<a id=\"ui\"></a>"),
-        "{file} has no `ui` anchor"
-    );
-    assert!(adr.contains("**Cost.**"), "ADR-0033 names no cost");
+    // ADR-0033 founds the UI; ADR-0036 amends its allowlist (ui-markdown
+    // AC-14). Both change the canon's `ui` section.
+    for id in ["ADR-0033", "ADR-0036"] {
+        let adr = read(&root.join(format!("docs/decisions/{id}.md")));
+        assert!(adr.len() <= 1536, "{id} is {} B, over 1 536 B", adr.len());
+        let canon = adr
+            .lines()
+            .find_map(|line| line.strip_prefix("canon: "))
+            .unwrap_or_else(|| panic!("{id} has no canon:"));
+        let (file, anchor) = canon
+            .split_once('#')
+            .unwrap_or_else(|| panic!("{id} canon: {canon} names no anchor"));
+        assert_eq!(
+            (file, anchor),
+            ("docs/canon/architecture.md", "ui"),
+            "{id} canon: {canon}"
+        );
+        assert!(
+            read(&root.join(file)).contains("<a id=\"ui\"></a>"),
+            "{file} has no `ui` anchor"
+        );
+        assert!(adr.contains("**Cost.**"), "{id} names no cost");
+    }
 }

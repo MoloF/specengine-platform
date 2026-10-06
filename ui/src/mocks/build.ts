@@ -149,16 +149,27 @@ function headingLevel(line: string): number {
   return hashes === undefined ? 0 : hashes.length;
 }
 
+/** A heading line's trailing attribute block naming `id` (`## Title {#ID}`, other attributes allowed). */
+function namesInAttributes(line: string, id: string): boolean {
+  const block = /\{([^{}]*)\}\s*$/.exec(line)?.[1];
+  return block !== undefined && block.trim().split(/\s+/).includes(`#${id}`);
+}
+
 /**
- * A mock spec file. Each declared section starts at the heading line naming its ID and ends before
- * the next heading of its level or above; it lies within the nearest declared section around it.
+ * A mock spec file. Each declared section starts at the heading line naming its ID (`## ID: Title`
+ * or `## Title {#ID}`) and ends before the next heading of its level or above; it lies within the
+ * nearest declared section around it.
  */
 export function specFile(fields: DocumentFields): MockDocument {
   const { lines } = fields;
   const placed = (fields.sections ?? []).map((section) => {
     const at = lines.findIndex((line) => {
       const level = headingLevel(line);
-      return level > 0 && line.slice(level + 1).startsWith(section.id) && /^[:\s]?$/.test(line.charAt(level + 1 + section.id.length));
+      return (
+        level > 0 &&
+        ((line.slice(level + 1).startsWith(section.id) && /^[:\s]?$/.test(line.charAt(level + 1 + section.id.length))) ||
+          namesInAttributes(line, section.id))
+      );
     });
     if (at < 0) {
       throw new Error(`${fields.path}: no heading names ${section.id}`);

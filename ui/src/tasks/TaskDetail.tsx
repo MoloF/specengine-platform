@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useTask } from "../api/queries";
 import type { TaskPackage } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { Prose } from "../markdown/Prose";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -106,7 +107,11 @@ function panelOf(id: TaskTab, project: string, taskId: string, task: TaskPackage
     case "plan":
       return (
         <div className="task-panel">
-          {task.plan === null ? <p className="muted">No plan yet</p> : <pre className="task-plan">{task.plan}</pre>}
+          {task.plan === null ? (
+            <p className="muted">No plan yet</p>
+          ) : (
+            <Prose className="task-plan" source={task.plan} links={null} project={project} baseLevel={1} frontMatter={false} />
+          )}
         </div>
       );
     case "changes":
@@ -114,7 +119,7 @@ function panelOf(id: TaskTab, project: string, taskId: string, task: TaskPackage
     case "proposals":
       return <TaskProposalsPanel project={project} task={task} />;
     case "runs":
-      return <RunsPanel task={task} />;
+      return <RunsPanel project={project} task={task} />;
   }
 }
 

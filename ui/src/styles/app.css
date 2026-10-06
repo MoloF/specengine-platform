@@ -2944,3 +2944,242 @@ mark {
   justify-content: space-between;
   gap: var(--space-2);
 }
+
+/*
+ * Rendered markdown (docs/features/ui-markdown.md): spec prose as documents. Text wraps; code,
+ * front-matter and raw HTML keep their whitespace; a table scrolls in its own focusable region.
+ * Statuses by label and icon (the Badge), colours only from tokens.css.
+ */
+.markdown {
+  min-width: 0;
+  max-width: 80ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.markdown-pending {
+  white-space: pre-wrap;
+}
+
+.markdown > *,
+.markdown li > *,
+.markdown blockquote > *,
+.markdown .md-footnote > * {
+  margin: 0 0 var(--space-2);
+}
+
+.markdown > :last-child,
+.markdown li > :last-child,
+.markdown blockquote > :last-child,
+.markdown .md-footnote > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: var(--space-5);
+}
+
+.markdown .md-heading {
+  margin-top: var(--space-3);
+  line-height: var(--line-height-tight);
+  font-weight: 600;
+}
+
+.markdown > .md-heading:first-child {
+  margin-top: 0;
+}
+
+.markdown h2.md-heading {
+  font-size: var(--font-size-l);
+}
+
+.markdown h3.md-heading,
+.markdown h4.md-heading {
+  font-size: var(--font-size-m);
+}
+
+.markdown h5.md-heading,
+.markdown h6.md-heading {
+  font-size: var(--font-size-s);
+}
+
+.md-heading-id {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-s);
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.markdown blockquote,
+.md-footnote {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border-control);
+}
+
+.md-footnote {
+  font-size: var(--font-size-s);
+}
+
+.md-footnote-label {
+  color: var(--text-secondary);
+}
+
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--border-control);
+}
+
+.markdown code {
+  overflow-wrap: anywhere;
+}
+
+.md-code {
+  margin: 0;
+}
+
+.md-code-info {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-s);
+}
+
+.md-code-block,
+.md-front-matter {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-canvas);
+  font-size: var(--font-size-s);
+  tab-size: 4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-front-matter {
+  color: var(--text-secondary);
+}
+
+.md-raw-html {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-s);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-table-region {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-s);
+}
+
+.md-table {
+  border-collapse: collapse;
+  font-size: var(--font-size-s);
+}
+
+.md-table th,
+.md-table td {
+  min-width: 8ch;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.md-table th {
+  background: var(--surface-raised);
+  font-weight: 600;
+}
+
+.markdown .task-list-item {
+  list-style: none;
+}
+
+.md-task-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  vertical-align: middle;
+}
+
+.md-url,
+.md-image-path {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.md-image-alt {
+  font-style: italic;
+}
+
+.md-link-unresolved .badge {
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+.markdown [data-target] {
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Rendered or Source: two toggle buttons, one pressed. */
+.text-mode {
+  display: inline-flex;
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-s);
+}
+
+.text-mode-option {
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-s);
+  cursor: pointer;
+}
+
+.text-mode-option + .text-mode-option {
+  border-left: 1px solid var(--border-control);
+}
+
+.text-mode-option[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.target-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+}
+
+.target-label-row .text-mode {
+  margin-bottom: 0;
+}
+
+.option-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+}

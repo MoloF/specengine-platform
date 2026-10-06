@@ -101,7 +101,9 @@ async function focused(element: HTMLElement) {
 }
 
 describe("what a route reads (AC-01)", () => {
-  it("reads one tree and one node for #/alpha/tree/DOC-A; no bundle, no search", async () => {
+  // ui-markdown changed this by design (docs/features/ui-markdown.md AC-05): the node is read once
+  // plainly and once with its links, for the rendered text's anchors and the Links tab.
+  it("reads one tree and the node twice, plainly and with links, for #/alpha/tree/DOC-A; no bundle, no search", async () => {
     const client = await openTree(treeClient(), "#/alpha/tree/DOC-A");
     await screen.findByRole("tab", { name: "Text" });
     await waitFor(() => {
@@ -109,8 +111,10 @@ describe("what a route reads (AC-01)", () => {
     });
     expect(client.getTree).toHaveBeenCalledTimes(1);
     expect(client.getTree).toHaveBeenCalledWith("alpha");
-    expect(client.getNode).toHaveBeenCalledTimes(1);
-    expect(client.getNode).toHaveBeenCalledWith("alpha", "DOC-A");
+    expect(client.getNode.mock.calls).toEqual([
+      ["alpha", "DOC-A"],
+      ["alpha", "DOC-A", { with: ["links"] }],
+    ]);
     expect(client.getBundle).not.toHaveBeenCalled();
     expect(client.search).not.toHaveBeenCalled();
   });

@@ -1,5 +1,6 @@
 import type { TaskPackage, TaskRun } from "../api/types";
 import { Badge } from "../ui/Badge";
+import { Prose } from "../markdown/Prose";
 import { Icon } from "../ui/Icon";
 import { runOutcomeLook } from "./labels";
 import { Part, When } from "./parts";
@@ -7,7 +8,7 @@ import { Part, When } from "./parts";
 /** Lists up to this long show open; longer ones open on demand. */
 const SHOWN_OPEN = 10;
 
-function RunItem({ run }: { run: TaskRun }) {
+function RunItem({ project, run }: { project: string; run: TaskRun }) {
   return (
     <li className="task-run">
       <h3 className="task-run-title">
@@ -33,7 +34,7 @@ function RunItem({ run }: { run: TaskRun }) {
         <dt>Ended</dt>
         <dd>{run.ended_at === null ? "Running" : <When at={run.ended_at} />}</dd>
       </dl>
-      {run.summary !== null && <p className="task-text run-summary">{run.summary}</p>}
+      {run.summary !== null && <Prose className="task-text run-summary" source={run.summary} links={null} project={project} baseLevel={3} frontMatter={false} />}
       {run.changed_files.length === 0 ? (
         <p className="muted">No changed file reported.</p>
       ) : (
@@ -53,7 +54,7 @@ function RunItem({ run }: { run: TaskRun }) {
 }
 
 /** The Runs tab: the claim, else "Not claimed"; each run by number, an open one "Running". */
-export function RunsPanel({ task }: { task: TaskPackage }) {
+export function RunsPanel({ project, task }: { project: string; task: TaskPackage }) {
   const claim = task.claim;
   const runs = [...task.runs].sort((a, b) => a.run - b.run);
   return (
@@ -82,7 +83,7 @@ export function RunsPanel({ task }: { task: TaskPackage }) {
         ) : (
           <ol className="task-runs">
             {runs.map((run) => (
-              <RunItem key={run.run} run={run} />
+              <RunItem key={run.run} project={project} run={run} />
             ))}
           </ol>
         )}

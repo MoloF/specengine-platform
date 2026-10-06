@@ -63,6 +63,8 @@ Verifiers: Vitest, `ui_policy.rs` (`test-engineer`), the gates. M: the mutation 
 - [x] AC-14 — no kind, mock spec status or link type but `mentions` quoted in `ui/src` outside mocks and tests (`policy.test.ts`); ARIA tabs; one `h1` with two holders (M: `status === "accepted"` styling; an `h1` per holder).
 - [x] AC-15 — `pnpm lint` (0 warnings), `build`, `test` green, no `console.error`/`warn`; `ui_policy`, `anonymity`, `doc_pointers` green (33 tests); 15 packages; mock kinds, `large`'s too, in their set; non-Latin escaped; `ui/README.md` ≤ 8 192 B; docs gate clean, worst W ≤ start (107 750 ≤ 107 890 B) (M: a 16th package; a raw Cyrillic letter in a mock).
 
+Changed by design in `ui-markdown` (2026-10-06, ADR-0036): opening a node also reads it with links (AC-01); AC-06 holds in Source, Rendered the default; the working answer "no markdown package" is replaced.
+
 ## Owner's manual check
 
 `pnpm --dir ui dev`: `#/harbor-sim/tree` by keyboard alone, VoiceOver reading level, position, expanded state, marks; `MEC-TIDE-TABLES` whole; at 200 % the panes stack without horizontal scroll; `?scenario=large#/harbor-sim/tree`: a root expanded, 100 rows arrowed without lag; `?scenario=empty`, `error`, `slow`.

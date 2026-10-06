@@ -9,7 +9,7 @@ import { renderApp } from "../test/render";
 import { SOME_TASKS, taskClient } from "../test/taskStub";
 
 // docs/features/ui-tasks.md on a stub client: AC-01 (what a route reads), AC-03 (an unknown state
-// in the DOM), AC-05 (filters), AC-07 (verbatim text, links), AC-09 (commands and Copy), AC-10
+// in the DOM), AC-05 (filters), AC-07 (text, now rendered by ui-markdown; links), AC-09 (commands and Copy), AC-10
 // (Package), AC-11 (states), AC-12 (keyboard), AC-13 (hostile text); a node its diff removes
 // (task-package G4) as text; opening a task in the stacked layout.
 
@@ -261,22 +261,38 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     runs: [aTaskRun({ run: 1, role: HOSTILE, ended_at: "2026-10-02T10:00:00Z", outcome: "completed", summary: " Run summary\n" })],
   });
 
-  it("shows goal, criterion text, note and the plan exactly as sent", async () => {
+  // ui-markdown changed this by design (docs/features/ui-markdown.md "Data"): goal,
+  // criterion, note, plan and run summary render as markdown; their words stay, markup in them is
+  // text, and the row-like summaries stay exactly as sent.
+  it("renders goal, criterion text, note, plan and run summary as markdown, their words kept; a proposal's summary exactly as sent", async () => {
     await openTask(pkg);
-    expect(document.querySelector(".task-goal")?.textContent).toBe(pkg.goal);
-    expect(Array.from(document.querySelectorAll(".criterion-text")).map((element) => element.textContent)).toEqual([
-      "  Criterion text\n  kept  ",
-      "Free criterion",
-    ]);
+    const rendered = (selector: string) => document.querySelector(`${selector}.markdown:not(.markdown-pending)`);
+    await waitFor(() => {
+      expect(rendered(".task-goal")).not.toBeNull();
+    });
+    expect(rendered(".task-goal")?.textContent).toBe("Goal with spaces kept\nand a second line");
+    expect(rendered(".task-goal")?.querySelector("br")).not.toBeNull();
+    expect(Array.from(document.querySelectorAll(".criterion-text"), (element) => element.textContent)).toEqual(["Criterion text\nkept", "Free criterion"]);
     expect(screen.getByText("Free text")).toBeTruthy();
     expect(screen.getByText("Not found in the compared place")).toBeTruthy();
-    expect(document.querySelector(".owner-note-text")?.textContent).toBe(`${HOSTILE}\n  second line `);
+    // An HTML block (the tag alone on its line, then lines to a blank one): literal text, as sent.
+    expect(rendered(".owner-note-text")?.textContent).toBe(`${HOSTILE}\n  second line `);
+    expect(rendered(".owner-note-text")?.querySelector(".md-raw-html")).not.toBeNull();
+    expect(document.querySelector("img")).toBeNull();
     showTab(/^Plan/);
-    expect(document.querySelector(".task-plan")?.textContent).toBe(plan);
+    await waitFor(() => {
+      expect(rendered(".task-plan")).not.toBeNull();
+    });
+    const shown = rendered(".task-plan");
+    expect(shown?.querySelector("ol li")?.textContent).toBe("First step");
+    expect(shown?.querySelector("strong")?.textContent).toBe("not bold");
+    expect(shown?.textContent).toContain("indented");
     showTab(/^Proposals/);
     expect(document.querySelector(".task-proposal-summary")?.textContent).toBe("  Summary kept  ");
     showTab(/^Runs/);
-    expect(document.querySelector(".run-summary")?.textContent).toBe(" Run summary\n");
+    await waitFor(() => {
+      expect(rendered(".run-summary")?.textContent).toBe("Run summary");
+    });
   });
 
   it("links targets, criteria, affected nodes and assumptions from sectionHash; a gone target is text alone", async () => {

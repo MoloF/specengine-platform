@@ -243,6 +243,9 @@ export function useNode(project: string, ref: string, options: NodeOptions = {},
   });
 }
 
+/** A node's read as a view holds it (the node pane's links read, shown by the Links tab). */
+export type NodeQuery = ReturnType<typeof useNode>;
+
 /** A search once submitted (`options` null before); a new query never shows the last one's hits. */
 export function useSearch(project: string, options: SearchOptions | null) {
   const client = useClient();

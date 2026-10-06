@@ -6,6 +6,7 @@ import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
+import type { TextMode } from "../markdown/TextMode";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -97,8 +98,10 @@ export function NoNodePane() {
 
 /**
  * One node by REF: its heading (the REF when several holders answer it, each holder then under
- * its own h2), the header facts, the daemon's notes and four tabs. The Text tab shows at once; the
- * Links and Bundle tabs read on first open; Proposals reads the Inbox's query.
+ * its own h2), the header facts, the daemon's notes and four tabs. The Text tab shows at once,
+ * rendered or as its source; the node's links read starts beside it (the rendered text's anchors,
+ * the Links tab), the text never waiting for it. The Bundle tab reads on first open; Proposals
+ * reads the Inbox's query.
  */
 export function NodePane({
   project,
@@ -106,6 +109,8 @@ export function NodePane({
   archive,
   rows,
   inbox,
+  textMode,
+  onTextMode,
   arrival,
   onFollow,
 }: {
@@ -114,12 +119,17 @@ export function NodePane({
   archive: boolean;
   rows: readonly TreeRow[];
   inbox: InboxQuery;
+  /** Rendered or Source: the view keeps it from node to node. */
+  textMode: TextMode;
+  onTextMode: (mode: TextMode) => void;
   /** Called once on mount: how this node was reached. */
   arrival: () => Arrival;
   /** An anchor to another node was clicked: the view decides whether it moves this page. */
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const view = useNode(project, nodeRef);
+  // One observer of the links read: the Links tab shows this same read, and adds none.
+  const links = useNode(project, nodeRef, { with: ["links"], archive });
   const failure = useRetainedFailure(view.error, view.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const arrived = useRef<Arrival | null>(null);
@@ -141,6 +151,13 @@ export function NodePane({
   function select(next: TabId) {
     setTab(next);
     setOpened((current) => (current.has(next) ? current : new Set([...current, next])));
+  }
+
+  // A new mode mounts the other view: the jump already made is not made again there, so focus stays
+  // on the switch that was pressed (WCAG 3.2.2).
+  function changeMode(mode: TextMode) {
+    setTarget(null);
+    onTextMode(mode);
   }
 
   function jump(place: string, line: number) {
@@ -225,13 +242,23 @@ export function NodePane({
         />
         <TabPanel base={base} id="text" selected={tab === "text"}>
           <RegionBoundary name="text">
-            <TextPanel project={project} holders={holders} rows={rows} target={target} onJump={jump} onFollow={onFollow} />
+            <TextPanel
+              project={project}
+              holders={holders}
+              rows={rows}
+              mode={textMode}
+              links={links.data}
+              target={target}
+              onMode={changeMode}
+              onJump={jump}
+              onFollow={onFollow}
+            />
           </RegionBoundary>
         </TabPanel>
         <TabPanel base={base} id="links" selected={tab === "links"}>
           {opened.has("links") && (
             <RegionBoundary name="links">
-              <LinksPanel project={project} nodeRef={nodeRef} archive={archive} onShowInText={jump} onFollow={onFollow} />
+              <LinksPanel project={project} nodeRef={nodeRef} archive={archive} query={links} onShowInText={jump} onFollow={onFollow} />
             </RegionBoundary>
           )}
         </TabPanel>

@@ -1,6 +1,6 @@
 import { useRef, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import { useNode } from "../api/queries";
+import type { NodeQuery } from "../api/queries";
 import type { ShownLink, ShownLinks, ShownNode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
@@ -194,21 +194,26 @@ function HolderLinks({
   );
 }
 
-/** The Links tab: outgoing then incoming per holder, in the daemon's order; read on first open. */
+/**
+ * The Links tab: outgoing then incoming per holder, in the daemon's order. The read is the node
+ * pane's (`nodes?with=links`, started with the node), shared with the rendered text's anchors.
+ */
 export function LinksPanel({
   project,
   nodeRef,
   archive,
+  query,
   onShowInText,
   onFollow,
 }: {
   project: string;
   nodeRef: string;
   archive: boolean;
+  /** The node's links read. */
+  query: NodeQuery;
   onShowInText: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
-  const query = useNode(project, nodeRef, { with: ["links"], archive });
   const failure = useRetainedFailure(query.error, query.isFetching);
   const region = useRef<HTMLDivElement>(null);
   const retried = useRetryFocus(query.data, () => region.current);

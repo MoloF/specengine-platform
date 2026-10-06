@@ -1,5 +1,6 @@
 import type { TaskPackage, TaskTarget } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { Prose } from "../markdown/Prose";
 import { Part, When } from "./parts";
 
 /** A target's name: its ID, else its path (an ID-less document). */
@@ -35,12 +36,19 @@ function Target({ project, target }: { project: string; target: TaskTarget }) {
   );
 }
 
-/** The Overview tab: goal, criteria, targets, affected nodes, assumptions, owner notes, profile; text verbatim. */
+/**
+ * The Overview tab: goal, criteria, targets, affected nodes, assumptions, owner notes, profile.
+ * Goal, criterion, assumption and note texts render as markdown; names and paths stay verbatim.
+ */
 export function OverviewPanel({ project, task }: { project: string; task: TaskPackage }) {
   return (
     <div className="task-panel">
       <Part title="Goal">
-        {task.goal === null ? <p className="muted">No goal given.</p> : <p className="task-text task-goal">{task.goal}</p>}
+        {task.goal === null ? (
+          <p className="muted">No goal given.</p>
+        ) : (
+          <Prose className="task-text task-goal" source={task.goal} links={null} project={project} baseLevel={2} frontMatter={false} />
+        )}
       </Part>
 
       <Part title="Criteria" count={task.criteria.length}>
@@ -62,7 +70,7 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
                 {criterion.text === null ? (
                   <p className="muted">Not found in the compared place</p>
                 ) : (
-                  <p className="task-text criterion-text">{criterion.text}</p>
+                  <Prose className="task-text criterion-text" source={criterion.text} links={null} project={project} baseLevel={2} frontMatter={false} />
                 )}
               </li>
             ))}
@@ -108,7 +116,7 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
                 <a className="mono" href={sectionHash(project, "inbox", assumption.proposal)}>
                   {assumption.proposal}
                 </a>
-                <p className="task-text assumption-text">{assumption.text}</p>
+                <Prose className="task-text assumption-text" source={assumption.text} links={null} project={project} baseLevel={2} frontMatter={false} />
               </li>
             ))}
           </ul>
@@ -125,7 +133,7 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
                 <p className="task-note-at">
                   <When at={note.at} />
                 </p>
-                <p className="task-text owner-note-text">{note.note}</p>
+                <Prose className="task-text owner-note-text" source={note.note} links={null} project={project} baseLevel={2} frontMatter={false} />
               </li>
             ))}
           </ol>

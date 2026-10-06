@@ -1,6 +1,8 @@
 import { useMemo, type MouseEvent } from "react";
-import type { ShownNode } from "../api/types";
+import type { NodeView, ShownLink, ShownNode } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { Prose } from "../markdown/Prose";
+import { TextModeSwitch, type TextMode } from "../markdown/TextMode";
 import { Icon } from "../ui/Icon";
 import { placeKey, rowName, type TreeRow } from "./rows";
 import { splitLines, TextView, type LineTarget } from "./TextView";
@@ -30,12 +32,23 @@ function names(list: string[], more: number): string {
   return more > 0 ? `${list.join(", ")}, ${String(more)} more` : list.join(", ");
 }
 
-/** One holder's text: its sections to jump to, what a cut left out, the numbered text. */
+/**
+ * A holder's outgoing links from the node's links read (`nodes?with=links`), matched by place;
+ * null until it lands, or when it lists no such holder.
+ */
+export function outgoingOf(read: NodeView | undefined, holder: ShownNode): readonly ShownLink[] | null {
+  const place = placeKey(holder);
+  return read?.nodes.find((node) => placeKey(node) === place)?.links?.outgoing ?? null;
+}
+
+/** One holder's text: its sections to jump to, what a cut left out, the text rendered or numbered. */
 function HolderText({
   project,
   holder,
   rows,
   many,
+  mode,
+  links,
   target,
   onJump,
   onFollow,
@@ -44,6 +57,8 @@ function HolderText({
   holder: ShownNode;
   rows: readonly TreeRow[];
   many: boolean;
+  mode: TextMode;
+  links: readonly ShownLink[] | null;
   target: TextTarget | null;
   onJump: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
@@ -122,34 +137,60 @@ function HolderText({
           <span>This file is not UTF-8: undecodable bytes show as replacement characters.</span>
         </p>
       )}
-      <TextView
-        text={holder.text}
-        firstLine={holder.line}
-        label={`Text of ${rowName(holder)}, lines ${String(holder.line)} to ${String(holder.end_line)}`}
-        target={target !== null && target.place === place ? target : null}
-      />
+      {mode === "source" ? (
+        <TextView
+          text={holder.text}
+          firstLine={holder.line}
+          label={`Text of ${rowName(holder)}, lines ${String(holder.line)} to ${String(holder.end_line)}`}
+          target={target !== null && target.place === place ? target : null}
+        />
+      ) : (
+        <Prose
+          className="node-markdown"
+          source={holder.text}
+          links={links}
+          project={project}
+          baseLevel={many ? 2 : 1}
+          frontMatter={holder.line === 1}
+          firstLine={holder.line}
+          path={holder.path}
+          target={target !== null && target.place === place ? target : null}
+          onFollow={onFollow}
+        />
+      )}
     </section>
   );
 }
 
-/** The Text tab: each holder's text verbatim, numbered from its first line. */
+/**
+ * The Text tab: each holder's text rendered as markdown (its links anchored only as the links read
+ * resolved them) or, in Source, verbatim and numbered from its first line.
+ */
 export function TextPanel({
   project,
   holders,
   rows,
+  mode,
+  links,
   target,
+  onMode,
   onJump,
   onFollow,
 }: {
   project: string;
   holders: readonly ShownNode[];
   rows: readonly TreeRow[];
+  mode: TextMode;
+  /** The node's links read; undefined until it lands. */
+  links: NodeView | undefined;
   target: TextTarget | null;
+  onMode: (mode: TextMode) => void;
   onJump: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   return (
     <div className="text-panel">
+      <TextModeSwitch mode={mode} label="Show the text as" onChange={onMode} />
       {holders.map((holder) => (
         <HolderText
           key={placeKey(holder)}
@@ -157,6 +198,8 @@ export function TextPanel({
           holder={holder}
           rows={rows}
           many={holders.length > 1}
+          mode={mode}
+          links={outgoingOf(links, holder)}
           target={target}
           onJump={onJump}
           onFollow={onFollow}
