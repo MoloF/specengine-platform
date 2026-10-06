@@ -22,12 +22,12 @@ function part(selector: string): HTMLElement {
   return found;
 }
 
-function Page({ open, onClose }: { open: boolean; onClose: () => void }) {
+function Page({ open, onClose, closeOnScrim }: { open: boolean; onClose: () => void; closeOnScrim?: boolean }) {
   return (
     <Announcer>
       <button type="button">Behind</button>
       {open && (
-        <Dialog title="Something to decide" onClose={onClose}>
+        <Dialog title="Something to decide" onClose={onClose} closeOnScrim={closeOnScrim}>
           <button type="button">Inside</button>
         </Dialog>
       )}
@@ -35,8 +35,8 @@ function Page({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-function renderDialog(onClose: () => void) {
-  return render(<Page open onClose={onClose} />);
+function renderDialog(onClose: () => void, closeOnScrim?: boolean) {
+  return render(<Page open onClose={onClose} closeOnScrim={closeOnScrim} />);
 }
 
 describe("Dialog", () => {
@@ -49,12 +49,38 @@ describe("Dialog", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps focus where it was when the scrim is pressed", () => {
-    renderDialog(() => undefined);
+  it("leaves an Esc that ends an IME composition to the input method: no close, not prevented", () => {
+    const onClose = vi.fn();
+    renderDialog(onClose);
+    const inside = screen.getByRole("button", { name: "Inside" });
+    expect(fireEvent.keyDown(inside, { key: "Escape", isComposing: true })).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(fireEvent.keyDown(inside, { key: "Escape" })).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps focus where it was when the scrim is pressed, and stays open on a click there by default", () => {
+    const onClose = vi.fn();
+    renderDialog(onClose);
     const inside = screen.getByRole("button", { name: "Inside" });
     expect(document.activeElement).toBe(inside);
     expect(fireEvent.mouseDown(part("[data-dialog-scrim]"))).toBe(false);
+    fireEvent.click(part("[data-dialog-scrim]"));
     expect(document.activeElement).toBe(inside);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on a click on the scrim with closeOnScrim, never on a click inside the panel", () => {
+    const onClose = vi.fn();
+    renderDialog(onClose, true);
+    const inside = screen.getByRole("button", { name: "Inside" });
+    expect(fireEvent.mouseDown(part("[data-dialog-scrim]"))).toBe(false);
+    expect(document.activeElement).toBe(inside);
+    fireEvent.click(screen.getByRole("dialog"));
+    fireEvent.click(inside);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(part("[data-dialog-scrim]"));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("keeps Tab and Shift+Tab inside when the panel itself has focus (a click on its text)", () => {

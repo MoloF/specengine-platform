@@ -56,6 +56,14 @@ export function statusLook(value: ProposalStatus): Look {
   return lookup(STATUS, value) ?? { label: value, tone: "proposal-unknown", icon: "unknown" };
 }
 
+const STATUS_ORDER: readonly string[] = Object.keys(STATUS);
+
+/** A status's place in the table's order (open first); any unknown value after every known one. */
+export function statusRank(value: ProposalStatus): number {
+  const at = STATUS_ORDER.indexOf(value);
+  return at === -1 ? STATUS_ORDER.length : at;
+}
+
 const GAP: Record<KnownGapType, string> = {
   missing: "Missing in the spec or the code",
   partial: "Partly covered",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHash, sectionHash } from "./routes";
+import { homeHash, navOf, parseHash, sectionHash } from "./routes";
 
 describe("hash routes", () => {
   it.each([
@@ -10,7 +10,12 @@ describe("hash routes", () => {
     ["#/alpha/inbox/", { type: "section", project: "alpha", section: "inbox", id: null }],
     ["#/alpha/inbox/PR-0042", { type: "section", project: "alpha", section: "inbox", id: "PR-0042" }],
     ["#/alpha/tree/R-12", { type: "section", project: "alpha", section: "tree", id: "R-12" }],
-    ["#/alpha", { type: "not_found" }],
+    ["#/alpha", { type: "project", project: "alpha" }],
+    ["#/alpha/", { type: "project", project: "alpha" }],
+    ["#/a%20b", { type: "project", project: "a b" }],
+    ["#/alpha//", { type: "not_found" }],
+    ["#/alpha//x", { type: "not_found" }],
+    ["#/%E0%A4%A", { type: "not_found" }],
     ["#/alpha/nowhere", { type: "not_found" }],
     ["#/alpha/inbox/PR-1/extra", { type: "not_found" }],
     ["#main", { type: "not_found" }],
@@ -19,7 +24,21 @@ describe("hash routes", () => {
     expect(parseHash(hash)).toEqual(route);
   });
 
+  it("lists the nav: Overview to the home, then the six sections", () => {
+    expect(navOf("a b").map(({ label, hash }) => [label, hash])).toEqual([
+      ["Overview", "#/a%20b"],
+      ["Inbox", "#/a%20b/inbox"],
+      ["Tasks", "#/a%20b/tasks"],
+      ["Spec tree", "#/a%20b/tree"],
+      ["Graph", "#/a%20b/graph"],
+      ["Health", "#/a%20b/health"],
+      ["Questions", "#/a%20b/questions"],
+    ]);
+  });
+
   it("writes what it reads", () => {
+    expect(homeHash("alpha")).toBe("#/alpha");
+    expect(parseHash(homeHash("a/b c"))).toEqual({ type: "project", project: "a/b c" });
     expect(sectionHash("alpha", "inbox")).toBe("#/alpha/inbox");
     expect(sectionHash("alpha", "inbox", "PR-1")).toBe("#/alpha/inbox/PR-1");
     expect(parseHash(sectionHash("a b", "graph", "X/Y"))).toEqual({

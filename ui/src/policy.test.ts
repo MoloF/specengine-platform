@@ -115,11 +115,23 @@ describe("source policy", () => {
     expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
   });
 
-  it("takes every href in the views of spec data from sectionHash (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks)", () => {
-    const views = (path: string) =>
-      !(path.startsWith("/src/tree/") || path.startsWith("/src/inbox/") || path.startsWith("/src/graph/") || path.startsWith("/src/tasks/")) ||
-      /\.test\.tsx?$/.test(path);
-    expect(offending(/\bhref=(?!\{sectionHash\()/, views)).toEqual([]);
+  it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home)", () => {
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/"];
+    const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
+    const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
+    expect(offending(rule, views)).toEqual([]);
+    // The detector itself: a hash spelled by hand is caught, one from routes.ts is not.
+    expect(rule.test("<a href={`#/${project}/tasks`}>")).toBe(true);
+    expect(rule.test('<a href={"#/" + project}>')).toBe(true);
+    expect(rule.test('<a href={sectionHash(project, "tasks")}>')).toBe(false);
+    expect(rule.test("<a href={homeHash(project)}>")).toBe(false);
+  });
+
+  it("reads no clock in the home or the palette: times are shown as stored (AC-07 of ui-home)", () => {
+    const outside = (path: string) => !(path.startsWith("/src/overview/") || path.startsWith("/src/palette/")) || /\.test\.tsx?$/.test(path);
+    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "performance\\.now\\(", "useNow\\b", "formatAge\\b"].join("|"));
+    expect(offending(clock, outside)).toEqual([]);
   });
 
   it("reads the network only through src/api (AC-01 of ui-tree-node)", () => {

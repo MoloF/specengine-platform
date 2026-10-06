@@ -61,5 +61,8 @@ export function stalenessLook(stale: boolean | null, hasSnapshot: boolean): Look
   return { label: "Unknown", tone: "stale-unknown", icon: "unknown" };
 }
 
+/** A list row's mark for `stale` true (the Tasks list, the home): the spec changed since approval. */
+export const SPEC_CHANGED: Look = { label: "Spec changed", tone: "stale-changed", icon: "specChanged" };
+
 /** What stands in for the staleness badge before any approval. */
 export const FROZEN_AT_APPROVAL = "The spec is frozen at approval.";

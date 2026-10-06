@@ -213,6 +213,42 @@ export function useTasks(project: string) {
 export type TasksQuery = ReturnType<typeof useTasks>;
 
 /**
+ * The palette's reads (docs/features/ui-home.md "Reads"): the cached answer as it is, never read
+ * again by opening; read once when uncached or failed (`enabled` false: no project, nothing read).
+ */
+export function useCachedTasks(project: string, enabled = true) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.tasks(project),
+    queryFn: () => client.getTasks(project),
+    refetchOnMount: false,
+    enabled,
+  });
+}
+
+/** The Inbox as cached, for the palette: see useCachedTasks. */
+export function useCachedInbox(project: string, enabled = true) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.inbox(project),
+    queryFn: () => client.getInbox(project),
+    refetchOnMount: false,
+    enabled,
+  });
+}
+
+/**
+ * The palette's node search: one `search` per activation, the query as typed, nothing on a
+ * keystroke; `reset` drops the answer (an edit), and a reply after it is never shown.
+ */
+export function useSearchOnActivation(project: string) {
+  const client = useClient();
+  return useMutation({
+    mutationFn: (query: string) => client.search(project, { query }),
+  });
+}
+
+/**
  * One task's package. No placeholder: a newly opened task never shows the previous one's package
  * while its own is read (docs/features/ui-tasks.md, States).
  */

@@ -232,6 +232,8 @@ describe("the Inbox on a stub client", () => {
       "r",
       "c",
       "d",
+      "Cmd-K",
+      "Ctrl-K",
       "?",
       "Esc",
     ]);
@@ -439,10 +441,7 @@ describe("keyboard (AC-13)", () => {
     const shortcuts = screen.getByRole("button", { name: "Keyboard shortcuts" });
     shortcuts.focus();
     fireEvent.keyDown(shortcuts, { key: "a" });
-    const inbox = within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link")[0];
-    if (inbox === undefined) {
-      throw new Error("no nav link");
-    }
+    const inbox = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Inbox" });
     fireEvent.keyDown(inbox, { key: "r" });
     fireEvent.keyDown(document.body, { key: "d" });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -776,10 +775,7 @@ describe("decisions (AC-14)", () => {
   async function leaveWhileSending(client: StubClient) {
     renderApp(client, "#/alpha/tasks");
     await screen.findByRole("heading", { level: 1, name: "Tasks" });
-    const inboxLink = within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link")[0];
-    if (inboxLink === undefined) {
-      throw new Error("no Inbox link");
-    }
+    const inboxLink = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Inbox" });
     fireEvent.click(inboxLink);
     const card = await screen.findByRole("article");
     fireEvent.click(within(card).getByRole("button", { name: "Defer" }));

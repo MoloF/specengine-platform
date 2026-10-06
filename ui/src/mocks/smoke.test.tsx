@@ -16,7 +16,7 @@ function renderMock(scenario: Scenario, hash: string) {
 
 describe("the UI over the mock", () => {
   it("shows harbor-sim's queue in order with its odd cases intact", async () => {
-    renderMock("normal", "#/");
+    renderMock("normal", "#/harbor-sim/inbox");
     const list = await screen.findByRole("listbox");
     const ids = within(list)
       .getAllByRole("option")

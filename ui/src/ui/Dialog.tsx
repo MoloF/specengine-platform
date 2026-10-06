@@ -26,19 +26,24 @@ function focusables(root: HTMLElement): HTMLElement[] {
 /**
  * An in-app modal dialog: role dialog, aria-modal, focus moved inside on open and trapped there,
  * the rest of the page inert except the live regions. Esc and Tab are handled on the whole host,
- * so they work wherever focus sits inside it; a press on the scrim leaves focus where it was.
- * Esc calls onClose, which may decline (a decision being sent). The caller returns focus on close.
+ * so they work wherever focus sits inside it; an Esc that ends an IME composition is the input
+ * method's, not the dialog's. A press on the scrim leaves focus where it was; with `closeOnScrim`
+ * (a dialog with nothing to lose, the palette) a click there closes it as Esc does. Esc calls
+ * onClose, which may decline (a decision being sent). The caller returns focus on close.
  */
 export function Dialog({
   title,
   onClose,
   children,
   className,
+  closeOnScrim = false,
 }: {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  /** A click on the scrim calls onClose; off by default, so a misplaced click keeps typed text. */
+  closeOnScrim?: boolean;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -70,6 +75,9 @@ export function Dialog({
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {
+      if (event.nativeEvent.isComposing) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       onClose();
@@ -106,6 +114,11 @@ export function Dialog({
         data-dialog-scrim=""
         onMouseDown={(event) => {
           event.preventDefault();
+        }}
+        onClick={() => {
+          if (closeOnScrim) {
+            onClose();
+          }
         }}
       />
       <div

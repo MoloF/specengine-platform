@@ -9,7 +9,7 @@ import { stubClient } from "../test/stubClient";
 import { App } from "./App";
 
 // AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph, Tasks
-// since ui-tasks.
+// since ui-tasks; the home ("Overview", first in the nav) since ui-home, where `#/` lands.
 
 const UNBUILT = [
   ["health", "Health", "ui-health-round"],
@@ -29,11 +29,16 @@ function navLinks(): HTMLElement[] {
   return within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link");
 }
 
+function navLink(name: string): HTMLElement {
+  return within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name });
+}
+
 describe("the shell (AC-11)", () => {
-  it("lists the six sections in order and marks the current one", async () => {
+  it("lists the home and the six sections in order and marks the current one", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
     expect(navLinks().map((link) => link.textContent)).toEqual([
+      "Overview",
       "Inbox",
       "Tasks",
       "Spec tree",
@@ -41,8 +46,9 @@ describe("the shell (AC-11)", () => {
       "Health",
       "Questions",
     ]);
-    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual(["page", null, null, null, null, null]);
-    expect(navLinks()[1]?.getAttribute("href")).toBe("#/alpha/tasks");
+    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null]);
+    expect(navLinks()[0]?.getAttribute("href")).toBe("#/alpha");
+    expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/tasks");
   });
 
   it.each(UNBUILT)("names the slice that builds %s", async (section, title, slice) => {
@@ -76,11 +82,7 @@ describe("the shell (AC-11)", () => {
   it("navigates with the nav, and back returns", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
-    const tasks = navLinks()[1];
-    if (tasks === undefined) {
-      throw new Error("no Tasks link");
-    }
-    fireEvent.click(tasks);
+    fireEvent.click(navLink("Tasks"));
     expect(await screen.findByRole("heading", { level: 1, name: "Tasks" })).toBeTruthy();
     expect(window.location.hash).toBe("#/alpha/tasks");
     // jsdom traverses history in a task of its own; wait for the hashchange it fires, not a clock.
@@ -101,11 +103,11 @@ describe("the shell (AC-11)", () => {
     expect(window.location.hash).toBe("#/alpha/inbox");
   });
 
-  it("opens the first project's inbox from #/, leaving focus at the top of the page", async () => {
+  it("opens the first project's home from #/, leaving focus at the top of the page", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/");
-    expect(await screen.findByRole("heading", { level: 1, name: "Inbox" })).toBeTruthy();
-    expect(window.location.hash).toBe("#/alpha/inbox");
-    await screen.findByRole("listbox");
+    expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
+    expect(window.location.hash).toBe("#/alpha");
+    await screen.findByRole("link", { name: /^PR-1: / });
     expect(document.activeElement).toBe(document.body);
   });
 
@@ -119,11 +121,11 @@ describe("the shell (AC-11)", () => {
     expect(alert.contains(retry)).toBe(false);
     retry.focus();
     fireEvent.click(retry);
-    const heading = await screen.findByRole("heading", { level: 1, name: "Inbox" });
+    const heading = await screen.findByRole("heading", { level: 1, name: "Overview" });
     await waitFor(() => {
       expect(document.activeElement).toBe(heading);
     });
-    expect(window.location.hash).toBe("#/alpha/inbox");
+    expect(window.location.hash).toBe("#/alpha");
   });
 
   it("after a successful Retry that finds no projects, focuses the No projects heading", async () => {
@@ -209,11 +211,7 @@ describe("error boundaries (AC-16)", () => {
     });
     expect(await screen.findByRole("heading", { level: 1, name: "This view failed" })).toBeTruthy();
     expect(caught.length).toBeGreaterThan(0);
-    const tasks = navLinks()[1];
-    if (tasks === undefined) {
-      throw new Error("no Tasks link");
-    }
-    fireEvent.click(tasks);
+    fireEvent.click(navLink("Tasks"));
     expect(await screen.findByRole("heading", { level: 1, name: "Tasks" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "This view failed" })).toBeNull();
   });
@@ -239,6 +237,7 @@ describe("the console guard (AC-16)", () => {
 
 describe("Mock data (AC-17)", () => {
   const routes = [
+    "#/alpha",
     "#/alpha/inbox",
     "#/alpha/tree",
     "#/alpha/tree/R-1",

@@ -618,13 +618,17 @@ describe("keyboard (AC-08)", () => {
     expect(within(dialog).getByText("Canvas: centre the graph on the box, options kept")).toBeTruthy();
   });
 
-  it("adds no key listener to the document or the window when the canvas mounts", async () => {
+  // Amended by docs/features/ui-home.md "Amendment": exactly the shell's one listener, the chord's.
+  it("adds no key listener to the document or the window when the canvas mounts, but the shell's chord listener", async () => {
     const onDocument = vi.spyOn(document, "addEventListener");
     const onWindow = vi.spyOn(window, "addEventListener");
     renderApp(graphClient(), "#/alpha/graph/R-0");
     await drawn();
-    const keyListeners = [...onDocument.mock.calls, ...onWindow.mock.calls].map(([type]) => type).filter((type) => /^key/.test(type));
-    expect(keyListeners).toEqual([]);
+    const keyListeners = [
+      ...onDocument.mock.calls.map(([type, , options]) => ["document", type, options]),
+      ...onWindow.mock.calls.map(([type, , options]) => ["window", type, options]),
+    ].filter(([, type]) => typeof type === "string" && /^key/.test(type));
+    expect(keyListeners).toEqual([["document", "keydown", true]]);
   });
 });
 

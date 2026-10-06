@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
 import { useProjects } from "../api/queries";
 import type { Project } from "../api/types";
 import { GraphView } from "../graph/GraphView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
+import { HomeView } from "../overview/HomeView";
 import { InboxView } from "../inbox/InboxView";
+import { Palette } from "../palette/Palette";
 import { TasksView } from "../tasks/TasksView";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
@@ -14,16 +16,29 @@ import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
+import { isJumpChord, JUMP_KEYSHORTCUTS } from "./chord";
 import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { pushHash, replaceHash, useHash } from "./location";
-import { parseHash, sectionHash, type Route } from "./routes";
+import { homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { SECTIONS } from "./sections";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { NotBuilt, NotFound, ViewFailure } from "./views";
 
+/** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl. */
+const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "\u2318K" : "Ctrl K";
+
+/** One key per view: per section of a project, per project's home; `#/` is "home". */
 function viewKeyOf(route: Route): string {
-  return route.type === "section" ? `${route.project}/${route.section}` : route.type;
+  if (route.type === "section") {
+    return `${route.project}/${route.section}`;
+  }
+  return route.type === "project" ? `project:${route.project}` : route.type;
+}
+
+/** The project a route names, if any. */
+function projectOf(route: Route): string | null {
+  return route.type === "section" || route.type === "project" ? route.project : null;
 }
 
 /**
@@ -47,7 +62,7 @@ function ProjectSwitcher({
 }) {
   const select = useRef<HTMLSelectElement>(null);
   const retried = useRef(false);
-  const current = route.type === "section" ? route.project : "";
+  const current = projectOf(route) ?? "";
   const known = projects ?? [];
   const listed = known.some((project) => project.slug === current);
 
@@ -100,8 +115,9 @@ function ProjectSwitcher({
         value={current}
         disabled={projects === undefined}
         onChange={(event) => {
-          const section = route.type === "section" ? route.section : "inbox";
-          pushHash(sectionHash(event.target.value, section));
+          // A section keeps its section; the home and any other route land on the other project's home.
+          const other = event.target.value;
+          pushHash(route.type === "section" ? sectionHash(other, route.section) : homeHash(other));
         }}
       >
         {!listed && (
@@ -119,7 +135,7 @@ function ProjectSwitcher({
   );
 }
 
-/** Header, the six sections, the current view inside its own error boundary. */
+/** Header, the home and the six sections, the current view inside its own error boundary, the jump palette. */
 export function Shell({ scenario }: { scenario: string | null }) {
   const hash = useHash();
   const route = parseHash(hash);
@@ -133,6 +149,13 @@ export function Shell({ scenario }: { scenario: string | null }) {
   /** Retry was pressed on the home view's error panel; the answer takes away the Retry that had focus. */
   const homeRetried = useRef(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  /** The palette is open, as the document's key listener sees it, ahead of the next render. */
+  const paletteShown = useRef(false);
+  const paletteTrigger = useRef<HTMLElement | null>(null);
+  const paletteInput = useRef<HTMLInputElement>(null);
+  /** A jump's hash: once the route shows it, the view's `h1` takes the focus (once). */
+  const jumpedTo = useRef<string | null>(null);
   /** The Graph's options per project for this page's life; never in the hash (docs/features/ui-graph.md). */
   const graphSettings = useRef(new Map<string, GraphSettings>());
   const graphMemory = useMemo<GraphMemory>(
@@ -147,11 +170,52 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
 
+  // `#/` is the first project's home, without a history entry of its own.
   useEffect(() => {
     if (route.type === "home" && firstProject !== null) {
-      replaceHash(sectionHash(firstProject, "inbox"));
+      replaceHash(homeHash(firstProject));
     }
   }, [route.type, firstProject]);
+
+  // A palette jump: focus went to main as the palette closed; the destination's heading takes it
+  // once rendered, also when the view stays the same (one task to another).
+  useEffect(() => {
+    const wanted = jumpedTo.current;
+    if (wanted === null || hash !== wanted) {
+      return;
+    }
+    const heading = main.current?.querySelector<HTMLElement>("h1");
+    if (heading !== null && heading !== undefined) {
+      jumpedTo.current = null;
+      heading.focus();
+    }
+  });
+
+  // The chord, Cmd-K or Ctrl-K: the shell's one document key listener (capture), for the palette
+  // only, from anywhere, a text field included. Every other key passes untouched.
+  const chordAction = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    chordAction.current = () => {
+      if (paletteShown.current) {
+        paletteInput.current?.focus();
+      } else if (document.querySelector('[role="dialog"]') === null) {
+        openPalette(document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
+      }
+    };
+  });
+  useEffect(() => {
+    function onChord(event: KeyboardEvent) {
+      if (!isJumpChord(event)) {
+        return;
+      }
+      event.preventDefault();
+      chordAction.current();
+    }
+    document.addEventListener("keydown", onChord, true);
+    return () => {
+      document.removeEventListener("keydown", onChord, true);
+    };
+  }, []);
 
   // A new view focuses its heading. Leaving home does so only after a Retry there whose button has
   // gone with focus on it; on first load focus stays at the top of the page.
@@ -196,7 +260,32 @@ export function Shell({ scenario }: { scenario: string | null }) {
     focusLater(() => (back?.isConnected === true ? back : null));
   }
 
-  const navProject = route.type === "section" ? route.project : firstProject;
+  function openPalette(trigger: HTMLElement | null) {
+    paletteTrigger.current = trigger;
+    paletteShown.current = true;
+    jumpedTo.current = null;
+    setPaletteOpen(true);
+  }
+
+  function closePalette() {
+    paletteShown.current = false;
+    setPaletteOpen(false);
+    const back = paletteTrigger.current;
+    focusLater(() => (back?.isConnected === true ? back : main.current));
+  }
+
+  /** One history entry, none to the hash shown; focus to main, then the destination's heading. */
+  function jump(target: string) {
+    paletteShown.current = false;
+    setPaletteOpen(false);
+    jumpedTo.current = target;
+    if (target !== window.location.hash) {
+      pushHash(target);
+    }
+    focusLater(() => main.current);
+  }
+
+  const navProject = projectOf(route) ?? firstProject;
   const inboxHref = navProject === null ? "#/" : sectionHash(navProject, "inbox");
 
   let view;
@@ -239,6 +328,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     }
   } else if (projects.data !== undefined && !projects.data.some((project) => project.slug === route.project)) {
     view = <NotFound reason={`There is no project ${route.project}.`} inboxHref={inboxHref} />;
+  } else if (route.type === "project") {
+    view = <HomeView key={route.project} project={route.project} />;
   } else if (route.section === "inbox") {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
@@ -275,6 +366,21 @@ export function Shell({ scenario }: { scenario: string | null }) {
             onRetry={retryProjects}
           />
           <DataSource dataSource={dataSource} scenario={scenario} />
+          <button
+            type="button"
+            className="button button-quiet jump-button"
+            aria-haspopup="dialog"
+            aria-keyshortcuts={JUMP_KEYSHORTCUTS}
+            onClick={(event: MouseEvent<HTMLButtonElement>) => {
+              openPalette(event.currentTarget);
+            }}
+          >
+            <Icon name="search" />
+            <span>Jump to</span>
+            <kbd className="jump-hint" aria-hidden="true">
+              {CHORD_HINT}
+            </kbd>
+          </button>
           <button type="button" className="button button-quiet" onClick={openShortcuts}>
             <Icon name="keyboard" />
             <span>Keyboard shortcuts</span>
@@ -283,15 +389,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
         <div className="app-body">
           <nav className="app-nav" aria-label="Sections">
             <ul>
-              {SECTIONS.map((section) => {
-                const active = route.type === "section" && route.section === section.id;
+              {navOf(navProject ?? "").map((entry) => {
+                const active = entry.key === "overview" ? route.type === "project" : route.type === "section" && route.section === entry.key;
                 return (
-                  <li key={section.id}>
-                    <a
-                      href={navProject === null ? "#/" : sectionHash(navProject, section.id)}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      {section.label}
+                  <li key={entry.key}>
+                    <a href={navProject === null ? "#/" : entry.hash} aria-current={active ? "page" : undefined}>
+                      {entry.label}
                     </a>
                   </li>
                 );
@@ -305,6 +408,16 @@ export function Shell({ scenario }: { scenario: string | null }) {
           </main>
         </div>
         {shortcutsOpen && <ShortcutsDialog section={route.type === "section" ? route.section : null} onClose={closeShortcuts} />}
+        {paletteOpen && (
+          <Palette
+            routeProject={projectOf(route)}
+            projects={projects.data}
+            projectsFailure={projectsFailure === null ? null : apiErrorOf(projectsFailure).message}
+            inputRef={paletteInput}
+            onJump={jump}
+            onClose={closePalette}
+          />
+        )}
       </Announcer>
     </ShortcutsOpener>
   );

@@ -675,13 +675,17 @@ describe("keyboard (AC-12)", () => {
     expect(within(dialog).getByText(/No key changes a task/)).toBeTruthy();
   });
 
-  it("adds no key listener to the document or the window", async () => {
+  // Amended by docs/features/ui-home.md "Amendment": exactly the shell's one listener, the chord's.
+  it("adds no key listener to the document or the window but the shell's chord listener", async () => {
     const onDocument = vi.spyOn(document, "addEventListener");
     const onWindow = vi.spyOn(window, "addEventListener");
     await openList(taskClient(SOME_TASKS), "#/alpha/tasks/T-0002");
     await screen.findByRole("tab", { name: "Overview" });
-    const keyListeners = [...onDocument.mock.calls, ...onWindow.mock.calls].map(([type]) => type).filter((type) => /^key/.test(type));
-    expect(keyListeners).toEqual([]);
+    const keyListeners = [
+      ...onDocument.mock.calls.map(([type, , options]) => ["document", type, options]),
+      ...onWindow.mock.calls.map(([type, , options]) => ["window", type, options]),
+    ].filter(([, type]) => typeof type === "string" && /^key/.test(type));
+    expect(keyListeners).toEqual([["document", "keydown", true]]);
   });
 
   it("opens with a click: one history entry and focus on the row", async () => {

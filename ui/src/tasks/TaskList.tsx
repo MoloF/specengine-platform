@@ -4,7 +4,7 @@ import type { TasksQuery } from "../api/queries";
 import type { TaskListEntry } from "../api/types";
 import { pushHash } from "../app/location";
 import { sectionHash } from "../app/routes";
-import { Badge, type Look } from "../ui/Badge";
+import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -15,12 +15,10 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { chipsOf, DEFAULT_FILTERS, isFiltered, isPressed, matchesFilters, toggleChip, type TaskFilters } from "./filter";
 import { groupsOf, waitsForYou } from "./groups";
-import { taskStatusLook } from "./labels";
+import { SPEC_CHANGED, taskStatusLook } from "./labels";
 
 /** How many targets a row names before "+k". */
 const ROW_TARGETS = 3;
-
-const SPEC_CHANGED: Look = { label: "Spec changed", tone: "stale-changed", icon: "specChanged" };
 
 /** A row's targets: the first three, then "+k" for the rest. */
 export function targetsText(targets: readonly string[]): string {
