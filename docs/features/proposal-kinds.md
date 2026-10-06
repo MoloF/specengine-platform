@@ -9,13 +9,13 @@ ref: proposal-kinds analysis 2026-10-06, every recommendation accepted; 08 s2 Ph
 
 ## Why
 
-No node comes into existence through the queue: no new requirement, term, rule or criterion, no first tree (08 s4.1: "built through the queue", IDs "agent proposes, owner confirms"). `propose update` refuses an added `{#ID}` or `id:` (`docs/canon/proposal-queue.md` "Creation" 3); the `propose-spec-change` skill sends the agent to the owner. This slice adds the kind `create`: a new spec file, or new `{#ID}` sections in a node's span, applied by `spec approve` as one commit where raised. No new ADR: it rests on ADR-0004, 0005, 0032, 0012, 0008, 0031, 0009, 0026, 0003, 0013, 0017.
+No node, not even a first tree, comes into existence through the queue (08 s4.1: "built through the queue", IDs "agent proposes, owner confirms"). `propose update` refuses an added `{#ID}` or `id:` (`proposal-queue.md` "Creation" 3); the `propose-spec-change` skill sends the agent to the owner. This slice adds the kind `create`: a new spec file, or new `{#ID}` sections in a node's span, applied by `spec approve` as one commit where raised. **Order** (accepted 2026-10-06): `daemon-read`, this, `task-package` (schema 4, `--task` on `create`, plugin 0.1.5), `ui-live`; AC-14's schema 3 and 40 columns hold only before `task-package`. No new ADR: it rests on ADR-0004, 0005, 0032, 0012, 0008, 0031, 0009, 0026, 0003, 0013, 0017.
 
-Working answers (the orchestrator's recommendations, accepted under the owner's night rule 2026-10-06; morning review: "Open"): Q1 the proposer names each new ID, reserved while live; Q2 one kind for files and sections, `update` keeps its node set; Q3 `kind` on `propose_change`, no new tool; Q4 no `[decision_records]` ID by create; Q5 no schema bump; Q6 amendment = a document with `amends: <target>` by create's file form, unapplied until the target is revised; Q7 a decision and its canon diff are two commits, the record then a linked update.
+Working answers (the orchestrator's, accepted under the owner's night rule 2026-10-06; morning review: "Open"): Q1 the proposer names each new ID, reserved while live (Open); Q2 one kind for files and sections, `update` keeps its node set; Q3 `kind` on `propose_change`, no new tool; Q4 no `[decision_records]` ID by create; Q5 no schema bump; Q6 an amendment is a file by create (Open); Q7 a decision and its canon diff are two commits, the record then a linked update; Q8 (readiness check) the probe paragraph cut (Data), the order above.
 
 ## Description and interactions
 
-Planned kinds (05 s3.3, 07 s1.2, s2): `create` here; then `interpretation` (an update applying a decision, `interprets`, 06 s5.4), `amendment` (Q6; the queue's path to an `immutable_text` node, 06 s7), `decision` (a record with no question before it, 06 s5.2); `spec new` = create + instant apply, later. **File form**: `TARGET` a free `.md` path, no `--base`, the text the whole file, applied by decision-apply's new-file steps (`docs/canon/decision-record.md` "Steps"), commit `A <path>`. **Section form**: `TARGET` a node, `--base` its `span_hash`, the span's text adding `{#ID}` sections below the target, applied by the update's steps (`docs/canon/proposal-apply.md` "Apply steps"), commit `M <path>`.
+Later kinds: `interpretation`, `amendment` (Q6), `decision` (05 s3.3; 06 s5, s7); `spec new` = create + instant apply. **File form**: `TARGET` a free `.md` path, no `--base`, the text the whole file, applied by decision-apply's new-file steps (`docs/canon/decision-record.md` "Steps"), commit `A <path>`. **Section form**: `TARGET` a node, `--base` its `span_hash`, the span's text adding `{#ID}` sections below the target, applied by the update's steps (`docs/canon/proposal-apply.md` "Apply steps"), commit `M <path>`.
 
 ## Data
 
@@ -28,7 +28,9 @@ PR-0001
 introduced: <n>
 ```
 
-**MCP** `propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` enum `["update", "create"]` from core constants; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief`; `base` absent or `null` = no `--base` (an `update`: exit 2, as the CLI). The description gains `create`. `INSTRUCTIONS`: `- propose_change = spec propose update|create: a node's new text against its span_hash; create: new ID sections in it, or a new file (base null).` `mirror.rs`: no new key.
+**MCP** `propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` enum `["update", "create"]` from core constants; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief`; `base` absent or `null` = no `--base` (an `update`: exit 2, as the CLI). The description gains `create`; `mirror.rs` no new key.
+
+**Instructions budget** (measured 2026-10-06: `INSTRUCTIONS` 1 675 B + `PROBE_INSTRUCTIONS` 366 = 2 041 of `server.rs`'s `TEXT_LIMIT` 2 048, asserted at compile time under `probes`, which the longer line alone breaks): the line becomes (146 B with its LF) `- propose_change = spec propose update|create: a node's new text against its span_hash; create: new ID sections in it, or a new file (base null).`; `PROBE_INSTRUCTIONS` a blank line and `Probes build, owner's checklist only: review_proposal(proposal_id) asks the owner by form; probe_output(tokens) returns filler; probe_sleep(seconds) waits.` (157 B). Then 1 740 B, 1 897 with `probes`: 151 left, 138 for `task-package`'s line. `mcp_decision.rs`, `mcp_path.rs` re-pin length and BLAKE3.
 
 **Queue row**, `kind` `create`: schema 3, 40 columns, no column added, no `user_version` bump (Q5; schema 4 stays `task-package`'s).
 
@@ -74,7 +76,7 @@ Only steps 1-4, 6, 7 refuse; whatever `spec check` judges (`ref-dangling`, `file
 
 ## Acceptance criteria
 
-Setup: temp git repos of `fixtures/spec-a`, `fixtures/spec-b`, committed; scratch `HOME`; clock `2026-10-06T12:00:00Z`; a git identity; library calls, consent yes; T13 = "Data"'s `r13.md`. Refused: the exit named, nothing stored, written or reserved. M: the mutation turning it red. Tests: CLI `proposal_kinds.rs` unless named.
+Setup: temp git repos of `fixtures/spec-a`, `-b`, committed; scratch `HOME`; clock `2026-10-06T12:00:00Z`; a git identity; library calls, consent yes; T13 = "Data"'s `r13.md`. Refused: the exit named, nothing stored, written or reserved. M: the mutation turning it red. Tests: CLI `proposal_kinds.rs` unless named.
 
 - [ ] AC-01 -- spec-a `propose create docs/records/R/R-13.md` T13: `PR-0001`; review: `kind` `create`, `target_id` `R-13`, `target_path` the path, `target_ids` `["R-13"]`, `base_hash`, `base_text` `null`, `new_text` T13; `git status --porcelain` empty (M: writing at propose).
 - [ ] AC-02 -- a file modified, another staged; `approve`: one commit, one parent, exactly `A docs/records/R/R-13.md`, blob T13, `spec: apply PR-0001`, rationale, four trailers; both files as before; `spec show R-13` resolves (M: staging the whole tree).
@@ -90,12 +92,13 @@ Setup: temp git repos of `fixtures/spec-a`, `fixtures/spec-b`, committed; scratc
 - [ ] AC-12 -- file form `approved` at step 7, committed by hand (`new_text`, `Proposal: PR-0001`): approve -> `applied`, no commit or prompt; other bytes -> exit 1 `does not carry the proposal's text`; reject refused with that commit on the branch; killed between 8 and 9: approve exit 1 at step 4 naming two ways out (M: completion ignoring the blob).
 - [ ] AC-13 -- `approve PR-0001` with `--option 0`, `--answer a`, `--canon R-12`: exit 2, no event; `propose create docs/records/R/R-13.md --base b3:<any>` exit 1 `drop --base`; `propose create RULE-STAM-REGEN` without `--base` exit 1 (M: a decision flag accepted).
 - [ ] AC-14 -- `review PR-0001`: `diff` `--- base docs/records/R/R-13.md`, `@@ -0,0 +1,<n> @@`, all `+`; `preview` `applies`, a file there -> `unavailable` (step 4); `inbox` `PR-0001 | create | open | R-13 | ...`; `export state`, `import-state` fresh, re-export byte-identical, `queue_schema` 3, 40 columns, `user_version` 3 (M: a column or a schema bump).
-- [ ] AC-15 -- `propose-spec-change` teaches `kind: "create"` (a new file, `base` null; ID sections with the span's hash; the named next free ID); its "an ID section to add or remove is a question for the owner" now removal only; `plugin.json` `0.1.4`, `PINS` appended; `plugin_skills.rs`, `plugin_files.rs` green (M: the skill edited, no bump).
+- [ ] AC-15 -- `propose-spec-change` teaches `kind: "create"` (a new file, `base` null; ID sections with the span's hash; the named next free ID); its "an ID section to add or remove is a question for the owner" now removal only; `plugin.json` `0.1.4` (`task-package` 0.1.5), `PINS` appended; `plugin_skills.rs`, `plugin_files.rs` green (M: the skill edited, no bump).
 - [ ] AC-16 -- no `crates/*/src` comment cites `decision-apply`; `cargo nextest run -p specengine-eval --test anonymity --test doc_pointers` green; `export index && check` clean, worst W not above shipping's; the full run green (M: a heading `decision-record.md` lacks).
+- [ ] AC-17 -- instructions as "Data" (1 897 <= 2 048 - 140); the `probes` build compiles; `mcp_decision.rs`, `mcp_path.rs` pin 1 740 (M: the probe paragraph left at 366 B: the `probes` build fails).
 
 ## Out of scope
 
-Kinds `interpretation`, `amendment`, `decision` (later slices, that order); `spec new`, `spec edit`; engine-issued numbers; deleting, renaming, re-targeting nodes; `has_open_proposal`; `task_id` (`task-package`); `[decision_records]` IDs (Q4); the UI; pilots; `.claude/`.
+Kinds `interpretation`, `amendment`, `decision` (later slices, that order); `spec new`, `spec edit`; engine-issued numbers; deleting, renaming, re-targeting nodes; `has_open_proposal`; `task_id`, `--task` (`task-package`, after this slice); `[decision_records]` IDs (Q4); the UI; pilots; `.claude/`.
 
 ## Open
 
@@ -108,6 +111,6 @@ The owner's morning review; working answers stand until then.
 
 Not built.
 
-**Pointers** (developer, this slice): `crates/*/src` comments citing task spec `decision-apply` cite `` `docs/canon/decision-record.md` "<Heading>" `` instead, on one line: "Config" core `project_toml.rs:13`; "Template", "ID" core `record.rs:1`; "ID", "Steps" store `lib.rs:54`, `worktree.rs:6`; "Flags", "Steps" CLI `decide.rs:2`, `lib.rs:16`, `apply.rs:48`; "Flags" `apply.rs:95`; "Completion" `preflight.rs:46`; "Queue and documents" store `queue.rs:15`, `:146`, `queue/state.rs:26`, CLI `proposals.rs:27`, `inbox.rs:8`, `intake.rs:164`, `state_file.rs:10`. Tests' citations still resolve.
+**Pointers** (developer, this slice): `crates/*/src` comments citing task spec `decision-apply` cite `` `docs/canon/decision-record.md` "<Heading>" `` instead, on one line: "Config" core `project_toml.rs:13`; "Template", "ID" core `record.rs:1`; "ID", "Steps" store `lib.rs:57`, `worktree.rs:6`; "Flags", "Steps" CLI `decide.rs:2`, `lib.rs:16`, `apply.rs:48`; "Flags" `apply.rs:95`; "Completion" `preflight.rs:46`; "Queue and documents" store `queue.rs:15`, `:146`, `queue/state.rs:26`, CLI `proposals.rs:27`, `inbox.rs:8`, `intake.rs:164`, `state_file.rs:10`. Tests' citations still resolve.
 
-**At shipping**: new Tier 2 canon `docs/canon/proposal-kinds.md` (queue canons are full), "Data" and "Rules" as built; byte-neutral pointers: `proposal-queue.md` "Not yet", "Creation" 3; `agent-intake.md` "Schemas"; 05 s3.3; 07 s1.2, s2; 08 s2 Phase 2; core, store, CLI, MCP READMEs; root `README.md` `propose-spec-change` row, "Version" 0.1.4; `CLAUDE.md` state.
+**At shipping**: new Tier 2 canon `docs/canon/proposal-kinds.md` (queue canons are full), "Data" and "Rules" as built; byte-neutral pointers: `proposal-queue.md` "Not yet", "Creation" 3; `agent-intake.md` "Schemas"; `mcp-read.md` "Tools" (1 740, 1 897 B); 05 s3.3; 07 s1.2, s2; 08 s2 Phase 2; core, store, CLI, MCP READMEs; root `README.md` `propose-spec-change` row, "Version" 0.1.4; `CLAUDE.md` state.
