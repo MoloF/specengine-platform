@@ -1,17 +1,26 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2; a higher version is a newer build's: refused),
+//! user_version` (0 → 1 → 2 → 3; a higher version is a newer build's:
+//! refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
 //!
 //! - **Kinds** (`docs/canon/agent-intake.md` "Stored"): `update` applies; a
-//!   `question` and a `discrepancy` never do ([`ProposalQueue::approve_from`]
-//!   and [`ProposalQueue::applied_with`] refuse them): their fields live in
-//!   the eleven columns step 2 adds ([`Intake`]), the update's five text
-//!   columns NULL. They are stored by [`ProposalQueue::create_intake`], whose
-//!   dedup reads the queue inside the inserting transaction.
+//!   `question` and a `discrepancy` decide: their fields live in the eleven
+//!   columns step 2 adds ([`Intake`]), the update's five text columns NULL.
+//!   They are stored by [`ProposalQueue::create_intake`], whose dedup reads
+//!   the queue inside the inserting transaction.
+//! - **Records** (task spec `decision-apply`, "Data"): a deciding kind is
+//!   approved only with its decision record ([`DecisionRecord`], the five
+//!   columns step 3 adds), by [`ProposalQueue::approve_record_from`], which
+//!   issues the record's ID under the write lock ([`RecordSeries`]: one
+//!   more than the highest of the corpus and of every ID the queue issued;
+//!   a proposal keeps its own across a reopen); [`ProposalQueue::approve`],
+//!   [`ProposalQueue::approve_from`] refuse it, [`ProposalQueue::applied`]
+//!   and [`ProposalQueue::applied_with`] refuse one without its record. The
+//!   record is replaced by a later approval and kept by a reopen.
 //!
 //! - **IDs**: `PR-NNNN`, the highest number in the table plus one, taken in
 //!   the inserting transaction; rows are never deleted, so an ID is never
@@ -73,9 +82,12 @@ use specengine_core::intake::{
     DISCREPANCY_KIND, Evidence, GapType, IntakeOption, IntakeSeverity, QUESTION_KIND,
     normalized_summary,
 };
+use specengine_core::is_clean_relative;
 use specengine_core::proposal::{
     Author, author_field_problem, is_utc_timestamp, patch_hash_input, proposal_id, proposal_number,
 };
+pub use specengine_core::record::Choice;
+use specengine_core::record::record_id;
 use specengine_model::Severity;
 
 use crate::error::{Db, StoreError};
@@ -88,7 +100,7 @@ pub use state::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 2;
+pub const QUEUE_SCHEMA_VERSION: i64 = 3;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -130,12 +142,32 @@ ALTER TABLE proposals ADD COLUMN distinct_from TEXT;
 ALTER TABLE proposals ADD COLUMN linked TEXT;
 ";
 
+/// Step 2 → 3: a decision record's columns, appended in this order (task
+/// spec `decision-apply`, "Data").
+const STEP_3: &str = "
+ALTER TABLE proposals ADD COLUMN record_id TEXT;
+ALTER TABLE proposals ADD COLUMN record_path TEXT;
+ALTER TABLE proposals ADD COLUMN record_title TEXT;
+ALTER TABLE proposals ADD COLUMN record_text TEXT;
+ALTER TABLE proposals ADD COLUMN choice TEXT;
+";
+
+/// The record columns, in table order.
+const RECORD_COLUMNS: [&str; 5] = [
+    "record_id",
+    "record_path",
+    "record_title",
+    "record_text",
+    "choice",
+];
+
 /// Every column of `proposals`, in table order.
 const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_common_dir, \
      worktree, root_rel, branch, base_commit, base_hash, base_text, new_text, patch_hash, \
      rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
      created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
-     price_of_other, evidence, options, recommendation, distinct_from, linked";
+     price_of_other, evidence, options, recommendation, distinct_from, linked, record_id, \
+     record_path, record_title, record_text, choice";
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -151,8 +183,9 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
-/// What a proposal does: `update` applies; the intake kinds are queue
-/// records the owner settles by rejecting them with the answer.
+/// What a proposal does: `update` applies; the intake kinds decide (an
+/// approval writes a decision record), or are settled by a rejection whose
+/// reason is the answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
@@ -179,9 +212,14 @@ impl ProposalKind {
         Self::ALL.into_iter().find(|kind| kind.as_str() == text)
     }
 
-    /// Only an `update` is ever applied.
+    /// Only an `update` replaces a node's span.
     pub const fn applies(self) -> bool {
         matches!(self, Self::Update)
+    }
+
+    /// A question or a discrepancy: its approval writes a decision record.
+    pub const fn decides(self) -> bool {
+        matches!(self, Self::Question | Self::Discrepancy)
     }
 }
 
@@ -331,6 +369,48 @@ pub struct QueueMatch {
     pub status: ProposalStatus,
     /// The rejection's reason (`decision_note`) of a rejected one.
     pub reason: Option<String>,
+    /// Its decision record's ID, root-relative path and title, as stored.
+    pub record_id: Option<String>,
+    pub record_path: Option<String>,
+    pub record_title: Option<String>,
+}
+
+/// A decision record of a question or a discrepancy, set at apply step 7.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionRecord {
+    /// The record's ID, issued by the queue.
+    pub id: String,
+    /// Root-relative, clean.
+    pub path: String,
+    pub title: String,
+    /// The rendered bytes, as written and committed.
+    pub text: String,
+    pub choice: Choice,
+}
+
+/// The series a record's ID is issued from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordSeries {
+    /// The `[decision_records] prefix`.
+    pub prefix: String,
+    /// Its `[ids]` width.
+    pub width: u32,
+    /// The highest number of the prefix (or its aliases) in the corpus.
+    pub corpus_max: u64,
+}
+
+/// Apply step 7 of a question or a discrepancy: its record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordApproval {
+    pub series: RecordSeries,
+    /// The ID previewed before the owner's consent; issued only if it is
+    /// still the next.
+    pub preview: String,
+    /// Root-relative, clean.
+    pub path: String,
+    pub title: String,
+    pub text: String,
+    pub choice: Choice,
 }
 
 /// What [`ProposalQueue::create_intake`] found and did.
@@ -381,6 +461,9 @@ pub struct Proposal {
     /// The other proposal of a discrepancy and its proposed patch (an
     /// `update`), both ways.
     pub linked: Option<String>,
+    /// A question's or a discrepancy's decision record, from its step 7
+    /// on; `None` for an update.
+    pub record: Option<DecisionRecord>,
 }
 
 impl Proposal {
@@ -506,6 +589,10 @@ pub enum QueueError {
         status: ProposalStatus,
         updated_at: String,
     },
+    /// Apply step 7 of a deciding kind: the record ID previewed is no
+    /// longer the next (another run took it meanwhile); `next` is. Nothing
+    /// written.
+    Issued { next: String },
 }
 
 impl From<StoreError> for QueueError {
@@ -539,6 +626,10 @@ impl fmt::Display for QueueError {
                 f,
                 "`{id}` changed since this run read it: it is {status} since {updated_at} \
                  (another `spec approve` or `spec reject` holds or decided it)"
+            ),
+            Self::Issued { next } => write!(
+                f,
+                "the record ID previewed was issued meanwhile; the next is `{next}`"
             ),
         }
     }
@@ -605,6 +696,27 @@ pub trait ProposalQueue {
         &mut self,
         id: &str,
         seen: &Seen,
+        decision: &Decision,
+        now: &str,
+    ) -> Result<Proposal, QueueError>;
+    /// The next record ID of `series`, read only: one more than the
+    /// greater of `series.corpus_max` and the highest number of the
+    /// project's stored `record_id`s of its prefix, zero-padded to its
+    /// width.
+    fn next_record(&self, series: &RecordSeries) -> Result<String, QueueError>;
+    /// Apply step 7 of a question or a discrepancy: [`Self::approve_from`]'s
+    /// compare-and-set on `seen`, and its record set (replacing an earlier
+    /// one). The record's ID is the one the proposal holds from an earlier
+    /// step 7, else [`Self::next_record`] read again under the write lock;
+    /// not `approval.preview` → [`QueueError::Issued`], nothing written.
+    /// An `update`, a path that is not clean, a choice not of the kind or
+    /// out of range: [`QueueError::Invalid`]. Logs `proposal.approved`
+    /// (with `record`) from `open`.
+    fn approve_record_from(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        approval: &RecordApproval,
         decision: &Decision,
         now: &str,
     ) -> Result<Proposal, QueueError>;
@@ -827,7 +939,7 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
-        never_applies(&current)?;
+        approved_without_record(&current)?;
         match current.status {
             ProposalStatus::Open | ProposalStatus::Approved => {}
             _ => return Err(status_error(current)),
@@ -924,7 +1036,14 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
-        never_applies(&current)?;
+        if current.kind.decides() && current.record.is_none() {
+            return Err(QueueError::Invalid(format!(
+                "`{id}` is a {} without its decision record: it is applied only after the \
+                 record's step 7",
+                current.kind.as_str()
+            )));
+        }
+        let record = current.record.as_ref().map(|record| record.id.clone());
         match (current.status, decision) {
             (ProposalStatus::Approved, _) => {}
             (ProposalStatus::Open, Some(decision)) => {
@@ -934,7 +1053,13 @@ impl SqliteQueue {
                     rusqlite::params![decision.decided_by, now, decision.note, id, project],
                 )
                 .db()?;
-                log(&tx, &project, EVENT_APPROVED, &json!({ "id": id }), now)?;
+                log(
+                    &tx,
+                    &project,
+                    EVENT_APPROVED,
+                    &with_record(json!({ "id": id }), record.as_deref()),
+                    now,
+                )?;
             }
             _ => return Err(status_error(current)),
         }
@@ -954,9 +1079,95 @@ impl SqliteQueue {
             &tx,
             &project,
             EVENT_APPLIED,
-            &json!({ "id": id, "commit": commit }),
+            &with_record(json!({ "id": id, "commit": commit }), record.as_deref()),
             now,
         )?;
+        let stored = existing(&tx, &project, id)?;
+        tx.commit().db()?;
+        Ok(stored)
+    }
+
+    /// [`ProposalQueue::approve_record_from`].
+    fn approve_record_if(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        approval: &RecordApproval,
+        decision: &Decision,
+        now: &str,
+    ) -> Result<Proposal, QueueError> {
+        check_time(now)?;
+        let project = self.project.clone();
+        let tx = self.write()?;
+        let current = existing(&tx, &project, id)?;
+        if !current.kind.decides() {
+            return Err(QueueError::Invalid(format!(
+                "`{id}` is an {}: its approval writes no decision record",
+                current.kind.as_str()
+            )));
+        }
+        match current.status {
+            ProposalStatus::Open | ProposalStatus::Approved => {}
+            _ => return Err(status_error(current)),
+        }
+        if current.seen() != *seen {
+            return Err(changed(current));
+        }
+        if current.status == ProposalStatus::Approved && now <= current.updated_at.as_str() {
+            return Err(QueueError::Invalid(format!(
+                "`{id}` was approved at {}, not before now ({now}): approve it again in a moment",
+                current.updated_at
+            )));
+        }
+        if !is_clean_relative(&approval.path) {
+            return Err(QueueError::Invalid(format!(
+                "the record path {:?} is not a clean root-relative path",
+                approval.path
+            )));
+        }
+        if let Some(problem) = choice_problem(&approval.choice, current.kind, &current) {
+            return Err(QueueError::Invalid(format!("`{id}`: {problem}")));
+        }
+        let next = match &current.record {
+            Some(record) => record.id.clone(),
+            None => record_id(
+                &approval.series.prefix,
+                approval.series.width,
+                next_number(&tx, &project, &approval.series)?,
+            ),
+        };
+        if next != approval.preview {
+            return Err(QueueError::Issued { next });
+        }
+        let choice = to_json(&approval.choice)?;
+        tx.execute(
+            "UPDATE main.proposals SET status = ?1, decided_by = ?2, decided_at = ?3, \
+             decision_note = ?4, updated_at = ?3, record_id = ?5, record_path = ?6, \
+             record_title = ?7, record_text = ?8, choice = ?9 WHERE id = ?10 AND project = ?11",
+            rusqlite::params![
+                ProposalStatus::Approved.as_str(),
+                decision.decided_by,
+                now,
+                decision.note,
+                approval.preview,
+                approval.path,
+                approval.title,
+                approval.text,
+                choice,
+                id,
+                project
+            ],
+        )
+        .db()?;
+        if current.status == ProposalStatus::Open {
+            log(
+                &tx,
+                &project,
+                EVENT_APPROVED,
+                &json!({ "id": id, "record": approval.preview }),
+                now,
+            )?;
+        }
         let stored = existing(&tx, &project, id)?;
         tx.commit().db()?;
         Ok(stored)
@@ -1028,7 +1239,8 @@ enum Hold<'a> {
 }
 
 /// The queue's schema steps, in one `Immediate` transaction: 0 → 1 makes
-/// the tables, 1 → 2 adds the intake columns (0 → 2 runs both);
+/// the tables, 1 → 2 adds the intake columns, 2 → 3 the record columns
+/// (0 → 3 runs all three);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -1054,6 +1266,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 1 {
         tx.execute_batch(STEP_2).db()?;
         version = 2;
+    }
+    if version == 2 {
+        tx.execute_batch(STEP_3).db()?;
+        version = 3;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -1213,11 +1429,13 @@ impl RawRow {
             distinct_from: take(),
         };
         let linked = take();
+        let record_columns: [Option<String>; 5] = std::array::from_fn(|_| take());
         let intake = if kind.applies() {
             None
         } else {
             Some(columns.decode(&id, kind, &target_id)?)
         };
+        let record = decode_record(&id, kind, status, intake.as_ref(), record_columns)?;
         if let Some(linked) = &linked
             && proposal_number(linked).is_none()
         {
@@ -1250,8 +1468,170 @@ impl RawRow {
             updated_at,
             intake,
             linked,
+            record,
         })
     }
+}
+
+/// The record columns of a row ([`RECORD_COLUMNS`]): none on an update;
+/// all or none on a question or a discrepancy, all on an approved or
+/// applied one; `record_id` an ID, `record_path` clean, `choice` of the
+/// row's kind and in range. Else the row is corrupt, named.
+fn decode_record(
+    id: &str,
+    kind: ProposalKind,
+    status: ProposalStatus,
+    intake: Option<&Intake>,
+    columns: [Option<String>; 5],
+) -> Result<Option<DecisionRecord>, UnreadableRow> {
+    if !kind.decides() {
+        if let Some(at) = columns.iter().position(Option::is_some) {
+            return Err(corrupt(id, RECORD_COLUMNS[at], "an update holds no record"));
+        }
+        return Ok(None);
+    }
+    if columns.iter().all(Option::is_none) {
+        if matches!(status, ProposalStatus::Approved | ProposalStatus::Applied) {
+            return Err(corrupt(
+                id,
+                RECORD_COLUMNS[0],
+                format!("it is NULL on an {status} {}", kind.as_str()),
+            ));
+        }
+        return Ok(None);
+    }
+    if let Some(at) = columns.iter().position(Option::is_none) {
+        return Err(corrupt(
+            id,
+            RECORD_COLUMNS[at],
+            "it is NULL while the record's other columns are set",
+        ));
+    }
+    let [
+        Some(record),
+        Some(path),
+        Some(title),
+        Some(text),
+        Some(choice),
+    ] = columns
+    else {
+        return Err(corrupt(id, RECORD_COLUMNS[0], "it is NULL"));
+    };
+    if !is_record_id(&record) {
+        return Err(corrupt(
+            id,
+            "record_id",
+            format!("{record:?} is no record ID"),
+        ));
+    }
+    if !is_clean_relative(&path) {
+        return Err(corrupt(
+            id,
+            "record_path",
+            format!("{path:?} is no clean root-relative path"),
+        ));
+    }
+    let shape = || {
+        corrupt(
+            id,
+            "choice",
+            "not `{\"option\":N}`, `{\"working_answer\":true}` or `{\"answer\":\"…\"}`",
+        )
+    };
+    let value: Value = serde_json::from_str(&choice).map_err(|_| shape())?;
+    let choice = Choice::from_json(&value).ok_or_else(shape)?;
+    if let Some(problem) = intake.and_then(|intake| choice_fits(&choice, kind, intake)) {
+        return Err(corrupt(id, "choice", problem));
+    }
+    Ok(Some(DecisionRecord {
+        id: record,
+        path,
+        title,
+        text,
+        choice,
+    }))
+}
+
+/// `text` has a record ID's shape: an ASCII prefix (a capital letter, then
+/// capitals and digits), `-`, ASCII digits.
+fn is_record_id(text: &str) -> bool {
+    text.split_once('-').is_some_and(|(prefix, digits)| {
+        prefix.starts_with(|c: char| c.is_ascii_uppercase())
+            && prefix
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+            && !digits.is_empty()
+            && digits.bytes().all(|byte| byte.is_ascii_digit())
+    })
+}
+
+/// Why `choice` is not one `kind` takes: an option of a discrepancy, in
+/// range of its options; the working answer or another answer of a
+/// question. `None`: it is.
+fn choice_fits(choice: &Choice, kind: ProposalKind, intake: &Intake) -> Option<String> {
+    match (kind, choice) {
+        (ProposalKind::Discrepancy, Choice::Option(index)) => {
+            let fits = usize::try_from(*index).is_ok_and(|index| index < intake.options.len());
+            (!fits).then(|| {
+                format!(
+                    "option {index} is out of range of its {} options",
+                    intake.options.len()
+                )
+            })
+        }
+        (ProposalKind::Question, Choice::WorkingAnswer | Choice::Answer(_)) => None,
+        _ => Some(format!(
+            "{} is no choice of a {}",
+            choice.described(),
+            kind.as_str()
+        )),
+    }
+}
+
+/// [`choice_fits`] of a stored proposal's intake.
+fn choice_problem(choice: &Choice, kind: ProposalKind, proposal: &Proposal) -> Option<String> {
+    let intake = proposal.intake.as_ref()?;
+    choice_fits(choice, kind, intake)
+}
+
+/// `payload` with `record` added when there is one.
+fn with_record(mut payload: Value, record: Option<&str>) -> Value {
+    if let (Some(record), Value::Object(object)) = (record, &mut payload) {
+        object.insert("record".to_owned(), Value::String(record.to_owned()));
+    }
+    payload
+}
+
+/// The highest number `<prefix>-<digits>` of the project's stored
+/// `record_id`s and `series.corpus_max`, plus one.
+fn next_number(conn: &Connection, project: &str, series: &RecordSeries) -> Result<u64, QueueError> {
+    let mut statement = conn
+        .prepare(
+            "SELECT record_id FROM main.proposals WHERE project = ?1 AND record_id IS NOT NULL",
+        )
+        .db()?;
+    let ids: Vec<Option<String>> = statement
+        .query_map([project], |row| row.get(0))
+        .db()?
+        .collect::<rusqlite::Result<_>>()
+        .db()?;
+    let mut highest = series.corpus_max;
+    for id in ids.into_iter().flatten() {
+        let number = id
+            .strip_prefix(series.prefix.as_str())
+            .and_then(|rest| rest.strip_prefix('-'))
+            .filter(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|digits| digits.parse::<u64>().ok());
+        if let Some(number) = number {
+            highest = highest.max(number);
+        }
+    }
+    highest.checked_add(1).ok_or_else(|| {
+        QueueError::Invalid(format!(
+            "`{}` numbers reach {highest}: no record ID follows",
+            series.prefix
+        ))
+    })
 }
 
 /// The intake columns of a row, before decoding.
@@ -1380,14 +1760,15 @@ fn existing(tx: &Transaction<'_>, project: &str, id: &str) -> Result<Proposal, Q
     select_one(tx, project, id)?.ok_or_else(|| QueueError::Unknown { id: id.to_owned() })
 }
 
-/// A kind that never applies refuses the apply's state changes, nothing
-/// written.
-fn never_applies(proposal: &Proposal) -> Result<(), QueueError> {
+/// A deciding kind refuses an approval without its decision record
+/// ([`ProposalQueue::approve_record_from`] approves it), nothing written.
+fn approved_without_record(proposal: &Proposal) -> Result<(), QueueError> {
     if proposal.kind.applies() {
         return Ok(());
     }
     Err(QueueError::Invalid(format!(
-        "`{}` is a {} and never applies: rejecting it with the answer settles it",
+        "`{}` is a {}: it is approved only with its decision record (or rejected with the \
+         answer)",
         proposal.id,
         proposal.kind.as_str()
     )))
@@ -1461,7 +1842,8 @@ fn insert_update(
         &format!(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
-             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20)"
+             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
+             NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -1514,7 +1896,7 @@ fn insert_intake(
         &format!(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
-             ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL)"
+             ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -1559,25 +1941,38 @@ fn queue_matches(
     let wanted = normalized_summary(&intake.intake.summary);
     let mut statement = tx
         .prepare(&format!(
-            "SELECT id, status, target_ids, summary, decision_note FROM main.proposals \
-             WHERE project = ?1 AND kind = ?2 {ID_ORDER}"
+            "SELECT id, status, target_ids, summary, decision_note, record_id, record_path, \
+             record_title FROM main.proposals WHERE project = ?1 AND kind = ?2 {ID_ORDER}"
         ))
         .db()?;
     let rows: Vec<MatchRow> = statement
         .query_map([project, intake.kind.as_str()], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-            ))
+            Ok(MatchRow {
+                id: row.get(0)?,
+                status: row.get(1)?,
+                target_ids: row.get(2)?,
+                summary: row.get(3)?,
+                decision_note: row.get(4)?,
+                record_id: row.get(5)?,
+                record_path: row.get(6)?,
+                record_title: row.get(7)?,
+            })
         })
         .db()?
         .collect::<rusqlite::Result<_>>()
         .db()?;
     let (mut hits, mut related) = (Vec::new(), Vec::new());
-    for (id, status, target_ids, summary, decision_note) in rows {
+    for row in rows {
+        let MatchRow {
+            id,
+            status,
+            target_ids,
+            summary,
+            decision_note,
+            record_id,
+            record_path,
+            record_title,
+        } = row;
         let (Some(id), Some(status)) = (id, status.as_deref().and_then(ProposalStatus::parse))
         else {
             continue;
@@ -1599,27 +1994,39 @@ fn queue_matches(
             let reason = (status == ProposalStatus::Rejected)
                 .then_some(decision_note)
                 .flatten();
-            hits.push(QueueMatch { id, status, reason });
+            hits.push(QueueMatch {
+                id,
+                status,
+                reason,
+                record_id,
+                record_path,
+                record_title,
+            });
         } else {
             related.push(QueueMatch {
                 id,
                 status,
                 reason: None,
+                record_id,
+                record_path,
+                record_title,
             });
         }
     }
     Ok((hits, related))
 }
 
-/// A row [`queue_matches`] reads: `id`, `status`, `target_ids`, `summary`,
-/// `decision_note`.
-type MatchRow = (
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
+/// A row [`queue_matches`] reads, not decoded.
+struct MatchRow {
+    id: Option<String>,
+    status: Option<String>,
+    target_ids: Option<String>,
+    summary: Option<String>,
+    decision_note: Option<String>,
+    record_id: Option<String>,
+    record_path: Option<String>,
+    record_title: Option<String>,
+}
 
 impl ProposalQueue for SqliteQueue {
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError> {
@@ -1756,6 +2163,24 @@ impl ProposalQueue for SqliteQueue {
         now: &str,
     ) -> Result<Proposal, QueueError> {
         self.approve_if(id, Some(seen), decision, now)
+    }
+
+    fn next_record(&self, series: &RecordSeries) -> Result<String, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let number = next_number(&tx, &self.project, series)?;
+        tx.commit().db()?;
+        Ok(record_id(&series.prefix, series.width, number))
+    }
+
+    fn approve_record_from(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        approval: &RecordApproval,
+        decision: &Decision,
+        now: &str,
+    ) -> Result<Proposal, QueueError> {
+        self.approve_record_if(id, seen, approval, decision, now)
     }
 
     fn applied(&mut self, id: &str, commit: &str, now: &str) -> Result<Proposal, QueueError> {

@@ -72,9 +72,9 @@ pub const INTAKE_MATCHES_MAX: usize = 10;
 /// The most matches of one list a note names past [`INTAKE_MATCHES_MAX`].
 const NAMED_PAST_MAX: usize = DISTINCT_MAX - INTAKE_MATCHES_MAX;
 
-/// The `status:` of a decision the owner accepted (the documentation
-/// convention's decision class).
-const ACCEPTED: &str = "accepted";
+// The `status:` of a decision the owner accepted (the documentation
+// convention's decision class): the one a record from the queue carries.
+use specengine_core::record::ACCEPTED;
 
 /// `spec propose question` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,11 +154,15 @@ pub struct IntakeMatch {
     pub source: MatchSource,
     /// `accepted`, or the proposal's state.
     pub status: String,
-    /// A decision's root-relative path; `null` for a proposal.
+    /// A decision's root-relative path, an applied proposal's record path;
+    /// else `null` for a proposal.
     pub path: Option<String>,
-    /// A hit's answer: the decision's title, a rejected proposal's reason;
-    /// `null` for a related item.
+    /// A hit's answer: the decision's title, a rejected proposal's reason,
+    /// an applied one's record title; `null` for a related item.
     pub answer: Option<String>,
+    /// A hit's decision record: a decision's `id:`, an applied proposal's
+    /// `record_id` (task spec `decision-apply`); `null` for a related item.
+    pub record: Option<String>,
 }
 
 impl IntakeMatch {
@@ -583,16 +587,25 @@ fn answer(
     patched: bool,
     mut messages: Vec<Message>,
 ) -> IntakeOutcome {
-    let queue_match = |found: QueueMatch, hit: bool| IntakeMatch {
-        id: Some(found.id),
-        source: MatchSource::Queue,
-        status: found.status.as_str().to_owned(),
-        path: None,
-        answer: if hit && found.status == ProposalStatus::Rejected {
-            found.reason
+    // An applied hit's decision is its record: its path, its title as the
+    // answer; a rejected hit's answer is the owner's reason.
+    let queue_match = |found: QueueMatch, hit: bool| {
+        let decided = hit && found.status == ProposalStatus::Applied && found.record_id.is_some();
+        let (path, answer, record) = if decided {
+            (found.record_path, found.record_title, found.record_id)
+        } else if hit && found.status == ProposalStatus::Rejected {
+            (None, found.reason, None)
         } else {
-            None
-        },
+            (None, None, None)
+        };
+        IntakeMatch {
+            id: Some(found.id),
+            source: MatchSource::Queue,
+            status: found.status.as_str().to_owned(),
+            path,
+            answer,
+            record,
+        }
     };
     let mut hits = corpus_hits;
     hits.extend(
@@ -743,6 +756,11 @@ fn corpus_matches(
             path: Some(graph.paths()[file].to_owned()),
             answer: if hit {
                 document.and_then(|node| node.title.clone())
+            } else {
+                None
+            },
+            record: if hit {
+                document.and_then(|node| node.id.clone())
             } else {
                 None
             },

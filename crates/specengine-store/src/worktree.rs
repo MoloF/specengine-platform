@@ -2,7 +2,12 @@
 //! creation step 5, apply steps 2, 3, 5, 7–10): its git facts, the dirty
 //! check of one path, `git merge-file`, `git diff --no-index`, `git commit
 //! --only` with the caller's message, the trailer lookup on a branch, a
-//! file's blob at a commit, and the atomic replace of one file.
+//! file's blob at a commit, and the atomic replace of one file. A decision
+//! record (task spec `decision-apply`, steps 8–10): a new file created
+//! without ever replacing one ([`create_file`]), its intent-to-add entry
+//! and its removal ([`WorktreeGit::intent_to_add`],
+//! [`WorktreeGit::remove_cached`]), the name-status of a commit
+//! ([`WorktreeGit::name_status`]).
 //! `crate::git` stays the read side of `spec check`, resolving `GIT_*`
 //! against the caller; here nothing of the caller's repository is used.
 //!
@@ -530,6 +535,41 @@ impl WorktreeGit {
             .any(|entry| entry == path.as_bytes()))
     }
 
+    /// `path`'s index entry is an intent-to-add one (`git add
+    /// --intent-to-add`): `status --porcelain=v2 -z --untracked-files=no --
+    /// :(literal)<path>` gives it the `.A` status. No entry: `false`.
+    pub fn is_intent_to_add(&self, path: &str) -> Result<bool, GitError> {
+        let spec = literal(path);
+        let output = self.read(
+            "status",
+            &[
+                "status",
+                "--porcelain=v2",
+                "-z",
+                "--untracked-files=no",
+                "--",
+                &spec,
+            ],
+        )?;
+        let mut records = output.split(|&byte| byte == 0);
+        while let Some(record) = records.next() {
+            // `2 …` (a rename or copy) is followed by its original path.
+            if record.starts_with(b"2 ") {
+                records.next();
+                continue;
+            }
+            // `1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>`.
+            let fields: Vec<&[u8]> = record.splitn(9, |&byte| byte == b' ').collect();
+            if let [b"1", b".A", .., named] = fields.as_slice()
+                && fields.len() == 9
+                && *named == path.as_bytes()
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// `path` differs from `HEAD` in the index or the working tree, or is
     /// untracked (`status --porcelain=v1 -z --untracked-files=all --
     /// :(literal)<path>` prints anything).
@@ -669,6 +709,73 @@ impl WorktreeGit {
         // made commit into a failure.
         drop(files);
         success(COMMAND, output?).map(|_| ())
+    }
+
+    /// `git add --intent-to-add -- :(literal)<path>`: a new file's entry in
+    /// the index, so `git commit --only` takes it. A failure carries git's
+    /// stderr (an ignored path, `index.lock`).
+    pub fn intent_to_add(&self, path: &str) -> Result<(), GitError> {
+        const COMMAND: &str = "add";
+        let spec = literal(path);
+        let args = [
+            OsStr::new("add"),
+            OsStr::new("--intent-to-add"),
+            OsStr::new("--"),
+            OsStr::new(&spec),
+        ];
+        success(COMMAND, self.output(&args, false)?).map(|_| ())
+    }
+
+    /// `git rm --cached --quiet --ignore-unmatch -- :(literal)<path>`: the
+    /// path's index entry gone, its file untouched; none is no failure.
+    pub fn remove_cached(&self, path: &str) -> Result<(), GitError> {
+        const COMMAND: &str = "rm";
+        let spec = literal(path);
+        let args = [
+            OsStr::new("rm"),
+            OsStr::new("--cached"),
+            OsStr::new("--quiet"),
+            OsStr::new("--ignore-unmatch"),
+            OsStr::new("--"),
+            OsStr::new(&spec),
+        ];
+        success(COMMAND, self.output(&args, false)?).map(|_| ())
+    }
+
+    /// The paths that differ between the commits `from` and `to` with
+    /// their status letter (`diff-tree -r -z --name-status --no-renames
+    /// --no-commit-id --end-of-options`), top-relative, in git's order; a
+    /// name that is not UTF-8 lossily.
+    pub fn name_status(&self, from: &str, to: &str) -> Result<Vec<ChangedPath>, GitError> {
+        const COMMAND: &str = "diff-tree";
+        let output = self.read(
+            COMMAND,
+            &[
+                "diff-tree",
+                "-r",
+                "-z",
+                "--name-status",
+                "--no-renames",
+                "--no-commit-id",
+                "--end-of-options",
+                from,
+                to,
+            ],
+        )?;
+        let mut fields = output
+            .split(|&byte| byte == 0)
+            .filter(|entry| !entry.is_empty());
+        let mut changed = Vec::new();
+        while let Some(status) = fields.next() {
+            let path = fields
+                .next()
+                .ok_or(GitError::Unreadable { command: COMMAND })?;
+            changed.push(ChangedPath {
+                status: String::from_utf8_lossy(status).into_owned(),
+                path: String::from_utf8_lossy(path).into_owned(),
+            });
+        }
+        Ok(changed)
     }
 
     /// The parents of `commit`, hex, in order (`rev-list --parents -n 1
@@ -916,6 +1023,227 @@ pub fn replace_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
         let _ = dir.sync_all();
     }
     Ok(())
+}
+
+/// One path a commit changed ([`WorktreeGit::name_status`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangedPath {
+    /// Git's status letter: `A` added, `M` modified, `D` deleted, `T` its
+    /// type changed…
+    pub status: String,
+    /// Top-relative.
+    pub path: String,
+}
+
+impl ChangedPath {
+    /// Git's status letter of a path a commit adds.
+    const ADDED: char = 'A';
+
+    /// The commit adds `path`.
+    pub fn adds(&self, path: &str) -> bool {
+        self.path == path && self.status.chars().eq([Self::ADDED])
+    }
+}
+
+impl fmt::Display for ChangedPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.status, self.path)
+    }
+}
+
+/// Why [`create_file`] wrote nothing.
+#[derive(Debug)]
+pub enum CreateFileError {
+    /// Something is at the path already (a dangling symlink too), or
+    /// appeared there while the file was written: left untouched.
+    Exists,
+    /// An existing component of the path is a symlink (named, relative).
+    Symlink(String),
+    /// An existing component of the directory is not a directory (named).
+    NotDirectory(String),
+    /// The path names no file under the root.
+    BadPath,
+    /// The file system refused (what was being done, the error).
+    Io(String, io::Error),
+}
+
+impl fmt::Display for CreateFileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Exists => f.write_str("something is at the path"),
+            Self::Symlink(component) => write!(f, "`{component}` is a symlink"),
+            Self::NotDirectory(component) => write!(f, "`{component}` is not a directory"),
+            Self::BadPath => f.write_str("the path names no file under the root"),
+            Self::Io(what, error) => write!(f, "{what}: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for CreateFileError {}
+
+/// A file [`create_file`] made, and the directories it made for it,
+/// outermost first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedFile {
+    pub path: PathBuf,
+    pub made_dirs: Vec<PathBuf>,
+}
+
+impl CreatedFile {
+    /// The file and the directories made for it removed (innermost first,
+    /// only while empty); what could not be removed, one line each.
+    pub fn remove(&self) -> Vec<String> {
+        let mut left = Vec::new();
+        match fs::remove_file(&self.path) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => {
+                left.push(format!("cannot remove {}: {error}", self.path.display()));
+            }
+            _ => {}
+        }
+        left.extend(remove_dirs(&self.made_dirs));
+        left
+    }
+}
+
+/// `dirs` (outermost first) removed innermost first, only while empty;
+/// what stays, one line each.
+fn remove_dirs(dirs: &[PathBuf]) -> Vec<String> {
+    let mut left = Vec::new();
+    for dir in dirs.iter().rev() {
+        if let Err(error) = fs::remove_dir(dir) {
+            left.push(format!(
+                "the directory {} made for it stays: {error}",
+                dir.display()
+            ));
+        }
+    }
+    left
+}
+
+/// Creates the new file `relative` (`/`-separated, clean) under the
+/// directory `root` holding `bytes`, never replacing anything: every
+/// existing component of its directory a directory and no symlink, missing
+/// ones made one by one (each checked again once made); nothing at the
+/// path, a dangling symlink included. The bytes go to a new sibling
+/// (`.<name>.specengine-<pid>-<n>.tmp`, a dot-name the walk skips),
+/// synced, hard-linked to the path (`link` never replaces a name: one
+/// appearing meanwhile is [`CreateFileError::Exists`], untouched), the
+/// sibling removed and the directory synced (best effort). On any failure
+/// the sibling and the directories made are removed (innermost first, only
+/// while empty) and nothing at the path is touched.
+pub fn create_file(
+    root: &Path,
+    relative: &str,
+    bytes: &[u8],
+) -> Result<CreatedFile, CreateFileError> {
+    let components: Vec<&str> = relative.split('/').collect();
+    let Some((name, parents)) = components.split_last() else {
+        return Err(CreateFileError::BadPath);
+    };
+    if components
+        .iter()
+        .any(|component| matches!(*component, "" | "." | ".."))
+    {
+        return Err(CreateFileError::BadPath);
+    }
+    let mut made = Vec::new();
+    let failed = |error: CreateFileError, made: &[PathBuf]| {
+        remove_dirs(made);
+        error
+    };
+    let mut dir = root.to_path_buf();
+    for (index, component) in parents.iter().enumerate() {
+        dir.push(component);
+        let shown = || components[..=index].join("/");
+        match fs::symlink_metadata(&dir) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Err(failed(CreateFileError::Symlink(shown()), &made));
+            }
+            Ok(meta) if meta.is_dir() => {}
+            Ok(_) => return Err(failed(CreateFileError::NotDirectory(shown()), &made)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match fs::create_dir(&dir) {
+                    Ok(()) => made.push(dir.clone()),
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(error) => {
+                        let what = format!("cannot create the directory {}", dir.display());
+                        return Err(failed(CreateFileError::Io(what, error), &made));
+                    }
+                }
+                // Made here or meanwhile: a directory, never a symlink.
+                match fs::symlink_metadata(&dir) {
+                    Ok(meta) if meta.file_type().is_symlink() => {
+                        return Err(failed(CreateFileError::Symlink(shown()), &made));
+                    }
+                    Ok(meta) if meta.is_dir() => {}
+                    _ => return Err(failed(CreateFileError::NotDirectory(shown()), &made)),
+                }
+            }
+            Err(error) => {
+                let what = format!("cannot read {}", dir.display());
+                return Err(failed(CreateFileError::Io(what, error), &made));
+            }
+        }
+    }
+    let path = dir.join(name);
+    match fs::symlink_metadata(&path) {
+        Ok(_) => return Err(failed(CreateFileError::Exists, &made)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => {
+            let what = format!("cannot read {}", path.display());
+            return Err(failed(CreateFileError::Io(what, error), &made));
+        }
+    }
+    let (temp, mut file) = loop {
+        let candidate = dir.join(format!(
+            ".{name}.specengine-{}-{}.tmp",
+            std::process::id(),
+            SCRATCH_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => break (candidate, file),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                let what = format!("cannot create {}", candidate.display());
+                return Err(failed(CreateFileError::Io(what, error), &made));
+            }
+        }
+    };
+    let written = file.write_all(bytes).and_then(|()| file.sync_all());
+    drop(file);
+    let placed = match written {
+        Err(error) => Err(CreateFileError::Io(
+            format!("cannot write {}", temp.display()),
+            error,
+        )),
+        Ok(()) => match fs::hard_link(&temp, &path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                Err(CreateFileError::Exists)
+            }
+            Err(_) if fs::symlink_metadata(&path).is_ok() => Err(CreateFileError::Exists),
+            Err(error) => Err(CreateFileError::Io(
+                format!("cannot link {} to {}", temp.display(), path.display()),
+                error,
+            )),
+        },
+    };
+    let _ = fs::remove_file(&temp);
+    if let Err(error) = placed {
+        return Err(failed(error, &made));
+    }
+    // The new name made durable where the platform allows; best effort.
+    if let Ok(dir) = fs::File::open(&dir) {
+        let _ = dir.sync_all();
+    }
+    Ok(CreatedFile {
+        path,
+        made_dirs: made,
+    })
 }
 
 /// Scratch files of one command, removed when it is dropped (best effort:

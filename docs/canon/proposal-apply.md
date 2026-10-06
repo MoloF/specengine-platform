@@ -3,16 +3,16 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # Proposal apply: consent, steps, completion, reject
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `docs/canon/architecture.md#apply`). Commands, states, store ops, escaping, git safety: `docs/canon/proposal-queue.md`. An apply writes the target file and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7–10, completion), `preflight.rs` (steps 2–6, the trailer lookup); store `WorktreeGit` (`place`, `is_tracked`, `is_dirty`, `committer_ident`, `merge_file`, `commit_only`, `parents`, `changed_paths`, `blob_at`, `has_path`, `trailer_values`, `commits_with_trailer`, `branch_commits_with_trailer`), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `docs/canon/architecture.md#apply`). Commands, states, store ops, escaping, git safety: `docs/canon/proposal-queue.md`. An apply writes the target file (a question's or discrepancy's: a new decision record, `decision-record.md`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7–10, completion), `preflight.rs` (steps 2–6, the trailer lookup); store `WorktreeGit` (place, status, identity, `merge_file`, `commit_only`, history and trailer reads), `replace_file`, `update_file`.
 
 ## Consent
 
-`spec approve`, `spec reject` and `spec import-state` (`docs/canon/queue-backup.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none (checked at shipping), the owner's `!` commands presumably neither: decide in a separate terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
+`spec approve`, `spec reject` and `spec import-state` (`docs/canon/queue-backup.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none, the owner's `!` commands presumably neither: decide in a separate terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
 
 - `apply PR-0001 to <path from the worktree top> on <branch> in <worktree> (applies|rebases)? [y/N]`, after steps 2–6 and the identity;
 - `complete PR-0001 by its commit <sha> on <branch> in <worktree>? [y/N]` (an `open` proposal's own commit; `in` the current project root when the lookup read the current repository);
@@ -22,7 +22,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 
 ## Apply steps
 
-`approve(&Env, &Globals, &ApproveRequest {id, note, now, git}, consent)`: `applied` → exit 1 `` `PR` is already applied: commit <sha> ``; `rejected` → exit 1. Then the trailer lookup ("Completion"); its own commit completes it. Else, in the recorded worktree only:
+`approve_with(&Env, &Globals, &ApproveRequest {id, note, now, git}, &ApproveFlags, consent)` (a decision flag on an update: exit 2): `applied` → exit 1 `` `PR` is already applied: commit <sha> ``; `rejected` → exit 1. Then the trailer lookup ("Completion"); its own commit completes it. Else, in the recorded worktree only:
 
 1. Consent (above).
 2. **Place**: the worktree exists, top and common dir as recorded, `HEAD` on the recorded branch with a commit, no merge, rebase, cherry-pick, revert, bisect or sequencer state; else exit 2 (`the proposal's worktree <w> no longer exists`, `a <operation> is in progress in <w>: finish or abort it first`, …).
@@ -37,7 +37,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 
 **Runs.** No lock until the daemon: runs meet in the queue. A run holds nothing before its own step 7, so a refusal there (steps 2–6, identity, step 7's compare-and-set) only logs (`log_failure`): `open` stays open, another run's `approved` stays approved. At steps 8–9 it reopens (`reopen_from`) only while the proposal is in the state it wrote; step 10 never reopens, a commit exists. One `proposal.apply_failed` per refusal at steps 2–10; none for the terminal check, a decline, another repository, a bad ID, an applied or rejected one.
 
-**Commit** (core `commit_message`; approve writes no decision record, the commit is the record):
+**Commit** (core `commit_message`; an update's commit is its record):
 
 ```
 spec: apply PR-0001
@@ -60,7 +60,7 @@ Looked up by approve before step 2 and at step 5, by review, by reject before an
 
 ## Reject
 
-`reject(&Env, &Globals, &RejectRequest {id, reason, now, git}, consent)`: `open` or `approved` only (else exit 1 `` `PR` is applied: only an open or approved proposal is rejected (commit <sha>) ``), never with a `Proposal:` commit on its branch, checked before and after the prompt; refused: nothing written, no event:
+`reject(&Env, &Globals, &RejectRequest {id, reason, now, git}, consent)`: `open` or `approved` only (a question or discrepancy: `decision-record.md` "Reject"; else exit 1 `` `PR` is applied: only an open or approved proposal is rejected (commit <sha>) ``), never with a `Proposal:` commit on its branch, checked before and after the prompt; refused: nothing written, no event:
 
 - its completing commit → exit 1 `` `PR` has its commit <sha> on `<branch>`: a proposal whose commit is in history is never rejected; `spec approve PR` completes it ``;
 - another → the newest named, ` (<k> older one(s) too)`, why it does not complete, the hint;

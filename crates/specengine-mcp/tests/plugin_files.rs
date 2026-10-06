@@ -63,6 +63,12 @@ const PINS: &[(&str, &str)] = &[
         "0.1.2",
         "efc6d7c3fb789a15e48f6e56bb08687af2c3014b958d3a99f5a56a1af1c8500a",
     ),
+    // docs/features/decision-apply.md "Data", "Plugin": `ask-owner` teaches
+    // a decided item's record (PATCH).
+    (
+        "0.1.3",
+        "876d2d50da902c32c8e29a4389972469ee4aad5e05834a1fcc4927b3ad577dfc",
+    ),
 ];
 
 /// The README's closed file set (its Files bullet), relative to `plugin/`.

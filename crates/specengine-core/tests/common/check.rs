@@ -9,7 +9,7 @@ use specengine_core::check::{self, Baseline, CheckConfig, CheckFile, CheckInput,
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::IdScheme;
 
-use super::md_files;
+use super::walked_md_files;
 
 /// The date every test runs on unless it says otherwise.
 pub const TODAY: &str = "2026-09-29";
@@ -65,13 +65,14 @@ impl Config {
     }
 }
 
-/// A fixture corpus: its own `specengine.toml` and every `.md` file under
-/// it, parsed (the fixture is only read).
+/// A fixture corpus: its own `specengine.toml` and every `.md` file of
+/// its walk ([`walked_md_files`]: a record template outside the roots is
+/// none), parsed (the fixture is only read).
 pub fn fixture_input(corpus: &Path) -> (Config, CheckInput) {
     let text = std::fs::read_to_string(corpus.join("specengine.toml")).expect("specengine.toml");
     let config = Config::from_toml(&text);
     let input = CheckInput {
-        files: md_files(corpus)
+        files: walked_md_files(corpus)
             .into_iter()
             .map(|(path, bytes)| CheckFile::parse(path, bytes, &config.scheme))
             .collect(),

@@ -87,8 +87,9 @@ A hit: an accepted decision document linked to a node (its id, path, and title a
 answer), or a question queued on a shared node with the same text, whitespace and case aside \
 (a rejected one's reason is the owner's answer). With a hit nothing is stored: id null, \
 created false; read the answer, or name every hit in distinct_from to store it anyway. Past \
-10 hits, a note names the rest; over 64 it cannot be stored. Related: decisions only mentioning a node, questions with other text. The owner answers with \
-`spec reject PR --reason <answer>`. A refusal names the field. ",
+10 hits, a note names the rest; over 64 it cannot be stored. Related: decisions only mentioning a node, questions with other text. The owner decides \
+with `spec approve PR` (a decision record: a queue hit's record, path, title as the answer) \
+or answers with `spec reject PR --reason <answer>`. A refusal names the field. ",
     queue_tail!()
 );
 
@@ -112,8 +113,8 @@ of node_ids: stored as a linked update (linked, its findings in diagnostics), de
 own.
 distinct_from, author_role (required), author_model, run: as ask_question.
 
-The owner settles it with `spec reject PR --reason <answer>`. A refusal names the field \
-(evidence[2].observed). ",
+The owner decides it with `spec approve PR --option N` (a decision record) or settles it \
+with `spec reject PR --reason <answer>`. A refusal names the field (evidence[2].observed). ",
     queue_tail!()
 );
 
@@ -122,7 +123,8 @@ const PROPOSAL_DESCRIPTION: &str = concat!(
 content is the command's output (key: value lines), structuredContent its --json document: \
 kind, status, targets, place, author, rationale, the findings an update introduces (at most \
 20, the rest counted in a note), a question's or discrepancy's fields, the owner's decision \
-and note (a rejected question's reason is its answer), and for an open update what approving \
+and note (a rejected question's reason is its answer; one decided by `spec approve` names its \
+record: record_id, record_path, record_title, choice), and for an open update what approving \
 it now would do. The texts, diff and conflict are left out (`spec review PR` prints them); the \
 text is cut at 40000 characters.
 

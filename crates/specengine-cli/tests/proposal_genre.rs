@@ -19,20 +19,33 @@ use std::fs;
 use common::{FIXTURES, fixture, read_text, repository_root};
 use specengine_core::ProjectConfig;
 
-/// The new sources of the slice.
-const NEW_SOURCES: [&str; 11] = [
+/// The new sources of the slice, and of docs/features/decision-apply.md
+/// (core `record`, CLI `decide`).
+const NEW_SOURCES: [&str; 13] = [
     "crates/specengine-core/src/patch.rs",
     "crates/specengine-core/src/proposal.rs",
+    "crates/specengine-core/src/record.rs",
     "crates/specengine-store/src/queue.rs",
     "crates/specengine-store/src/update.rs",
     "crates/specengine-store/src/worktree.rs",
     "crates/specengine-cli/src/apply.rs",
+    "crates/specengine-cli/src/decide.rs",
     "crates/specengine-cli/src/inbox.rs",
     "crates/specengine-cli/src/preflight.rs",
     "crates/specengine-cli/src/proposals.rs",
     "crates/specengine-cli/src/propose.rs",
     "crates/specengine-cli/src/review.rs",
 ];
+
+/// docs/features/decision-apply.md's new sources (AC-03).
+const RECORD_SOURCES: [&str; 2] = [
+    "crates/specengine-core/src/record.rs",
+    "crates/specengine-cli/src/decide.rs",
+];
+
+/// The document classes of the convention: a kind that is also a class
+/// name is no project word (AC-03 "class names aside").
+const CLASS_NAMES: [&str; 4] = ["canon", "decision", "spec", "generated"];
 
 /// Paths, files and names of the fixtures and of this repository.
 const PROJECT_NAMES: &[&str] = &[
@@ -115,6 +128,89 @@ fn ac20_the_new_modules_name_no_fixture_prefix_slug_or_path() {
         "fixture names in the new modules:\n{}",
         found.join("\n")
     );
+}
+
+/// The `[ids]` prefixes, aliases and kinds of the fixtures and of this
+/// repository's own `specengine.toml`, the kinds that are class names
+/// aside.
+fn record_words() -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut prefixes = BTreeSet::new();
+    let mut kinds = BTreeSet::new();
+    let mut configs: Vec<String> = FIXTURES
+        .iter()
+        .map(|(name, _)| read_text(&fixture(name), "specengine.toml"))
+        .collect();
+    configs.push(read_text(&repository_root(), "specengine.toml"));
+    for text in configs {
+        let config = ProjectConfig::from_toml(&text).expect("a config");
+        for spec in config.scheme.prefixes() {
+            prefixes.insert(spec.prefix.clone());
+            prefixes.extend(spec.aliases_from.iter().cloned());
+            if !CLASS_NAMES.contains(&spec.kind.as_str()) {
+                kinds.insert(spec.kind.clone());
+            }
+        }
+    }
+    (prefixes, kinds)
+}
+
+/// The literals of `text` (named `source`) that name a prefix (as the
+/// scan above), equal a kind, or hold `Cost`, `docs/` or `records/`.
+fn record_offenders(
+    source: &str,
+    text: &str,
+    prefixes: &BTreeSet<String>,
+    kinds: &BTreeSet<String>,
+) -> Vec<String> {
+    let mut found = offenders(source, text, prefixes, &["Cost", "docs/", "records/"]);
+    for (number, line) in text.lines().enumerate() {
+        for literal in literals(line) {
+            if kinds.contains(literal) {
+                found.push(format!("{source}:{}: {literal:?} (a kind)", number + 1));
+            }
+        }
+    }
+    found
+}
+
+/// docs/features/decision-apply.md AC-03, the scan half (the run half:
+/// `decision_apply.rs`): the record's sources hold no literal naming an
+/// `[ids]` prefix of spec-a, spec-b or this repository, none equal to a
+/// kind of theirs but a class name, none holding `Cost`, `docs/` or
+/// `records/`: a record's prefix, directory and headings come only from
+/// the project's table and template. M: `"DEC"`.
+#[test]
+fn ac03_the_record_sources_name_no_prefix_kind_heading_or_directory() {
+    let (prefixes, kinds) = record_words();
+    assert!(
+        prefixes.contains("DEC") && prefixes.contains("ADR") && prefixes.contains("QST"),
+        "{prefixes:?}"
+    );
+    assert!(
+        kinds.contains("question") && kinds.contains("rule") && !kinds.contains("decision"),
+        "{kinds:?}"
+    );
+    let mut found = Vec::new();
+    for source in RECORD_SOURCES {
+        let text = fs::read_to_string(repository_root().join(source))
+            .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert!(text.len() > 1000, "{source} is read whole");
+        found.extend(record_offenders(source, &text, &prefixes, &kinds));
+    }
+    assert!(
+        found.is_empty(),
+        "project words in the record sources:\n{}",
+        found.join("\n")
+    );
+    // The scan sees what it must refuse.
+    let sample = "let p = \"DEC\";\nlet k = \"question\";\nlet h = \"## Cost\";\n\
+                  let d = format!(\"docs/records/{id}.md\");\nlet c = \"decision\";\n";
+    let seen = record_offenders("sample.rs", sample, &prefixes, &kinds);
+    let lines: Vec<&str> = seen
+        .iter()
+        .map(|found| found.split(':').nth(1).expect("a line"))
+        .collect();
+    assert_eq!(lines, ["1", "3", "4", "2"], "{seen:?}");
 }
 
 /// The scan sees what it must refuse.

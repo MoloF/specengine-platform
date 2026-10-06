@@ -622,7 +622,10 @@ fn the_sink_detector_flags_each_use_and_no_name_in_pieces() {
             "insertAdjacentHTML",
         ),
         ("window.document.write(text);", "document.write"),
-        ("range.createContextualFragment(text);", "createContextualFragment"),
+        (
+            "range.createContextualFragment(text);",
+            "createContextualFragment",
+        ),
         ("<iframe srcDoc={text} />", "srcdoc"),
         ("frame.srcdoc = text;", "srcdoc"),
     ];

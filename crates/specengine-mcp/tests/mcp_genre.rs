@@ -367,7 +367,8 @@ fn ac11_the_garden_through_the_queue_tools_gets_no_stack_word() {
         assert_eq!(
             document["hits"],
             json!([{"id": "CHOICE-001", "source": "corpus", "status": "accepted",
-                "path": "docs/records/CHOICE-001.md", "answer": "Drip lines for the beds"}]),
+                "path": "docs/records/CHOICE-001.md", "answer": "Drip lines for the beds",
+                "record": "CHOICE-001"}]),
             "{era:?}: {document}"
         );
         assert_eq!(document["created"], json!(false));

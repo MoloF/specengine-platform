@@ -2,9 +2,10 @@
 //! twins): `spec propose question`, `spec propose discrepancy`, the queue
 //! records that never apply, their dedup against what is decided and asked
 //! (Rules 6–7), the refusals (Rules 1–5), a proposed patch as a linked
-//! update, escaping, and settling (`approve` refused before any prompt,
-//! `reject` with the answer). AC-03 (the twin half), AC-04, AC-06, AC-07,
-//! AC-08, AC-09.
+//! update, escaping, and settling (`approve` refused before any prompt
+//! where the root has no `[decision_records]`, as docs/features/
+//! decision-apply.md decides them; `reject` with the answer). AC-03 (the
+//! twin half), AC-04, AC-06, AC-07, AC-08, AC-09.
 //!
 //! Scratch git repositories of `fixtures/spec-a` as `common::proposal`
 //! makes them (the main worktree on `main`, a linked one on `t1`), a scratch
@@ -289,7 +290,7 @@ fn ac04_what_is_decided_or_asked_answers_a_question() {
         json,
         json!({"id": null, "created": false,
             "hits": [{"id": "PR-0001", "source": "queue", "status": "open", "path": null,
-                "answer": null}],
+                "answer": null, "record": null}],
             "related": [], "linked": null, "diagnostics": [], "notes": []})
     );
     assert_eq!(
@@ -318,7 +319,7 @@ fn ac04_what_is_decided_or_asked_answers_a_question() {
     assert_eq!(
         json["hits"],
         json!([{"id": "PR-0001", "source": "queue", "status": "rejected", "path": null,
-            "answer": "Yes: it stops at once.\nSee A-101."}])
+            "answer": "Yes: it stops at once.\nSee A-101.", "record": null}])
     );
     assert!(
         text.starts_with("hit: PR-0001 | rejected | - | Yes: it stops at once.\n"),
@@ -340,7 +341,7 @@ fn ac04_what_is_decided_or_asked_answers_a_question() {
             json!({"id": null, "created": false,
                 "hits": [{"id": "DEC-0023", "source": "corpus", "status": "accepted",
                     "path": "docs/records/DEC/DEC-0023.md",
-                    "answer": "Regeneration waits for rest"}],
+                    "answer": "Regeneration waits for rest", "record": "DEC-0023"}],
                 "related": [], "linked": null, "diagnostics": [], "notes": []}),
             "{target}"
         );
@@ -427,9 +428,9 @@ fn ac04_what_is_decided_or_asked_answers_a_question() {
         json["related"],
         json!([
             {"id": "DEC-0099", "source": "corpus", "status": "accepted",
-                "path": "docs/records/DEC/DEC-0099.md", "answer": null},
+                "path": "docs/records/DEC/DEC-0099.md", "answer": null, "record": null},
             {"id": "PR-0002", "source": "queue", "status": "open", "path": null,
-                "answer": null}
+                "answer": null, "record": null}
         ])
     );
     assert_eq!(
@@ -1441,15 +1442,21 @@ fn ac08_agent_text_is_escaped_in_text_and_raw_in_json() {
 
 // ------------------------------------------------------------------ AC-09
 
-/// AC-09: library `approve` (consent yes) of a question and a discrepancy:
-/// exit 1 naming `spec reject`, no prompt (the consent callback never
-/// called), `dump()` and git unchanged; `reject`: `rejected`, the reason in
-/// `decision_note`, `proposal.rejected`, git unchanged (the linked update
-/// stays `open`). M: approve accepted.
+/// AC-09, as docs/features/decision-apply.md changes it (`approve` decides
+/// a question or a discrepancy into its decision record; its AC-04): in a
+/// recorded root without `[decision_records]`, library `approve` (consent
+/// yes) of a question exits 2 at step 3 naming the table and `spec
+/// reject`, from either worktree, no prompt, one `apply_failed` (step 3)
+/// each, files, refs and rows unchanged; of a discrepancy without
+/// `--option` exits 2 before any step, no event; `reject`: `rejected`, the
+/// reason in `decision_note`, `proposal.rejected`, git unchanged (the
+/// linked update stays `open`). M: approve accepted.
 #[test]
 fn ac09_approve_refuses_and_reject_settles_a_question() {
     let pair = Pair::new("ai-ac09", "spec-a");
     let cwd = pair.linked.clone();
+    pair.drop_records_table(&pair.linked);
+    pair.drop_records_table(&pair.main);
     asked(
         &pair,
         &cwd,
@@ -1467,31 +1474,50 @@ fn ac09_approve_refuses_and_reject_settles_a_question() {
     let outcome = report(&pair, &cwd, input).expect("report");
     assert_eq!(outcome.document.id.as_deref(), Some("PR-0002"));
     let state = pair.state();
+    for cwd in [&pair.linked, &pair.main] {
+        let (outcome, questions) = pair.approve_answer(cwd, "PR-0001", true, pair.git_env(cwd));
+        let message = common::proposal::cannot(&outcome, "approve PR-0001");
+        assert_eq!(
+            message,
+            format!(
+                "spec: `PR-0001` not applied (step 3): {}/specengine.toml has no \
+                 `[decision_records]` \
+                 (`prefix`, `dir`, `template`) for `PR-0001`'s record: add it, or `spec reject \
+                 PR-0001 --reason <answer>`; nothing changed",
+                pair.linked.display()
+            )
+        );
+        assert!(questions.is_empty(), "asked {questions:?}");
+        assert_eq!(pair.state(), state, "nothing written, the row as before");
+    }
+    assert_eq!(
+        pair.events_of("PR-0001"),
+        [
+            ("proposal.created".to_owned(), None),
+            ("proposal.apply_failed".to_owned(), Some(3)),
+            ("proposal.apply_failed".to_owned(), Some(3)),
+        ]
+    );
     let dump = queue_state(&pair);
-    for id in ["PR-0001", "PR-0002"] {
-        for cwd in [&pair.linked, &pair.main] {
-            let (outcome, questions) = pair.approve_answer(cwd, id, true, pair.git_env(cwd));
-            let outcome = outcome.unwrap_or_else(|error| panic!("approve {id}: {error}"));
-            assert_eq!(outcome.exit(), Exit::NotFound, "{id}: {outcome:?}");
-            assert_eq!(
-                outcome.refusal.as_deref(),
-                Some(
-                    format!(
-                        "`{id}` never applies: `spec reject {id} --reason <answer>` settles \
-                         it; nothing changed"
-                    )
-                    .as_str()
-                )
-            );
-            assert!(questions.is_empty(), "{id}: asked {questions:?}");
-            assert_eq!(queue_state(&pair), dump, "{id}");
-            assert_eq!(pair.state(), state, "{id}");
-        }
+    for cwd in [&pair.linked, &pair.main] {
+        let (outcome, questions) = pair.approve_answer(cwd, "PR-0002", true, pair.git_env(cwd));
+        let message = common::proposal::cannot(&outcome, "approve PR-0002");
+        assert_eq!(
+            message,
+            "spec: `PR-0002` is a discrepancy: name the owner's choice with `--option N` (0-1); \
+             nothing changed"
+        );
+        assert!(questions.is_empty(), "asked {questions:?}");
+        assert_eq!(queue_state(&pair), dump, "no event");
+        assert_eq!(pair.state(), state);
     }
 
     reject_ok(&pair, &cwd, "PR-0001", "Yes, it stops.");
     reject_ok(&pair, &pair.main, "PR-0002", "Fix the code.");
-    for (id, reason) in [("PR-0001", "Yes, it stops."), ("PR-0002", "Fix the code.")] {
+    for (id, reason, failed) in [
+        ("PR-0001", "Yes, it stops.", 2),
+        ("PR-0002", "Fix the code.", 0),
+    ] {
         let stored = pair.proposal(id);
         assert_eq!(stored.status, ProposalStatus::Rejected, "{id}");
         assert_eq!(stored.decision_note.as_deref(), Some(reason), "{id}");
@@ -1502,13 +1528,11 @@ fn ac09_approve_refuses_and_reject_settles_a_question() {
             "{id}"
         );
         assert!(stored.applied_commit.is_none(), "{id}");
-        assert_eq!(
-            pair.events_of(id),
-            [
-                ("proposal.created".to_owned(), None),
-                ("proposal.rejected".to_owned(), None)
-            ]
-        );
+        assert!(stored.record.is_none(), "{id}: no decision record");
+        let mut want = vec![("proposal.created".to_owned(), None)];
+        want.extend((0..failed).map(|_| ("proposal.apply_failed".to_owned(), Some(3))));
+        want.push(("proposal.rejected".to_owned(), None));
+        assert_eq!(pair.events_of(id), want, "{id}");
     }
     assert_eq!(pair.proposal("PR-0003").status, ProposalStatus::Open);
     let after = pair.state();

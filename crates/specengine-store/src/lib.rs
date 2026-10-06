@@ -50,7 +50,10 @@
 //!   `merge-file`, `commit --only`, the trailer lookup), every `GIT_*`
 //!   local variable dropped; [`replace_file`] the atomic write;
 //!   [`update_file`], [`span_hash`], [`introduced_findings`] the update of
-//!   one span over core's pure half.
+//!   one span over core's pure half; a question's or a discrepancy's
+//!   decision record (docs/features/decision-apply.md): its ID issued under
+//!   the queue's write lock ([`RecordSeries`], [`RecordApproval`]), the new
+//!   file [`create_file`] makes without ever replacing one.
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -87,18 +90,19 @@ pub use error::StoreError;
 pub use git::GitEnv;
 pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
-    APPLY_VERIFY_STEP, ApplyFailure, Decision, EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED,
-    EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, Event, Intake, IntakeResult, NewIntake,
-    NewProposal, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind,
-    ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError,
-    QueueMatch, Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue,
-    UnreadableRow, patch_hash, proposal_columns,
+    APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, EVENT_APPLIED,
+    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, Event,
+    Intake, IntakeResult, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, Proposal,
+    ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
+    QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch, RecordApproval, RecordSeries,
+    Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue, UnreadableRow,
+    patch_hash, proposal_columns,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use worktree::{
-    GitError, ListedWorktree, Merge, Operation, PlaceError, WorktreeGit, replace_file,
-    same_repository,
+    ChangedPath, CreateFileError, CreatedFile, GitError, ListedWorktree, Merge, Operation,
+    PlaceError, WorktreeGit, create_file, replace_file, same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

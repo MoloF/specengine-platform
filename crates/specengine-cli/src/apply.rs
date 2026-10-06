@@ -45,24 +45,30 @@
 //! never with the caller's local `GIT_*` variables; nothing outside the
 //! recorded worktree and the data directory is written.
 //!
-//! A question or a discrepancy (canon `agent-intake`, "Settling") never
-//! applies: approve refuses it before any lookup or prompt (exit 1, naming
-//! `spec reject`); reject settles it with the answer as its reason, no
-//! history read (no commit of it can exist), `decided_by` the current
-//! repository's committer.
+//! A question or a discrepancy (task spec `decision-apply`) is approved
+//! into a decision record, one new file and one commit where it was raised
+//! ([`crate::decide`]); `--option N`, `--answer T`, `--canon REF` are its
+//! flags only (on an update: exit 2). Reject settles it with the answer as
+//! its reason, refused as an update's when a commit of it is in history
+//! (its record's: none completes one with no record issued); holding no
+//! record, a history git cannot read refuses nothing (a note, before the
+//! prompt too). `decided_by` the current repository's committer unless it
+//! holds a record issued at an earlier step 7 (then as an update's).
 
 use std::path::Path;
 
 use specengine_core::proposal::{CommitFacts, PROPOSAL_TRAILER, commit_message};
 use specengine_store::{
     ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalQueue as _, ProposalStatus,
-    QueueError, Seen, Source as _, WorkingTree, replace_file, same_repository,
+    QueueError, Seen, Source as _, WorkingTree, WorktreeGit, replace_file, same_repository,
 };
 
+use crate::decide;
 use crate::location::open_index;
 use crate::preflight::{
-    History, Missing, Prepared, StepFailure, completes_when, completing, history, place_unchanged,
-    prepare, recorded_project, recorded_root, trailer_lookup, trailer_lookup_here,
+    History, LookupError, Missing, Prepared, StepFailure, TrailerCommit, completes_when,
+    completing, history, place_unchanged, prepare, recorded_project, recorded_root, trailer_lookup,
+    trailer_lookup_here,
 };
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, checked_now,
@@ -85,6 +91,26 @@ pub struct ApproveRequest {
     pub git: GitEnv,
 }
 
+/// `spec approve`'s flags of a question or a discrepancy (task spec
+/// `decision-apply`); all `None` for an update.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ApproveFlags {
+    /// `--option N`: a discrepancy's chosen option, from 0.
+    pub option: Option<u64>,
+    /// `--answer T`: a question's answer other than its working answer.
+    pub answer: Option<String>,
+    /// `--canon REF`: the section the record governs (`ID`, `ID#SECTION`,
+    /// `path#anchor`).
+    pub canon: Option<String>,
+}
+
+impl ApproveFlags {
+    /// Any flag given.
+    pub fn any(&self) -> bool {
+        self.option.is_some() || self.answer.is_some() || self.canon.is_some()
+    }
+}
+
 /// `spec reject` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RejectRequest {
@@ -102,20 +128,34 @@ pub struct RejectRequest {
 pub type Consent<'a> = &'a mut dyn FnMut(&str) -> bool;
 
 /// `spec approve`: applies an open proposal (steps 2–10), or completes one
-/// whose own commit is on its branch.
+/// whose own commit is on its branch; no flag ([`approve_with`]).
 pub fn approve(
     env: &Env,
     globals: &Globals,
     request: &ApproveRequest,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_approve(env, globals, request, consent).map_err(escaped_error)
+    approve_with(env, globals, request, &ApproveFlags::default(), consent)
+}
+
+/// `spec approve PR [--note T] [--option N | --answer T] [--canon REF]`:
+/// [`approve`], a question or a discrepancy decided into its record by
+/// `flags`.
+pub fn approve_with(
+    env: &Env,
+    globals: &Globals,
+    request: &ApproveRequest,
+    flags: &ApproveFlags,
+    consent: Consent<'_>,
+) -> Result<ProposalOutcome, CliError> {
+    run_approve(env, globals, request, flags, consent).map_err(escaped_error)
 }
 
 fn run_approve(
     env: &Env,
     globals: &Globals,
     request: &ApproveRequest,
+    flags: &ApproveFlags,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Approve;
@@ -147,10 +187,13 @@ fn run_approve(
     let document = |proposal: &Proposal, scratch: &Path| with_diff(proposal, &request.git, scratch);
     match proposal.status {
         ProposalStatus::Applied => {
-            let reason = format!(
+            let mut reason = format!(
                 "`{id}` is already applied: commit {}",
                 proposal.applied_commit.as_deref().unwrap_or("unknown")
             );
+            if let Some(record) = &proposal.record {
+                reason.push_str(&format!(", its record `{}`", record.id));
+            }
             return Ok(ProposalOutcome::refused(
                 COMMAND,
                 document(&proposal, &context.data_dir),
@@ -169,17 +212,20 @@ fn run_approve(
         }
         ProposalStatus::Open | ProposalStatus::Approved => {}
     }
-    if !proposal.kind.applies() {
-        let reason = format!(
-            "`{id}` never applies: `spec reject {id} --reason <answer>` settles it; nothing \
-             changed"
-        );
-        return Ok(ProposalOutcome::refused(
-            COMMAND,
-            document(&proposal, &context.data_dir),
-            &reason,
-            messages,
-        ));
+    if proposal.kind.decides() {
+        return decide::approve_record(env, request, flags, &mut context, &proposal, consent);
+    }
+    if flags.any() {
+        let flag = match (flags.option, &flags.answer) {
+            (Some(_), _) => "--option",
+            (None, Some(_)) => "--answer",
+            (None, None) => "--canon",
+        };
+        return Err(CliError::spec(format!(
+            "`{flag}` decides a question or a discrepancy; `{id}` is an {}: `spec approve {id}` \
+             applies it as proposed; nothing changed",
+            proposal.kind.as_str()
+        )));
     }
     // The proposal's own commit already on its branch: completed, no new
     // commit. Its branch read in the current repository when the recorded
@@ -245,7 +291,7 @@ fn run_approve(
                 &proposal,
                 None,
                 failure,
-                preview,
+                Some(preview),
                 messages,
             );
         }
@@ -266,7 +312,7 @@ fn run_approve(
                 &proposal,
                 None,
                 failure,
-                prepared.preview,
+                Some(prepared.preview),
                 messages,
             );
         }
@@ -308,7 +354,7 @@ fn run_approve(
                 &proposal,
                 None,
                 failure,
-                prepared.preview,
+                Some(prepared.preview),
                 messages,
             );
         }
@@ -318,8 +364,8 @@ fn run_approve(
     // Step 8: the place and the file as checked, then the write.
     let path = proposal.target_path.as_str();
     let file = prepared.tree.root().join(path);
-    let unchanged =
-        place_unchanged(&prepared, &proposal.place).and_then(|()| match prepared.tree.read(path) {
+    let unchanged = place_unchanged(&prepared.git, &prepared.head, &proposal.place).and_then(
+        |()| match prepared.tree.read(path) {
             Ok(bytes) if bytes == prepared.bytes => Ok(()),
             Ok(_) => Err(StepFailure::refused(
                 8,
@@ -329,7 +375,8 @@ fn run_approve(
                 8,
                 format!("cannot read `{path}` again: {error}; nothing written"),
             )),
-        });
+        },
+    );
     if let Err(failure) = unchanged {
         return failed(
             &mut context,
@@ -337,7 +384,7 @@ fn run_approve(
             &proposal,
             Some(&held),
             failure,
-            prepared.preview,
+            Some(prepared.preview),
             messages,
         );
     }
@@ -352,7 +399,7 @@ fn run_approve(
             &proposal,
             Some(&held),
             failure,
-            prepared.preview,
+            Some(prepared.preview),
             messages,
         );
     }
@@ -374,7 +421,7 @@ fn run_approve(
         // step 10, never overwritten by a restore. Anything else moving
         // the branch is not this run's commit.
         let branch = &proposal.place.branch;
-        match made_anyway(&prepared, &proposal) {
+        match made_anyway(&prepared.git, &prepared.head, &proposal) {
             Made::Commit { tip, on_branch } => {
                 let moved = if on_branch {
                     format!("`{branch}` moved to {tip}")
@@ -413,7 +460,7 @@ fn run_approve(
                     &proposal,
                     Some(&held),
                     failure,
-                    prepared.preview,
+                    Some(prepared.preview),
                     messages,
                 );
             }
@@ -423,7 +470,18 @@ fn run_approve(
     // Step 10.
     // This run's own commit verified: `applied`, even when its hold was
     // reopened meanwhile.
-    match verify(&prepared, &proposal) {
+    let changes_only_the_path =
+        |commit: &str| match prepared.git.changed_paths(&prepared.head, commit) {
+            Ok(changed) if changed == [prepared.top_path.as_str()] => Ok(()),
+            Ok(changed) => Err(format!("it changes {}", changed.join(", "))),
+            Err(error) => Err(error.to_string()),
+        };
+    match verify(
+        &prepared.git,
+        &prepared.head,
+        &proposal,
+        &changes_only_the_path,
+    ) {
         Ok(commit) => {
             let applied = match context.queue.applied_with(&id, &commit, &decision, now) {
                 Ok(applied) => applied,
@@ -465,27 +523,33 @@ fn run_approve(
                 &proposal,
                 Some(&held),
                 failure,
-                preview,
+                Some(preview),
                 messages,
             )
         }
     }
 }
 
-/// Step 10: the branch's new commit, when its one parent is the old `HEAD`,
-/// it changes only the path and its `Proposal:` trailer is the ID; else
-/// why not, naming the commit.
-fn verify(prepared: &Prepared, proposal: &Proposal) -> Result<String, String> {
-    let git = &prepared.git;
+/// Step 10: the branch's new commit, when its one parent is the old `HEAD`
+/// (`head`), `content` passes it (it changes only the path; a record: it
+/// adds only the record's path with its text) and its `Proposal:` trailer
+/// is the ID; else why not, naming the commit.
+pub(crate) fn verify(
+    git: &WorktreeGit,
+    head: &str,
+    proposal: &Proposal,
+    content: &dyn Fn(&str) -> Result<(), String>,
+) -> Result<String, String> {
+    let old_head = head;
     let branch = &proposal.place.branch;
     let commit = match git.commit_of(&format!("refs/heads/{branch}")) {
         Ok(Some(commit)) => commit,
         Ok(None) => return Err(format!("`{branch}` names no commit after the commit")),
         Err(error) => return Err(format!("cannot read `{branch}` after the commit: {error}")),
     };
-    if commit == prepared.head {
+    if commit == old_head {
         let head = match git.head() {
-            Ok(Some(head)) if head != prepared.head => head,
+            Ok(Some(head)) if head != old_head => head,
             Ok(_) => {
                 return Err(format!(
                     "`{branch}` did not move from {commit} and HEAD names no new commit; `{}` \
@@ -521,15 +585,11 @@ fn verify(prepared: &Prepared, proposal: &Proposal) -> Result<String, String> {
         )
     };
     match git.parents(&commit) {
-        Ok(parents) if parents == [prepared.head.as_str()] => {}
+        Ok(parents) if parents == [old_head] => {}
         Ok(parents) => return Err(stays(format!("its parents are {}", parents.join(" ")))),
         Err(error) => return Err(stays(error.to_string())),
     }
-    match git.changed_paths(&prepared.head, &commit) {
-        Ok(changed) if changed == [prepared.top_path.as_str()] => {}
-        Ok(changed) => return Err(stays(format!("it changes {}", changed.join(", ")))),
-        Err(error) => return Err(stays(error.to_string())),
-    }
+    content(&commit).map_err(&stays)?;
     match git.trailer_values(&commit, PROPOSAL_TRAILER) {
         Ok(values) if values.contains(&proposal.id) => Ok(commit),
         Ok(_) => Err(stays(format!(
@@ -544,15 +604,16 @@ fn verify(prepared: &Prepared, proposal: &Proposal) -> Result<String, String> {
 /// the state this run wrote at step 7 ([`Seen`]), is reopened (unless at
 /// step 10) only while it is still that state; before step 7 (`None`) the
 /// run holds nothing and the state stays as it is, whoever left it. Exit
-/// 2 as an error, exit 1 as the refused document. A proposal applied or
-/// rejected meanwhile logs nothing; its document is the stored one.
-fn failed(
+/// 2 as an error, exit 1 as the refused document (an update's with its
+/// `preview`). A proposal applied or rejected meanwhile logs nothing; its
+/// document is the stored one.
+pub(crate) fn failed(
     context: &mut QueueContext,
     request: &ApproveRequest,
     proposal: &Proposal,
     held: Option<&Seen>,
     failure: StepFailure,
-    preview: Preview,
+    preview: Option<Preview>,
     mut messages: Vec<Message>,
 ) -> Result<ProposalOutcome, CliError> {
     let attempt = ApplyFailure {
@@ -589,8 +650,9 @@ fn failed(
     if matches!(
         logged.status,
         ProposalStatus::Open | ProposalStatus::Approved
-    ) {
-        document.preview = Some(preview);
+    ) && preview.is_some()
+    {
+        document.preview = preview;
         document.conflict = failure.conflict;
     }
     let reason = format!(
@@ -607,7 +669,7 @@ fn failed(
 
 /// What a failed `git commit` left: this run's commit (its `Proposal:`
 /// trailer) as the branch's or `HEAD`'s new commit, or nothing of it.
-enum Made {
+pub(crate) enum Made {
     Commit {
         tip: String,
         /// The branch's tip; else where `HEAD` went.
@@ -621,15 +683,15 @@ enum Made {
 
 /// After a failed `git commit` at step 9: whether git made this run's
 /// commit anyway, by the new tip of the branch, else of `HEAD`, carrying
-/// the proposal's `Proposal:` trailer.
-fn made_anyway(prepared: &Prepared, proposal: &Proposal) -> Made {
-    let git = &prepared.git;
+/// the proposal's `Proposal:` trailer (`head`: the branch's commit step 2
+/// found).
+pub(crate) fn made_anyway(git: &WorktreeGit, head: &str, proposal: &Proposal) -> Made {
     let own = |tip: &str| {
         git.trailer_values(tip, PROPOSAL_TRAILER)
             .is_ok_and(|values| values.contains(&proposal.id))
     };
     let branch_tip = match git.commit_of(&format!("refs/heads/{}", proposal.place.branch)) {
-        Ok(Some(tip)) if tip != prepared.head => Some(tip),
+        Ok(Some(tip)) if tip != head => Some(tip),
         _ => None,
     };
     if let Some(tip) = branch_tip.as_deref().filter(|tip| own(tip)) {
@@ -639,7 +701,7 @@ fn made_anyway(prepared: &Prepared, proposal: &Proposal) -> Made {
         };
     }
     if let Ok(Some(tip)) = git.head()
-        && tip != prepared.head
+        && tip != head
         && branch_tip.as_deref() != Some(tip.as_str())
         && own(&tip)
     {
@@ -656,7 +718,7 @@ fn made_anyway(prepared: &Prepared, proposal: &Proposal) -> Made {
 /// The consent question with the lookup's note before it (`unknown`: git
 /// could not tell whether the proposal's commit is on its branch), escaped:
 /// the owner reads it before answering.
-fn noted(unknown: Option<&str>, question: &str) -> String {
+pub(crate) fn noted(unknown: Option<&str>, question: &str) -> String {
     match unknown {
         Some(note) => format!(
             "{}\n{question}",
@@ -673,7 +735,7 @@ fn noted(unknown: Option<&str>, question: &str) -> String {
 /// worktree's committer identity, the current repository's when the
 /// worktree is not there (none: exit 2 before the prompt). Nothing but the
 /// queue and the data directory's index is written.
-fn complete(
+pub(crate) fn complete(
     env: &Env,
     request: &ApproveRequest,
     context: &mut QueueContext,
@@ -716,7 +778,7 @@ fn complete(
                 proposal,
                 None,
                 failure,
-                Preview::Unavailable,
+                (!proposal.kind.decides()).then_some(Preview::Unavailable),
                 messages,
             );
         };
@@ -767,7 +829,7 @@ fn complete(
 
 /// `applied` with `commit` refused because another run (a completion)
 /// recorded the same commit meanwhile: the stored proposal, with a note.
-fn recorded_already(
+pub(crate) fn recorded_already(
     context: &QueueContext,
     error: &QueueError,
     commit: &str,
@@ -791,15 +853,19 @@ fn recorded_already(
     Some(stored)
 }
 
-/// The recorded root's index brought up to date for the applied path
-/// after a completion; a failure is a warning.
+/// The recorded root's index brought up to date for the applied path (a
+/// decision record's path) after a completion; a failure is a warning.
 fn reindex(env: &Env, context: &QueueContext, proposal: &Proposal, messages: &mut Vec<Message>) {
+    let path = proposal
+        .record
+        .as_ref()
+        .map_or(proposal.target_path.as_str(), |record| record.path.as_str());
     let updated = recorded_project(&recorded_root(proposal), &context.slug).and_then(|recorded| {
         let mut open = open_index(env, &recorded).map_err(|error| error.message)?;
         let tree = WorkingTree::new(&recorded.root, &recorded.config.paths)
             .map_err(|error| error.to_string())?;
         open.index
-            .update_paths(&tree, &recorded.config.scheme, &[&proposal.target_path])
+            .update_paths(&tree, &recorded.config.scheme, &[path])
             .map(|_| ())
             .map_err(|error| error.to_string())
     });
@@ -820,8 +886,9 @@ fn reindex(env: &Env, context: &QueueContext, proposal: &Proposal, messages: &mu
 /// `Proposal:` trailer, naming it (and why it does not complete it, if
 /// so), or when git cannot tell (naming the way out); an orphan's lookup
 /// is skipped only when neither the branch nor the base commit is in the
-/// current repository. Decided by the committer of its [`History`], else
-/// of the current repository.
+/// current repository. A question or a discrepancy holding no record is
+/// refused only by such a commit found: its history unread, a note. Decided
+/// by the committer of its [`History`], else of the current repository.
 pub fn reject(
     env: &Env,
     globals: &Globals,
@@ -892,10 +959,38 @@ fn run_reject(
         ));
     }
     // A proposal with a commit in history is never recorded as rejected;
-    // nor one whose history git cannot read. A kind that never applies has
-    // no commit: its history is not read.
-    let applies = proposal.kind.applies();
-    if applies && let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
+    // nor one whose history git cannot read, when it may have a commit: an
+    // update, or a question or a discrepancy holding a record issued at an
+    // earlier step 7. One holding none is refused only by a commit with its
+    // trailer found (a queue restored from before step 7 while its
+    // record's commit is there: neither approve nor reject takes it); its
+    // history unread (its branch deleted after a merge), it is rejected,
+    // noted.
+    let applies = proposal.kind.applies() || proposal.record.is_some();
+    let mut unknown = None;
+    let refusal = if applies {
+        committed(&request.git, &context, &proposal, orphan)
+    } else if proposal.kind.decides() {
+        match trailer_found(&request.git, &context, &proposal, orphan) {
+            Ok(found) => carried(&proposal, orphan, &found),
+            Err(error) => {
+                let why = match error.missing {
+                    Some(_) => format!("the branch `{}` no longer exists", proposal.place.branch),
+                    None => error.reason,
+                };
+                let note = one_line(&format!(
+                    "`{id}` holds no record, and its history cannot be read ({why}): rejected \
+                     without looking for a commit of it"
+                ));
+                messages.push(Message::Note(note.clone()));
+                unknown = Some(note);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if let Some(reason) = refusal {
         return Ok(ProposalOutcome::refused(
             COMMAND, document, &reason, messages,
         ));
@@ -926,7 +1021,7 @@ fn run_reject(
         proposal.place.branch,
         proposal.place.worktree
     );
-    if !consent(&escape_controls(&question)) {
+    if !consent(&noted(unknown.as_deref(), &escape_controls(&question))) {
         return Ok(ProposalOutcome::refused(
             COMMAND,
             document,
@@ -964,12 +1059,8 @@ fn run_reject(
 }
 
 /// Why `spec reject` refuses the proposal: a commit on its branch carries
-/// its `Proposal:` trailer (the one that completes it, else the newest,
-/// with why it does not), or git cannot tell. Read in its [`History`]
-/// ([`trailer_lookup`]); an `orphan`'s (its recorded repository gone or
-/// moved) in the current repository ([`trailer_lookup_here`]): none there
-/// when neither the branch nor the base commit is in it (another
-/// repository); the branch alone missing refuses, naming the way out.
+/// its `Proposal:` trailer ([`carried`]), or git cannot tell
+/// ([`trailer_found`]).
 fn committed(
     git_env: &GitEnv,
     context: &QueueContext,
@@ -977,28 +1068,46 @@ fn committed(
     orphan: bool,
 ) -> Option<String> {
     let id = &proposal.id;
-    let branch = &proposal.place.branch;
-    let found = if orphan {
+    match trailer_found(git_env, context, proposal, orphan) {
+        Ok(found) => carried(proposal, orphan, &found),
+        Err(error) if orphan => Some(format!(
+            "cannot tell whether `{id}` has its commit in this repository: {error}"
+        )),
+        Err(error) => Some(format!(
+            "cannot tell whether `{id}` has its commit in history: {error}"
+        )),
+    }
+}
+
+/// The commits on the proposal's branch carrying its `Proposal:` trailer.
+/// Read in its [`History`] ([`trailer_lookup`]); an `orphan`'s (its
+/// recorded repository gone or moved) in the current repository
+/// ([`trailer_lookup_here`]): none there when neither the branch nor the
+/// base commit is in it (another repository); the branch alone missing is
+/// an error, naming the way out.
+fn trailer_found(
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    orphan: bool,
+) -> Result<Vec<TrailerCommit>, LookupError> {
+    if orphan {
         match trailer_lookup_here(context, proposal) {
-            Ok(found) => found,
-            Err(error) if error.missing == Some(Missing::Both) => return None,
-            Err(error) => {
-                return Some(format!(
-                    "cannot tell whether `{id}` has its commit in this repository: {error}"
-                ));
-            }
+            Err(error) if error.missing == Some(Missing::Both) => Ok(Vec::new()),
+            found => found,
         }
     } else {
-        match trailer_lookup(git_env, context, proposal) {
-            Ok(found) => found,
-            Err(error) => {
-                return Some(format!(
-                    "cannot tell whether `{id}` has its commit in history: {error}"
-                ));
-            }
-        }
-    };
-    let mut reason = if let Some(own) = completing(&found) {
+        trailer_lookup(git_env, context, proposal)
+    }
+}
+
+/// Why `spec reject` refuses the proposal whose trailer commits are
+/// `found`: the one that completes it, else the newest, with why it does
+/// not; `None` when there is none.
+fn carried(proposal: &Proposal, orphan: bool, found: &[TrailerCommit]) -> Option<String> {
+    let id = &proposal.id;
+    let branch = &proposal.place.branch;
+    let mut reason = if let Some(own) = completing(found) {
         format!(
             "`{id}` has its commit {} on `{branch}`: a proposal whose commit is in history is \
              never rejected; `spec approve {id}` completes it",

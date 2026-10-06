@@ -4,7 +4,8 @@
 //! <target_id> | <branch> | <created_at> | <rationale's first line, at most
 //! 80 characters>`; a question's or a discrepancy's last column
 //! `<severity>: <summary's first line>` (canon `agent-intake`,
-//! "Review document").
+//! "Review document"), an applied one's ending ` [<record_id>]` (task spec
+//! `decision-apply`).
 //! Proposals of another repository of the same slug (the database is the
 //! slug's) are never listed: those of an existing one are counted in a
 //! note; those of a repository that no longer exists (orphans) are named
@@ -58,6 +59,8 @@ pub struct InboxEntry {
     /// A question's text's or a discrepancy's summary's first line, cut as
     /// the rationale; `null` for an update.
     pub summary: Option<String>,
+    /// A question's or a discrepancy's decision record, from its step 7.
+    pub record_id: Option<String>,
 }
 
 /// What `spec inbox` listed.
@@ -170,6 +173,7 @@ fn entry(proposal: &Proposal) -> InboxEntry {
         rationale: intake.is_none().then(|| first_line(&proposal.rationale)),
         severity: intake.map(|intake| intake.severity.as_str().to_owned()),
         summary: intake.map(|intake| first_line(&intake.summary)),
+        record_id: proposal.record.as_ref().map(|record| record.id.clone()),
     }
 }
 
@@ -195,10 +199,15 @@ pub(crate) fn render_text(outcome: &InboxOutcome) -> String {
 fn raw_text(outcome: &InboxOutcome) -> String {
     let mut out = String::new();
     for entry in &outcome.proposals {
-        let last = match (&entry.severity, &entry.summary) {
+        let mut last = match (&entry.severity, &entry.summary) {
             (Some(severity), Some(summary)) => format!("{severity}: {summary}"),
             _ => entry.rationale.clone().unwrap_or_default(),
         };
+        if entry.status == ProposalStatus::Applied.as_str()
+            && let Some(record) = &entry.record_id
+        {
+            last.push_str(&format!(" [{record}]"));
+        }
         out.push_str(&one_line(&format!(
             "{} | {} | {} | {} | {} | {} | {last}",
             entry.id, entry.kind, entry.status, entry.target_id, entry.branch, entry.created_at,

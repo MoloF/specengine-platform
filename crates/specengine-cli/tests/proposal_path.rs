@@ -304,7 +304,7 @@ fn ac01_an_id_less_document_is_proposed_and_asked_by_its_path() {
         json,
         json!({"id": "PR-0002", "created": true, "hits": [],
             "related": [{"id": "DEC-0023", "source": "corpus", "status": "accepted",
-                "path": "docs/records/DEC/DEC-0023.md", "answer": null}],
+                "path": "docs/records/DEC/DEC-0023.md", "answer": null, "record": null}],
             "linked": null, "diagnostics": [], "notes": []})
     );
     assert_eq!(
@@ -355,7 +355,7 @@ fn ac02_a_document_with_an_id_is_named_by_it() {
         json!({"id": null, "created": false,
             "hits": [{"id": "DEC-0023", "source": "corpus", "status": "accepted",
                 "path": "docs/records/DEC/DEC-0023.md",
-                "answer": "Regeneration waits for rest"}],
+                "answer": "Regeneration waits for rest", "record": "DEC-0023"}],
             "related": [], "linked": null, "diagnostics": [], "notes": []})
     );
     assert_eq!(queue_state(&pair), before, "nothing stored");
@@ -897,9 +897,10 @@ fn ac07_a_decision_whose_canon_lands_in_the_file_answers_it() {
     let outcome = asked(&pair, &cwd, &question(&pair, &cwd, &[climb], text));
     let (printed_text, json) = printed_intake(&outcome);
     let dec_0099 = json!({"id": "DEC-0099", "source": "corpus", "status": "accepted",
-        "path": "docs/records/DEC/DEC-0099.md", "answer": "Climbing costs stamina"});
+        "path": "docs/records/DEC/DEC-0099.md", "answer": "Climbing costs stamina",
+        "record": "DEC-0099"});
     let dec_0098 = json!({"id": "DEC-0098", "source": "corpus", "status": "accepted",
-        "path": "docs/records/DEC/DEC-0098.md", "answer": null});
+        "path": "docs/records/DEC/DEC-0098.md", "answer": null, "record": null});
     assert_eq!(
         json,
         json!({"id": null, "created": false, "hits": [dec_0099], "related": [dec_0098],
@@ -1112,7 +1113,8 @@ fn export_to(pair: &Pair, home: &Path, out: &Path, now: &str) -> Vec<u8> {
 
 /// AC-10: AC-01's update and AC-07's question (both path targets)
 /// exported and imported into a fresh `HOME`: `dump()` equal, the re-export
-/// byte-identical, `queue_schema` 2; the restored rows read back by
+/// byte-identical, `queue_schema` 3 (docs/features/decision-apply.md
+/// "Data"); the restored rows read back by
 /// `review`. M: a read-time ID check on `target_id`.
 #[test]
 fn ac10_path_targets_round_trip_through_a_backup() {
@@ -1139,7 +1141,7 @@ fn ac10_path_targets_round_trip_through_a_backup() {
     let text = String::from_utf8(bytes.clone()).expect("a UTF-8 dump");
     assert!(
         text.starts_with(
-            "{\"format\":1,\"queue_schema\":2,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{text}"
     );

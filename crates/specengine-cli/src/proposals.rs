@@ -24,9 +24,11 @@
 //!   `notes` the reasons a preview is unavailable and a refusal's reason.
 //!   The intake kinds (canon `agent-intake`, "Review document") fill the
 //!   eleven keys after `updated_at` instead of an update's texts, `diff`,
-//!   `preview`.
-//! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts,
-//!   `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
+//!   `preview`; their decision record (task spec `decision-apply`) the five
+//!   after `linked`: `record_id`, `record_path`, `record_title`,
+//!   `record_text`, `choice` (an object).
+//! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts
+//!   (`record_text` too), `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
 //!   (the rest counted in a note), the text cut at [`OUTPUT_CAP_CHARS`].
 //!
 //! - **Terminal**: the text output and stderr of the queue's commands
@@ -46,8 +48,8 @@ use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
 use specengine_store::{
-    GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue, WorktreeGit,
-    same_repository,
+    Choice, GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue,
+    WorktreeGit, same_repository,
 };
 
 use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
@@ -139,6 +141,15 @@ pub struct ProposalDocument {
     pub distinct_from: Vec<String>,
     /// The other proposal of a discrepancy and its proposed patch.
     pub linked: Option<String>,
+    /// A question's or a discrepancy's decision record, from its step 7.
+    pub record_id: Option<String>,
+    /// Root-relative.
+    pub record_path: Option<String>,
+    pub record_title: Option<String>,
+    /// The record's bytes; `null` in a brief answer.
+    pub record_text: Option<String>,
+    /// `{"option":N}`, `{"working_answer":true}` or `{"answer":"…"}`.
+    pub choice: Option<Choice>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -198,6 +209,11 @@ impl ProposalDocument {
                 .map(|intake| intake.distinct_from.clone())
                 .unwrap_or_default(),
             linked: proposal.linked.clone(),
+            record_id: proposal.record.as_ref().map(|record| record.id.clone()),
+            record_path: proposal.record.as_ref().map(|record| record.path.clone()),
+            record_title: proposal.record.as_ref().map(|record| record.title.clone()),
+            record_text: proposal.record.as_ref().map(|record| record.text.clone()),
+            choice: proposal.record.as_ref().map(|record| record.choice.clone()),
             notes: Vec::new(),
         }
     }
@@ -273,6 +289,7 @@ pub(crate) fn briefed(mut outcome: ProposalOutcome) -> ProposalOutcome {
     document.new_text = None;
     document.diff = None;
     document.conflict = None;
+    document.record_text = None;
     let mut omitted = 0;
     if let Some(findings) = &mut document.diagnostics
         && findings.len() > SHOW_TAIL_NAMES
@@ -487,10 +504,16 @@ pub(crate) fn checked_now(now: &str) -> Result<&str, CliError> {
 
 /// The target's path from the worktree's top: `root_rel/target_path`.
 pub(crate) fn top_path(proposal: &Proposal) -> String {
+    top_of(proposal, &proposal.target_path)
+}
+
+/// A root-relative `path` of the proposal's recorded root from the
+/// worktree's top: `root_rel/path`.
+pub(crate) fn top_of(proposal: &Proposal, path: &str) -> String {
     if proposal.place.root_rel.is_empty() {
-        proposal.target_path.clone()
+        path.to_owned()
     } else {
-        format!("{}/{}", proposal.place.root_rel, proposal.target_path)
+        format!("{}/{path}", proposal.place.root_rel)
     }
 }
 
@@ -617,11 +640,17 @@ fn raw_text(outcome: &ProposalOutcome) -> String {
                 out.push('\n');
             }
         }
-        QueueCommand::Approve => out.push_str(&format!(
-            "applied {id} as {} on {}\n",
-            document.applied_commit.as_deref().unwrap_or_default(),
-            document.branch.as_deref().unwrap_or_default()
-        )),
+        QueueCommand::Approve => {
+            out.push_str(&format!(
+                "applied {id} as {} on {}",
+                document.applied_commit.as_deref().unwrap_or_default(),
+                document.branch.as_deref().unwrap_or_default()
+            ));
+            if let (Some(record), Some(path)) = (&document.record_id, &document.record_path) {
+                out.push_str(&format!(": {record} {path}"));
+            }
+            out.push('\n');
+        }
         QueueCommand::Reject => out.push_str(&format!("rejected {id}\n")),
     }
     out
@@ -741,6 +770,15 @@ fn review_text(document: &ProposalDocument) -> String {
         Some(document.distinct_from.clone()),
     );
     line(&mut out, "linked", document.linked.as_deref());
+    line(&mut out, "record_id", document.record_id.as_deref());
+    line(&mut out, "record_path", document.record_path.as_deref());
+    line(&mut out, "record_title", document.record_title.as_deref());
+    block(&mut out, "record_text", document.record_text.as_deref());
+    let choice = document
+        .choice
+        .as_ref()
+        .and_then(|choice| serde_json::to_string(choice).ok());
+    line(&mut out, "choice", choice.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
 }

@@ -1,14 +1,14 @@
 //! The queue's dump, format 1 (canon `queue-backup`, "Format"): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":1,"queue_schema":2,"project":"<slug>","proposals":<p>,"events":<e>}`
+//! `{"format":1,"queue_schema":3,"project":"<slug>","proposals":<p>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number and every `events` row by `seq`, each
 //! `{"<table>":{…}}` with every column in table order: `TEXT` a string,
 //! `NULL` `null`, `seq` a number; `author`, `diagnostics`, `payload` stay
 //! the strings stored. No export time and no host inside: equal queues give
-//! equal bytes. A dump of queue schema 1 (canon `queue-backup`, "Format")
-//! still restores: its rows hold schema 1's 24 columns, the eleven later
-//! ones restored `NULL`.
+//! equal bytes. A dump of queue schema 1 or 2 (canon `queue-backup`,
+//! "Format"; task spec `decision-apply`) still restores: its rows hold that
+//! schema's 24 or 35 columns, the later ones restored `NULL`.
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's

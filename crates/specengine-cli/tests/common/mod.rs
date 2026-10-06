@@ -11,6 +11,7 @@
 
 pub mod bundle;
 pub mod check;
+pub mod decision;
 pub mod git;
 pub mod graph;
 pub mod proposal;
@@ -201,6 +202,39 @@ pub fn data_dir(home: &Path) -> PathBuf {
     } else {
         home.join(".local").join("share").join("specengine")
     }
+}
+
+/// `config` with `line` (one `PREFIX = { … }` entry, LF-ended) as the last
+/// key line of its `[ids]` table: a later table (the fixtures'
+/// `[decision_records]`) keeps its own keys.
+pub fn with_ids_line(config: &str, line: &str) -> String {
+    let lines: Vec<&str> = config.split_inclusive('\n').collect();
+    let header = lines
+        .iter()
+        .position(|text| text.trim() == "[ids]")
+        .expect("the config has an `[ids]` table");
+    let last_key = lines[header + 1..]
+        .iter()
+        .take_while(|text| !text.trim_start().starts_with('['))
+        .enumerate()
+        .filter(|(_, text)| {
+            let text = text.trim();
+            !text.is_empty() && !text.starts_with('#')
+        })
+        .map(|(offset, _)| header + 1 + offset)
+        .last()
+        .unwrap_or(header);
+    let mut out = String::new();
+    for (index, text) in lines.iter().enumerate() {
+        out.push_str(text);
+        if index == last_key {
+            if !text.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push_str(line);
+        }
+    }
+    out
 }
 
 /// One finished `spec` process.

@@ -3,18 +3,18 @@ class: canon
 tier: 1
 scope: [crates/specengine-mcp]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # specengine-mcp — the MCP server over stdio
 
-One process serves one client over stdin/stdout on `rmcp =3.5.0` (features `server`, `macros`, `transport-io`, `request-state`; rmcp's `elicitation` feature is skipped because it pulls `url` / ICU — the wire message goes out through `send_request`). No HTTP stack in the graph. The default build serves the read tools `get_tree`, `get_node`, `search`, `get_context_bundle` and the resources over the CLI library; their contract (parity, schemas, resources, "no project", size, latency, the owner's check) is `docs/canon/mcp-read.md`. The queue tools `propose_change`, `ask_question`, `report_discrepancy`, `get_proposal` call the CLI's `propose … --brief`, `propose question|discrepancy`, `review --brief` (`docs/canon/agent-intake.md`); a `target` or `node_ids` item may be a root-relative `.md` path, naming its file's document (`docs/canon/proposal-queue.md` "Creation" 1). Reads refresh the project's index in SpecEngine's data directory, as the CLI's reads do, the queue tools write only its proposal queue there; no tool writes under the project root (ADR-0004, ADR-0005). Design rules for the full tool set: 07 §1.1–1.2.
+One process serves one client over stdin/stdout on `rmcp =3.5.0` (features `server`, `macros`, `transport-io`, `request-state`; not `elicitation`, which pulls `url` / ICU: the wire message goes out through `send_request`). No HTTP stack in the graph. The default build serves the read tools `get_tree`, `get_node`, `search`, `get_context_bundle` and the resources over the CLI library; their contract (parity, schemas, resources, "no project", size, latency, the owner's check) is `docs/canon/mcp-read.md`. The queue tools `propose_change`, `ask_question`, `report_discrepancy`, `get_proposal` call the CLI's `propose … --brief`, `propose question|discrepancy`, `review --brief` (`docs/canon/agent-intake.md`); a `target` or `node_ids` item may be a root-relative `.md` path, naming its file's document (`docs/canon/proposal-queue.md` "Creation" 1). Reads refresh the project's index in SpecEngine's data directory, as the CLI's reads do, the queue tools write only its proposal queue there; no tool writes under the project root (ADR-0004, ADR-0005). Design rules for the full tool set: 07 §1.1–1.2.
 
 Dependencies: `specengine-cli` (never the store or `rusqlite` directly; the reverse edge is forbidden), `rmcp`, `tokio`, `serde`, `serde_json`, `clap`, `getrandom` (optional, `probes`); pinned by eval `build_graph.rs`.
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`; `--root`, `--config` are the CLI globals of every read. stdout carries JSON-RPC and nothing else (a quiet panic hook); the only human text is one stderr line when the session fails. Exit 0 = the client closed the session (also empty stdin); 1 = the session did not start or the service failed. Launcher used by the owner checklist: `fixtures/mcp/mcp.json` (`cargo run -q -p specengine-mcp --features probes`, a scratch `HOME`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`; `--root`, `--config` are the CLI globals of every read. stdout carries JSON-RPC and nothing else (a quiet panic hook); the only human text is one stderr line when the session fails. Exit 0 = the client closed the session (also empty stdin); 1 = the session did not start or the service failed. The owner checklist's launcher: `fixtures/mcp/mcp.json` (`cargo run -q -p specengine-mcp --features probes`, a scratch `HOME`).
 
 ## Protocol eras
 
@@ -58,9 +58,9 @@ The measurement build, never default: the consent demo below (its `requestState`
 | `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; under `probes` `ReviewOutcome`, `FormAction`, `Decision`, `Era` |
 | `server.rs` | `SpecEngineServer` (`ServerHandler`, no project state): `INSTRUCTIONS` (the eight tools) and their asserts, the tool routers (`read_tools`, `intake_tools`, `review_tools`), `get_info` (tools, resources), `Lifecycle` → `supported_protocol_versions`, `list_resources`, `list_resource_templates`, `read_resource` (blocking pool, cache hints from 2026-07-28); `serve_stdio` (clean exit on closed stdin, `ServeError`) |
 | `read.rs` | the read tools (`read_tools` router): argument types, descriptions and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `Answer` → the tool result; text helpers shared with `intake.rs` |
-| `intake.rs` | the queue tools (`intake_tools` router): argument types (one level of closed inline objects; `ChangeKind` only `update`), descriptions (the path form too) and their asserts (each cap, `INTAKE_MATCHES_MAX`, `DISTINCT_MAX`), one CLI library call each with `author_role` always passed, `utc_now`, `process_git` |
+| `intake.rs` | the queue tools (`intake_tools` router): argument types (one level of closed inline objects; `ChangeKind` only `update`), descriptions (the path form, `spec approve` too) and their asserts (each cap, `INTAKE_MATCHES_MAX`, `DISTINCT_MAX`), one CLI library call each with `author_role` always passed, `utc_now`, `process_git` |
 | `resources.rs` | `list` (200 per page), the node template, `parse`, `read`, `percent_encode`, `percent_decode`, the error codes |
-| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (the review and intake documents too; `kind` free), schema only |
+| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (the review and intake documents too, a record's keys, a one-key `Choice`; `kind` free), schema only |
 | `review.rs` | `probes` only: `review_tools` router, `check_proposal_id`, form capability check, `ask_legacy` (raced with cancellation), `ask_stateless` / `resume` (`RequestStateCodec`), `finish` → `ReviewOutcome` + prose |
 | `probes.rs` | `probes` only: `probe_output`, `probe_sleep` |
 | `main.rs` | clap CLI, the quiet panic hook, current-thread tokio runtime, exit codes |
@@ -74,4 +74,4 @@ The measurement build, never default: the consent demo below (its `requestState`
 
 ## Tests
 
-`tests/common/mod.rs`: a spawned-binary JSON-RPC client, each spawn with a cleared environment, its own working directory and a fresh scratch `HOME`; `common/read.rs` the CLI-side expectations, `common/blake3.rs` a BLAKE3 written from the specification. The read files: `docs/canon/mcp-read.md` "Tests"; `mcp_intake.rs`: the queue tools (`mcp_door`, `mcp_genre` cover them too); `plugin_files.rs`, `plugin_skills.rs`: the plugin. `tests/mcp_stdio.rs` (`probes`: both eras, elicitation round trips, `requiresUserInteraction`, a 104 000-byte output, ID refusals, cancellation, empty stdin, bad first message, working directory untouched, `mcp.json` shape). Run: `cargo nextest run -p specengine-mcp --test <file>`, `--features probes` for `mcp_stdio`.
+`tests/common/mod.rs`: a spawned-binary JSON-RPC client, each spawn with a cleared environment, its own working directory and a fresh scratch `HOME`; `common/read.rs` the CLI-side expectations, `common/blake3.rs` a BLAKE3 written from the specification. The read files: `docs/canon/mcp-read.md` "Tests"; `mcp_intake.rs`: the queue tools (`mcp_door`, `mcp_genre` cover them too); `mcp_decision.rs`: a decided item; `plugin_files.rs`, `plugin_skills.rs`: the plugin. `tests/mcp_stdio.rs` (`probes`: both eras, elicitation round trips, `requiresUserInteraction`, a 104 000-byte output, ID refusals, cancellation, empty stdin, bad first message, working directory untouched, `mcp.json` shape). Run: `cargo nextest run -p specengine-mcp --test <file>`, `--features probes` for `mcp_stdio`.

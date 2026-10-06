@@ -51,6 +51,7 @@ pub mod patch;
 pub mod paths_toml;
 pub mod project_toml;
 pub mod proposal;
+pub mod record;
 pub mod scheme_toml;
 pub mod tokens;
 pub mod walk_scope;

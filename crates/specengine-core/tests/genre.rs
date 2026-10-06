@@ -17,7 +17,8 @@ use serde_json::Value;
 use specengine_model::{AnchorOrigin, IdScheme, ParsedFile};
 
 use common::{
-    corpus_scheme, fixture, md_files, render_diagnostics, render_link, repository_root, text_of,
+    corpus_scheme, fixture, render_diagnostics, render_link, repository_root, text_of,
+    walked_md_files,
 };
 
 const CORPORA: [&str; 2] = ["spec-a", "spec-b"];
@@ -28,8 +29,10 @@ fn expected(corpus: &Path) -> Value {
         .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
+/// The corpus's walked documents, parsed (a record template outside the
+/// walk is no document of it).
 fn parse_corpus(corpus: &Path, scheme: &IdScheme) -> Vec<(String, Vec<u8>, ParsedFile)> {
-    md_files(corpus)
+    walked_md_files(corpus)
         .into_iter()
         .map(|(path, bytes)| {
             let parsed = specengine_core::parse(&path, &bytes, scheme);
@@ -277,7 +280,7 @@ fn the_two_corpora_differ_in_prefixes_kinds_and_language() {
                 .any(|c| ('\u{0400}'..='\u{04FF}').contains(&c))),
         "spec-b has a Cyrillic aliases_from"
     );
-    let cyrillic_files = md_files(&fixture("spec-b"))
+    let cyrillic_files = walked_md_files(&fixture("spec-b"))
         .iter()
         .filter(|(_, bytes)| {
             String::from_utf8_lossy(bytes)
@@ -294,7 +297,9 @@ fn the_two_corpora_differ_in_prefixes_kinds_and_language() {
 }
 
 /// No prefix or alias of either `[ids]` is a string literal in the model or
-/// core sources: the core knows no subject domain.
+/// core sources: the core knows no subject domain. The scan reads core's
+/// `record.rs` too (docs/features/decision-apply.md AC-03: a record's
+/// prefix comes only from the project's table).
 #[test]
 fn no_prefix_is_a_string_literal_in_model_or_core_sources() {
     let mut names = BTreeSet::new();
@@ -305,6 +310,7 @@ fn no_prefix_is_a_string_literal_in_model_or_core_sources() {
         }
     }
     let mut offenders = Vec::new();
+    let mut scanned = BTreeSet::new();
     for krate in ["specengine-model", "specengine-core"] {
         let src = repository_root().join("crates").join(krate).join("src");
         let mut stack = vec![src];
@@ -317,6 +323,9 @@ fn no_prefix_is_a_string_literal_in_model_or_core_sources() {
                     continue;
                 }
                 files += 1;
+                if let Ok(relative) = path.strip_prefix(repository_root()) {
+                    scanned.insert(relative.to_string_lossy().into_owned());
+                }
                 let text = fs::read_to_string(&path).expect("UTF-8 source");
                 for (number, line) in text.lines().enumerate() {
                     for name in &names {
@@ -337,6 +346,10 @@ fn no_prefix_is_a_string_literal_in_model_or_core_sources() {
         }
         assert!(files > 0, "{krate}: no source files");
     }
+    assert!(
+        scanned.contains("crates/specengine-core/src/record.rs"),
+        "the record source is scanned: {scanned:?}"
+    );
     assert!(
         offenders.is_empty(),
         "fixture prefixes hard-coded in model/core:\n{}",

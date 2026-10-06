@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # Queue backup and restore
 
-The queue (`proposals`, `events` in `<slug>.db`, `docs/canon/proposal-queue.md` "Store") is the one state git cannot rebuild. `spec export state` dumps it to a JSONL file outside the repository; `spec import-state` restores a dump into an empty queue (ADR-0003; one write door: ADR-0004, ADR-0005; single user: ADR-0012; no re-targeting: ADR-0032). No automatic backup or retention (the daemon's), no `specengine.toml` key. Code: CLI `state.rs` (both commands), `state_file.rs` (the format), `main.rs` (the terminal check); store `queue/state.rs`, `WorktreeGit::{top_if_repository, worktrees}`.
+The queue (`proposals`, `events` in `<slug>.db`, `docs/canon/proposal-queue.md` "Store") is the one state git cannot rebuild. `spec export state` dumps it to a JSONL file outside the repository; `spec import-state` restores a dump into an empty queue (ADR-0003; one write door: ADR-0004, ADR-0005; single user: ADR-0012; no re-targeting: ADR-0032). No automatic backup or retention (the daemon's), no `specengine.toml` key. Code: CLI `state.rs` (the commands), `state_file.rs` (the format), `main.rs` (the terminal); store `queue/state.rs`, `WorktreeGit::{top_if_repository, worktrees}`.
 
 ## Commands
 
@@ -21,13 +21,13 @@ The queue (`proposals`, `events` in `<slug>.db`, `docs/canon/proposal-queue.md` 
 
 `STATE_FORMAT` = 1 (CLI): UTF-8 compact JSON, one object per LF-ended line.
 
-1. The header `{"format":1,"queue_schema":2,"project":"<slug>","proposals":<p>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
-2. Every `proposals` row by ID number (`ORDER BY length(id), id`), then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 35; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `seq` a number; `author`, `diagnostics`, `payload` stay the strings stored.
+1. The header `{"format":1,"queue_schema":3,"project":"<slug>","proposals":<p>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
+2. Every `proposals` row by ID number (`ORDER BY length(id), id`), then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 40; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `seq` a number; `author`, `diagnostics`, `payload` stay the strings stored.
 
-No export time, host or rowid inside: equal queues give byte-identical dumps, whatever their insertion order. Test oracle: `SqliteQueue::dump()`. Backing up another table (tasks, runs) extends the format in its own slice. A `queue_schema` 1 dump restores (24 proposal columns, the eleven intake ones NULL); a schema-1 DB exports as 2, unmigrated.
+No export time, host or rowid: equal queues give byte-identical dumps, whatever their insertion order. Test oracle: `SqliteQueue::dump()`. Another table (tasks, runs) extends the format in its own slice. A `queue_schema` 1 or 2 dump restores (24 or 35 proposal columns, the later ones NULL); a schema-1 or -2 DB exports as 3, unmigrated.
 
 ```
-{"format":1,"queue_schema":2,"project":"lantern-keep","proposals":1,"events":1}
+{"format":1,"queue_schema":3,"project":"lantern-keep","proposals":1,"events":1}
 {"proposals":{"id":"PR-0001","project":"lantern-keep","kind":"update",…,"updated_at":"2026-10-05T12:00:00Z"}}
 {"events":{"seq":1,"project":"lantern-keep","type":"proposal.created","payload":"{\"id\":\"PR-0001\"}","at":"2026-10-05T12:00:00Z"}}
 ```
@@ -47,7 +47,7 @@ In order, the first refusal exit 2; nothing is written before step 5.
 In order; nothing is written before step 5.
 
 1. `main`: stdin not a terminal → exit 2 before `FILE` is opened, approve's message naming `spec import-state` (`proposal-apply.md` "Consent"). No `--yes`.
-2. `FILE` (current-directory relative, symlinks followed) a regular file, checked before the open and on the opened handle, else ``cannot read <FILE>: not a regular file (a dump is one file)``, unread. Read whole and checked; the first defect → ``<FILE>:<line>: <defect>``, never quoting the line or an unknown name: not UTF-8, not JSON, not a JSON object, an empty line or file, no final LF; no header, a header without exactly the five keys or with a value of the wrong type; `format` or `queue_schema` above the build's (`… upgrade SpecEngine`), `format` below, `queue_schema` not 1 or 2; `project` not the root's slug (both named); a row not `{"proposals"|"events":{…}}`; a column missing, extra or repeated (any repeated key); TEXT not a string or `null`; `seq` not an integer ≥ 1 (`12.0` too); `id` not `PR-` and 4 or more digits as the queue writes it, numbered 1 to 2⁶⁴−1; `project` not the header's; an `id` or `seq` repeating an earlier line's (named). Then rows read ≠ header counts → ``<FILE>: header counts <p>, <e>; found <p'>, <e'>``. Rows in any order, inserted in file order; CRLF and whitespace inside a line accepted.
+2. `FILE` (current-directory relative, symlinks followed) a regular file, checked before the open and on the opened handle, else ``cannot read <FILE>: not a regular file (a dump is one file)``, unread. Read whole and checked; the first defect → ``<FILE>:<line>: <defect>``, never quoting the line or an unknown name: not UTF-8, not JSON, not a JSON object, an empty line or file, no final LF; no header, a header without exactly the five keys or with a value of the wrong type; `format` or `queue_schema` above the build's (`… upgrade SpecEngine`), `format` below, `queue_schema` not 1, 2 or 3; `project` not the root's slug (both named); a row not `{"proposals"|"events":{…}}`; a column missing, extra or repeated (any repeated key); TEXT not a string or `null`; `seq` not an integer ≥ 1 (`12.0` too); `id` not `PR-` and 4 or more digits as the queue writes it, numbered 1 to 2⁶⁴−1; `project` not the header's; an `id` or `seq` repeating an earlier line's (named). Then rows read ≠ header counts → ``<FILE>: header counts <p>, <e>; found <p'>, <e'>``. Rows in any order, inserted in file order; CRLF and whitespace inside a line accepted.
 3. The data directory checked, not created; either table holding a row (any project) → ``the queue of `<slug>` in <db> holds <p> proposal(s), <e> event(s): import-state restores only into an empty queue (a fresh data directory, or <db> moved aside); nothing changed``, no question.
 4. stderr ``restore <p> proposal(s) and <e> event(s) of <slug> from <FILE> into <db>? [y/N]``, one line read, only `y` or `yes`; else exit 1, ``spec: not restored: the answer was not `y`; nothing changed``, stdout empty (`--json` `{db, proposals: 0, events: 0}`).
 5. The data directory and DB made when absent (schema steps), then `restore`: one `Immediate` transaction, step 3 again under the write lock (filled meanwhile: step 3's refusal, nothing inserted), every row inserted as given, commit. No event of its own: the next ID and `seq` are the highest restored + 1.
@@ -63,11 +63,11 @@ Neither command writes a spec file, commits, runs apply or completion, or runs g
 | Op | Does |
 |---|---|
 | `SqliteQueue::open_existing(db, project)` | `None` without the file; creates nothing, runs no schema step; `user_version` above the build's → `SchemaTooNew`; no queue tables: reads empty |
-| `stored_rows() -> StoredQueue` | every row of both tables, every project's, raw, one read transaction, by ID number and `seq` (a schema-1 DB: the eleven `None`; tables at another `user_version` → `Invalid`); a TEXT value that is no UTF-8 text (or a number, a BLOB) fails naming row and column |
+| `stored_rows() -> StoredQueue` | every row of both tables, every project's, raw, one read transaction, by ID number and `seq` (a schema-1 or -2 DB: the later ones `None`; tables at another `user_version` → `Invalid`); a TEXT value that is no UTF-8 text (or a number, a BLOB) fails naming row and column |
 | `counts() -> QueueCounts {proposals, events}` | both tables, every project's, one snapshot (`is_empty()`) |
 | `restore(&StoredQueue) -> Restore {Restored, Occupied(QueueCounts)}` | schema steps, then one `Immediate` transaction: both tables empty or `Occupied`, plain `INSERT`s, commit; a row of another project than the handle's → `Invalid`, nothing written |
 
-`StoredQueue {proposals: Vec<StoredProposal>, events: Vec<StoredEvent>}` (`counts()`); `StoredProposal {columns: [Option<String>; 35]}` (`id()`, `project()`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (35; `proposal_columns(schema)`: schema 1's first 24), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
+`StoredQueue {proposals: Vec<StoredProposal>, events: Vec<StoredEvent>}` (`counts()`); `StoredProposal {columns: [Option<String>; 40]}` (`id()`, `project()`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (40; `proposal_columns(schema)`: schema 1's first 24, 2's 35), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
 
 ## Known limits
 

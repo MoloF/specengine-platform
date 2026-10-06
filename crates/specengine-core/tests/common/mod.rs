@@ -65,6 +65,28 @@ pub fn md_files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
+/// The corpus's documents: [`md_files`] of `corpus` within the walk of its
+/// own `specengine.toml` (`[paths]`, defaults applied), as `spec check` and
+/// the index read them. A file the walk never reads (a template a record
+/// is rendered from, docs/features/decision-apply.md) is no document.
+pub fn walked_md_files(corpus: &Path) -> Vec<(String, Vec<u8>)> {
+    let path = corpus.join("specengine.toml");
+    let text =
+        fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    let paths = specengine_core::Paths::from_toml(&text)
+        .unwrap_or_else(|error| panic!("{}: {error:?}", path.display()));
+    let files: Vec<_> = md_files(corpus)
+        .into_iter()
+        .filter(|(relative, _)| paths.in_walk_scope(relative))
+        .collect();
+    assert!(
+        !files.is_empty(),
+        "no walked .md files under {}",
+        corpus.display()
+    );
+    files
+}
+
 /// A scheme of `number` prefixes, width 2, kind = lowercase prefix.
 pub fn numbers(prefixes: &[&str]) -> IdScheme {
     IdScheme::new(

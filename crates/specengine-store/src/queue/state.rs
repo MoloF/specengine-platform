@@ -22,8 +22,9 @@ use crate::schema;
 
 /// Every column of `proposals`, in table order (canon `proposal-queue.md`,
 /// "Store"): queue schema 1's 24, then the eleven step 2 appends
-/// (`docs/canon/agent-intake.md` "Stored").
-pub const PROPOSAL_COLUMNS: [&str; 35] = [
+/// (`docs/canon/agent-intake.md` "Stored"), then the five of a decision
+/// record step 3 appends (task spec `decision-apply`, "Data").
+pub const PROPOSAL_COLUMNS: [&str; 40] = [
     "id",
     "project",
     "kind",
@@ -59,18 +60,28 @@ pub const PROPOSAL_COLUMNS: [&str; 35] = [
     "recommendation",
     "distinct_from",
     "linked",
+    "record_id",
+    "record_path",
+    "record_title",
+    "record_text",
+    "choice",
 ];
 
 /// The columns of queue schema 1's `proposals`: the first of
 /// [`PROPOSAL_COLUMNS`].
 const SCHEMA_1_COLUMNS: usize = 24;
 
-/// The `proposals` columns of queue schema `schema`, in table order: 1 and
-/// 2 (this build's) are known, a dump of either restores; `None` for any
+/// The columns of queue schema 2's `proposals`: the first of
+/// [`PROPOSAL_COLUMNS`].
+const SCHEMA_2_COLUMNS: usize = 35;
+
+/// The `proposals` columns of queue schema `schema`, in table order: 1, 2
+/// and 3 (this build's) are known, a dump of any restores; `None` for any
 /// other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
+        2 => Some(&PROPOSAL_COLUMNS[..SCHEMA_2_COLUMNS]),
         QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
@@ -191,8 +202,8 @@ impl SqliteQueue {
     /// Every row of both tables, every project's, as stored, in one read
     /// transaction: `proposals` by ID number, `events` by `seq`. A `TEXT`
     /// column that holds no UTF-8 text fails, naming row and column. A DB
-    /// still at queue schema 1 (no step runs here) reads its 24 columns,
-    /// the eleven later ones `None`.
+    /// still at queue schema 1 or 2 (no step runs here) reads its 24 or 35
+    /// columns, the later ones `None`.
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();

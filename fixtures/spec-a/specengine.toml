@@ -17,3 +17,10 @@ Q    = { kind = "question",    width = 3, aliases_from = ["QST"] }
 DEC  = { kind = "decision",    width = 4 }
 AC   = { kind = "criterion",   width = 2, scope = "feature" }
 TERM = { kind = "term",        shape = "name" }
+
+# Where `spec approve` writes a decided question or discrepancy
+# (docs/features/decision-apply.md); the template lies outside the walk.
+[decision_records]
+prefix   = "DEC"
+dir      = "docs/records/DEC"
+template = "templates/decision.md"

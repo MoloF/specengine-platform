@@ -19,11 +19,12 @@ use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError, DiscrepancyRequest, Env,
-    Exit, ExportIndexRequest, ExportStateRequest, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES,
-    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
-    Outcome, ProposeRequest, ProposedText, QuestionRequest, RejectRequest, ReviewRequest,
-    SearchRequest, ShowRequest, TEXT_MAX_BYTES, TreeRequest, render_json, render_text,
+    ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError,
+    DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest, Globals, GraphRequest,
+    INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
+    IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText, QuestionRequest,
+    RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES, TreeRequest,
+    render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -170,13 +171,22 @@ enum Command {
         #[arg(long)]
         brief: bool,
     },
-    /// Apply an open proposal in its worktree as one commit, or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask).
+    /// Apply an open proposal in its worktree as one commit (a question or a discrepancy: write its decision record, from the project's [decision_records] template, as one new file and one commit), or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask).
     Approve {
         #[arg(value_name = "PR")]
         id: String,
-        /// A note kept with the decision.
+        /// A note kept with the decision (and in a decision record's `note` slot).
         #[arg(long, value_name = "T")]
         note: Option<String>,
+        /// A discrepancy: the owner's chosen option, from 0.
+        #[arg(long, value_name = "N")]
+        option: Option<u64>,
+        /// A question: the owner's answer, instead of its working answer.
+        #[arg(long, value_name = "T")]
+        answer: Option<String>,
+        /// A question or a discrepancy: the section its record governs (ID, ID#SECTION or path#anchor), instead of its first ID.
+        #[arg(long, value_name = "REF")]
+        canon: Option<String>,
     },
     /// Reject an open or approved proposal, never one whose `Proposal:` commit is on its branch; asks for consent on the terminal.
     Reject {
@@ -565,10 +575,16 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 specengine_cli::review(env, globals, &request)?
             }))
         }
-        Command::Approve { id, note } => {
+        Command::Approve {
+            id,
+            note,
+            option,
+            answer,
+            canon,
+        } => {
             require_terminal("approve")?;
             let mut consent = ask;
-            Outcome::Proposal(Box::new(specengine_cli::approve(
+            Outcome::Proposal(Box::new(specengine_cli::approve_with(
                 env,
                 globals,
                 &ApproveRequest {
@@ -576,6 +592,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     note,
                     now: now(),
                     git: process_git(env),
+                },
+                &ApproveFlags {
+                    option,
+                    answer,
+                    canon,
                 },
                 &mut consent,
             )?))

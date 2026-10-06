@@ -64,6 +64,8 @@ const NAMES: [(&str, &[&str]); 3] = [
             "get_proposal",
             "distinct_from",
             "working_answer",
+            // docs/features/decision-apply.md "Data", "Plugin".
+            "record_id",
         ],
     ),
     ("propose-spec-change", &["propose_change", "span_hash"]),
@@ -813,5 +815,135 @@ fn ac11_each_skill_names_its_names_and_yields_to_the_project() {
         &ac11_problems(&reworded),
         "propose-spec-change: no precedence sentence",
         "reworded",
+    );
+}
+
+// ------------------------------------------- decision-apply AC-16 (skill)
+
+/// The lines of `text` (outside `json` blocks) that are bullets: `- …`.
+fn bullets(text: &str) -> Vec<String> {
+    let (outside, _) = split(text).unwrap_or_default();
+    outside
+        .iter()
+        .map(|(_, line)| line.trim_start())
+        .filter(|line| line.starts_with("- "))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// docs/features/decision-apply.md "Data", "Plugin": `ask-owner` teaches
+/// a queue hit with a `record` (the owner's decision: `get_node` on it, off
+/// this branch `get_proposal` and its `choice`), one with only an
+/// `answer` (rejected, the owner's answer), and an applied item's
+/// `get_proposal` (`record_id`, `record_title`, `choice`,
+/// `decision_note`); `choice` counts as the owner's answer.
+fn ac16_problems(skills: &Skills) -> Vec<String> {
+    let mut problems = Vec::new();
+    let Some(text) = skills.get("ask-owner") else {
+        return vec!["ask-owner: missing".to_owned()];
+    };
+    let has =
+        |line: &str, names: &[&str]| names.iter().all(|name| line.contains(&format!("`{name}`")));
+    let items = bullets(text);
+    if !items.iter().any(|line| {
+        line.contains("with a `record`")
+            && has(line, &["get_node", "record", "get_proposal", "choice"])
+    }) {
+        problems.push(
+            "ask-owner: no hit with a `record` read by `get_node`, else `get_proposal`'s `choice`"
+                .to_owned(),
+        );
+    }
+    if !items
+        .iter()
+        .any(|line| line.contains("with only an `answer`") && line.contains("rejected"))
+    {
+        problems.push("ask-owner: no hit with only an `answer` (rejected)".to_owned());
+    }
+    if !items.iter().any(|line| {
+        has(
+            line,
+            &[
+                "get_proposal",
+                "record_id",
+                "record_title",
+                "choice",
+                "decision_note",
+            ],
+        )
+    }) {
+        problems.push(
+            "ask-owner: no applied item's `get_proposal` with `record_id`, `record_title`, \
+             `choice`"
+                .to_owned(),
+        );
+    }
+    let (outside, _) = split(text).unwrap_or_default();
+    if !outside.iter().any(|(_, line)| {
+        line.contains("Only the owner's") && has(line, &["decision_note", "choice"])
+    }) {
+        problems.push("ask-owner: `choice` is not among the owner's answers".to_owned());
+    }
+    problems
+}
+
+/// AC-16 of docs/features/decision-apply.md, the skill half (the pin
+/// half: `plugin_files.rs` AC-10 at `0.1.3`): the committed `ask-owner`
+/// teaches a decided item. M: the skill unedited (its 0.1.2 bullets, in
+/// memory).
+#[test]
+fn decision_apply_ac16_ask_owner_teaches_a_decided_item() {
+    let skills = committed();
+    assert_eq!(ac16_problems(&skills), Vec::<String>::new());
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+
+    // M: the skill unedited: the 0.1.2 wording of each changed line.
+    let mut unedited = edited(
+        &skills,
+        "ask-owner",
+        "- A queue record with a `record`: the owner decided it, and that record is the owner's \
+         decision. Read it with `get_node` on its `record`; off this branch it is not there yet: \
+         `get_proposal` with the hit's `id` gives the owner's `choice`. Follow it where it settles \
+         your question.\n",
+        "",
+    );
+    for (from, to) in [
+        (
+            "- A queue record with only an `answer`: the owner rejected that record",
+            "- A queue record with an `answer`: the owner rejected that record",
+        ),
+        (
+            "- A queue record with neither: it is asked already.",
+            "- A queue record with no `answer`: it is asked already.",
+        ),
+        (
+            "- Later, `get_proposal` with the item's `id` as `proposal_id` gives its `status` and \
+             the owner's `decision_note`; on a rejected question or discrepancy the note is the \
+             owner's answer; on an applied one, `record_id` and `record_title` name the owner's \
+             decision record, and its `choice` answers too.",
+            "- Later, `get_proposal` with the record's `id` as `proposal_id` gives its `status` \
+             and the owner's `decision_note`; on a rejected question or discrepancy the note is \
+             the owner's answer.",
+        ),
+        (
+            "Only the owner's `decision_note`, `choice` and an accepted decision are answers;",
+            "Only the owner's `decision_note` and an accepted decision are answers;",
+        ),
+    ] {
+        unedited = edited(&unedited, "ask-owner", from, to);
+    }
+    let problems = ac16_problems(&unedited);
+    for needle in [
+        "with a `record`",
+        "with only an `answer`",
+        "`record_id`",
+        "`choice` is not among",
+    ] {
+        assert_names(&problems, needle, "the skill unedited");
+    }
+    assert_names(
+        &ac11_problems(&unedited),
+        "ask-owner: `record_id` not backticked",
+        "the skill unedited",
     );
 }

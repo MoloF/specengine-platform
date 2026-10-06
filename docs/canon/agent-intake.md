@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # Agent intake: queue tools, questions, discrepancies
@@ -48,32 +48,32 @@ Deterministic, never search.
 
 ## Intake document
 
-`{id, created, hits, related, linked, diagnostics, notes}`: `id` the new `PR-…` or `null`; a match `{id, source: corpus|queue, status, path, answer}` (corpus: the decision's `id:` or `null`, `accepted`, its path, its indexed title; queue: `PR-…`, its status, `null`, a rejected one's reason; related: `answer` `null`); `linked` the update's ID, `diagnostics` its findings (20, then `<k> more introduced finding(s): spec review PR`); `notes` also `note:` lines. Text: the ID, `linked: PR-…`, a patch's `introduced: <n>` and finding lines, a `hit:`/`related: <id or path> | <status> | <path or -> | <answer's first line or ->` line each; not stored: ``not stored: name every hit in `distinct_from` to store it anyway``. Exit 0 stored or not; 1 refused (no text, `--json` the document).
+`{id, created, hits, related, linked, diagnostics, notes}`: `id` the new `PR-…` or `null`; a match `{id, source: corpus|queue, status, path, answer, record}` (corpus: the decision's `id:` or `null`, `accepted`, its path, its indexed title; queue: `PR-…`, its status, `null`, a rejected one's reason; an applied one: `decision-record.md`; related: `answer`, `record` `null`); `linked` the update's ID, `diagnostics` its findings (20, then `<k> more introduced finding(s): spec review PR`); `notes` also `note:` lines. Text: the ID, `linked: PR-…`, a patch's `introduced: <n>` and finding lines, a `hit:`/`related: <id or path> | <status> | <path or -> | <answer's first line or ->` line each; not stored: ``not stored: name every hit in `distinct_from` to store it anyway``. Exit 0 stored or not; 1 refused (no text, `--json` the document).
 
 ```
 ask_question {"node_ids": ["Q-031"], "text": "Does regeneration wait for rest?", "working_answer": "yes, 1.5 s",
   "price_of_other": "R-28 rebalanced", "author_role": "developer"}
 → {"id": null, "created": false, "hits": [{"id": "DEC-0023", "source": "corpus", "status": "accepted",
-  "path": "docs/records/DEC/DEC-0023.md", "answer": "Regeneration waits for rest"}], "related": [], "linked": null,
+  "path": "docs/records/DEC/DEC-0023.md", "answer": "Regeneration waits for rest", "record": "DEC-0023"}], "related": [], "linked": null,
   "diagnostics": [], "notes": []}
 ```
 
 ## Stored
 
-Kinds `question`, `discrepancy` (`ProposalKind::applies()` false). Queue step 1 → 2 (`QUEUE_SCHEMA_VERSION` 2; 0 → 2 runs both): `ALTER TABLE proposals ADD COLUMN <c> TEXT`, in order `target_ids` (JSON canonical targets; `target_id` the first, `target_path` its holder), `severity`, `gap_type`, `summary` (a question's text), `working_answer`, `price_of_other`, `evidence`, `options` (JSON as input, absent keys `null`; a question's NULL), `recommendation` (decimal), `distinct_from` (JSON), `linked`; `PROPOSAL_COLUMNS` 35. New kinds: `base_hash`, `base_text`, `new_text`, `patch_hash`, `rationale` NULL, `diagnostics` `[]`; an update: the eleven NULL but `linked`. Corrupt, named: a kind's required column NULL, JSON not of its shape, an enum or `recommendation` out of range, a first target not `target_id`, `linked` no `PR-` ID.
+Kinds `question`, `discrepancy` (`applies()` false, `decides()` true). Queue step 1 → 2 (step 3: `decision-record.md`): `ALTER TABLE proposals ADD COLUMN <c> TEXT`, in order `target_ids` (JSON canonical targets; `target_id` the first, `target_path` its holder), `severity`, `gap_type`, `summary` (a question's text), `working_answer`, `price_of_other`, `evidence`, `options` (JSON as input, absent keys `null`; a question's NULL), `recommendation` (decimal), `distinct_from` (JSON), `linked`; 35 columns. New kinds: `base_hash`, `base_text`, `new_text`, `patch_hash`, `rationale` NULL, `diagnostics` `[]`; an update: the eleven NULL but `linked`. Corrupt, named: a kind's required column NULL, JSON not of its shape, an enum or `recommendation` out of range, a first target not `target_id`, `linked` no `PR-` ID.
 
-Store: `create_intake(&NewIntake {kind, target_path, place, author, intake: Intake}, corpus_hits: &[String], patch: Option<&NewProposal>, now) -> IntakeResult {hits, related: Vec<QueueMatch {id, status, reason}>, created, linked}`; an applying kind → `Invalid`. `create` of a never-applying kind, `approve`, `approve_from`, `applied`, `applied_with` of one → `Invalid`. Backup: `queue-backup.md` "Format".
+Store: `create_intake(&NewIntake {kind, target_path, place, author, intake: Intake}, corpus_hits: &[String], patch: Option<&NewProposal>, now) -> IntakeResult {hits, related: Vec<QueueMatch {id, status, reason, record_{id,path,title}}>, created, linked}`; an applying kind → `Invalid`. `create`, `approve`, `approve_from` of a new kind are `Invalid`; `applied`, `applied_with` without its record too. Backup: `queue-backup.md` "Format".
 
 ## Review document
 
-The eleven keys between `updated_at` and `notes`: `target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked`; `recommendation` an integer, lists `[]` when absent (an update's `target_ids` `[target_id]`), scalars `null`. Text: `key: <n>`, an indented line per item: `[i] label | effect | price` (+ ` (recommended)`), `file[:lines][ qpath] | observed | documented`. New kinds: `diff`, `preview`, `conflict` `null`, no apply step run.
+The eleven keys after `updated_at` (then a record's five: `decision-record.md`): `target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked`; `recommendation` an integer, lists `[]` when absent (an update's `target_ids` `[target_id]`), scalars `null`. Text: `key: <n>`, an indented line per item: `[i] label | effect | price` (+ ` (recommended)`), `file[:lines][ qpath] | observed | documented`. New kinds: `diff`, `preview`, `conflict` `null`, no apply step run.
 
 - **`--brief`** (`propose update`, `review`; `propose_change`, `get_proposal`): `base_text`, `new_text`, `diff`, `conflict` `null`; 20 `diagnostics` (`SHOW_TAIL_NAMES`), note `<k> more introduced finding(s): spec review PR`; text over `OUTPUT_CAP_CHARS`: the whole lines that fit (a longer first one cut), then `[truncated: <k> of <n> lines not shown: spec review PR]`.
 - **Inbox**: entries gain `severity`, `summary` (`null` for an update), `rationale` `null` for the new kinds; their last column `<severity>: <summary's first line>`, cut at 80 characters as the rationale.
 
 ## Settling
 
-`approve` of a new kind → exit 1 before any lookup or prompt: `` `PR-0004` never applies: `spec reject PR-0004 --reason <answer>` settles it; nothing changed``. `reject --reason`: `open → rejected`, the reason in `decision_note` (the owner's answer: `get_proposal` and dedup return it), `proposal.rejected`, no history or trailer read, `decided_by` the committer identity; orphans and other repositories as for an update.
+`spec approve` decides one as an accepted decision record: `decision-record.md`. `reject --reason`: `open → rejected`, the reason in `decision_note` (the owner's answer: `get_proposal` and dedup return it), `proposal.rejected`; its history read only when a commit of it may exist (`decision-record.md` "Reject"); orphans and other repositories as for an update.
 
 ## Authors
 
@@ -85,6 +85,6 @@ The new fields go through `escape_controls` (text, prompts, stderr: inbox, revie
 
 ## Known limits
 
-An agent's Bash `spec propose` without `A` stores `human`; a subagent in a task worktree binds to the session's tree (ADR-0032); a cancelled MCP write still stores (a repeat gets the hit); a settled question reads `rejected` until `decision-apply`; a scratch-`HOME` launcher (`fixtures/mcp/mcp.json`) hides its items from the owner's inbox; no dedup for `update`; rows by a path and by its later `id:` stay apart.
+An agent's Bash `spec propose` without `A` stores `human`; a subagent in a task worktree binds to the session's tree (ADR-0032); a cancelled MCP write still stores (a repeat gets the hit); a scratch-`HOME` launcher (`fixtures/mcp/mcp.json`) hides its items from the owner's inbox; no dedup for `update`; rows by a path and by its later `id:` stay apart.
 
 - **Unnameable hits**: over 64, or one whose path is over 256 bytes or holds a control character (listed; `distinct_from[i]` refuses it, the agent's only sign): the item is never stored. `unnameable` counts hit documents, not names: two accepted decisions sharing an ID (a `spec check` error) may read "cannot be stored" though naming the 64 names stores it. The note joins names with `, `: a path holding `, ` does not split back.

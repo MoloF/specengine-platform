@@ -1,17 +1,19 @@
-//! docs/features/agent-intake.md AC-10 through the CLI library: the
-//! queue's backup at schema 2 ("Backup": `format` 1, header `queue_schema`
-//! 2, 35 proposal columns) — every kind (an update, an open question, a
-//! rejected question, a discrepancy and its linked update) exported and
-//! imported fresh, `dump()` equal, the fresh queue's export the same bytes;
-//! a `queue_schema` 1 dump (24 columns) imports, the eleven `NULL`, and
-//! re-exports as 2; a database still at queue schema 1 exports as 2
-//! without stepping, and the first queue command that opens it steps it to
-//! 2, its rows kept (`queue_schema` 3: `queue_state.rs`'s AC-06).
+//! docs/features/agent-intake.md AC-10 through the CLI library, at the
+//! queue schema docs/features/decision-apply.md makes current (3: "Data",
+//! "Backup"): the queue's backup (`format` 1, header `queue_schema` 3, 40
+//! proposal columns) — every kind (an update, an open question, a rejected
+//! question, a discrepancy and its linked update) exported and imported
+//! fresh, `dump()` equal, the fresh queue's export the same bytes; a
+//! `queue_schema` 1 dump (24 columns) imports, the sixteen later columns
+//! `NULL`, and re-exports as 3; a database still at queue schema 1 exports
+//! as 3 without stepping, and the first queue command that opens it steps
+//! it to 3, its rows kept (`queue_schema` 4: `queue_state.rs`'s AC-06; the
+//! decided rows and a schema-2 dump: `decision_apply.rs`'s AC-12).
 //!
 //! Scratch git repositories of `fixtures/spec-a` (`common::proposal`), a
 //! scratch `HOME` per queue, the injected clock, consent through the
 //! callback; the version-1 database is made from a real one by the
-//! system's `sqlite3` (the eleven columns dropped, `user_version` 1).
+//! system's `sqlite3` (the sixteen later columns dropped, `user_version` 1).
 //! Every dump is written under the test's scratch directory.
 
 #![cfg(unix)]
@@ -33,10 +35,13 @@ use specengine_cli::{
 };
 use specengine_store::{PROPOSAL_COLUMNS, ProposalQueue as _, ProposalStatus, SqliteQueue};
 
-/// The eleven columns of queue schema 2, as the dump writes an update's.
+/// The eleven columns of queue schema 2 and the five of schema 3, as the
+/// dump writes an update's.
 const NULL_TAIL: &str = ",\"target_ids\":null,\"severity\":null,\"gap_type\":null,\
 \"summary\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":null,\
-\"options\":null,\"recommendation\":null,\"distinct_from\":null,\"linked\":null}}";
+\"options\":null,\"recommendation\":null,\"distinct_from\":null,\"linked\":null,\
+\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\
+\"choice\":null}}";
 
 fn env_at(home: &Path, cwd: &Path) -> Env {
     Env {
@@ -220,13 +225,13 @@ fn assert_columns(line: &str, columns: &[&str]) {
 
 // ------------------------------------------------------------------ AC-10
 
-/// AC-10: every kind exported (header `queue_schema` 2, each row the 35
+/// AC-10: every kind exported (header `queue_schema` 3, each row the 40
 /// columns in table order, a question's and a discrepancy's fields as
-/// stored), imported into a fresh queue: `dump()` equal, every row read
-/// back alike, and the fresh queue's export byte-identical. M: a column
-/// left out.
+/// stored, an undecided one's record columns `null`), imported into a
+/// fresh queue: `dump()` equal, every row read back alike, and the fresh
+/// queue's export byte-identical. M: a column left out.
 #[test]
-fn ac10_every_kind_round_trips_at_schema_2() {
+fn ac10_every_kind_round_trips_at_schema_3() {
     let pair = Pair::new("ai-ac10", "spec-a");
     every_kind(&pair);
     let before = dump_of(&pair.home);
@@ -235,10 +240,15 @@ fn ac10_every_kind_round_trips_at_schema_2() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":1,\"queue_schema\":2,\"project\":\"lantern-keep\",\"proposals\":5,\"events\":6}"
+        "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":5,\"events\":6}"
     );
+    assert_eq!(PROPOSAL_COLUMNS.len(), 40);
     for row in &rows[1..6] {
         assert_columns(row, &PROPOSAL_COLUMNS);
+        let value: Value = serde_json::from_str(row).unwrap();
+        for column in &PROPOSAL_COLUMNS[35..] {
+            assert!(value["proposals"][column].is_null(), "{column}: {row}");
+        }
     }
     assert!(rows[1].ends_with(NULL_TAIL), "an update's: {}", rows[1]);
     let question: Value = serde_json::from_str(&rows[3]).unwrap();
@@ -286,12 +296,12 @@ fn ac10_every_kind_round_trips_at_schema_2() {
 }
 
 /// AC-10: a `queue_schema` 1 dump (its 24 columns) imports into a fresh
-/// queue, the eleven `NULL`; its export is a `queue_schema` 2 dump, equal
-/// to the schema-2 export of the same queue; a schema-1 row carrying a
-/// schema-2 column, or a schema-2 row without one, is refused naming its
-/// line. M: schema 1 refused; a column left out.
+/// queue, the sixteen later columns `NULL`; its export is a `queue_schema`
+/// 3 dump, equal to the schema-3 export of the same queue; a schema-1 row
+/// carrying a later column, or a schema-3 row without them, is refused
+/// naming its line. M: schema 1 refused; a column left out.
 #[test]
-fn ac10_a_schema_1_dump_imports_and_re_exports_as_2() {
+fn ac10_a_schema_1_dump_imports_and_re_exports_as_3() {
     let pair = Pair::new("ai-ac10-v1", "spec-a");
     pair.propose_edit(
         &pair.linked,
@@ -308,10 +318,15 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_2() {
     let (outcome, _) = pair.reject_answer(&pair.main, &rejected, "No.", true);
     assert_eq!(outcome.expect("reject").exit(), Exit::Answered);
     let dumps = pair.scratch.dir("dumps");
-    let v2 = export_ok(&pair, &pair.home, &dumps.join("v2.jsonl"));
-    let v2_lines = lines(&v2);
-    let mut v1_lines = v2_lines.clone();
-    v1_lines[0] = v1_lines[0].replacen("\"queue_schema\":2,", "\"queue_schema\":1,", 1);
+    let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
+    let v3_lines = lines(&v3);
+    assert!(
+        v3_lines[0].contains("\"queue_schema\":3,"),
+        "{}",
+        v3_lines[0]
+    );
+    let mut v1_lines = v3_lines.clone();
+    v1_lines[0] = v1_lines[0].replacen("\"queue_schema\":3,", "\"queue_schema\":1,", 1);
     for line in &mut v1_lines[1..3] {
         assert!(line.ends_with(NULL_TAIL), "{line}");
         *line = format!("{}}}}}", &line[..line.len() - NULL_TAIL.len()]);
@@ -324,16 +339,16 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_2() {
     let fresh = pair.scratch.home("fresh");
     let outcome = import_ok(&fresh, &pair.main, &v1_file);
     assert_eq!((outcome.proposals, outcome.events), (2, 3));
-    assert_eq!(dump_of(&fresh), dump_of(&pair.home), "the eleven NULL");
+    assert_eq!(dump_of(&fresh), dump_of(&pair.home), "the sixteen NULL");
     let again = export_ok(&pair, &fresh, &dumps.join("again.jsonl"));
-    assert_eq!(again, v2, "re-exported as queue_schema 2");
+    assert_eq!(again, v3, "re-exported as queue_schema 3");
 
-    // A schema-1 row with a schema-2 column; a schema-2 row without one.
+    // A schema-1 row with the later columns; a schema-3 row without them.
     let mut mixed = v1_lines.clone();
-    mixed[2] = v2_lines[2].clone();
-    let mut short = v2_lines.clone();
+    mixed[2] = v3_lines[2].clone();
+    let mut short = v3_lines.clone();
     short[2] = v1_lines[2].clone();
-    for (name, bad) in [("v1 with 35", mixed), ("v2 with 24", short)] {
+    for (name, bad) in [("v1 with 40", mixed), ("v3 with 24", short)] {
         let file = dumps.join(format!("{}.jsonl", name.replace(' ', "-")));
         fs::write(&file, format!("{}\n", bad.join("\n"))).unwrap();
         let home = pair
@@ -348,11 +363,11 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_2() {
     }
 }
 
-/// AC-10: a database still at queue schema 1 (a real queue's eleven
-/// columns dropped, `user_version` 1) exports as `queue_schema` 2 without
-/// stepping (the eleven `null`, the bytes of the schema-2 export); the
-/// first queue command that opens it (`spec inbox`) steps it to 2 in
-/// place: its rows kept, the eleven `NULL`.
+/// AC-10: a database still at queue schema 1 (a real queue's sixteen
+/// later columns dropped, `user_version` 1) exports as `queue_schema` 3
+/// without stepping (the sixteen `null`, the bytes of the schema-3
+/// export); the first queue command that opens it (`spec inbox`) steps it
+/// to 3 in place: its rows kept, the sixteen `NULL`.
 #[test]
 fn ac10_a_version_1_database_is_stepped_when_opened() {
     let pair = Pair::new("ai-ac10-db", "spec-a");
@@ -363,7 +378,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
         "the sprint ends at once;",
     );
     let dumps = pair.scratch.dir("dumps");
-    let v2 = export_ok(&pair, &pair.home, &dumps.join("v2.jsonl"));
+    let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let before = dump_of(&pair.home);
     let db = pair.db();
     let drops: Vec<String> = PROPOSAL_COLUMNS[24..]
@@ -381,7 +396,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     );
 
     let exported = export_ok(&pair, &pair.home, &dumps.join("from-v1.jsonl"));
-    assert_eq!(exported, v2, "a version-1 DB exports as queue_schema 2");
+    assert_eq!(exported, v3, "a version-1 DB exports as queue_schema 3");
     assert_eq!(
         sql(&db, "PRAGMA user_version;"),
         "1",
@@ -390,12 +405,12 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
 
     let inbox = pair.inbox(&pair.main, false).expect("inbox");
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "2");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "3");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),
         PROPOSAL_COLUMNS,
-        "step 2 appends the eleven in order"
+        "steps 2 and 3 append the sixteen in order"
     );
-    assert_eq!(dump_of(&pair.home), before, "rows kept, the eleven NULL");
+    assert_eq!(dump_of(&pair.home), before, "rows kept, the sixteen NULL");
 }

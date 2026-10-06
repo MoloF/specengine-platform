@@ -42,7 +42,10 @@
 //! cherry-picked apply's merge), each blob read under the `specengine.toml`
 //! of its commit's tree, the one read now when the tree has none. A base
 //! commit not there (pruned after a rebase): the branch's whole history is
-//! read; a branch not there is named with the way out.
+//! read; a branch not there is named with the way out. A question's or a
+//! discrepancy's commit (task spec `decision-apply`) completes it with one
+//! parent, adding exactly its record's path, the blob there its stored
+//! `record_text` byte for byte, never rendered again ([`record_commit`]).
 //!
 //! Git runs `-C <worktree>` (a [`History::Current`] lookup: `-C` the
 //! current project root), stdin null, without the caller's local `GIT_*`
@@ -69,7 +72,7 @@ use specengine_store::{
 
 use crate::location::{OpenIndex, open_index};
 use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
-use crate::proposals::{Preview, QueueContext, top_path};
+use crate::proposals::{Preview, QueueContext, top_of, top_path};
 use crate::propose::is_path_target;
 use crate::refresh::refresh;
 use crate::{Env, Exit, Message, one_line};
@@ -142,81 +145,8 @@ pub(crate) fn prepare(
     messages: &mut Vec<Message>,
 ) -> Result<Prepared, StepFailure> {
     let place = &proposal.place;
-    let worktree = Path::new(&place.worktree);
     let path = proposal.target_path.as_str();
-
-    // Step 2: the place.
-    let at = |error: &dyn std::fmt::Display| {
-        StepFailure::cannot(2, format!("git in {}: {error}", place.worktree))
-    };
-    if !worktree.is_dir() {
-        return Err(StepFailure::cannot(
-            2,
-            format!(
-                "the proposal's worktree {} no longer exists",
-                place.worktree
-            ),
-        ));
-    }
-    let git = WorktreeGit::new(worktree, git_env).map_err(|error| at(&error))?;
-    let top = git.top().map_err(|error| at(&error))?;
-    if !same_repository(&place.worktree, &top) {
-        return Err(StepFailure::cannot(
-            2,
-            format!(
-                "{} is no longer the top of a git worktree (git names {})",
-                place.worktree,
-                top.display()
-            ),
-        ));
-    }
-    let common = git.common_dir().map_err(|error| at(&error))?;
-    if !same_repository(&place.git_common_dir, &common) {
-        return Err(StepFailure::cannot(
-            2,
-            format!(
-                "the worktree {} belongs to the repository {} now, not {}",
-                place.worktree,
-                common.display(),
-                place.git_common_dir
-            ),
-        ));
-    }
-    match git.branch().map_err(|error| at(&error))? {
-        Some(branch) if branch == place.branch => {}
-        Some(branch) => {
-            return Err(StepFailure::cannot(
-                2,
-                format!(
-                    "the worktree {} is on `{branch}`; the proposal applies on `{}`: check it \
-                     out there",
-                    place.worktree, place.branch
-                ),
-            ));
-        }
-        None => {
-            return Err(StepFailure::cannot(
-                2,
-                format!(
-                    "HEAD is detached in {}; the proposal applies on `{}`: check it out there",
-                    place.worktree, place.branch
-                ),
-            ));
-        }
-    }
-    if let Some(operation) = git.operation_in_progress().map_err(|error| at(&error))? {
-        return Err(StepFailure::cannot(
-            2,
-            format!(
-                "a {operation} is in progress in {}: finish or abort it first",
-                place.worktree
-            ),
-        ));
-    }
-    let head = git
-        .head()
-        .map_err(|error| at(&error))?
-        .ok_or_else(|| StepFailure::cannot(2, format!("`{}` has no commit", place.branch)))?;
+    let Placed { git, top, head } = place_step(git_env, proposal)?;
 
     // Step 3: the file.
     let root = if place.root_rel.is_empty() {
@@ -356,6 +286,95 @@ pub(crate) fn prepare(
     })
 }
 
+/// Step 2 passed: git in the recorded worktree, its top, and the branch's
+/// commit.
+pub(crate) struct Placed {
+    pub git: WorktreeGit,
+    /// Canonical.
+    pub top: PathBuf,
+    pub head: String,
+}
+
+/// Apply step 2: the recorded worktree exists, its top and common dir as
+/// recorded, `HEAD` on the recorded branch with a commit, no operation in
+/// progress; else exit 2.
+pub(crate) fn place_step(git_env: &GitEnv, proposal: &Proposal) -> Result<Placed, StepFailure> {
+    let place = &proposal.place;
+    let worktree = Path::new(&place.worktree);
+    let at = |error: &dyn std::fmt::Display| {
+        StepFailure::cannot(2, format!("git in {}: {error}", place.worktree))
+    };
+    if !worktree.is_dir() {
+        return Err(StepFailure::cannot(
+            2,
+            format!(
+                "the proposal's worktree {} no longer exists",
+                place.worktree
+            ),
+        ));
+    }
+    let git = WorktreeGit::new(worktree, git_env).map_err(|error| at(&error))?;
+    let top = git.top().map_err(|error| at(&error))?;
+    if !same_repository(&place.worktree, &top) {
+        return Err(StepFailure::cannot(
+            2,
+            format!(
+                "{} is no longer the top of a git worktree (git names {})",
+                place.worktree,
+                top.display()
+            ),
+        ));
+    }
+    let common = git.common_dir().map_err(|error| at(&error))?;
+    if !same_repository(&place.git_common_dir, &common) {
+        return Err(StepFailure::cannot(
+            2,
+            format!(
+                "the worktree {} belongs to the repository {} now, not {}",
+                place.worktree,
+                common.display(),
+                place.git_common_dir
+            ),
+        ));
+    }
+    match git.branch().map_err(|error| at(&error))? {
+        Some(branch) if branch == place.branch => {}
+        Some(branch) => {
+            return Err(StepFailure::cannot(
+                2,
+                format!(
+                    "the worktree {} is on `{branch}`; the proposal applies on `{}`: check it \
+                     out there",
+                    place.worktree, place.branch
+                ),
+            ));
+        }
+        None => {
+            return Err(StepFailure::cannot(
+                2,
+                format!(
+                    "HEAD is detached in {}; the proposal applies on `{}`: check it out there",
+                    place.worktree, place.branch
+                ),
+            ));
+        }
+    }
+    if let Some(operation) = git.operation_in_progress().map_err(|error| at(&error))? {
+        return Err(StepFailure::cannot(
+            2,
+            format!(
+                "a {operation} is in progress in {}: finish or abort it first",
+                place.worktree
+            ),
+        ));
+    }
+    let head = git
+        .head()
+        .map_err(|error| at(&error))?
+        .ok_or_else(|| StepFailure::cannot(2, format!("`{}` has no commit", place.branch)))?;
+    Ok(Placed { git, top, head })
+}
+
 /// Step 4 for a target by ID: held by one file in the refreshed index,
 /// `path`, and declared once in `parsed` (its fresh parse): its position.
 fn held_by_id(
@@ -433,11 +452,14 @@ fn document_of(parsed: &ParsedFile, target: &str, path: &str) -> Result<usize, S
 }
 
 /// Right before step 8: the place still as step 2 found it, `HEAD` on the
-/// recorded branch at the commit checked ([`Prepared::head`]), no
+/// recorded branch at the commit checked (`head`, [`Prepared::head`]), no
 /// operation in progress; else a refusal at step 8 (exit 1), nothing
 /// written. The owner may switch branches while asked.
-pub(crate) fn place_unchanged(prepared: &Prepared, place: &Place) -> Result<(), StepFailure> {
-    let git = &prepared.git;
+pub(crate) fn place_unchanged(
+    git: &WorktreeGit,
+    head: &str,
+    place: &Place,
+) -> Result<(), StepFailure> {
     let refused = |what: String| {
         StepFailure::refused(
             8,
@@ -467,11 +489,11 @@ pub(crate) fn place_unchanged(prepared: &Prepared, place: &Place) -> Result<(), 
         Err(error) => return Err(at(&error)),
     }
     match git.head() {
-        Ok(Some(head)) if head == prepared.head => {}
-        Ok(Some(head)) => {
+        Ok(Some(now)) if now == head => {}
+        Ok(Some(now)) => {
             return Err(refused(format!(
-                "`{}` moved from {} to {head}",
-                place.branch, prepared.head
+                "`{}` moved from {head} to {now}",
+                place.branch
             )));
         }
         Ok(None) => return Err(refused(format!("`{}` lost its commit", place.branch))),
@@ -642,6 +664,15 @@ fn applied_before(proposal: &Proposal, found: &[TrailerCommit]) -> Option<StepFa
 /// What completes a proposal by its commit, for a refusal naming one that
 /// does not (steps 5 and 10, `spec reject`).
 pub(crate) fn completes_when(proposal: &Proposal) -> String {
+    if let Some(record) = &proposal.record {
+        return format!(
+            "a commit on `{}` with the trailer `{PROPOSAL_TRAILER}: {id}`, one parent, adding \
+             only `{}` with the record's text completes it (`spec approve {id}`)",
+            proposal.place.branch,
+            top_of(proposal, &record.path),
+            id = proposal.id
+        );
+    }
     format!(
         "a commit on `{}` with the trailer `{PROPOSAL_TRAILER}: {id}`, one parent, changing only \
          `{}` to the proposal's text completes it (`spec approve {id}`)",
@@ -890,8 +921,66 @@ fn trailer_commits(
     .map_err(failed)?;
     Ok(found
         .into_iter()
-        .map(|commit| trailer_commit(git, scratch, proposal, config_now, commit))
+        .map(|commit| {
+            if proposal.kind.decides() {
+                record_commit(git, proposal, commit)
+            } else {
+                trailer_commit(git, scratch, proposal, config_now, commit)
+            }
+        })
         .collect())
+}
+
+/// One trailer commit of a question or a discrepancy judged: it completes
+/// it with one parent, adding exactly the record's path, its blob there the
+/// stored `record_text` byte for byte (never rendered again). A proposal
+/// with no record issued has nothing to compare: none completes it.
+fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> TrailerCommit {
+    let not_completing = match &proposal.record {
+        None => Some("the proposal holds no issued record to compare it with".to_owned()),
+        Some(record) => {
+            let path = top_of(proposal, &record.path);
+            match git.parents(&commit) {
+                Ok(parents) => match parents.as_slice() {
+                    [parent] => adds_record(git, parent, &commit, &path, &record.text).err(),
+                    parents => Some(format!("has {} parents", parents.len())),
+                },
+                Err(error) => Some(one_line(&format!("cannot be read: {error}"))),
+            }
+        }
+    };
+    TrailerCommit {
+        commit,
+        not_completing,
+        carries: false,
+    }
+}
+
+/// `commit` against `parent` adds exactly `path` (top-relative) and
+/// nothing else, its blob there `text` byte for byte; else why not:
+/// `changes <status> <path>, …`, `does not carry the record`, `cannot be
+/// read: <git's error>`.
+pub(crate) fn adds_record(
+    git: &WorktreeGit,
+    parent: &str,
+    commit: &str,
+    path: &str,
+    text: &str,
+) -> Result<(), String> {
+    let unreadable = |error: &dyn std::fmt::Display| one_line(&format!("cannot be read: {error}"));
+    match git.name_status(parent, commit) {
+        Ok(changed) if changed.len() == 1 && changed[0].adds(path) => {}
+        Ok(changed) => {
+            let listed: Vec<String> = changed.iter().map(ToString::to_string).collect();
+            return Err(format!("changes {}", listed.join(", ")));
+        }
+        Err(error) => return Err(unreadable(&error)),
+    }
+    match git.blob_at(commit, path) {
+        Ok(bytes) if bytes == text.as_bytes() => Ok(()),
+        Ok(_) => Err("does not carry the record".to_owned()),
+        Err(error) => Err(unreadable(&error)),
+    }
 }
 
 /// One trailer commit judged: it completes the proposal with one parent,

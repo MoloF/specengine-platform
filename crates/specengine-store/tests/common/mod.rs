@@ -347,6 +347,41 @@ pub fn assert_equals_fresh(index: &SqliteIndex, corpus: &Corpus, scratch: &Scrat
 /// AC-07 script adds the prefix.
 pub const ADDED_FILE: &str = "docs/records/R/R-13.md";
 
+/// The `[ids]` line the AC-07 script adds, then removes.
+pub const EXTRA_PREFIX: &str = "EXTRA = { kind = \"extra\", width = 2 }\n";
+
+/// `config` with [`EXTRA_PREFIX`] as the last key line of its `[ids]`
+/// table (a later table, such as `[decision_records]`, keeps its keys).
+pub fn with_extra_prefix(config: &str) -> String {
+    let lines: Vec<&str> = config.split_inclusive('\n').collect();
+    let header = lines
+        .iter()
+        .position(|line| line.trim() == "[ids]")
+        .expect("the config has an `[ids]` table");
+    let last_key = lines[header + 1..]
+        .iter()
+        .take_while(|line| !line.trim_start().starts_with('['))
+        .enumerate()
+        .filter(|(_, line)| {
+            let line = line.trim();
+            !line.is_empty() && !line.starts_with('#')
+        })
+        .map(|(offset, _)| header + 1 + offset)
+        .last()
+        .unwrap_or(header);
+    let mut out = String::new();
+    for (index, line) in lines.iter().enumerate() {
+        out.push_str(line);
+        if index == last_key {
+            if !line.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push_str(EXTRA_PREFIX);
+        }
+    }
+    out
+}
+
 /// The spec-a edit script of AC-07: `(name, edit)`; the caller updates the
 /// index after every step. The `[ids]` steps re-read `specengine.toml`, the
 /// root step re-reads `[paths]`.
@@ -385,17 +420,23 @@ pub fn ac07_script() -> Vec<Step> {
         }),
         ("add an [ids] prefix", |corpus: &mut Corpus| {
             let text = corpus.read_text("specengine.toml");
-            corpus.write(
-                "specengine.toml",
-                format!("{text}EXTRA = {{ kind = \"extra\", width = 2 }}\n"),
-            );
+            corpus.write("specengine.toml", with_extra_prefix(&text));
             corpus.reload();
         }),
         ("remove the [ids] prefix", |corpus: &mut Corpus| {
             let text = corpus.read_text("specengine.toml");
-            let line = "EXTRA = { kind = \"extra\", width = 2 }\n";
-            assert!(text.ends_with(line), "the added prefix is the last line");
-            corpus.write("specengine.toml", &text[..text.len() - line.len()]);
+            let lines: Vec<&str> = text.split_inclusive('\n').collect();
+            let at = lines
+                .iter()
+                .position(|line| *line == EXTRA_PREFIX)
+                .expect("the added prefix is a line of `[ids]`");
+            let mut out = String::new();
+            for (index, line) in lines.iter().enumerate() {
+                if index != at {
+                    out.push_str(line);
+                }
+            }
+            corpus.write("specengine.toml", out);
             corpus.reload();
         }),
         ("drop a root", |corpus: &mut Corpus| {

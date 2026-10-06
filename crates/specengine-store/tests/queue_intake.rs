@@ -1,11 +1,12 @@
 //! docs/features/agent-intake.md, the store half: `create_intake` (Rules 7:
 //! the queue's hits read under the write lock the insert takes, so parallel
 //! identical intakes store one row — AC-05), the kinds that never apply
-//! (`approve`, `approve_from`, `applied`, `applied_with` → `Invalid`,
-//! nothing written; `reject` settles — AC-09), schema step 1 → 2 on a
-//! version-1 database (rows kept, the eleven new columns `NULL`;
-//! `stored_rows` reads a version-1 DB without stepping it — AC-10), and the
-//! rows "Stored" names corrupt, each naming its column.
+//! (`approve`, `approve_from`, `applied`, `applied_with` → `Invalid`
+//! without a decision record, nothing written; `reject` settles — AC-09),
+//! schema steps 1 → 3 on a version-1 database (rows kept, the sixteen new
+//! columns `NULL`; `stored_rows` reads a version-1 DB without stepping it —
+//! AC-10, at the schema docs/features/decision-apply.md makes current), and
+//! the rows "Stored" names corrupt, each naming its column.
 //!
 //! Through the public API only (`api.rs`: no test but `format.rs` names the
 //! SQL crate); the version-1 database is made, and `user_version` read, by
@@ -31,6 +32,16 @@ use specengine_store::{
 const T0: &str = "2026-10-05T21:14:03Z";
 const T1: &str = "2026-10-06T08:00:00Z";
 const PROJECT: &str = "demo";
+
+/// The five columns step 3 appends, in table order
+/// (docs/features/decision-apply.md "Data", "Queue").
+const RECORD_COLUMNS: [&str; 5] = [
+    "record_id",
+    "record_path",
+    "record_title",
+    "record_text",
+    "choice",
+];
 
 /// The eleven columns step 2 appends, in table order ("Stored").
 const INTAKE_COLUMNS: [&str; 11] = [
@@ -215,10 +226,14 @@ fn ac05_parallel_identical_intakes_store_one_row() {
 
 // ------------------------------------------------------------------ AC-09
 
-/// AC-09, the store half: a question and a discrepancy refuse every apply
-/// state change as `Invalid` naming `reject`, nothing written (`dump()`
-/// unchanged); `reject` takes them `open → rejected`, the reason in
-/// `decision_note`, one `proposal.rejected`. M: approve accepted.
+/// AC-09, the store half, as docs/features/decision-apply.md ("Data",
+/// "Store") changes it: a question and a discrepancy without a decision
+/// record refuse every apply state change as `Invalid` naming its kind
+/// and the record (`approve`, `approve_from`: approved only with its
+/// decision record, or rejected; `applied`, `applied_with`: applied only
+/// after the record's step 7), nothing written (`dump()` unchanged);
+/// `reject` takes them `open → rejected`, the reason in `decision_note`,
+/// one `proposal.rejected`. M: approve accepted.
 #[test]
 fn ac09_the_apply_steps_refuse_the_kinds_that_never_apply() {
     let scratch = Scratch::new("qi-settle");
@@ -260,12 +275,23 @@ fn ac09_the_apply_steps_refuse_the_kinds_that_never_apply() {
                     .map(|_| ()),
             ),
         ];
+        let kind = item.kind.as_str();
         for (name, outcome) in refusals {
+            let want = if name.starts_with("approve") {
+                format!(
+                    "`{id}` is a {kind}: it is approved only with its decision record (or \
+                     rejected with the answer)"
+                )
+            } else {
+                format!(
+                    "`{id}` is a {kind} without its decision record: it is applied only after \
+                     the record's step 7"
+                )
+            };
             match outcome {
-                Err(QueueError::Invalid(message)) => assert!(
-                    message.contains(id) && message.contains("never applies"),
-                    "{name} {id}: {message}"
-                ),
+                Err(QueueError::Invalid(message)) => {
+                    assert_eq!(message, want, "{name} {id}");
+                }
                 other => panic!("{name} {id}: expected Invalid, got {other:?}"),
             }
         }
@@ -430,20 +456,23 @@ INSERT INTO events (project, type, payload, at)
 ";
 
 /// AC-10, the store half: a version-1 database read with `open_existing`
-/// gives its rows as 35 columns, the eleven new ones `None`, and stays at
-/// version 1 (no step runs on a read); opened, it steps to 2 in place: the
-/// row kept and readable, the eleven `NULL` in `dump()`, the next ID after
-/// it; `proposal_columns` knows 1 (the first 24) and 2 (all 35), nothing
-/// else. M: a column left out of step 2; schema 1 unknown.
+/// gives its rows as 40 columns, the sixteen later ones `None`, and stays
+/// at version 1 (no step runs on a read); opened, it steps to 3 in place:
+/// the row kept and readable, the sixteen `NULL` in `dump()`, the next ID
+/// after it; `proposal_columns` knows 1 (the first 24), 2 (the first 35)
+/// and 3 (all 40), nothing else. M: a column left out of step 2; schema 1
+/// unknown.
 #[test]
-fn ac10_a_version_1_database_steps_to_2_keeping_its_rows() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 2);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 35);
-    assert_eq!(PROPOSAL_COLUMNS[24..], INTAKE_COLUMNS);
+fn ac10_a_version_1_database_steps_to_3_keeping_its_rows() {
+    assert_eq!(QUEUE_SCHEMA_VERSION, 3);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 40);
+    assert_eq!(PROPOSAL_COLUMNS[24..35], INTAKE_COLUMNS);
+    assert_eq!(PROPOSAL_COLUMNS[35..], RECORD_COLUMNS);
     assert_eq!(proposal_columns(1), Some(&PROPOSAL_COLUMNS[..24]));
-    assert_eq!(proposal_columns(2), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(2), Some(&PROPOSAL_COLUMNS[..35]));
+    assert_eq!(proposal_columns(3), Some(&PROPOSAL_COLUMNS[..]));
     assert_eq!(proposal_columns(0), None);
-    assert_eq!(proposal_columns(3), None);
+    assert_eq!(proposal_columns(4), None);
 
     let scratch = Scratch::new("qi-v1");
     let db = scratch.db("q");
@@ -463,13 +492,14 @@ fn ac10_a_version_1_database_steps_to_2_keeping_its_rows() {
     assert_eq!(row.id(), Some("PR-0007"));
     assert_eq!(row.columns[2].as_deref(), Some("update"));
     assert_eq!(row.columns[23].as_deref(), Some(T0));
+    assert_eq!(row.columns.len(), 40, "{row:?}");
     assert!(
         row.columns[24..].iter().all(Option::is_none),
-        "the eleven new columns None: {row:?}"
+        "the sixteen later columns None: {row:?}"
     );
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps the schema");
-    assert_eq!(user_version(&db), "2");
+    assert_eq!(user_version(&db), "3");
     let table: Vec<String> = sqlite3(&db, "SELECT name FROM pragma_table_info('proposals');")
         .lines()
         .map(str::to_owned)
@@ -488,8 +518,8 @@ fn ac10_a_version_1_database_steps_to_2_keeping_its_rows() {
     let dump = queue.dump().expect("dump");
     let proposals = dump.lines().next().expect("the proposals line");
     assert!(
-        proposals.ends_with(&format!("\"{T0}\",{}]", ["null"; 11].join(","))),
-        "the eleven NULL: {proposals}"
+        proposals.ends_with(&format!("\"{T0}\",{}]", ["null"; 16].join(","))),
+        "the sixteen NULL: {proposals}"
     );
     let next = queue
         .create_intake(&question(&["A-1"], "Why?", &[]), &[], None, T1)
@@ -499,7 +529,7 @@ fn ac10_a_version_1_database_steps_to_2_keeping_its_rows() {
     assert_eq!(next.id, "PR-0008");
     drop(queue);
     let reopened = SqliteQueue::open(&db, PROJECT).expect("reopen");
-    assert_eq!(user_version(&db), "2", "stepped once");
+    assert_eq!(user_version(&db), "3", "stepped once");
     assert_eq!(reopened.get("PR-0008").unwrap().unwrap(), next);
 }
 

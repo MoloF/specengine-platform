@@ -21,3 +21,10 @@ FLAG = { kind = "flag",        shape = "name" }
 
 [project]
 slug = "zerkalo"
+
+# Where `spec approve` writes a decided question or discrepancy
+# (docs/features/decision-apply.md); the template lies outside the walk.
+[decision_records]
+prefix   = "ADR"
+dir      = "docs/records/ADR"
+template = "templates/decision.md"

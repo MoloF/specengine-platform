@@ -235,16 +235,16 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
     assert_eq!(reopened.stored_rows().unwrap(), state);
 }
 
-/// A `user_version` above this build's: `open_existing` refuses it as
-/// `SchemaTooNew`.
+/// A `user_version` above this build's (3, docs/features/decision-apply.md
+/// "Data"): `open_existing` refuses it as `SchemaTooNew`.
 #[test]
 fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    sqlite3(&db, "PRAGMA user_version = 3");
+    sqlite3(&db, "PRAGMA user_version = 4");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 3 }) => {}
+        Err(QueueError::SchemaTooNew { found: 4 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }

@@ -238,3 +238,38 @@ fn update_paths_escalates_on_directories_and_unclean_paths() {
     assert_eq!(report.walked, 0, ".hidden: {report:?}");
     assert_equals_fresh(&index, &corpus, &scratch, "a dot-directory");
 }
+
+/// docs/features/decision-apply.md "Data", Config ("Index fingerprint
+/// kept"): editing spec-a's `[decision_records]` or dropping it re-parses
+/// nothing; the index still equals a fresh one.
+#[test]
+fn a_decision_records_edit_keeps_the_index_fingerprint() {
+    let scratch = Scratch::new("incremental-records");
+    let mut corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let mut index = corpus.open(&scratch.db("index"));
+    let first = corpus.update(&mut index);
+    assert_eq!(first.parsed, first.walked);
+    let toml = corpus.read_text("specengine.toml");
+    let at = toml
+        .find("[decision_records]")
+        .expect("the fixture's table");
+    for (step, text) in [
+        (
+            "dir edited",
+            toml.replacen(
+                "dir      = \"docs/records/DEC\"",
+                "dir      = \"docs/records/DEC/new\"",
+                1,
+            ),
+        ),
+        ("dropped", toml[..at].to_owned()),
+    ] {
+        assert_ne!(text, corpus.read_text("specengine.toml"), "{step}");
+        corpus.write("specengine.toml", &text);
+        corpus.reload();
+        let report = corpus.update(&mut index);
+        assert_eq!(report.parsed, 0, "{step}: {report:?}");
+        assert!(!report.reparsed_all, "{step}: {report:?}");
+        assert_equals_fresh(&index, &corpus, &scratch, step);
+    }
+}

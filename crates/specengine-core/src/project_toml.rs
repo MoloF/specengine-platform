@@ -10,11 +10,17 @@
 //! - `[ids]` and `[paths]` go through their own readers
 //!   ([`scheme_from_toml`], [`paths_from_toml`]), lines kept; no `[ids]` is
 //!   the empty scheme.
-//! - Top-level keys: `project`, `paths`, `ids`, then `budgets`, `classes`,
-//!   `check`, `generators`, `zones`, `gate`, `code`, which are only
-//!   name-checked here (their readers are the check's and later
-//!   increments'); any other key is an error at its line, so a `[path]`
-//!   typo cannot silently fall back to the default walk.
+//! - `[decision_records]` (task spec `decision-apply`, "Data"): exactly
+//!   `prefix`, `dir`, `template`, three strings; `prefix` an `[ids]` entry
+//!   of shape `number` and scope `project` (a legacy alias is an error
+//!   naming the canonical prefix), `dir` and `template` root-relative paths
+//!   under `[paths]`' rules. Optional: only `spec approve` of a question or
+//!   a discrepancy needs it.
+//! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
+//!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
+//!   which are only name-checked here (their readers are the check's and
+//!   later increments'); any other key is an error at its line, so a
+//!   `[path]` typo cannot silently fall back to the default walk.
 //!
 //! Every error is `file:line: message` through [`ProjectError::at`].
 
@@ -23,10 +29,11 @@ use std::ops::Range;
 
 use serde::Deserialize;
 use serde::de::IgnoredAny;
-use specengine_model::{IdScheme, SchemeError, grammar};
+use specengine_model::{IdScheme, IdScope, SchemeError, Shape, grammar};
 use toml::Spanned;
 
-use crate::paths_toml::{Paths, PathsError, paths_from_toml};
+use crate::paths_toml::{Paths, PathsError, checked_path, paths_from_toml};
+use crate::record::DecisionRecords;
 use crate::scheme_toml::scheme_from_toml;
 
 /// The longest `[project] slug`, in bytes (a slug is ASCII).
@@ -55,6 +62,8 @@ pub struct ProjectConfig {
     pub paths_written: bool,
     /// The 1-based line of the `[project]` header; `None` without the table.
     pub project_line: Option<usize>,
+    /// `[decision_records]`; `None` without the table.
+    pub decision_records: Option<DecisionRecords>,
 }
 
 impl ProjectConfig {
@@ -179,12 +188,61 @@ pub fn project_from_toml(text: &str) -> Result<ProjectConfig, ProjectError> {
     }
     let scheme = scheme_from_toml(text)?;
     let paths = paths_from_toml(text)?;
+    let decision_records = match raw.decision_records {
+        Some(table) => Some(decision_records(table, &scheme, &error_at)?),
+        None => None,
+    };
     Ok(ProjectConfig {
         project,
         scheme,
         paths,
         paths_written: raw.paths.is_some(),
         project_line,
+        decision_records,
+    })
+}
+
+/// `[decision_records]` checked against the file's `[ids]` (see the module
+/// documentation).
+fn decision_records(
+    table: RawDecisionRecords,
+    scheme: &IdScheme,
+    error_at: &dyn Fn(Option<Range<usize>>, String) -> ProjectError,
+) -> Result<DecisionRecords, ProjectError> {
+    let span = table.prefix.span();
+    let prefix = table.prefix.into_inner();
+    let problem = match scheme.prefix(&prefix) {
+        None => Some(match scheme.alias(&prefix) {
+            Some(spec) => format!(
+                "`{prefix}` is a legacy alias of `{}`: name the canonical prefix",
+                spec.prefix
+            ),
+            None => format!("`{prefix}` is no `[ids]` prefix"),
+        }),
+        Some(spec) if spec.shape != Shape::Number || spec.width.is_none() => Some(format!(
+            "`[ids] {prefix}` is not of shape `number`: a record's ID is numbered"
+        )),
+        Some(spec) if spec.scope != IdScope::Project => Some(format!(
+            "`[ids] {prefix}` is feature-scoped: a record's ID is unique in the project (scope \
+             `project`)"
+        )),
+        Some(_) => None,
+    };
+    if let Some(problem) = problem {
+        return Err(error_at(
+            Some(span),
+            format!("`decision_records.prefix`: {problem}"),
+        ));
+    }
+    let path = |key: &str, value: Spanned<String>, directory: bool| {
+        let span = value.span();
+        checked_path(value.get_ref(), directory)
+            .map_err(|problem| error_at(Some(span), format!("`decision_records.{key}`: {problem}")))
+    };
+    Ok(DecisionRecords {
+        prefix,
+        dir: path("dir", table.dir, true)?,
+        template: path("template", table.template, false)?,
     })
 }
 
@@ -200,6 +258,8 @@ struct RawFile {
     paths: Option<IgnoredAny>,
     #[serde(default)]
     ids: Option<IgnoredAny>,
+    #[serde(default)]
+    decision_records: Option<RawDecisionRecords>,
     #[serde(default)]
     budgets: Option<IgnoredAny>,
     #[serde(default)]
@@ -226,6 +286,15 @@ struct ProjectTable {
     name: Option<String>,
     #[serde(default)]
     language: Option<String>,
+}
+
+/// `[decision_records]`: exactly these three strings.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawDecisionRecords {
+    prefix: Spanned<String>,
+    dir: Spanned<String>,
+    template: Spanned<String>,
 }
 
 fn line_of(text: &str, offset: usize) -> usize {

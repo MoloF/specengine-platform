@@ -589,7 +589,7 @@ fn ac05_eight_parallel_asks_and_the_twin_store_one_row() {
                 assert_eq!(
                     document["hits"],
                     json!([{"id": id, "source": "queue", "status": "open", "path": null,
-                        "answer": null}]),
+                        "answer": null, "record": null}]),
                     "round {round}"
                 );
             }

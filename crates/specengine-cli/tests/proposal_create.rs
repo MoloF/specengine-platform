@@ -20,7 +20,7 @@ use std::path::Path;
 
 use common::bundle::blake3_hex;
 use common::proposal::{CASES, NOW, Pair, cannot, edit, json_of, printed, printed_inbox, refused};
-use common::{read, read_text, replace, spec, write};
+use common::{read, read_text, replace, spec, with_ids_line, write};
 use specengine_cli::{Exit, Globals, Outcome, ProposedText, TEXT_MAX_BYTES, propose_brief};
 use specengine_core::ProjectConfig;
 
@@ -577,8 +577,10 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
     assert_eq!(pair.proposal("PR-0001").diagnostics, []);
 }
 
-/// The Data keys of `review` in order.
-const REVIEW_KEYS: [&str; 37] = [
+/// The Data keys of `review` in order (docs/features/decision-apply.md
+/// "Data", "Review document": the five of a decision record after
+/// `linked`).
+const REVIEW_KEYS: [&str; 42] = [
     "id",
     "project",
     "kind",
@@ -615,6 +617,11 @@ const REVIEW_KEYS: [&str; 37] = [
     "recommendation",
     "distinct_from",
     "linked",
+    "record_id",
+    "record_path",
+    "record_title",
+    "record_text",
+    "choice",
     "notes",
 ];
 
@@ -696,6 +703,7 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
                 "id",
                 "kind",
                 "rationale",
+                "record_id",
                 "severity",
                 "status",
                 "summary",
@@ -735,6 +743,11 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         "decided_at",
         "decision_note",
         "applied_commit",
+        "record_id",
+        "record_path",
+        "record_title",
+        "record_text",
+        "choice",
     ] {
         assert!(value[absent].is_null(), "{absent}: {json}");
         assert!(
@@ -831,12 +844,15 @@ fn ac19_a_look_alike_proposal_id_and_pr_in_ids_exit_2() {
             "PULL = { kind = \"pull\", width = 4, aliases_from = [\"\u{0420}R\"] }\n".to_owned(),
         ),
     ] {
-        write(&pair.main, "specengine.toml", format!("{config}{line}"));
+        write(&pair.main, "specengine.toml", with_ids_line(&config, &line));
         let message = cannot(
             &pair.propose(&pair.main, "EDGE-SPRINT-EMPTY", &hash, &new_text),
             label,
         );
         assert!(message.contains("PR"), "{label}: {message}");
+        // The entry is read as an `[ids]` prefix, not as a stray key of a
+        // later table.
+        assert!(!message.contains("unknown field"), "{label}: {message}");
         cannot(&pair.inbox(&pair.main, true), label);
         cannot(&pair.review(&pair.main, "PR-0001"), label);
         let (outcome, questions) =

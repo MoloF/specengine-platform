@@ -11,8 +11,9 @@
 //! within a budget of estimated tokens, named by its `bundle_hash`; task
 //! spec `proposal-apply`, the proposal queue: `spec propose update`, `spec
 //! inbox`, `spec review`, `spec approve` (the one write door: the target
-//! file replaced in the proposal's recorded worktree and committed there)
-//! and `spec reject`; the queue's backup (canon `queue-backup`,
+//! file replaced in the proposal's recorded worktree and committed there;
+//! a question's or a discrepancy's decision record created there, task
+//! spec `decision-apply`) and `spec reject`; the queue's backup (canon `queue-backup`,
 //! "Commands"): `spec export state` and `spec import-state`; the agent
 //! intake (canon `agent-intake`, "Tools"): `spec propose question`, `spec
 //! propose discrepancy` and the `--brief` answers of `spec propose update`
@@ -37,13 +38,15 @@
 //! - [`propose`], [`inbox`], [`review`], [`approve`], [`reject`]: the
 //!   queue's commands; all but `inbox` answer with the review document
 //!   ([`ProposalDocument`]); `approve` and `reject` take the owner's
-//!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt), and every
+//!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt; [`approve_with`]
+//!   takes a decision's [`ApproveFlags`]), and every
 //!   request carries the caller's git environment ([`process_git`]) and,
 //!   where the queue records a time, the clock's `now` ([`utc_now`]);
 //!   [`propose_brief`], [`review_brief`]: their brief answers;
 //! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
-//!   discrepancy stored as a queue record that never applies, unless what
-//!   is decided or asked already answers it ([`IntakeDocument`]);
+//!   discrepancy stored as a queue record (approved into a decision record,
+//!   or rejected with the answer), unless what is decided or asked already
+//!   answers it ([`IntakeDocument`]);
 //! - [`export_state`], [`import_state`]: the queue's dump ([`STATE_FORMAT`])
 //!   written outside the worktree, and restored into an empty queue after
 //!   the owner's [`Consent`];
@@ -64,8 +67,8 @@
 //! command writes
 //! under the project root but `spec init`, which creates its one file,
 //! `spec export index`, which writes only `[paths] index`, and `spec
-//! approve`, which writes only the proposal's target file and commits it in
-//! the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
+//! approve`, which writes only the proposal's target file (or creates its
+//! decision record) and commits it in the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
 //! `bundle`, `propose`, `inbox`, `review`, `reject` and `import-state` write
 //! only the data directory (`propose question` and `propose discrepancy`
 //! too), `export state` only its dump (never inside the worktree), `check`
@@ -78,6 +81,7 @@ mod bundle;
 mod cap;
 mod check;
 mod corpus;
+mod decide;
 mod documents;
 mod export;
 mod graph;
@@ -102,7 +106,9 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 
-pub use apply::{ApproveRequest, Consent, RejectRequest, approve, reject};
+pub use apply::{
+    ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_with, reject,
+};
 pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
     ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
@@ -468,11 +474,8 @@ pub(crate) fn escape_controls(text: &str) -> String {
     out
 }
 
-/// A character [`escape_controls`] escapes (a CR followed by LF aside).
+/// A character [`escape_controls`] escapes (a CR followed by LF aside):
+/// core's test, the one a decision record refuses too.
 fn is_escaped(c: char) -> bool {
-    (c.is_control() && c != '\n' && c != '\t')
-        || matches!(
-            c,
-            '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
-        )
+    specengine_core::record::is_escaped(c)
 }

@@ -432,7 +432,27 @@ pub(crate) struct ReviewDocument {
     pub recommendation: Option<u64>,
     pub distinct_from: Vec<String>,
     pub linked: Option<String>,
+    /// A question's or discrepancy's decision record, once approved.
+    pub record_id: Option<String>,
+    pub record_path: Option<String>,
+    pub record_title: Option<String>,
+    /// `null` in a brief answer.
+    pub record_text: Option<String>,
+    /// The owner's choice.
+    pub choice: Option<Choice>,
     pub notes: Vec<String>,
+}
+
+/// The owner's choice of a decided question or discrepancy: one key.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum Choice {
+    /// A discrepancy's option, by index from 0.
+    Option(u64),
+    /// A question's working answer (`true`).
+    WorkingAnswer(bool),
+    /// Another answer to a question.
+    Answer(String),
 }
 
 /// A proposal's state.
@@ -573,10 +593,14 @@ pub(crate) struct IntakeMatch {
     pub source: MatchSource,
     /// `accepted`, or the proposal's state.
     pub status: String,
-    /// A decision's path; `null` for a proposal.
+    /// A decision's path, an applied proposal's record path.
     pub path: Option<String>,
-    /// A hit's answer: the decision's title, a rejected proposal's reason.
+    /// A hit's answer: the decision's title, a rejected proposal's reason,
+    /// an applied one's record title.
     pub answer: Option<String>,
+    /// A hit's decision record: a decision's id, an applied proposal's
+    /// record_id.
+    pub record: Option<String>,
 }
 
 #[derive(JsonSchema)]
