@@ -8,10 +8,10 @@ import { renderApp } from "../test/render";
 import { stubClient } from "../test/stubClient";
 import { App } from "./App";
 
-// AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph.
+// AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph, Tasks
+// since ui-tasks.
 
 const UNBUILT = [
-  ["tasks", "Tasks", "ui-tasks"],
   ["health", "Health", "ui-health-round"],
   ["questions", "Questions", "ui-health-round"],
 ] as const;
@@ -60,6 +60,17 @@ describe("the shell (AC-11)", () => {
     expect(screen.queryByText(/Not built yet/)).toBeNull();
     const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Graph");
+  });
+
+  it("builds Tasks: its heading and list, no stand-in; the about speaks of what waits, not of a board (AC-15 of ui-tasks)", async () => {
+    renderApp(stubClient(), "#/alpha/tasks");
+    expect(await screen.findByRole("heading", { level: 1, name: "Tasks" })).toBeTruthy();
+    expect(screen.queryByText(/Not built yet/)).toBeNull();
+    const about = screen.getByText(/^Tasks from draft to done/);
+    expect(about.textContent).toBe("Tasks from draft to done: what waits for you, each task's plan, spec changes and runs.");
+    expect(about.textContent).not.toMatch(/accepted|board/);
+    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    expect(current?.textContent).toBe("Tasks");
   });
 
   it("navigates with the nav, and back returns", async () => {
@@ -233,6 +244,8 @@ describe("Mock data (AC-17)", () => {
     "#/alpha/tree/R-1",
     "#/alpha/graph",
     "#/alpha/graph/R-1",
+    "#/alpha/tasks",
+    "#/alpha/tasks/T-0001",
     ...UNBUILT.map(([section]) => `#/alpha/${section}`),
     "#/alpha/nowhere",
     "#/zeta/inbox",

@@ -37,3 +37,16 @@ export function diffLines(diff: string): DiffLine[] {
     return { type: "context", text };
   });
 }
+
+/** A hunk header whose new side is empty: `@@ -a[,b] +0,0 @@`. */
+const EMPTY_NEW_SIDE = /^@@ -\d+(?:,\d+)? \+0,0 @@/;
+
+/**
+ * Whether the daemon's diff removes its whole text: it has hunks and the new side of each is empty,
+ * as `git diff` prints a text against nothing (a node gone from the compared place). Read from the
+ * hunk headers as sent; nothing is compared.
+ */
+export function removesAll(diff: string): boolean {
+  const hunks = diffLines(diff).filter((line) => line.type === "hunk");
+  return hunks.length > 0 && hunks.every((line) => EMPTY_NEW_SIDE.test(line.text));
+}

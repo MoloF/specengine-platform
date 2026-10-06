@@ -432,3 +432,187 @@ export interface ApiError {
   status: number;
   message: string;
 }
+
+// Tasks (docs/features/ui-tasks.md "Data"): the shapes of the draft task package; re-pointed to
+// its canon when task-package ships. `kind`, `role` and `profile` are plain strings (ADR-0027,
+// ADR-0031): shown verbatim, never compared.
+
+/**
+ * The ten task states, as the keys of a record: two of them are also words of the mocks' spec
+ * statuses, which app code never quotes. Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)".
+ */
+interface TaskStates {
+  draft: true;
+  analysis: true;
+  review: true;
+  changes_requested: true;
+  ready: true;
+  in_progress: true;
+  in_review: true;
+  done: true;
+  accepted: true;
+  cancelled: true;
+}
+
+/** The ten task states. Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
+export type KnownTaskStatus = keyof TaskStates;
+
+/** A task state as sent; other strings kept. Source: `docs/features/task-package.md` "Data". */
+export type TaskStatus = KnownTaskStatus | Unlisted;
+
+/** A run's outcome (Caps: no other value, never a hold). Source: `docs/features/task-package.md` "Data". */
+export type KnownRunOutcome = "completed" | "partial" | "failed" | "abandoned";
+
+/** A run's outcome as sent; other strings kept. Source: `docs/features/task-package.md` "Data". */
+export type RunOutcome = KnownRunOutcome | Unlisted;
+
+/** One row of `spec task list --json`: `stale` as the package's, per read. Source: `docs/features/task-package.md` "Description and interactions". */
+export interface TaskListEntry {
+  id: string;
+  status: TaskStatus;
+  title: string | null;
+  /** Canonical IDs or paths. */
+  targets: string[];
+  stale: boolean | null;
+  /** UTC, as stored. */
+  updated_at: string;
+}
+
+/** `spec task list --json`: the repository's tasks by number; a skipped row or a gone place in `notes`. Source: `docs/features/task-package.md` "Description and interactions". */
+export interface TaskList {
+  tasks: TaskListEntry[];
+  notes: string[];
+}
+
+/** `spec task show T --json` for an unknown T (exit 1, the daemon's 404). Source: `docs/features/task-package.md` "Description and interactions". */
+export interface TaskNotFound {
+  id: string | null;
+  reason: string;
+}
+
+/** A target resolved in the compared place; a gone node keeps its stored `id`, `path`, the rest null. Source: `docs/features/task-package.md` "Data". */
+export interface TaskTarget {
+  id: string | null;
+  path: string | null;
+  kind: string | null;
+  title: string | null;
+}
+
+/** A criterion: a reference and its text there (null: gone), or free text. Source: `docs/features/task-package.md` "Data". */
+export interface TaskCriterion {
+  ref: string | null;
+  text: string | null;
+}
+
+/** A working assumption: an open question's working answer, a discrepancy's recommended option. Source: `docs/features/task-package.md` "Data". */
+export interface TaskAssumption {
+  proposal: string;
+  text: string;
+}
+
+/** An open or approved proposal on the task's nodes or bound to it. Source: `docs/features/task-package.md` "Data". */
+export interface TaskProposal {
+  id: string;
+  kind: string;
+  status: ProposalStatus;
+  target_ids: string[];
+  task_id: string | null;
+  summary: string;
+}
+
+/** The owner's note of a `changes --note`, oldest first. Source: `docs/features/task-package.md` "Data". */
+export interface OwnerNote {
+  at: string;
+  note: string;
+}
+
+/** Where the approval froze the spec (ADR-0032). Source: `docs/features/task-package.md` "Data". */
+export interface SnapshotPlace {
+  worktree: string;
+  root_rel: string;
+  branch: string;
+  commit: string;
+}
+
+/** A node as frozen at approval. Source: `docs/features/task-package.md` "Data". */
+export interface SnapshotNode {
+  id: string;
+  path: string;
+  span_hash: string;
+}
+
+/** The spec as the owner approved it. Source: `docs/features/task-package.md` "Data". */
+export interface SpecSnapshot {
+  at: string;
+  place: SnapshotPlace;
+  nodes: SnapshotNode[];
+}
+
+/** A node changed since approval: unified hunks from the snapshot text, cut at 8 192 B. Source: `docs/features/task-package.md` "Data". */
+export interface SnapshotDiff {
+  id: string;
+  path: string;
+  /** The snapshot's (the old side). */
+  span_hash: string;
+  diff: string;
+  cut: boolean;
+}
+
+/** The one claim of a task. Source: `docs/features/task-package.md` "Data". */
+export interface TaskClaim {
+  at: string;
+  role: string;
+  worktree: string;
+  branch: string;
+}
+
+/** A run of the task; an open run has `ended_at` null. Source: `docs/features/task-package.md` "Data". */
+export interface TaskRun {
+  run: number;
+  role: string;
+  started_at: string;
+  ended_at: string | null;
+  outcome: RunOutcome | null;
+  summary: string | null;
+  changed_files: string[];
+}
+
+/** The bundle an agent gets for the targets. Source: `docs/features/task-package.md` "Data". */
+export interface TaskBundle {
+  node_ids: string[];
+  budget: number;
+  bundle_hash: string;
+}
+
+/**
+ * `spec task show T --json`, uncut: every key present, absent null, lists []. `stale`, `snapshot_diff`,
+ * `open_proposals` and `assumptions` are computed by the core per read. Source: `docs/features/task-package.md` "Data".
+ */
+export interface TaskPackage {
+  schema_version: number;
+  id: string;
+  project: string;
+  status: TaskStatus;
+  title: string | null;
+  goal: string | null;
+  profile: string | null;
+  stale: boolean | null;
+  targets: TaskTarget[];
+  criteria: TaskCriterion[];
+  affected_nodes: string[];
+  plan: string | null;
+  assumptions: TaskAssumption[];
+  open_proposals: TaskProposal[];
+  owner_notes: OwnerNote[];
+  /** Empty until Phase 3. */
+  bindings: unknown[];
+  spec_snapshot: SpecSnapshot | null;
+  snapshot_diff: SnapshotDiff[] | null;
+  claim: TaskClaim | null;
+  runs: TaskRun[];
+  bundle: TaskBundle | null;
+  author: Author | null;
+  created_at: string;
+  updated_at: string;
+  notes: string[];
+}

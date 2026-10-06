@@ -6,6 +6,7 @@ import type { Project } from "../api/types";
 import { GraphView } from "../graph/GraphView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
 import { InboxView } from "../inbox/InboxView";
+import { TasksView } from "../tasks/TasksView";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
@@ -240,6 +241,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <NotFound reason={`There is no project ${route.project}.`} inboxHref={inboxHref} />;
   } else if (route.section === "inbox") {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
+  } else if (route.section === "tasks") {
+    view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
   } else if (route.section === "tree") {
     view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
   } else if (route.section === "graph") {

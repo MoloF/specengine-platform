@@ -115,9 +115,10 @@ describe("source policy", () => {
     expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
   });
 
-  it("takes every href in the views of spec data from sectionHash (AC-07 of ui-tree-node, AC-12 of ui-graph)", () => {
+  it("takes every href in the views of spec data from sectionHash (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks)", () => {
     const views = (path: string) =>
-      !(path.startsWith("/src/tree/") || path.startsWith("/src/inbox/") || path.startsWith("/src/graph/")) || /\.test\.tsx?$/.test(path);
+      !(path.startsWith("/src/tree/") || path.startsWith("/src/inbox/") || path.startsWith("/src/graph/") || path.startsWith("/src/tasks/")) ||
+      /\.test\.tsx?$/.test(path);
     expect(offending(/\bhref=(?!\{sectionHash\()/, views)).toEqual([]);
   });
 
@@ -146,6 +147,54 @@ describe("source policy", () => {
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
     expect(offending(new RegExp(`["'\`](${types.join("|")})["'\`]`), appCode)).toEqual([]);
+  });
+
+  it("compares no role, profile or kind in app code: project vocabulary is shown, never branched on (AC-13 of ui-tasks)", () => {
+    const appCode = (path: string) =>
+      path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
+    const field = "\\.(role|profile|kind)\\b";
+    // ===, !==, == or != whole: never a shorter part of a longer operator.
+    const equality = "([!=]==?)(?!=)";
+    const absent = "(null|undefined)\\b";
+    const compared = new RegExp(
+      [
+        // x.kind === value (a check for presence, against null or undefined, is no comparison)
+        `${field}\\s*${equality}(?!\\s*${absent})`,
+        // value === x.kind
+        `(?<!${absent}\\s*)${equality}\\s*[\\w.?]*${field}`,
+        // a switch, a ternary or a short circuit on the value
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `${field}\\s*(&&|\\|\\|)`,
+        // a lookup by the value: table[x.kind], .includes(x.role)
+        `\\[[^\\]]*${field}\\s*\\]`,
+        `\\.(includes|has|indexOf|startsWith|endsWith|test)\\([^)]*${field}`,
+      ].join("|"),
+    );
+    expect(offending(compared, appCode)).toEqual([]);
+    // The detector itself.
+    for (const line of [
+      "if (task.profile === x) {",
+      'return run.role !== "a";',
+      "switch (target.kind) {",
+      "const tone = a === b.kind;",
+      "const look = task.profile ? a : b;",
+      "const go = task.profile && run();",
+      "const tone = TONES[proposal.kind];",
+      "if (KNOWN.includes(claim.role)) {",
+    ]) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of [
+      "<dd className=\"mono\">{run.role}</dd>",
+      "kind: string | null;",
+      "{target.kind !== null && <span className=\"kind-tag\">{target.kind}</span>}",
+      "{node.kind ?? \"-\"}",
+      "author.role === null ? null : `role ${author.role}`",
+      "{task.profile === null ? <p>No profile</p> : <p>{task.profile}</p>}",
+    ]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
   });
 
   it("holds no raw Cyrillic letter: non-Latin test text is escaped (ADR-0024)", () => {

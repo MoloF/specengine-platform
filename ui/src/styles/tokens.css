@@ -62,6 +62,19 @@
   --task-cancelled: #8e99ad;
   --task-unknown: var(--severity-unknown);
 
+  /* Run outcomes (task-package "Data") and unknown; none of them is a hold on work. */
+  --run-completed: var(--sync-ok);
+  --run-partial: #f2bb5c;
+  --run-failed: #ff7d88;
+  --run-abandoned: #97a3b8;
+  --run-unknown: var(--severity-unknown);
+
+  /* A task's spec since approval: changed draws attention; unknown takes cannot-verify's colour,
+     never unchanged's. */
+  --stale-changed: var(--attention);
+  --stale-unchanged: var(--sync-ok);
+  --stale-unknown: var(--sync-cannot-verify);
+
   /* Sync states (05, "Markers and the sync matrix"); cannot-verify has its own colour, never ok's. */
   --sync-ok: #4cc995;
   --sync-spec-ahead: #6fcbdc;

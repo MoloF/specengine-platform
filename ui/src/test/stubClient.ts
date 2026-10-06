@@ -10,6 +10,9 @@ import type {
   Project,
   Proposal,
   SearchResults,
+  TaskList,
+  TaskNotFound,
+  TaskPackage,
   TreeView,
 } from "../api/types";
 import { aBundle, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView } from "./builders";
@@ -59,6 +62,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
           archive: options.archive ?? false,
         }),
       ),
+    ),
+    getTasks: vi.fn<(project: string) => Promise<TaskList>>(() => Promise.resolve({ tasks: [], notes: [] })),
+    getTask: vi.fn<(project: string, id: string) => Promise<TaskPackage | TaskNotFound>>((_project, id) =>
+      Promise.resolve({ id, reason: `no task ${id} in this repository` }),
     ),
     decideProposal: vi.fn((_project: string, id: string, decision: Decision): Promise<DecisionResult> => {
       const current = state.proposals.find((proposal) => proposal.id === id);

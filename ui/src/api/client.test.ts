@@ -21,6 +21,12 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ["getBundle", "/** MISSING ENDPOINT GET /api/projects/:p/bundle (07 §3 lacks it; rust-developer, daemon-read) */"],
     // AC-01 of docs/features/ui-graph.md.
     ["getGraph", '/** MISSING ENDPOINT GET /api/projects/:p/graph (07 section 3 lists it; uncut; rust-developer, daemon-read "Out of scope") */'],
+    // AC-01 of docs/features/ui-tasks.md.
+    [
+      "getTasks",
+      '/** MISSING ENDPOINT GET /api/projects/:p/tasks (07 section 3 lists it; = spec task list --json; rust-developer, daemon-read "Out of scope") */',
+    ],
+    ["getTask", "/** MISSING ENDPOINT GET /api/projects/:p/tasks/:id (07 section 3 lacks it; = spec task show T --json, uncut) */"],
   ])("%s says %s", (method, comment) => {
     expect(commentAbove(method)).toBe(comment);
   });
@@ -42,5 +48,26 @@ describe("the graph's options (AC-01 of ui-graph)", () => {
       "depth?: number;",
       "archive?: boolean;",
     ]);
+  });
+});
+
+describe("the tasks' reads (AC-01 of ui-tasks)", () => {
+  /** The member names of the SpecEngineClient interface. */
+  function members(): string[] {
+    const block = /export interface SpecEngineClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? "";
+    return [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");
+  }
+
+  it("are two reads and no write: no member transitions, approves, cancels or claims a task", () => {
+    const names = members();
+    expect(names).toContain("getTasks");
+    expect(names).toContain("getTask");
+    expect(names).toContain("decideProposal");
+    expect(names.filter((name) => /transition|approve|cancel|claim/i.test(name))).toEqual([]);
+  });
+
+  it("type a package read as the package or the exit-1 document", () => {
+    expect(source).toContain("getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;");
+    expect(source).toContain("getTasks(project: string): Promise<TaskList>;");
   });
 });

@@ -8,6 +8,9 @@ import type {
   NodeView,
   Project,
   SearchResults,
+  TaskList,
+  TaskNotFound,
+  TaskPackage,
   TreeView,
 } from "./types";
 
@@ -56,8 +59,9 @@ export interface GraphOptions {
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/specs/specengine-platform/07-interfaces.md` "3. HTTP (daemon)"). Only the
  * bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for tree,
- * nodes, bundle, graph) resolves to its document, `reason` set; every other failure rejects with a
- * ClientError carrying the daemon's status and message verbatim (exit 2: 503).
+ * nodes, bundle, graph, task) resolves to its document, `reason` set; every other failure rejects
+ * with a ClientError carrying the daemon's status and message verbatim (exit 2: 503). Tasks are
+ * read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
  */
 export interface SpecEngineClient {
   /** Drives the permanent "Mock data" indicator. */
@@ -76,6 +80,10 @@ export interface SpecEngineClient {
   getBundle(project: string, options: BundleOptions): Promise<BundleView>;
   /** MISSING ENDPOINT GET /api/projects/:p/graph (07 section 3 lists it; uncut; rust-developer, daemon-read "Out of scope") */
   getGraph(project: string, options: GraphOptions): Promise<GraphView>;
+  /** MISSING ENDPOINT GET /api/projects/:p/tasks (07 section 3 lists it; = spec task list --json; rust-developer, daemon-read "Out of scope") */
+  getTasks(project: string): Promise<TaskList>;
+  /** MISSING ENDPOINT GET /api/projects/:p/tasks/:id (07 section 3 lacks it; = spec task show T --json, uncut) */
+  getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;
   /** POST /api/projects/:p/proposals/:id/decision */
   decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;
 }

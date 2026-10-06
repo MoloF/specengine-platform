@@ -38,6 +38,19 @@ const PATHS = {
   more: "M3.5 8h.1 M8 8h.1 M12.5 8h.1",
   fit: "M2.5 6V2.5H6 M10 2.5h3.5V6 M13.5 10v3.5H10 M6 13.5H2.5V10 M6 8h4 M8 6v4",
   graph: "M2.5 4.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0Z M10.5 3.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0Z M10.5 12.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0Z M5.5 4.3l5-.6 M5 5.6l5.9 5.8",
+  taskDraft: "M10.5 2.5l3 3L6 13H3v-3l7.5-7.5Z M9 4l3 3",
+  taskReview: "M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8Z M8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Z",
+  taskReady: "M3.5 14V2.5 M3.5 3h8l-1.8 2.75 1.8 2.75h-8",
+  taskInProgress: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M6.7 5.6 10.4 8l-3.7 2.4Z",
+  taskInReview: "M2.5 2.5h8v6 M2.5 2.5v11h5 M4.5 5.5h4 M4.5 8h2 M11 9.5a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z M12.6 13.2l1.4 1.3",
+  taskAccepted: "M1.5 8.5l3 3L10 5 M7.2 10.8l.7.7 6.6-7",
+  taskCancelled: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M6 6l4 4 M10 6l-4 4",
+  runPartial: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M8 2.5v11 M8 5.5h3.8 M8 8h5.5 M8 10.5h3.8",
+  runAbandoned: "M9.5 3.5h-6v9h6 M7 8h7 M11.5 5.5 14 8l-2.5 2.5",
+  specChanged: "M3 2.5h10v11H3Z M8 4.5v4 M6 6.5h4 M6 11h4",
+  waiting: "M4.5 2.5h7 M4.5 13.5h7 M5.5 2.5V4L8 8l-2.5 4v1.5 M10.5 2.5V4L8 8l2.5 4v1.5",
+  copy: "M5.5 5.5h8v8h-8Z M10.5 5.5v-3h-8v8h3",
+  terminal: "M2 3h12v10H2Z M4.5 6.5l2 1.5-2 1.5 M8 10h3.5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

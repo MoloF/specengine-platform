@@ -1,11 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { aBundle, aGraphView, aProposal, aSearchResults, aTreeView } from "../test/builders";
+import { aBundle, aGraphView, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, DECIDED_ELSEWHERE } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
-import { queryKeys, useBundle, useDecideProposal, useGraph, useNode, useSearch, useTree } from "./queries";
+import { queryKeys, useBundle, useDecideProposal, useGraph, useNode, useSearch, useTask, useTree } from "./queries";
 
 // AC-13 of docs/features/ui-tree-node.md: query keys carry every argument (absent as null, [] or
 // false); a request carries only the options given; after a decision, success or 409, the
@@ -25,6 +25,9 @@ describe("query keys", () => {
     expect(queryKeys.bundle("p", { node_ids: ["R"] })).toEqual(["bundle", "p", { node_ids: ["R"], budget: null }]);
     expect(queryKeys.bundle("p", { node_ids: ["R"], budget: 9 })).toEqual(["bundle", "p", { node_ids: ["R"], budget: 9 }]);
     expect(queryKeys.inbox("p")).toEqual(["inbox", "p"]);
+    // AC-08 of docs/features/ui-tasks.md.
+    expect(queryKeys.tasks("p")).toEqual(["tasks", "p"]);
+    expect(queryKeys.task("p", "T-0001")).toEqual(["task", "p", "T-0001"]);
     // AC-03 of docs/features/ui-graph.md.
     expect(queryKeys.graph("p", { ref: "R" })).toEqual(["graph", "p", { ref: "R", impact: false, types: [], depth: null, archive: false }]);
     expect(queryKeys.graph("p", { ref: "R", impact: true, types: ["t2", "t1"], depth: 3, archive: true })).toEqual([
@@ -105,7 +108,10 @@ function seeded(): QueryClient {
   queryClient.setQueryData(queryKeys.search("alpha", { query: "x" }), aSearchResults([]));
   queryClient.setQueryData(queryKeys.bundle("alpha", { node_ids: ["R-1"] }), aBundle(["R-1"]));
   queryClient.setQueryData(queryKeys.graph("alpha", { ref: "R-1", impact: true, types: ["t1"] }), aGraphView([], []));
+  queryClient.setQueryData(queryKeys.tasks("alpha"), { tasks: [], notes: [] });
+  queryClient.setQueryData(queryKeys.task("alpha", "T-0001"), aTaskPackage({ id: "T-0001" }));
   queryClient.setQueryData(queryKeys.tree("beta"), aTreeView([]));
+  queryClient.setQueryData(queryKeys.task("beta", "T-0001"), aTaskPackage({ id: "T-0001" }));
   queryClient.setQueryData(queryKeys.graph("beta", { ref: "R-1" }), aGraphView([], []));
   return queryClient;
 }
@@ -118,6 +124,8 @@ const AFTER_DECISION = [
   queryKeys.search("alpha", { query: "x" }),
   queryKeys.bundle("alpha", { node_ids: ["R-1"] }),
   queryKeys.graph("alpha", { ref: "R-1", impact: true, types: ["t1"] }),
+  queryKeys.tasks("alpha"),
+  queryKeys.task("alpha", "T-0001"),
 ];
 
 async function decideWith(client: StubClient) {
@@ -149,6 +157,7 @@ describe("after a decision (AC-13)", () => {
     });
     expect(queryClient.getQueryState(queryKeys.tree("beta"))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(queryKeys.graph("beta", { ref: "R-1" }))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(queryKeys.task("beta", "T-0001"))?.isInvalidated).toBe(false);
   });
 
   it("409: reads them again too", async () => {
@@ -168,5 +177,40 @@ describe("after a decision (AC-13)", () => {
       await Promise.resolve();
     });
     expect(AFTER_DECISION.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toEqual(AFTER_DECISION.map(() => false));
+  });
+});
+
+function OneTask({ id, onData }: { id: string; onData: (data: unknown) => void }) {
+  const task = useTask("alpha", id);
+  onData(task.data);
+  return null;
+}
+
+describe("a task's read (AC-11 of ui-tasks)", () => {
+  it("never answers a new T with the previous T's package while it is read", async () => {
+    const client = stubClient();
+    client.getTask.mockImplementation((_project, id) =>
+      id === "T-0001" ? Promise.resolve(aTaskPackage({ id: "T-0001" })) : new Promise(() => undefined),
+    );
+    const seen: unknown[] = [];
+    const { rerender } = render(
+      <ApiProvider client={client}>
+        <OneTask id="T-0001" onData={(data) => seen.push(data)} />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(seen.at(-1)).toMatchObject({ id: "T-0001" });
+    });
+    seen.length = 0;
+    rerender(
+      <ApiProvider client={client}>
+        <OneTask id="T-0002" onData={(data) => seen.push(data)} />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(client.getTask).toHaveBeenCalledWith("alpha", "T-0002");
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((data) => data === undefined)).toBe(true);
   });
 });

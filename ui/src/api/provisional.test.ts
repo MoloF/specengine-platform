@@ -9,13 +9,29 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  OwnerNote,
   Proposal,
   SearchHit,
   SearchResults,
   ShownNode,
   Snippet,
+  SnapshotDiff,
+  SnapshotNode,
+  SnapshotPlace,
   SnippetSegment,
+  SpecSnapshot,
   TailEntry,
+  TaskAssumption,
+  TaskBundle,
+  TaskClaim,
+  TaskCriterion,
+  TaskList,
+  TaskListEntry,
+  TaskNotFound,
+  TaskPackage,
+  TaskProposal,
+  TaskRun,
+  TaskTarget,
   TreeNode,
   TreeView,
   WorkingAnswer,
@@ -290,5 +306,124 @@ describe("the read types' keys (AC-02 of ui-tree-node)", () => {
     for (const type of [...Object.keys(KEYS), "TreeMark", "BundleForm", "Direction"]) {
       expect([type, cited(type)]).toEqual([type, true]);
     }
+  });
+});
+
+/**
+ * AC-02 of docs/features/ui-tasks.md: the task types' keys equal the lists the draft
+ * `docs/features/task-package.md` writes ("Description and interactions" for the list and the
+ * exit-1 document, "Data" for the package and its parts); each type cites that heading.
+ */
+const TASK_KEYS = {
+  TaskList: { tasks: true, notes: true } satisfies Record<keyof TaskList, true>,
+  TaskListEntry: { id: true, status: true, title: true, targets: true, stale: true, updated_at: true } satisfies Record<keyof TaskListEntry, true>,
+  TaskNotFound: { id: true, reason: true } satisfies Record<keyof TaskNotFound, true>,
+  TaskPackage: {
+    schema_version: true,
+    id: true,
+    project: true,
+    status: true,
+    title: true,
+    goal: true,
+    profile: true,
+    stale: true,
+    targets: true,
+    criteria: true,
+    affected_nodes: true,
+    plan: true,
+    assumptions: true,
+    open_proposals: true,
+    owner_notes: true,
+    bindings: true,
+    spec_snapshot: true,
+    snapshot_diff: true,
+    claim: true,
+    runs: true,
+    bundle: true,
+    author: true,
+    created_at: true,
+    updated_at: true,
+    notes: true,
+  } satisfies Record<keyof TaskPackage, true>,
+  TaskTarget: { id: true, path: true, kind: true, title: true } satisfies Record<keyof TaskTarget, true>,
+  TaskCriterion: { ref: true, text: true } satisfies Record<keyof TaskCriterion, true>,
+  TaskAssumption: { proposal: true, text: true } satisfies Record<keyof TaskAssumption, true>,
+  TaskProposal: { id: true, kind: true, status: true, target_ids: true, task_id: true, summary: true } satisfies Record<keyof TaskProposal, true>,
+  OwnerNote: { at: true, note: true } satisfies Record<keyof OwnerNote, true>,
+  SpecSnapshot: { at: true, place: true, nodes: true } satisfies Record<keyof SpecSnapshot, true>,
+  SnapshotPlace: { worktree: true, root_rel: true, branch: true, commit: true } satisfies Record<keyof SnapshotPlace, true>,
+  SnapshotNode: { id: true, path: true, span_hash: true } satisfies Record<keyof SnapshotNode, true>,
+  SnapshotDiff: { id: true, path: true, span_hash: true, diff: true, cut: true } satisfies Record<keyof SnapshotDiff, true>,
+  TaskClaim: { at: true, role: true, worktree: true, branch: true } satisfies Record<keyof TaskClaim, true>,
+  TaskRun: {
+    run: true,
+    role: true,
+    started_at: true,
+    ended_at: true,
+    outcome: true,
+    summary: true,
+    changed_files: true,
+  } satisfies Record<keyof TaskRun, true>,
+  TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
+};
+
+/** The key lists as the draft's JSON writes them, copied verbatim. */
+const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
+  TaskList: "tasks, notes",
+  TaskListEntry: "id, status, title, targets, stale, updated_at",
+  TaskNotFound: "id, reason",
+  TaskPackage:
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, author, created_at, updated_at, notes",
+  TaskTarget: "id, path, kind, title",
+  TaskCriterion: "ref, text",
+  TaskAssumption: "proposal, text",
+  TaskProposal: "id, kind, status, target_ids, task_id, summary",
+  OwnerNote: "at, note",
+  SpecSnapshot: "at, place, nodes",
+  SnapshotPlace: "worktree, root_rel, branch, commit",
+  SnapshotNode: "id, path, span_hash",
+  SnapshotDiff: "id, path, span_hash, diff, cut",
+  TaskClaim: "at, role, worktree, branch",
+  TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
+  TaskBundle: "node_ids, budget, bundle_hash",
+};
+
+const DRAFT = "`docs/features/task-package.md`";
+const LISTED = new Set(["TaskList", "TaskListEntry", "TaskNotFound"]);
+
+function commentOf(type: string): string {
+  const at = source.search(new RegExp(`export (interface|type) ${type}\\b`));
+  expect([type, at > 0]).toEqual([type, true]);
+  return source.slice(source.lastIndexOf("/**", at), at);
+}
+
+describe("the task types (AC-02 of ui-tasks)", () => {
+  it.each(Object.keys(TASK_KEYS) as (keyof typeof TASK_KEYS)[])("%s has exactly the draft's keys, in order", (name) => {
+    expect(Object.keys(TASK_KEYS[name]).join(", ")).toBe(TASK_CITED[name]);
+  });
+
+  it("count 25 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document", () => {
+    expect([TASK_KEYS.TaskPackage, TASK_KEYS.TaskListEntry, TASK_KEYS.TaskRun, TASK_KEYS.OwnerNote, TASK_KEYS.TaskNotFound].map((keys) => Object.keys(keys).length)).toEqual([
+      25, 6, 7, 2, 2,
+    ]);
+  });
+
+  it.each(Object.keys(TASK_KEYS))("%s cites the draft's heading", (type) => {
+    const heading = LISTED.has(type) ? '"Description and interactions"' : '"Data"';
+    expect(commentOf(type)).toContain(`${DRAFT} ${heading}`);
+  });
+
+  it("cite 05 for the ten states and the draft's Data for the outcomes and the open tables", () => {
+    expect(commentOf("KnownTaskStatus")).toContain('`docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)"');
+    for (const type of ["TaskStatus", "KnownRunOutcome", "RunOutcome"]) {
+      expect(commentOf(type)).toContain(`${DRAFT} "Data"`);
+    }
+  });
+
+  it("keep kind, role and profile plain strings", () => {
+    const target: Pick<TaskTarget, "kind"> = { kind: "any-project-kind" };
+    const run: Pick<TaskRun, "role"> = { role: "any-project-role" };
+    const pkg: Pick<TaskPackage, "profile"> = { profile: "any-profile" };
+    expect([target.kind, run.role, pkg.profile]).toEqual(["any-project-kind", "any-project-role", "any-profile"]);
   });
 });

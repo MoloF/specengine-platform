@@ -3,15 +3,16 @@ import { diffLines, type DiffLineType } from "./diff";
 const SPOKEN: Partial<Record<DiffLineType, string>> = { added: "Added: ", removed: "Removed: " };
 
 /**
- * The read-only section diff exactly as the daemon sent it: signs kept, lines styled, wrapped. The
- * label sits on a wrapping figure (ARIA 1.2 forbids naming a bare `pre`).
+ * A read-only diff exactly as the daemon sent it: signs kept, lines styled, wrapped. The label sits
+ * on a wrapping figure (ARIA 1.2 forbids naming a bare `pre`). The Inbox's section diff and a
+ * task's spec changes since approval.
  */
-export function DiffView({ diff }: { diff: string | null }) {
+export function DiffView({ diff, label = "Section diff" }: { diff: string | null; label?: string }) {
   if (diff === null) {
     return <p className="muted">No section diff attached.</p>;
   }
   return (
-    <figure className="diff-figure" aria-label="Section diff">
+    <figure className="diff-figure" aria-label={label}>
       <pre className="diff">
         <code>
           {diffLines(diff).map((line, index) => {

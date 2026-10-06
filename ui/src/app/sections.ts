@@ -4,8 +4,8 @@ export const SECTIONS = [
   {
     id: "tasks",
     label: "Tasks",
-    slice: "ui-tasks",
-    about: "The task board from draft to accepted, with briefs, plans and runs.",
+    slice: null,
+    about: "Tasks from draft to done: what waits for you, each task's plan, spec changes and runs.",
   },
   {
     id: "tree",

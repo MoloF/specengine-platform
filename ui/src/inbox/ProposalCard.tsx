@@ -4,13 +4,13 @@ import { useNode } from "../api/queries";
 import type { Proposal } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
+import { DiffView } from "../ui/DiffView";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Section, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
-import { DiffView } from "./DiffView";
 import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
@@ -153,7 +153,9 @@ export function ProposalCard({
           </div>
           <div className="fact">
             <dt>Task</dt>
-            <dd className="mono">{proposal.task_id ?? "No task"}</dd>
+            <dd className="mono">
+              {proposal.task_id === null ? "No task" : <a href={sectionHash(project, "tasks", proposal.task_id)}>{proposal.task_id}</a>}
+            </dd>
           </div>
           <div className="fact">
             <dt>Status</dt>

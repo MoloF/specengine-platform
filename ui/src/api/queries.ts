@@ -48,10 +48,15 @@ export const queryKeys = {
         archive: options.archive ?? false,
       },
     ] as const,
+  tasks: (project: string) => ["tasks", project] as const,
+  task: (project: string, id: string) => ["task", project, id] as const,
 };
 
-/** The reads a decision can change, by their first key part: each is read again after one. */
-const READS_AFTER_DECISION = ["inbox", "tree", "node", "search", "bundle", "graph"] as const;
+/**
+ * The reads a decision can change, by their first key part: each is read again after one. A task's
+ * open proposals and assumptions are the queue's (docs/features/ui-tasks.md "Data").
+ */
+const READS_AFTER_DECISION = ["inbox", "tree", "node", "search", "bundle", "graph", "tasks", "task"] as const;
 
 // What a request carries: absent options omitted, an empty array or a false `archive` too.
 
@@ -198,6 +203,24 @@ export function useGraph(project: string, options: GraphOptions | null) {
   });
 }
 
+/** The project's tasks, one read for the whole list: filters never read again. */
+export function useTasks(project: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.tasks(project), queryFn: () => client.getTasks(project) });
+}
+
+/** The task list's read as the view shares it (the list, the summary beside it). */
+export type TasksQuery = ReturnType<typeof useTasks>;
+
+/**
+ * One task's package. No placeholder: a newly opened task never shows the previous one's package
+ * while its own is read (docs/features/ui-tasks.md, States).
+ */
+export function useTask(project: string, id: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.task(project, id), queryFn: () => client.getTask(project, id) });
+}
+
 /** Accept and reject close a proposal (06 §3.4): it leaves the inbox; the other two keep it there. */
 function closes(decision: Decision): boolean {
   return decision.decision === "accept" || decision.decision === "reject";
@@ -207,7 +230,8 @@ function closes(decision: Decision): boolean {
  * One decideProposal call per submit. On success a closed proposal (accepted, rejected) leaves the
  * cached inbox at once, never written back as applied or rejected; a kept one (needs clarification,
  * deferred) takes the daemon's returned state. After a success or a 409 (decided elsewhere) the
- * project's inbox, tree, nodes, searches, bundles and graphs are read again: an apply may change any.
+ * project's inbox, tree, nodes, searches, bundles, graphs and tasks are read again: an apply may
+ * change any.
  */
 export function useDecideProposal(project: string) {
   const client = useClient();

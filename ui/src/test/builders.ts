@@ -10,6 +10,10 @@ import type {
   SearchResults,
   ShownLink,
   ShownNode,
+  TaskListEntry,
+  TaskPackage,
+  TaskProposal,
+  TaskRun,
   TreeNode,
   TreeView,
 } from "../api/types";
@@ -249,6 +253,67 @@ export function aGraphView(nodes: GraphNode[], edges: GraphEdge[], fields: Parti
     truncated: false,
     nodes,
     edges,
+    ...fields,
+  };
+}
+
+/** A task list row for tests. */
+export function aTaskEntry(fields: Partial<TaskListEntry> & Pick<TaskListEntry, "id">): TaskListEntry {
+  return {
+    status: "draft",
+    title: `Title of ${fields.id}`,
+    targets: [],
+    stale: null,
+    updated_at: "2026-10-01T10:00:00Z",
+    ...fields,
+  };
+}
+
+/** A whole task package for tests, every key in the documented order; omitted keys null or empty. */
+export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "id">): TaskPackage {
+  return {
+    schema_version: fields.schema_version ?? 1,
+    id: fields.id,
+    project: fields.project ?? "alpha",
+    status: fields.status ?? "draft",
+    title: fields.title === undefined ? `Title of ${fields.id}` : fields.title,
+    goal: fields.goal ?? null,
+    profile: fields.profile ?? null,
+    stale: fields.stale ?? null,
+    targets: fields.targets ?? [],
+    criteria: fields.criteria ?? [],
+    affected_nodes: fields.affected_nodes ?? [],
+    plan: fields.plan ?? null,
+    assumptions: fields.assumptions ?? [],
+    open_proposals: fields.open_proposals ?? [],
+    owner_notes: fields.owner_notes ?? [],
+    bindings: fields.bindings ?? [],
+    spec_snapshot: fields.spec_snapshot ?? null,
+    snapshot_diff: fields.snapshot_diff ?? null,
+    claim: fields.claim ?? null,
+    runs: fields.runs ?? [],
+    bundle: fields.bundle ?? null,
+    author: fields.author ?? null,
+    created_at: fields.created_at ?? "2026-10-01T09:00:00Z",
+    updated_at: fields.updated_at ?? "2026-10-01T10:00:00Z",
+    notes: fields.notes ?? [],
+  };
+}
+
+/** A task's open proposal for tests. */
+export function aTaskProposal(fields: Partial<TaskProposal> & Pick<TaskProposal, "id">): TaskProposal {
+  return { kind: "update", status: "open", target_ids: [], task_id: null, summary: `Summary of ${fields.id}`, ...fields };
+}
+
+/** A run for tests; open unless `ended_at` is given. */
+export function aTaskRun(fields: Partial<TaskRun> & Pick<TaskRun, "run">): TaskRun {
+  return {
+    role: "worker",
+    started_at: "2026-10-01T11:00:00Z",
+    ended_at: null,
+    outcome: null,
+    summary: null,
+    changed_files: [],
     ...fields,
   };
 }

@@ -80,6 +80,9 @@ const SYNC = [
   "cannot-verify",
 ];
 const LINK = ["resolved", "dangling", "skipped", "unchecked", "unknown"];
+// docs/features/ui-tasks.md: run outcomes and the staleness of a task's frozen spec.
+const RUN = ["completed", "partial", "failed", "abandoned", "unknown"];
+const STALE = ["changed", "unchanged", "unknown"];
 const MARK = ["dangling-parent", "parent-cycle", "unknown"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
@@ -88,6 +91,8 @@ const STATUS = [
   "--highlight-line",
   ...PROPOSAL.map((value) => `--proposal-${value}`),
   ...TASK.map((value) => `--task-${value}`),
+  ...RUN.map((value) => `--run-${value}`),
+  ...STALE.map((value) => `--stale-${value}`),
   ...SYNC.map((value) => `--sync-${value}`),
   "--attention",
   // The graph canvas (docs/features/ui-graph.md): edges and minimap nodes are read against the surfaces.
@@ -152,6 +157,13 @@ describe("tokens.css (AC-09)", () => {
     for (const state of ["unchecked", "skipped", "dangling", "unknown"]) {
       expect(resolve(`--link-${state}`).toLowerCase()).not.toBe(resolved);
     }
+  });
+
+  it("never gives a task's unknown staleness the unchanged colour, nor a run's unknown outcome a completed one's", () => {
+    expect(resolve("--stale-unknown").toLowerCase()).not.toBe(resolve("--stale-unchanged").toLowerCase());
+    expect(resolve("--stale-unknown").toLowerCase()).toBe(resolve("--sync-cannot-verify").toLowerCase());
+    expect(resolve("--stale-changed").toLowerCase()).not.toBe(resolve("--stale-unchanged").toLowerCase());
+    expect(resolve("--run-unknown").toLowerCase()).not.toBe(resolve("--run-completed").toLowerCase());
   });
 
   it("gives cannot-verify its own colour, never ok's or another sync state's", () => {

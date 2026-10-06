@@ -134,7 +134,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 | **Node** | CodeMirror (markdown) + preview; tabs: links (direct and reverse), bindings (symbol, signature, `sync`), history (git), proposals |
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; hotkeys a/e/r/c/d |
-| **Tasks** | board: draft → analysis → review ⇄ changes_requested → ready → in_progress → in_review → done → accepted; brief, plan, open proposals, runs |
+| **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
 | **Health** | "what is left", drift, budgets, W metrics |
 | **Round** | question sheet in domain language for printing and sending + answer paste |
 

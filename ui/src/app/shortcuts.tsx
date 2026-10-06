@@ -49,12 +49,26 @@ const GRAPH_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
+/** The Tasks screen's keys (docs/features/ui-tasks.md "Description and interactions", Keyboard): no key acts on a task. */
+const TASKS_KEYS: readonly Shortcut[] = [
+  [["j", "Down arrow"], "Task list: next task"],
+  [["k", "Up arrow"], "Task list: previous task"],
+  [["Home", "End"], "Task list: first or last task"],
+  [["Enter"], "Task list: open the task, focus stays on its row"],
+  [["Left arrow", "Right arrow"], "Tabs: previous or next tab"],
+  [["Enter", "Space"], "Tabs: show the focused tab"],
+  [["Esc"], "In a task: back to its row in the list; a dialog: close it"],
+  [["?"], "Show this list"],
+];
+
 const INTRO: Partial<Record<SectionId, string>> = {
   inbox:
     "Letter keys act while focus is in the Inbox queue, outside a text field, without Ctrl, Alt or Cmd. The decision keys open the dialog of that decision for the selected proposal.",
   tree: "Keys act where focus is (the tree, the hits, the tabs), outside a text field, without Ctrl, Alt or Cmd. Arrows only move; Enter and clicks open, one history entry each.",
   graph:
     "Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd. One box holds the tab stop; arrows only move it. The List view holds every node and edge as text.",
+  tasks:
+    "Keys act where focus is (the task list, the tabs), outside a text field, without Ctrl, Alt or Cmd. Arrows only move; Enter and clicks open, one history entry each. No key changes a task: owner actions are commands you copy to a terminal.",
 };
 
 function keysOf(section: SectionId | null): readonly Shortcut[] {
@@ -64,6 +78,9 @@ function keysOf(section: SectionId | null): readonly Shortcut[] {
   if (section === "graph") {
     return GRAPH_KEYS;
   }
+  if (section === "tasks") {
+    return TASKS_KEYS;
+  }
   return INBOX_KEYS;
 }
 
@@ -71,7 +88,7 @@ export function ShortcutsDialog({ section = null, onClose }: { section?: Section
   const keys = keysOf(section);
   return (
     <Dialog title="Keyboard shortcuts" onClose={onClose}>
-      <p className="dialog-text">{INTRO[section === "tree" || section === "graph" ? section : "inbox"]}</p>
+      <p className="dialog-text">{INTRO[section === "tree" || section === "graph" || section === "tasks" ? section : "inbox"]}</p>
       <dl className="shortcut-list">
         {keys.map(([names, action]) => (
           <div key={action} className="shortcut">

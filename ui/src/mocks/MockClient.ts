@@ -18,6 +18,9 @@ import type {
   Project,
   Proposal,
   SearchResults,
+  TaskList,
+  TaskNotFound,
+  TaskPackage,
   TreeView,
 } from "../api/types";
 import { fakeHex, stamp, type MockProject } from "./build";
@@ -26,6 +29,7 @@ import { harborSim } from "./harbor-sim/fixtures";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { SLOW_MS, type Scenario } from "./scenario";
+import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
 
 export interface MockOptions {
   /** The clock; fixture times are relative to it at construction. */
@@ -55,6 +59,8 @@ export class MockClient implements SpecEngineClient {
   readonly dataSource = "mock";
   readonly scenario: Scenario;
   private readonly projects: MockProject[];
+  /** Each project's tasks by slug (src/mocks/tasks.ts); read only: no owner action reaches them here. */
+  private readonly tasks = new Map<string, MockTasks>();
   private readonly delayMs: number;
   private readonly now: () => number;
 
@@ -64,11 +70,15 @@ export class MockClient implements SpecEngineClient {
     this.delayMs = options.delayMs ?? (scenario === "slow" ? SLOW_MS : 0);
     const at = this.now();
     this.projects = [harborSim(at), ledgerApi(at)];
+    for (const project of this.projects) {
+      this.tasks.set(project.project.slug, mockTasks(project.project.slug));
+    }
     if (scenario === "empty") {
       for (const project of this.projects) {
         project.proposals = [];
         project.notes = [];
         project.corpus = { documents: [], links: [], treeNotes: [EMPTY_TREE_NOTE] };
+        this.tasks.set(project.project.slug, { tasks: [], notes: [] });
       }
     }
     if (scenario === "large") {
@@ -79,6 +89,10 @@ export class MockClient implements SpecEngineClient {
         documents: [...harbor.corpus.documents, ...documents],
         links: [...harbor.corpus.links, ...largeLinks(documents)],
       };
+      const tasks = this.tasks.get("harbor-sim");
+      if (tasks !== undefined) {
+        tasks.tasks = [...tasks.tasks, ...largeTasks()];
+      }
     }
   }
 
@@ -118,6 +132,25 @@ export class MockClient implements SpecEngineClient {
   async getGraph(project: string, options: GraphOptions): Promise<GraphView> {
     await this.read();
     return graphOf(this.project(project).corpus, options);
+  }
+
+  /** Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). */
+  async getTasks(project: string): Promise<TaskList> {
+    await this.read();
+    this.project(project);
+    return structuredClone(taskListOf(this.taskStore(project)));
+  }
+
+  /**
+   * Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). The
+   * open proposals and assumptions are read from this mock's queue now, so a decision in the Inbox
+   * drops a proposal from both; an unknown T answers the exit-1 document, as data.
+   */
+  async getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound> {
+    await this.read();
+    const entry = this.project(project);
+    const stored = this.taskStore(project).tasks.find((candidate) => candidate.id === id);
+    return structuredClone(stored === undefined ? taskNotFound(id) : packageOf(stored, entry.proposals));
   }
 
   async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {
@@ -197,6 +230,10 @@ export class MockClient implements SpecEngineClient {
       return Promise.resolve();
     }
     return new Promise((resolve) => setTimeout(resolve, this.delayMs));
+  }
+
+  private taskStore(slug: string): MockTasks {
+    return this.tasks.get(slug) ?? { tasks: [], notes: [] };
   }
 
   private project(slug: string): MockProject {
