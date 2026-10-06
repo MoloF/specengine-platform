@@ -831,6 +831,7 @@ fn git_dir_and_work_tree_reach_the_base_s_calls() {
             ],
             &[("GIT_DIR", git_dir.as_os_str())],
         );
+        git.quiet_env(scratch.path(), &[("GIT_DIR", git_dir.as_os_str())]);
         git.git_env(&tree, &["add", "-A"], &vars);
         git.git_env(
             &tree,

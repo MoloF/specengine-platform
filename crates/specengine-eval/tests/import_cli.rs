@@ -1859,12 +1859,7 @@ mod pilots {
         copy_dir(&fixture_dir("import-one"), &corpus);
         let config = scratch.join("census-pilot.toml");
         fs::rename(corpus.join("census.toml"), &config).expect("import-one has a census.toml");
-        let init = std::process::Command::new("git")
-            .current_dir(&corpus)
-            .args(["init", "-q"])
-            .output()
-            .expect("git runs");
-        assert!(init.status.success(), "git init: {}", stderr(&init));
+        pilot::git_init(&corpus);
         (corpus, config)
     }
 

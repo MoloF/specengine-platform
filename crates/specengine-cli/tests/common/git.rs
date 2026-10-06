@@ -9,9 +9,22 @@
 //! `GIT_CONFIG_NOSYSTEM=1`, a scratch `HOME` and `XDG_CONFIG_HOME`,
 //! `GIT_CEILING_DIRECTORIES` = the scratch parent, a fixed author and
 //! committer, and `PATH` = the directory of the real `git` plus
-//! `/usr/bin:/bin`. Repositories are made by `git init --template=`; no
-//! remote is ever added. A test sets a variable only through
-//! [`Sandbox::git_env`] or its own `spec` call.
+//! `/usr/bin:/bin`. Repositories are made by `git init --template=`, and
+//! each new repository's own config at once turns git's automatic
+//! maintenance off ([`QUIET`]); no remote is ever added. A test sets a
+//! variable only through [`Sandbox::git_env`] or its own `spec` call.
+//!
+//! Why the repository's own config: git 2.54 (Apple Git-157) follows a plain
+//! `git commit` (and a push into a repository) with a detached
+//! `git maintenance run --auto` that within seconds turns loose objects
+//! into a pack and a multi-pack-index — a change to `.git` racing every
+//! "no repository file changed" snapshot and every test that removes a
+//! loose object. `GIT_CONFIG_*` variables or `-c` reach only the setup git:
+//! the product drops `GIT_CONFIG_COUNT` and `GIT_CONFIG_PARAMETERS` before
+//! it runs git in a worktree, a local push drops them for the receiving
+//! side, and `/usr/bin/git` called directly never sees a `PATH` wrapper.
+//! The repository's config reaches every git process that opens the
+//! repository.
 //!
 //! Self-contained (no `super::`): the store's tests include it by path.
 
@@ -33,6 +46,26 @@ pub const IDENTITY: [(&str, &str); 6] = [
     ("GIT_COMMITTER_EMAIL", "committer@example.invalid"),
     ("GIT_COMMITTER_DATE", "2026-01-01T00:00:00+0000"),
 ];
+
+/// The repository-local config every scratch repository gets right after
+/// `git init` (see the module docs): no automatic maintenance
+/// (`maintenance.auto`, the switch git 2.54's detached repack honours),
+/// no automatic `gc --auto` (`gc.auto`, an older git's path).
+pub const QUIET: [(&str, &str); 2] = [("maintenance.auto", "false"), ("gc.auto", "0")];
+
+/// [`QUIET`] as a git config file, for a template directory
+/// (`GIT_TEMPLATE_DIR`): a repository git makes from it — a clone, a
+/// submodule — starts with it.
+pub fn quiet_config_text() -> String {
+    let mut text = String::new();
+    for (key, value) in QUIET {
+        let (section, name) = key.split_once('.').expect("a section.name key");
+        for part in ["[", section, "]\n\t", name, " = ", value, "\n"] {
+            text.push_str(part);
+        }
+    }
+    text
+}
 
 /// Replaced whatever the test process holds.
 const OVERRIDDEN: [&str; 3] = ["HOME", "XDG_CONFIG_HOME", "PATH"];
@@ -210,7 +243,9 @@ impl Sandbox {
     }
 
     /// `git init --template= -q -b main` of `dir` (created when absent),
-    /// with `extra` arguments before the directory.
+    /// with `extra` arguments before the directory, then [`QUIET`] in the
+    /// new repository's config (its git directory's, wherever
+    /// `--separate-git-dir` puts it; a `--bare` one's own).
     pub fn init_with(&self, dir: &Path, extra: &[&str]) {
         fs::create_dir_all(dir).expect("repository directory");
         let dir_text = dir.to_str().expect("a UTF-8 scratch path");
@@ -218,6 +253,20 @@ impl Sandbox {
         args.extend_from_slice(extra);
         args.push(dir_text);
         self.git(&self.parent, &args);
+        self.quiet(dir);
+    }
+
+    /// [`QUIET`] into the config of the repository git finds from `cwd`.
+    pub fn quiet(&self, cwd: &Path) {
+        self.quiet_env(cwd, &[]);
+    }
+
+    /// [`QUIET`] into the config of the repository git finds from `cwd`
+    /// with `extra` variables (a `GIT_DIR` of a separate git directory).
+    pub fn quiet_env(&self, cwd: &Path, extra: &[(&str, &OsStr)]) {
+        for (key, value) in QUIET {
+            self.git_env(cwd, &["config", "--local", key, value], extra);
+        }
     }
 
     /// `git init --template=` of `dir`.

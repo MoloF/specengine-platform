@@ -434,16 +434,7 @@ pub fn invented_setup(scratch: &Path, with_paths: bool) -> Setup {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    let init = Command::new("git")
-        .current_dir(&corpus)
-        .args(["init", "-q"])
-        .output()
-        .expect("git runs");
-    assert!(
-        init.status.success(),
-        "git init: {}",
-        String::from_utf8_lossy(&init.stderr)
-    );
+    git_init(&corpus);
     let scheme = scratch.join("scheme-a.toml");
     fs::write(&scheme, scheme_text(with_paths)).unwrap();
     let config = scratch.join("census-a.toml");
@@ -453,6 +444,36 @@ pub fn invented_setup(scratch: &Path, with_paths: bool) -> Setup {
         scheme,
         config,
     }
+}
+
+/// Git's automatic maintenance off, in a scratch repository's own config:
+/// git 2.54 follows a commit with a detached repack (loose objects into a
+/// pack and a multi-pack-index) that would change `.git` under a test;
+/// the repository's config reaches every git process that opens it.
+pub const QUIET: [(&str, &str); 2] = [("maintenance.auto", "false"), ("gc.auto", "0")];
+
+/// `git init -q` of the scratch directory `dir`, then [`QUIET`] in the new
+/// repository's config.
+pub fn git_init(dir: &Path) {
+    scratch_git(dir, &["init", "-q"]);
+    for (key, value) in QUIET {
+        scratch_git(dir, &["config", "--local", key, value]);
+    }
+}
+
+/// `git args` in the scratch directory `dir`; it must succeed.
+fn scratch_git(dir: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {args:?} in {}: {}",
+        dir.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn copy_files(from: &Path, to: &Path) {

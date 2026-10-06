@@ -3054,12 +3054,7 @@ mod pilots {
             fs::rename(corpus.join("specengine.toml"), &scheme).unwrap();
             fs::rename(corpus.join("census.toml"), &config).unwrap();
             fs::rename(corpus.join("tasks.toml"), &tasks).unwrap();
-            let init = Command::new("git")
-                .current_dir(&corpus)
-                .args(["init", "-q"])
-                .output()
-                .expect("git runs");
-            assert!(init.status.success(), "git init: {}", stderr(&init));
+            pilot::git_init(&corpus);
             let envelope = w_read_only(
                 label,
                 &scratch.0,

@@ -5215,12 +5215,7 @@ mod pilots {
             let config = scratch.join("census-pilot.toml");
             fs::rename(corpus.join("specengine.toml"), &scheme).unwrap();
             fs::rename(corpus.join("census.toml"), &config).unwrap();
-            let init = std::process::Command::new("git")
-                .current_dir(&corpus)
-                .args(["init", "-q"])
-                .output()
-                .expect("git runs");
-            assert!(init.status.success(), "git init: {}", stderr(&init));
+            pilot::git_init(&corpus);
             let envelope = layout_run(
                 label,
                 &scratch.0,

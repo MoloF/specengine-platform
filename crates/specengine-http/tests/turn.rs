@@ -64,6 +64,7 @@ fn corpus(scratch: &Scratch) -> std::path::PathBuf {
         &root,
         &["init", "-q", "--template=", "--initial-branch=main"],
     );
+    git.quiet(&root);
     git.run(&root, &["add", "-A"]);
     git.run(&root, &["commit", "-q", "-m", "generated corpus"]);
     root

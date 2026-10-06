@@ -207,7 +207,8 @@ impl Scratch {
     }
 
     /// A git repository at `<scratch>/<dir>`: a byte copy of
-    /// `fixtures/<name>`, every file committed once on `branch`.
+    /// `fixtures/<name>`, [`QUIET`] in its own config, every file committed
+    /// once on `branch`.
     pub fn repo(&self, name: &str, dir: &str, branch: &str) -> PathBuf {
         let root = self.copy(name, dir);
         let git = self.git();
@@ -220,6 +221,7 @@ impl Scratch {
                 &format!("--initial-branch={branch}"),
             ],
         );
+        git.quiet(&root);
         git.run(&root, &["add", "-A"]);
         git.run(&root, &["commit", "-q", "-m", "fixture"]);
         root
@@ -372,13 +374,23 @@ pub fn files_ending(dir: &Path, suffix: &str) -> Vec<String> {
 
 // ------------------------------------------------------------ git
 
+/// Git's automatic maintenance off: a git that repacks in the background
+/// after a commit (git 2.54's detached geometric repack: loose objects into
+/// a pack and a multi-pack-index within seconds) would otherwise race the
+/// test's next git command and every snapshot of `.git`. Written into each
+/// repository's own config right after `init` ([`Git::quiet`]), which every
+/// git process opening the repository reads — the setup's, a product's
+/// (whose environment is [`product_env`], untouched; the product's
+/// worktree git drops `GIT_CONFIG_COUNT` and `GIT_CONFIG_PARAMETERS` in any
+/// case), `/usr/bin/git` called directly — and also given to the setup git
+/// as `GIT_CONFIG_*` variables.
+pub const QUIET: [(&str, &str); 2] = [("maintenance.auto", "false"), ("gc.auto", "0")];
+
 /// The isolated environment of every git process of a test: no inherited
 /// variable, git's global and system configs off, a fixed identity, a
 /// scratch `HOME`, `GIT_CEILING_DIRECTORIES` the scratch, and no automatic
-/// maintenance (`maintenance.auto`, `gc.auto`): a git that repacks in the
-/// background after a setup commit (git 2.54's detached geometric repack)
-/// would otherwise race the test's next git command and change `.git`
-/// under it. Product processes get [`product_env`], untouched.
+/// maintenance ([`QUIET`] as `GIT_CONFIG_*`). Product processes get
+/// [`product_env`], untouched.
 #[derive(Debug, Clone)]
 pub struct Git {
     vars: Vec<(OsString, OsString)>,
@@ -425,12 +437,12 @@ impl Git {
                 "GIT_CEILING_DIRECTORIES".into(),
                 scratch.parent().expect("scratch parent").as_os_str().into(),
             ),
-            ("GIT_CONFIG_COUNT".into(), "2".into()),
-            ("GIT_CONFIG_KEY_0".into(), "maintenance.auto".into()),
-            ("GIT_CONFIG_VALUE_0".into(), "false".into()),
-            ("GIT_CONFIG_KEY_1".into(), "gc.auto".into()),
-            ("GIT_CONFIG_VALUE_1".into(), "0".into()),
+            ("GIT_CONFIG_COUNT".into(), QUIET.len().to_string().into()),
         ];
+        for (index, (key, value)) in QUIET.iter().enumerate() {
+            vars.push((format!("GIT_CONFIG_KEY_{index}").into(), (*key).into()));
+            vars.push((format!("GIT_CONFIG_VALUE_{index}").into(), (*value).into()));
+        }
         for (key, value) in [
             ("GIT_AUTHOR_NAME", "Scratch Author"),
             ("GIT_AUTHOR_EMAIL", "author@example.invalid"),
@@ -442,6 +454,14 @@ impl Git {
             vars.push((key.into(), value.into()));
         }
         Self { vars }
+    }
+
+    /// [`QUIET`] into the config of the repository git finds from `cwd`
+    /// (right after its `init`).
+    pub fn quiet(&self, cwd: &Path) {
+        for (key, value) in QUIET {
+            self.run(cwd, &["config", "--local", key, value]);
+        }
     }
 
     /// `git args` in `cwd`, which must succeed; its stdout.

@@ -24,6 +24,11 @@
 
 mod common;
 
+/// Only its [`scratch_git::QUIET`]: the repository-local config that keeps
+/// git's automatic maintenance out of the repository (see that module).
+#[path = "../../specengine-cli/tests/common/git.rs"]
+mod scratch_git;
+
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -33,7 +38,9 @@ use common::*;
 use serde_json::{Value, json};
 
 /// `git args` in `dir`: a cleared environment, no global or system config,
-/// a fixed identity.
+/// a fixed identity. A repository it makes gets [`scratch_git::QUIET`] in
+/// its own config right after `init`, so neither this git nor the server's
+/// starts a background repack that changes `.git` under the snapshot.
 fn git(dir: &Path, home: &Path, args: &[&str]) -> String {
     let program = if Path::new("/usr/bin/git").exists() {
         "/usr/bin/git"
@@ -217,6 +224,9 @@ fn ac08_reads_write_nothing_under_the_project_root() {
         &git_home,
         &["init", "-q", "--template=", "-b", "main"],
     );
+    for (key, value) in scratch_git::QUIET {
+        git(&root, &git_home, &["config", "--local", key, value]);
+    }
     git(&root, &git_home, &["add", "-A"]);
     git(&root, &git_home, &["commit", "-q", "-m", "spec-a"]);
     assert_eq!(

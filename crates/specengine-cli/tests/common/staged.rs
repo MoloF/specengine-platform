@@ -19,7 +19,7 @@ use specengine_core::check::Report;
 use specengine_store::{GitEnv, check_staged, check_staged_with_notes, today_utc};
 
 use super::check::{FAR, baseline_covering, library};
-use super::git::Sandbox;
+use super::git::{Sandbox, quiet_config_text};
 use super::{RUN_TIMEOUT, Run, SPEC, Scratch, copy_dir, fixture, write};
 
 /// A scratch repository: `<scratch>/<dir>` under git, with its sandbox.
@@ -93,8 +93,10 @@ impl Repo {
 /// worktree at `<scratch>/linked` (canonical) with the submodule checked
 /// out (its git dir under the linked worktree's own, `modules/proj`).
 /// The submodule is cloned from its local path only
-/// (`protocol.file.allow=always`, no network), templates from an empty
-/// directory; every git process runs in the sandbox.
+/// (`protocol.file.allow=always`, no network), templates from a directory
+/// holding only a `config` of [`super::git::QUIET`] (each submodule clone
+/// starts without automatic maintenance, as `Sandbox::init` leaves every
+/// repository it makes); every git process runs in the sandbox.
 pub struct Superproject {
     pub scratch: Scratch,
     pub git: Sandbox,
@@ -109,6 +111,7 @@ impl Superproject {
         let scratch = Scratch::new(label);
         let git = Sandbox::new(scratch.path());
         let templates = scratch.dir("templates");
+        std::fs::write(templates.join("config"), quiet_config_text()).expect("the template config");
         let local = [
             ("GIT_TEMPLATE_DIR", templates.as_os_str()),
             ("GIT_ALLOW_PROTOCOL", OsStr::new("file")),
