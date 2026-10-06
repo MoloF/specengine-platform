@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { apiErrorOf, isNotServed } from "../api/client";
 import { Icon } from "./Icon";
 
 /** A loading placeholder: grey bars, aria-busy, a label for screen readers. */
@@ -57,6 +58,40 @@ export function ErrorPanel({
       </button>
     </div>
   );
+}
+
+/**
+ * A read that failed, as a screen shows it. A read the daemon does not serve yet (ClientError
+ * `notServed`: nothing was requested) is not built, not broken: a note, the client's message
+ * verbatim, no Retry, since asking again cannot change it. Anything else (the daemon down, no
+ * response; a refusal in the daemon's words) is an ErrorPanel with Retry.
+ */
+export function ReadFailure({
+  title,
+  failure,
+  onRetry,
+  retrying = false,
+  attempt = 0,
+}: {
+  title: string;
+  failure: unknown;
+  onRetry: () => void;
+  retrying?: boolean;
+  attempt?: number;
+}) {
+  const { message } = apiErrorOf(failure);
+  if (isNotServed(failure)) {
+    return (
+      <div className="notice notice-not-served" role="status">
+        <p className="notice-title">
+          <Icon name="info" />
+          <span>Not built yet: the daemon has no endpoint for this read</span>
+        </p>
+        <p className="error-message">{message}</p>
+      </div>
+    );
+  }
+  return <ErrorPanel title={title} message={message} onRetry={onRetry} retrying={retrying} attempt={attempt} />;
 }
 
 /** A section with a small heading inside a card. */

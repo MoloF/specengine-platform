@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { apiErrorOf, DECIDED_ELSEWHERE } from "../api/client";
-import { useDecideProposal, useInbox } from "../api/queries";
+import { useDecideProposal, useInbox, useProposal } from "../api/queries";
 import type { ApiError, Decision, DecisionResult, Proposal } from "../api/types";
 import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
@@ -24,8 +24,7 @@ import { sharesTarget } from "./targets";
 
 const LETTERS = new Map<string, DecisionKind>(DECISION_KEYS.map(([kind, key]) => [key, kind]));
 
-function announcementOf(result: DecisionResult, decision: Decision): string {
-  const id = result.proposal.id;
+function announcementOf(id: string, result: DecisionResult, decision: Decision): string {
   switch (decision.decision) {
     case "accept":
       return result.commit === null
@@ -41,15 +40,19 @@ function announcementOf(result: DecisionResult, decision: Decision): string {
 }
 
 /**
- * The open decision dialog: the proposal as it was when opened, so a re-read cannot pull the dialog
- * away; the dialog itself is given the inbox's current version and says when it changed.
+ * The open decision dialog: the proposal's review document as it was when opened, so a re-read
+ * cannot pull the dialog away; the dialog itself is given the current read and says when it changed.
  */
 interface OpenDecision {
+  id: string;
   proposal: Proposal;
   kind: DecisionKind;
 }
 
-/** The owner's queue: list by severity then age, the selected card, the four decisions. */
+/**
+ * The owner's queue: the inbox's entries by severity then age, the selected one's card from its
+ * review document, the four decisions (the daemon refuses each, naming the terminal command).
+ */
 export function InboxView({ project, selectedId }: { project: string; selectedId: string | null }) {
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
@@ -82,6 +85,9 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     selectedId !== null && inbox.data !== undefined && !ordered.some((proposal) => proposal.id === selectedId)
       ? selectedId
       : null;
+  const review = useProposal(project, selected?.id ?? null);
+  /** The selected proposal's review document, once read (not the exit-1 document). */
+  const reviewed = review.data !== undefined && review.data.id !== null && review.data.id === selected?.id ? review.data : null;
 
   useEffect(() => {
     mounted.current = true;
@@ -133,13 +139,16 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     setDialog(next);
   }
 
-  /** Opens a decision on the selected proposal; nothing while a dialog is open or a decision pending. */
+  /**
+   * Opens a decision on the selected proposal once its review document is read (the options come
+   * from it); nothing while a dialog is open or a decision pending.
+   */
   function openDialog(kind: DecisionKind) {
-    if (selected === null || openDecision.current !== null || deciding.current || decide.isPending) {
+    if (selected === null || reviewed === null || openDecision.current !== null || deciding.current || decide.isPending) {
       return;
     }
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    showDialog({ proposal: selected, kind });
+    showDialog({ id: selected.id, proposal: reviewed, kind });
   }
 
   function closeDialog() {
@@ -153,7 +162,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
 
   /** Closes the dialog deciding `id` and no other; false when that dialog is not the open one. */
   function closeOwnDialog(id: string): boolean {
-    if (openDecision.current?.proposal.id !== id) {
+    if (openDecision.current?.id !== id) {
       return false;
     }
     showDialog(null);
@@ -161,8 +170,8 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   }
 
   /** After a decision leaves the dialog: select and focus the next item, else the heading. */
-  function focusNextAfter(proposal: Proposal) {
-    const at = visible.findIndex((candidate) => candidate.id === proposal.id);
+  function focusNextAfter(id: string) {
+    const at = visible.findIndex((candidate) => candidate.id === id);
     const next = visible[at + 1] ?? visible[at - 1];
     if (next === undefined) {
       focusLater(() => heading.current);
@@ -176,44 +185,44 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
    * the catch, so it can never be shown as a refusal. Resolves to the refusal for the dialog to show,
    * or null when the dialog is closed (or gone with the view).
    */
-  async function submitDecision(proposal: Proposal, decision: Decision): Promise<string | null> {
+  async function submitDecision(id: string, decision: Decision): Promise<string | null> {
     deciding.current = true;
     let decided: DecisionResult;
     try {
-      decided = await decide.mutateAsync({ id: proposal.id, decision });
+      decided = await decide.mutateAsync({ id, decision });
     } catch (error) {
       deciding.current = false;
-      return refused(proposal, apiErrorOf(error));
+      return refused(id, apiErrorOf(error));
     }
     deciding.current = false;
-    const said = announcementOf(decided, decision);
+    const said = announcementOf(id, decided, decision);
     announce(said);
     if (!mounted.current) {
       return null;
     }
     setProblem(null);
     setResult(said);
-    if (closeOwnDialog(proposal.id)) {
-      focusNextAfter(proposal);
+    if (closeOwnDialog(id)) {
+      focusNextAfter(id);
     }
     return null;
   }
 
   /** A refusal: 409 closes the dialog; any other stays in it, or is spoken when the view is gone. */
-  function refused(proposal: Proposal, refusal: ApiError): string | null {
+  function refused(id: string, refusal: ApiError): string | null {
     if (refusal.status === DECIDED_ELSEWHERE) {
-      announce(`${proposal.id} was decided elsewhere; the inbox is read again. ${refusal.message}`, "assertive");
+      announce(`${id} was decided elsewhere; the inbox is read again. ${refusal.message}`, "assertive");
       if (mounted.current) {
         setResult("");
-        setProblem({ id: proposal.id, message: refusal.message });
-        if (closeOwnDialog(proposal.id)) {
-          focusNextAfter(proposal);
+        setProblem({ id, message: refusal.message });
+        if (closeOwnDialog(id)) {
+          focusNextAfter(id);
         }
       }
       return null;
     }
     if (!mounted.current) {
-      announce(`The daemon refused the decision on ${proposal.id}; nothing changed. ${refusal.message}`, "assertive");
+      announce(`The daemon refused the decision on ${id}; nothing changed. ${refusal.message}`, "assertive");
       return null;
     }
     return refusal.message;
@@ -293,7 +302,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             autoComplete="off"
             spellCheck={false}
             value={query}
-            placeholder="ID, words, kind, task or target"
+            placeholder="ID, words, kind, branch or target"
             onChange={(event) => {
               setQuery(event.target.value);
             }}
@@ -345,7 +354,8 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
         {selected !== null && (
           <ProposalCard
             project={project}
-            proposal={selected}
+            entry={selected}
+            review={review}
             others={ordered.filter((other) => sharesTarget(other, selected))}
             now={now}
             deciding={decide.isPending}
@@ -381,11 +391,12 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
       {body}
       {dialog !== null && (
         <DecisionDialog
-          key={`${dialog.proposal.id}-${dialog.kind}`}
-          proposal={ordered.find((proposal) => proposal.id === dialog.proposal.id) ?? dialog.proposal}
+          key={`${dialog.id}-${dialog.kind}`}
+          id={dialog.id}
+          proposal={reviewed !== null && reviewed.id === dialog.id ? reviewed : dialog.proposal}
           kind={dialog.kind}
           onCancel={closeDialog}
-          onSubmit={(decision) => submitDecision(dialog.proposal, decision)}
+          onSubmit={(decision) => submitDecision(dialog.id, decision)}
         />
       )}
     </section>

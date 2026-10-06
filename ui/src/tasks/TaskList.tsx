@@ -7,7 +7,7 @@ import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
-import { ErrorPanel, Skeleton } from "../ui/states";
+import { ReadFailure, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
@@ -133,9 +133,9 @@ export function TaskList({
         <Skeleton label={`Loading the tasks of ${project}`} lines={6} />
       </div>
     ) : (
-      <ErrorPanel
+      <ReadFailure
         title="The tasks could not be loaded"
-        message={apiErrorOf(failure).message}
+        failure={failure}
         retrying={tasks.isFetching}
         attempt={tasks.errorUpdateCount}
         onRetry={() => {

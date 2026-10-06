@@ -6,8 +6,8 @@ import type { Scenario } from "./scenario";
 
 // The Tasks screen over the real mock, as `pnpm dev` shows it (docs/features/ui-tasks.md): AC-01
 // (what a route reads), AC-04 (harbor-sim's groups), AC-06 (the four staleness displays, the spec
-// changes as sent), AC-08 (proposals split by task_id; the Inbox's Task link; a decision read
-// again), AC-11 (slow, empty, error, an unknown T), AC-14 (large).
+// changes as sent), AC-08 (proposals split by task_id; a decision read again; the review document
+// names no task since daemon-read, so the Inbox card links none), AC-11 (slow, empty, error, an unknown T), AC-14 (large).
 
 function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
@@ -183,7 +183,7 @@ describe("proposals and the Inbox (AC-08)", () => {
     expect(screen.getByRole("link", { name: "PR-0041" }).getAttribute("href")).toBe("#/harbor-sim/inbox/PR-0041");
   });
 
-  it("links PR-0041's Inbox card to T-0107; after PR-0041 is rejected, T-0107 is read again without it", async () => {
+  it("after PR-0041 is rejected in the Inbox, T-0107 is read again without it", async () => {
     const { getTask } = renderMock("normal", "#/harbor-sim/tasks/T-0107");
     await screen.findByRole("tab", { name: "Overview", selected: true });
     expect(within(document.querySelector(".task-assumptions") ?? document.body).getByText("PR-0041")).toBeTruthy();
@@ -191,8 +191,8 @@ describe("proposals and the Inbox (AC-08)", () => {
 
     await goTo("#/harbor-sim/inbox/PR-0041");
     const card = await screen.findByRole("article");
-    const task = within(card).getByRole("link", { name: "T-0107" });
-    expect(task.getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    expect(within(card).queryByRole("link", { name: "T-0107" })).toBeNull();
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog", { name: "Reject PR-0041" });
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "The window stays." } });

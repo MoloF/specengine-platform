@@ -15,11 +15,14 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { aBundle, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView } from "./builders";
+import { aBundle, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
+
+/** The stub's live tail: none. */
+const noLiveTail: SpecEngineClient["subscribe"] = () => () => undefined;
 
 export const PROJECTS: Project[] = [
-  { slug: "alpha", name: "Alpha" },
-  { slug: "beta", name: "Beta" },
+  { slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" },
+  { slug: "beta", name: "Beta", root: "/work/beta", branch: null },
 ];
 
 /** The stub's tree: a document holding R-1. */
@@ -39,8 +42,12 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     state,
     getProjects: vi.fn((): Promise<Project[]> => Promise.resolve(PROJECTS.map((project) => ({ ...project })))),
     getInbox: vi.fn(
-      (): Promise<Inbox> => Promise.resolve({ proposals: state.proposals.map((p) => ({ ...p })), notes: [...state.notes] }),
+      (): Promise<Inbox> => Promise.resolve({ proposals: state.proposals.map((p) => entryOf(p)), notes: [...state.notes] }),
     ),
+    getProposal: vi.fn((_project: string, id: string): Promise<Proposal> => {
+      const found = state.proposals.find((proposal) => proposal.id === id);
+      return Promise.resolve(found === undefined ? noReview(id) : structuredClone(found));
+    }),
     getTree: vi.fn<(project: string, options?: TreeOptions) => Promise<TreeView>>(() =>
       Promise.resolve(aTreeView(STUB_TREE.map((row) => ({ ...row })))),
     ),
@@ -88,6 +95,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       state.proposals = state.proposals.map((proposal) => (proposal.id === id ? updated : proposal));
       return Promise.resolve({ proposal: updated, commit: null });
     }),
+    /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */
+    subscribe: noLiveTail,
   } satisfies SpecEngineClient & { state: unknown };
   return client;
 }

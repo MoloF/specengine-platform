@@ -1,4 +1,4 @@
-import type { Proposal } from "../api/types";
+import type { InboxEntry } from "../api/types";
 import { targetsOf } from "../inbox/targets";
 import { stemOf } from "./rows";
 
@@ -12,18 +12,18 @@ export function namesOf(node: { id: string | null; path: string }): string[] {
 }
 
 /** Whether a proposal targets any of the nodes. */
-export function targetsAny(proposal: Proposal, nodes: readonly { id: string | null; path: string }[]): boolean {
+export function targetsAny(proposal: InboxEntry, nodes: readonly { id: string | null; path: string }[]): boolean {
   const names = new Set(nodes.flatMap(namesOf));
   return targetsOf(proposal).some((target) => names.has(target));
 }
 
 /** The proposals targeting any of the nodes, in the inbox's order. */
-export function proposalsFor(proposals: readonly Proposal[], nodes: readonly { id: string | null; path: string }[]): Proposal[] {
+export function proposalsFor(proposals: readonly InboxEntry[], nodes: readonly { id: string | null; path: string }[]): InboxEntry[] {
   return proposals.filter((proposal) => targetsAny(proposal, nodes));
 }
 
 /** How many proposals target each name; a proposal naming one node twice counts once per node. */
-export function targetIndex(proposals: readonly Proposal[]): Map<string, Set<string>> {
+export function targetIndex(proposals: readonly InboxEntry[]): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   for (const proposal of proposals) {
     for (const target of targetsOf(proposal)) {

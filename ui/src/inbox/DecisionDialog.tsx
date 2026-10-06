@@ -37,12 +37,15 @@ function decisionOf(kind: DecisionKind, option: number | null, text: string): De
  * made on the new version.
  */
 export function DecisionDialog({
+  id,
   proposal,
   kind,
   onCancel,
   onSubmit,
 }: {
-  /** The proposal as the inbox has it now; the dialog shows the version it was opened on until it changes. */
+  /** The proposal decided on. */
+  id: string;
+  /** Its review document as read now; the dialog shows the version it was opened on until it changes. */
   proposal: Proposal;
   kind: DecisionKind;
   onCancel: () => void;
@@ -121,7 +124,7 @@ export function DecisionDialog({
   }
 
   return (
-    <Dialog title={wording.title(shown.id)} onClose={cancel} className="decision-dialog">
+    <Dialog title={wording.title(id)} onClose={cancel} className="decision-dialog">
       {changed && (
         // A new alert for each revision, so a second one is spoken too.
         <div key={shown.updated_at} className="notice" role="alert">
@@ -132,7 +135,7 @@ export function DecisionDialog({
           <p>The dialog now shows the new version and keeps your text. Check it, then send your decision.</p>
         </div>
       )}
-      <p className="dialog-text">{shown.summary ?? shown.target_id ?? shown.kind}</p>
+      <p className="dialog-text">{shown.summary ?? shown.target_id ?? shown.kind ?? id}</p>
       <p className="dialog-text dialog-effect">{wording.effect}</p>
       <form
         ref={form}

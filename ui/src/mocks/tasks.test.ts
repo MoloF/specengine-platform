@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { TaskPackage } from "../api/types";
+import { harborSim } from "./harbor-sim/fixtures";
+import { ledgerApi } from "./ledger-api/fixtures";
 import { MockClient } from "./MockClient";
 import tasksSource from "./tasks.ts?raw";
 import { largeTasks, mockTasks, packageOf, taskListOf, type StoredTask } from "./tasks";
@@ -60,13 +62,13 @@ describe("the mock's tasks are fixed (AC-14)", () => {
     expect(list.notes[1]).toMatch(/^T-0111: /);
   });
 
-  it("resolve every task_id of both inboxes to a task of that project", async () => {
+  it("resolve every task_id of both queues to a task of that project", async () => {
     const client = new MockClient("normal", { now: () => NOW });
-    for (const project of ["harbor-sim", "ledger-api"]) {
-      const { proposals } = await client.getInbox(project);
+    for (const queued of [harborSim(NOW), ledgerApi(NOW)]) {
+      const project = queued.project.slug;
       const { tasks } = await client.getTasks(project);
       const ids = new Set(tasks.map((entry) => entry.id));
-      const bound = proposals.flatMap((proposal) => proposal.task_id ?? []);
+      const bound = queued.proposals.flatMap((proposal) => proposal.task_id ?? []);
       expect(bound.length).toBeGreaterThan(0);
       for (const id of bound) {
         expect([project, id, ids.has(id)]).toEqual([project, id, true]);

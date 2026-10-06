@@ -19,10 +19,10 @@
 use serde::Serialize;
 use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SearchHit,
-    SearchQuery, SpecIndex,
+    SearchQuery, Snippet, SpecIndex,
 };
 
-use crate::cap::OUTPUT_CAP_CHARS;
+use crate::cap::{OUTPUT_CAP_CHARS, View};
 use crate::location::open_index;
 use crate::project::discover;
 use crate::refresh::refresh;
@@ -60,6 +60,9 @@ pub struct SearchOutcome {
     /// Tier 3 matches left out (0 with `archive`).
     pub tier3_left_out: u32,
     pub messages: Vec<Message>,
+    /// The cap ([`View::Capped`] but for the daemon); JSON gives a hit's
+    /// snippet as text ([`View::Capped`]) or as its structure.
+    pub view: View,
 }
 
 /// How much of the first hit is printed when its lines alone pass the cap:
@@ -86,6 +89,18 @@ pub fn search(
     env: &Env,
     globals: &Globals,
     request: &SearchRequest,
+) -> Result<SearchOutcome, CliError> {
+    search_with_view(env, globals, request, View::Capped)
+}
+
+/// [`search`], its answer bounded by `view` (the daemon's
+/// [`View::Browser`]: every hit, none cut, no cap note; each snippet as
+/// its structure in JSON).
+pub fn search_with_view(
+    env: &Env,
+    globals: &Globals,
+    request: &SearchRequest,
+    view: View,
 ) -> Result<SearchOutcome, CliError> {
     let limit = match request.limit {
         None => SEARCH_LIMIT_DEFAULT,
@@ -140,7 +155,11 @@ pub fn search(
         hits: results.hits,
         tier3_left_out: results.tier3_left_out,
         messages,
+        view,
     };
+    if view == View::Browser {
+        return Ok(outcome);
+    }
     (outcome.shown, outcome.cut) = fitting(&outcome);
     if outcome.truncated() {
         outcome.messages.push(Message::Note(format!(
@@ -344,7 +363,16 @@ struct HitJson<'a> {
     line: usize,
     ord: usize,
     archived: bool,
-    snippet: &'a str,
+    snippet: SnippetJson<'a>,
+}
+
+/// A hit's snippet: the text printed ([`View::Capped`]), or its structure
+/// (`null` when empty).
+#[derive(Serialize)]
+#[serde(untagged)]
+enum SnippetJson<'a> {
+    Text(&'a str),
+    Parts(Option<&'a Snippet>),
 }
 
 fn view(outcome: &SearchOutcome) -> SearchJson<'_> {
@@ -366,7 +394,12 @@ fn view(outcome: &SearchOutcome) -> SearchJson<'_> {
                     line: hit.line,
                     ord: hit.ord,
                     archived: hit.tier3,
-                    snippet: texts.snippet,
+                    snippet: match outcome.view {
+                        View::Capped => SnippetJson::Text(texts.snippet),
+                        View::Browser => SnippetJson::Parts(
+                            Some(&hit.snippet_parts).filter(|parts| !parts.is_empty()),
+                        ),
+                    },
                 }
             })
             .collect(),

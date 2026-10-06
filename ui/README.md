@@ -6,27 +6,26 @@ owner: owner
 reviewed: 2026-10-06
 ---
 
-# ui — the web UI
+# ui -- the web UI
 
-The owner's screens over SpecEngine: home, queue, tasks, spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State, on mock data: `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` 2026-10-06; the rest: 08 §2 Phase 4. Screens' meaning: 07 §3 "Web UI — screens"; the owner's flow: 06 §3.3–3.4.
+The owner's screens over SpecEngine: home, queue, tasks, spec tree and graph, health. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033), nothing blocked (`#control`). State: `ui-shell` (2026-10-05), `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` shipped on mocks, `daemon-read` on `specengine-http`, 2026-10-06; the rest: 08 s2 Phase 4. Screens' meaning: 07 s3 "Web UI — screens"; the owner's flow: 06 s3.3-3.4.
 
 ## Stack
 
-A standalone pnpm project on strict TypeScript, packages in "Dependencies": no root `package.json`, no workspace with the Rust crates. Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`. Not approved, each decided at its slice: CodeMirror 6 and `@codemirror/merge`, a TS type generator, `rust-embed`, `user-event`, an a11y lint plugin, router, markdown, icon or webfont packages.
+A standalone pnpm project on strict TypeScript, packages in "Dependencies": no root `package.json`, no workspace with the Rust crates. Tests: Vitest on jsdom with Testing Library, next to the code as `src/**/*.test.ts(x)`, `fetch` and `EventSource` stubbed.
 
 ## Contract seam
 
-- One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 §3); the bootstrap `src/main.tsx` alone picks the implementation and imports `src/mocks/`.
-- App code imports domain types only from `src/api/types.ts`, which re-exports `src/api/provisional.ts` today and the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" ``; they are replaced, never extended, and the generated ones win.
-- An endpoint the UI needs and 07 §3 lacks is named for `rust-developer` in the slice spec's "Open", never invented as a URL; the mock may serve it, flagged in the interface.
+- One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 s3). The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`.
+- App code imports domain types only from `src/api/types.ts`, which re-exports `src/api/provisional.ts` today and the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
+- An endpoint the UI needs and 07 s3 lacks is named for `rust-developer` in the slice spec's "Open", never invented as a URL; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
 - The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID).
-- Switching to the daemon: add an HTTP implementation, switch the bootstrap, re-point `types.ts`.
 
 ## Screen rules
 
 Every slice keeps these (UI tests, `ui_policy.rs`).
 
-- **Tokens**: `src/styles/tokens.css` holds every colour literal, as semantic roles, and the spacing, type, motion (0 under reduced motion) and `--target-min: 24px` tokens; dark only. WCAG 2.2 AA on every surface: text ≥ 4.5:1; focus ring, control border, statuses ≥ 3:1. `cannot-verify` has its own colour and icon.
+- **Tokens**: `src/styles/tokens.css` holds every colour literal, as semantic roles, and the spacing, type, motion (0 under reduced motion) and `--target-min: 24px` tokens; dark only. WCAG 2.2 AA on every surface: text >= 4.5:1; focus ring, control border, statuses >= 3:1. `cannot-verify` has its own colour and icon.
 - **Status** never by colour alone: label and icon. An unknown value is a neutral badge with the raw text, sorted last; `kind`, `contour`, `role`, `profile`, spec statuses, link types (but `mentions`) stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests.
 - **States**: loading, a skeleton and `aria-busy`; empty, the meaning and the next step; error, the daemon's message verbatim and Retry.
 - **Dialogs** in-app only (`role="dialog"`, `aria-modal`, focus trap, Esc unless ending an IME composition, focus back to the trigger; a scrim click closes only on opt-in (the palette); no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while it is pending nothing closes or opens a dialog; a refusal keeps the dialog, the typed text and a `role="alert"` message; a proposal revised meanwhile is shown as changed and needs a fresh submit.
@@ -58,9 +57,9 @@ The owner's allowlist of 2026-10-05: exactly these 15 names in `package.json` (b
 | `@testing-library/react` | 16.3.3 | component tests; peer `@testing-library/dom` in the lockfile only, never imported |
 | `jsdom` | 29.1.1 | test DOM |
 
-**Held back.** TypeScript 7 (outside `typescript-eslint`'s peer range), jsdom 30 (Node ≥ 24.15; the laptop has 24.14): an owner decision after a Node upgrade.
+**Held back.** TypeScript 7 (outside `typescript-eslint`'s peer range), jsdom 30 (Node >= 24.15; the laptop has 24.14): an owner decision after a Node upgrade.
 
-**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Each pin was the newest stable version fitting React 19 and every peer range, at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. A new package, a removal or a version change, security patches included, is an owner decision recorded in this table. Dependency install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
+**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches included, is an owner decision recorded in this table. Dependency install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
 
 ## Gates
 
@@ -83,10 +82,9 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 
 ## Owner's manual steps
 
-1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
-2. `pnpm --dir ui dev`, open the printed URL; Ctrl-C stops it. Mock projects `harbor-sim` and `ledger-api`; decisions live in memory until a reload. Scenarios, before the `#`: `?scenario=empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes).
+1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change (`ui/node_modules` on Spotlight's privacy list: optional).
+2. `specengine-http --root <project>`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up; about six tabs exhaust Chrome's HTTP/1.1 per-host limit. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (reads fail, 503), `slow` (1.5 s a call), `conflict` (a decision fails, 409), `large` (3 000+ nodes); projects `harbor-sim`, `ledger-api`, decisions in memory until a reload.
 3. The slice's own check list: its spec, "Owner's manual check".
-4. Optional: `ui/node_modules` on Spotlight's privacy list.
 
 ## Roles here
 

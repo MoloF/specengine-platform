@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # SpecEngine architecture rules
@@ -75,7 +75,7 @@ MVP: tree-sitter and markers only; the marker provides the identity of a link. T
 
 Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. The interface is in English; spec content is shown in the project's language, so search and token estimates must handle non-Latin scripts. ADR-0011, ADR-0014.
 
-The UI starts before the daemon: it reads and decides only through one client interface. Until `spec serve` exists that interface's only implementation is a typed mock, flagged "Mock data" on every screen, and its types are provisional hand-written ones; types generated from Rust replace them and win, nothing extends them. Dependencies are the owner's allowlist at exact versions; a new package or a version change is an owner decision. The UI computes no core logic (diffs, rebases, checks): it renders what the daemon returns. How: `ui/README.md`. ADR-0033.
+The UI reads and decides only through one client interface, implemented twice: by default an HTTP client of `specengine-http`, the daemon's read surface (`crates/specengine-http/README.md`; a decision there is refused, it stays on a terminal), and a typed mock (`?scenario=`), flagged "Mock data" on every screen. Its types are provisional hand-written ones; types generated from Rust replace them and win, nothing extends them. Dependencies are the owner's allowlist at exact versions; a new package or a version change is an owner decision. The UI computes no core logic (diffs, rebases, checks): it renders what the daemon returns. How: `ui/README.md`. ADR-0033.
 
 <a id="checks-migration"></a>
 ## Documentation checks in projects

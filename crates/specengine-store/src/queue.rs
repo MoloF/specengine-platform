@@ -533,6 +533,32 @@ pub struct Event {
     pub at: String,
 }
 
+/// One event of a live tail ([`SqliteQueue::events_after`]): its `seq`,
+/// `type` and `payload` as stored (the payload's JSON text untouched).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TailEvent {
+    pub seq: i64,
+    pub event_type: String,
+    pub payload: String,
+}
+
+/// What [`SqliteQueue::events_after`] read in its one read transaction.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EventsAfter {
+    /// The project's events after the `seq` given, by `seq`, from at most
+    /// the limit's rows; a row whose `type` or `payload` is NULL is
+    /// skipped.
+    pub events: Vec<TailEvent>,
+    /// Where the next poll starts (its `after`): the last row read when the
+    /// limit was reached, else the table's highest `seq` (any project's) or
+    /// the `after` given, whichever is higher; `None` when nothing was
+    /// given and the table has no row (or no queue table exists yet).
+    pub last_seq: Option<i64>,
+    /// The limit's rows were read (skipped ones counted): the next poll
+    /// may find more at once.
+    pub full: bool,
+}
+
 /// An owner's decision: who and the optional note (an approval's `--note`,
 /// a rejection's `--reason`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -894,6 +920,96 @@ impl SqliteQueue {
         }
         tx.commit().db()?;
         Ok(out)
+    }
+
+    /// A live tail's poll (task spec `daemon-read`, "Data"): in one short
+    /// read transaction, ended before returning, the bound project's events
+    /// with a `seq` above `after`, by `seq`, from at most `limit` rows (none
+    /// read when `after` is `None`), and where the next poll starts
+    /// ([`EventsAfter::last_seq`]). A DB whose queue tables do not exist
+    /// yet reads as no event; nothing is written, no schema step runs (open
+    /// it with [`Self::open_existing`]). The `user_version` is read in the
+    /// same transaction, so a handle kept from poll to poll still refuses a
+    /// newer build's queue ([`QueueError::SchemaTooNew`]).
+    pub fn events_after(
+        &self,
+        after: Option<i64>,
+        limit: usize,
+    ) -> Result<EventsAfter, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let version = user_version(&tx)?;
+        if version > QUEUE_SCHEMA_VERSION {
+            return Err(QueueError::SchemaTooNew { found: version });
+        }
+        if !schema::has_table(&tx, "events")? {
+            return Ok(EventsAfter {
+                events: Vec::new(),
+                last_seq: after,
+                full: false,
+            });
+        }
+        let highest: Option<i64> = tx
+            .query_row("SELECT max(seq) FROM main.events", [], |row| row.get(0))
+            .db()?;
+        let Some(after) = after else {
+            tx.commit().db()?;
+            return Ok(EventsAfter {
+                events: Vec::new(),
+                last_seq: highest,
+                full: false,
+            });
+        };
+        let mut events = Vec::new();
+        let mut read = 0;
+        let mut last_read = after;
+        {
+            let mut statement = tx
+                .prepare(
+                    "SELECT seq, type, payload FROM main.events \
+                     WHERE project = ?1 AND seq > ?2 ORDER BY seq LIMIT ?3",
+                )
+                .db()?;
+            let rows = statement
+                .query_map(
+                    rusqlite::params![
+                        self.project,
+                        after,
+                        i64::try_from(limit).unwrap_or(i64::MAX)
+                    ],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                        ))
+                    },
+                )
+                .db()?;
+            for row in rows {
+                let (seq, event_type, payload) = row.db()?;
+                read += 1;
+                last_read = seq;
+                if let (Some(event_type), Some(payload)) = (event_type, payload) {
+                    events.push(TailEvent {
+                        seq,
+                        event_type,
+                        payload,
+                    });
+                }
+            }
+        }
+        tx.commit().db()?;
+        let full = read >= limit;
+        let last_seq = if full {
+            last_read
+        } else {
+            highest.map_or(after, |highest| highest.max(after))
+        };
+        Ok(EventsAfter {
+            events,
+            last_seq: Some(last_seq),
+            full,
+        })
     }
 
     fn write(&mut self) -> Result<Transaction<'_>, QueueError> {

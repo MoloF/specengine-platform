@@ -48,6 +48,9 @@ pub struct InboxEntry {
     pub kind: String,
     pub status: String,
     pub target_id: String,
+    /// The stored canonical targets, in the order given: an update's
+    /// `[target_id]` (task spec `daemon-read`, D1).
+    pub target_ids: Vec<String>,
     pub branch: String,
     pub created_at: String,
     /// An update's rationale's first line, at most
@@ -168,6 +171,10 @@ fn entry(proposal: &Proposal) -> InboxEntry {
         kind: proposal.kind.as_str().to_owned(),
         status: proposal.status.as_str().to_owned(),
         target_id: proposal.target_id.clone(),
+        target_ids: intake.map_or_else(
+            || vec![proposal.target_id.clone()],
+            |intake| intake.target_ids.clone(),
+        ),
         branch: proposal.place.branch.clone(),
         created_at: proposal.created_at.clone(),
         rationale: intake.is_none().then(|| first_line(&proposal.rationale)),

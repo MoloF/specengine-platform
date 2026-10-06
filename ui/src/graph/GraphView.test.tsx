@@ -124,7 +124,7 @@ function chip(name: string): HTMLElement {
 describe("the route and its one read (AC-01)", () => {
   it("reads one graph for #/harbor-sim/graph/MEC-TIDES: the REF and depth 2, nothing else", async () => {
     const client = graphClient();
-    client.getProjects.mockResolvedValue([{ slug: "harbor-sim", name: "Harbor Sim" }]);
+    client.getProjects.mockResolvedValue([{ slug: "harbor-sim", name: "Harbor Sim", root: "/work/harbor-sim", branch: "main" }]);
     renderApp(client, "#/harbor-sim/graph/MEC-TIDES");
     expect(await screen.findByRole("heading", { level: 1, name: "Graph: MEC-TIDES" })).toBeTruthy();
     await drawn();
@@ -136,7 +136,7 @@ describe("the route and its one read (AC-01)", () => {
 
   it("reads nothing at #/harbor-sim/graph and puts focus in the REF field", async () => {
     const client = graphClient();
-    client.getProjects.mockResolvedValue([{ slug: "harbor-sim", name: "Harbor Sim" }]);
+    client.getProjects.mockResolvedValue([{ slug: "harbor-sim", name: "Harbor Sim", root: "/work/harbor-sim", branch: "main" }]);
     renderApp(client, "#/harbor-sim/graph");
     expect(await screen.findByRole("heading", { level: 1, name: "Graph" })).toBeTruthy();
     const field = screen.getByLabelText("REF");

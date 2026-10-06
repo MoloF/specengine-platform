@@ -1,8 +1,9 @@
-import type { Proposal } from "../api/types";
+import type { InboxEntry } from "../api/types";
 import { Badge } from "../ui/Badge";
 import { formatAge, formatUtc } from "../ui/time";
 import { severityLook, statusLook } from "./labels";
 import { summaryOf } from "./summary";
+import { targetsOf } from "./targets";
 
 /**
  * The queue as one Tab stop: a listbox whose selected option alone is tabbable. Moving with the
@@ -14,7 +15,7 @@ export function ProposalList({
   now,
   onSelect,
 }: {
-  proposals: readonly Proposal[];
+  proposals: readonly InboxEntry[];
   selectedId: string;
   now: number;
   onSelect: (id: string) => void;
@@ -24,6 +25,7 @@ export function ProposalList({
       {proposals.map((proposal) => {
         const selected = proposal.id === selectedId;
         const status = statusLook(proposal.status);
+        const targets = targetsOf(proposal);
         return (
           <div
             key={proposal.id}
@@ -47,7 +49,7 @@ export function ProposalList({
             <span className="queue-item-meta">
               <span className="mono">{proposal.kind}</span>
               <span aria-hidden="true"> | </span>
-              <span className="mono">{proposal.task_id ?? "no task"}</span>
+              <span className="mono">{targets.length === 0 ? "no target" : targets.join(", ")}</span>
               {proposal.status !== "open" && (
                 <>
                   <span aria-hidden="true"> | </span>

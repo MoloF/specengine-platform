@@ -1,4 +1,4 @@
-import type { Proposal, ProposalStatus, TaskListEntry } from "../api/types";
+import type { InboxEntry, ProposalStatus, TaskListEntry } from "../api/types";
 import { statusRank } from "../inbox/labels";
 import { isClosed, type TaskGroup } from "../tasks/groups";
 
@@ -43,7 +43,7 @@ export interface StatusCount {
 }
 
 /** Proposals per status: the table's order, unknown values after it (by text), each raw. */
-export function statusCountsOf(proposals: readonly Pick<Proposal, "status">[]): StatusCount[] {
+export function statusCountsOf(proposals: readonly Pick<InboxEntry, "status">[]): StatusCount[] {
   return [...countBy(proposals.map(({ status }) => status))]
     .map(([status, count]) => ({ status, count }))
     .sort((a, b) => statusRank(a.status) - statusRank(b.status) || collator.compare(a.status, b.status));
@@ -56,7 +56,7 @@ export interface KindCount {
 }
 
 /** Proposals per raw kind: the most first, then by text. */
-export function kindCountsOf(proposals: readonly Pick<Proposal, "kind">[]): KindCount[] {
+export function kindCountsOf(proposals: readonly Pick<InboxEntry, "kind">[]): KindCount[] {
   return [...countBy(proposals.map(({ kind }) => kind))]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || collator.compare(a.name, b.name));

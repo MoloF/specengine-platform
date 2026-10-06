@@ -17,7 +17,7 @@ The owner decides proposals in a terminal (`proposal-apply`); the queue card (06
 
 The provisional contract `ui/src/api/provisional.ts` cites, kept until `src/api/generated/` replaces it; keys as the JSON, absent = `null`; the endpoints it presumes: "Open".
 
-- `Project {slug, name}`; `NodeView` = `spec show --json` (`crates/specengine-cli/README.md` "Output and the cap"); `Inbox {proposals, notes}`; `Proposal` = the `review` JSON (`docs/features/proposal-apply.md` "Data") + 05 §3.3's `severity`, `gap_type`, `task_id`, `target_ids`, `evidence [{file, qpath, lines, observed, documented}]`, `options [{label, effect, price}]`, `recommendation`, `working_answer` + 07 §1.2's `summary`.
+- `Project {slug, name, root, branch}`; `NodeView` = `spec show --json` (`crates/specengine-cli/README.md` "Output and the cap"); `Inbox {proposals, notes}`, its entries `spec inbox --json`'s; `Proposal` = the review document (`docs/canon/proposal-queue.md` "Commands"; since `daemon-read`): no `task_id`, so no Task fact and no task filter field.
 - `Decision` (06 §3.4, 07 §2): `{decision: "accept", option, note}` (both nullable), `{decision: "reject", reason}`, `{decision: "needs_clarification", note}`, `{decision: "defer", note}` (nullable). `DecisionResult {proposal, commit: {sha, subject} | null}`; `ApiError {status, message}`, 409 = decided elsewhere.
 - `kind`, `contour`: `string` (ADR-0031). Closed tables (severity `high|normal|low`, proposal states, gap type, `preview`): their literals, any other string kept verbatim.
 - Outcomes (the mock's today): accept → `applied`, `commit {sha, subject: "spec: apply PR-…"}` (05 §7 item 4); reject → `rejected`; both leave the inbox. Needs clarification → `changes_requested`, defer → `deferred`; both stay.

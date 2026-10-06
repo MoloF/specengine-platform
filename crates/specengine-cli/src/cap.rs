@@ -48,6 +48,21 @@ pub const OUTPUT_CAP_CHARS: usize = 40_000;
 /// holders not shown), as its JSON `omitted`; the rest are counted.
 pub const SHOW_TAIL_NAMES: usize = 20;
 
+/// How a `tree`, `show` or `search` answer is bounded (task spec
+/// `daemon-read`, "Data"): the CLI and MCP read [`View::Capped`], the
+/// daemon [`View::Browser`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum View {
+    /// Cut at [`OUTPUT_CAP_CHARS`] as the module documentation says; a
+    /// hit's snippet one text, matches in `**`, cuts `…`.
+    #[default]
+    Capped,
+    /// Never cut (`truncated` false, `omitted` null, the same keys); a
+    /// hit's snippet its structure ([`specengine_store::Snippet`], `null`
+    /// when empty). An uncut answer costs an agent's context: not for MCP.
+    Browser,
+}
+
 /// Where the cap falls.
 #[derive(Debug, Clone, Copy)]
 struct Cut {
@@ -313,7 +328,10 @@ fn list_or_none(items: &[String], more: usize) -> String {
 
 pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
     let nodes = &outcome.nodes;
-    let cut = plan_text(nodes);
+    let cut = match outcome.view {
+        View::Capped => plan_text(nodes),
+        View::Browser => None,
+    };
     let mut out = String::new();
     for (index, node) in nodes.iter().enumerate() {
         let this_cut = cut.filter(|cut| cut.node == index);
@@ -415,7 +433,9 @@ struct OmittedJson {
 fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
     let nodes = &outcome.nodes;
     // With `--links`: the text's cut, so the JSON holds the printed links.
-    let cut = if nodes.iter().any(|node| node.links.is_some()) {
+    let cut = if outcome.view == View::Browser {
+        None
+    } else if nodes.iter().any(|node| node.links.is_some()) {
         plan_text(nodes)
     } else {
         plan_json(nodes)

@@ -1,4 +1,4 @@
-import type { Project, Proposal, SearchHit, TaskListEntry } from "../api/types";
+import type { InboxEntry, Project, SearchHit, TaskListEntry } from "../api/types";
 import { homeHash, navOf, sectionHash } from "../app/routes";
 import { fold } from "../inbox/filter";
 import { queueOrder } from "../inbox/order";
@@ -14,7 +14,7 @@ export const GROUP_LIMIT = 10;
 export type PaletteOption =
   | { type: "section"; key: string; label: string; hash: string }
   | { type: "task"; key: string; entry: TaskListEntry; hash: string }
-  | { type: "proposal"; key: string; proposal: Proposal; hash: string }
+  | { type: "proposal"; key: string; proposal: InboxEntry; hash: string }
   | { type: "project"; key: string; project: Project; hash: string }
   | { type: "search"; key: string; query: string }
   | { type: "ref"; key: string; ref: string; hash: string }
@@ -40,7 +40,7 @@ export interface PaletteInput {
   /** The text as typed. */
   text: string;
   tasks: Held<readonly TaskListEntry[]>;
-  inbox: Held<readonly Proposal[]>;
+  inbox: Held<readonly InboxEntry[]>;
   projects: Held<readonly Project[]>;
   /** The node search activated for this text: its hits, on its way, or not run. */
   search: Held<readonly SearchHit[]> | null;
@@ -89,7 +89,7 @@ function indexedOnce<T>(
 }
 
 const TASKS_IN_ORDER = new WeakMap<readonly TaskListEntry[], readonly Indexed<TaskListEntry>[]>();
-const QUEUE_IN_ORDER = new WeakMap<readonly Proposal[], readonly Indexed<Proposal>[]>();
+const QUEUE_IN_ORDER = new WeakMap<readonly InboxEntry[], readonly Indexed<InboxEntry>[]>();
 
 /** The tasks in the Tasks screen's order (`groupsOf`), matched on ID and title. */
 function tasksInOrder(tasks: readonly TaskListEntry[]): readonly Indexed<TaskListEntry>[] {
@@ -103,7 +103,7 @@ function tasksInOrder(tasks: readonly TaskListEntry[]): readonly Indexed<TaskLis
 }
 
 /** The proposals in the Inbox's order (`queueOrder`), matched on ID and summary. */
-function queueInOrder(proposals: readonly Proposal[]): readonly Indexed<Proposal>[] {
+function queueInOrder(proposals: readonly InboxEntry[]): readonly Indexed<InboxEntry>[] {
   return indexedOnce(QUEUE_IN_ORDER, proposals, queueOrder, (proposal) => [proposal.id, summaryOf(proposal)], (proposal) => proposal.id);
 }
 

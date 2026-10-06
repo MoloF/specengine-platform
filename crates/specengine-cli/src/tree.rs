@@ -26,7 +26,7 @@ use serde::Serialize;
 use specengine_core::check::{NodeAt, Parent, SpecGraph};
 use specengine_core::is_under;
 
-use crate::cap::lines_within;
+use crate::cap::{View, lines_within};
 use crate::corpus::{Admission, LeftOut, depth_of, holders_warning, indexed, locate};
 use crate::project::discover;
 use crate::search::notes;
@@ -114,6 +114,17 @@ impl TreeMark {
 
 /// `spec tree`: updates the index, then walks the containment tree.
 pub fn tree(env: &Env, globals: &Globals, request: &TreeRequest) -> Result<TreeOutcome, CliError> {
+    tree_with_view(env, globals, request, View::Capped)
+}
+
+/// [`tree`], its answer bounded by `view` (the daemon's
+/// [`View::Browser`]: every line shown).
+pub fn tree_with_view(
+    env: &Env,
+    globals: &Globals,
+    request: &TreeRequest,
+    view: View,
+) -> Result<TreeOutcome, CliError> {
     let depth = depth_of(request.depth)?;
     let project = discover(env, globals)?;
     project.slug()?;
@@ -217,7 +228,10 @@ pub fn tree(env: &Env, globals: &Globals, request: &TreeRequest) -> Result<TreeO
         .nodes
         .iter()
         .map(|node| node_line(node).chars().count() + 1);
-    outcome.shown = lines_within(costs, summary, true).0;
+    outcome.shown = match view {
+        View::Capped => lines_within(costs, summary, true).0,
+        View::Browser => outcome.nodes.len(),
+    };
     Ok(outcome)
 }
 

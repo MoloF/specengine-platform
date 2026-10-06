@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { aBundle, aGraphView, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
+import { aBundle, aGraphView, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, DECIDED_ELSEWHERE } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
@@ -25,6 +25,8 @@ describe("query keys", () => {
     expect(queryKeys.bundle("p", { node_ids: ["R"] })).toEqual(["bundle", "p", { node_ids: ["R"], budget: null }]);
     expect(queryKeys.bundle("p", { node_ids: ["R"], budget: 9 })).toEqual(["bundle", "p", { node_ids: ["R"], budget: 9 }]);
     expect(queryKeys.inbox("p")).toEqual(["inbox", "p"]);
+    // `docs/features/daemon-read.md` "Data": one proposal's review document.
+    expect(queryKeys.proposal("p", "PR-0001")).toEqual(["proposal", "p", "PR-0001"]);
     // AC-08 of docs/features/ui-tasks.md.
     expect(queryKeys.tasks("p")).toEqual(["tasks", "p"]);
     expect(queryKeys.task("p", "T-0001")).toEqual(["task", "p", "T-0001"]);
@@ -101,7 +103,10 @@ function Decider({ onReady }: { onReady: (decide: ReturnType<typeof useDecidePro
 
 function seeded(): QueryClient {
   const queryClient = createQueryClient();
-  queryClient.setQueryData(queryKeys.inbox("alpha"), { proposals: [aProposal({ id: "PR-1" })], notes: [] });
+  queryClient.setQueryData(queryKeys.inbox("alpha"), { proposals: [anEntry({ id: "PR-1" })], notes: [] });
+  queryClient.setQueryData(queryKeys.proposal("alpha", "PR-1"), aProposal({ id: "PR-1" }));
+  queryClient.setQueryData(queryKeys.proposal("alpha", "PR-2"), aProposal({ id: "PR-2" }));
+  queryClient.setQueryData(queryKeys.proposal("beta", "PR-2"), aProposal({ id: "PR-2" }));
   queryClient.setQueryData(queryKeys.tree("alpha", { archive: true }), aTreeView([]));
   queryClient.setQueryData(queryKeys.node("alpha", "R-1"), { ref: "R-1", reason: null, notes: [], nodes: [] });
   queryClient.setQueryData(queryKeys.node("alpha", "R-1", { with: ["links"] }), { ref: "R-1", reason: null, notes: [], nodes: [] });
@@ -118,6 +123,8 @@ function seeded(): QueryClient {
 
 const AFTER_DECISION = [
   queryKeys.inbox("alpha"),
+  queryKeys.proposal("alpha", "PR-1"),
+  queryKeys.proposal("alpha", "PR-2"),
   queryKeys.tree("alpha", { archive: true }),
   queryKeys.node("alpha", "R-1"),
   queryKeys.node("alpha", "R-1", { with: ["links"] }),
@@ -156,6 +163,7 @@ describe("after a decision (AC-13)", () => {
       expect(AFTER_DECISION.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toEqual(AFTER_DECISION.map(() => true));
     });
     expect(queryClient.getQueryState(queryKeys.tree("beta"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(queryKeys.proposal("beta", "PR-2"))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(queryKeys.graph("beta", { ref: "R-1" }))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(queryKeys.task("beta", "T-0001"))?.isInvalidated).toBe(false);
   });

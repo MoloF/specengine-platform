@@ -1,0 +1,26 @@
+[package]
+name = "specengine-http"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "The daemon's read surface of SpecEngine: the CLI's documents and the queue's live events over HTTP on 127.0.0.1"
+
+[[bin]]
+name = "specengine-http"
+path = "src/main.rs"
+
+# Every read goes through the `spec` library (`specengine-cli`), never the
+# store or `rusqlite` directly; the reverse edge is forbidden (CLI_FORBIDDEN in
+# crates/specengine-eval/tests/build_graph.rs). `tokio`'s `net` is the listener
+# (`axum`'s `tokio` feature asks for it too); `sync` the per-project turn
+# (`tokio::sync::Mutex`, awaited by the request's own task).
+[dependencies]
+specengine-cli = { path = "../specengine-cli" }
+axum.workspace = true
+tokio = { workspace = true, features = ["net", "sync"] }
+futures-util.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

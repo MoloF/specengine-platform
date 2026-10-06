@@ -9,7 +9,7 @@ import { useOpenShortcuts } from "../app/shortcuts";
 import { useAnnounce } from "../ui/announcer";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
-import { ErrorPanel, Skeleton } from "../ui/states";
+import { ErrorPanel, ReadFailure, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -313,9 +313,9 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
           <Skeleton label={`Drawing the graph of ${nodeRef}`} lines={6} />
         </div>
       ) : (
-        <ErrorPanel
+        <ReadFailure
           title={`The graph of ${nodeRef} could not be read`}
-          message={apiErrorOf(failure).message}
+          failure={failure}
           retrying={graph.isFetching}
           attempt={graph.errorUpdateCount}
           onRetry={() => {

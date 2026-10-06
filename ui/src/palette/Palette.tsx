@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type KeyboardEvent, type Ref } from "react";
-import { apiErrorOf } from "../api/client";
+import { apiErrorOf, isNotServed } from "../api/client";
 import { useCachedInbox, useCachedTasks, useSearchOnActivation } from "../api/queries";
 import type { Project } from "../api/types";
 import { statusLook } from "../inbox/labels";
@@ -38,7 +38,13 @@ function OptionText({ option }: { option: PaletteOption }) {
     case "project":
       return (
         <span className="palette-option-main">
-          <span>{option.project.name}</span> <span className="mono muted">{option.project.slug}</span>
+          {option.project.name === null ? (
+            <span className="mono">{option.project.slug}</span>
+          ) : (
+            <>
+              <span>{option.project.name}</span> <span className="mono muted">{option.project.slug}</span>
+            </>
+          )}
         </span>
       );
     case "search":
@@ -203,18 +209,19 @@ export function Palette({
   }
 
   const typed = needleOf(text) !== "";
-  const failures: [string, string][] = [];
+  // Each failed read: its name, the message verbatim, and whether the daemon does not serve it yet.
+  const failures: [string, string, boolean][] = [];
   if (projects === undefined && projectsFailure !== null) {
-    failures.push(["Projects", projectsFailure]);
+    failures.push(["Projects", projectsFailure, false]);
   }
   if (typed && project !== null && tasks.data === undefined && tasks.error !== null) {
-    failures.push(["Tasks", apiErrorOf(tasks.error).message]);
+    failures.push(["Tasks", apiErrorOf(tasks.error).message, isNotServed(tasks.error)]);
   }
   if (typed && project !== null && inbox.data === undefined && inbox.error !== null) {
-    failures.push(["Inbox", apiErrorOf(inbox.error).message]);
+    failures.push(["Inbox", apiErrorOf(inbox.error).message, isNotServed(inbox.error)]);
   }
   if (search.error !== null) {
-    failures.push(["Search", apiErrorOf(search.error).message]);
+    failures.push(["Search", apiErrorOf(search.error).message, isNotServed(search.error)]);
   }
   const noHits = search.data !== undefined && search.variables === text && search.data.hits.length === 0;
 
@@ -280,14 +287,24 @@ export function Palette({
       </div>
       {project === null && projects !== undefined && <p className="muted">No project yet.</p>}
       {noHits && <p className="muted">The spec search found no node for &apos;{text}&apos;.</p>}
-      {failures.map(([name, message]) => (
-        <p key={name} className="palette-error" role="alert">
-          <Icon name="alert" />
-          <span>
-            {name} could not be read: <span className="verbatim">{message}</span>
-          </span>
-        </p>
-      ))}
+      {failures.map(([name, message, notServed]) =>
+        notServed ? (
+          // Not built yet, not broken: said once, politely.
+          <p key={name} className="palette-error palette-not-served" role="status">
+            <Icon name="info" />
+            <span>
+              {name}: <span className="verbatim">{message}</span>
+            </span>
+          </p>
+        ) : (
+          <p key={name} className="palette-error" role="alert">
+            <Icon name="alert" />
+            <span>
+              {name} could not be read: <span className="verbatim">{message}</span>
+            </span>
+          </p>
+        ),
+      )}
       <div className="palette-foot">
         <p className="palette-hint muted">
           <kbd>Up</kbd> and <kbd>Down</kbd> move, <kbd>Enter</kbd> opens, <kbd>Esc</kbd> closes.

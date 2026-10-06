@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { Proposal } from "../api/types";
+import type { InboxEntry } from "../api/types";
 import { MockClient } from "./MockClient";
 import { scenarioFromSearch, SLOW_MS } from "./scenario";
 
@@ -22,7 +22,7 @@ async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   throw new Error("the call resolved");
 }
 
-function ids(proposals: Proposal[]): string[] {
+function ids(proposals: InboxEntry[]): string[] {
   return proposals.map((proposal) => proposal.id);
 }
 
@@ -50,13 +50,15 @@ describe("the normal scenario", () => {
     const client = new MockClient("normal", { now: clock });
     expect(client.dataSource).toBe("mock");
     expect(await client.getProjects()).toEqual([
-      { slug: "harbor-sim", name: "Harbor Sim" },
-      { slug: "ledger-api", name: "Ledger API" },
+      { slug: "harbor-sim", name: "Harbor Sim", root: "/work/harbor-sim", branch: "main" },
+      { slug: "ledger-api", name: "Ledger API", root: "/work/ledger-api", branch: "main" },
     ]);
   });
 
   it("holds every case the slice names in harbor-sim's queue", async () => {
-    const { proposals } = await new MockClient("normal", { now: clock }).getInbox("harbor-sim");
+    const client = new MockClient("normal", { now: clock });
+    const { proposals } = await client.getInbox("harbor-sim");
+    const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
     const severities = new Set(proposals.map((proposal) => proposal.severity));
     for (const severity of ["high", "normal", "low", "urgent", null]) {
       expect(severities.has(severity)).toBe(true);
@@ -65,17 +67,46 @@ describe("the normal scenario", () => {
     expect(proposals.some((proposal) => !known.includes(proposal.kind))).toBe(true);
     const statuses = ["open", "changes_requested", "approved", "applied", "rejected", "deferred", "superseded"];
     expect(proposals.some((proposal) => !statuses.includes(proposal.status))).toBe(true);
-    expect(proposals.some((proposal) => proposal.options.length > 0 && proposal.recommendation !== null)).toBe(true);
-    expect(proposals.some((proposal) => proposal.options.length === 0)).toBe(true);
+    expect(reviews.some((proposal) => proposal.options.length > 0 && proposal.recommendation !== null)).toBe(true);
+    expect(reviews.some((proposal) => proposal.options.length === 0)).toBe(true);
     const targets = proposals.flatMap((proposal) => proposal.target_ids);
     expect(targets.some((target, index) => targets.indexOf(target) !== index)).toBe(true);
-    expect(proposals.some((proposal) => proposal.diff !== null)).toBe(true);
-    const texts = proposals.flatMap((proposal) => [
+    expect(reviews.some((proposal) => proposal.diff !== null)).toBe(true);
+    const texts = reviews.flatMap((proposal) => [
       proposal.summary ?? "",
       ...proposal.evidence.flatMap((item) => [item.observed, item.documented]),
     ]);
     expect(texts.some((text) => text.split(/\s+/).some((token) => token.length >= 300))).toBe(true);
     expect(texts.some((text) => text !== text.normalize("NFC") && /[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(text))).toBe(true);
+  });
+
+  it("lists each proposal as spec inbox does and reads its review document by ID (daemon-read)", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const { proposals } = await client.getInbox("harbor-sim");
+    for (const entry of proposals) {
+      expect(Object.keys(entry)).toEqual([
+        "id",
+        "kind",
+        "status",
+        "target_id",
+        "target_ids",
+        "branch",
+        "created_at",
+        "rationale",
+        "severity",
+        "summary",
+        "record_id",
+      ]);
+      const review = await client.getProposal("harbor-sim", entry.id);
+      expect([review.id, review.kind, review.status, review.created_at]).toEqual([entry.id, entry.kind, entry.status, entry.created_at]);
+      expect(review.target_ids).toEqual(entry.target_ids);
+      for (const line of [entry.summary, entry.rationale]) {
+        expect(line === null || (!line.includes("\n") && Array.from(line).length <= 80)).toBe(true);
+      }
+    }
+    const missing = await client.getProposal("harbor-sim", "PR-9999");
+    expect([missing.id, missing.kind, missing.status]).toEqual([null, null, null]);
+    expect(missing.notes.at(-1)).toBe("no proposal `PR-9999` in this project's queue");
   });
 
   it("returns copies the caller cannot change", async () => {

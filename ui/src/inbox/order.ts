@@ -1,4 +1,4 @@
-import type { Proposal } from "../api/types";
+import type { InboxEntry } from "../api/types";
 import { severityRank } from "./labels";
 
 const byId = new Intl.Collator("en", { numeric: true });
@@ -9,7 +9,7 @@ function time(stored: string): number {
 }
 
 /** Queue order: severity high, normal, low, then none or unknown; oldest first; then ID. */
-export function queueOrder(proposals: readonly Proposal[]): Proposal[] {
+export function queueOrder(proposals: readonly InboxEntry[]): InboxEntry[] {
   return [...proposals].sort(
     (a, b) =>
       severityRank(a.severity) - severityRank(b.severity) ||

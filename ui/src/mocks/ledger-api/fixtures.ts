@@ -160,7 +160,7 @@ export function ledgerApi(now: number): MockProject {
   const at = (minutesAgo: number) => stamp(now, minutesAgo);
   const agent = (role: string, run: string) => ({ type: "agent", role, model: "claude-opus-5-5", run });
   return {
-    project: { slug: SLUG, name: "Ledger API" },
+    project: { slug: SLUG, name: "Ledger API", root: "/work/ledger-api", branch: "main" },
     nodeKinds,
     specStatuses,
     notes: ["2 proposals of an archived task are left out (spec inbox --all lists them)"],

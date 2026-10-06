@@ -36,7 +36,7 @@ Route `#/<p>/health`: one `h1` "Health", four regions (`h2`), each with its own 
 getCheck(project: string): Promise<CheckReport>;
 ```
 
-`HttpClient.getCheck`: `notServed`, status 0, no `fetch`. Key `["check", p]`: read on entering Health, never on window focus or an interval, not in `READS_AFTER_DECISION`.
+`HttpClient.getCheck`: the not-served marker (`ClientError {status: 501, notServed: true}`; status 0 is no response), no `fetch`. Key `["check", p]`: read on entering Health, never on window focus or an interval, not in `READS_AFTER_DECISION`.
 
 **Provisional types** (`ui/src/api/provisional.ts`), citing `docs/canon/spec-check.md` "Findings, debt, verdict" (its JSON; core `check/report.rs` `Report`):
 
@@ -78,7 +78,7 @@ CheckVerdict = KnownCheckVerdict | Unlisted  // clean | observed | blocked | can
 
 Vitest (`ui-developer`), `ui_policy.rs` (`test-engineer`), the gates. Counting stub: calls per member; builder: a test-built answer; M: the mutation turning it red.
 
-- [ ] AC-01 - `client.ts?raw` holds the `/check` `MISSING ENDPOINT` comment; `HttpClient.getCheck` rejects with status 0, no `fetch`; counting stub: `#/harbor-sim/health` one `getCheck`, one `getInbox`, no other call; `#/harbor-sim` no `getCheck` (M: the home calls it; `getCheck` fetching).
+- [ ] AC-01 - `client.ts?raw` holds the `/check` `MISSING ENDPOINT` comment; `HttpClient.getCheck` rejects with the not-served marker (501, `notServed`), no `fetch`; counting stub: `#/harbor-sim/health` one `getCheck`, one `getInbox`, no other call; `#/harbor-sim` no `getCheck` (M: the home calls it; `getCheck` fetching).
 - [ ] AC-02 - the check types cite an existing heading (`doc_pointers`); key records equal the cited lists: `CheckReport` 7, `CheckCounts` 9, `CheckFinding` 9, `DebtEntry` 6, `CheckCause` 2; a builder finding without `debt`, `fix` shows neither (M: `debt !== null` as the test; a key dropped).
 - [ ] AC-03 - the four verdicts: distinct labels, an icon each; `cannot-check` in the `cannot-verify` token; builder verdict `triage`: neutral, raw, last; the view's text never matches `/block/i` (M: the raw verdict shown; `cannot-check` styled as clean).
 - [ ] AC-04 - `cannot-check`: no "0 B", the causes verbatim; no `counts.introduced`: no introduced count; the value cells of rows 3-6 and task W hold no digit (M: `?? 0`).

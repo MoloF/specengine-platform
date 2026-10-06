@@ -14,7 +14,7 @@ use crate::rows::{from_json, rebuild_parsed};
 use crate::search::fts_query;
 use crate::{
     IdHit, IndexedFile, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SearchHit, SearchQuery, SearchResults,
-    schema,
+    Snippet, schema,
 };
 
 /// Runs `read` over the handle's worktree in one read transaction;
@@ -197,7 +197,7 @@ pub(crate) fn search(
         values.push(Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
         let sql = format!(
             "SELECT f.path, n.ord, n.line, f.tier3, n.id, n.kind, n.title,
-                    snippet(nodes_fts, -1, '**', '**', '…', 64)
+                    snippet(nodes_fts, -1, char(2), char(3), char(4), 64)
              {MATCHES}{filter}{archive}
              ORDER BY bm25(nodes_fts, 10.0, 5.0, 1.0), f.path, n.ord
              LIMIT ?{limit_param}"
@@ -205,6 +205,8 @@ pub(crate) fn search(
         let mut statement = tx.prepare(&sql).db()?;
         let hits = statement
             .query_map(params_from_iter(values), |row| {
+                let snippet_parts =
+                    Snippet::from_marks(&row.get::<_, Option<String>>(7)?.unwrap_or_default());
                 Ok(SearchHit {
                     path: row.get(0)?,
                     ord: ord_of(row.get(1)?),
@@ -213,7 +215,8 @@ pub(crate) fn search(
                     id: row.get(4)?,
                     kind: row.get(5)?,
                     title: row.get(6)?,
-                    snippet: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+                    snippet: snippet_parts.marked(),
+                    snippet_parts,
                 })
             })
             .db()?

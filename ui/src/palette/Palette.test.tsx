@@ -609,6 +609,24 @@ describe("failures in their group (AC-14)", () => {
     expect(combobox().value).toBe("in");
   });
 
+  it("says tasks the daemon does not serve yet as not built: a status, no alert role, R-n7", async () => {
+    const stub = client();
+    const message = "Not served by the daemon yet: GET /api/projects/alpha/tasks is a missing endpoint";
+    stub.getTasks.mockRejectedValue(new ClientError({ status: 501, message }, { notServed: true }));
+    renderApp(stub, "#/alpha");
+    await within(await screen.findByRole("region", { name: "Tasks" })).findByText(message);
+    await within(screen.getByRole("region", { name: "Inbox" })).findByRole("link", { name: /^PR-0041/ });
+    await openPalette();
+    type("in");
+    const dialog = palette() ?? document.body;
+    await waitFor(() => {
+      expect(within(dialog).getByText(message).closest("p")?.textContent).toBe(`Tasks: ${message}`);
+    });
+    expect(within(dialog).getByText(message).closest("p")?.getAttribute("role")).toBe("status");
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(groups().map(([label]) => label)).toEqual(["Sections", "Inbox", "Spec tree"]);
+  });
+
   it("says the search could not be read, stays open and keeps the text", async () => {
     const stub = await home();
     stub.search.mockRejectedValue(new ClientError({ status: 503, message: "s" }));

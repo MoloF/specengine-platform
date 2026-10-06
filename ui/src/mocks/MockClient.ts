@@ -23,7 +23,7 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { fakeHex, stamp, type MockProject } from "./build";
+import { fakeHex, inboxEntryOf, noReview, stamp, type MockProject, type StoredReview } from "./build";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
@@ -104,7 +104,14 @@ export class MockClient implements SpecEngineClient {
   async getInbox(project: string): Promise<Inbox> {
     await this.read();
     const entry = this.project(project);
-    return structuredClone({ proposals: entry.proposals, notes: entry.notes });
+    return structuredClone({ proposals: entry.proposals.map(({ review }) => inboxEntryOf(review)), notes: entry.notes });
+  }
+
+  /** The review document; an unknown ID answers the exit-1 document, as data. */
+  async getProposal(project: string, id: string): Promise<Proposal> {
+    await this.read();
+    const stored = this.project(project).proposals.find(({ review }) => review.id === id);
+    return structuredClone(stored === undefined ? noReview(id) : stored.review);
   }
 
   async getTree(project: string, options: TreeOptions = {}): Promise<TreeView> {
@@ -156,9 +163,9 @@ export class MockClient implements SpecEngineClient {
   async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {
     await this.wait();
     const entry = this.project(project);
-    const index = entry.proposals.findIndex((proposal) => proposal.id === id);
-    const current = entry.proposals[index];
-    if (current === undefined) {
+    const index = entry.proposals.findIndex(({ review }) => review.id === id);
+    const stored = entry.proposals[index];
+    if (stored === undefined) {
       throw new ClientError({ status: 404, message: `no open proposal ${id} in ${project}` });
     }
     if (this.scenario === "conflict") {
@@ -168,7 +175,8 @@ export class MockClient implements SpecEngineClient {
         message: `${id} is no longer open: another session applied it as ${fakeSha(`${id}:elsewhere`).slice(0, 7)}`,
       });
     }
-    const decided: Proposal = {
+    const current = stored.review;
+    const decided: StoredReview = {
       ...current,
       decided_by: DECIDED_BY,
       decided_at: stamp(this.now(), 0),
@@ -186,7 +194,7 @@ export class MockClient implements SpecEngineClient {
           throw new ClientError({ status: 422, message: `${id} has no option ${String(decision.option)}` });
         }
         const sha = fakeSha(id);
-        const applied: Proposal = { ...decided, status: "applied", applied_commit: sha, decision_note: decision.note };
+        const applied: StoredReview = { ...decided, status: "applied", applied_commit: sha, decision_note: decision.note };
         entry.proposals.splice(index, 1);
         return structuredClone({ proposal: applied, commit: { sha, subject: `spec: apply ${id}` } });
       }
@@ -194,7 +202,7 @@ export class MockClient implements SpecEngineClient {
         if (decision.reason.trim() === "") {
           throw new ClientError({ status: 422, message: "reject needs a non-empty reason" });
         }
-        const rejected: Proposal = { ...decided, status: "rejected", decision_note: decision.reason };
+        const rejected: StoredReview = { ...decided, status: "rejected", decision_note: decision.reason };
         entry.proposals.splice(index, 1);
         return structuredClone({ proposal: rejected, commit: null });
       }
@@ -202,16 +210,21 @@ export class MockClient implements SpecEngineClient {
         if (decision.note.trim() === "") {
           throw new ClientError({ status: 422, message: "needs_clarification needs a non-empty note" });
         }
-        const sentBack: Proposal = { ...decided, status: "changes_requested", decision_note: decision.note };
-        entry.proposals[index] = sentBack;
+        const sentBack: StoredReview = { ...decided, status: "changes_requested", decision_note: decision.note };
+        entry.proposals[index] = { ...stored, review: sentBack };
         return structuredClone({ proposal: sentBack, commit: null });
       }
       case "defer": {
-        const deferred: Proposal = { ...decided, status: "deferred", decision_note: decision.note };
-        entry.proposals[index] = deferred;
+        const deferred: StoredReview = { ...decided, status: "deferred", decision_note: decision.note };
+        entry.proposals[index] = { ...stored, review: deferred };
         return structuredClone({ proposal: deferred, commit: null });
       }
     }
+  }
+
+  /** No live tail: the mock's queue changes only by this page's decisions, which read again themselves. */
+  subscribe(): () => void {
+    return () => undefined;
   }
 
   /** A read: waits, then fails in the `error` scenario. */

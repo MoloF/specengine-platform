@@ -61,7 +61,7 @@ describe("node kinds and spec statuses", () => {
   it("name every target of the queues: an ID, else an ID-less document's path", () => {
     for (const project of [harborSim(0), ledgerApi(0)]) {
       const names = new Set(nodesOf(project).map((node) => node.id ?? node.path));
-      for (const target of project.proposals.flatMap((proposal) => proposal.target_ids)) {
+      for (const target of project.proposals.flatMap(({ review }) => review.target_ids)) {
         expect([project.project.slug, target, names.has(target)]).toEqual([project.project.slug, target, true]);
       }
     }

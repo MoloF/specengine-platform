@@ -5,6 +5,7 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  InboxEntry,
   Proposal,
   SearchHit,
   SearchResults,
@@ -18,8 +19,8 @@ import type {
   TreeView,
 } from "../api/types";
 
-/** A whole proposal for tests; omitted keys null or empty as the review JSON gives them. */
-export function aProposal(fields: Partial<Proposal> & Pick<Proposal, "id">): Proposal {
+/** A whole review document for tests; omitted keys null or empty as the review JSON gives them. */
+export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal {
   return {
     project: "alpha",
     kind: "update",
@@ -27,7 +28,7 @@ export function aProposal(fields: Partial<Proposal> & Pick<Proposal, "id">): Pro
     target_id: null,
     target_path: null,
     worktree: null,
-    branch: null,
+    branch: "main",
     base_commit: null,
     base_hash: null,
     base_text: null,
@@ -45,18 +46,96 @@ export function aProposal(fields: Partial<Proposal> & Pick<Proposal, "id">): Pro
     applied_commit: null,
     created_at: "2026-10-01T10:00:00Z",
     updated_at: "2026-10-01T10:00:00Z",
-    notes: [],
+    target_ids: [],
     severity: "normal",
     gap_type: null,
-    task_id: null,
-    target_ids: [],
+    summary: `Summary of ${fields.id}`,
+    working_answer: null,
+    price_of_other: null,
     evidence: [],
     options: [],
     recommendation: null,
-    working_answer: null,
-    summary: `Summary of ${fields.id}`,
+    distinct_from: [],
+    linked: null,
+    record_id: null,
+    record_path: null,
+    record_title: null,
+    record_text: null,
+    choice: null,
+    notes: [],
     ...fields,
   };
+}
+
+/** A review document's line in the inbox, its fields passed through (the stub cuts nothing). */
+export function entryOf(proposal: Proposal): InboxEntry {
+  const target = proposal.target_id ?? proposal.target_ids[0] ?? "";
+  return {
+    id: proposal.id ?? "",
+    kind: proposal.kind ?? "",
+    status: proposal.status ?? "",
+    target_id: target,
+    target_ids: proposal.target_ids.length > 0 ? [...proposal.target_ids] : target === "" ? [] : [target],
+    branch: proposal.branch ?? "",
+    created_at: proposal.created_at ?? "",
+    rationale: proposal.rationale,
+    severity: proposal.severity,
+    summary: proposal.summary,
+    record_id: proposal.record_id,
+  };
+}
+
+/** `spec review PR --json` for a PR the queue lacks (exit 1, the daemon's 404 as data). */
+export function noReview(id: string): Proposal {
+  return {
+    id: null,
+    project: null,
+    kind: null,
+    status: null,
+    target_id: null,
+    target_path: null,
+    worktree: null,
+    branch: null,
+    base_commit: null,
+    base_hash: null,
+    base_text: null,
+    new_text: null,
+    patch_hash: null,
+    rationale: null,
+    author: null,
+    diagnostics: null,
+    diff: null,
+    preview: null,
+    conflict: null,
+    decided_by: null,
+    decided_at: null,
+    decision_note: null,
+    applied_commit: null,
+    created_at: null,
+    updated_at: null,
+    target_ids: [],
+    severity: null,
+    gap_type: null,
+    summary: null,
+    working_answer: null,
+    price_of_other: null,
+    evidence: [],
+    options: [],
+    recommendation: null,
+    distinct_from: [],
+    linked: null,
+    record_id: null,
+    record_path: null,
+    record_title: null,
+    record_text: null,
+    choice: null,
+    notes: [`no proposal \`${id}\` in this project's queue`],
+  };
+}
+
+/** A whole inbox entry for tests. */
+export function anEntry(fields: Partial<Proposal> & { id: string }): InboxEntry {
+  return entryOf(aProposal(fields));
 }
 
 /** A whole shown node for tests. */

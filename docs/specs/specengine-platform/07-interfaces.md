@@ -69,6 +69,7 @@ Plugin skills carry them (`plugin-skills`: `read-spec`, `ask-owner`, `propose-sp
 spec init [--import IMPORTER]            # specengine.toml, layout, migration (08 §4)
 spec index [--full]                      # rebuild the index (incremental by BLAKE3)
 spec serve [--port 7777]                 # daemon: HTTP + SSE + MCP(HTTP) + UI + watcher
+specengine-http --root DIR... [--port N]  # built: its read surface, crates/specengine-http/README.md
 spec mcp                                 # MCP over stdio (for .mcp.json)
 
 # tree and nodes
@@ -117,16 +118,16 @@ spec export index [--stdout]                         # [paths] index by its regi
 
 ## 3. HTTP (daemon)
 
-- `127.0.0.1:7777`, local token (`~/.config/specengine/token`), `Origin` check.
-- `GET /api/projects/:p/tree|nodes/:id|search|graph|inbox|tasks|symbols|health`
-- `POST /api/projects/:p/proposals/:id/decision`, `/tasks/:id/transition`, `/nodes/:id` (owner edit)
-- `GET /api/events` — **SSE** stream of events from the `events` table (the UI updates live)
+- `127.0.0.1:7777`, `Origin` check; a local token (`~/.config/specengine/token`) with the first write endpoint. Built, reads only: `specengine-http` (`crates/specengine-http/README.md`), a Host, Origin and Sec-Fetch-Site fence.
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|inbox|proposals/:id` (built); `graph|tasks|symbols|health` to come
+- `POST /api/projects/:p/proposals/:id/decision` (today always 403: decided on a terminal), `/tasks/:id/transition`, `/nodes/:id` (owner edit)
+- `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)
 - `/` — Web UI (embedded via `rust-embed`)
 
 ### Web UI — screens
 
-UI in **English** (ADR-0014); spec content is shown as is (the project's language), fonts and search handle non-Latin scripts.
+UI in **English** (ADR-0014); spec content is shown as is (the project's language), fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam").
 
 | Screen | Content |
 |---|---|

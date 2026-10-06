@@ -707,10 +707,25 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
                 "severity",
                 "status",
                 "summary",
-                "target_id"
+                "target_id",
+                "target_ids"
             ]
         );
+        // D1 of docs/features/daemon-read.md: an update's `target_ids` is
+        // `[target_id]`, right after it.
+        assert_eq!(
+            entry["target_ids"],
+            serde_json::json!([entry["target_id"]]),
+            "{entry}"
+        );
     }
+    let raw_inbox = printed_inbox(&inbox).1;
+    assert!(
+        raw_inbox.contains(
+            "\"target_id\":\"EDGE-SPRINT-EMPTY\",\"target_ids\":[\"EDGE-SPRINT-EMPTY\"],"
+        ),
+        "target_ids follows target_id: {raw_inbox}"
+    );
 
     let review = pair.review_ok(&pair.main, "PR-0001");
     let (text, json) = printed(&review);

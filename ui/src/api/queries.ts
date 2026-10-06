@@ -1,7 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { apiErrorOf, DECIDED_ELSEWHERE, type BundleOptions, type GraphOptions, type NodeOptions, type SearchOptions, type TreeOptions } from "./client";
 import { useClient } from "./provider";
-import type { Decision, Inbox } from "./types";
+import type { Decision, Inbox, Proposal } from "./types";
 
 /**
  * Query keys: every argument present, an absent one as `null`, `[]` or `false`, so two reads that
@@ -10,6 +11,7 @@ import type { Decision, Inbox } from "./types";
 export const queryKeys = {
   projects: ["projects"] as const,
   inbox: (project: string) => ["inbox", project] as const,
+  proposal: (project: string, id: string) => ["proposal", project, id] as const,
   tree: (project: string, options: TreeOptions = {}) =>
     [
       "tree",
@@ -56,7 +58,7 @@ export const queryKeys = {
  * The reads a decision can change, by their first key part: each is read again after one. A task's
  * open proposals and assumptions are the queue's (docs/features/ui-tasks.md "Data").
  */
-const READS_AFTER_DECISION = ["inbox", "tree", "node", "search", "bundle", "graph", "tasks", "task"] as const;
+const READS_AFTER_DECISION = ["inbox", "proposal", "tree", "node", "search", "bundle", "graph", "tasks", "task"] as const;
 
 // What a request carries: absent options omitted, an empty array or a false `archive` too.
 
@@ -135,6 +137,81 @@ export function useInbox(project: string) {
 
 /** The Inbox's read as a view shares it (the tree's counts, a node's Proposals tab). */
 export type InboxQuery = ReturnType<typeof useInbox>;
+
+/** One proposal's review document (`id` null: nothing read); the Inbox's card and its decision read it. */
+export function useProposal(project: string, id: string | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.proposal(project, id ?? ""),
+    queryFn: () => client.getProposal(project, id ?? ""),
+    enabled: id !== null,
+  });
+}
+
+/** The review document's read as the Inbox shares it with its card. */
+export type ProposalQuery = ReturnType<typeof useProposal>;
+
+/** The proposal ID a queue event names: its payload's `id` (`docs/canon/proposal-queue.md` "States and events"). */
+function eventProposalId(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null || !("id" in payload)) {
+    return null;
+  }
+  return typeof payload.id === "string" ? payload.id : null;
+}
+
+/**
+ * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
+ * spec (every tree, node, search and bundle of it, each `[read, project, …]`).
+ */
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle"] as const;
+
+/** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
+const APPLIED = "proposal.applied";
+
+/**
+ * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
+ * `proposal.*` event reads that project's inbox and that proposal again; `proposal.applied` also
+ * that project's trees, nodes, searches and bundles (a spec file changed), no other project's and
+ * no other read. A stream this client opened again after the browser gave up on it (events may be
+ * missed, an apply among them) reads the inbox, every cached proposal and those spec reads of the
+ * project again. Only the reads on screen are fetched; the rest are marked stale.
+ */
+export function useLiveQueue(project: string | null) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (project === null) {
+      return undefined;
+    }
+    const readSpecAgain = () => {
+      // `[read, project]` matches that project's entries of the read whatever their options.
+      for (const read of READS_OF_THE_SPEC) {
+        void queryClient.invalidateQueries({ queryKey: [read, project] });
+      }
+    };
+    return client.subscribe(
+      project,
+      (event) => {
+        if (!event.type.startsWith("proposal.")) {
+          return;
+        }
+        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
+        const id = eventProposalId(event.payload);
+        if (id !== null) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
+        }
+        if (event.type === APPLIED) {
+          readSpecAgain();
+        }
+      },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
+        void queryClient.invalidateQueries({ queryKey: ["proposal", project] });
+        readSpecAgain();
+      },
+    );
+  }, [client, queryClient, project]);
+}
 
 /** The containment tree; while new options are read, the last tree stays up (no layout jump). */
 export function useTree(project: string, options: TreeOptions) {
@@ -265,9 +342,9 @@ function closes(decision: Decision): boolean {
 /**
  * One decideProposal call per submit. On success a closed proposal (accepted, rejected) leaves the
  * cached inbox at once, never written back as applied or rejected; a kept one (needs clarification,
- * deferred) takes the daemon's returned state. After a success or a 409 (decided elsewhere) the
- * project's inbox, tree, nodes, searches, bundles, graphs and tasks are read again: an apply may
- * change any.
+ * deferred) takes the daemon's returned state, and its review document is the returned one. After a
+ * success or a 409 (decided elsewhere) the project's inbox, proposals, tree, nodes, searches,
+ * bundles, graphs and tasks are read again: an apply may change any.
  */
 export function useDecideProposal(project: string) {
   const client = useClient();
@@ -282,13 +359,15 @@ export function useDecideProposal(project: string) {
     mutationFn: ({ id, decision }: { id: string; decision: Decision }) =>
       client.decideProposal(project, id, decision),
     onSuccess: (result, { id, decision }) => {
+      queryClient.setQueryData<Proposal>(queryKeys.proposal(project, id), result.proposal);
       queryClient.setQueryData<Inbox>(inboxKey, (inbox) => {
         if (inbox === undefined) {
           return inbox;
         }
+        const status = result.proposal.status;
         const proposals = closes(decision)
-          ? inbox.proposals.filter((proposal) => proposal.id !== id)
-          : inbox.proposals.map((proposal) => (proposal.id === id ? result.proposal : proposal));
+          ? inbox.proposals.filter((entry) => entry.id !== id)
+          : inbox.proposals.map((entry) => (entry.id === id && status !== null ? { ...entry, status } : entry));
         return { ...inbox, proposals };
       });
       readAgain();

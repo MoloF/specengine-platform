@@ -25,7 +25,7 @@ getTree(project: string, options?: { root?: string; depth?: number; kinds?: stri
 getNode(project: string, ref: string, options?: { with?: "links"[]; archive?: boolean }): Promise<NodeView>;
 /** GET /api/projects/:p/search */
 search(project: string, options: { query: string; kinds?: string[]; limit?: number; archive?: boolean }): Promise<SearchResults>;
-/** MISSING ENDPOINT GET /api/projects/:p/bundle (07 §3 lacks it; rust-developer, daemon-read) */
+/** GET /api/projects/:p/bundle */
 getBundle(project: string, options: { node_ids: string[]; budget?: number }): Promise<BundleView>;
 ```
 
@@ -69,7 +69,7 @@ Verifiers: Vitest, `ui_policy.rs` (`test-engineer`), the gates. M: the mutation 
 
 ## Open
 
-- **Endpoints** (`rust-developer`): `bundle`, the uncut browser view of `tree`, `nodes/{*ref}`, `search`, structured snippets (D2), 404 with the exit-1 document, inbox `target_ids` (D1): specified by `docs/features/daemon-read.md`, closed when it ships. Until D1, a second target matches nothing against the daemon.
+- **Endpoints**: closed by `daemon-read`: `bundle`, the uncut browser view, structured snippets (D2), the exit-1 404, inbox `target_ids` (D1): a second target matches its node against the daemon too.
 - **Non-Latin search**: the trigram does not normalise; a composed query misses decomposed text (`rust-developer`).
 - **Latency**: `get_tree` 593 ms on 3 000 nodes, a bundle about 2 s: search on submit, bundle on demand; virtualization if `large` lags at the owner's check.
 

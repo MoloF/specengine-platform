@@ -1,4 +1,4 @@
-import type { LinkOrigin, LinkState, Project, Proposal, TreeMark } from "../api/types";
+import type { Finding, InboxEntry, LinkOrigin, LinkState, Project, Proposal, ProposalStatus, TreeMark } from "../api/types";
 
 /**
  * One node of a mock corpus: a document or a nested ID section of one, with its span in the
@@ -68,8 +68,29 @@ export interface MockProject {
   /** The project's spec statuses (`src/mocks/<slug>/kinds.ts`). */
   specStatuses: readonly string[];
   corpus: MockCorpus;
-  proposals: Proposal[];
+  proposals: MockProposal[];
   notes: string[];
+}
+
+/** A review document as the mock stores one: never the exit-1 document, so these keys are set. */
+export type StoredReview = Proposal & {
+  id: string;
+  project: string;
+  kind: string;
+  status: ProposalStatus;
+  branch: string;
+  created_at: string;
+  updated_at: string;
+  diagnostics: Finding[];
+};
+
+/**
+ * A queued proposal as the mock holds it: its review document (`getProposal`) and the task it was
+ * raised for, which only the task package reads (`docs/features/task-package.md` "Data").
+ */
+export interface MockProposal {
+  review: StoredReview;
+  task_id: string | null;
 }
 
 const MINUTE = 60_000;
@@ -220,12 +241,96 @@ export function link(fields: Omit<MockLink, "reason" | "to" | "state"> & Partial
   };
 }
 
-/** A whole queue card; omitted keys are null or empty, as the review JSON gives them. */
+/**
+ * A queued proposal: its whole review document, omitted keys null or empty as the review JSON
+ * gives them (an update's `target_ids` its `[target_id]`), and the task it was raised for.
+ */
 export function proposal(
-  fields: Pick<Proposal, "id" | "project" | "kind" | "created_at"> & Partial<Proposal>,
-): Proposal {
+  fields: Pick<StoredReview, "id" | "project" | "kind" | "created_at"> & Partial<StoredReview> & { task_id?: string | null },
+): MockProposal {
+  const { task_id = null, ...given } = fields;
   return {
-    status: "open",
+    task_id,
+    review: {
+      status: "open",
+      target_id: null,
+      target_path: null,
+      worktree: null,
+      branch: "main",
+      base_commit: null,
+      base_hash: null,
+      base_text: null,
+      new_text: null,
+      patch_hash: null,
+      rationale: null,
+      author: null,
+      diagnostics: [],
+      diff: null,
+      preview: null,
+      conflict: null,
+      decided_by: null,
+      decided_at: null,
+      decision_note: null,
+      applied_commit: null,
+      updated_at: fields.created_at,
+      target_ids: fields.target_id === undefined || fields.target_id === null ? [] : [fields.target_id],
+      severity: null,
+      gap_type: null,
+      summary: null,
+      working_answer: null,
+      price_of_other: null,
+      evidence: [],
+      options: [],
+      recommendation: null,
+      distinct_from: [],
+      linked: null,
+      record_id: null,
+      record_path: null,
+      record_title: null,
+      record_text: null,
+      choice: null,
+      notes: [],
+      ...given,
+    },
+  };
+}
+
+/** The most characters an inbox line keeps of a rationale or summary (the CLI's `INBOX_RATIONALE_CHARS`). */
+const INBOX_LINE_CHARS = 80;
+
+/** A text's first line as `spec inbox` prints it: a final CR dropped, over 80 characters 79 and an ellipsis (U+2026). */
+function inboxLine(text: string): string {
+  const first = text.split("\n")[0] ?? "";
+  const line = first.endsWith("\r") ? first.slice(0, -1) : first;
+  const chars = Array.from(line);
+  return chars.length <= INBOX_LINE_CHARS ? line : `${chars.slice(0, INBOX_LINE_CHARS - 1).join("")}\u2026`;
+}
+
+/** A stored proposal's line of `spec inbox --json` (`docs/features/daemon-read.md` "Data"). */
+export function inboxEntryOf(review: StoredReview): InboxEntry {
+  const target = review.target_id ?? review.target_ids[0] ?? "";
+  return {
+    id: review.id,
+    kind: review.kind,
+    status: review.status,
+    target_id: target,
+    target_ids: review.target_ids.length > 0 ? [...review.target_ids] : [target],
+    branch: review.branch,
+    created_at: review.created_at,
+    rationale: review.rationale === null ? null : inboxLine(review.rationale),
+    severity: review.severity,
+    summary: review.summary === null ? null : inboxLine(review.summary),
+    record_id: review.record_id,
+  };
+}
+
+/** `spec review PR --json` for a PR the queue does not hold (exit 1): every scalar null, the reason the last note. */
+export function noReview(id: string): Proposal {
+  return {
+    id: null,
+    project: null,
+    kind: null,
+    status: null,
     target_id: null,
     target_path: null,
     worktree: null,
@@ -237,7 +342,7 @@ export function proposal(
     patch_hash: null,
     rationale: null,
     author: null,
-    diagnostics: [],
+    diagnostics: null,
     diff: null,
     preview: null,
     conflict: null,
@@ -245,17 +350,24 @@ export function proposal(
     decided_at: null,
     decision_note: null,
     applied_commit: null,
-    updated_at: fields.created_at,
-    notes: [],
+    created_at: null,
+    updated_at: null,
+    target_ids: [],
     severity: null,
     gap_type: null,
-    task_id: null,
-    target_ids: [],
+    summary: null,
+    working_answer: null,
+    price_of_other: null,
     evidence: [],
     options: [],
     recommendation: null,
-    working_answer: null,
-    summary: null,
-    ...fields,
+    distinct_from: [],
+    linked: null,
+    record_id: null,
+    record_path: null,
+    record_title: null,
+    record_text: null,
+    choice: null,
+    notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

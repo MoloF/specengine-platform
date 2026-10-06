@@ -7,7 +7,7 @@ import { groupsOf } from "../tasks/groups";
 import { SPEC_CHANGED, taskStatusLook } from "../tasks/labels";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { ErrorPanel, Skeleton } from "../ui/states";
+import { ReadFailure, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { Count, Notes, Region, Stored } from "./parts";
@@ -102,9 +102,9 @@ export function TasksRegion({ project }: { project: string }) {
       failure === null ? (
         <Skeleton label={`Loading the tasks of ${project}`} lines={4} />
       ) : (
-        <ErrorPanel
+        <ReadFailure
           title="The tasks could not be loaded"
-          message={apiErrorOf(failure).message}
+          failure={failure}
           retrying={tasks.isFetching}
           attempt={tasks.errorUpdateCount}
           onRetry={() => {

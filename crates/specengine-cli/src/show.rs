@@ -33,6 +33,7 @@ use specengine_model::script::normalize_char;
 use specengine_model::{IdScheme, IdScript, ParsedFile, Reference, grammar};
 use specengine_store::{Source as _, WorkingTree, b3_hash, span_hash};
 
+use crate::cap::View;
 use crate::corpus::{Admission, indexed};
 use crate::links::{ShownLinks, node_links};
 use crate::project::discover;
@@ -61,6 +62,8 @@ pub struct ShowOutcome {
     /// By (path, position), each with its whole text; the output cap is
     /// applied when rendering.
     pub nodes: Vec<ShownNode>,
+    /// The cap applied when rendering ([`View::Capped`] but for the daemon).
+    pub view: View,
 }
 
 /// One node as read from its file just now.
@@ -113,6 +116,21 @@ pub(crate) enum Target {
 
 /// `spec show`: updates the index, resolves `REF`, reads its holders.
 pub fn show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowOutcome, CliError> {
+    show_with_view(env, globals, request, View::Capped)
+}
+
+/// [`show`], its answer bounded by `view` (the daemon's
+/// [`View::Browser`]: never cut).
+pub fn show_with_view(
+    env: &Env,
+    globals: &Globals,
+    request: &ShowRequest,
+    view: View,
+) -> Result<ShowOutcome, CliError> {
+    run_show(env, globals, request).map(|outcome| ShowOutcome { view, ..outcome })
+}
+
+fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowOutcome, CliError> {
     if request.archive && !request.links {
         return Err(CliError::spec(
             "--archive applies to --links only: add --links, or drop --archive",
@@ -252,6 +270,7 @@ pub fn show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         reason: None,
         messages,
         nodes,
+        view: View::Capped,
     })
 }
 
@@ -263,6 +282,7 @@ fn not_found(request: &ShowRequest, reason: String, messages: Vec<Message>) -> S
         reason: Some(one_line(&reason)),
         messages,
         nodes: Vec::new(),
+        view: View::Capped,
     }
 }
 

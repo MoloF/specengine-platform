@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { groupsOf } from "../tasks/groups";
-import { aProposal, aTaskEntry } from "../test/builders";
+import { anEntry, aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { kindCountsOf, otherOpenOf, proposalNoun, statusCountsOf, waitingOf } from "./tally";
 
@@ -33,12 +33,12 @@ describe("the Tasks region's counts (AC-03)", () => {
 
 describe("the Inbox region's counts (AC-04)", () => {
   const queue = [
-    aProposal({ id: "PR-1", status: "open", kind: "update" }),
-    aProposal({ id: "PR-2", status: "escalated", kind: "question" }),
-    aProposal({ id: "PR-3", status: "deferred", kind: "update" }),
-    aProposal({ id: "PR-4", status: "open", kind: "discrepancy" }),
-    aProposal({ id: "PR-5", status: "approved", kind: "question" }),
-    aProposal({ id: "PR-6", status: "archived", kind: "update" }),
+    anEntry({ id: "PR-1", status: "open", kind: "update" }),
+    anEntry({ id: "PR-2", status: "escalated", kind: "question" }),
+    anEntry({ id: "PR-3", status: "deferred", kind: "update" }),
+    anEntry({ id: "PR-4", status: "open", kind: "discrepancy" }),
+    anEntry({ id: "PR-5", status: "approved", kind: "question" }),
+    anEntry({ id: "PR-6", status: "archived", kind: "update" }),
   ];
 
   it("counts by status in the table's order, unknown raw values last", () => {

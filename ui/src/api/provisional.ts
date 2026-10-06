@@ -7,10 +7,15 @@
 /** A value outside a closed table, kept verbatim. Source: `docs/features/ui-shell.md` "Data". */
 export type Unlisted = string & Record<never, never>;
 
-/** A project the daemon serves (MISSING ENDPOINT GET /api/projects). Source: `docs/features/ui-shell.md` "Data". */
+/**
+ * A project the daemon serves, in `--root` order: `name` its `[project] name`, `root` canonical,
+ * `branch` the root's current one (null detached or outside git). Source: `docs/features/daemon-read.md` "Data".
+ */
 export interface Project {
   slug: string;
-  name: string;
+  name: string | null;
+  root: string;
+  branch: string | null;
 }
 
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
@@ -81,16 +86,23 @@ export interface Finding {
   message: string;
 }
 
+/** The owner's choice a decision record holds (JSON with one key). Source: `docs/features/decision-apply.md` "Data". */
+export type Choice = { option: number } | { working_answer: true } | { answer: string };
+
 /**
- * A queue card: the `review` JSON plus the queue fields and the agent's summary.
- * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)";
- * `docs/specs/specengine-platform/07-interfaces.md` "1.2. Tools (`core` set)".
+ * The review document of one proposal, as `spec review PR --json` (the daemon's `proposals/:id`):
+ * every key present, absent `null`, lists `[]`. The exit-1 document (no such proposal here) has
+ * every scalar `null` and its reason as the last of `notes`. A question or a discrepancy fills the
+ * eleven keys after `updated_at` instead of an update's texts, `diff` and `preview`; a decided
+ * one its record's five after `linked`.
+ * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
+ * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data".
  */
 export interface Proposal {
-  id: string;
-  project: string;
-  kind: string;
-  status: ProposalStatus;
+  id: string | null;
+  project: string | null;
+  kind: string | null;
+  status: ProposalStatus | null;
   target_id: string | null;
   target_path: string | null;
   worktree: string | null;
@@ -102,7 +114,7 @@ export interface Proposal {
   patch_hash: string | null;
   rationale: string | null;
   author: Author | null;
-  diagnostics: Finding[];
+  diagnostics: Finding[] | null;
   /** Pre-computed unified hunks; the UI never computes a diff. */
   diff: string | null;
   preview: Preview | null;
@@ -112,25 +124,72 @@ export interface Proposal {
   decision_note: string | null;
   applied_commit: string | null;
   /** UTC, as stored, e.g. 2026-10-05T21:14:03Z. */
-  created_at: string;
-  updated_at: string;
-  notes: string[];
+  created_at: string | null;
+  updated_at: string | null;
+  /** The canonical targets; an update's `[target_id]`. */
+  target_ids: string[];
   severity: Severity | null;
   gap_type: GapType | null;
-  task_id: string | null;
-  target_ids: string[];
+  /** A question's text, a discrepancy's summary. */
+  summary: string | null;
+  working_answer: string | null;
+  /** What the other answer to a question would cost. */
+  price_of_other: string | null;
   evidence: Evidence[];
   options: ProposalOption[];
   /** Index into `options`. */
   recommendation: number | null;
-  working_answer: string | null;
-  summary: string | null;
+  /** The hits the author named as distinct when raising it. */
+  distinct_from: string[];
+  /** A discrepancy's proposed patch as its own update, and back. */
+  linked: string | null;
+  record_id: string | null;
+  record_path: string | null;
+  record_title: string | null;
+  /** The record's bytes. */
+  record_text: string | null;
+  choice: Choice | null;
+  /** Why a preview is unavailable, what a reader should know, a refusal's reason last. */
+  notes: string[];
 }
 
-/** The owner's queue, as `spec inbox --json`. Source: `docs/canon/proposal-queue.md` "Commands". */
+/**
+ * One line of the owner's queue, `spec inbox --json`: `rationale` an update's first line (at most
+ * 80 characters), `severity` and `summary` (its first line) a question's or a discrepancy's.
+ * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/features/daemon-read.md` "Data".
+ */
+export interface InboxEntry {
+  id: string;
+  kind: string;
+  status: ProposalStatus;
+  /** The first canonical target. */
+  target_id: string;
+  /** Every stored canonical target; an update's `[target_id]`. */
+  target_ids: string[];
+  branch: string;
+  /** UTC, as stored. */
+  created_at: string;
+  rationale: string | null;
+  severity: Severity | null;
+  summary: string | null;
+  /** A decided question's or discrepancy's record. */
+  record_id: string | null;
+}
+
+/** The owner's queue, as `spec inbox --json`: the current repository's open and approved proposals. Source: `docs/canon/proposal-queue.md` "Commands". */
 export interface Inbox {
-  proposals: Proposal[];
+  proposals: InboxEntry[];
   notes: string[];
+}
+
+/**
+ * One queue event of a project's live tail: the SSE `id`, `event` and `data` (the stored payload,
+ * JSON with `id`). Sources: `docs/features/daemon-read.md` "Data"; `docs/canon/proposal-queue.md` "States and events".
+ */
+export interface QueueEvent {
+  seq: number;
+  type: string;
+  payload: unknown;
 }
 
 /** Where `show` cut a node at the output cap. Source: `crates/specengine-cli/README.md` "Output and the cap". */
@@ -427,7 +486,11 @@ export interface DecisionResult {
   commit: Commit | null;
 }
 
-/** The daemon's refusal; 409 = decided elsewhere. Source: `docs/features/ui-shell.md` "Data". */
+/**
+ * The daemon's error body, exactly these two keys (`message` the CLI's line(s) verbatim): 403 a
+ * decision (made on a terminal), 503 a read that cannot run; 409 = decided elsewhere (the mock).
+ * Sources: `docs/features/daemon-read.md` "Data"; `docs/features/ui-shell.md` "Data".
+ */
 export interface ApiError {
   status: number;
   message: string;

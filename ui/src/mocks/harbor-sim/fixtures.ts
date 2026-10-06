@@ -603,7 +603,7 @@ export function harborSim(now: number): MockProject {
   const at = (minutesAgo: number) => stamp(now, minutesAgo);
   const agent = (role: string, run: string) => ({ type: "agent", role, model: "claude-opus-5-5", run });
   return {
-    project: { slug: SLUG, name: "Harbor Sim" },
+    project: { slug: SLUG, name: "Harbor Sim", root: "/work/harbor-sim", branch: "main" },
     nodeKinds,
     specStatuses,
     notes: [],

@@ -177,10 +177,21 @@ describe("the Inbox region (AC-04)", () => {
 });
 
 describe("only the daemon's InboxEntry keys (AC-05)", () => {
-  const NINE = ["id", "kind", "status", "target_id", "target_ids", "created_at", "rationale", "severity", "summary"] as const;
-
-  function entryOf(proposal: Proposal): Proposal {
-    return Object.fromEntries(NINE.map((key) => [key, proposal[key]])) as unknown as Proposal;
+  /** A review document keeping only what its inbox entry carries; every other key as absent. */
+  function bare(proposal: Proposal): Proposal {
+    return aProposal({
+      id: proposal.id ?? "",
+      kind: proposal.kind,
+      status: proposal.status,
+      target_id: proposal.target_id,
+      target_ids: proposal.target_ids,
+      branch: proposal.branch,
+      created_at: proposal.created_at,
+      rationale: proposal.rationale,
+      severity: proposal.severity,
+      summary: proposal.summary,
+      record_id: proposal.record_id,
+    });
   }
 
   /** The region's markup without the ids React generates per render. */
@@ -188,16 +199,16 @@ describe("only the daemon's InboxEntry keys (AC-05)", () => {
     return new XMLSerializer().serializeToString(region("Inbox")).replace(/\s(id|aria-labelledby)="[^"]*"/g, "");
   }
 
-  it("renders the region from the nine keys exactly as from full proposals", async () => {
+  it("renders the region from the entry's keys exactly as from full review documents", async () => {
     const evidence = [{ file: "src/a.rs", qpath: null, lines: "1-2", observed: "T-0009 seen", documented: "doc" }];
     const full = [
-      aProposal({ id: "PR-7", task_id: "T-0001", evidence, summary: null, rationale: null, target_id: "R-1" }),
-      ...QUEUE.map((proposal) => ({ ...proposal, task_id: "T-0002", evidence })),
+      aProposal({ id: "PR-7", evidence, summary: null, rationale: null, target_id: "R-1", working_answer: "T-0001 first" }),
+      ...QUEUE.map((proposal) => ({ ...proposal, working_answer: "T-0002 first", evidence })),
     ];
     await openHome(homeClient([], full));
     const fromFull = markup();
     cleanup();
-    await openHome(homeClient([], full.map(entryOf)));
+    await openHome(homeClient([], full.map(bare)));
     expect(markup()).toBe(fromFull);
     const fromEntries = region("Inbox");
     expect(within(fromEntries).getByRole("link", { name: "PR-7: update on R-1" })).toBeTruthy();

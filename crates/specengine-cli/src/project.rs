@@ -9,7 +9,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use specengine_core::{ProjectConfig, ProjectError};
+use specengine_store::{GitEnv, WorktreeGit};
 
 use crate::{CliError, Env, Globals};
 
@@ -49,6 +51,42 @@ pub struct Located {
     pub config_file: PathBuf,
     /// As in [`ProjectRoot::config_label`].
     pub config_label: String,
+}
+
+/// A served project as the daemon lists it (task spec `daemon-read`,
+/// "Data"): its slug, `[project] name`, canonical root and the root's
+/// current branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProjectEntry {
+    pub slug: String,
+    /// `[project] name`; `null` without one.
+    pub name: Option<String>,
+    /// Canonical.
+    pub root: String,
+    /// The branch the root's `HEAD` names; `null` when detached or outside
+    /// git (or when git cannot tell).
+    pub branch: Option<String>,
+}
+
+/// The project's [`ProjectEntry`]: its config read now, its branch asked of
+/// git in the root (`git_env`'s variables, the local `GIT_*` ones
+/// dropped). Reads only; the data directory is not touched.
+pub fn project_entry(
+    env: &Env,
+    globals: &Globals,
+    git_env: &GitEnv,
+) -> Result<ProjectEntry, CliError> {
+    let project = discover(env, globals)?;
+    let slug = project.slug()?.to_owned();
+    let branch = WorktreeGit::new(&project.root, git_env)
+        .ok()
+        .and_then(|git| git.branch().ok().flatten());
+    Ok(ProjectEntry {
+        slug,
+        name: project.config.project.name.clone(),
+        root: project.root.display().to_string(),
+        branch,
+    })
 }
 
 /// Finds the project (see the module documentation) and reads its config.

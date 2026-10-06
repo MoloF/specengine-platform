@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
-import { useProjects } from "../api/queries";
+import { useLiveQueue, useProjects } from "../api/queries";
 import type { Project } from "../api/types";
 import { GraphView } from "../graph/GraphView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
@@ -127,7 +127,7 @@ function ProjectSwitcher({
         )}
         {known.map((project) => (
           <option key={project.slug} value={project.slug}>
-            {project.name}
+            {project.name ?? project.slug}
           </option>
         ))}
       </select>
@@ -169,6 +169,9 @@ export function Shell({ scenario }: { scenario: string | null }) {
   );
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
+  const routeProject = projectOf(route);
+  // The shown project's live queue, once the daemon has named it among its projects.
+  useLiveQueue(routeProject !== null && projects.data?.some((project) => project.slug === routeProject) === true ? routeProject : null);
 
   // `#/` is the first project's home, without a history entry of its own.
   useEffect(() => {

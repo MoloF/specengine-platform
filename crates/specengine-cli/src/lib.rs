@@ -35,6 +35,12 @@
 //!   each giving its outcome or a [`CliError`];
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
+//! - [`tree_with_view`], [`show_with_view`], [`search_with_view`]: those
+//!   reads bounded by a [`View`], the daemon's [`View::Browser`] never cut
+//!   (task spec `daemon-read`); [`project_entry`], [`events_after`]: a
+//!   served project's entry and the queue's events after a `seq`, which
+//!   only the daemon reads (no command prints them); [`EventsTail`] the
+//!   latter with its connection kept between a live tail's polls;
 //! - [`propose`], [`inbox`], [`review`], [`approve`], [`reject`]: the
 //!   queue's commands; all but `inbox` answer with the review document
 //!   ([`ProposalDocument`]); `approve` and `reject` take the owner's
@@ -83,6 +89,7 @@ mod check;
 mod corpus;
 mod decide;
 mod documents;
+mod events;
 mod export;
 mod graph;
 mod inbox;
@@ -113,10 +120,11 @@ pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
     ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
 };
-pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
+pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use corpus::LeftOut;
 pub use documents::{DocumentEntry, documents};
+pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use graph::{FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
@@ -128,13 +136,15 @@ pub use intake::{
 };
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
-pub use project::{CONFIG_FILE, Located, ProjectRoot, discover, locate};
+pub use project::{
+    CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
+};
 pub use proposals::{Preview, ProposalDocument, ProposalOutcome, QueueCommand};
 pub use propose::{ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief};
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use review::{ReviewRequest, review, review_brief};
-pub use search::{HitCut, SearchOutcome, SearchRequest, search};
-pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show};
+pub use search::{HitCut, SearchOutcome, SearchRequest, search, search_with_view};
+pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
 pub use specengine_core::ProjectConfig;
 /// The intake's input types, enums and caps (core's), for the bridges.
 pub use specengine_core::intake::{
@@ -151,12 +161,14 @@ pub use specengine_store::GitEnv;
 pub use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
 };
+/// A search hit's snippet as structure (the browser view's).
+pub use specengine_store::{Snippet, SnippetSegment};
 pub use state::{
     ExportStateOutcome, ExportStateRequest, ImportStateOutcome, ImportStateRequest, export_state,
     import_state,
 };
 pub use state_file::STATE_FORMAT;
-pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree};
+pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

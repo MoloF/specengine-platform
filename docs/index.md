@@ -36,11 +36,10 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/spec-cli-bundle.md](canon/spec-cli-bundle.md) spec bundle and bundle_hash · crates/specengine-cli, crates/specengine-core, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/w-measurement.md](canon/w-measurement.md) W measurement: every task, before and after · crates/specengine-eval · tier 2
-- [ui/README.md](../ui/README.md) ui — the web UI · ui · tier 1
+- [ui/README.md](../ui/README.md) ui -- the web UI · ui · tier 1
 
 ## Specs
 
-- [docs/features/daemon-read.md](features/daemon-read.md) Daemon read: the HTTP read surface · crates/specengine-http, crates/specengine-cli, ui · draft
 - [docs/features/proposal-kinds.md](features/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/task-package.md](features/task-package.md) Task package · specengine · draft

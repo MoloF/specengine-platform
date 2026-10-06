@@ -1,7 +1,7 @@
-import type { Proposal } from "../api/types";
+import type { InboxEntry, Proposal } from "../api/types";
 
-/** The nodes a proposal targets: `target_ids` when the queue fields name them, else its one `target_id`. */
-export function targetsOf(proposal: Proposal): string[] {
+/** The nodes a proposal targets: `target_ids` when the queue names them, else its one `target_id`. */
+export function targetsOf(proposal: Pick<InboxEntry | Proposal, "target_id" | "target_ids">): string[] {
   if (proposal.target_ids.length > 0) {
     return proposal.target_ids;
   }
@@ -9,7 +9,7 @@ export function targetsOf(proposal: Proposal): string[] {
 }
 
 /** Whether two different proposals share a target node (information only: nothing waits on it). */
-export function sharesTarget(a: Proposal, b: Proposal): boolean {
+export function sharesTarget(a: InboxEntry, b: InboxEntry): boolean {
   if (a.id === b.id) {
     return false;
   }

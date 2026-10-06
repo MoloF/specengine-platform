@@ -18,7 +18,12 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ["getTree", "/** GET /api/projects/:p/tree */"],
     ["getNode", "/** GET /api/projects/:p/nodes/:ref */"],
     ["search", "/** GET /api/projects/:p/search */"],
-    ["getBundle", "/** MISSING ENDPOINT GET /api/projects/:p/bundle (07 §3 lacks it; rust-developer, daemon-read) */"],
+    // daemon-read serves the bundle, the projects and one proposal (docs/features/daemon-read.md "Data").
+    ["getBundle", "/** GET /api/projects/:p/bundle */"],
+    ["getProjects", "/** GET /api/projects */"],
+    ["getInbox", "/** GET /api/projects/:p/inbox */"],
+    ["getProposal", "/** GET /api/projects/:p/proposals/:id */"],
+    ["decideProposal", "/** POST /api/projects/:p/proposals/:id/decision */"],
     // AC-01 of docs/features/ui-graph.md.
     ["getGraph", '/** MISSING ENDPOINT GET /api/projects/:p/graph (07 section 3 lists it; uncut; rust-developer, daemon-read "Out of scope") */'],
     // AC-01 of docs/features/ui-tasks.md.

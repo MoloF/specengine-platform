@@ -7,6 +7,8 @@ import type {
   Inbox,
   NodeView,
   Project,
+  Proposal,
+  QueueEvent,
   SearchResults,
   TaskList,
   TaskNotFound,
@@ -57,26 +59,31 @@ export interface GraphOptions {
 
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
- * endpoints (`docs/specs/specengine-platform/07-interfaces.md` "3. HTTP (daemon)"). Only the
- * bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for tree,
- * nodes, bundle, graph, task) resolves to its document, `reason` set; every other failure rejects
- * with a ClientError carrying the daemon's status and message verbatim (exit 2: 503). Tasks are
- * read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
+ * endpoints (`docs/features/daemon-read.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx,
+ * picks the implementation. A read answered with exit 1 (404 for tree, nodes, bundle, a proposal,
+ * graph, task) resolves to its document, `reason` (a proposal: the last of `notes`) set; every
+ * other failure rejects with a ClientError carrying the daemon's status and message verbatim
+ * (exit 2: 503; no response: 0; a read the daemon does not serve yet: `notServed`, 501, nothing
+ * requested). Decisions are made on a terminal: the daemon refuses each one
+ * (403) naming its `spec` command (docs/features/daemon-read.md, Q4). Tasks are read only: an owner
+ * action is a command for a terminal (docs/features/ui-tasks.md).
  */
 export interface SpecEngineClient {
   /** Drives the permanent "Mock data" indicator. */
   readonly dataSource: "mock" | "daemon";
-  /** MISSING ENDPOINT GET /api/projects (named for rust-developer; docs/features/ui-shell.md). */
+  /** GET /api/projects */
   getProjects(): Promise<Project[]>;
   /** GET /api/projects/:p/inbox */
   getInbox(project: string): Promise<Inbox>;
+  /** GET /api/projects/:p/proposals/:id */
+  getProposal(project: string, id: string): Promise<Proposal>;
   /** GET /api/projects/:p/tree */
   getTree(project: string, options?: TreeOptions): Promise<TreeView>;
   /** GET /api/projects/:p/nodes/:ref */
   getNode(project: string, ref: string, options?: NodeOptions): Promise<NodeView>;
   /** GET /api/projects/:p/search */
   search(project: string, options: SearchOptions): Promise<SearchResults>;
-  /** MISSING ENDPOINT GET /api/projects/:p/bundle (07 §3 lacks it; rust-developer, daemon-read) */
+  /** GET /api/projects/:p/bundle */
   getBundle(project: string, options: BundleOptions): Promise<BundleView>;
   /** MISSING ENDPOINT GET /api/projects/:p/graph (07 section 3 lists it; uncut; rust-developer, daemon-read "Out of scope") */
   getGraph(project: string, options: GraphOptions): Promise<GraphView>;
@@ -86,20 +93,44 @@ export interface SpecEngineClient {
   getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;
   /** POST /api/projects/:p/proposals/:id/decision */
   decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;
+  /**
+   * GET /api/projects/:p/events (SSE): `onEvent` per queue event of the project until the returned
+   * function is called. `onGap` when the client opens the stream again after the browser gave up on
+   * it: events may have been missed, so what they would refresh is read again (a reconnect the
+   * browser makes itself resumes with `Last-Event-ID`: no gap). The mock: a no-op.
+   */
+  subscribe(project: string, onEvent: (event: QueueEvent) => void, onGap?: () => void): () => void;
 }
 
 /** HTTP 409: the proposal was decided elsewhere. */
 export const DECIDED_ELSEWHERE = 409;
 
-/** What a SpecEngineClient rejects with: the daemon's error body, its message verbatim. */
+/**
+ * HTTP 501 Not Implemented: the status of a read the daemon does not serve yet, refused by the
+ * client with nothing requested. Never 0, which says no response came (the daemon is down).
+ */
+export const NOT_SERVED = 501;
+
+/**
+ * What a SpecEngineClient rejects with: the daemon's error body, its message verbatim. `notServed`
+ * marks a read the daemon has no endpoint for yet (status NOT_SERVED): nothing was requested, so
+ * the screen says the read is not built and offers no Retry; a daemon answering 501 itself is not.
+ */
 export class ClientError extends Error implements ApiError {
   readonly status: number;
+  readonly notServed: boolean;
 
-  constructor(body: ApiError) {
+  constructor(body: ApiError, { notServed = false }: { notServed?: boolean } = {}) {
     super(body.message);
     this.name = "ClientError";
     this.status = body.status;
+    this.notServed = notServed;
   }
+}
+
+/** True for a read the daemon does not serve yet: not built, as opposed to a daemon down or refusing. */
+export function isNotServed(error: unknown): boolean {
+  return error instanceof ClientError && error.notServed;
 }
 
 /** The status and the verbatim message of any rejection; status 0 when no response carried one. */

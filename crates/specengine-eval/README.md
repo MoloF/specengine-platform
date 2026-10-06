@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-06
 ---
 
 # specengine-eval — the permanent measurement harness
@@ -50,7 +50,7 @@ specengine-eval <ast-hash|ron|census|import|parse|index|check|layout|w|bevy-dete
 
 Pilot paths come only from the environment: `SPECENGINE_{PILOT,CENSUS_CONFIG,SCHEME,TASKS}_A` / `_B` (configs outside the repository; `TASKS`: `w`), `SPECENGINE_PILOT_A_DUMP` / `_B_DUMP`; `SPECENGINE_RUSTFMT` overrides the rustfmt binary (canon above). Pilot tests are `#[ignore]`: `cargo nextest run -p specengine-eval --test <file> --run-ignored only pilot`. They fail, never skip, naming an unset or empty variable or a scheme without `[paths]`. Those of `index`, `check`, `parse`, `import`, `layout`, `w` (`tests/pilot/mod.rs`) give the child only `PATH`, the label's variables and an empty scratch `HOME` (kept empty), and prove the run read-only: `git --no-optional-locks status` and a (path, kind, size, mtime) listing of the scheme's roots (`import`: corpus and code roots) equal before and after. `ra` pilot runs: manual, release, under a self-terminating timeout.
 
-Tests: a `<subcommand>_cli.rs` each (`bevy_cli.rs`; `index_cli.rs` pilot runs check 08 AC-10's `full_ms`, `one_file_ms`; `ra_cli.rs` `--features ra`), `import_gaps_cli.rs`, `ast_hash_units.rs` (`fixtures/cargo-units`, cargo and rustfmt stubs), `identity_literals.rs`, `doc_pointers.rs` (headings cited from code exist), `import_genre.rs`, `label_cli.rs`, `links_census.rs` (`broken_links` = `link-dangling`), `build_graph.rs` (eight default members, model / core / store layers, pins; feature-only dependencies, never Bevy, off the core graph), `anonymity.rs` (no absolute path or pilot name in `docs/`, `crates/`, `fixtures/`; raw Cyrillic only in `fixtures/{spec-b,token-calibration}/`: Q5, core README).
+Tests: a `<subcommand>_cli.rs` each (`bevy_cli.rs`; `index_cli.rs` pilot runs check 08 AC-10's `full_ms`, `one_file_ms`; `ra_cli.rs` `--features ra`), `import_gaps_cli.rs`, `ast_hash_units.rs` (`fixtures/cargo-units`, cargo and rustfmt stubs), `identity_literals.rs`, `doc_pointers.rs` (headings cited from code exist), `import_genre.rs`, `label_cli.rs`, `links_census.rs` (`broken_links` = `link-dangling`), `build_graph.rs` (nine default members, model / core / store layers, pins, the daemon's licences; feature-only dependencies, never Bevy, off the core graph), `anonymity.rs` (no absolute path or pilot name in `docs/`, `crates/`, `fixtures/`; raw Cyrillic only in `fixtures/{spec-b,token-calibration}/`: Q5, core README).
 
 ## Open minors
 

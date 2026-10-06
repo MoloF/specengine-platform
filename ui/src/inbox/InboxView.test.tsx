@@ -1,8 +1,8 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
-import type { Proposal } from "../api/types";
-import { aProposal } from "../test/builders";
+import type { Proposal, QueueEvent } from "../api/types";
+import { aProposal, entryOf, noReview } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
 
@@ -14,7 +14,6 @@ const QUEUE: Proposal[] = [
     id: "PR-1",
     severity: "high",
     kind: "discrepancy",
-    task_id: "T-7",
     target_ids: ["R-1"],
     created_at: "2026-10-01T10:00:00Z",
     summary: "High one",
@@ -238,6 +237,127 @@ describe("the Inbox on a stub client", () => {
       "Esc",
     ]);
     expect(within(dialog).getByText("Needs clarification")).toBeTruthy();
+  });
+});
+
+describe("the card reads the review document (daemon-read \"Data\")", () => {
+  it("lists entries from the inbox and reads the selected one's review by ID, once", async () => {
+    const { client } = await openInbox(QUEUE, "#/alpha/inbox/PR-2");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    expect(client.getProposal.mock.calls).toEqual([["alpha", "PR-2"]]);
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("High one"));
+    await within(screen.getByRole("article")).findByRole("heading", { level: 3, name: "Options" });
+    expect(client.getProposal.mock.calls).toEqual([
+      ["alpha", "PR-2"],
+      ["alpha", "PR-1"],
+    ]);
+  });
+
+  it("shows what only the review holds: a question's price, a linked patch, distinct items, the decision record", async () => {
+    await openInbox(
+      [
+        aProposal({
+          id: "PR-8",
+          kind: "question",
+          summary: "Does regeneration wait for rest?",
+          working_answer: "Yes, 1.5 s",
+          price_of_other: "R-28 rebalanced",
+          linked: "PR-9",
+          distinct_from: ["DEC-0023", "PR-0003"],
+          options: [
+            { label: "Wait", effect: "Regeneration waits", price: "None" },
+            { label: "Never wait", effect: "Regeneration runs", price: "Balance" },
+          ],
+          record_id: "DEC-0031",
+          record_title: "Regeneration waits for rest",
+          record_path: "docs/records/DEC/DEC-0031.md",
+          choice: { option: 1 },
+        }),
+      ],
+      "#/alpha/inbox/PR-8",
+    );
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    expect(within(card).getByText("R-28 rebalanced")).toBeTruthy();
+    expect(within(card).getByRole("link", { name: "PR-9" }).getAttribute("href")).toBe("#/alpha/inbox/PR-9");
+    expect(within(card).getByText("DEC-0023, PR-0003")).toBeTruthy();
+    const record = within(card).getByRole("heading", { level: 3, name: "Decision record" }).closest("section");
+    expect(record?.textContent).toContain("DEC-0031");
+    expect(record?.textContent).toContain("docs/records/DEC/DEC-0031.md");
+    expect(record?.textContent).toContain("Option 1: Never wait");
+    expect(within(card).queryByText(/^T-/)).toBeNull();
+  });
+
+  it("does nothing on a decision key or button until the review is read", async () => {
+    const client = stubClient(QUEUE);
+    let release: () => void = () => undefined;
+    const read = client.getProposal.getMockImplementation();
+    client.getProposal.mockImplementationOnce(
+      (project, id) =>
+        new Promise((resolve) => {
+          release = () => {
+            void read?.(project, id).then(resolve);
+          };
+        }),
+    );
+    renderApp(client, "#/alpha/inbox/PR-1");
+    const list = await screen.findByRole("listbox");
+    const card = await screen.findByRole("article");
+    expect(await within(card).findByLabelText("Loading the review of PR-1")).toBeTruthy();
+    const accept = within(card).getByRole("button", { name: "Accept" });
+    expect(accept.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(accept);
+    fireEvent.keyDown(selectedOption(list), { key: "a" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(accept.getAttribute("aria-disabled")).toBe("false");
+    });
+    fireEvent.keyDown(selectedOption(list), { key: "a" });
+    expect(await screen.findByRole("dialog", { name: "Accept PR-1" })).toBeTruthy();
+  });
+
+  it("shows a review that cannot be read in the daemon's words, Retry reading it again", async () => {
+    const client = stubClient(QUEUE);
+    const message = "spec: `PR-1` belongs to the repository /work/other (worktree /work/other), which no longer exists";
+    client.getProposal.mockRejectedValueOnce(new ClientError({ status: 503, message }));
+    renderApp(client, "#/alpha/inbox/PR-1");
+    const card = await screen.findByRole("article");
+    const alert = await within(card).findByRole("alert");
+    expect(alert.textContent).toContain("The review of PR-1 could not be read");
+    expect(alert.textContent).toContain(message);
+    fireEvent.click(within(card).getByRole("button", { name: "Retry" }));
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    expect(client.getProposal).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the exit-1 document's reason when the queue no longer holds the proposal", async () => {
+    const client = stubClient(QUEUE);
+    client.getProposal.mockResolvedValueOnce(noReview("PR-1"));
+    renderApp(client, "#/alpha/inbox/PR-1");
+    const card = await screen.findByRole("article");
+    expect(await within(card).findByText("PR-1 has no review document in this repository")).toBeTruthy();
+    expect(within(card).getByText("no proposal `PR-1` in this project's queue")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Accept" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("keeps the daemon's 403 in the dialog, its terminal command verbatim (AC-11)", async () => {
+    const { client } = await openInbox(QUEUE, "#/alpha/inbox/PR-2");
+    const message = "decisions are made on a terminal: `spec approve PR-2` or `spec reject PR-2 --reason …` in /work/alpha; nothing changed";
+    client.decideProposal.mockRejectedValueOnce(new ClientError({ status: 403, message }));
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Accept PR-2" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
+    const refusal = await within(dialog).findByRole("alert");
+    expect(refusal.textContent).toContain("The daemon refused the decision; nothing changed.");
+    expect(within(refusal).getByText(message)).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Accept PR-2" })).toBe(dialog);
   });
 });
 
@@ -778,6 +898,8 @@ describe("decisions (AC-14)", () => {
     const inboxLink = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Inbox" });
     fireEvent.click(inboxLink);
     const card = await screen.findByRole("article");
+    // A decision needs the review document: its sections are read before the buttons act.
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     fireEvent.click(within(card).getByRole("button", { name: "Defer" }));
     const dialog = await screen.findByRole("dialog", { name: "Defer PR-1" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
@@ -837,18 +959,17 @@ describe("decisions (AC-14)", () => {
   });
 
   it("takes a revision that arrives while the dialog is open: says so, keeps the text, waits for a new submit", async () => {
-    const { client, list } = await openInbox(QUEUE, "#/alpha/inbox/PR-1");
-    // The inbox read that follows the first decision is held, so it lands while the next dialog is open.
-    let answer: () => void = () => undefined;
-    client.getInbox.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          answer = () => {
-            resolve({ proposals: client.state.proposals.map((proposal) => ({ ...proposal })), notes: [] });
-          };
-        }),
-    );
+    const client = stubClient(QUEUE);
+    // The live tail: an event on PR-1 reads its review document again while the dialog is open.
+    let emit: (event: QueueEvent) => void = () => undefined;
+    client.subscribe = (_project, onEvent) => {
+      emit = onEvent;
+      return () => undefined;
+    };
+    renderApp(client, "#/alpha/inbox/PR-1");
+    const list = await screen.findByRole("listbox");
     const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     fireEvent.click(within(card).getByRole("button", { name: "Defer" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Defer" }));
     await waitFor(() => {
@@ -861,6 +982,9 @@ describe("decisions (AC-14)", () => {
     fireEvent.keyDown(selectedOption(list), { key: "k" });
     await waitFor(() => {
       expect(selectedOption(list).dataset.proposal).toBe("PR-1");
+    });
+    await waitFor(() => {
+      expect(within(screen.getByRole("article")).getByRole("button", { name: "Accept" }).getAttribute("aria-disabled")).toBe("false");
     });
     fireEvent.keyDown(selectedOption(list), { key: "a" });
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-1" });
@@ -887,9 +1011,8 @@ describe("decisions (AC-14)", () => {
           }
         : proposal,
     );
-    await act(async () => {
-      answer();
-      await Promise.resolve();
+    act(() => {
+      emit({ seq: 7, type: "proposal.apply_failed", payload: { id: "PR-1", step: 3, reason: "elsewhere" } });
     });
     const notice = (await within(dialog).findByText("This proposal changed since you opened it")).closest('[role="alert"]');
     expect(notice).not.toBeNull();
@@ -922,7 +1045,7 @@ describe("decisions (AC-14)", () => {
         new Promise((resolve) => {
           answer = () => {
             // Equal proposals, new objects; the note shows that the read has landed.
-            resolve({ proposals: client.state.proposals.map((proposal) => ({ ...proposal })), notes: ["Read again."] });
+            resolve({ proposals: client.state.proposals.map(entryOf), notes: ["Read again."] });
           };
         }),
     );

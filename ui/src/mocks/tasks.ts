@@ -1,6 +1,5 @@
 import type {
   Author,
-  Proposal,
   SnapshotDiff,
   SnapshotNode,
   TaskAssumption,
@@ -11,6 +10,7 @@ import type {
   TaskRun,
   TaskTarget,
 } from "../api/types";
+import type { MockProposal, StoredReview } from "./build";
 
 // The tasks of the mock projects (docs/features/ui-tasks.md "Data", Mock): the draft package of
 // docs/features/task-package.md as `spec task list --json` and `spec task show T --json` print it.
@@ -569,7 +569,7 @@ function nodesOf(stored: StoredTask): Set<string> {
   return new Set(named);
 }
 
-function summaryOf(proposal: Proposal): string {
+function summaryOf(proposal: StoredReview): string {
   if (proposal.kind === "question") {
     return proposal.summary ?? "";
   }
@@ -577,7 +577,7 @@ function summaryOf(proposal: Proposal): string {
   return first ?? proposal.summary ?? "";
 }
 
-function assumptionOf(proposal: Proposal): TaskAssumption | null {
+function assumptionOf(proposal: StoredReview): TaskAssumption | null {
   if (proposal.kind === "question" && proposal.working_answer !== null) {
     return { proposal: proposal.id, text: proposal.working_answer };
   }
@@ -589,19 +589,19 @@ function assumptionOf(proposal: Proposal): TaskAssumption | null {
 }
 
 /** `spec task show T --json`: the stored task with its proposals and assumptions read from the queue now. */
-export function packageOf(stored: StoredTask, proposals: readonly Proposal[]): TaskPackage {
+export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]): TaskPackage {
   const nodes = nodesOf(stored);
   const listed = proposals
-    .filter((proposal) => LISTED_PROPOSAL.has(proposal.status))
-    .filter((proposal) => proposal.task_id === stored.id || proposal.target_ids.some((id) => nodes.has(id)))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  const open: TaskProposal[] = listed.map((proposal) => ({
-    id: proposal.id,
-    kind: proposal.kind,
-    status: proposal.status,
-    target_ids: [...proposal.target_ids],
-    task_id: proposal.task_id,
-    summary: summaryOf(proposal),
+    .filter(({ review }) => LISTED_PROPOSAL.has(review.status))
+    .filter(({ review, task_id }) => task_id === stored.id || review.target_ids.some((id) => nodes.has(id)))
+    .sort((a, b) => a.review.id.localeCompare(b.review.id));
+  const open: TaskProposal[] = listed.map(({ review, task_id }) => ({
+    id: review.id,
+    kind: review.kind,
+    status: review.status,
+    target_ids: [...review.target_ids],
+    task_id,
+    summary: summaryOf(review),
   }));
   return {
     schema_version: stored.schema_version,
@@ -616,7 +616,7 @@ export function packageOf(stored: StoredTask, proposals: readonly Proposal[]): T
     criteria: stored.criteria,
     affected_nodes: stored.affected_nodes,
     plan: stored.plan,
-    assumptions: listed.flatMap((proposal) => assumptionOf(proposal) ?? []),
+    assumptions: listed.flatMap(({ review }) => assumptionOf(review) ?? []),
     open_proposals: open,
     owner_notes: stored.owner_notes,
     bindings: stored.bindings,

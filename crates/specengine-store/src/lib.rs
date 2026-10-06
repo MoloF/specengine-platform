@@ -22,7 +22,8 @@
 //!   [`UpdateReport`];
 //! - [`SpecIndex`]: [`SpecIndex::files`], [`SpecIndex::file`],
 //!   [`SpecIndex::lookup_id`], [`SpecIndex::search`] (Tier 3 files left out
-//!   unless [`SearchQuery::archive`]), [`SpecIndex::indexed_input`] (the
+//!   unless [`SearchQuery::archive`]; each hit's snippet as text and as its
+//!   structure, [`Snippet`]), [`SpecIndex::indexed_input`] (the
 //!   index-fed [`CheckInput`] of `spec show`);
 //! - [`load_config`], [`load_check`]: the config and the baseline from
 //!   their bytes ([`NamedBytes`]), validated into a [`CheckSetup`] or a
@@ -45,6 +46,8 @@
 //!   `events` in the same DB, made by their own schema steps on
 //!   `user_version` and never dropped by the index, and gives them raw for
 //!   their backup ([`StoredQueue`], `docs/canon/queue-backup.md` "Store");
+//!   a live tail reads a project's events after a `seq` in one short read
+//!   transaction ([`SqliteQueue::events_after`], the daemon's);
 //!   [`WorktreeGit`] is the
 //!   write side of one recorded worktree's git (its place, the dirty check,
 //!   `merge-file`, `commit --only`, the trailer lookup), every `GIT_*`
@@ -92,10 +95,10 @@ pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, EVENT_APPLIED,
     EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, Event,
-    Intake, IntakeResult, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, Proposal,
+    EventsAfter, Intake, IntakeResult, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, Proposal,
     ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
     QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch, RecordApproval, RecordSeries,
-    Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue, UnreadableRow,
+    Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue, TailEvent, UnreadableRow,
     patch_hash, proposal_columns,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
@@ -246,8 +249,124 @@ pub struct SearchHit {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     /// The best-matching column's text around the match, matches in `**`,
-    /// cuts marked `…`.
+    /// cuts marked `…`: [`Self::snippet_parts`] rendered
+    /// ([`Snippet::marked`]), as FTS5 marked it before the structure.
     pub snippet: String,
+    /// The same snippet as structure: a corpus `**` is text, never a hit.
+    #[serde(skip)]
+    pub snippet_parts: Snippet,
+}
+
+/// A hit's snippet as structure (task spec `daemon-read`, "Data"): the
+/// text in order, each run marked as a match or not, and whether the text
+/// is cut before or after it. Read from the one FTS5 `snippet()`, which
+/// marks a match's start [`SNIPPET_HIT_START`], its end
+/// [`SNIPPET_HIT_END`] and a cut [`SNIPPET_CUT`] (a corpus holding these
+/// control characters may fake a match or a cut, a known limit).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Snippet {
+    pub segments: Vec<SnippetSegment>,
+    pub cut_start: bool,
+    pub cut_end: bool,
+}
+
+/// A run of a [`Snippet`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SnippetSegment {
+    pub text: String,
+    /// A matched term.
+    pub hit: bool,
+}
+
+/// FTS5 `snippet()`'s mark before a match (U+0002).
+pub const SNIPPET_HIT_START: char = '\u{2}';
+/// FTS5 `snippet()`'s mark after a match (U+0003).
+pub const SNIPPET_HIT_END: char = '\u{3}';
+/// FTS5 `snippet()`'s mark of a cut, at the text's start or end (U+0004).
+pub const SNIPPET_CUT: char = '\u{4}';
+
+impl Snippet {
+    /// The structure of `snippet()`'s text: a leading and a trailing
+    /// [`SNIPPET_CUT`] are the cuts; [`SNIPPET_HIT_START`] opens a match
+    /// and [`SNIPPET_HIT_END`] closes it; any other of these characters,
+    /// and a match never closed, are text as written.
+    pub fn from_marks(marked: &str) -> Self {
+        let mut body = marked;
+        let cut_start = body.starts_with(SNIPPET_CUT);
+        if cut_start {
+            body = &body[SNIPPET_CUT.len_utf8()..];
+        }
+        let cut_end = body.ends_with(SNIPPET_CUT);
+        if cut_end {
+            body = &body[..body.len() - SNIPPET_CUT.len_utf8()];
+        }
+        let mut snippet = Self {
+            segments: Vec::new(),
+            cut_start,
+            cut_end,
+        };
+        let mut text = String::new();
+        let mut in_hit = false;
+        for c in body.chars() {
+            if c == SNIPPET_HIT_START && !in_hit {
+                snippet.push(std::mem::take(&mut text), false);
+                in_hit = true;
+            } else if c == SNIPPET_HIT_END && in_hit {
+                snippet.push(std::mem::take(&mut text), true);
+                in_hit = false;
+            } else {
+                text.push(c);
+            }
+        }
+        if in_hit {
+            // Opened, never closed: the mark was the corpus's own.
+            text.insert(0, SNIPPET_HIT_START);
+        }
+        snippet.push(text, false);
+        snippet
+    }
+
+    /// The snippet as one text: a cut as `…`, a match between `**`.
+    pub fn marked(&self) -> String {
+        let mut out = String::new();
+        if self.cut_start {
+            out.push('…');
+        }
+        for segment in &self.segments {
+            if segment.hit {
+                out.push_str("**");
+                out.push_str(&segment.text);
+                out.push_str("**");
+            } else {
+                out.push_str(&segment.text);
+            }
+        }
+        if self.cut_end {
+            out.push('…');
+        }
+        out
+    }
+
+    /// No text and no cut.
+    pub fn is_empty(&self) -> bool {
+        self.segments.is_empty() && !self.cut_start && !self.cut_end
+    }
+
+    /// Appends a run: a match always, other text when not empty, joined to
+    /// the run before it when that is other text too.
+    fn push(&mut self, text: String, hit: bool) {
+        if !hit && text.is_empty() {
+            return;
+        }
+        if !hit
+            && let Some(last) = self.segments.last_mut()
+            && !last.hit
+        {
+            last.text.push_str(&text);
+            return;
+        }
+        self.segments.push(SnippetSegment { text, hit });
+    }
 }
 
 /// The hits of a search, best first: bm25 (weights `id` 10, `title` 5,

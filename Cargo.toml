@@ -14,6 +14,7 @@ default-members = [
     "crates/specengine-mcp",
     "crates/specengine-import",
     "crates/specengine-eval",
+    "crates/specengine-http",
 ]
 exclude = ["fixtures/bevy-mini", "fixtures/ra-mini"]
 
@@ -71,6 +72,14 @@ rmcp = { version = "=3.5.0", default-features = false, features = ["server", "ma
 # the `rmcp::schemars` re-export (1.2.2, as in 04 §6). Approved by the owner 2026-09-29.
 tokio = { version = "=1.53.1", default-features = false, features = ["rt", "macros", "io-std", "time"] }
 getrandom = { version = "=0.4.3", default-features = false }
+# The daemon's read surface `specengine-http` (docs/features/daemon-read.md, "Data"; 04 §6):
+# HTTP/1 on tokio and the router only. No default features: no `query` (the daemon
+# decodes the raw query string itself, strictly), `json`, `form`, `tracing`,
+# `matched-path`, `original-uri`, `tower-log`, no HTTP/2, and no `tower-http`.
+# `futures-util` (its `stream::unfold`, the live tail) is already locked at this
+# version through `rmcp`. Approved by the owner 2026-10-06.
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
+futures-util = { version = "=0.3.34", default-features = false }
 # rust-analyzer as a library (spike group 6, layer C of 05 §5.1, ADR-0020): one
 # release of the `ra_ap_*` set, pinned exactly. Used only by `specengine-ra`, which
 # is not a default member, so none of these enters the core build graph (AC-01).

@@ -1,12 +1,12 @@
-import type { Proposal } from "../api/types";
+import type { InboxEntry } from "../api/types";
 
 /** Text compared by the filter: NFC, lower case, so composed and decomposed forms match. */
 export function fold(text: string): string {
   return text.normalize("NFC").toLowerCase();
 }
 
-/** Whether a proposal's ID, summary, rationale, kind, task, targets, severity or status hold the query. */
-export function matchesFilter(proposal: Proposal, query: string): boolean {
+/** Whether an inbox entry's ID, summary, rationale, kind, branch, targets, severity, status or record hold the query. */
+export function matchesFilter(proposal: InboxEntry, query: string): boolean {
   const needle = fold(query.trim());
   if (needle === "") {
     return true;
@@ -16,9 +16,10 @@ export function matchesFilter(proposal: Proposal, query: string): boolean {
     proposal.summary,
     proposal.rationale,
     proposal.kind,
-    proposal.task_id,
+    proposal.branch,
     proposal.severity,
     proposal.status,
+    proposal.record_id,
     ...proposal.target_ids,
   ]
     .filter((part): part is string => part !== null)

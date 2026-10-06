@@ -6,7 +6,7 @@ import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
-import { ErrorPanel, Skeleton } from "../ui/states";
+import { ReadFailure, Skeleton } from "../ui/states";
 import { TabPanel, Tabs, type TabSpec } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
@@ -185,9 +185,9 @@ export function TaskDetail({
           <Skeleton label={`Loading ${taskId}`} lines={6} />
         </div>
       ) : (
-        <ErrorPanel
+        <ReadFailure
           title={`${taskId} could not be read`}
-          message={apiErrorOf(failure).message}
+          failure={failure}
           retrying={query.isFetching}
           attempt={query.errorUpdateCount}
           onRetry={() => {

@@ -2405,6 +2405,15 @@ mark {
   color: var(--accent);
 }
 
+/* A read the daemon does not serve yet: not built, not an error. */
+.notice-not-served {
+  border-color: var(--border-control);
+}
+
+.notice-not-served .notice-title .icon {
+  color: var(--accent);
+}
+
 .notice-unknown {
   border-color: var(--stale-unknown);
 }
@@ -2917,6 +2926,10 @@ mark {
 .palette-error .icon {
   margin-top: 0.2em;
   color: var(--severity-high);
+}
+
+.palette-not-served .icon {
+  color: var(--accent);
 }
 
 .palette-hint {

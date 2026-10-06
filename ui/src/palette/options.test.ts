@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Project, Proposal, SearchHit, TaskListEntry } from "../api/types";
-import { aProposal, aSearchHit, aTaskEntry } from "../test/builders";
+import type { InboxEntry, Project, SearchHit, TaskListEntry } from "../api/types";
+import { anEntry, aSearchHit, aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { groupLabel, paletteGroups, type Held, type PaletteInput, type PaletteOption } from "./options";
 
@@ -8,8 +8,8 @@ import { groupLabel, paletteGroups, type Held, type PaletteInput, type PaletteOp
 // substring matching on the trimmed text, an exact ID's group first (AC-13).
 
 const PROJECTS: Project[] = [
-  { slug: "alpha", name: "Alpha" },
-  { slug: "beta", name: "Beta harbour" },
+  { slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" },
+  { slug: "beta", name: "Beta harbour", root: "/work/beta", branch: null },
 ];
 
 function ready<T>(value: T): Held<T> {
@@ -21,7 +21,7 @@ function input(text: string, fields: Partial<PaletteInput> = {}): PaletteInput {
     project: "alpha",
     text,
     tasks: ready<readonly TaskListEntry[]>(SOME_TASKS),
-    inbox: ready<readonly Proposal[]>([aProposal({ id: "PR-1", summary: "Tide window" }), aProposal({ id: "PR-2", summary: "Berth T-0002" })]),
+    inbox: ready<readonly InboxEntry[]>([anEntry({ id: "PR-1", summary: "Tide window" }), anEntry({ id: "PR-2", summary: "Berth T-0002" })]),
     projects: ready<readonly Project[]>(PROJECTS),
     search: null,
     ...fields,

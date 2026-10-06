@@ -17,7 +17,10 @@
 //! entry. AC-12 of docs/features/spec-cli-switch.md: the eight specengine
 //! crates are the default members, no second-implementation package is left
 //! in the metadata or `Cargo.lock`, `.cargo/config.toml` holds only the
-//! build directory, and `scripts/` only the hook installer.
+//! build directory, and `scripts/` only the hook installer. AC-08 of
+//! docs/features/daemon-read.md: `specengine-http` a default member, its
+//! `[dependencies]` and the `axum` / `futures-util` pins, the CLI never
+//! reaching it or an HTTP stack, and its normal graph's licences.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -40,7 +43,7 @@ fn cargo() -> Command {
 }
 
 #[test]
-fn default_members_are_exactly_the_eight_core_packages() {
+fn default_members_are_exactly_the_core_packages() {
     let output = cargo()
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .output()
@@ -71,6 +74,9 @@ fn default_members_are_exactly_the_eight_core_packages() {
             "specengine-code",
             "specengine-core",
             "specengine-eval",
+            // docs/features/daemon-read.md "Data": the daemon is a default
+            // member.
+            "specengine-http",
             "specengine-import",
             "specengine-mcp",
             "specengine-model",
@@ -898,9 +904,15 @@ fn no_workspace_dependency_is_added_against_main() {
     let on_main = keys(&String::from_utf8_lossy(&output.stdout));
     let now = keys(&now_text);
     let added: Vec<&String> = now.iter().filter(|key| !on_main.contains(key)).collect();
+    // docs/features/daemon-read.md "Data": `axum` and `futures-util`,
+    // approved by the owner 2026-10-06 (their pins: `daemon_pins_are_the_
+    // approved_ones`).
     assert!(
-        added.iter().all(|key| *key == "petgraph"),
-        "[workspace.dependencies] entries added against main beyond petgraph: {added:?}"
+        added
+            .iter()
+            .all(|key| ["petgraph", "axum", "futures-util"].contains(&key.as_str())),
+        "[workspace.dependencies] entries added against main beyond petgraph, axum, \
+         futures-util: {added:?}"
     );
     assert!(
         now.iter().any(|key| key == "serde_json"),
@@ -1160,7 +1172,7 @@ fn serde_json_float_roundtrip_is_set_on_the_workspace_pin_only() {
 /// proc-macros (as it does the model's and the core's), so the check is on
 /// the linked graph (`-e normal,no-proc-macro`), as
 /// `core_tree_has_no_rust_analyzer_syn3_or_bevy` does.
-const CLI_FORBIDDEN: [&str; 7] = [
+const CLI_FORBIDDEN: [&str; 10] = [
     "specengine-code",
     "specengine-import",
     "specengine-mcp",
@@ -1168,6 +1180,11 @@ const CLI_FORBIDDEN: [&str; 7] = [
     "specengine-ra",
     "tokio",
     "rmcp",
+    // docs/features/daemon-read.md AC-08: the daemon depends on the CLI,
+    // never the reverse; the CLI keeps no HTTP stack.
+    "specengine-http",
+    "axum",
+    "hyper",
 ];
 
 #[test]
@@ -1825,4 +1842,416 @@ fn cli_direct_dependencies_are_unchanged_by_w() {
         "{direct:?}"
     );
     assert!(CLI_FORBIDDEN.contains(&"specengine-eval"));
+}
+
+// ---------------------------------------------------------------------------
+// docs/features/daemon-read.md AC-08: the daemon's graph and licences.
+// ---------------------------------------------------------------------------
+
+/// The daemon's `[dependencies]`, exactly.
+const HTTP_DEPENDENCIES: [&str; 7] = [
+    "axum",
+    "clap",
+    "futures-util",
+    "serde",
+    "serde_json",
+    "specengine-cli",
+    "tokio",
+];
+
+/// `specengine-http` declares exactly [`HTTP_DEPENDENCIES`]:
+/// `specengine-cli` by path, every other a `[workspace.dependencies]`
+/// entry with no version or default-features of its own, `tokio` adding
+/// exactly `net` (the listener) and `sync` (the per-project turn, declared
+/// rather than borrowed from hyper's feature set); no target-specific, build or optional
+/// dependency; the direct normal graph is the same; the store and
+/// `rusqlite` reach it only through the CLI library; the pins it shares
+/// with the MCP server are `main`'s.
+#[test]
+fn http_direct_dependencies_are_the_cli_library_axum_and_tokio() {
+    let (names, targeted) = declared_normal_dependencies("specengine-http");
+    assert_eq!(
+        names, HTTP_DEPENDENCIES,
+        "specengine-http's [dependencies] (docs/features/daemon-read.md \"Data\")"
+    );
+    assert!(
+        !targeted,
+        "specengine-http has a target-specific dependency table"
+    );
+    let text = std::fs::read_to_string(workspace_root().join("crates/specengine-http/Cargo.toml"))
+        .expect("crates/specengine-http/Cargo.toml");
+    let manifest: toml::Table = text.parse().expect("the daemon's manifest is TOML");
+    assert!(
+        !manifest.contains_key("build-dependencies") && !manifest.contains_key("features"),
+        "no build dependency, no feature in specengine-http"
+    );
+    let deps = manifest["dependencies"].as_table().expect("[dependencies]");
+    for (name, spec) in deps {
+        let spec = spec
+            .as_table()
+            .unwrap_or_else(|| panic!("dependencies.{name} pins a version: {spec:?}"));
+        if name == "specengine-cli" {
+            assert_eq!(
+                spec.get("path").and_then(toml::Value::as_str),
+                Some("../specengine-cli"),
+                "{spec:?}"
+            );
+            assert_eq!(spec.len(), 1, "specengine-cli: extra keys {spec:?}");
+            continue;
+        }
+        assert_eq!(
+            spec.get("workspace").and_then(toml::Value::as_bool),
+            Some(true),
+            "dependencies.{name} is not a workspace entry: {spec:?}"
+        );
+        let allowed: &[&str] = if name == "tokio" {
+            &["workspace", "features"]
+        } else {
+            &["workspace"]
+        };
+        let extra: Vec<&String> = spec
+            .keys()
+            .filter(|key| !allowed.contains(&key.as_str()))
+            .collect();
+        assert!(extra.is_empty(), "dependencies.{name}: {extra:?}");
+    }
+    assert_eq!(
+        deps["tokio"].get("features"),
+        Some(&toml::Value::Array(vec![
+            toml::Value::String("net".to_owned()),
+            toml::Value::String("sync".to_owned()),
+        ])),
+        "tokio adds exactly `net` (the listener) and `sync` (the per-project turn, \
+         `tokio::sync::Mutex`), in that order"
+    );
+
+    let direct = cargo_tree(&["-p", "specengine-http", "-e", "normal", "--depth", "1"]);
+    let crates = tree_crates(&direct);
+    assert!(
+        crates
+            .first()
+            .is_some_and(|(name, _)| name == "specengine-http"),
+        "cargo tree lists specengine-http first:\n{direct}"
+    );
+    let mut found: Vec<&str> = crates
+        .iter()
+        .skip(1)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    found.sort_unstable();
+    found.dedup();
+    assert_eq!(
+        found, HTTP_DEPENDENCIES,
+        "direct normal dependencies:\n{direct}"
+    );
+    for (inverted, dependents) in [
+        ("specengine-store", ["specengine-cli"]),
+        ("rusqlite", ["specengine-store"]),
+    ] {
+        let tree = cargo_tree(&[
+            "-p",
+            "specengine-http",
+            "-e",
+            "normal",
+            "-i",
+            inverted,
+            "--depth",
+            "1",
+        ]);
+        let found: Vec<String> = tree_crates(&tree)
+            .into_iter()
+            .skip(1)
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(found, dependents, "{inverted}'s dependents:\n{tree}");
+    }
+
+    let output = Command::new("git")
+        .current_dir(workspace_root())
+        .args(["show", "main:Cargo.toml"])
+        .output()
+        .expect("git runs");
+    if !output.status.success() {
+        eprintln!(
+            "no main:Cargo.toml: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let on_main: toml::Table =
+        toml::from_str(&String::from_utf8_lossy(&output.stdout)).expect("main's manifest");
+    let now: toml::Table = toml::from_str(
+        &std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest"),
+    )
+    .expect("the root manifest");
+    for name in ["tokio", "clap", "serde", "serde_json"] {
+        assert_eq!(
+            now["workspace"]["dependencies"].get(name),
+            on_main["workspace"]["dependencies"].get(name),
+            "[workspace.dependencies].{name} changed against main"
+        );
+    }
+}
+
+/// The pins the owner approved (docs/features/daemon-read.md "Data"):
+/// `axum` `=0.8.9`, no default features, exactly `http1` and `tokio` (the
+/// query string is decoded by the daemon's own strict parser, so axum's
+/// `query` is off); `futures-util` `=0.3.34`, no default features, none
+/// added; each resolves once, at its pin; axum's `json` is off and `tower-http`,
+/// `rust-embed`, `notify`, `h2` are not in the daemon's normal graph.
+#[test]
+fn daemon_pins_are_the_approved_ones() {
+    let text = std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest");
+    let manifest: toml::Table = toml::from_str(&text).expect("a TOML manifest");
+    let deps = manifest["workspace"]["dependencies"]
+        .as_table()
+        .expect("[workspace.dependencies]");
+    for (name, version, features) in [
+        ("axum", "=0.8.9", &["http1", "tokio"][..]),
+        ("futures-util", "=0.3.34", &[][..]),
+    ] {
+        let spec = deps
+            .get(name)
+            .and_then(toml::Value::as_table)
+            .unwrap_or_else(|| panic!("[workspace.dependencies].{name} is a table"));
+        assert_eq!(
+            spec.get("version").and_then(toml::Value::as_str),
+            Some(version),
+            "{name}"
+        );
+        assert_eq!(
+            spec.get("default-features").and_then(toml::Value::as_bool),
+            Some(false),
+            "{name}: default features off"
+        );
+        let on: Vec<&str> = spec
+            .get("features")
+            .and_then(toml::Value::as_array)
+            .map(|items| items.iter().filter_map(toml::Value::as_str).collect())
+            .unwrap_or_default();
+        assert_eq!(on, features, "{name}'s features");
+        let extra: Vec<&String> = spec
+            .keys()
+            .filter(|key| !["version", "default-features", "features"].contains(&key.as_str()))
+            .collect();
+        assert!(extra.is_empty(), "{name}: {extra:?}");
+        assert_eq!(
+            locked_versions(name),
+            [version.trim_start_matches('=')],
+            "{name} resolves once, at its pin"
+        );
+    }
+    let graph = http_graph_licences();
+    for absent in ["tower-http", "rust-embed", "notify", "h2"] {
+        assert!(
+            !graph.iter().any(|(name, _, _)| name == absent),
+            "{absent} is in the daemon's normal graph"
+        );
+    }
+    let features = cargo_tree(&["-p", "specengine-http", "-e", "features", "-i", "axum"]);
+    let mut on: Vec<&str> = features
+        .lines()
+        .filter_map(|line| line.split("axum feature ").nth(1))
+        .map(|rest| rest.trim_end_matches(" (*)").trim_matches('"'))
+        .collect();
+    on.sort_unstable();
+    on.dedup();
+    assert_eq!(on, ["http1", "tokio"], "axum's features on:\n{features}");
+    for off in [
+        "\"json\"",
+        "\"form\"",
+        "\"query\"",
+        "\"http2\"",
+        "\"tracing\"",
+        "\"ws\"",
+    ] {
+        assert!(
+            !features
+                .lines()
+                .any(|line| line.contains("axum feature") && line.contains(off)),
+            "axum feature {off} is on:\n{features}"
+        );
+    }
+}
+
+/// The licences AC-08 allows.
+const ALLOWED_LICENCES: [&str; 8] = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Unlicense",
+    "BSL-1.0",
+    "Zlib",
+    "Unicode-3.0",
+    "ISC",
+];
+
+/// Whether an SPDX expression is within `allowed`: `OR` (or a legacy `/`)
+/// needs one side, `AND` both, parentheses group, `X WITH E` is `X` (an
+/// exception only adds permissions).
+fn licence_allowed(expression: &str, allowed: &[&str]) -> Result<bool, String> {
+    let spaced = expression
+        .replace('(', " ( ")
+        .replace(')', " ) ")
+        .replace('/', " OR ");
+    let tokens: Vec<&str> = spaced.split_whitespace().collect();
+    fn or(tokens: &[&str], at: &mut usize, allowed: &[&str]) -> Result<bool, String> {
+        let mut value = and(tokens, at, allowed)?;
+        while tokens.get(*at) == Some(&"OR") {
+            *at += 1;
+            let right = and(tokens, at, allowed)?;
+            value = value || right;
+        }
+        Ok(value)
+    }
+    fn and(tokens: &[&str], at: &mut usize, allowed: &[&str]) -> Result<bool, String> {
+        let mut value = atom(tokens, at, allowed)?;
+        while tokens.get(*at) == Some(&"AND") {
+            *at += 1;
+            let right = atom(tokens, at, allowed)?;
+            value = value && right;
+        }
+        Ok(value)
+    }
+    fn atom(tokens: &[&str], at: &mut usize, allowed: &[&str]) -> Result<bool, String> {
+        let token = *tokens.get(*at).ok_or("an expression ends early")?;
+        *at += 1;
+        if token == "(" {
+            let value = or(tokens, at, allowed)?;
+            if tokens.get(*at) != Some(&")") {
+                return Err("an unclosed parenthesis".to_owned());
+            }
+            *at += 1;
+            return Ok(value);
+        }
+        if ["OR", "AND", "WITH", ")"].contains(&token) {
+            return Err(format!("`{token}` where a licence is expected"));
+        }
+        if tokens.get(*at) == Some(&"WITH") {
+            *at += 2;
+        }
+        Ok(allowed.contains(&token))
+    }
+    let mut at = 0;
+    let value = or(&tokens, &mut at, allowed)?;
+    if at != tokens.len() {
+        return Err(format!("trailing `{}`", tokens[at..].join(" ")));
+    }
+    Ok(value)
+}
+
+/// `(name, version, licence)` of the daemon itself and every package of
+/// its normal graph, each once.
+fn http_graph_licences() -> Vec<(String, String, Option<String>)> {
+    let tree = cargo_tree(&[
+        "-p",
+        "specengine-http",
+        "-e",
+        "normal",
+        "--prefix",
+        "none",
+        "--format",
+        "{p}\t{l}",
+    ]);
+    let mut out: Vec<(String, String, Option<String>)> = Vec::new();
+    for line in tree.lines() {
+        let line = line.trim_end_matches(" (*)");
+        let Some((package, licence)) = line.split_once('\t') else {
+            continue;
+        };
+        let mut words = package.split_whitespace();
+        let name = words.next().expect("a name").to_owned();
+        let version = words
+            .next()
+            .and_then(|version| version.strip_prefix('v'))
+            .expect("a version")
+            .to_owned();
+        let licence = licence.trim().trim_end_matches(" (*)").trim();
+        let licence = (!licence.is_empty()).then(|| licence.to_owned());
+        if !out.iter().any(|(n, v, _)| *n == name && *v == version) {
+            out.push((name, version, licence));
+        }
+    }
+    out
+}
+
+#[test]
+fn every_package_of_the_daemons_normal_graph_is_licensed_within_the_allowed_set() {
+    let graph = http_graph_licences();
+    assert!(
+        graph
+            .first()
+            .is_some_and(|(name, _, _)| name == "specengine-http"),
+        "{graph:?}"
+    );
+    for wanted in [
+        "axum",
+        "hyper",
+        "matchit",
+        "tokio",
+        "specengine-cli",
+        "rusqlite",
+    ] {
+        assert!(
+            graph.iter().any(|(name, _, _)| name == wanted),
+            "{wanted} is in the daemon's normal graph: {graph:?}"
+        );
+    }
+    let mut refused = Vec::new();
+    for (name, version, licence) in &graph {
+        match licence {
+            None => refused.push(format!("{name} {version}: no licence")),
+            Some(expression) => match licence_allowed(expression, &ALLOWED_LICENCES) {
+                Ok(true) => {}
+                Ok(false) => refused.push(format!("{name} {version}: {expression}")),
+                Err(problem) => refused.push(format!("{name} {version}: {expression}: {problem}")),
+            },
+        }
+    }
+    assert!(
+        refused.is_empty(),
+        "outside {ALLOWED_LICENCES:?} ({} packages checked): {refused:#?}",
+        graph.len()
+    );
+    // matchit is MIT AND BSD-3-Clause: both are needed.
+    let matchit = graph
+        .iter()
+        .find(|(name, _, _)| name == "matchit")
+        .and_then(|(_, _, licence)| licence.clone())
+        .expect("matchit's licence");
+    let without_bsd: Vec<&str> = ALLOWED_LICENCES
+        .iter()
+        .copied()
+        .filter(|licence| *licence != "BSD-3-Clause")
+        .collect();
+    assert_eq!(
+        licence_allowed(&matchit, &without_bsd),
+        Ok(false),
+        "{matchit}"
+    );
+}
+
+#[test]
+fn the_licence_expressions_read_as_spdx() {
+    let allowed = ["MIT", "Apache-2.0"];
+    for (expression, want) in [
+        ("MIT", true),
+        ("GPL-3.0", false),
+        ("MIT OR Apache-2.0", true),
+        ("MIT/Apache-2.0", true),
+        ("GPL-3.0 OR MIT", true),
+        ("MIT AND BSD-3-Clause", false),
+        ("MIT AND Apache-2.0", true),
+        ("(MIT OR Apache-2.0) AND Unicode-3.0", false),
+        ("Apache-2.0 WITH LLVM-exception", true),
+        ("Apache-2.0 WITH LLVM-exception OR GPL-2.0", true),
+    ] {
+        assert_eq!(
+            licence_allowed(expression, &allowed),
+            Ok(want),
+            "{expression}"
+        );
+    }
+    assert!(licence_allowed("MIT OR", &allowed).is_err());
+    assert!(licence_allowed("(MIT", &allowed).is_err());
 }
