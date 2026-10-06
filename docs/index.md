@@ -41,6 +41,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/daemon-read.md](features/daemon-read.md) Daemon read: the HTTP read surface · crates/specengine-http, crates/specengine-cli, ui · draft
+- [docs/features/proposal-kinds.md](features/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/task-package.md](features/task-package.md) Task package · specengine · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
