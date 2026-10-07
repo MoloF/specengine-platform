@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-07
 ---
 
 # Decision staging: UI prepares, terminal confirms
 
-The decided behaviour of ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`). **Not built yet: the `decision-staging` slice** (`docs/features/decision-staging.md`, after `task-package`). Until it ships the decision POST answers 403 (`crates/specengine-http/README.md` "One door"), the UI offers the `spec` command to copy, and a decision is `spec approve|reject` with its flags alone (`proposal-apply.md` "Consent", `decision-record.md` "Flags").
+The decided behaviour of ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`). **Not built yet: the `decision-staging` slice** (`docs/features/decision-staging.md`, after `task-package`). Until it ships the decision POST answers 403 (`crates/specengine-http/README.md` "One door"), the UI offers the `spec` command to copy, a decision is `spec approve|reject` with its flags alone.
 
 ## Rule
 
@@ -26,7 +26,7 @@ The decided behaviour of ADR-0035 under ADR-0034 (`docs/canon/architecture.md#ap
 {"decision":"reject","reason":"duplicate of PR-0003"}
 ```
 
-An approve carries `option`, `answer`, `canon`, `note` (`null` when absent) and, for an `update` or `create`, `span_hash`: the target's span hash when staged (the staleness note). `staged_at` is the UTC time, `YYYY-MM-DDTHH:MM:SSZ`. A stage is checked as the terminal checks its flags, before anything is stored: the ID and repository (`proposal-queue.md` "Place, IDs, repositories"; an orphan takes only a reject), state `open`, the decision flags (`decision-record.md` "Flags"; a decision flag on an `update` refused), the caps (`note`, `reason` <= 4 096 bytes, as the CLI from then on; `answer` 2 048, `canon` 512), a character the queue escapes refused, named. No apply step runs; nothing is written in a worktree.
+An approve carries `option`, `answer`, `canon`, `note` (`null` when absent) and, for an `update` or section-form `create`, `span_hash`: the target's span hash when staged (the staleness note). `staged_at` is the UTC time, `YYYY-MM-DDTHH:MM:SSZ`. A stage is checked as the terminal checks its flags, before anything is stored: the ID and repository (`proposal-queue.md` "Place, IDs, repositories"; an orphan takes only a reject), state `open`, the decision flags (`decision-record.md` "Flags"; a decision flag on an `update` or `create` refused), the caps (`note`, `reason` <= 4 096 bytes, as the CLI from then on; `answer` 2 048, `canon` 512), a character the queue escapes refused, named. No apply step runs; nothing is written in a worktree.
 
 ## Queue
 
@@ -44,7 +44,7 @@ Queue schema 5 (after `task-package`'s 4): `proposals` + `staged`, `staged_at`, 
 
 - `spec approve PR` without decision flags, an approve staged: before the question, on stderr, `staged <staged_at>: spec approve PR-0004 --option 1 --note "..."` (escaped) and the chosen option's line; the question is marked `staged`. `y` applies with the staged flags, checked again; anything else -> exit 1, the stage kept.
 - Typed flags win whole, never merged with the stage; a note names the stage left unused. `spec reject PR`: `--reason` may be omitted only when a reject is staged.
-- Step 7 and a reject compare the shown stage with the row byte for byte (with `updated_at`, 1 s resolution): changed -> exit 1, nothing changed. No `--yes`; without a terminal exit 2 before reading (`proposal-apply.md` "Consent").
+- Step 7, a completion and a reject compare the shown stage with the row byte for byte (with `updated_at`, 1 s resolution): changed -> exit 1, nothing changed. No `--yes`; without a terminal exit 2 before reading (`proposal-apply.md` "Consent").
 
 ## Staleness
 
@@ -52,7 +52,7 @@ A staged `span_hash` other than the target's now (apply step 5) gives a note at 
 
 ## Documents
 
-The review document gains `staged`, `staged_at`; inbox entries `staged_at`; pinned by `fixtures/daemon-keys.json`. Backups keep stages (`queue-backup.md` "Format"; dumps of schemas 1-5 restore, NULL where absent).
+The review document gains `staged`, `staged_at`; inbox entries `staged_at`; pinned by `fixtures/daemon-keys.json`. Backups keep stages (`queue-backup.md` "Format"; format-1 dumps of schemas 1-3, format-2 of 4-5 restore, NULL where absent).
 
 ## UI
 

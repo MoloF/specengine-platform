@@ -2,7 +2,7 @@
 class: spec
 status: draft
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
-ref: decision-staging analysis 2026-10-06; the owner's decisions of 2026-10-06, every recommendation accepted; 08 s2 Phase 2
+ref: decision-staging analysis 2026-10-06, the owner's decisions as recommended; readiness check 2026-10-07; 08 s2 Phase 2
 adrs: [ADR-0034, ADR-0035]
 ---
 
@@ -10,95 +10,88 @@ adrs: [ADR-0034, ADR-0035]
 
 ## Why
 
-The owner reads a proposal best in the browser, but the UI cannot decide: the decision POST answers 403 and the card offers a command to copy (`crates/specengine-http/README.md` "One door"). The owner decided (2026-10-06): no authentication inside SpecEngine, ever (ADR-0034); a decision is **staged anywhere, confirmed only on a terminal** (ADR-0035). The behaviour is canon already, marked not built: `docs/canon/decision-staging.md` (read it first; this spec does not repeat it). This slice builds it: one optional staged choice per open proposal, written by `specengine-http`, shown and confirmed by the existing `spec approve|reject` `[y/N]`.
+The UI cannot decide: the decision POST answers 403, the card offers a command to copy (`crates/specengine-http/README.md` "One door"). The owner decided (2026-10-06): no authentication inside SpecEngine, ever (ADR-0034); a decision is **staged anywhere, confirmed only on a terminal** (ADR-0035). The behaviour is canon, marked not built: `docs/canon/decision-staging.md` (read it first). This slice builds it: one optional staged choice per open proposal, written by `specengine-http`, shown and confirmed by the existing `spec approve|reject` `[y/N]`.
 
-**Order** (08 s2): `task-package` (queue schema 4, 41 proposal columns, review document 43 keys), `ui-live-tasks` (both shipped 2026-10-07: `QUEUE_EVENT_TYPES` 14, the five `proposal.*` then nine `task.*`; reads take an `AbortSignal`, the decision POST none), this. Roles: `rust-developer` store, CLI library, `specengine-http`, MCP `mirror.rs`; `ui-developer` `ui/src`; `test-engineer` tests, `fixtures/daemon-keys.json` (regenerated). No hook, CI or plugin change; no new crate or package.
+**Order** (08 s2): after `task-package`, `ui-live-tasks` (shipped). Roles: `rust-developer` store, CLI library, `specengine-http`, `mirror.rs`, `plugin/`; `ui-developer` `ui/src`; `test-engineer` tests, `fixtures/daemon-keys.json`, `PINS`. No hook, CI, crate or package added.
 
-**Owner's questions, decided 2026-10-06 as recommended**: Q1 after `task-package`, schema 5; Q2 typed flags win whole; Q3 agents never stage (no MCP tool); Q4 staging requires `Sec-Fetch-Site: same-origin`, labelled "not authentication"; Q5 staleness is a note; Q6 stages travel in backups.
-
-**Assumptions**: A1 "one key" is `y` + Enter, the existing prompt; A2 `note` and `reason` are capped at 4 096 bytes for staging and the CLI alike (a new exit 1 on the CLI); A3 staged text holding a character the queue escapes is refused, named; A4 who staged is unknowable: the commit format is unchanged, the event log keeps every stage; A5 `daemon-read` is not rewritten: this slice supersedes its AC-03 (the POST's 403) and `door.rs` changes with it.
+**Assumptions**: A1 "one key" is `y` + Enter, the existing prompt; A2-A4 are canon now; A5 `daemon-read` stays: this slice supersedes its AC-03 (the POST's 403). **Working answers** Q1-Q5 (readiness check 2026-10-07, as recommended, open to the owner): marked in place.
 
 ## Description and interactions
 
-1. The owner opens a card (`GET .../proposals/:id`), chooses in the decision dialog: the POST stages, the card reads ``Staged <at>. Confirm on a terminal: `spec approve PR-0004` `` with Copy and Unstage; the proposal stays in the inbox.
-2. On a terminal `spec approve PR-0004` (no flags) prints the stage and its time, then the question; `y` applies exactly as `spec approve PR-0004 --option 1 --note "..."` would today.
-3. An agent sees `staged`, `staged_at` in `get_proposal` and `spec review --json`; no tool stages (Q3). Neighbours: `proposal-apply.md` "Consent", `decision-record.md` "Flags", `queue-backup.md` "Format", `agent-intake.md` "Review document", `ui/README.md` "Contract seam".
+1. The owner stages in the UI's dialog; `spec approve|reject PR` on a terminal confirms (the canon's "UI", "Terminal").
+2. Agents read `staged`, `staged_at` (`get_proposal`, `spec review --json`); no tool stages. Plugin `ask-owner` "Whose words count": a staged choice is not an answer (any local process writes one, ADR-0034); 0.1.5 -> 0.1.6 (root README "Claude Code plugin"; Q3).
+3. Task-bound proposals: a stage never touches `task_id`, a snapshot or a package; the refresh stays the terminal apply's.
+
+**Docs at shipping**: new normative text only in `docs/canon/decision-staging.md` ("Not built yet" goes). Elsewhere byte-neutral only (4 -> 5, 41 -> 43, 43 -> 45, 11 -> 12, five -> seven, "not yet" -> the fact; no op rows): `tasks.md` "Store", "Backup", "Task-bound proposals"; `proposal-kinds.md` "Queue row"; `proposal-queue.md` "States and events", "Store" (schema, "Connection", `Seen`); `queue-backup.md` "Format", "Store"; `architecture.md#apply`, `#ui`; the http README title, intro, "Fence", "Endpoints", "One door" (drop "Until staging ships" to pay), "Live tail", "Concurrency", "Tests"; `ui/README.md` "Contract seam"; root README version; 07 s3.
 
 ## Data
 
-**Queue schema 5** (`QUEUE_SCHEMA_VERSION` 4 -> 5, one `Immediate` transaction): `ALTER TABLE proposals ADD COLUMN staged TEXT`, then `staged_at TEXT`; `PROPOSAL_COLUMNS` 41 -> 43, pinned to `PRAGMA table_info`. A schema-4 DB opens as 5 with both NULL; a schema-6 DB -> exit 2, nothing changed. Columns, not a table: one stage per proposal.
+**Queue schema 5**: `QUEUE_SCHEMA_VERSION` 5; `migrate` (`queue.rs`) adds `STEP_5` under `if version == 4`, same transaction: `ALTER TABLE proposals ADD COLUMN staged TEXT`, then `staged_at TEXT`. `PROPOSAL_COLUMNS` 43 = `PRAGMA table_info`; `proposal_columns(4)` the first 41. Schema 4 opens as 5, both NULL; 6 -> exit 2. A schema-5 DB refuses older builds (`SchemaTooNew`): restart the daemon, reinstall `specengine-mcp` from one commit.
 
-`staged`, compact JSON, keys in this order, `null` for an absent value:
+`staged`: compact JSON, the canon's two shapes ("The stage"), keys in its order, `null` when absent. `span_hash`: an `update`'s or section-form `create`'s target span hash (step 5's reading); `null` for a file-form `create`, a deciding kind. `staged_at` by `utc_now`. **Corrupt row**, named (`get`, `list` fail; `inbox` skips, noted): another shape (a key missing, extra, reordered; a wrong type); one column NULL alone; staged, not `open`; `option` or `canon` on a kind taking none.
 
-```json
-{"decision":"approve","option":1,"answer":null,"canon":null,"note":"keep the cap","span_hash":null}
-{"decision":"approve","option":null,"answer":null,"canon":null,"note":null,"span_hash":"b3:9f2c..."}
-{"decision":"reject","reason":"duplicate of PR-0003"}
-```
-
-`span_hash`: an `update`'s or `create`'s target span hash when staged (apply step 5's reading), `null` for a deciding kind. `staged_at` `YYYY-MM-DDTHH:MM:SSZ` (CLI `utc_now`). **Corrupt row**, named (`get`, `list` fail; `inbox` skips with its note): `staged` not one of the two shapes (a key missing, extra or reordered; a wrong type); one of the pair NULL without the other; a stage on a row not `open`; `option` or `canon` on a kind that takes none (`decision-record.md` "Flags").
-
-**Store ops** (`ProposalQueue`; `Seen` gains `staged`, the text as read):
+**Store ops** (`ProposalQueue`; `Seen` + `staged`); any op leaving `open` NULLs both:
 
 | Op | Does |
 |---|---|
-| `stage_from(id, seen, stage, now)` | `open` only; compare-and-set on `Seen`; sets both, `updated_at` = `now`; `proposal.staged`; else `Status`/`Changed`, nothing written |
-| `unstage_from(id, seen, now)` | `open` only; both NULL, `updated_at` = `now`, `proposal.unstaged`; nothing staged -> `Ok(false)`, no write, no event |
-| `approve_from`, `reject_from`, `applied_with`, `reject_orphan` | compare `staged` too; leaving `open` NULLs both in the same transaction |
+| `stage_from(id, seen, stage, now)` | `open`, compare-and-set on `Seen`: sets both, `updated_at` = `now`, `proposal.staged`; else `Status`/`Changed`, no write |
+| `unstage_from(id, seen, now)` | alike, NULLs both, `proposal.unstaged`; nothing staged -> `Ok(false)`, no write, no event |
+| `approve_from`, `approve_record_from`, `reject_from`, `reject_orphan` | compare `staged` too |
+| `approve`, `reject`, `applied_with` | no compare (`applied_with` by design: `queue.rs` "Runs") |
 
-**Events**: `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}` (`staged` an object); `proposal.unstaged` `{"id":"PR-0004"}`; `.approved`, `.rejected` add `"staged_at"` when they confirm a stage. Proposal events 5 -> 7, listed alike in `proposal-queue.md` "States and events", the http README "Live tail" and `ui/src/api/http.ts` `QUEUE_EVENT_TYPES`.
+**Events**: `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}`, `proposal.unstaged` `{"id":"PR-0004"}`; `.approved` (step 7 or a completion) and `.rejected` add `"staged_at"` when confirming a stage. `QUEUE_EVENT_TYPES` 16, the two after `proposal.apply_failed`.
 
-**CLI library** (no `spec stage` command): `stage(&Env, &Globals, &StageRequest {id, stage, updated_at, now, git}) -> ProposalOutcome`, `unstage(&Env, &Globals, &UnstageRequest {id, now, git})`. In order: the ID (`proposal-queue.md` "Place, IDs, repositories"), the current repository, the orphan rule (only a reject stages), state `open`, `updated_at` equal to the row's, `first_checks` (`decide.rs`) on the staged flags, the caps (`note`, `reason` 4 096; `answer` 2 048; `canon` 512), escaped characters refused, named. No apply step, no git write, nothing under any root. Each refusal names its cause for the daemon's status.
+**CLI library** (no `spec stage`): `stage(&Env, &Globals, &StageRequest {id, body: StageBody, now, git})`, `unstage(&Env, &Globals, &UnstageRequest {id, now, git})` -> `Result<StageOutcome, CliError>` (`Outcome::Stage`). `StageBody`: serde, `deny_unknown_fields`, approve keys absent = `null`; the daemon decodes with it, no literal of its own (`no_domain.rs`). Checks: the canon's ("The stage"), `updated_at` equal to the row's after `open`, flags by `first_checks` (`decide.rs`). `StageOutcome {proposal: ProposalOutcome, cause: Option<StageCause>}`, `StageCause` `Usage` (an exit-2 usage line) | `Unknown` | `Refused` (the last note). No name in `specengine-http` is `Staged`, `Changed`, `baseline` (`door.rs` `not_plain`).
 
-**Daemon** (`specengine-http`; error body as the README's, two keys):
+**Daemon**: `answer.rs` `answered` keys on `Outcome::Stage` as on the check exception: no cause 200, `Usage` 400, `Unknown` 404, `Refused` 409 (the refused review document, Q2), `CliError` 503; error bodies the README's.
 
 | Request | Answer |
 |---|---|
-| `POST .../proposals/:id/decision`, body `{"decision":"approve","option":1,"answer":null,"canon":null,"note":"...","updated_at":"..."}` or `{"decision":"reject","reason":"...","updated_at":"..."}` | 200 the review document; 400 bad JSON, an unknown or missing key, flag usage (the CLI's message); 404 unknown ID; 409 the refused document (its reason the last note: not `open`, an orphan's approve, another repository, `updated_at` changed); 413 body over 16 384 bytes; 415 not `application/json`; 503 cannot run |
-| `DELETE .../proposals/:id/decision` | 200 the review document, also when nothing was staged (no event); 404; 409 not `open`; 503 |
+| `POST .../proposals/:id/decision`, body `StageBody`: the stage less `span_hash`, plus `updated_at` | 200 the review document; 400 bad JSON, a key unknown or missing, flag usage (a question with only a path target: no `--canon`); 404; 409 not `open`, an orphan's approve, another repository, `updated_at` changed; 413 over 16 384 bytes; 415 not `application/json`; 503 |
+| `DELETE`, same path | 200 the document, nothing staged too (no event); 404; 409 not `open`; 503 |
 
-Past the fence, for these two only: `Sec-Fetch-Site: same-origin` required (absent or `none` -> 403 ``staging needs a same-origin page (not authentication: ADR-0034)``); other methods -> 405 `Allow: POST, DELETE`. Approve keys may be absent (= `null`). The one door changes: handlers call `stage`, `unstage`, never `approve`, `reject`, `propose`, `import_state`, `export_*`, `init`, `index`; `check` only plain.
+Past the fence, these two only: `Sec-Fetch-Site: same-origin` (absent, `none` -> 403 ``staging needs a same-origin page (not authentication: ADR-0034)``); else 405 `Allow: POST, DELETE` (`app.rs` `only_post`, `methods.rs`). `pnpm dev` as is (its proxy keeps `Sec-Fetch-Site`: `vite.config.ts`). One door: `door.rs` `forbidden` kept, handlers add `stage`, `unstage`; only its first test's decision-POST block is rewritten.
 
-**Terminal** (`main.rs`, `apply.rs`): `spec approve PR` with no decision flag and an approve staged takes its flags: stderr ``staged 2026-10-06T09:14:02Z: spec approve PR-0004 --option 1 --note "keep the cap"`` (values double-quoted, `\` and `"` backslashed, then escaped), the chosen option's review line (`  [1] label | effect | price`), then the question, its parenthesis ending `, staged`. Any typed flag (`--note` too) wins whole: note ``the choice staged <at> is not used: the typed flags decide``. `spec approve` with a reject staged runs as unstaged, the same note. `spec reject PR` without `--reason`: a reject staged -> its reason; nothing staged -> exit 2 naming `--reason`; an approve staged -> exit 2 naming `spec approve PR`. Declined -> exit 1, the stage kept.
+**Terminal** (`main.rs`, `apply.rs`): `spec approve PR`, no decision flag, an approve staged: stderr ``staged 2026-10-06T09:14:02Z: spec approve PR-0004 --option 1 --note "keep the cap"`` (values double-quoted, `\` `"` backslashed, then escaped), the option's review line (`  [1] label | effect | price`), the question: apply's parenthesis ends `, staged`, the completion's (none now: `proposal-apply.md` "Consent") is ` (staged)`; a completion of an `open` proposal records the staged flags, the stage compared again before `applied_with` (Q4). A typed flag (`--note` too) wins whole: ``the choice staged <at> is not used: the typed flags decide``; a reject staged under `spec approve`: the same. `--reason` optional (`Reject`, `RejectRequest`): a reject staged -> its reason; nothing staged -> exit 2 naming `--reason`; an approve staged -> exit 2 naming `spec approve PR`. Declined -> exit 1, stage kept.
 
-**Staleness**: staged `span_hash` other than step 5's: note ``staged against <h1>; the target is now <h2>: the change applies as it rebases`` at the prompt and in `spec review`'s `notes`. Never refuses or unstages; no expiry.
+**Staleness** note: ``staged against <h1>; the target is now <h2>: the change applies as it rebases``, at the prompt and in `spec review`'s `notes`.
 
-**Documents and keys**: review document + `staged` (object or `null`), `staged_at` after `task_id`: 45 keys; text `staged:` compact JSON, `staged_at:`. Inbox entries + `staged_at` (12 keys); text status `open (staged)`. `fixtures/daemon-keys.json` regenerated; `mirror.rs` mirrors both.
+**Documents**: review + `staged` (object or `null`), `staged_at` between `task_id` and `notes` (45 keys); text `staged:` compact JSON, `staged_at:`. Inbox entries + `staged_at` after `record_id` (12); text `open (staged)`. `daemon-keys.json` 34 sets (+ the two shapes, 6 and 2 keys). `mirror.rs`: `staged` two closed objects, `staged_at` after `task_id`; `decision` a field identifier, never a literal (`mcp_genre.rs`).
 
-**Backup**: the two columns travel in dumps (`queue_schema` 5); import takes schemas 1-5 (later columns NULL); a schema-4 DB exports as 5, unmigrated.
+**Backup**: `STATE_FORMAT` 2, `queue_schema` 5. Import (`state_file.rs`): format 1 holds schemas 1-3, format 2 4-5 (schema 4: stages NULL). `stored_rows` (`queue/state.rs`) reads tasks, runs at `version >= 4`, not `==`; schema 4 exports as 5, unmigrated.
 
-**UI**: `SpecEngineClient.stageDecision(project, id, stage, updatedAt)`, `unstageDecision(project, id)` replace `decideProposal` (`HttpClient`, the mock, `stubClient.ts`); `provisional.ts` `Stage`, `Proposal.staged`, `staged_at`, `InboxEntry.staged_at`; the dialog's fields come from the review document; accept -> approve stage, reject -> reject stage; clarification and defer send nothing ("Not built yet"). The card's Copy copies only fixed words and an ID matching `^PR-[0-9]{4,}$`. A `proposal.staged` or `.unstaged` refetches that project's inbox and that proposal; a stage changed outside this tab raises a `role="alert"`.
+**UI**: `stageDecision(project, id, stage, updatedAt)`, `unstageDecision(project, id)` replace `decideProposal` (`SpecEngineClient`, `HttpClient`, mock, `stubClient.ts`), no `AbortSignal` (a write's answer always taken). `http.ts` `request` takes `DELETE`; a POST/DELETE 409 carrying the review document rejects as `ClientError {409, its last note}`. `provisional.ts` `Stage`, `Proposal.staged`, `staged_at`, `InboxEntry.staged_at`; dialog fields from the review document; accept, reject stage; clarification, defer send nothing ("Not built yet"); `decisions.ts` `WORDING` accept, reject `effect` reworded (staged, confirmed on a terminal). Copy: fixed words and an ID matching `^PR-[0-9]{4,}$`. A stage (replacing `useDecideProposal`) keeps the entry, sets the returned document, re-reads only that inbox and proposal; `useLiveQueue` alike on `proposal.staged`, `.unstaged`; a stage changed outside this tab: `role="alert"`.
 
 ## Rules and edge cases
 
-- WHEN a stage arrives for a proposal not `open` THEN the system SHALL refuse it (409) and store nothing.
-- WHEN the stage shown at the prompt differs byte for byte from the row at step 7 or at reject (`updated_at` has 1 s resolution) THEN exit 1 ``PR-0004 changed since the question: its staged choice was replaced or removed; nothing changed``.
-- WHEN a proposal leaves `open` THEN its stage SHALL be cleared in that transaction, without `proposal.unstaged`.
-- A stage never blocks (ADR-0012): no status, no hold; a staged proposal is listed, decided by anyone's terminal.
-- No `--yes`, no TTY -> exit 2 before anything is read (`proposal-apply.md` "Consent").
-- Risks: a reflex `y` on an agent-made or injected stage (mitigated: the whole choice and time first, the alert, the event log, no MCP tool, the header rule; residual: forged headers plus an unread prompt); a faked terminal and other local accounts (ADR-0034, stated); `specengine-http` becomes a queue writer (README "One door", `proposal-queue.md` "Store"); the UI's four choices against the CLI's two.
+The canon's ("Rule", "Queue", "Terminal"), and:
+
+- WHEN the stage shown at the prompt differs byte for byte from the row at step 7, a completion or reject (`updated_at` has 1 s resolution) THEN exit 1 ``PR-0004 changed since the question: its staged choice was replaced or removed; nothing changed``.
+- Gap (Q1: the stage's compare-and-set key stays `updated_at`): a stage made in the same second as the UI's read replaces it without a 409; its event still raises the alert.
+- Risks past the canon's "Threat model": `specengine-http` a queue writer; the UI's four choices against the CLI's two.
 
 ## Acceptance criteria
 
-- [ ] AC-01 -- docs: ADR-0034, ADR-0035 each <= 1 536 B with `canon:` and "Cost"; `rg 'specengine/[t]oken|first write [e]ndpoint'` finds nothing in live docs, READMEs, `crates/*/src`, `ui/src`; `docs/canon/decision-staging.md` <= 12 288 B; the five queue canons within cap (M: 07 s3's token line restored).
-- [ ] AC-02 -- schema: a schema-4 DB opens as 5, both NULL; `PROPOSAL_COLUMNS` 43 = `PRAGMA table_info`; a schema-6 DB exit 2 (M: the columns added without the version bump).
-- [ ] AC-03 -- staging an open `update`, `question`, `discrepancy` -> 200 with `staged`; `git status --porcelain` empty, `HEAD`, branches, status unchanged; one `proposal.staged` each, a subscriber sees it < 1 s; `door.rs` green (M: the handler approves with an always-yes consent).
-- [ ] AC-04 -- every refusal of `decision-record.md` "Flags" and a decision flag on an update, via POST: the CLI's message, 400 or 409, nothing stored (M: the daemon's own option-range check).
+- [ ] AC-01 -- docs: ADR-0034, ADR-0035 each <= 1 536 B with `canon:` and "Cost"; `rg 'specengine/[t]oken|first write [e]ndpoint'` finds nothing in live docs, READMEs, `crates/*/src`, `ui/src`; every touched canon within cap (M: 07 s3's token line restored).
+- [ ] AC-02 -- a schema-4 DB opens as 5, both NULL; `PROPOSAL_COLUMNS` 43 = `PRAGMA table_info`; schema 6 exit 2 (M: the columns without the version bump).
+- [ ] AC-03 -- staging an open `update`, `question`, `discrepancy` -> 200 with `staged`; `git status --porcelain` empty, `HEAD`, branches, status unchanged; one `proposal.staged` each, seen by a subscriber < 1 s; `door.rs`, `no_domain.rs` green (M: the handler approves with an always-yes consent).
+- [ ] AC-04 -- each refusal of `decision-record.md` "Flags", a decision flag on an update or a create, via POST: the CLI's message, 400 or 409, nothing stored; a path-only question's approve 400 (M: the daemon's own option-range check).
 - [ ] AC-05 -- `approved`, `applied`, `rejected` -> 409; an orphan's approve 409, its reject stored; unknown ID 404; a stale `updated_at` 409 with the current document (M: an applied row staged).
-- [ ] AC-06 -- a second POST replaces the stage, its event carries the new one; DELETE NULLs both, one `proposal.unstaged`; DELETE with nothing staged 200, no event (M: no unstage event).
-- [ ] AC-07 -- on a pty, `{option: 1, note: "n"}` staged: `spec approve PR` prints `staged <at>:`, the command, the option line, then the question; `y` -> record option 1, note `n`, stage NULL, `.approved` has `staged_at`; `n` -> exit 1, stage kept; no TTY -> exit 2 before reading (M: the stage not read).
-- [ ] AC-08 -- option 1 staged, typed `--option 2` -> the unused-stage note, record option 2, empty note slot (M: the staged note merged).
+- [ ] AC-06 -- a second POST replaces the stage, its event the new one; DELETE NULLs both, one `proposal.unstaged`; DELETE, nothing staged: 200, no event (M: no unstage event).
+- [ ] AC-07 -- pty, `{option: 1, note: "n"}` staged: `spec approve PR` prints `staged <at>:`, the command, the option line, the question ending `, staged)? [y/N]`; `y` -> record option 1, note `n`, stage NULL, `.approved` with `staged_at`; `n` -> exit 1, stage kept; no TTY -> exit 2 unread (M: the stage not read).
+- [ ] AC-08 -- option 1 staged, typed `--option 2` -> the unused-stage note, option 2, empty note (M: the staged note merged).
 - [ ] AC-09 -- reject staged: `spec reject PR` stores its reason in `decision_note`; nothing staged exit 2 naming `--reason`; approve staged exit 2 naming `spec approve` (M: an empty reason stored).
-- [ ] AC-10 -- the stage replaced between the prompt and `y` within the same second -> exit 1, no commit (M: compare-and-set on status and `updated_at` only).
-- [ ] AC-11 -- staged at hash H, the target changed after -> the note at the prompt and in review, applied as it rebases; changed only before staging -> no note (M: the note from `preview != applies`).
-- [ ] AC-12 -- leaving `open` clears the stage without `.unstaged`; a stage on another state is a named corrupt row; export, import, export byte-identical with stages; format-1 and format-2 schema-4 dumps restore with NULL stages (M: export drops `staged`).
-- [ ] AC-13 -- `http.ts`, the http README, `proposal-queue.md` list the same 7 proposal event types; the UI refetches that project's inbox and that proposal on each (M: `http.ts` without `proposal.staged`).
-- [ ] AC-14 -- UI: accept with option 2 and a note -> one POST whose body is exactly the stage plus `updated_at`; the card shows Staged, the command, Copy (no free text), Unstage (DELETE); still listed; clarification and defer send nothing; the mock alike; daemon keys regenerated (M: the proposal dropped from the inbox once staged).
-- [ ] AC-15 -- `tools/list` holds no stage tool; `get_proposal` = `review --brief --json` with both keys; a POST with a foreign `Origin`, `text/plain`, an oversize body or no `Sec-Fetch-Site` -> refused, nothing stored, no `Access-Control-*` (M: the content-type check removed).
+- [ ] AC-10 -- the stage replaced between prompt and `y` in the same second, at step 7 or a completion -> exit 1, no commit (M: compare-and-set on status and `updated_at` only).
+- [ ] AC-11 -- staged at hash H, the target changed after -> the note at the prompt and in review, applied as it rebases; changed only before -> no note; a file-form create's `span_hash` null (M: the note from `preview != applies`).
+- [ ] AC-12 -- leaving `open` clears the stage, no `.unstaged`; staged on another state: a named corrupt row; export, import, export byte-identical with stages; format-1 (schemas 1-3), format-2 schema-4 dumps restore, stages NULL; format 1 at schema 4 refused; a schema-4 DB exports its tasks (M: export drops `staged`; `stored_rows` keeps `==`).
+- [ ] AC-13 -- `http.ts` (16 types), the http README, `proposal-queue.md` list the same 7 proposal events; a stage event re-reads that inbox and proposal, no task read (M: `http.ts` without `proposal.staged`; tasks re-read).
+- [ ] AC-14 -- UI: accept, option 2, a note -> one POST, its body exactly the stage plus `updated_at`; the card: Staged, the command, Copy (no free text), Unstage (DELETE); still listed; a 409 -> `ClientError` 409, the last note; clarification, defer send nothing; the mock alike; 34 key sets (M: the proposal dropped once staged).
+- [ ] AC-15 -- `tools/list` has no stage tool; `get_proposal` = `review --brief --json` with both keys; `ask-owner` names a stage no answer, 0.1.6 in `PINS`; a POST with a foreign `Origin`, `text/plain`, an oversize body or no `Sec-Fetch-Site` -> refused, nothing stored, no `Access-Control-*` (M: the content-type check removed).
+- [ ] AC-16 -- an `open` proposal, approve staged, completed by its own commit: the question ends ` (staged)? [y/N]`; `y` -> the staged flags recorded, `.approved` with `staged_at` (M: `applied_with` given no flags).
 
 ## Out of scope
 
-Task staging (`approve_task`, `spec task approve`); `changes_requested`, `deferred`; MCP elicitation, URL mode (08 Phase 5); a single raw keypress; a `spec stage` command; a Unix socket; age-based cleanup; authentication of any kind (ADR-0034).
+Task staging; `changes_requested`, `deferred`; `--answer`, `--canon` from the UI (Q5); MCP elicitation, URL mode (08 Phase 5); a raw keypress; `spec stage`; a Unix socket; age-based cleanup; any authentication (ADR-0034).
 
 **Owner's text for `.claude/agents/ui-developer.md`** (lines 32-33): "the owner's choice, staged, is the UI's only writing action; before it a diff, after it the staged choice and its `spec` command, confirmed on a terminal (ADR-0035);".
 
