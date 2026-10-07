@@ -8,7 +8,7 @@ reviewed: 2026-10-07
 
 # specengine-core — the spec parser and the check
 
-The reading core: the parser (a file's bytes → `ParsedFile`) and `check` (parses → `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4`, `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`, `petgraph =0.8.3` for `depends-cycle`. Callers: store, CLI, `specengine-eval`.
+The reading core: the parser (a file's bytes -> `ParsedFile`) and `check` (parses -> `Report`). No file access and no SpecEngine crate but `specengine-model` (types, `[ids]`, the reference grammar: its README). Output depends only on the arguments, maps serialise sorted or in source order; a broken file is reported, never fatal (ADR-0012). Pins (Q1): `pulldown-cmark =0.13.4`, `serde-saphyr =1.3.0` (`deserialize` only), `toml` for `specengine.toml`, `serde_json` for `Report::to_json`, `petgraph =0.8.3` for `depends-cycle`. Callers: store, CLI, `specengine-eval`.
 
 ## API
 
@@ -54,12 +54,12 @@ Alias expansion cap 10 000 replayed events, over it one `frontmatter-yaml`. Both
 
 ## Open owner questions
 
-Working answer (the code) → what the other answer triggers.
+Working answer (the code) -> what the other answer triggers.
 
 - Q1 (parser libraries): the pins above, default features off, gaps reported, never swapped silently; `serde-saphyr`'s unpinned transitive crates (04 §6) and `serde_json` as a normal dependency await acknowledgement.
-- Q3 (section revision syntax): the `rev=N` heading attribute. Settled → an ADR extending ADR-0026 / ADR-0018 with a `#layout` diff.
-- Q5 (raw Russian test text): self-written, only in `fixtures/{spec-b,token-calibration}/`, exempt in `anonymity.rs`. "Yes" → an ADR amending ADR-0024 (`#language`); "no" → escapes built at test time.
+- Q3 (section revision syntax): the `rev=N` heading attribute. Settled -> an ADR extending ADR-0026 / ADR-0018 with a `#layout` diff.
+- Q5 (raw Russian test text): self-written, only in `fixtures/{spec-b,token-calibration}/`, exempt in `anonymity.rs`. "Yes" -> an ADR amending ADR-0024 (`#language`); "no" -> escapes built at test time.
 
 ## Tests
 
-`tests/`, one file per concern: `crafted_yaml.rs` (every shape at cap and cap + 1, 2 MiB thread), `genre.rs` (spec-a game design, spec-b a Russian CLI tool), `dogfood.rs` (every document the root config walks), `check_*.rs`, `project_config.rs`, `detached.rs`, `spec_graph.rs`, `bundle_layers.rs`, `patch.rs`, `decision_records.rs`, `task_rules.rs`.
+`tests/`, one file per concern: `crafted_yaml.rs` (every shape at cap and cap + 1, 2 MiB thread), `genre.rs` (spec-a game, -b Russian CLI, -c Python web service), `dogfood.rs` (every document the root config walks), `check_*.rs`, `project_config.rs`, `detached.rs`, `spec_graph.rs`, `bundle_layers.rs`, `patch.rs`, `decision_records.rs`, `task_rules.rs`.

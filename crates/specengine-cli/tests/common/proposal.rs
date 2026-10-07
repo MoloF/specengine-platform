@@ -90,7 +90,8 @@ pub fn edit(text: &str, from: &str, to: &str) -> String {
 }
 
 /// The repository of one test: its main worktree (a fixture copy, one
-/// commit on `main`) and a linked worktree on `t1`.
+/// commit on `main`: spec-a, spec-b, or the non-Rust spec-c) and a linked
+/// worktree on `t1`.
 pub struct Pair {
     pub scratch: Scratch,
     pub git: Sandbox,
@@ -127,6 +128,7 @@ impl Pair {
         let home = scratch.home("h");
         let slug = super::FIXTURES
             .iter()
+            .chain([&super::NON_RUST])
             .find(|(name, _)| *name == fixture)
             .map_or_else(
                 || panic!("no slug for {fixture}"),

@@ -1,0 +1,17 @@
+# Fixture corpus spec-c: a small web-service project ("Dock Hire": bicycles
+# hired from street docks) whose code is Python; English prose, prefixes of
+# its own. The synthetic non-Rust project of 07 s1.2 P2-5: no record names a
+# stack, a tool chain or a role; the project's stack wording lives only in
+# `[project] profile`, which a task package carries verbatim.
+
+[project]
+slug    = "dock-hire"
+profile = "python 3.12 web service; tests: pytest"
+
+[ids]
+AREA = { kind = "area",             shape = "name" }
+JRN  = { kind = "journey",          shape = "name" }
+FEE  = { kind = "tariff",           shape = "name" }
+WISH = { kind = "rider-need",       width = 3 }
+OPEN = { kind = "open-point",       width = 2 }
+CHK  = { kind = "acceptance-check", width = 2, scope = "feature" }

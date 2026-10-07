@@ -185,9 +185,10 @@ pub fn git_status(dir: &Path, pathspec: &str) -> String {
 
 /// Every line of `git status --porcelain -- fixtures/` names one of the
 /// `fixtures/import-*` fixtures, the `fixtures/pilot-w` ones
-/// (docs/features/pilot-w.md) or `fixtures/daemon-keys.json`
-/// (docs/features/daemon-read.md AC-09), each untracked until the owner
-/// commits it, nothing else.
+/// (docs/features/pilot-w.md), `fixtures/daemon-keys.json`
+/// (docs/features/daemon-read.md AC-09) or the non-Rust `fixtures/spec-c`
+/// (07 s1.2 P2-5), each untracked until the owner commits it, nothing
+/// else.
 pub fn assert_fixtures_status_clean() {
     let status = git_status(&repository_root(), "fixtures/");
     let foreign: Vec<&str> = status
@@ -196,13 +197,14 @@ pub fn assert_fixtures_status_clean() {
             let path = line.get(3..).unwrap_or("");
             !path.starts_with("fixtures/import-")
                 && !path.starts_with("fixtures/pilot-w/")
+                && !path.starts_with("fixtures/spec-c/")
                 && path != "fixtures/daemon-keys.json"
         })
         .collect();
     assert!(
         foreign.is_empty(),
-        "git status -- fixtures/ shows more than fixtures/import-*, fixtures/pilot-w and \
-         fixtures/daemon-keys.json:\n{}",
+        "git status -- fixtures/ shows more than fixtures/import-*, fixtures/pilot-w, \
+         fixtures/spec-c and fixtures/daemon-keys.json:\n{}",
         foreign.join("\n")
     );
 }

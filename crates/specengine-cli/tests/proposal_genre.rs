@@ -24,7 +24,7 @@ mod common;
 use std::collections::BTreeSet;
 use std::fs;
 
-use common::{FIXTURES, fixture, read_text, repository_root};
+use common::{FIXTURES, NON_RUST, fixture, read_text, repository_root};
 use specengine_core::ProjectConfig;
 
 /// The new sources of the slice, of docs/features/decision-apply.md
@@ -162,8 +162,9 @@ fn ac20_the_new_modules_name_no_fixture_prefix_slug_or_path() {
     );
 }
 
-/// The `[ids]` prefixes, aliases and kinds of the fixtures and of this
-/// repository's own `specengine.toml`, the kinds that are class names
+/// The `[ids]` prefixes, aliases and kinds of the fixtures (spec-a, spec-b,
+/// the non-Rust spec-c) and of this repository's own `specengine.toml`, the
+/// kinds that are class names
 /// aside.
 fn record_words() -> (BTreeSet<String>, BTreeSet<String>) {
     let mut prefixes = BTreeSet::new();
@@ -172,6 +173,7 @@ fn record_words() -> (BTreeSet<String>, BTreeSet<String>) {
         .iter()
         .map(|(name, _)| read_text(&fixture(name), "specengine.toml"))
         .collect();
+    configs.push(read_text(&fixture(NON_RUST.0), "specengine.toml"));
     configs.push(read_text(&repository_root(), "specengine.toml"));
     for text in configs {
         let config = ProjectConfig::from_toml(&text).expect("a config");
@@ -450,6 +452,11 @@ fn ac20_no_dependency_is_added() {
 #[test]
 fn task_package_the_task_sources_name_no_prefix_kind_or_directory() {
     let (prefixes, kinds) = record_words();
+    // 07 s1.2 P2-5: the non-Rust spec-c's words are scanned too.
+    assert!(
+        prefixes.contains("FEE") && kinds.contains("tariff") && kinds.contains("rider-need"),
+        "{prefixes:?} {kinds:?}"
+    );
     let sources = [
         "crates/specengine-model/src/task.rs",
         "crates/specengine-core/src/task.rs",

@@ -1,6 +1,7 @@
 //! AC-12 of docs/features/mcp-read.md (ADR-0008, 07 §1.2 P2-3): a scan of
 //! `crates/specengine-mcp/src` finds no string literal equal to a kind of
-//! `fixtures/spec-a` or `fixtures/spec-b` and no P2-3 word in a text; a
+//! `fixtures/spec-a`, `fixtures/spec-b` or the non-Rust `fixtures/spec-c`
+//! (07 s1.2 P2-5) and no P2-3 word in a text; a
 //! synthetic non-Rust corpus (garden planning) yields no P2-3 word in any
 //! tool or resource answer, nor in the wire texts (descriptions,
 //! `instructions`).
@@ -42,10 +43,11 @@ use common::read::{ERAS, STACK_WORDS, Session, TOOLS, has_word};
 use common::*;
 use serde_json::json;
 
-/// Every `kind = "…"` of the two fixtures' configs.
+/// Every `kind = "…"` of the fixtures' configs: spec-a, spec-b and the
+/// non-Rust spec-c (07 s1.2 P2-5).
 fn fixture_kinds() -> Vec<String> {
     let mut kinds = Vec::new();
-    for name in ["spec-a", "spec-b"] {
+    for name in ["spec-a", "spec-b", "spec-c"] {
         let text = read_text(&fixture(name), "specengine.toml");
         for part in text.split("kind").skip(1) {
             let Some(rest) = part.trim_start().strip_prefix('=') else {
@@ -101,7 +103,9 @@ fn ac12_the_sources_hold_no_fixture_kind_and_no_stack_word() {
     let src = repository_root().join("crates/specengine-mcp/src");
     let kinds = fixture_kinds();
     assert!(
-        kinds.contains(&"mechanic".to_owned()) && kinds.contains(&"flag".to_owned()),
+        kinds.contains(&"mechanic".to_owned())
+            && kinds.contains(&"flag".to_owned())
+            && kinds.contains(&"tariff".to_owned()),
         "{kinds:?}"
     );
     let skipped = probes_only_modules(&src);

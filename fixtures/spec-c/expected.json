@@ -1,0 +1,69 @@
+{
+  "prefixes": ["AREA", "CHK", "FEE", "JRN", "OPEN", "WISH"],
+  "files": {
+    "docs/spec/hire.md": {
+      "id": "AREA-HIRE",
+      "kind": "area",
+      "title": "Hiring a bicycle",
+      "summary": "Riders hire a bicycle at a street dock, ride it, and return it to any dock\nwith a free slot.",
+      "sections": [
+        {"id": "JRN-UNLOCK", "kind": "journey", "level": 2, "parent": "AREA-HIRE", "title": "Unlock"},
+        {"id": "JRN-RETURN", "kind": "journey", "level": 2, "parent": "AREA-HIRE", "title": "Return"}
+      ],
+      "anchors": ["slug:hiring-a-bicycle", "slug:unlock", "slug:return"],
+      "links": [],
+      "diagnostics": []
+    },
+    "docs/spec/fees.md": {
+      "id": "FEE-RIDE",
+      "kind": "tariff",
+      "title": "Ride fees",
+      "parent": "AREA-HIRE",
+      "summary": "What a ride costs, from unlock to return (JRN-RETURN).",
+      "sections": [
+        {"id": "FEE-LATE-RETURN", "kind": "tariff", "level": 2, "parent": "FEE-RIDE", "title": "Late return"},
+        {"id": "FEE-DAY-CAP", "kind": "tariff", "level": 2, "parent": "FEE-RIDE", "title": "Day cap"}
+      ],
+      "anchors": ["slug:ride-fees", "slug:late-return", "slug:day-cap"],
+      "links": [
+        "FEE-RIDE derived_from frontmatter WISH-001",
+        "FEE-RIDE mentions inline JRN-RETURN"
+      ],
+      "diagnostics": []
+    },
+    "docs/features/late-return.md": {
+      "title": "Late return",
+      "summary": "Charge the late-return fee of FEE-LATE-RETURN and keep the day cap of\nFEE-DAY-CAP.",
+      "sections": [
+        {"id": "CHK-01", "kind": "acceptance-check", "level": 3, "title": "A 45-minute ride costs 1.00"},
+        {"id": "CHK-02", "kind": "acceptance-check", "level": 3, "title": "The day cap holds"}
+      ],
+      "anchors": ["slug:late-return", "slug:acceptance-criteria", "attr:acceptance", "slug:a-45-minute-ride-costs-100", "slug:the-day-cap-holds"],
+      "links": [
+        "- mentions inline FEE-LATE-RETURN",
+        "- mentions inline FEE-DAY-CAP"
+      ],
+      "diagnostics": []
+    },
+    "docs/records/WISH/WISH-001.md": {
+      "id": "WISH-001",
+      "kind": "rider-need",
+      "title": "Riders know the price before they ride",
+      "summary": "A rider sees what a ride will cost before unlocking a bicycle.",
+      "sections": [],
+      "anchors": ["slug:riders-know-the-price-before-they-ride"],
+      "links": [],
+      "diagnostics": []
+    },
+    "docs/records/OPEN/OPEN-01.md": {
+      "id": "OPEN-01",
+      "kind": "open-point",
+      "title": "Does waiting at a full dock count toward the day cap?",
+      "summary": "Open until the owner answers; FEE-DAY-CAP counts only charged fees for now.",
+      "sections": [],
+      "anchors": ["slug:does-waiting-at-a-full-dock-count-toward-the-day-cap"],
+      "links": ["OPEN-01 mentions inline FEE-DAY-CAP"],
+      "diagnostics": []
+    }
+  }
+}

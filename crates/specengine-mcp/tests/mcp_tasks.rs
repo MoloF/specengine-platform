@@ -24,6 +24,9 @@
 //!   tasks.
 //! - 07 s1.2 P2-3: the package, brief and task sources and `plugin/**`
 //!   name no stack word or role of this repository.
+//! - 07 s1.2 P2-5: on `fixtures/spec-c` (a web service whose code is
+//!   Python) an agent's whole run names no P2-3 or Rust word in any reply;
+//!   `profile` passes verbatim.
 //!
 //! Scratch git repositories of `fixtures/spec-a` (`-b`) in the CLI tests'
 //! sandbox (`common/git.rs`, automatic maintenance off); every server with
@@ -946,6 +949,234 @@ fn p2_3_the_task_sources_and_the_plugin_name_no_stack_word() {
     // The scan sees what it must refuse.
     assert!(has_word("let brief = \"run cargo test\";", "cargo"));
     assert!(!has_word("a nested span", "nest"));
+}
+
+// ----------------------------------------------------------------- P2-5
+
+/// Beyond P2-3's words, what a non-Rust project's task must never hold:
+/// the Rust tool chain's and an ECS engine's words (`rs` the file
+/// extension).
+const RUST_WORDS: [&str; 7] = [
+    "rust",
+    "rustc",
+    "rs",
+    "crate",
+    "crates",
+    "ecs",
+    "add_systems",
+];
+
+/// `fixtures/spec-c`'s `[project] profile`, as written.
+const NON_RUST_PROFILE: &str = "python 3.12 web service; tests: pytest";
+
+/// Every key and string of a JSON value, unescaped.
+fn strings_of(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(text) => out.push(text.clone()),
+        Value::Array(items) => items.iter().for_each(|item| strings_of(item, out)),
+        Value::Object(entries) => {
+            for (key, item) in entries {
+                out.push(key.clone());
+                strings_of(item, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Asserts `texts` (named `context`) hold no P2-3 or Rust word.
+fn assert_neutral(texts: &[String], context: &str) {
+    for text in texts {
+        let found: Vec<&str> = STACK_WORDS
+            .iter()
+            .chain(RUST_WORDS.iter())
+            .copied()
+            .filter(|word| has_word(text, word))
+            .collect();
+        assert!(found.is_empty(), "{context}: {found:?} in {text}");
+    }
+}
+
+/// A tool result's `content` text and every key and string of its
+/// `structuredContent`.
+fn result_texts(result: &Value) -> Vec<String> {
+    let mut texts = vec![content_text(result).to_owned()];
+    if let Some(document) = result.get("structuredContent") {
+        strings_of(document, &mut texts);
+    }
+    texts
+}
+
+/// 07 s1.2 P2-5 at MCP level: `fixtures/spec-c` (a web service whose code
+/// is Python; its records hold no stack word). The owner makes, plans and
+/// approves a task through the library (the consent closure records one
+/// question); an agent then runs it on the tools from the linked worktree:
+/// `get_task` by ID and by `next` (each `spec task show` to the byte,
+/// P2-1), `claim_task` with the project's own role, `complete_task` and
+/// `submit_plan` refused, a bound `ask_question`, `report_run`, a target
+/// edited, `complete_task`, `get_task` again. No consent question and no
+/// reply — its `content` or any key or string of its `structuredContent`
+/// — holds a P2-3 word or a Rust word; `profile` is the fixture's, verbatim,
+/// and the brief never shows it. M: `cargo` in the brief.
+#[test]
+fn p2_5_a_non_rust_projects_agent_run_names_no_stack_word() {
+    let repo = Repo::new("mt-p25", "spec-c");
+    let globals = Globals::default();
+    let owner_env = cli_env(&repo.main, Some(&repo.home));
+    let made = task_new(
+        &owner_env,
+        &globals,
+        &TaskNewRequest {
+            nodes: vec!["FEE-LATE-RETURN".to_owned()],
+            title: Some("Charge late returns by the quarter hour".to_owned()),
+            goal: Some(
+                "Riders pay for every started quarter hour past the free half hour.".to_owned(),
+            ),
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: CLOCK.to_owned(),
+            git: repo.git_env(&repo.main),
+        },
+    )
+    .expect("task new");
+    assert_eq!(made.exit(), Exit::Answered, "{made:?}");
+    let id = made.id.clone().expect("an ID");
+    let planned = task_plan(
+        &owner_env,
+        &globals,
+        &TaskPlanRequest {
+            id: id.clone(),
+            plan: specengine_cli::ProposedText::Given(
+                b"1. Read the fee rules.\n2. Change the fee.\n".to_vec(),
+            ),
+            criteria: vec![
+                "late-return/CHK-01".to_owned(),
+                "A ride of exactly 30 minutes is free.".to_owned(),
+            ],
+            affected: vec!["FEE-DAY-CAP".to_owned()],
+            now: CLOCK.to_owned(),
+            git: repo.git_env(&repo.main),
+        },
+    )
+    .expect("task plan");
+    assert_eq!(planned.exit(), Exit::Answered, "{planned:?}");
+    let mut asked = Vec::new();
+    let mut consent = |question: &str| {
+        asked.push(question.to_owned());
+        true
+    };
+    let approved = task_approve(
+        &owner_env,
+        &globals,
+        &TaskDecisionRequest {
+            id: id.clone(),
+            note: None,
+            now: CLOCK.to_owned(),
+            git: repo.git_env(&repo.main),
+        },
+        &mut consent,
+    )
+    .expect("task approve");
+    assert_eq!(approved.exit(), Exit::Answered, "{approved:?}");
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_neutral(&asked, "the consent question");
+
+    let cwd = repo.linked.clone();
+    let env = cli_env(&cwd, Some(&repo.home));
+    let mut session = Session::open(Era::Stateless, &[], Some(&cwd), Home::At(&repo.home));
+    let schemas = output_schemas(&session.tools());
+    let read = |session: &mut Session, args: Value| {
+        let context = format!("get_task {args}");
+        let result = checked_call(session, &schemas, "get_task", args, &env, &globals);
+        assert_neutral(&result_texts(&result), &context);
+        result
+    };
+    let first = read(&mut session, json!({"task_id": id}));
+    let package = &first["structuredContent"];
+    assert_eq!(package["status"], json!("ready"));
+    assert_eq!(package["project"], json!("dock-hire"));
+    assert_eq!(package["profile"], json!(NON_RUST_PROFILE));
+    assert_eq!(package["targets"][0]["kind"], json!("tariff"));
+    for word in ["python", "pytest"] {
+        assert!(!has_word(content_text(&first), word), "{word}: {first}");
+    }
+    let next = read(&mut session, json!({"next": true}));
+    assert_eq!(next["structuredContent"], first["structuredContent"]);
+
+    let mut step = |tool: &str, args: Value, refused: bool, status: &str| {
+        let context = format!("{tool} {args}");
+        let reply = session.call(tool, args);
+        let result = result(&reply).clone();
+        assert_eq!(result["isError"], json!(refused), "{context}: {result}");
+        if !status.is_empty() {
+            assert_eq!(
+                result["structuredContent"]["status"],
+                json!(status),
+                "{context}"
+            );
+        }
+        assert_neutral(&result_texts(&result), &context);
+        result
+    };
+    step(
+        "claim_task",
+        json!({"task_id": id, "role": "implementer", "worktree": "."}),
+        false,
+        "in_progress",
+    );
+    step("complete_task", json!({"task_id": id}), true, "in_progress");
+    step(
+        "submit_plan",
+        json!({"task_id": id, "plan_md": "1. Again.", "criteria": [], "affected_nodes": []}),
+        true,
+        "in_progress",
+    );
+    let question = step(
+        "ask_question",
+        json!({"node_ids": ["FEE-DAY-CAP"],
+               "text": "Does waiting at a full dock count toward the cap?",
+               "working_answer": "No: only charged fees count.",
+               "price_of_other": "A new case in the day cap.",
+               "author_role": "implementer", "task_id": id}),
+        false,
+        "",
+    );
+    assert_eq!(
+        question["structuredContent"]["created"],
+        json!(true),
+        "{question}"
+    );
+    step(
+        "report_run",
+        json!({"task_id": id, "outcome": "completed",
+               "summary": "The late fee is charged per started quarter hour.",
+               "changed_files": ["src/dock_hire/fees.py", "tests/test_fees.py"]}),
+        false,
+        "in_progress",
+    );
+    replace(&cwd, "docs/spec/fees.md", "costs 1.00.", "costs 1.50.");
+    step("complete_task", json!({"task_id": id}), false, "done");
+    let last = read(&mut session, json!({"task_id": id}));
+    let package = &last["structuredContent"];
+    assert_eq!(package["status"], json!("done"));
+    assert_eq!(package["stale"], json!(true));
+    assert_eq!(package["profile"], json!(NON_RUST_PROFILE));
+    assert_eq!(package["claim"]["role"], json!("implementer"));
+    assert_eq!(
+        package["runs"][0]["changed_files"],
+        json!(["src/dock_hire/fees.py", "tests/test_fees.py"])
+    );
+    assert_eq!(package["open_proposals"][0]["task_id"], json!(id));
+    assert_eq!(
+        package["assumptions"][0]["text"],
+        json!("No: only charged fees count.")
+    );
+    assert!(
+        content_text(&last).contains("costs 1.50."),
+        "the diff in the brief: {last}"
+    );
+    drop(session.finish());
 }
 
 /// Iteration 2 (docs/canon/mcp-read.md "Size", docs/canon/task-package.md "Caps"):

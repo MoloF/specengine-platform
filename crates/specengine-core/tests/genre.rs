@@ -6,6 +6,11 @@
 //! read through its own `specengine.toml` alone and passes the *same* test
 //! functions against its own `expected.json`. No prefix of either scheme is
 //! a string literal in the model or core sources.
+//!
+//! `fixtures/spec-c` (07 s1.2 P2-5: a web service whose code is Python,
+//! English prose) passes the same functions against its own
+//! `expected.json`, shares no prefix or kind with the other two, and its
+//! prefixes join the literal scan.
 
 mod common;
 
@@ -21,7 +26,7 @@ use common::{
     walked_md_files,
 };
 
-const CORPORA: [&str; 2] = ["spec-a", "spec-b"];
+const CORPORA: [&str; 3] = ["spec-a", "spec-b", "spec-c"];
 
 fn expected(corpus: &Path) -> Value {
     let path = corpus.join("expected.json");
@@ -248,6 +253,21 @@ fn spec_b_kinds_come_from_its_scheme() {
     kinds_come_from_the_corpus_scheme("spec-b");
 }
 
+#[test]
+fn spec_c_scheme_is_read_from_the_corpus() {
+    scheme_is_read_from_the_corpus("spec-c");
+}
+
+#[test]
+fn spec_c_matches_expected() {
+    corpus_matches_expected("spec-c");
+}
+
+#[test]
+fn spec_c_kinds_come_from_its_scheme() {
+    kinds_come_from_the_corpus_scheme("spec-c");
+}
+
 // ------------------------------------------------------------ across the corpora
 
 #[test]
@@ -294,6 +314,51 @@ fn the_two_corpora_differ_in_prefixes_kinds_and_language() {
         cyrillic_files >= 5,
         "spec-b prose is Russian ({cyrillic_files} files)"
     );
+}
+
+/// spec-c (07 s1.2 P2-5) shares no prefix, alias or kind with spec-a or
+/// spec-b, and its code is not Rust: Python sources, no `.rs` file, no
+/// `Cargo.toml`. M: a spec-a prefix in its `[ids]`.
+#[test]
+fn spec_c_shares_no_prefix_or_kind_and_holds_no_rust() {
+    let names = |s: &IdScheme| -> BTreeSet<String> {
+        s.prefixes()
+            .iter()
+            .flat_map(|p| std::iter::once(p.prefix.clone()).chain(p.aliases_from.iter().cloned()))
+            .collect()
+    };
+    let kinds = |s: &IdScheme| -> BTreeSet<String> {
+        s.prefixes().iter().map(|p| p.kind.clone()).collect()
+    };
+    let c = corpus_scheme(&fixture("spec-c"));
+    for other in ["spec-a", "spec-b"] {
+        let scheme = corpus_scheme(&fixture(other));
+        let shared: Vec<String> = names(&c).intersection(&names(&scheme)).cloned().collect();
+        assert!(shared.is_empty(), "spec-c and {other} share {shared:?}");
+        let shared: Vec<String> = kinds(&c).intersection(&kinds(&scheme)).cloned().collect();
+        assert!(
+            shared.is_empty(),
+            "spec-c and {other} share the kinds {shared:?}"
+        );
+    }
+    let mut files = Vec::new();
+    let mut stack = vec![fixture("spec-c")];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).expect("a readable fixture") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                files.push(path.file_name().unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    assert!(files.iter().any(|name| name.ends_with(".py")), "{files:?}");
+    let rust: Vec<&String> = files
+        .iter()
+        .filter(|name| name.ends_with(".rs") || name.as_str() == "Cargo.toml")
+        .collect();
+    assert!(rust.is_empty(), "Rust in spec-c: {rust:?}");
 }
 
 /// No prefix or alias of either `[ids]` is a string literal in the model or

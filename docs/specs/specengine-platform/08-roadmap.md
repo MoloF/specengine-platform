@@ -36,7 +36,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE (reads, stages: `specengine-http`); agents' MCP is the `spec mcp` stdio bridge to it (MCP HTTP after MVP, 07 s1.1).
 - **Plugin** (06 §8; root `README.md`): hooks (07 §4), task prompts, stack-neutral roles, `/feature`; stack roles from a stack-profile plugin or the project (ADR-0027).
-- Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality: a synthetic non-Rust fixture in tests (07 §1.2, P2-5).
+- Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality done 2026-10-08: `fixtures/spec-c` (07 s1.2 P2-5).
 
 ### Phase 3. Code and drift — ~2-3 weeks
 

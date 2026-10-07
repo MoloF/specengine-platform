@@ -430,6 +430,11 @@ pub fn assert_plain(text: &str, context: &str) {
 /// The fixtures both genre tests run on, with their slugs.
 pub const FIXTURES: [(&str, &str); 2] = [("spec-a", "lantern-keep"), ("spec-b", "zerkalo")];
 
+/// The synthetic non-Rust fixture of 07 s1.2 P2-5 (a web service whose code
+/// is Python), with its slug: a project of its own, kept out of
+/// [`FIXTURES`], whose loops pin spec-a's and spec-b's own findings.
+pub const NON_RUST: (&str, &str) = ("spec-c", "dock-hire");
+
 /// A header line of `spec show`: the fields split on ` | `.
 pub fn header_fields(line: &str) -> Vec<&str> {
     line.split(" | ").collect()
