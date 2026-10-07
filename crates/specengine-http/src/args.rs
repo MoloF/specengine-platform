@@ -13,6 +13,8 @@
 //! by two hex digits or bytes that are not UTF-8 are a 400 naming the
 //! parameter, never passed on as written or as U+FFFD.
 
+use specengine_cli::TaskStatus;
+
 /// An endpoint's query, its names checked.
 pub(crate) struct Args {
     pairs: Vec<(String, String)>,
@@ -100,6 +102,22 @@ impl Args {
             Some("false") => Ok(Some(false)),
             Some(value) => Err(format!("`{name}={value}`: not `true` or `false`")),
         }
+    }
+
+    /// Every value of `name` as a task state, in order (an array; none:
+    /// every state), each judged by the model's `TaskStatus::parse`; a
+    /// refusal lists `TaskStatus::ALL` (docs/features/ui-live-tasks.md
+    /// "Data"): no state is written here.
+    pub(crate) fn statuses(&self, name: &str) -> Result<Vec<TaskStatus>, String> {
+        self.texts(name)
+            .into_iter()
+            .map(|value| {
+                TaskStatus::parse(&value).ok_or_else(|| {
+                    let states: Vec<&str> = TaskStatus::ALL.map(TaskStatus::as_str).to_vec();
+                    format!("`{name}={value}`: not a task state: {}", states.join(", "))
+                })
+            })
+            .collect()
     }
 
     /// `with`: each value `links`; given at least once.

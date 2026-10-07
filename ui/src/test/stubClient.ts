@@ -41,27 +41,27 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
   const client = {
     dataSource: "mock" as const,
     state,
-    getProjects: vi.fn((): Promise<Project[]> => Promise.resolve(PROJECTS.map((project) => ({ ...project })))),
-    getInbox: vi.fn(
-      (): Promise<Inbox> => Promise.resolve({ proposals: state.proposals.map((p) => entryOf(p)), notes: [...state.notes] }),
+    getProjects: vi.fn<(signal?: AbortSignal) => Promise<Project[]>>(() => Promise.resolve(PROJECTS.map((project) => ({ ...project })))),
+    getInbox: vi.fn<(project: string, signal?: AbortSignal) => Promise<Inbox>>(() =>
+      Promise.resolve({ proposals: state.proposals.map((p) => entryOf(p)), notes: [...state.notes] }),
     ),
-    getProposal: vi.fn((_project: string, id: string): Promise<Proposal> => {
+    getProposal: vi.fn<(project: string, id: string, signal?: AbortSignal) => Promise<Proposal>>((_project, id) => {
       const found = state.proposals.find((proposal) => proposal.id === id);
       return Promise.resolve(found === undefined ? noReview(id) : structuredClone(found));
     }),
-    getTree: vi.fn<(project: string, options?: TreeOptions) => Promise<TreeView>>(() =>
+    getTree: vi.fn<(project: string, options?: TreeOptions, signal?: AbortSignal) => Promise<TreeView>>(() =>
       Promise.resolve(aTreeView(STUB_TREE.map((row) => ({ ...row })))),
     ),
-    getNode: vi.fn<(project: string, ref: string, options?: NodeOptions) => Promise<NodeView>>((_project, id) =>
+    getNode: vi.fn<(project: string, ref: string, options?: NodeOptions, signal?: AbortSignal) => Promise<NodeView>>((_project, id) =>
       Promise.resolve({ ref: id, reason: null, notes: [], nodes: [aNode({ id })] }),
     ),
-    search: vi.fn<(project: string, options: SearchOptions) => Promise<SearchResults>>((_project, options) =>
+    search: vi.fn<(project: string, options: SearchOptions, signal?: AbortSignal) => Promise<SearchResults>>((_project, options) =>
       Promise.resolve(aSearchResults([], { query: options.query, archive: options.archive ?? false })),
     ),
-    getBundle: vi.fn<(project: string, options: BundleOptions) => Promise<BundleView>>((_project, options) =>
+    getBundle: vi.fn<(project: string, options: BundleOptions, signal?: AbortSignal) => Promise<BundleView>>((_project, options) =>
       Promise.resolve(aBundle(options.node_ids, { budget: options.budget ?? 2000 })),
     ),
-    getGraph: vi.fn<(project: string, options: GraphOptions) => Promise<GraphView>>((_project, options) =>
+    getGraph: vi.fn<(project: string, options: GraphOptions, signal?: AbortSignal) => Promise<GraphView>>((_project, options) =>
       Promise.resolve(
         aGraphView([aGraphNode({ id: options.ref, distance: 0 })], [], {
           ref: options.ref,
@@ -71,8 +71,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
         }),
       ),
     ),
-    getTasks: vi.fn<(project: string) => Promise<TaskList>>(() => Promise.resolve({ tasks: [], notes: [] })),
-    getTask: vi.fn<(project: string, id: string) => Promise<TaskPackage | TaskNotFound>>((_project, id) =>
+    getTasks: vi.fn<(project: string, signal?: AbortSignal) => Promise<TaskList>>(() => Promise.resolve({ tasks: [], notes: [] })),
+    getTask: vi.fn<(project: string, id: string, signal?: AbortSignal) => Promise<TaskPackage | TaskNotFound>>((_project, id) =>
       Promise.resolve({ id, reason: `no task ${id} in this repository` }),
     ),
     getCheck: vi.fn<(project: string) => Promise<CheckReport>>(() => Promise.resolve(aCheckReport())),
@@ -104,3 +104,20 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
 }
 
 export type StubClient = ReturnType<typeof stubClient>;
+
+/**
+ * A stub method's calls as the app made them, less what every query adds: its AbortSignal last,
+ * and the `undefined` standing for absent options before it.
+ */
+export function argsOf(method: { mock: { calls: readonly (readonly unknown[])[] } }): unknown[][] {
+  return method.mock.calls.map((call) => {
+    const args = [...call];
+    if (args.at(-1) instanceof AbortSignal) {
+      args.pop();
+    }
+    while (args.length > 0 && args.at(-1) === undefined) {
+      args.pop();
+    }
+    return args;
+  });
+}

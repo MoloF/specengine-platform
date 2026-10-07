@@ -5,6 +5,7 @@ import { renderApp } from "../test/render";
 import { treeClient } from "../test/treeStub";
 import type * as NodePaneModule from "./NodePane";
 import type * as SpecTreeModule from "./SpecTree";
+import { argsOf } from "../test/stubClient";
 
 // docs/features/ui-tree-node.md AC-11 (search "never per keystroke"): a keystroke in the search
 // field renders the field alone. The tree and the node pane are wrapped to count how often the
@@ -57,6 +58,6 @@ describe("the search field's keystrokes (AC-11)", () => {
     expect(renders).toEqual(before);
     fireEvent.submit(screen.getByRole("search"));
     expect(await screen.findByText(/No node matches/)).toBeTruthy();
-    expect(client.search).toHaveBeenCalledWith("alpha", { query: "widget" });
+    expect(argsOf(client.search)).toContainEqual(["alpha", { query: "widget" }]);
   });
 });

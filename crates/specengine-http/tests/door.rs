@@ -16,6 +16,13 @@
 //! field written or set, and every writer of the old list), the plain
 //! `check(…, &CheckRequest::default())` call not. M: a handler calls
 //! `index`.
+//!
+//! AC-05 of docs/features/ui-live-tasks.md, the door's half: `tasks` and
+//! `tasks/:id` join the endpoints that change nothing; every `task_` name
+//! of the CLI library but `task_list` and `task_show` joins the forbidden
+//! calls (a task is listed or shown, never moved), each caught in a probe
+//! by path and bare (`task_claim`, `task_approve` among them), the two
+//! reads not. M: a handler calls `task_claim`.
 
 mod common;
 
@@ -134,6 +141,9 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         format!("{p}/inbox"),
         format!("{p}/proposals/PR-0001"),
         format!("{p}/proposals/PR-0002"),
+        format!("{p}/tasks"),
+        format!("{p}/tasks?status=draft&status=ready"),
+        format!("{p}/tasks/T-0001"),
     ] {
         let reply = server.get(&path);
         assert!(
@@ -195,6 +205,9 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         ("PUT", format!("{p}/proposals/PR-0001/decision")),
         ("POST", format!("{p}/proposals/PR-0001")),
         ("POST", format!("{p}/inbox")),
+        ("POST", format!("{p}/tasks")),
+        ("POST", format!("{p}/tasks/T-0001")),
+        ("PUT", format!("{p}/tasks/T-0001")),
     ] {
         let reply = server.request(method, &path, &[]);
         assert_eq!(reply.status, 405, "{method} {path}: {}", reply.text());
@@ -335,10 +348,18 @@ fn sources() -> Vec<(PathBuf, String)> {
     files
 }
 
+/// The CLI library's task calls a handler may make: the two reads
+/// (docs/features/ui-live-tasks.md "Description and interactions").
+const TASK_READS: [&str; 2] = ["task_list", "task_show"];
+
 /// The names no handler may call: the CLI's deciding, storing, exporting,
 /// importing, creating and indexing calls (`check` left the list with
-/// docs/features/ui-live.md: the plain run is a read).
+/// docs/features/ui-live.md: the plain run is a read), and every `task_`
+/// call but the two reads (docs/features/ui-live-tasks.md AC-05).
 fn forbidden(name: &str) -> bool {
+    if name.starts_with("task_") {
+        return !TASK_READS.contains(&name);
+    }
     [
         "approve",
         "approve_with",
@@ -454,6 +475,47 @@ fn ac07_the_scan_catches_a_checks_git_mode_or_baseline_and_every_writer() {
          specengine_cli::check(env, globals, &CheckRequest::default()).map(Outcome::Check) }",
         "fn f() { let s = \"Staged Changed baseline index\"; } // CheckedTree::Changed, baseline",
         "/* CheckRequest { baseline: Some(p) } */ fn f() { let n = list.index; }",
+    ] {
+        assert_eq!(caught(probe), Vec::<String>::new(), "{probe}");
+    }
+}
+
+#[test]
+fn ac05_the_scan_catches_every_task_call_but_list_and_show() {
+    // Positive controls: every task call of the CLI library that moves a
+    // task, by path and bare; a name the library may add later too.
+    for name in [
+        "task_claim",
+        "task_approve",
+        "task_new",
+        "task_plan",
+        "task_changes",
+        "task_cancel",
+        "task_report",
+        "task_complete",
+        "task_refresh",
+    ] {
+        let by_path = format!(
+            "fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &request, &mut yes); }}"
+        );
+        assert_eq!(caught(&by_path), [name], "{by_path}");
+        let bare = format!("fn f() {{ {name}(&env, &globals, &request)?; }}");
+        assert_eq!(caught(&bare), [name], "{bare}");
+    }
+    // The handler of a task route that claims: caught.
+    let handler = "async fn task(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {\n\
+                   Ok(run(project, move |env, globals| {\n\
+                   specengine_cli::task_claim(env, globals, &TaskClaimRequest { id, role, \
+                   worktree, now, git: process_git(env) }).map(|o| Outcome::Task(Box::new(o)))\n\
+                   }).await) }";
+    assert_eq!(caught(handler), ["task_claim"], "{handler}");
+    // Negative controls: the two reads, a request type, a name in a
+    // string or a comment, a method of something else.
+    for probe in [
+        "fn f() { specengine_cli::task_list(env, globals, &TaskListRequest { statuses, git }) }",
+        "fn f() { specengine_cli::task_show(env, globals, &TaskShowRequest { id, next: false, git }) }",
+        "fn f() { let r: TaskClaimRequest = todo!(); let s = \"task_claim\"; } // task_approve(x)",
+        "fn f() { queue.task_claim(); }",
     ] {
         assert_eq!(caught(probe), Vec::<String>::new(), "{probe}");
     }

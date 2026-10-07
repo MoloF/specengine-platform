@@ -1,65 +1,62 @@
-import { screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { ClientError, NOT_SERVED } from "../api/client";
-import { HttpClient } from "../api/http";
-import { errorAnswer, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import { renderApp } from "../test/render";
 import { stubClient } from "../test/stubClient";
 
-// R-n7 of the daemon-read review: a read the daemon does not serve yet (the tasks, a task;
-// `docs/features/ui-live.md` "Out of scope", AC-11) is not built, not broken. Its screen says so
-// with the client's message verbatim and offers no Retry; a daemon down (no response, status 0) on
-// the same screen is an alert with Retry. The graph and the check are served: liveScreens.test.tsx.
+// R-n7 of the daemon-read review: a read the daemon does not serve yet is not built, not broken.
+// Its screen says so with the client's message verbatim and offers no Retry; a daemon down (no
+// response, status 0) on the same screen is an alert with Retry. Since ui-live-tasks the daemon
+// serves every read the UI makes (`docs/features/ui-live-tasks.md` "Open", WA-5): the mark stays
+// for the next missing endpoint, shown here on a stub client that refuses the tasks as a client
+// would refuse such a read. The served tasks: liveScreens.test.tsx.
 
 const NOT_BUILT = "Not built yet: the daemon has no endpoint for this read";
 
-/** The daemon: one project with an empty inbox; anything else its 404. */
-function daemon() {
-  return stubFetch((url) => {
-    if (url === "/api/projects") {
-      return jsonAnswer(200, [{ slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" }]);
+/** What a client says of a read it refuses unsent, the endpoint named. */
+function refusedUnsent(endpoint: string): string {
+  return `Not served by the daemon yet: ${endpoint} is a missing endpoint. The mock serves it: open the UI with ?scenario=normal.`;
+}
+
+/** A stub client refusing the tasks and a task unsent, as not served. */
+function notServingTasks() {
+  const client = stubClient();
+  client.getTasks.mockImplementation((project) =>
+    Promise.reject(new ClientError({ status: NOT_SERVED, message: refusedUnsent(`GET /api/projects/${project}/tasks`) }, { notServed: true })),
+  );
+  client.getTask.mockImplementation((project, id) =>
+    Promise.reject(new ClientError({ status: NOT_SERVED, message: refusedUnsent(`GET /api/projects/${project}/tasks/${id}`) }, { notServed: true })),
+  );
+  return client;
+}
+
+/** The notes saying a read is not built, found by their title, in page order. */
+async function notBuilt(count: number): Promise<HTMLElement[]> {
+  await waitFor(() => {
+    expect(screen.queryAllByText(NOT_BUILT)).toHaveLength(count);
+  });
+  return screen.getAllByText(NOT_BUILT).map((title) => {
+    const note = title.closest<HTMLElement>(".notice");
+    if (note === null) {
+      throw new Error("the title sits in no notice");
     }
-    if (url === "/api/projects/alpha/inbox") {
-      return jsonAnswer(200, { proposals: [], notes: [] });
-    }
-    return errorAnswer(404, `no route ${url}`);
+    return note;
   });
 }
 
-/** The note saying the read is not built, found by its title. */
-async function notBuilt(): Promise<HTMLElement> {
-  const title = await screen.findByText(NOT_BUILT);
-  const note = title.closest<HTMLElement>(".notice");
-  if (note === null) {
-    throw new Error("the title sits in no notice");
-  }
-  return note;
-}
-
-beforeEach(() => {
-  stubEventSource();
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("a read the daemon does not serve yet (R-n7)", () => {
   it.each([
-    ["Tasks", "#/alpha/tasks", "GET /api/projects/alpha/tasks"],
-    ["a task", "#/alpha/tasks/T-0001", "GET /api/projects/alpha/tasks/T-0001"],
-    ["the home's Tasks region", "#/alpha", "GET /api/projects/alpha/tasks"],
-  ])("%s: not built, the client's message verbatim, no Retry, no alert", async (_name, hash, endpoint) => {
-    const fetchStub = daemon();
-    renderApp(new HttpClient(), hash);
-    const note = await notBuilt();
-    expect(note.getAttribute("role")).toBe("status");
-    expect(within(note).getByText(/^Not served by the daemon yet: /).textContent).toBe(
-      `Not served by the daemon yet: ${endpoint} is a missing endpoint (docs/features/ui-live.md "Out of scope"). The mock serves it: open the UI with ?scenario=normal.`,
-    );
+    ["Tasks", "#/alpha/tasks", ["GET /api/projects/alpha/tasks"]],
+    // The list beside the task reads too: each region says it on its own.
+    ["a task", "#/alpha/tasks/T-0001", ["GET /api/projects/alpha/tasks", "GET /api/projects/alpha/tasks/T-0001"]],
+    ["the home's Tasks region", "#/alpha", ["GET /api/projects/alpha/tasks"]],
+  ])("%s: not built, the client's message verbatim, no Retry, no alert", async (_name, hash, endpoints) => {
+    renderApp(notServingTasks(), hash);
+    const notes = await notBuilt(endpoints.length);
+    expect(notes.map((note) => note.getAttribute("role"))).toEqual(endpoints.map(() => "status"));
+    expect(notes.map((note) => within(note).getByText(/^Not served by the daemon yet: /).textContent)).toEqual(endpoints.map(refusedUnsent));
     expect(screen.queryByRole("button", { name: /^Retry/ })).toBeNull();
     expect(screen.queryAllByRole("alert").filter((alert) => alert.textContent.includes("Not served"))).toEqual([]);
-    expect(urlsOf(fetchStub).filter((url) => url.includes("/tasks"))).toEqual([]);
   });
 
   it("the same screen, the daemon down: an alert with Retry, never the not-built note", async () => {

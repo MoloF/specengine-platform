@@ -8,7 +8,7 @@ import { queueOrder } from "../inbox/order";
 import { aCheckFinding, aCheckReport, aProposal, entryOf } from "../test/builders";
 import { callsOf } from "../test/homeStub";
 import { renderApp } from "../test/render";
-import { stubClient } from "../test/stubClient";
+import { argsOf, stubClient } from "../test/stubClient";
 
 // docs/features/ui-health.md on a stub client: AC-01 (what the route reads), AC-02 (absent keys
 // show nothing), AC-03 (verdicts), AC-04 (nothing measured is never 0), AC-05 (the queue's first
@@ -120,7 +120,7 @@ describe("what the route reads (AC-01)", () => {
     await settle();
     expect(callsOf(client)).toEqual({ getProjects: 1, getCheck: 1, getInbox: 1 });
     expect(client.getCheck).toHaveBeenCalledWith("alpha");
-    expect(client.getInbox).toHaveBeenCalledWith("alpha");
+    expect(argsOf(client.getInbox)).toContainEqual(["alpha"]);
   });
 
   it("#/alpha, the home: no getCheck", async () => {

@@ -317,9 +317,10 @@ describe("the read types' keys (AC-02 of ui-tree-node)", () => {
 });
 
 /**
- * AC-02 of docs/features/ui-tasks.md: the task types' keys equal the lists the draft
- * `docs/features/task-package.md` writes ("Description and interactions" for the list and the
- * exit-1 document, "Data" for the package and its parts); each type cites that heading.
+ * AC-02 of docs/features/ui-tasks.md and AC-13 of docs/features/ui-live-tasks.md: the task types'
+ * keys equal the lists the canon writes (`docs/canon/tasks.md` "Commands" for the list and the
+ * exit-1 document, `docs/canon/task-package.md` "Package" for the package and its parts); each type
+ * cites its heading as ui-live-tasks "Citations" re-points it.
  */
 const TASK_KEYS = {
   TaskList: { tasks: true, notes: true } satisfies Record<keyof TaskList, true>,
@@ -374,7 +375,7 @@ const TASK_KEYS = {
   TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
 };
 
-/** The key lists as the draft's JSON writes them, copied verbatim. */
+/** The key lists as the canon's JSON writes them, copied verbatim. */
 const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskList: "tasks, notes",
   TaskListEntry: "id, status, title, targets, stale, updated_at",
@@ -395,8 +396,20 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskBundle: "node_ids, budget, bundle_hash",
 };
 
-const DRAFT = "`docs/features/task-package.md`";
+/** The canon of the task commands, and of the package (ui-live-tasks "Citations"). */
+const TASKS = "`docs/canon/tasks.md`";
+const PACKAGE = "`docs/canon/task-package.md`";
+
+/** The types `docs/canon/tasks.md` "Commands" writes: the list, a row, the exit-1 document. */
 const LISTED = new Set(["TaskList", "TaskListEntry", "TaskNotFound"]);
+
+/** Each task type's citation per ui-live-tasks "Citations": the commands, the diffs' two headings, else the package. */
+function taskCitation(type: string): string {
+  if (LISTED.has(type)) {
+    return `${TASKS} "Commands"`;
+  }
+  return type === "SnapshotDiff" ? `${PACKAGE} "Staleness", "Caps"` : `${PACKAGE} "Package"`;
+}
 
 function commentOf(type: string): string {
   const at = source.search(new RegExp(`export (interface|type) ${type}\\b`));
@@ -404,8 +417,8 @@ function commentOf(type: string): string {
   return source.slice(source.lastIndexOf("/**", at), at);
 }
 
-describe("the task types (AC-02 of ui-tasks)", () => {
-  it.each(Object.keys(TASK_KEYS) as (keyof typeof TASK_KEYS)[])("%s has exactly the draft's keys, in order", (name) => {
+describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
+  it.each(Object.keys(TASK_KEYS) as (keyof typeof TASK_KEYS)[])("%s has exactly the canon's keys, in order", (name) => {
     expect(Object.keys(TASK_KEYS[name]).join(", ")).toBe(TASK_CITED[name]);
   });
 
@@ -415,16 +428,41 @@ describe("the task types (AC-02 of ui-tasks)", () => {
     ]);
   });
 
-  it.each(Object.keys(TASK_KEYS))("%s cites the draft's heading", (type) => {
-    const heading = LISTED.has(type) ? '"Description and interactions"' : '"Data"';
-    expect(commentOf(type)).toContain(`${DRAFT} ${heading}`);
+  it.each(Object.keys(TASK_KEYS))("%s cites the canon's heading", (type) => {
+    expect(commentOf(type)).toContain(taskCitation(type));
   });
 
-  it("cite 05 for the ten states and the draft's Data for the outcomes and the open tables", () => {
+  it("cite 05 for the ten states, the canon's Transitions for a state as sent, its Caps for the outcomes", () => {
     expect(commentOf("KnownTaskStatus")).toContain('`docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)"');
-    for (const type of ["TaskStatus", "KnownRunOutcome", "RunOutcome"]) {
-      expect(commentOf(type)).toContain(`${DRAFT} "Data"`);
+    expect(commentOf("TaskStatus")).toContain(`${TASKS} "Transitions"`);
+    for (const type of ["KnownRunOutcome", "RunOutcome"]) {
+      expect(commentOf(type)).toContain(`${PACKAGE} "Caps"`);
     }
+  });
+
+  it("cite the package's Versioning for its schema_version, and the task-bound proposals for a review's task_id", () => {
+    expect(commentOf("TaskPackage")).toContain(`${PACKAGE} "Package", "Versioning"`);
+    expect(commentOf("Proposal")).toContain(`${TASKS} "Task-bound proposals"`);
+  });
+
+  it("cite no task-package feature spec: its blocks go at shipping (WA-9)", () => {
+    expect(source).not.toContain("docs/features/" + "task-package.md");
+  });
+
+  it("type a bundle hash as the package sends it: null when no bundle can be made", () => {
+    const unmade: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: null };
+    const made: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: "b3:0" };
+    expect([unmade.bundle_hash, made.bundle_hash]).toEqual([null, "b3:0"]);
+    expect(commentOf("TaskBundle")).toContain("`bundle_hash` null");
+  });
+
+  it("say a proposal's summary and a diff's two nulls as the canon does", () => {
+    const summary = source.slice(source.indexOf("export interface TaskProposal "), source.indexOf("  summary: string | null;", source.indexOf("export interface TaskProposal ")));
+    expect(summary).toContain("/** A question's or discrepancy's summary, else the rationale's first line, null for an empty rationale. */");
+    // The comment as one line of words, its `*` margins dropped.
+    const diff = commentOf("SnapshotDiff").replace(/\s*\n\s*\*?\s*/g, " ");
+    expect(diff).toContain("`diff` null has two meanings: `cut` true, left out past 262 144 B in all");
+    expect(diff).toContain("`cut` false, a diff git cannot make, a note says why");
   });
 
   it("keep kind, role and profile plain strings", () => {

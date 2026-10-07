@@ -8,11 +8,12 @@ import { aTaskEntry, aTaskPackage, aTaskProposal, aTaskRun } from "../test/build
 import { renderApp } from "../test/render";
 import { SOME_TASKS, taskClient } from "../test/taskStub";
 import { NO_DIFF_NOTICE, TOTAL_CUT_NOTICE } from "./SpecChangesPanel";
+import { argsOf } from "../test/stubClient";
 
 // docs/features/ui-tasks.md on a stub client: AC-01 (what a route reads), AC-03 (an unknown state
 // in the DOM), AC-05 (filters), AC-07 (text, now rendered by ui-markdown; links), AC-09 (commands and Copy), AC-10
 // (Package), AC-11 (states), AC-12 (keyboard), AC-13 (hostile text); a node its diff removes
-// (task-package G4) as text; opening a task in the stacked layout.
+// (`docs/canon/task-package.md` "Package": a gone target) as text; opening a task in the stacked layout.
 
 /** Markup an author pasted; shown as text, never parsed (escaped so no source line spells a dialog call). */
 const HOSTILE = "<img src=x onerror=\u0061lert(1)>";
@@ -147,7 +148,7 @@ describe("what a route reads (AC-01)", () => {
   it("reads the list once and no package for #/alpha/tasks; nothing is opened by itself", async () => {
     const client = await openList();
     expect(client.getTasks).toHaveBeenCalledTimes(1);
-    expect(client.getTasks).toHaveBeenCalledWith("alpha");
+    expect(argsOf(client.getTasks)).toContainEqual(["alpha"]);
     expect(client.getTask).not.toHaveBeenCalled();
     expect(heading().textContent).toBe("Tasks");
     expect(rows().filter((item) => item.getAttribute("aria-selected") === "true")).toEqual([]);
@@ -158,7 +159,7 @@ describe("what a route reads (AC-01)", () => {
     await screen.findByRole("tab", { name: "Overview" });
     expect(client.getTasks).toHaveBeenCalledTimes(1);
     expect(client.getTask).toHaveBeenCalledTimes(1);
-    expect(client.getTask).toHaveBeenCalledWith("alpha", "T-0002");
+    expect(argsOf(client.getTask)).toContainEqual(["alpha", "T-0002"]);
     expect(row("T-0002").getAttribute("aria-selected")).toBe("true");
   });
 });
@@ -323,7 +324,8 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     expect(screen.getByRole("heading", { level: 1, name: "T-0044: Untitled" })).toBe(heading());
   });
 
-  it("shows a node its diff removes as text in Spec changes, every other node a link (task-package G4)", async () => {
+  // `docs/canon/task-package.md` "Package": a gone target keeps its stored `id` and `path`, nothing to open.
+  it("shows a node its diff removes as text in Spec changes, every other node a link (task-package canon, Package: a gone target)", async () => {
     const kept = { id: "R-1", path: "docs/spec/r.md", span_hash: "b3:kept" };
     const gone = { id: "R-GONE", path: "docs/spec/gone.md", span_hash: "b3:gone" };
     await openTask(
@@ -352,7 +354,7 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     expect(screen.getByRole("figure", { name: "Changes to R-GONE since approval" })).toBeTruthy();
   });
 
-  it("puts a quiet line in place of a diff the package left out, never an empty diff (task-package Data)", async () => {
+  it("puts a quiet line in place of a diff the package left out, never an empty diff (task-package canon, Staleness and Caps)", async () => {
     const nodes = ["R-1", "R-2", "R-3"].map((id) => ({ id, path: `docs/spec/${id.toLowerCase()}.md`, span_hash: `b3:${id}` }));
     const [sent, past, none] = nodes;
     if (sent === undefined || past === undefined || none === undefined) {
@@ -389,7 +391,7 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     expect(screen.getByRole("tab", { name: /^Spec changes/ }).textContent).toContain("3");
   });
 
-  it("lists a task's proposal with no summary by its head alone (task-package Data)", async () => {
+  it("lists a task's proposal with no summary by its head alone (task-package canon, Package)", async () => {
     await openTask(aTaskPackage({ id: "T-0046", status: "ready", open_proposals: [aTaskProposal({ id: "PR-0008", task_id: "T-0046", summary: null })] }));
     showTab(/^Proposals/);
     const item = screen.getByRole("tabpanel").querySelector(".task-proposal");
@@ -637,7 +639,7 @@ describe("keyboard (AC-12)", () => {
     });
     expect(window.history.length).toBe(before + 1);
     await screen.findByRole("tab", { name: "Overview" });
-    expect(client.getTask).toHaveBeenCalledWith("alpha", "T-0004");
+    expect(argsOf(client.getTask)).toContainEqual(["alpha", "T-0004"]);
     expect(document.activeElement).toBe(row("T-0004"));
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });

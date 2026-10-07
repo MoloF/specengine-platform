@@ -184,7 +184,7 @@ describe("the cases the slice names (Data, Mock)", () => {
   });
 });
 
-describe("T-0200 at every cap of the package (task-package Data, Caps)", () => {
+describe("T-0200 at every cap of the package (task-package canon, Caps)", () => {
   const capped = largeTasks()[0];
 
   it("fills each capped field to its cap", () => {

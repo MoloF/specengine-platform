@@ -2,10 +2,26 @@ import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { aBundle, aCheckReport, aGraphView, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
-import { stubClient, type StubClient } from "../test/stubClient";
+import { argsOf, stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, DECIDED_ELSEWHERE } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
-import { queryKeys, useBundle, useDecideProposal, useGraph, useNode, useSearch, useTask, useTree } from "./queries";
+import {
+  queryKeys,
+  useBundle,
+  useCachedInbox,
+  useCachedTasks,
+  useCheck,
+  useDecideProposal,
+  useGraph,
+  useInbox,
+  useNode,
+  useProjects,
+  useProposal,
+  useSearch,
+  useTask,
+  useTasks,
+  useTree,
+} from "./queries";
 
 // AC-13 of docs/features/ui-tree-node.md: query keys carry every argument (absent as null, [] or
 // false); a request carries only the options given; after a decision, success or 409, the
@@ -86,14 +102,64 @@ describe("requests", () => {
     await waitFor(() => {
       expect(client.getBundle).toHaveBeenCalledTimes(1);
     });
-    expect(client.getTree.mock.calls).toEqual([["alpha"], ["alpha", { root: "R-1", archive: true }]]);
-    expect(client.getNode.mock.calls).toEqual([["alpha", "R-1"], ["alpha", "R-1", { with: ["links"] }]]);
-    expect(client.search.mock.calls).toEqual([["alpha", { query: "a b" }]]);
-    expect(client.getBundle.mock.calls).toEqual([["alpha", { node_ids: ["R-1"] }]]);
-    expect(client.getGraph.mock.calls).toEqual([
+    expect(argsOf(client.getTree)).toEqual([["alpha"], ["alpha", { root: "R-1", archive: true }]]);
+    expect(argsOf(client.getNode)).toEqual([["alpha", "R-1"], ["alpha", "R-1", { with: ["links"] }]]);
+    expect(argsOf(client.search)).toEqual([["alpha", { query: "a b" }]]);
+    expect(argsOf(client.getBundle)).toEqual([["alpha", { node_ids: ["R-1"] }]]);
+    expect(argsOf(client.getGraph)).toEqual([
       ["alpha", { ref: "R-1" }],
       ["alpha", { ref: "R-2", impact: true, types: ["t1"], depth: 0, archive: true }],
     ]);
+  });
+});
+
+/** One of each read, the check among them. */
+function EveryRead() {
+  useProjects();
+  useInbox("alpha");
+  useCachedInbox("beta");
+  useProposal("alpha", "PR-1");
+  useTree("alpha", {});
+  useNode("alpha", "R-1");
+  useSearch("alpha", { query: "q" });
+  useBundle("alpha", { node_ids: ["R-1"] }, true);
+  useGraph("alpha", { ref: "R-1" });
+  useTasks("alpha");
+  useCachedTasks("beta");
+  useTask("alpha", "T-0001");
+  useCheck("alpha");
+  return null;
+}
+
+describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
+  it("hand every read its query's AbortSignal last, the check none: a walk in flight is never aborted", async () => {
+    const client = stubClient();
+    render(
+      <ApiProvider client={client}>
+        <EveryRead />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(client.getCheck).toHaveBeenCalledTimes(1);
+      expect(client.getTask).toHaveBeenCalledTimes(1);
+    });
+    const reads = {
+      getProjects: client.getProjects,
+      getInbox: client.getInbox,
+      getProposal: client.getProposal,
+      getTree: client.getTree,
+      getNode: client.getNode,
+      search: client.search,
+      getBundle: client.getBundle,
+      getGraph: client.getGraph,
+      getTasks: client.getTasks,
+      getTask: client.getTask,
+    };
+    for (const [name, read] of Object.entries(reads)) {
+      const calls: readonly (readonly unknown[])[] = read.mock.calls;
+      expect([name, calls.length > 0 && calls.every((call) => call.at(-1) instanceof AbortSignal)]).toEqual([name, true]);
+    }
+    expect(client.getCheck.mock.calls).toEqual([["alpha"]]);
   });
 });
 
@@ -221,7 +287,7 @@ describe("a task's read (AC-11 of ui-tasks)", () => {
       </ApiProvider>,
     );
     await waitFor(() => {
-      expect(client.getTask).toHaveBeenCalledWith("alpha", "T-0002");
+      expect(argsOf(client.getTask)).toContainEqual(["alpha", "T-0002"]);
     });
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((data) => data === undefined)).toBe(true);

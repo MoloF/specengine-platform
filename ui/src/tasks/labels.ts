@@ -1,8 +1,9 @@
 import type { KnownRunOutcome, KnownTaskStatus, RunOutcome, TaskStatus } from "../api/types";
 import type { Look } from "../ui/Badge";
 
-// The closed tables of the Tasks screen: the ten task states (05 §3.3) and the four run outcomes
-// (docs/features/task-package.md "Data"). Known literals get a label, a colour role and an icon;
+// The closed tables of the Tasks screen: the ten task states (05 §3.3,
+// `docs/canon/tasks.md` "Transitions") and the four run outcomes
+// (`docs/canon/task-package.md` "Caps"). Known literals get a label, a colour role and an icon;
 // any other string is shown raw in a neutral badge, never mapped to a known value.
 
 function lookup<K extends string, V>(table: Record<K, V>, value: string): V | null {

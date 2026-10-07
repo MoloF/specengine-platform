@@ -270,6 +270,8 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
         ("GET", "/api/projects/nope/check"),
         ("GET", "/api/projects/nope/inbox"),
         ("GET", "/api/projects/nope/proposals/PR-0001"),
+        ("GET", "/api/projects/nope/tasks"),
+        ("GET", "/api/projects/nope/tasks/T-0001"),
         ("GET", "/api/projects/nope/events"),
         ("POST", "/api/projects/nope/proposals/PR-0001/decision"),
     ] {
@@ -281,18 +283,25 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
             "{method} {path}: {message}"
         );
     }
-    // An unknown route: 404, the error body too.
+    // An unknown route: 404, the error body too, listing the routes
+    // (`graph` and `check` since docs/features/ui-live.md, `tasks` and
+    // `tasks/<id>` since docs/features/ui-live-tasks.md).
     for path in [
         "/",
         "/api",
         "/api/projects/lantern-keep",
-        // `graph` and `check` are routes since docs/features/ui-live.md;
-        // `tasks` is not yet ("Out of scope").
-        "/api/projects/lantern-keep/tasks",
+        "/api/projects/lantern-keep/tasks/",
+        "/api/projects/lantern-keep/tasks/T-0001/transition",
     ] {
         let reply = server.get(path);
         assert_eq!(reply.status, 404, "{path}: {}", reply.text());
-        reply.error_message();
+        let message = reply.error_message();
+        for route in ["graph", "check", "proposals/<id>", "tasks", "tasks/<id>"] {
+            assert!(
+                message.contains(&format!(" {route},")),
+                "{path}: the routes name `{route}`: {message}"
+            );
+        }
     }
     assert!(
         common::files_ending(&home, ".db").is_empty(),

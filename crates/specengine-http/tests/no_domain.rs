@@ -16,6 +16,13 @@
 //! of a literal that is a route path (`/` first, no whitespace), the
 //! decision route's own name (`/api/projects/{p}/proposals/{id}/decision`);
 //! a verdict or a link type is never exempt, nor `decision` in prose.
+//!
+//! AC-04 of docs/features/ui-live-tasks.md: the ten task states join the
+//! words, read from `TaskStatus::ALL` in
+//! `crates/specengine-model/src/task.rs` (each variant by its `as_str`
+//! arm) and checked against the library's `TaskStatus::ALL`: a `status`
+//! value is judged by the model's `TaskStatus::parse`, never by a literal.
+//! M: a handler comparing `"ready"`.
 
 mod common;
 
@@ -273,6 +280,47 @@ fn kinds() -> (BTreeSet<String>, Vec<PathBuf>) {
     (kinds, files)
 }
 
+/// `TaskStatus::ALL` as `crates/specengine-model/src/task.rs` defines it:
+/// the variants of the array, in order, each named by its `as_str` arm.
+fn task_states() -> Vec<String> {
+    let path = repository_root().join("crates/specengine-model/src/task.rs");
+    let text = fs::read_to_string(&path).expect("task.rs");
+    let start = text
+        .find("pub enum TaskStatus")
+        .expect("`pub enum TaskStatus` in task.rs");
+    let body = &text[start..];
+    let all = body
+        .find("pub const ALL: [Self; ")
+        .expect("TaskStatus's `ALL`");
+    let declared: usize = body[all + "pub const ALL: [Self; ".len()..]
+        .split(']')
+        .next()
+        .and_then(|count| count.trim().parse().ok())
+        .expect("the array's declared length");
+    let open = body[all..].find("= [").expect("its array") + all + 3;
+    let close = body[open..].find("];").expect("its end") + open;
+    let variants: Vec<&str> = body[open..close]
+        .split(',')
+        .map(|item| item.trim().trim_start_matches("Self::"))
+        .filter(|item| !item.is_empty())
+        .collect();
+    assert_eq!(variants.len(), declared, "{variants:?}");
+    let as_str = body.find("fn as_str").expect("TaskStatus's `as_str`");
+    let end = body[as_str..].find("fn parse").expect("`parse` after it") + as_str;
+    let arms = &body[as_str..end];
+    variants
+        .iter()
+        .map(|variant| {
+            let arm = format!("Self::{variant} => \"");
+            let at = arms
+                .find(&arm)
+                .unwrap_or_else(|| panic!("no `as_str` arm of {variant}: {arms}"))
+                + arm.len();
+            arms[at..].split('"').next().expect("its name").to_owned()
+        })
+        .collect()
+}
+
 const VERDICTS: [&str; 4] = ["clean", "observed", "blocked", "cannot-check"];
 
 /// A literal that is a route path: `/` first, no whitespace.
@@ -280,11 +328,12 @@ fn route_path(text: &str) -> bool {
     text.starts_with('/') && !text.chars().any(char::is_whitespace)
 }
 
-/// The words of `literal` that are a verdict, a link type or a kind
-/// (with the reason), and whether the exemption was used.
+/// The words of `literal` that are a verdict, a link type, a task state
+/// or a kind (with the reason), and whether the exemption was used.
 fn domain_words(
     literal: &str,
     links: &[String],
+    states: &[String],
     kinds: &BTreeSet<String>,
 ) -> (Vec<(String, &'static str)>, bool) {
     let mut hits = Vec::new();
@@ -292,6 +341,8 @@ fn domain_words(
     for word in words(literal) {
         if VERDICTS.contains(&word.as_str()) {
             hits.push((word, "a verdict"));
+        } else if states.contains(&word) {
+            hits.push((word, "a task state"));
         } else if links.contains(&word) {
             hits.push((word, "a LINK_TYPES name"));
         } else if kinds.contains(&word) {
@@ -333,6 +384,12 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
         links.len() == 12 && links.contains(&"depends_on".to_owned()),
         "{links:?}"
     );
+    let states = task_states();
+    let library: Vec<&str> = specengine_cli::TaskStatus::ALL
+        .map(specengine_cli::TaskStatus::as_str)
+        .to_vec();
+    assert_eq!(states, library, "task.rs's `ALL` is the library's");
+    assert_eq!(states.len(), 10, "{states:?}");
     let (kinds, configs) = kinds();
     assert!(configs.len() >= 3, "{configs:?}");
     for kind in ["mechanic", "rule", "decision", "edge-case", "requirement"] {
@@ -349,7 +406,7 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
             .to_string();
         for literal in literals(&text) {
             scanned += 1;
-            let (hits, exempted) = domain_words(&literal.text, &links, &kinds);
+            let (hits, exempted) = domain_words(&literal.text, &links, &states, &kinds);
             for (word, why) in hits {
                 found.push(format!(
                     "{relative}:{}: {:?} holds `{word}`, {why}",
@@ -362,8 +419,9 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
         }
     }
     eprintln!(
-        "{scanned} literals scanned; {} kinds from {} configs: {kinds:?}; exempt route paths: \
-         {exempt:#?}",
+        "{scanned} literals scanned; {} task states: {states:?}; {} kinds from {} configs: \
+         {kinds:?}; exempt route paths: {exempt:#?}",
+        states.len(),
         kinds.len(),
         configs.len()
     );
@@ -407,7 +465,7 @@ fn f(verdict: &str) -> u16 {
     let mut hits = Vec::new();
     let mut exempt = Vec::new();
     for literal in literals(probe) {
-        let (found, exempted) = domain_words(&literal.text, &links, &kinds);
+        let (found, exempted) = domain_words(&literal.text, &links, &[], &kinds);
         for (word, _) in found {
             hits.push((literal.line, word));
         }
@@ -430,4 +488,53 @@ fn f(verdict: &str) -> u16 {
         ]
     );
     assert_eq!(exempt, ["/api/projects/{p}/proposals/{id}/decision"]);
+}
+
+#[test]
+fn ac04_the_scan_sees_a_task_state_in_a_literal() {
+    let states = task_states();
+    assert_eq!(
+        states,
+        [
+            "draft",
+            "analysis",
+            "review",
+            "changes_requested",
+            "ready",
+            "in_progress",
+            "in_review",
+            "done",
+            "accepted",
+            "cancelled",
+        ]
+    );
+    let probe = r#"
+// A comment saying ready or in_progress is no literal.
+fn tasks(query: &str) -> u16 {
+    if query == "ready" { return 1; }
+    let _ = "status=IN_PROGRESS";
+    let _ = "/api/projects/{p}/tasks/{id}";
+    let _ = "`{name}={value}`: not a task state: {}";
+    let _ = "already done";
+    let _ = "readying; cancelled.";
+    0
+}
+"#;
+    let mut hits = Vec::new();
+    for literal in literals(probe) {
+        let (found, exempted) = domain_words(&literal.text, &[], &states, &BTreeSet::new());
+        assert!(!exempted);
+        for (word, why) in found {
+            hits.push((literal.line, word, why));
+        }
+    }
+    assert_eq!(
+        hits,
+        [
+            (4, "ready".to_owned(), "a task state"),
+            (5, "in_progress".to_owned(), "a task state"),
+            (8, "done".to_owned(), "a task state"),
+            (9, "cancelled".to_owned(), "a task state"),
+        ]
+    );
 }

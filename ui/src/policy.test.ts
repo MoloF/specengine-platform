@@ -268,6 +268,10 @@ describe("source policy", () => {
     const cyrillic = new RegExp(`[${String.fromCodePoint(0x400)}-${String.fromCodePoint(0x4ff)}]`);
     expect(offending(cyrillic)).toEqual([]);
   });
+
+  it("cites the task canon, never the task-package feature spec, whose blocks go at shipping (AC-13 of ui-live-tasks, WA-9)", () => {
+    expect(offending(new RegExp(["docs", "features", "task-package[.]md"].join("/")))).toEqual([]);
+  });
 });
 
 describe("toolchain policy", () => {

@@ -6,13 +6,13 @@ import { Icon } from "../ui/Icon";
 import { FROZEN_AT_APPROVAL } from "./labels";
 import { Part, When } from "./parts";
 
-/** The cut the core makes in a diff (`docs/features/task-package.md` "Data"). */
+/** The cut the core makes in a diff (`docs/canon/task-package.md` "Caps"). */
 export const CUT_NOTICE = "Diff cut by SpecEngine at 8 192 bytes; the file in the worktree holds the rest.";
 
-/** An entry past the package's total: `diff` null, `cut` true (`docs/features/task-package.md` "Data"). */
+/** An entry past the package's total: `diff` null, `cut` true (`docs/canon/task-package.md` "Caps"). */
 export const TOTAL_CUT_NOTICE = "Diff cut: the package's diffs reached their size cap (262 144 bytes in all); the file in the worktree holds this change.";
 
-/** An entry with no diff and no cut: the daemon's notes on the task say why. */
+/** An entry with no diff and no cut, a diff git cannot make: the daemon's notes on the task say why (`docs/canon/task-package.md` "Staleness"). */
 export const NO_DIFF_NOTICE = "No diff sent for this node; the daemon's notes on this task say why.";
 
 /** What a node whose diff removes it says in place of a link. */
@@ -23,7 +23,7 @@ const SHOWN_OPEN = 10;
 
 /**
  * A node the spec tree can open, linked; one its diff removes (gone from the compared place,
- * task-package "Data") as text with what happened to it, never a link to nothing.
+ * `docs/canon/task-package.md` "Staleness") as text with what happened to it, never a link to nothing.
  */
 function NodeName({ project, id, removed }: { project: string; id: string; removed: boolean }) {
   if (removed) {

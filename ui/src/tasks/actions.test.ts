@@ -3,7 +3,7 @@ import source from "./actions.ts?raw";
 import { actionsFor, ownerCommands, TASK_ID } from "./actions";
 
 // AC-09 of docs/features/ui-tasks.md: per state exactly its row of the transition table
-// (docs/features/task-package.md "Data", owner rows), then `spec task show`; fixed words and a
+// (`docs/canon/tasks.md` "Transitions", owner rows), then `spec task show`; fixed words and a
 // checked ID, the note never composed into a command.
 
 const TABLE: [string, string[]][] = [
@@ -47,7 +47,7 @@ describe("the owner's actions per state (AC-09)", () => {
   });
 
   it("cites the transition table and composes nothing but fixed words and the ID", () => {
-    expect(source).toContain('`docs/features/task-package.md` "Data"');
+    expect(source).toContain('`docs/canon/tasks.md` "Transitions"');
     const templates = [...source.matchAll(/`spec task [^`]*\$\{[^`]*`/g)].map((match) => match[0]);
     expect(templates.sort()).toEqual([
       "`spec task approve ${id}`",

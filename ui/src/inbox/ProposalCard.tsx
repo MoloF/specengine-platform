@@ -479,6 +479,15 @@ export function ProposalCard({
               <Badge look={severityLook(reviewed === undefined ? entry.severity : reviewed.severity)} />
             </dd>
           </div>
+          {/* Only the review document names the task (an inbox entry has no `task_id`): absent until it is read. */}
+          {reviewed !== undefined && (
+            <div className="fact">
+              <dt>Task</dt>
+              <dd className="mono">
+                {reviewed.task_id === null ? "No task" : <a href={sectionHash(project, "tasks", reviewed.task_id)}>{reviewed.task_id}</a>}
+              </dd>
+            </div>
+          )}
           <div className="fact">
             <dt>Status</dt>
             <dd>

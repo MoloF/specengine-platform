@@ -22,8 +22,20 @@
 //! union of its instances: the order of the one instance holding every
 //! key, every other instance's keys in that order. The debt dates are
 //! centuries away: today's date never changes the answer.
+//!
+//! AC-07 of docs/features/ui-live-tasks.md, its Rust half: seventeen sets
+//! more ("Key sets"), 32 in all, from the documents of A in state S
+//! (`task_state`) served by a daemon of their own: `TaskList`,
+//! `TaskListEntry` from `/tasks`; `TaskNotFound` from `/tasks/T-0099` and
+//! `/tasks/foo`; `TaskPackage` and its parts (`TaskTarget`,
+//! `TaskCriterion`, `TaskAssumption`, `TaskProposal`, `OwnerNote`,
+//! `SpecSnapshot`, `SnapshotPlace`, `SnapshotNode`, `SnapshotDiff`,
+//! `TaskClaim`, `TaskRun`, `TaskBundle`, `Author`) from T-0001 to T-0004,
+//! each part from every package that holds one. M: a `TaskRun` key
+//! dropped from the fixture.
 
 mod common;
+mod task_state;
 
 use std::fmt;
 use std::fs;
@@ -332,6 +344,48 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         texts.iter().map(|text| raw_object(text, key)).collect()
     };
 
+    // ui-live-tasks: A in state S, its own HOME and daemon.
+    let home_s = scratch.home("s");
+    let s = task_state::repo_in_s(&scratch, &task_state::A, "s", &home_s);
+    let tasks_server = Server::serve(&home_s, &cwd, &[&s]);
+    let list = vec![
+        tasks_server
+            .get(&format!("{p}/tasks"))
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
+    let not_found: Vec<String> = ["T-0099", "foo"]
+        .iter()
+        .map(|id| {
+            tasks_server
+                .get(&format!("{p}/tasks/{id}"))
+                .status(404)
+                .text()
+                .to_owned()
+        })
+        .collect();
+    let packages: Vec<String> = ["T-0001", "T-0002", "T-0003", "T-0004"]
+        .iter()
+        .map(|id| {
+            tasks_server
+                .get(&format!("{p}/tasks/{id}"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .collect();
+    drop(tasks_server);
+    // The packages whose `key` holds an object (or an array): not `null`.
+    let holding = |key: &str, open: char| -> Vec<String> {
+        packages
+            .iter()
+            .filter(|text| text.contains(&format!("\"{key}\":{open}")))
+            .cloned()
+            .collect()
+    };
+    let snapshots = objects(&holding("spec_snapshot", '{'), "spec_snapshot");
+
     vec![
         (
             "Project",
@@ -381,6 +435,83 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         (
             "CheckCause",
             one_key_set("CheckCause", &items(&checks, "cannot_check"), keys_of),
+        ),
+        ("TaskList", one_key_set("TaskList", &list, keys_of)),
+        (
+            "TaskListEntry",
+            one_key_set("TaskListEntry", &items(&list, "tasks"), keys_of),
+        ),
+        (
+            "TaskNotFound",
+            one_key_set("TaskNotFound", &not_found, keys_of),
+        ),
+        (
+            "TaskPackage",
+            one_key_set("TaskPackage", &packages, keys_of),
+        ),
+        (
+            "TaskTarget",
+            one_key_set("TaskTarget", &items(&packages, "targets"), keys_of),
+        ),
+        (
+            "TaskCriterion",
+            one_key_set("TaskCriterion", &items(&packages, "criteria"), keys_of),
+        ),
+        (
+            "TaskAssumption",
+            one_key_set("TaskAssumption", &items(&packages, "assumptions"), keys_of),
+        ),
+        (
+            "TaskProposal",
+            one_key_set("TaskProposal", &items(&packages, "open_proposals"), keys_of),
+        ),
+        (
+            "OwnerNote",
+            one_key_set("OwnerNote", &items(&packages, "owner_notes"), keys_of),
+        ),
+        (
+            "SpecSnapshot",
+            one_key_set("SpecSnapshot", &snapshots, keys_of),
+        ),
+        (
+            "SnapshotPlace",
+            one_key_set("SnapshotPlace", &objects(&snapshots, "place"), keys_of),
+        ),
+        (
+            "SnapshotNode",
+            one_key_set("SnapshotNode", &items(&snapshots, "nodes"), keys_of),
+        ),
+        (
+            "SnapshotDiff",
+            one_key_set(
+                "SnapshotDiff",
+                &items(&holding("snapshot_diff", '['), "snapshot_diff"),
+                keys_of,
+            ),
+        ),
+        (
+            "TaskClaim",
+            one_key_set(
+                "TaskClaim",
+                &objects(&holding("claim", '{'), "claim"),
+                keys_of,
+            ),
+        ),
+        (
+            "TaskRun",
+            one_key_set("TaskRun", &items(&packages, "runs"), keys_of),
+        ),
+        (
+            "TaskBundle",
+            one_key_set(
+                "TaskBundle",
+                &objects(&holding("bundle", '{'), "bundle"),
+                keys_of,
+            ),
+        ),
+        (
+            "Author",
+            one_key_set("Author", &objects(&packages, "author"), keys_of),
         ),
     ]
 }
@@ -444,8 +575,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
-    assert_eq!(names.len(), 15, "{names:?}");
-    let counts: Vec<(&str, usize)> = sets[6..]
+    assert_eq!(names.len(), 32, "{names:?}");
+    let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
         .collect();
@@ -471,6 +602,49 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "{name}: {keys:?}"
         );
     }
+    // ui-live-tasks' seventeen (docs/features/ui-live-tasks.md "Key
+    // sets"), in that order, with their counts; the package's 25 keys in
+    // the canon's order, its `runs` items the seven of a run.
+    let counts: Vec<(&str, usize)> = sets[15..]
+        .iter()
+        .map(|(name, keys)| (*name, keys.len()))
+        .collect();
+    assert_eq!(
+        counts,
+        [
+            ("TaskList", 2),
+            ("TaskListEntry", 6),
+            ("TaskNotFound", 2),
+            ("TaskPackage", 25),
+            ("TaskTarget", 4),
+            ("TaskCriterion", 2),
+            ("TaskAssumption", 2),
+            ("TaskProposal", 6),
+            ("OwnerNote", 2),
+            ("SpecSnapshot", 3),
+            ("SnapshotPlace", 4),
+            ("SnapshotNode", 3),
+            ("SnapshotDiff", 5),
+            ("TaskClaim", 4),
+            ("TaskRun", 7),
+            ("TaskBundle", 3),
+            ("Author", 4),
+        ]
+    );
+    assert_eq!(sets[18].1[..2], ["schema_version", "id"]);
+    assert_eq!(sets[18].1[24], "notes");
+    assert_eq!(
+        sets[29].1,
+        [
+            "run",
+            "role",
+            "started_at",
+            "ended_at",
+            "outcome",
+            "summary",
+            "changed_files"
+        ]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");

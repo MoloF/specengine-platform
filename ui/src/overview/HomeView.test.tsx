@@ -7,6 +7,7 @@ import { aProposal, aTaskEntry } from "../test/builders";
 import { callsOf, homeClient } from "../test/homeStub";
 import { renderApp } from "../test/render";
 import { SOME_TASKS } from "../test/taskStub";
+import { argsOf } from "../test/stubClient";
 
 // docs/features/ui-home.md on a stub client: AC-01 (the route, `#/`), AC-02 (what the home reads),
 // AC-03 (the Tasks region), AC-04 (the Inbox region's counts), AC-05 (only the daemon's keys),
@@ -83,8 +84,8 @@ describe("what the home reads (AC-02)", () => {
     const client = await openHome();
     await settle();
     expect(callsOf(client)).toEqual({ getProjects: 1, getInbox: 1, getTasks: 1 });
-    expect(client.getInbox.mock.calls).toEqual([["alpha"]]);
-    expect(client.getTasks.mock.calls).toEqual([["alpha"]]);
+    expect(argsOf(client.getInbox)).toEqual([["alpha"]]);
+    expect(argsOf(client.getTasks)).toEqual([["alpha"]]);
   });
 });
 

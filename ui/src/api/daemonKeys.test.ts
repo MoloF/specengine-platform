@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import source from "./provisional.ts?raw";
 import type {
+  Author,
   BundleView,
   CheckCause,
   CheckCounts,
@@ -13,20 +14,36 @@ import type {
   GraphView,
   InboxEntry,
   NodeView,
+  OwnerNote,
   Project,
   Proposal,
   QueueEvent,
   SearchHit,
+  SnapshotDiff,
+  SnapshotNode,
+  SnapshotPlace,
+  SpecSnapshot,
+  TaskAssumption,
+  TaskBundle,
+  TaskClaim,
+  TaskCriterion,
+  TaskList,
+  TaskListEntry,
+  TaskNotFound,
+  TaskPackage,
+  TaskProposal,
+  TaskRun,
+  TaskTarget,
 } from "./types";
 
-// AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-10 of
-// docs/features/task-package.md (the review document's `task_id`): the provisional types of
-// the daemon's documents. Each record names exactly its type's keys (`satisfies` fails `pnpm
-// build` otherwise) and equals the list the cited headings write; the keys the daemon serves (the
-// record less the base-only keys of a plain check, NEVER_SERVED) equal `fixtures/daemon-keys.json`,
-// which a Rust test regenerates from the daemon on fixture A: daemon-read's six names, ui-live's
-// nine. While that file is absent the comparison is skipped, saying so; once it exists it names
-// all fifteen.
+// AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-07 of
+// docs/features/ui-live-tasks.md, the review document's `task_id` (`docs/canon/tasks.md`
+// "Task-bound proposals"): the provisional types of the daemon's documents. Each record names
+// exactly its type's keys (`satisfies` fails `pnpm build` otherwise) and equals the list the cited
+// headings write; the keys the daemon serves (the record less the base-only keys of a plain check,
+// NEVER_SERVED) equal `fixtures/daemon-keys.json`, which a Rust test regenerates from the daemon on
+// fixture A: daemon-read's six names, ui-live's nine, ui-live-tasks' seventeen. While that file is
+// absent the comparison is skipped, saying so; once it exists it names all thirty-two.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -47,7 +64,7 @@ const KEYS = {
   } satisfies Record<keyof InboxEntry, true>,
   // docs/canon/proposal-queue.md "Commands" to `updated_at`, docs/canon/agent-intake.md "Review
   // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`,
-  // docs/features/task-package.md "Data" (Review document) `task_id` after `choice`.
+  // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`.
   Proposal: {
     id: true,
     project: true,
@@ -183,6 +200,59 @@ const KEYS = {
   // docs/features/ui-live.md "Data": a `stale` entry, a `cannot_check` cause.
   DebtEntry: { code: true, path: true, subject: true, reason: true, expires: true, line: true } satisfies Record<keyof DebtEntry, true>,
   CheckCause: { path: true, message: true } satisfies Record<keyof CheckCause, true>,
+  // docs/canon/tasks.md "Commands": `spec task list --json`, a row, `spec task show`'s exit-1 document.
+  TaskList: { tasks: true, notes: true } satisfies Record<keyof TaskList, true>,
+  TaskListEntry: { id: true, status: true, title: true, targets: true, stale: true, updated_at: true } satisfies Record<keyof TaskListEntry, true>,
+  TaskNotFound: { id: true, reason: true } satisfies Record<keyof TaskNotFound, true>,
+  // docs/canon/task-package.md "Package": the package and each of its parts, `author` among them.
+  TaskPackage: {
+    schema_version: true,
+    id: true,
+    project: true,
+    status: true,
+    title: true,
+    goal: true,
+    profile: true,
+    stale: true,
+    targets: true,
+    criteria: true,
+    affected_nodes: true,
+    plan: true,
+    assumptions: true,
+    open_proposals: true,
+    owner_notes: true,
+    bindings: true,
+    spec_snapshot: true,
+    snapshot_diff: true,
+    claim: true,
+    runs: true,
+    bundle: true,
+    author: true,
+    created_at: true,
+    updated_at: true,
+    notes: true,
+  } satisfies Record<keyof TaskPackage, true>,
+  TaskTarget: { id: true, path: true, kind: true, title: true } satisfies Record<keyof TaskTarget, true>,
+  TaskCriterion: { ref: true, text: true } satisfies Record<keyof TaskCriterion, true>,
+  TaskAssumption: { proposal: true, text: true } satisfies Record<keyof TaskAssumption, true>,
+  TaskProposal: { id: true, kind: true, status: true, target_ids: true, task_id: true, summary: true } satisfies Record<keyof TaskProposal, true>,
+  OwnerNote: { at: true, note: true } satisfies Record<keyof OwnerNote, true>,
+  SpecSnapshot: { at: true, place: true, nodes: true } satisfies Record<keyof SpecSnapshot, true>,
+  SnapshotPlace: { worktree: true, root_rel: true, branch: true, commit: true } satisfies Record<keyof SnapshotPlace, true>,
+  SnapshotNode: { id: true, path: true, span_hash: true } satisfies Record<keyof SnapshotNode, true>,
+  SnapshotDiff: { id: true, path: true, span_hash: true, diff: true, cut: true } satisfies Record<keyof SnapshotDiff, true>,
+  TaskClaim: { at: true, role: true, worktree: true, branch: true } satisfies Record<keyof TaskClaim, true>,
+  TaskRun: {
+    run: true,
+    role: true,
+    started_at: true,
+    ended_at: true,
+    outcome: true,
+    summary: true,
+    changed_files: true,
+  } satisfies Record<keyof TaskRun, true>,
+  TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
+  Author: { type: true, role: true, model: true, run: true } satisfies Record<keyof Author, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -209,6 +279,24 @@ const CITED: Record<Named, string> = {
   CheckFinding: "code, severity, path, line, subject, message, fix?, debt?, introduced?",
   DebtEntry: "code, path, subject, reason, expires, line",
   CheckCause: "path, message",
+  TaskList: "tasks, notes",
+  TaskListEntry: "id, status, title, targets, stale, updated_at",
+  TaskNotFound: "id, reason",
+  TaskPackage:
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, author, created_at, updated_at, notes",
+  TaskTarget: "id, path, kind, title",
+  TaskCriterion: "ref, text",
+  TaskAssumption: "proposal, text",
+  TaskProposal: "id, kind, status, target_ids, task_id, summary",
+  OwnerNote: "at, note",
+  SpecSnapshot: "at, place, nodes",
+  SnapshotPlace: "worktree, root_rel, branch, commit",
+  SnapshotNode: "id, path, span_hash",
+  SnapshotDiff: "id, path, span_hash, diff, cut",
+  TaskClaim: "at, role, worktree, branch",
+  TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
+  TaskBundle: "node_ids, budget, bundle_hash",
+  Author: "type, role, model, run",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -218,6 +306,30 @@ const DAEMON_READ: readonly Named[] = ["Project", "InboxEntry", "Proposal", "Nod
 
 /** ui-live's nine (docs/features/ui-live.md AC-09). */
 const UI_LIVE: readonly Named[] = ["GraphView", "GraphNode", "GraphEdge", "FollowedType", "CheckReport", "CheckCounts", "CheckFinding", "DebtEntry", "CheckCause"];
+
+/** ui-live-tasks' seventeen (docs/features/ui-live-tasks.md "Key sets", AC-07). */
+const UI_LIVE_TASKS: readonly Named[] = [
+  "TaskList",
+  "TaskListEntry",
+  "TaskNotFound",
+  "TaskPackage",
+  "TaskTarget",
+  "TaskCriterion",
+  "TaskAssumption",
+  "TaskProposal",
+  "OwnerNote",
+  "SpecSnapshot",
+  "SnapshotPlace",
+  "SnapshotNode",
+  "SnapshotDiff",
+  "TaskClaim",
+  "TaskRun",
+  "TaskBundle",
+  "Author",
+];
+
+/** Every type the fixture names, in the slices' order. */
+const ALL: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -257,7 +369,14 @@ describe("the daemon's document types (AC-09)", () => {
       DebtEntry: 6,
       CheckCause: 2,
     });
-    expect([...DAEMON_READ, ...UI_LIVE].sort()).toEqual([...NAMES].sort());
+    expect([...ALL].sort()).toEqual([...NAMES].sort());
+  });
+
+  it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks)", () => {
+    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
+    expect(UI_LIVE_TASKS).toHaveLength(17);
+    expect(ALL).toHaveLength(32);
+    expect(new Set(ALL).size).toBe(32);
   });
 
   it("lists each base-only key once, a key of its type the citation marks optional", () => {
@@ -325,8 +444,8 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the fifteen types: daemon-read's six, ui-live's nine", () => {
-    expect(Object.keys(sets).sort()).toEqual([...DAEMON_READ, ...UI_LIVE].sort());
+  it("names exactly the thirty-two types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen", () => {
+    expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
   });
 
   it.each(NAMES)("%s: the daemon's keys are the type's", (name) => {

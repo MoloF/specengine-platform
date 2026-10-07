@@ -61,7 +61,11 @@ export const queryKeys = {
  */
 const READS_AFTER_DECISION = ["inbox", "proposal", "tree", "node", "search", "bundle", "graph", "tasks", "task"] as const;
 
-// What a request carries: absent options omitted, an empty array or a false `archive` too.
+// What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
+// false `archive` too; then the query's AbortSignal. A read invalidated while in flight is aborted
+// and read once more (TanStack's `cancelRefetch`), so a burst of live events costs the daemon one
+// answered read per query, not one per event (`docs/features/ui-live-tasks.md` "Data"); the check
+// alone never takes its signal (useCheck).
 
 function treeRequest(options: TreeOptions): TreeOptions | undefined {
   const sent: TreeOptions = {};
@@ -128,12 +132,12 @@ function bundleRequest(options: BundleOptions): BundleOptions {
 
 export function useProjects() {
   const client = useClient();
-  return useQuery({ queryKey: queryKeys.projects, queryFn: () => client.getProjects() });
+  return useQuery({ queryKey: queryKeys.projects, queryFn: ({ signal }) => client.getProjects(signal) });
 }
 
 export function useInbox(project: string) {
   const client = useClient();
-  return useQuery({ queryKey: queryKeys.inbox(project), queryFn: () => client.getInbox(project) });
+  return useQuery({ queryKey: queryKeys.inbox(project), queryFn: ({ signal }) => client.getInbox(project, signal) });
 }
 
 /** The Inbox's read as a view shares it (the tree's counts, a node's Proposals tab). */
@@ -144,7 +148,7 @@ export function useProposal(project: string, id: string | null) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.proposal(project, id ?? ""),
-    queryFn: () => client.getProposal(project, id ?? ""),
+    queryFn: ({ signal }) => client.getProposal(project, id ?? "", signal),
     enabled: id !== null,
   });
 }
@@ -152,8 +156,12 @@ export function useProposal(project: string, id: string | null) {
 /** The review document's read as the Inbox shares it with its card. */
 export type ProposalQuery = ReturnType<typeof useProposal>;
 
-/** The proposal ID a queue event names: its payload's `id` (`docs/canon/proposal-queue.md` "States and events"). */
-function eventProposalId(payload: unknown): string | null {
+/**
+ * The ID a queue event names: its payload's `id`, a proposal's or a task's
+ * (`docs/canon/proposal-queue.md` "States and events", `docs/canon/tasks.md` "Store"); null when
+ * the payload has no string `id`.
+ */
+function eventId(payload: unknown): string | null {
   if (typeof payload !== "object" || payload === null || !("id" in payload)) {
     return null;
   }
@@ -173,14 +181,24 @@ const WALK = "check";
 /** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
 const APPLIED = "proposal.applied";
 
+/** A proposal's queue events (`docs/canon/proposal-queue.md` "States and events"). */
+const PROPOSAL_EVENT = "proposal.";
+
+/** A task's queue events (`docs/canon/tasks.md` "Store"). */
+const TASK_EVENT = "task.";
+
 /**
  * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
- * `proposal.*` event reads that project's inbox and that proposal again; `proposal.applied` also
- * that project's trees, nodes, searches, bundles, graphs and check (a spec file changed;
- * `docs/features/ui-live.md` "Data"), no other project's and no other read. A stream this client
- * opened again after the browser gave up on it (events may be missed, an apply among them) reads
- * the inbox, every cached proposal and those spec reads of the project again. Only the reads on
- * screen are fetched, once each (the check only while Health shows it); the rest are marked stale.
+ * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
+ * every task of it (a task's open proposals and assumptions are the queue's); `proposal.applied`
+ * also that project's trees, nodes, searches, bundles, graphs and check (a spec file changed;
+ * `docs/features/ui-live.md` "Data"). A `task.*` event reads that project's task list and that task
+ * again (no string `id`: every task of it), never the inbox, a proposal or a spec read
+ * (`docs/features/ui-live-tasks.md` "Data"). No other project's read, and no other read. A stream
+ * this client opened again after the browser gave up on it (events may be missed, an apply among
+ * them) reads the inbox, every cached proposal, those spec reads and the task reads of the project
+ * again. Only the reads on screen are fetched, once each (the check only while Health shows it);
+ * the rest are marked stale.
  */
 export function useLiveQueue(project: string | null) {
   const client = useClient();
@@ -197,17 +215,32 @@ export function useLiveQueue(project: string | null) {
         void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: read !== WALK });
       }
     };
+    /** The task list and every task of the project, whatever task is open. */
+    const readTasksAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(project), exact: true });
+      void queryClient.invalidateQueries({ queryKey: ["task", project] });
+    };
     return client.subscribe(
       project,
       (event) => {
-        if (!event.type.startsWith("proposal.")) {
+        const id = eventId(event.payload);
+        if (event.type.startsWith(TASK_EVENT)) {
+          if (id === null) {
+            readTasksAgain();
+          } else {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(project), exact: true });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.task(project, id), exact: true });
+          }
+          return;
+        }
+        if (!event.type.startsWith(PROPOSAL_EVENT)) {
           return;
         }
         void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
-        const id = eventProposalId(event.payload);
         if (id !== null) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
         }
+        readTasksAgain();
         if (event.type === APPLIED) {
           readSpecAgain();
         }
@@ -216,6 +249,7 @@ export function useLiveQueue(project: string | null) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
         void queryClient.invalidateQueries({ queryKey: ["proposal", project] });
         readSpecAgain();
+        readTasksAgain();
       },
     );
   }, [client, queryClient, project]);
@@ -226,10 +260,7 @@ export function useTree(project: string, options: TreeOptions) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.tree(project, options),
-    queryFn: () => {
-      const sent = treeRequest(options);
-      return sent === undefined ? client.getTree(project) : client.getTree(project, sent);
-    },
+    queryFn: ({ signal }) => client.getTree(project, treeRequest(options), signal),
     placeholderData: keepPreviousData,
   });
 }
@@ -242,10 +273,7 @@ export function useNode(project: string, ref: string, options: NodeOptions = {},
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.node(project, ref, options),
-    queryFn: () => {
-      const sent = nodeRequest(options);
-      return sent === undefined ? client.getNode(project, ref) : client.getNode(project, ref, sent);
-    },
+    queryFn: ({ signal }) => client.getNode(project, ref, nodeRequest(options), signal),
     enabled,
     placeholderData: keepPreviousData,
   });
@@ -260,7 +288,7 @@ export function useSearch(project: string, options: SearchOptions | null) {
   const submitted = options ?? { query: "" };
   return useQuery({
     queryKey: queryKeys.search(project, submitted),
-    queryFn: () => client.search(project, searchRequest(submitted)),
+    queryFn: ({ signal }) => client.search(project, searchRequest(submitted), signal),
     enabled: options !== null,
   });
 }
@@ -270,7 +298,7 @@ export function useBundle(project: string, options: BundleOptions, enabled: bool
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.bundle(project, options),
-    queryFn: () => client.getBundle(project, bundleRequest(options)),
+    queryFn: ({ signal }) => client.getBundle(project, bundleRequest(options), signal),
     enabled,
   });
 }
@@ -285,7 +313,7 @@ export function useGraph(project: string, options: GraphOptions | null) {
   const asked = options ?? { ref: "" };
   return useQuery({
     queryKey: queryKeys.graph(project, asked),
-    queryFn: () => client.getGraph(project, graphRequest(asked)),
+    queryFn: ({ signal }) => client.getGraph(project, graphRequest(asked), signal),
     enabled: options !== null,
     placeholderData: keepPreviousData,
   });
@@ -294,7 +322,7 @@ export function useGraph(project: string, options: GraphOptions | null) {
 /** The project's tasks, one read for the whole list: filters never read again. */
 export function useTasks(project: string) {
   const client = useClient();
-  return useQuery({ queryKey: queryKeys.tasks(project), queryFn: () => client.getTasks(project) });
+  return useQuery({ queryKey: queryKeys.tasks(project), queryFn: ({ signal }) => client.getTasks(project, signal) });
 }
 
 /** The task list's read as the view shares it (the list, the summary beside it). */
@@ -308,7 +336,7 @@ export function useCachedTasks(project: string, enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.tasks(project),
-    queryFn: () => client.getTasks(project),
+    queryFn: ({ signal }) => client.getTasks(project, signal),
     refetchOnMount: false,
     enabled,
   });
@@ -319,7 +347,7 @@ export function useCachedInbox(project: string, enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.inbox(project),
-    queryFn: () => client.getInbox(project),
+    queryFn: ({ signal }) => client.getInbox(project, signal),
     refetchOnMount: false,
     enabled,
   });
@@ -342,14 +370,15 @@ export function useSearchOnActivation(project: string) {
  */
 export function useTask(project: string, id: string) {
   const client = useClient();
-  return useQuery({ queryKey: queryKeys.task(project, id), queryFn: () => client.getTask(project, id) });
+  return useQuery({ queryKey: queryKeys.task(project, id), queryFn: ({ signal }) => client.getTask(project, id, signal) });
 }
 
 /**
  * The project's `spec check` (docs/features/ui-health.md "Data"): read on entering Health, on
  * "Check again" (`refetch`) and, while Health is on screen, after the live tail's apply or gap
  * (useLiveQueue); never on window focus, a reconnect or an interval, and not after a decision (a
- * full walk per read; the report carries no time).
+ * full walk per read; the report carries no time). Its query's AbortSignal is never taken: a walk
+ * in flight is kept and its answer used, never aborted, whatever reads it again or unmounts.
  */
 export function useCheck(project: string) {
   const client = useClient();

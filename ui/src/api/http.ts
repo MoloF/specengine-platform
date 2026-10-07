@@ -1,6 +1,5 @@
 import {
   ClientError,
-  NOT_SERVED,
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
@@ -28,7 +27,8 @@ import type {
 } from "./types";
 
 // SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data", the
-// graph and the check `docs/features/ui-live.md` "Data"): `fetch` and `EventSource`, no package.
+// graph and the check `docs/features/ui-live.md` "Data", the tasks
+// `docs/features/ui-live-tasks.md` "Data"): `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -38,8 +38,10 @@ import type {
 const API = "/api";
 
 /**
- * The queue's event types (`docs/canon/proposal-queue.md` "States and events"). An EventSource
- * hands a named event only to a listener of that name: a type missing here is never seen.
+ * The queue's event types: the proposals' five
+ * (`docs/canon/proposal-queue.md` "States and events"), then the tasks' nine
+ * (`docs/canon/tasks.md` "Store"). An EventSource hands a named event only to a listener of that
+ * name: a type missing here is never seen.
  */
 export const QUEUE_EVENT_TYPES = [
   "proposal.created",
@@ -47,6 +49,15 @@ export const QUEUE_EVENT_TYPES = [
   "proposal.applied",
   "proposal.rejected",
   "proposal.apply_failed",
+  "task.created",
+  "task.planned",
+  "task.approved",
+  "task.changes_requested",
+  "task.claimed",
+  "task.run_reported",
+  "task.completed",
+  "task.cancelled",
+  "task.refreshed",
 ] as const;
 
 /** The first wait before a stream the browser gave up on is opened again; doubled per failure. */
@@ -112,13 +123,20 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** What a request sends besides its method and path: a POST's JSON body, a read's AbortSignal. */
+interface Sent {
+  body?: string;
+  signal?: AbortSignal;
+}
+
 /**
  * One request. 2xx: its JSON document (the check's report whatever its verdict). A GET's 404 that
  * is not the error body: the exit-1 document, as data. Any other answer: a ClientError with the
  * HTTP status and the error body's `message` verbatim (another body: its text verbatim). No
- * answer: status 0.
+ * answer: status 0. Aborted through `signal` (the read was superseded): the abort error as `fetch`
+ * gave it, never a ClientError, since the daemon was not at fault.
  */
-async function request(method: "GET" | "POST", path: string, body?: string): Promise<unknown> {
+async function request(method: "GET" | "POST", path: string, { body, signal }: Sent = {}): Promise<unknown> {
   const url = `${API}${path}`;
   const asked = `${method} ${url}`;
   let response: Response;
@@ -128,14 +146,21 @@ async function request(method: "GET" | "POST", path: string, body?: string): Pro
       headers: body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
       body,
       cache: "no-store",
+      ...(signal === undefined ? {} : { signal }),
     });
   } catch (error) {
+    if (signal?.aborted === true) {
+      throw error;
+    }
     throw new ClientError({ status: 0, message: `${asked}: no response from the daemon (${reasonOf(error)})` });
   }
   let text: string;
   try {
     text = await response.text();
   } catch (error) {
+    if (signal?.aborted === true) {
+      throw error;
+    }
     throw new ClientError({ status: 0, message: `${asked}: the answer broke off (${reasonOf(error)})` });
   }
   const value = parsed(text);
@@ -161,26 +186,6 @@ function emptyAnswer(asked: string, response: Response): string {
   return response.status === 502 ? `${said}: the dev server's proxy reached no daemon; is specengine-http running?` : said;
 }
 
-/** Where ui-live leaves the tasks for `ui-live-tasks`, after task-package. */
-const DAEMON_READ_GAP = 'docs/features/ui-live.md "Out of scope"';
-
-/**
- * A read the daemon does not serve yet, the tasks (`docs/features/ui-live.md` "Out of scope"):
- * refused here, nothing requested; `notServed`, status NOT_SERVED (501), never 0 (no response: the
- * daemon down). The message names the spec that leaves it out.
- */
-function notServed(endpoint: string): Promise<never> {
-  return Promise.reject(
-    new ClientError(
-      {
-        status: NOT_SERVED,
-        message: `Not served by the daemon yet: ${endpoint} is a missing endpoint (${DAEMON_READ_GAP}). The mock serves it: open the UI with ?scenario=normal.`,
-      },
-      { notServed: true },
-    ),
-  );
-}
-
 /** A named SSE message as a queue event: `id` the seq, the event's name the type, `data` parsed. */
 function queueEventOf(message: MessageEvent<unknown>): QueueEvent {
   const data = typeof message.data === "string" ? message.data : "";
@@ -192,52 +197,52 @@ function queueEventOf(message: MessageEvent<unknown>): QueueEvent {
 export class HttpClient implements SpecEngineClient {
   readonly dataSource = "daemon";
 
-  async getProjects(): Promise<Project[]> {
-    return (await request("GET", "/projects")) as Project[];
+  async getProjects(signal?: AbortSignal): Promise<Project[]> {
+    return (await request("GET", "/projects", { signal })) as Project[];
   }
 
-  async getInbox(project: string): Promise<Inbox> {
-    return (await request("GET", `${projectPath(project)}/inbox`)) as Inbox;
+  async getInbox(project: string, signal?: AbortSignal): Promise<Inbox> {
+    return (await request("GET", `${projectPath(project)}/inbox`, { signal })) as Inbox;
   }
 
-  async getProposal(project: string, id: string): Promise<Proposal> {
-    return (await request("GET", `${projectPath(project)}/proposals/${segment(id)}`)) as Proposal;
+  async getProposal(project: string, id: string, signal?: AbortSignal): Promise<Proposal> {
+    return (await request("GET", `${projectPath(project)}/proposals/${segment(id)}`, { signal })) as Proposal;
   }
 
-  async getTree(project: string, options: TreeOptions = {}): Promise<TreeView> {
+  async getTree(project: string, options: TreeOptions = {}, signal?: AbortSignal): Promise<TreeView> {
     const query = queryOf([
       ["root", options.root],
       ["depth", options.depth],
       ["kinds", options.kinds],
       ["archive", options.archive],
     ]);
-    return (await request("GET", `${projectPath(project)}/tree${query}`)) as TreeView;
+    return (await request("GET", `${projectPath(project)}/tree${query}`, { signal })) as TreeView;
   }
 
-  async getNode(project: string, ref: string, options: NodeOptions = {}): Promise<NodeView> {
+  async getNode(project: string, ref: string, options: NodeOptions = {}, signal?: AbortSignal): Promise<NodeView> {
     const query = queryOf([
       ["with", options.with],
       ["archive", options.archive],
     ]);
-    return (await request("GET", `${projectPath(project)}/nodes/${segment(ref)}${query}`)) as NodeView;
+    return (await request("GET", `${projectPath(project)}/nodes/${segment(ref)}${query}`, { signal })) as NodeView;
   }
 
-  async search(project: string, options: SearchOptions): Promise<SearchResults> {
+  async search(project: string, options: SearchOptions, signal?: AbortSignal): Promise<SearchResults> {
     const query = queryOf([
       ["query", options.query],
       ["kinds", options.kinds],
       ["limit", options.limit],
       ["archive", options.archive],
     ]);
-    return (await request("GET", `${projectPath(project)}/search${query}`)) as SearchResults;
+    return (await request("GET", `${projectPath(project)}/search${query}`, { signal })) as SearchResults;
   }
 
-  async getBundle(project: string, options: BundleOptions): Promise<BundleView> {
+  async getBundle(project: string, options: BundleOptions, signal?: AbortSignal): Promise<BundleView> {
     const query = queryOf([
       ["node_ids", options.node_ids],
       ["budget", options.budget],
     ]);
-    return (await request("GET", `${projectPath(project)}/bundle${query}`)) as BundleView;
+    return (await request("GET", `${projectPath(project)}/bundle${query}`, { signal })) as BundleView;
   }
 
   /**
@@ -246,7 +251,7 @@ export class HttpClient implements SpecEngineClient {
    * repeated in order, `impact` and `archive` sent only as true, an absent option left out. A 404
    * is the exit-1 document (an unknown REF), resolved as data.
    */
-  async getGraph(project: string, options: GraphOptions): Promise<GraphView> {
+  async getGraph(project: string, options: GraphOptions, signal?: AbortSignal): Promise<GraphView> {
     const query = queryOf([
       ["ref", options.ref],
       ["impact", options.impact === true ? true : undefined],
@@ -254,20 +259,29 @@ export class HttpClient implements SpecEngineClient {
       ["depth", options.depth],
       ["archive", options.archive === true ? true : undefined],
     ]);
-    return (await request("GET", `${projectPath(project)}/graph${query}`)) as GraphView;
+    return (await request("GET", `${projectPath(project)}/graph${query}`, { signal })) as GraphView;
   }
 
-  getTasks(project: string): Promise<TaskList> {
-    return notServed(`GET /api/projects/${project}/tasks`);
+  /**
+   * `spec task list --json`, the whole list: no `status` is sent, the screen filters the answer
+   * (`docs/features/ui-live-tasks.md` "Data").
+   */
+  async getTasks(project: string, signal?: AbortSignal): Promise<TaskList> {
+    return (await request("GET", `${projectPath(project)}/tasks`, { signal })) as TaskList;
   }
 
-  getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound> {
-    return notServed(`GET /api/projects/${project}/tasks/${id}`);
+  /**
+   * `spec task show T --json`, uncut, no query; the ID a path segment encoded once. A 404 is the
+   * exit-1 document `{id, reason}` (no such task, or not a task ID: `id` null), resolved as data.
+   */
+  async getTask(project: string, id: string, signal?: AbortSignal): Promise<TaskPackage | TaskNotFound> {
+    return (await request("GET", `${projectPath(project)}/tasks/${segment(id)}`, { signal })) as TaskPackage | TaskNotFound;
   }
 
   /**
    * `spec check --json` for the project, the plain run, no query: every verdict is a 200 report,
-   * data (a check outcome, never a hold on work: ADR-0012); a 503 rejects in the daemon's words.
+   * data (a check outcome, never a hold on work: ADR-0012); a 503 rejects in the daemon's words. No
+   * AbortSignal: a walk in flight is never aborted (`docs/features/ui-live.md` "Data").
    */
   async getCheck(project: string): Promise<CheckReport> {
     return (await request("GET", `${projectPath(project)}/check`)) as CheckReport;
@@ -275,7 +289,7 @@ export class HttpClient implements SpecEngineClient {
 
   /** Always refused by the daemon (403): its message names the terminal command. */
   async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {
-    return (await request("POST", `${projectPath(project)}/proposals/${segment(id)}/decision`, JSON.stringify(decision))) as DecisionResult;
+    return (await request("POST", `${projectPath(project)}/proposals/${segment(id)}/decision`, { body: JSON.stringify(decision) })) as DecisionResult;
   }
 
   /**

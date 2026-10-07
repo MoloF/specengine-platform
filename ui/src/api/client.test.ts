@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import source from "./client.ts?raw";
 
 // AC-01 of docs/features/ui-tree-node.md: each read names its endpoint in the comment above it;
-// one the daemon does not serve yet is flagged MISSING ENDPOINT (named for rust-developer): the
-// tasks' two, until ui-live-tasks. The graph's and the check's name the daemon's README (AC-10 of
-// docs/features/ui-live.md, amending AC-01 of ui-graph and of ui-health).
+// one the daemon does not serve yet would be flagged MISSING ENDPOINT (named for rust-developer):
+// none since ui-live-tasks. The graph's, the check's and the tasks' name the daemon's README (AC-10
+// of docs/features/ui-live.md, AC-08 of docs/features/ui-live-tasks.md, amending AC-01 of
+// ui-graph, ui-health and ui-tasks).
 
 function commentAbove(method: string): string {
   const lines = source.split("\n");
@@ -28,23 +29,20 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ["decideProposal", "/** POST /api/projects/:p/proposals/:id/decision */"],
     // AC-10 of docs/features/ui-live.md (AC-01 of ui-graph, amended).
     ["getGraph", '/** GET /api/projects/:p/graph (crates/specengine-http/README.md "Endpoints"; the browser view, uncut) */'],
-    // AC-01 of docs/features/ui-tasks.md.
+    // AC-08 of docs/features/ui-live-tasks.md (AC-01 of ui-tasks, amended): the two comments of its "Data".
+    ["getTasks", '/** GET /api/projects/:p/tasks (crates/specengine-http/README.md "Endpoints"; = spec task list --json) */'],
     [
-      "getTasks",
-      '/** MISSING ENDPOINT GET /api/projects/:p/tasks (07 section 3 lists it; = spec task list --json; rust-developer, daemon-read "Out of scope") */',
+      "getTask",
+      '/** GET /api/projects/:p/tasks/:id (crates/specengine-http/README.md "Endpoints"; = spec task show T --json, uncut; 404 the exit-1 document) */',
     ],
-    ["getTask", "/** MISSING ENDPOINT GET /api/projects/:p/tasks/:id (07 section 3 lacks it; = spec task show T --json, uncut) */"],
     // AC-10 of docs/features/ui-live.md (AC-01 of ui-health, amended).
     ["getCheck", '/** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */'],
   ])("%s says %s", (method, comment) => {
     expect(commentAbove(method)).toBe(comment);
   });
 
-  it("flags only the tasks' two reads MISSING ENDPOINT (AC-11 of ui-live)", () => {
-    const flagged = source
-      .split("\n")
-      .flatMap((line, index, lines) => (line.includes("MISSING ENDPOINT") ? [/^\s+(\w+)\(/.exec(lines[index + 1] ?? "")?.[1] ?? line] : []));
-    expect(flagged).toEqual(["getTasks", "getTask"]);
+  it("flags no read MISSING ENDPOINT: the daemon serves every one (AC-08 of ui-live-tasks)", () => {
+    expect(source).not.toContain("MISSING ENDPOINT");
   });
 
   it("names the options exactly as the MCP tools do", () => {
@@ -82,14 +80,14 @@ describe("the tasks' reads (AC-01 of ui-tasks)", () => {
     expect(names.filter((name) => /transition|approve|cancel|claim/i.test(name))).toEqual([]);
   });
 
-  it("type a package read as the package or the exit-1 document", () => {
-    expect(source).toContain("getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;");
-    expect(source).toContain("getTasks(project: string): Promise<TaskList>;");
+  it("type a package read as the package or the exit-1 document, each read taking its query's AbortSignal", () => {
+    expect(source).toContain("getTask(project: string, id: string, signal?: AbortSignal): Promise<TaskPackage | TaskNotFound>;");
+    expect(source).toContain("getTasks(project: string, signal?: AbortSignal): Promise<TaskList>;");
   });
 });
 
 describe("the check's read (AC-01 of ui-health)", () => {
-  it("is one read typed as the report, and no member applies a fix", () => {
+  it("is one read typed as the report, taking no AbortSignal (a walk in flight is never aborted), and no member applies a fix", () => {
     expect(source).toContain("getCheck(project: string): Promise<CheckReport>;");
     const block = /export interface SpecEngineClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? "";
     const names = [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");

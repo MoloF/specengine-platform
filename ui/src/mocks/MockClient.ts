@@ -55,7 +55,8 @@ function fakeSha(text: string): string {
  * memory (decisions change the queues until reload; an accepted change is applied in the
  * proposal's worktree, so no node text changes here: ADR-0032), and the scenario picked at
  * bootstrap. Reads answer as `spec serve` does for a browser: uncut, an unknown REF as its exit-1
- * document, a refusal (exit 2) as 503 with the CLI's words.
+ * document, a refusal (exit 2) as 503 with the CLI's words. A read's AbortSignal is ignored: no
+ * daemon runs the read, so there is nothing to spare.
  */
 export class MockClient implements SpecEngineClient {
   readonly dataSource = "mock";
@@ -131,7 +132,7 @@ export class MockClient implements SpecEngineClient {
     return searchOf(this.project(project).corpus, options);
   }
 
-  /** Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). */
+  /** The mock corpus's bundle; the daemon serves its own (`docs/features/daemon-read.md` "Data"). */
   async getBundle(project: string, options: BundleOptions): Promise<BundleView> {
     await this.read();
     return bundleOf(this.project(project).corpus, options);
@@ -143,7 +144,7 @@ export class MockClient implements SpecEngineClient {
     return graphOf(this.project(project).corpus, options);
   }
 
-  /** Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). */
+  /** The mock's task list; the daemon serves its own (`docs/features/ui-live-tasks.md` "Data"). */
   async getTasks(project: string): Promise<TaskList> {
     await this.read();
     this.project(project);
@@ -151,7 +152,7 @@ export class MockClient implements SpecEngineClient {
   }
 
   /**
-   * Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). The
+   * The mock's package; the daemon serves its own (`docs/features/ui-live-tasks.md` "Data"). The
    * open proposals and assumptions are read from this mock's queue now, so a decision in the Inbox
    * drops a proposal from both; an unknown T answers the exit-1 document, as data.
    */

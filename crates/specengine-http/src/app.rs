@@ -9,8 +9,10 @@
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data"): no handler here decides, stores,
 //! exports, imports, creates or indexes, and it checks only as the plain
-//! run (the working tree on disk: no git mode, no client's file); the
-//! only writes are the reads' own, in the data directory.
+//! run (the working tree on disk: no git mode, no client's file); a task
+//! is only listed or shown, never moved (docs/features/ui-live-tasks.md
+//! "Description and interactions"); the only writes are the reads' own,
+//! in the data directory.
 
 use std::sync::Arc;
 
@@ -24,7 +26,7 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use specengine_cli::{
     BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest, SearchRequest,
-    ShowRequest, TreeRequest, View, process_git, project_entry,
+    ShowRequest, TaskListRequest, TaskShowRequest, TreeRequest, View, process_git, project_entry,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -92,6 +94,8 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
+        .route("/api/projects/{p}/tasks", read(tasks))
+        .route("/api/projects/{p}/tasks/{id}", read(task))
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
             post(decision).fallback(only_post),
@@ -224,7 +228,8 @@ fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, graph, check, inbox, proposals/<id>, events}}",
+             nodes/<REF>, search, bundle, graph, check, inbox, proposals/<id>, tasks, \
+             tasks/<id>, events}}",
             uri.path()
         ),
     )
@@ -404,6 +409,45 @@ async fn proposal(State(app): State<Shared>, uri: Uri) -> Result<Response, Refus
         };
         specengine_cli::review(env, globals, &request)
             .map(|outcome| Outcome::Proposal(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/tasks`: `spec task list [--status S]… --json` (the root's
+/// repository); `status` repeated, in order, each a task state as the
+/// model parses it.
+async fn tasks(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("tasks", &["status"], &uri)?;
+    let statuses = args.statuses("status").map_err(Refusal::bad_request)?;
+    Ok(run(project, move |env, globals| {
+        let request = TaskListRequest {
+            statuses,
+            git: process_git(env),
+        };
+        specengine_cli::task_list(env, globals, &request).map(Outcome::TaskList)
+    })
+    .await)
+}
+
+/// `GET …/tasks/<id>`: `spec task show T --json`, the package uncut (no
+/// `--next`, no query name); no such task: the CLI's exit-1 document, a
+/// 404.
+async fn task(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, rest) = app.project_of(&uri)?;
+    let raw = rest
+        .strip_prefix("tasks/")
+        .ok_or_else(|| unknown_route_of(&uri))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    args("tasks/:id", &[], &uri)?;
+    Ok(run(project, move |env, globals| {
+        let request = TaskShowRequest {
+            id: Some(id),
+            next: false,
+            git: process_git(env),
+        };
+        specengine_cli::task_show(env, globals, &request)
+            .map(|outcome| Outcome::TaskShow(Box::new(outcome)))
     })
     .await)
 }

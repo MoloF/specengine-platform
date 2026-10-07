@@ -188,7 +188,7 @@ export type Choice = { option: number } | { working_answer: true } | { answer: s
  * one its record's five after `linked`; `task_id`, after `choice`, the task it was raised for.
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
- * `docs/features/task-package.md` "Data".
+ * `docs/canon/tasks.md` "Task-bound proposals".
  */
 export interface Proposal {
   id: string | null;
@@ -590,9 +590,9 @@ export interface ApiError {
   message: string;
 }
 
-// Tasks (docs/features/ui-tasks.md "Data"): the shapes of the draft task package; re-pointed to
-// its canon when task-package ships. `kind`, `role` and `profile` are plain strings (ADR-0027,
-// ADR-0031): shown verbatim, never compared.
+// Tasks (docs/features/ui-tasks.md "Data"): the list and the exit-1 document as `docs/canon/tasks.md`
+// writes them, the package and its parts as `docs/canon/task-package.md` does. `kind`, `role` and
+// `profile` are plain strings (ADR-0027, ADR-0031): shown verbatim, never compared.
 
 /**
  * The ten task states, as the keys of a record: two of them are also words of the mocks' spec
@@ -614,16 +614,16 @@ interface TaskStates {
 /** The ten task states. Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
 export type KnownTaskStatus = keyof TaskStates;
 
-/** A task state as sent; other strings kept. Source: `docs/features/task-package.md` "Data". */
+/** A task state as sent; other strings kept. Source: `docs/canon/tasks.md` "Transitions". */
 export type TaskStatus = KnownTaskStatus | Unlisted;
 
-/** A run's outcome (Caps: no other value, never a hold). Source: `docs/features/task-package.md` "Data". */
+/** A run's outcome (no other value, never a hold on work). Source: `docs/canon/task-package.md` "Caps". */
 export type KnownRunOutcome = "completed" | "partial" | "failed" | "abandoned";
 
-/** A run's outcome as sent; other strings kept. Source: `docs/features/task-package.md` "Data". */
+/** A run's outcome as sent; other strings kept. Source: `docs/canon/task-package.md` "Caps". */
 export type RunOutcome = KnownRunOutcome | Unlisted;
 
-/** One row of `spec task list --json`: `stale` as the package's, per read. Source: `docs/features/task-package.md` "Description and interactions". */
+/** One row of `spec task list --json`: `stale` as the package's, per read. Source: `docs/canon/tasks.md` "Commands". */
 export interface TaskListEntry {
   id: string;
   status: TaskStatus;
@@ -635,19 +635,19 @@ export interface TaskListEntry {
   updated_at: string;
 }
 
-/** `spec task list --json`: the repository's tasks by number; a skipped row or a gone place in `notes`. Source: `docs/features/task-package.md` "Description and interactions". */
+/** `spec task list --json`: the repository's tasks by number; a skipped row or a gone place in `notes`. Source: `docs/canon/tasks.md` "Commands". */
 export interface TaskList {
   tasks: TaskListEntry[];
   notes: string[];
 }
 
-/** `spec task show T --json` for an unknown T (exit 1, the daemon's 404). Source: `docs/features/task-package.md` "Description and interactions". */
+/** `spec task show T --json` for an unknown T (exit 1, the daemon's 404; `id` null for no task ID). Source: `docs/canon/tasks.md` "Commands". */
 export interface TaskNotFound {
   id: string | null;
   reason: string;
 }
 
-/** A target resolved in the compared place; a gone node keeps its stored `id`, `path`, the rest null. Source: `docs/features/task-package.md` "Data". */
+/** A target resolved in the compared place; a gone node keeps its stored `id`, `path`, the rest null. Source: `docs/canon/task-package.md` "Package". */
 export interface TaskTarget {
   id: string | null;
   path: string | null;
@@ -655,36 +655,36 @@ export interface TaskTarget {
   title: string | null;
 }
 
-/** A criterion: a reference and its text there (null: gone), or free text. Source: `docs/features/task-package.md` "Data". */
+/** A criterion: a reference and its text there (null: gone), or free text. Source: `docs/canon/task-package.md` "Package". */
 export interface TaskCriterion {
   ref: string | null;
   text: string | null;
 }
 
-/** A working assumption: an open question's working answer, a discrepancy's recommended option. Source: `docs/features/task-package.md` "Data". */
+/** A working assumption: an open question's working answer, a discrepancy's recommended option. Source: `docs/canon/task-package.md` "Package". */
 export interface TaskAssumption {
   proposal: string;
   text: string;
 }
 
-/** An open or approved proposal on the task's nodes or bound to it. Source: `docs/features/task-package.md` "Data". */
+/** An open or approved proposal on the task's nodes or bound to it. Source: `docs/canon/task-package.md` "Package". */
 export interface TaskProposal {
   id: string;
   kind: string;
   status: ProposalStatus;
   target_ids: string[];
   task_id: string | null;
-  /** A question's text, else the rationale's first line; null when it has neither. */
+  /** A question's or discrepancy's summary, else the rationale's first line, null for an empty rationale. */
   summary: string | null;
 }
 
-/** The owner's note of a `changes --note`, oldest first. Source: `docs/features/task-package.md` "Data". */
+/** The owner's note of a `changes --note`, oldest first. Source: `docs/canon/task-package.md` "Package". */
 export interface OwnerNote {
   at: string;
   note: string;
 }
 
-/** Where the approval froze the spec (ADR-0032). Source: `docs/features/task-package.md` "Data". */
+/** Where the approval froze the spec (ADR-0032). Source: `docs/canon/task-package.md` "Package". */
 export interface SnapshotPlace {
   worktree: string;
   root_rel: string;
@@ -692,14 +692,14 @@ export interface SnapshotPlace {
   commit: string;
 }
 
-/** A node as frozen at approval. Source: `docs/features/task-package.md` "Data". */
+/** A node as frozen at approval. Source: `docs/canon/task-package.md` "Package". */
 export interface SnapshotNode {
   id: string;
   path: string;
   span_hash: string;
 }
 
-/** The spec as the owner approved it. Source: `docs/features/task-package.md` "Data". */
+/** The spec as the owner approved it. Source: `docs/canon/task-package.md` "Package". */
 export interface SpecSnapshot {
   at: string;
   place: SnapshotPlace;
@@ -707,9 +707,10 @@ export interface SpecSnapshot {
 }
 
 /**
- * A node changed since approval: unified hunks from the snapshot text, cut at 8 192 B at a line
- * end (`cut`); past 262 144 B in all, this and every later entry `diff` null, `cut` true, and one
- * note says how many. Source: `docs/features/task-package.md` "Data".
+ * A node changed since approval, the snapshot's path and hash: `git diff --no-index` hunks from the
+ * frozen text, cut at 8 192 B at a line end (`cut`). `diff` null has two meanings: `cut` true, left
+ * out past 262 144 B in all (or the package's budget), one note says how many; `cut` false, a diff
+ * git cannot make, a note says why. Sources: `docs/canon/task-package.md` "Staleness", "Caps".
  */
 export interface SnapshotDiff {
   id: string;
@@ -720,7 +721,7 @@ export interface SnapshotDiff {
   cut: boolean;
 }
 
-/** The one claim of a task. Source: `docs/features/task-package.md` "Data". */
+/** The one claim of a task. Source: `docs/canon/task-package.md` "Package". */
 export interface TaskClaim {
   at: string;
   role: string;
@@ -728,7 +729,7 @@ export interface TaskClaim {
   branch: string;
 }
 
-/** A run of the task; an open run has `ended_at` null. Source: `docs/features/task-package.md` "Data". */
+/** A run of the task; an open run has `ended_at` null. Source: `docs/canon/task-package.md` "Package". */
 export interface TaskRun {
   run: number;
   role: string;
@@ -739,16 +740,20 @@ export interface TaskRun {
   changed_files: string[];
 }
 
-/** The bundle an agent gets for the targets. Source: `docs/features/task-package.md` "Data". */
+/**
+ * The bundle an agent gets for the targets, by reference: `bundle_hash` null, with a note
+ * `bundle: <why>`, when it cannot be made. Source: `docs/canon/task-package.md` "Package".
+ */
 export interface TaskBundle {
   node_ids: string[];
   budget: number;
-  bundle_hash: string;
+  bundle_hash: string | null;
 }
 
 /**
  * `spec task show T --json`, uncut: every key present, absent null, lists []. `stale`, `snapshot_diff`,
- * `open_proposals` and `assumptions` are computed by the core per read. Source: `docs/features/task-package.md` "Data".
+ * `open_proposals` and `assumptions` are computed by the core per read; `schema_version` as
+ * "Versioning" says. Sources: `docs/canon/task-package.md` "Package", "Versioning".
  */
 export interface TaskPackage {
   schema_version: number;

@@ -5,7 +5,7 @@ import type { ShownLinks } from "../api/types";
 import { aLink, aProposal, aSearchHit, aSearchResults, aTreeView } from "../test/builders";
 import { renderApp } from "../test/render";
 import { START_ROWS, TREE, treeClient, viewOf } from "../test/treeStub";
-import type { StubClient } from "../test/stubClient";
+import { argsOf, type StubClient } from "../test/stubClient";
 
 // docs/features/ui-tree-node.md on a stub client: AC-01 (what a route reads), AC-03 (the tree's
 // rows and ARIA), AC-04 (its keys), AC-11 (search), AC-12 (states of the tree and the search),
@@ -110,8 +110,8 @@ describe("what a route reads (AC-01)", () => {
       expect(currentNames()).toEqual(["DOC-A"]);
     });
     expect(client.getTree).toHaveBeenCalledTimes(1);
-    expect(client.getTree).toHaveBeenCalledWith("alpha");
-    expect(client.getNode.mock.calls).toEqual([
+    expect(argsOf(client.getTree)).toContainEqual(["alpha"]);
+    expect(argsOf(client.getNode)).toEqual([
       ["alpha", "DOC-A"],
       ["alpha", "DOC-A", { with: ["links"] }],
     ]);
@@ -216,12 +216,12 @@ describe("the tree's rows (AC-03)", () => {
     expect(screen.getByText("Showing the first 4 nodes: the list was cut")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show DOC-A as root" }));
     await waitFor(() => {
-      expect(client.getTree).toHaveBeenLastCalledWith("alpha", { root: "DOC-A" });
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha", { root: "DOC-A" }]);
     });
     expect(await screen.findByText("Rooted at")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Whole tree" }));
     await waitFor(() => {
-      expect(client.getTree).toHaveBeenLastCalledWith("alpha");
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha"]);
     });
   });
 
@@ -295,7 +295,7 @@ describe("the tree's keys (AC-04)", () => {
     await waitFor(() => {
       expect(currentNames()).toEqual(["SEC-A1"]);
     });
-    expect(client.getNode).toHaveBeenCalledWith("alpha", "SEC-A1");
+    expect(argsOf(client.getNode)).toContainEqual(["alpha", "SEC-A1"]);
     expect(document.activeElement).toBe(row("SEC-A1"));
   });
 
@@ -464,7 +464,7 @@ describe("search (AC-11)", () => {
     fireEvent.submit(screen.getByRole("search"));
     await screen.findByRole("listbox", { name: /Search hits/ });
     expect(client.search).toHaveBeenCalledTimes(1);
-    expect(client.search).toHaveBeenCalledWith("alpha", { query: "a widget" });
+    expect(argsOf(client.search)).toContainEqual(["alpha", { query: "a widget" }]);
     fireEvent.submit(screen.getByRole("search"));
     await waitFor(() => {
       expect(client.search).toHaveBeenCalledTimes(2);
@@ -477,7 +477,7 @@ describe("search (AC-11)", () => {
     fireEvent.change(screen.getByLabelText("Search the spec"), { target: { value: "widget" } });
     fireEvent.submit(screen.getByRole("search"));
     await waitFor(() => {
-      expect(client.search).toHaveBeenCalledWith("alpha", { query: "widget", archive: true });
+      expect(argsOf(client.search)).toContainEqual(["alpha", { query: "widget", archive: true }]);
     });
   });
 
@@ -679,14 +679,14 @@ describe("Include archive (AC-13)", () => {
     const client = await openTree(treeClient(), "#/alpha/tree/DOC-A");
     fireEvent.click(await screen.findByRole("tab", { name: "Links" }));
     await waitFor(() => {
-      expect(client.getNode).toHaveBeenCalledWith("alpha", "DOC-A", { with: ["links"] });
+      expect(argsOf(client.getNode)).toContainEqual(["alpha", "DOC-A", { with: ["links"] }]);
     });
     fireEvent.click(screen.getByLabelText("Include archive"));
     await waitFor(() => {
-      expect(client.getTree).toHaveBeenCalledWith("alpha", { archive: true });
+      expect(argsOf(client.getTree)).toContainEqual(["alpha", { archive: true }]);
     });
     await waitFor(() => {
-      expect(client.getNode).toHaveBeenCalledWith("alpha", "DOC-A", { with: ["links"], archive: true });
+      expect(argsOf(client.getNode)).toContainEqual(["alpha", "DOC-A", { with: ["links"], archive: true }]);
     });
     // The text needs no archive: the daemon refuses archive without links.
     expect(client.getNode.mock.calls.filter((call) => call[2]?.archive === true && call[2].with === undefined)).toEqual([]);

@@ -13,5 +13,22 @@
   "CheckCounts": ["documents", "errors", "warnings", "debt", "expired", "stale", "worst_w_bytes"],
   "CheckFinding": ["code", "severity", "path", "line", "subject", "message", "fix", "debt"],
   "DebtEntry": ["code", "path", "subject", "reason", "expires", "line"],
-  "CheckCause": ["path", "message"]
+  "CheckCause": ["path", "message"],
+  "TaskList": ["tasks", "notes"],
+  "TaskListEntry": ["id", "status", "title", "targets", "stale", "updated_at"],
+  "TaskNotFound": ["id", "reason"],
+  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "author", "created_at", "updated_at", "notes"],
+  "TaskTarget": ["id", "path", "kind", "title"],
+  "TaskCriterion": ["ref", "text"],
+  "TaskAssumption": ["proposal", "text"],
+  "TaskProposal": ["id", "kind", "status", "target_ids", "task_id", "summary"],
+  "OwnerNote": ["at", "note"],
+  "SpecSnapshot": ["at", "place", "nodes"],
+  "SnapshotPlace": ["worktree", "root_rel", "branch", "commit"],
+  "SnapshotNode": ["id", "path", "span_hash"],
+  "SnapshotDiff": ["id", "path", "span_hash", "diff", "cut"],
+  "TaskClaim": ["at", "role", "worktree", "branch"],
+  "TaskRun": ["run", "role", "started_at", "ended_at", "outcome", "summary", "changed_files"],
+  "TaskBundle": ["node_ids", "budget", "bundle_hash"],
+  "Author": ["type", "role", "model", "run"]
 }

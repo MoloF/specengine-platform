@@ -17,7 +17,7 @@ Working answers, 2026-10-06 (orchestrator; no ADR): one global `document` keydow
 
 ## Data
 
-No new contract; `Route` gains `{ type: "project"; project: string }`. The home reads `TaskList` (`docs/features/task-package.md` "Description and interactions") and only the daemon's `InboxEntry` keys (`docs/features/daemon-read.md` "Data": `id`, `kind`, `status`, `target_id`, `target_ids`, `created_at`, `rationale`, `severity`, `summary`; never `task_id`, `evidence`); the palette `SearchResults.hits` (`id`, `title`, `path`).
+No new contract; `Route` gains `{ type: "project"; project: string }`. The home reads `TaskList` (`docs/canon/tasks.md` "Commands"; served by the daemon since `ui-live-tasks`) and only the daemon's `InboxEntry` keys (`docs/features/daemon-read.md` "Data": `id`, `kind`, `status`, `target_id`, `target_ids`, `created_at`, `rationale`, `severity`, `summary`; never `task_id`, `evidence`); the palette `SearchResults.hits` (`id`, `title`, `path`).
 
 ```text
 #/harbor-sim, #/harbor-sim/  -> { type: "project", project: "harbor-sim" }

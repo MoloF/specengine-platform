@@ -110,7 +110,7 @@ describe("the normal scenario", () => {
     expect(missing.notes.at(-1)).toBe("no proposal `PR-9999` in this project's queue");
   });
 
-  it("serves each review document's task_id after choice, null unbound, as task-package's Data", async () => {
+  it("serves each review document's task_id after choice, null unbound, as the task canon's Task-bound proposals", async () => {
     const client = new MockClient("normal", { now: clock });
     const { proposals } = await client.getInbox("harbor-sim");
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));

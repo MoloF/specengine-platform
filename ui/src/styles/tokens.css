@@ -62,7 +62,7 @@
   --task-cancelled: #8e99ad;
   --task-unknown: var(--severity-unknown);
 
-  /* Run outcomes (task-package "Data") and unknown; none of them is a hold on work. */
+  /* Run outcomes (task-package canon, "Caps") and unknown; none of them is a hold on work. */
   --run-completed: var(--sync-ok);
   --run-partial: #f2bb5c;
   --run-failed: #ff7d88;

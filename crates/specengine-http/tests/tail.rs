@@ -16,8 +16,16 @@
 //! M: `.min(highest)` removed; `full` as events kept; the connection
 //! dropped at each poll; the file identity check skipped; the
 //! `user_version` check in the poll removed.
+//!
+//! AC-06 of docs/features/ui-live-tasks.md, the tail's half: a stream on A
+//! receives `task.created`, `task.approved`, `task.claimed`,
+//! `task.run_reported` raised through the CLI library, each within a
+//! second, `id: <seq>`, `event: <type>`, `data` the stored payload byte
+//! for byte (`{id}`, `+ run` for the claim and the report), in order, and
+//! nothing else. M: the tail keeping only `proposal.`.
 
 mod common;
+mod task_state;
 
 use std::fs;
 use std::os::unix::fs::MetadataExt as _;
@@ -375,4 +383,93 @@ fn a_newer_user_version_under_a_live_stream_ends_it() {
     let reply = server.request_within("GET", EVENTS, &[], Duration::from_secs(20));
     assert_eq!(reply.status, 503, "{}", reply.text());
     reply.error_message();
+}
+
+#[test]
+fn ac06_a_stream_receives_the_task_events_raised_through_the_library() {
+    let scratch = Scratch::new("tail-tasks");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    let mut stream = Stream::open(server.port, EVENTS, &[]);
+    assert_eq!(opening(&mut stream), 0, "no database yet");
+    let calls = task_state::Calls::new(&scratch, &a, &home);
+    let mut received = Vec::new();
+    for want in [
+        "task.created",
+        "task.approved",
+        "task.claimed",
+        "task.run_reported",
+    ] {
+        match want {
+            "task.created" => {
+                assert_eq!(calls.new_task("MEC-STAMINA", "Live", false), "T-0001");
+            }
+            "task.approved" => {
+                calls.owner("approve", "T-0001", None, specengine_cli::TaskStatus::Ready);
+            }
+            "task.claimed" => calls.claim("T-0001"),
+            _ => calls.report("T-0001"),
+        }
+        let stored = Instant::now();
+        let (seq, kind, payload) = arrives(&mut stream, stored, want);
+        assert_eq!(kind, want, "the events come in the order raised");
+        received.push((seq, kind, payload));
+    }
+    assert_eq!(
+        received,
+        [
+            (1, "task.created".to_owned(), json!({"id": "T-0001"})),
+            (2, "task.approved".to_owned(), json!({"id": "T-0001"})),
+            (
+                3,
+                "task.claimed".to_owned(),
+                json!({"id": "T-0001", "run": 1})
+            ),
+            (
+                4,
+                "task.run_reported".to_owned(),
+                json!({"id": "T-0001", "run": 1})
+            ),
+        ]
+    );
+    quiet(&mut stream, Duration::from_millis(500), "after the four");
+    drop(stream);
+
+    // Byte for byte: a stream from the start sends each stored row as
+    // stored.
+    let stored = stored_rows(&home, &a);
+    assert_eq!(stored.len(), 4, "{stored:?}");
+    let mut replay = Stream::open(server.port, EVENTS, &[("Last-Event-ID", "0")]);
+    assert_eq!(opening(&mut replay), 0);
+    for (seq, kind, payload) in &stored {
+        let frame = replay
+            .next_event(Duration::from_secs(5))
+            .unwrap_or_else(|| panic!("event {seq}: not replayed"));
+        assert_eq!(
+            frame.raw,
+            format!("id: {seq}\nevent: {kind}\ndata: {payload}"),
+            "event {seq}: the stored row"
+        );
+    }
+}
+
+/// `(seq, type, payload as stored)` of the project's events, read through
+/// the CLI library (not through the daemon).
+fn stored_rows(home: &Path, root: &Path) -> Vec<(i64, String, String)> {
+    let env = specengine_cli::Env {
+        cwd: root.to_path_buf(),
+        home: Some(home.as_os_str().to_os_string()),
+        xdg_data_home: None,
+    };
+    let globals = specengine_cli::Globals {
+        root: Some(root.to_path_buf()),
+        config: None,
+    };
+    specengine_cli::events_after(&env, &globals, Some(0))
+        .expect("the events read")
+        .events
+        .into_iter()
+        .map(|event| (event.seq, event.event_type, event.payload))
+        .collect()
 }

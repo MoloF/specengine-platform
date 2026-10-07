@@ -82,4 +82,4 @@ Five tools in the default build (`tasks.rs`), one CLI library call each, answeri
 
 ## Versioning
 
-`schema_version` 1 (`TASK_PACKAGE_SCHEMA_VERSION`): a new key keeps it; a removed, renamed or re-meant key raises it. The output schema comes from `mirror.rs` (`rmcp::schemars`, every key required, a `bindings` item `{"type": "object"}`); its key paths are pinned by MCP `p2_2_the_package_schema_is_pinned_at_version_1`. The UI mirrors the types in `ui/src/api/provisional.ts` (`ui-live-tasks` re-points it here).
+`schema_version` 1 (`TASK_PACKAGE_SCHEMA_VERSION`): a new key keeps it; a removed, renamed or re-meant key raises it. The output schema comes from `mirror.rs` (`rmcp::schemars`, every key required, a `bindings` item `{"type": "object"}`); its key paths are pinned by MCP `p2_2_the_package_schema_is_pinned_at_version_1`. The UI mirrors the types in `ui/src/api/provisional.ts`, each citing its section here or in `tasks.md`.

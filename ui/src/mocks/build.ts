@@ -86,7 +86,7 @@ export type StoredReview = Proposal & {
 
 /**
  * A queued proposal as the mock holds it: its review document (`getProposal`), `task_id` the task
- * it was raised for, which the review and the task package both read (`docs/features/task-package.md` "Data").
+ * it was raised for, which the review and the task package both read (`docs/canon/tasks.md` "Task-bound proposals").
  */
 export interface MockProposal {
   review: StoredReview;

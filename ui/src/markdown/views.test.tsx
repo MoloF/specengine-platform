@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { NodeView, ShownLinks } from "../api/types";
 import { aBundle, aLink, aNode, aProposal, aSearchHit, aSearchResults, aTaskPackage, aTaskRun } from "../test/builders";
 import { renderApp } from "../test/render";
-import { stubClient } from "../test/stubClient";
+import { argsOf, stubClient } from "../test/stubClient";
 import { taskClient } from "../test/taskStub";
 import { treeClient } from "../test/treeStub";
 
@@ -137,7 +137,7 @@ describe("what opening a node reads (AC-05)", () => {
     const { client, release } = docClient(true);
     renderApp(client, "#/alpha/tree/DOC-A");
     await renderedText();
-    expect(client.getNode.mock.calls.map((call) => call.slice(1))).toEqual([["DOC-A"], ["DOC-A", { with: ["links"] }]]);
+    expect(argsOf(client.getNode).map((call) => call.slice(1))).toEqual([["DOC-A"], ["DOC-A", { with: ["links"] }]]);
     await release();
     fireEvent.click(screen.getByRole("tab", { name: "Links" }));
     const links = await screen.findByRole("tabpanel", { name: "Links" });

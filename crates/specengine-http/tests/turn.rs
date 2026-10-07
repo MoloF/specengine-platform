@@ -22,8 +22,17 @@
 //! corpus sent while the corpus's reads hold the turn is answered after
 //! them, while a `/check` on A sent at the same time is answered before
 //! the corpus's first read ends. M: `check` outside the turn.
+//!
+//! AC-06 of docs/features/ui-live-tasks.md, the turn's half: a task read
+//! takes its project's turn. With the generated corpus and A in state S
+//! (`task_state`) served by one daemon, the corpus's `/tasks/T-0003` and
+//! `/tasks` sent while the corpus's reads hold its turn are answered after
+//! them, while A's `/tasks/T-0003` and `/tasks` sent at the same time are
+//! answered before the corpus's first read ends. M: the handler outside
+//! `run` (a turn of its own).
 
 mod common;
+mod task_state;
 
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -304,5 +313,61 @@ fn ac06_a_check_waits_for_its_own_projects_reads_not_anothers() {
     assert!(
         own_at > second_at,
         "the corpus's check ran beside its project's reads, outside the turn: {report}"
+    );
+}
+
+#[test]
+fn ac06_a_task_read_waits_for_its_own_projects_reads_not_anothers() {
+    let scratch = Scratch::new("turn-tasks");
+    let root = corpus(&scratch);
+    // A fresh HOME for the corpus (its first read builds its whole
+    // index); A in state S in it.
+    let home = scratch.home("fresh");
+    let a = task_state::repo_in_s(&scratch, &task_state::A, "a", &home);
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root), &a]);
+    let port = server.port;
+    let start = Instant::now();
+    // The corpus's turn: its first read, then a second one queued.
+    let first = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    let second = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    // Sent while the corpus's reads hold its turn: the corpus's task reads
+    // and A's.
+    let own_show = timed(port, "/api/projects/big-corpus/tasks/T-0003", start);
+    let own_list = timed(port, "/api/projects/big-corpus/tasks", start);
+    thread::sleep(Duration::from_millis(50));
+    let other_show = timed(port, "/api/projects/lantern-keep/tasks/T-0003", start);
+    let other_list = timed(port, "/api/projects/lantern-keep/tasks", start);
+
+    let (status, other_show_at) = other_show.join().expect("A's task");
+    assert_eq!(status, 200, "A's T-0003");
+    let (status, other_list_at) = other_list.join().expect("A's list");
+    assert_eq!(status, 200, "A's list");
+    let (status, first_at) = first.join().expect("the corpus's first read");
+    assert_eq!(status, 200, "the first read");
+    let (status, second_at) = second.join().expect("the corpus's second read");
+    assert_eq!(status, 200, "the second read");
+    let (status, own_show_at) = own_show.join().expect("the corpus's task");
+    assert_eq!(status, 404, "the corpus has no T-0003");
+    let (status, own_list_at) = own_list.join().expect("the corpus's list");
+    assert_eq!(status, 200, "the corpus's list");
+    let report = format!(
+        "answers after the start: A's task {other_show_at:?} and list {other_list_at:?}, the \
+         corpus's reads {first_at:?} and {second_at:?}, its task {own_show_at:?} and list \
+         {own_list_at:?}"
+    );
+    eprintln!("{report}");
+    assert!(
+        first_at > Duration::from_millis(300),
+        "the first read is too quick to hold the turn while the task reads arrive: {report}"
+    );
+    assert!(
+        other_show_at < first_at && other_list_at < first_at,
+        "A's task reads waited for another project's read: {report}"
+    );
+    assert!(
+        own_show_at > second_at && own_list_at > second_at,
+        "the corpus's task reads ran beside its project's reads, outside the turn: {report}"
     );
 }

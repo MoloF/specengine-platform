@@ -2,7 +2,7 @@ import type { KnownTaskStatus, TaskStatus } from "../api/types";
 
 // The owner's actions on a task, as commands for a terminal (docs/canon/architecture.md#control,
 // ADR-0012): the browser changes nothing; the terminal asks [y/N]. Which action applies in which
-// state is the transition table of `docs/features/task-package.md` "Data" (owner rows: approve,
+// state is the transition table of `docs/canon/tasks.md` "Transitions" (owner rows: approve,
 // changes, cancel); this module is the only copy of it in the UI.
 
 export type OwnerAction = "approve" | "changes" | "cancel";

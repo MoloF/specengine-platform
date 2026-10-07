@@ -60,39 +60,44 @@ export interface GraphOptions {
 
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
- * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data"; 07 §3).
- * Only the bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for
- * tree, nodes, bundle, a proposal, graph, task) resolves to its document, `reason` (a proposal: the
- * last of `notes`) set; the check answers every verdict as a 200 report, data too; every other
- * failure rejects with a ClientError carrying the daemon's status and message verbatim (exit 2:
- * 503; no response: 0; a read the daemon does not serve yet, the tasks: `notServed`, 501, nothing
- * requested). Decisions are made on a terminal: the daemon refuses each one
- * (403) naming its `spec` command (docs/features/daemon-read.md, Q4). Tasks are read only: an owner
- * action is a command for a terminal (docs/features/ui-tasks.md).
+ * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
+ * `docs/features/ui-live-tasks.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx, picks the
+ * implementation. A read answered with exit 1 (404 for tree, nodes, bundle, a proposal, graph,
+ * task) resolves to its document, `reason` (a proposal: the last of `notes`) set; the check answers
+ * every verdict as a 200 report, data too; every other failure rejects with a ClientError carrying
+ * the daemon's status and message verbatim (exit 2: 503; no response: 0; a read the daemon does not
+ * serve yet, none today: `notServed`, 501, nothing requested). Decisions are made on a terminal: the
+ * daemon refuses each one (403) naming its `spec` command (docs/features/daemon-read.md, Q4). Tasks
+ * are read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
+ *
+ * `signal`: the query's AbortSignal. A read superseded before it answered (a burst of live events
+ * reading the same task again) is aborted, so the daemon, which drops a request whose client left,
+ * never runs it; the mock ignores it. The check takes none: a walk in flight is kept and its
+ * answer taken, never aborted for a second one (`docs/features/ui-live.md` "Data").
  */
 export interface SpecEngineClient {
   /** Drives the permanent "Mock data" indicator. */
   readonly dataSource: "mock" | "daemon";
   /** GET /api/projects */
-  getProjects(): Promise<Project[]>;
+  getProjects(signal?: AbortSignal): Promise<Project[]>;
   /** GET /api/projects/:p/inbox */
-  getInbox(project: string): Promise<Inbox>;
+  getInbox(project: string, signal?: AbortSignal): Promise<Inbox>;
   /** GET /api/projects/:p/proposals/:id */
-  getProposal(project: string, id: string): Promise<Proposal>;
+  getProposal(project: string, id: string, signal?: AbortSignal): Promise<Proposal>;
   /** GET /api/projects/:p/tree */
-  getTree(project: string, options?: TreeOptions): Promise<TreeView>;
+  getTree(project: string, options?: TreeOptions, signal?: AbortSignal): Promise<TreeView>;
   /** GET /api/projects/:p/nodes/:ref */
-  getNode(project: string, ref: string, options?: NodeOptions): Promise<NodeView>;
+  getNode(project: string, ref: string, options?: NodeOptions, signal?: AbortSignal): Promise<NodeView>;
   /** GET /api/projects/:p/search */
-  search(project: string, options: SearchOptions): Promise<SearchResults>;
+  search(project: string, options: SearchOptions, signal?: AbortSignal): Promise<SearchResults>;
   /** GET /api/projects/:p/bundle */
-  getBundle(project: string, options: BundleOptions): Promise<BundleView>;
+  getBundle(project: string, options: BundleOptions, signal?: AbortSignal): Promise<BundleView>;
   /** GET /api/projects/:p/graph (crates/specengine-http/README.md "Endpoints"; the browser view, uncut) */
-  getGraph(project: string, options: GraphOptions): Promise<GraphView>;
-  /** MISSING ENDPOINT GET /api/projects/:p/tasks (07 section 3 lists it; = spec task list --json; rust-developer, daemon-read "Out of scope") */
-  getTasks(project: string): Promise<TaskList>;
-  /** MISSING ENDPOINT GET /api/projects/:p/tasks/:id (07 section 3 lacks it; = spec task show T --json, uncut) */
-  getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;
+  getGraph(project: string, options: GraphOptions, signal?: AbortSignal): Promise<GraphView>;
+  /** GET /api/projects/:p/tasks (crates/specengine-http/README.md "Endpoints"; = spec task list --json) */
+  getTasks(project: string, signal?: AbortSignal): Promise<TaskList>;
+  /** GET /api/projects/:p/tasks/:id (crates/specengine-http/README.md "Endpoints"; = spec task show T --json, uncut; 404 the exit-1 document) */
+  getTask(project: string, id: string, signal?: AbortSignal): Promise<TaskPackage | TaskNotFound>;
   /** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */
   getCheck(project: string): Promise<CheckReport>;
   /** POST /api/projects/:p/proposals/:id/decision */
@@ -111,7 +116,8 @@ export const DECIDED_ELSEWHERE = 409;
 
 /**
  * HTTP 501 Not Implemented: the status of a read the daemon does not serve yet, refused by the
- * client with nothing requested. Never 0, which says no response came (the daemon is down).
+ * client with nothing requested (none today; kept for the next missing endpoint). Never 0, which
+ * says no response came (the daemon is down).
  */
 export const NOT_SERVED = 501;
 

@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
-import { aCheckFinding, aCheckReport, aGraphEdge, aGraphNode, aGraphView } from "../test/builders";
-import { apiErrorOf, ClientError, isNotServed, NOT_SERVED } from "./client";
+import { aCheckFinding, aCheckReport, aGraphEdge, aGraphNode, aGraphView, aTaskEntry, aTaskPackage } from "../test/builders";
+import { apiErrorOf, ClientError, isNotServed } from "./client";
 import { errorBodyOf, HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS, REOPEN_MAX_MS } from "./http";
+import httpSource from "./http.ts?raw";
 import type { QueueEvent } from "./types";
 
 // AC-09 of docs/features/daemon-read.md: the browser side of the daemon, over a stubbed `fetch`
 // and `EventSource`. Each method hits its URL, a REF encoded once; a 404 document resolves as data;
 // any other non-2xx rejects with the daemon's message verbatim; no response is status 0. AC-10 and
 // AC-11 of docs/features/ui-live.md: the graph and the check are fetched, every check verdict a
-// 200 report resolved as data; the tasks are still refused unsent.
+// 200 report resolved as data. AC-08 and AC-09 of docs/features/ui-live-tasks.md: the tasks are
+// fetched too (the list with no query, a task's ID one path segment), a 404 `{id, reason}` resolved
+// as data; the live tail listens to the nine `task.*` types after the five `proposal.*`.
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -110,6 +113,14 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/alpha/graph?ref=%D0%97%D0%B5%2523X",
     ],
     ["getCheck: no query", (client) => client.getCheck("harbor-sim"), "/api/projects/harbor-sim/check"],
+    // AC-08 of docs/features/ui-live-tasks.md: exactly these two URLs; no `status` is sent.
+    ["getTasks: no query", (client) => client.getTasks("harbor-sim"), "/api/projects/harbor-sim/tasks"],
+    ["getTask: the ID one path segment", (client) => client.getTask("harbor-sim", "T-0107"), "/api/projects/harbor-sim/tasks/T-0107"],
+    [
+      "getTask, a look-alike ID sent as typed (the daemon names its Latin form), `/` as %2F",
+      (client) => client.getTask("alpha", `${String.fromCodePoint(0x422)}-0001/x`),
+      "/api/projects/alpha/tasks/%D0%A2-0001%2Fx",
+    ],
   ])("%s", async (_name, call, url) => {
     await call(new HttpClient());
     expect(urlsOf(fetchStub)).toEqual([url]);
@@ -128,22 +139,58 @@ describe("each method hits its URL (AC-09)", () => {
     expect(new HttpClient().dataSource).toBe("daemon");
   });
 
-  it("requests nothing the daemon does not serve: the tasks, a task (not served, 501, never 0; ui-live's gap named; AC-11 of ui-live)", async () => {
+  it("requests the tasks the daemon serves: no read is refused unsent any more (AC-08 of ui-live-tasks)", async () => {
     const client = new HttpClient();
-    const errors = [await rejection(client.getTasks("alpha")), await rejection(client.getTask("alpha", "T-0001"))];
-    // R-n7: status 0 says no response came (the daemon down); this read is not built.
-    expect(errors.map((error) => [error.status, error.notServed, isNotServed(error)])).toEqual([
-      [NOT_SERVED, true, true],
-      [NOT_SERVED, true, true],
-    ]);
-    expect(NOT_SERVED).toBe(501);
-    expect(errors.map((error) => error.message)).toEqual(
-      ["GET /api/projects/alpha/tasks", "GET /api/projects/alpha/tasks/T-0001"].map(
-        (endpoint) =>
-          `Not served by the daemon yet: ${endpoint} is a missing endpoint (docs/features/ui-live.md "Out of scope"). The mock serves it: open the UI with ?scenario=normal.`,
-      ),
+    await client.getTasks("alpha");
+    await client.getTask("alpha", "T-0001");
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/tasks", "/api/projects/alpha/tasks/T-0001"]);
+    expect(fetchStub.mock.calls.map((call) => call[1]?.method)).toEqual(["GET", "GET"]);
+    // WA-5: the not-served mark stays in client.ts for the next missing endpoint; HttpClient has no helper for it.
+    expect(httpSource).not.toContain("notServed(");
+    expect(httpSource).not.toContain("DAEMON_READ_GAP");
+  });
+
+  it.each<[string, (client: HttpClient, signal: AbortSignal) => Promise<unknown>]>([
+    ["getProjects", (client, signal) => client.getProjects(signal)],
+    ["getInbox", (client, signal) => client.getInbox("alpha", signal)],
+    ["getProposal", (client, signal) => client.getProposal("alpha", "PR-0004", signal)],
+    ["getTree", (client, signal) => client.getTree("alpha", undefined, signal)],
+    ["getNode", (client, signal) => client.getNode("alpha", "R-1", undefined, signal)],
+    ["search", (client, signal) => client.search("alpha", { query: "tide" }, signal)],
+    ["getBundle", (client, signal) => client.getBundle("alpha", { node_ids: ["R-1"] }, signal)],
+    ["getGraph", (client, signal) => client.getGraph("alpha", { ref: "R-1" }, signal)],
+    ["getTasks", (client, signal) => client.getTasks("alpha", signal)],
+    ["getTask", (client, signal) => client.getTask("alpha", "T-0001", signal)],
+  ])("%s hands the caller's AbortSignal to fetch (ui-live-tasks: a superseded read is aborted)", async (_name, call) => {
+    const controller = new AbortController();
+    await call(new HttpClient(), controller.signal);
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it("sends the check and a decision with no AbortSignal: a walk in flight is never aborted", async () => {
+    const client = new HttpClient();
+    await client.getCheck("alpha");
+    await client.decideProposal("alpha", "PR-0004", { decision: "defer", note: null });
+    await client.getTasks("alpha");
+    expect(fetchStub.mock.calls.map((call) => call[1] !== undefined && "signal" in call[1])).toEqual([false, false, false]);
+  });
+
+  it("rejects an aborted read with the abort error as fetch gave it, never a ClientError of the daemon", async () => {
+    const controller = new AbortController();
+    const aborted = new DOMException("The operation was aborted.", "AbortError");
+    stubFetch((_url, init) => {
+      if (init?.signal?.aborted === true) {
+        throw aborted;
+      }
+      return jsonAnswer(200, {});
+    });
+    controller.abort();
+    const error: unknown = await new HttpClient().getTask("alpha", "T-0001", controller.signal).then(
+      () => null,
+      (reason: unknown) => reason,
     );
-    expect(fetchStub).not.toHaveBeenCalled();
+    expect(error).toBe(aborted);
+    expect(error instanceof ClientError).toBe(false);
   });
 
   it("tells a read not built from the daemon down or refusing (R-n7)", async () => {
@@ -187,6 +234,46 @@ describe("answers (AC-09)", () => {
     expect(await client.getTree("alpha", { root: "R-404" })).toEqual(tree);
     expect(await client.getBundle("alpha", { node_ids: ["R-404"] })).toEqual(bundle);
     expect(await client.getProposal("alpha", "PR-9999")).toEqual(review);
+  });
+
+  it("resolves the task list and a package as sent: `bundle_hash` null, a diff null with `cut` false kept (AC-08 of ui-live-tasks)", async () => {
+    const list = { tasks: [aTaskEntry({ id: "T-0108", status: "ready", stale: true })], notes: ["T-0106: a corrupt row skipped"] };
+    const pkg = aTaskPackage({
+      id: "T-0107",
+      bundle: { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: null },
+      snapshot_diff: [{ id: "MEC-TIDES", path: "docs/spec/tides.md", span_hash: "b3:0", diff: null, cut: false }],
+      notes: ["bundle: `MEC-TIDES` resolves to no ID", "snapshot_diff: no diff of `MEC-TIDES`: git failed"],
+    });
+    stubFetch((url) => jsonAnswer(200, url.endsWith("/tasks") ? list : pkg));
+    const client = new HttpClient();
+    expect(await client.getTasks("harbor-sim")).toEqual(list);
+    expect(await client.getTask("harbor-sim", "T-0107")).toEqual(pkg);
+  });
+
+  it.each([
+    ["no such task", "T-0099", { id: "T-0099", reason: "no task T-0099 in this repository" }],
+    ["not a task ID: `id` null", "foo", { id: null, reason: "no task `foo`: a task ID is `T-` and 4 or more digits, as `spec task list` lists it" }],
+  ])("resolves a task's 404 exit-1 document as data, never a refusal: %s (AC-08 of ui-live-tasks)", async (_name, id, document) => {
+    const fetchStub = stubFetch(() => jsonAnswer(404, document));
+    expect(await new HttpClient().getTask("harbor-sim", id)).toEqual(document);
+    expect(urlsOf(fetchStub)).toEqual([`/api/projects/harbor-sim/tasks/${id}`]);
+  });
+
+  it.each<[string, (client: HttpClient) => Promise<unknown>, number, string]>([
+    ["a task's 404 error body (an unknown project)", (client) => client.getTask("zeta", "T-0001"), 404, "no project `zeta`: this daemon serves alpha, beta"],
+    [
+      "a task's 503 (a look-alike ID, its Latin form named)",
+      (client) => client.getTask("alpha", `${String.fromCodePoint(0x422)}-0001`),
+      503,
+      `spec: \`${String.fromCodePoint(0x422)}-0001\` is not a Latin task ID: write \`T-0001\``,
+    ],
+    ["the list's 503 (the root in no git worktree)", (client) => client.getTasks("alpha"), 503, "spec: /work/alpha is in no git worktree\nsecond line, verbatim"],
+    ["the list's 404 error body (an unknown route)", (client) => client.getTasks("alpha"), 404, "no route GET /api/projects/alpha/tasks/: try projects, tasks, tasks/:id"],
+  ])("rejects %s with a ClientError, the daemon's message verbatim (AC-08 of ui-live-tasks)", async (_name, call, status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    const error = await rejection(call(new HttpClient()));
+    expect(error).toBeInstanceOf(ClientError);
+    expect([error.status, error.message, error.notServed, isNotServed(error)]).toEqual([status, message, false, false]);
   });
 
   it("resolves the graph's 404 exit-1 document as data, its reason set (AC-03 of ui-live)", async () => {
@@ -312,13 +399,29 @@ describe("the live tail (AC-09)", () => {
     return source;
   }
 
-  it("opens the project's stream, listens to the queue's five event types and hands each over parsed", () => {
+  it("opens the project's stream, listens to the queue's fourteen event types and hands each over parsed", () => {
     const events: QueueEvent[] = [];
     const stop = new HttpClient().subscribe("alpha", (event) => events.push(event));
     const source = only();
     expect(source.url).toBe("/api/projects/alpha/events");
-    // docs/canon/proposal-queue.md "States and events": the five types, each a listener of its own.
-    expect(source.types()).toEqual(["proposal.created", "proposal.approved", "proposal.applied", "proposal.rejected", "proposal.apply_failed"]);
+    // docs/canon/proposal-queue.md "States and events": the five types; then docs/canon/tasks.md
+    // "Store": the nine (AC-09 of ui-live-tasks). Each a listener of its own, in this order.
+    expect(source.types()).toEqual([
+      "proposal.created",
+      "proposal.approved",
+      "proposal.applied",
+      "proposal.rejected",
+      "proposal.apply_failed",
+      "task.created",
+      "task.planned",
+      "task.approved",
+      "task.changes_requested",
+      "task.claimed",
+      "task.run_reported",
+      "task.completed",
+      "task.cancelled",
+      "task.refreshed",
+    ]);
     expect([...QUEUE_EVENT_TYPES]).toEqual(source.types());
     source.open();
     source.emit("proposal.created", '{"id":"PR-0005"}', "12");
@@ -331,6 +434,28 @@ describe("the live tail (AC-09)", () => {
     expect(source.readyState).toBe(2);
     source.emit("proposal.created", '{"id":"PR-0006"}', "14");
     expect(events).toHaveLength(2);
+  });
+
+  it("hands each of the nine task events over as {seq, type, payload}, the stored payload parsed (AC-09 of ui-live-tasks)", () => {
+    const events: QueueEvent[] = [];
+    new HttpClient().subscribe("alpha", (event) => events.push(event));
+    const source = only();
+    source.open();
+    const sent: [string, string][] = [
+      ["task.created", '{"id":"T-0001"}'],
+      ["task.planned", '{"id":"T-0001"}'],
+      ["task.approved", '{"id":"T-0001"}'],
+      ["task.changes_requested", '{"id":"T-0001"}'],
+      ["task.claimed", '{"id":"T-0001","run":1}'],
+      ["task.run_reported", '{"id":"T-0001","run":1}'],
+      ["task.completed", '{"id":"T-0001"}'],
+      ["task.cancelled", '{"id":"T-0002"}'],
+      ["task.refreshed", '{"id":"T-0003","proposal":"PR-0007","node":"MEC-TIDES"}'],
+    ];
+    sent.forEach(([type, data], index) => {
+      source.emit(type, data, String(70 + index));
+    });
+    expect(events).toEqual(sent.map(([type, data], index) => ({ seq: 70 + index, type, payload: JSON.parse(data) as unknown })));
   });
 
   it("leaves a dropped stream to the browser: it resumes with Last-Event-ID, so no gap is said (R-n6)", () => {

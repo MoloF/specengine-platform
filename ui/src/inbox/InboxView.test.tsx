@@ -4,7 +4,7 @@ import { ClientError } from "../api/client";
 import type { Proposal, QueueEvent } from "../api/types";
 import { aProposal, entryOf, noReview } from "../test/builders";
 import { renderApp } from "../test/render";
-import { stubClient, type StubClient } from "../test/stubClient";
+import { argsOf, stubClient, type StubClient } from "../test/stubClient";
 
 // AC-05, AC-07, AC-12, AC-13, AC-14 of docs/features/ui-shell.md, on a stub client.
 
@@ -135,10 +135,10 @@ describe("the Inbox on a stub client", () => {
     expect(optionIds(list)).toHaveLength(4);
     expect(client.getProjects).toHaveBeenCalledTimes(1);
     expect(client.getInbox).toHaveBeenCalledTimes(1);
-    expect(client.getInbox).toHaveBeenCalledWith("alpha");
+    expect(argsOf(client.getInbox)).toContainEqual(["alpha"]);
     expect(await screen.findByRole("heading", { level: 2, name: "High one" })).toBeTruthy();
     await screen.findByText("Title of R-1");
-    expect(client.getNode).toHaveBeenCalledWith("alpha", "R-1");
+    expect(argsOf(client.getNode)).toContainEqual(["alpha", "R-1"]);
     expect(client.decideProposal).not.toHaveBeenCalled();
   });
 
@@ -245,10 +245,10 @@ describe("the card reads the review document (daemon-read \"Data\")", () => {
     const { client } = await openInbox(QUEUE, "#/alpha/inbox/PR-2");
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    expect(client.getProposal.mock.calls).toEqual([["alpha", "PR-2"]]);
+    expect(argsOf(client.getProposal)).toEqual([["alpha", "PR-2"]]);
     fireEvent.click(within(screen.getByRole("listbox")).getByText("High one"));
     await within(screen.getByRole("article")).findByRole("heading", { level: 3, name: "Options" });
-    expect(client.getProposal.mock.calls).toEqual([
+    expect(argsOf(client.getProposal)).toEqual([
       ["alpha", "PR-2"],
       ["alpha", "PR-1"],
     ]);
@@ -358,6 +358,70 @@ describe("the card reads the review document (daemon-read \"Data\")", () => {
     expect(refusal.textContent).toContain("The daemon refused the decision; nothing changed.");
     expect(within(refusal).getByText(message)).toBeTruthy();
     expect(screen.getByRole("dialog", { name: "Accept PR-2" })).toBe(dialog);
+  });
+});
+
+/** The card's facts as shown: each `dt` with its `dd`'s text. */
+function facts(card: HTMLElement): [string, string][] {
+  return Array.from(card.querySelectorAll(".facts .fact"), (fact) => [fact.querySelector("dt")?.textContent ?? "", fact.querySelector("dd")?.textContent ?? ""]);
+}
+
+describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks, AC-08 of ui-tasks)", () => {
+  const BOUND = aProposal({ id: "PR-0041", kind: "discrepancy", summary: "Entry only inside the tide window, see T-0999", task_id: "T-0107" });
+  const UNBOUND = aProposal({ id: "PR-0044", summary: "Unbound" });
+
+  it("links a bound proposal's task by the review's task_id, never by its summary; an inbox entry names none", async () => {
+    const { client } = await openInbox([BOUND, UNBOUND], "#/alpha/inbox/PR-0041");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Gap type", "Severity", "Task", "Status"]);
+    const task = within(card).getByRole("link", { name: "T-0107" });
+    expect(task.getAttribute("href")).toBe("#/alpha/tasks/T-0107");
+    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Task");
+    expect(within(card).queryByRole("link", { name: "T-0999" })).toBeNull();
+    // InboxEntry stays the daemon's 11 keys: the task comes only from the review document.
+    const inbox = await client.getInbox("alpha");
+    expect(inbox.proposals.map((entry) => [entry.id, Object.keys(entry).length, "task_id" in entry])).toEqual([
+      ["PR-0041", 11, false],
+      ["PR-0044", 11, false],
+    ]);
+  });
+
+  it("says No task for an unbound proposal", async () => {
+    await openInbox([BOUND, UNBOUND], "#/alpha/inbox/PR-0044");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    expect(facts(card)).toContainEqual(["Task", "No task"]);
+    expect(within(card).queryByRole("link", { name: /^T-/ })).toBeNull();
+  });
+
+  it("shows no Task fact before the review arrives, nor for the exit-1 document", async () => {
+    const client = stubClient([BOUND, UNBOUND]);
+    let release: () => void = () => undefined;
+    const read = client.getProposal.getMockImplementation();
+    client.getProposal.mockImplementationOnce(
+      (project, id) =>
+        new Promise((resolve) => {
+          release = () => {
+            void read?.(project, id).then(resolve);
+          };
+        }),
+    );
+    renderApp(client, "#/alpha/inbox/PR-0041");
+    const card = await screen.findByRole("article");
+    expect(await within(card).findByLabelText("Loading the review of PR-0041")).toBeTruthy();
+    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Severity", "Status"]);
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    expect(await within(card).findByRole("link", { name: "T-0107" })).toBeTruthy();
+
+    client.getProposal.mockResolvedValueOnce(noReview("PR-0044"));
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Unbound"));
+    const gone = await screen.findByRole("article");
+    expect(await within(gone).findByText("PR-0044 has no review document in this repository")).toBeTruthy();
+    expect(facts(gone).map(([name]) => name)).not.toContain("Task");
   });
 });
 

@@ -7,6 +7,7 @@ import { graphClient, graphOf, HOSTILE, HOSTILE_LINK } from "../test/graphStub";
 import { renderApp } from "../test/render";
 import { FIT_MARGIN, FIT_MIN_ZOOM } from "./geometry";
 import { COLUMN_STEP, patternAt } from "./layout";
+import { argsOf } from "../test/stubClient";
 
 // AC-01, AC-03, AC-04 and AC-06 to AC-12 of docs/features/ui-graph.md, on the stub client: the
 // route and its one read, the options, the read-only canvas (boxes, stubs, details, keys, words),
@@ -128,7 +129,7 @@ describe("the route and its one read (AC-01)", () => {
     renderApp(client, "#/harbor-sim/graph/MEC-TIDES");
     expect(await screen.findByRole("heading", { level: 1, name: "Graph: MEC-TIDES" })).toBeTruthy();
     await drawn();
-    expect(client.getGraph.mock.calls).toEqual([["harbor-sim", { ref: "MEC-TIDES", depth: 2 }]]);
+    expect(argsOf(client.getGraph)).toEqual([["harbor-sim", { ref: "MEC-TIDES", depth: 2 }]]);
     for (const read of [client.getTree, client.getNode, client.search, client.getBundle, client.getInbox]) {
       expect(read).not.toHaveBeenCalled();
     }

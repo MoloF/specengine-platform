@@ -456,6 +456,12 @@ impl Git {
         Self { vars }
     }
 
+    /// The sandbox's variables: the caller's git environment of a CLI
+    /// library call (`GitEnv::new(cwd, git.vars())`).
+    pub fn vars(&self) -> Vec<(OsString, OsString)> {
+        self.vars.clone()
+    }
+
     /// [`QUIET`] into the config of the repository git finds from `cwd`
     /// (right after its `init`).
     pub fn quiet(&self, cwd: &Path) {

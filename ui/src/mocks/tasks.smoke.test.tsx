@@ -2,14 +2,15 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { CUT_NOTICE, TOTAL_CUT_NOTICE } from "../tasks/SpecChangesPanel";
+import { argsOf } from "../test/stubClient";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
 // The Tasks screen over the real mock, as `pnpm dev` shows it (docs/features/ui-tasks.md): AC-01
 // (what a route reads), AC-04 (harbor-sim's groups), AC-06 (the four staleness displays, the spec
-// changes as sent), AC-08 (proposals split by task_id; a decision read again; the review document
-// names no task since daemon-read, so the Inbox card links none), AC-11 (slow, empty, error, an unknown T), AC-14 (large;
-// T-0200's diffs past the package's total).
+// changes as sent), AC-08 (proposals split by task_id; a decision read again; the Inbox card links
+// the task its review document names, again since ui-live-tasks AC-12), AC-11 (slow, empty, error,
+// an unknown T), AC-14 (large; T-0200's diffs past the package's total).
 
 function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
@@ -87,7 +88,7 @@ describe("what a route reads over the mock (AC-01)", () => {
 
   it("#/harbor-sim/tasks/T-0107 reads the list and that package once each", async () => {
     const { getTasks, getTask } = await openTask("T-0107");
-    expect([getTasks.mock.calls.length, getTask.mock.calls]).toEqual([1, [["harbor-sim", "T-0107"]]]);
+    expect([getTasks.mock.calls.length, argsOf(getTask)]).toEqual([1, [["harbor-sim", "T-0107"]]]);
   });
 });
 
@@ -149,7 +150,7 @@ describe("staleness and spec changes (AC-06)", () => {
     });
     expect(document.querySelector(".cut-note")).toBeNull();
     expect(screen.getByRole("figure", { name: "Changes to RULE-NIGHT-LIGHTS since approval" })).toBeTruthy();
-    // The gone node is named, not linked: the tree has nothing to open (task-package G4).
+    // The gone node is named, not linked: the tree has nothing to open (`docs/canon/task-package.md` "Package": a gone target).
     const heads = shown.map((item) => [item.querySelector(".snapshot-diff-head a")?.textContent ?? null, item.querySelector(".plain-tag")?.textContent ?? null]);
     expect(heads).toEqual([
       ["MEC-NIGHT-PASSAGE", null],
@@ -185,7 +186,7 @@ describe("proposals and the Inbox (AC-08)", () => {
     expect(screen.getByRole("link", { name: "PR-0041" }).getAttribute("href")).toBe("#/harbor-sim/inbox/PR-0041");
   });
 
-  it("after PR-0041 is rejected in the Inbox, T-0107 is read again without it", async () => {
+  it("links PR-0041's Inbox card to T-0107; after PR-0041 is rejected, T-0107 is read again without it", async () => {
     const { getTask } = renderMock("normal", "#/harbor-sim/tasks/T-0107");
     await screen.findByRole("tab", { name: "Overview", selected: true });
     expect(within(document.querySelector(".task-assumptions") ?? document.body).getByText("PR-0041")).toBeTruthy();
@@ -194,7 +195,9 @@ describe("proposals and the Inbox (AC-08)", () => {
     await goTo("#/harbor-sim/inbox/PR-0041");
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    expect(within(card).queryByRole("link", { name: "T-0107" })).toBeNull();
+    const task = within(card).getByRole("link", { name: "T-0107" });
+    expect(task.getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
+    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Task");
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog", { name: "Reject PR-0041" });
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "The window stays." } });

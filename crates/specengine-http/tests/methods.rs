@@ -16,8 +16,9 @@ mod common;
 use common::{Reply, Scratch, Server, request_bytes, snapshot};
 
 /// Every read route of A, with a valid query (`graph`, `check`:
-/// docs/features/ui-live.md "Description and interactions").
-const READS: [&str; 10] = [
+/// docs/features/ui-live.md "Description and interactions"; `tasks`,
+/// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases").
+const READS: [&str; 12] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
@@ -27,13 +28,16 @@ const READS: [&str; 10] = [
     "/api/projects/lantern-keep/check",
     "/api/projects/lantern-keep/inbox",
     "/api/projects/lantern-keep/proposals/PR-0001",
+    "/api/projects/lantern-keep/tasks",
+    "/api/projects/lantern-keep/tasks/T-0001",
     "/api/projects/lantern-keep/events",
 ];
 
 const DECISION: &str = "/api/projects/lantern-keep/proposals/PR-0001/decision";
 
-/// Paths no route serves.
-const UNKNOWN: [&str; 10] = [
+/// Paths no route serves (`tasks/:id/transition`, 07 s3, stays one:
+/// docs/features/ui-live-tasks.md "Rules and edge cases").
+const UNKNOWN: [&str; 12] = [
     "/",
     "/api",
     "/no/such/route",
@@ -44,6 +48,8 @@ const UNKNOWN: [&str; 10] = [
     "/api/projects/lantern-keep/tree/more",
     "/api/projects/lantern-keep/check/more",
     "/api/projects/lantern-keep/graph/MEC-STAMINA",
+    "/api/projects/lantern-keep/tasks/",
+    "/api/projects/lantern-keep/tasks/T-0001/transition",
 ];
 
 /// Every method but GET and POST.

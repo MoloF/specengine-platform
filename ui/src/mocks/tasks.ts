@@ -12,8 +12,9 @@ import type {
 } from "../api/types";
 import type { MockProposal, StoredReview } from "./build";
 
-// The tasks of the mock projects (docs/features/ui-tasks.md "Data", Mock): the draft package of
-// docs/features/task-package.md as `spec task list --json` and `spec task show T --json` print it.
+// The tasks of the mock projects (docs/features/ui-tasks.md "Data", Mock): the list of
+// `docs/canon/tasks.md` "Commands" and the package of `docs/canon/task-package.md` "Package", as
+// `spec task list --json` and `spec task show T --json` print them.
 // One builder, fixed UTC times (never the clock), no word of a tool chain or of this repository's
 // roles: role and profile values are project vocabulary, shown verbatim.
 //
@@ -26,7 +27,7 @@ import type { MockProposal, StoredReview } from "./build";
 // (its 128 changed nodes past the diffs' total: 32 diffs, 96 entries `diff` null); each other one
 // in progress claimed with run 1 open, as T-0109.
 
-/** A diff's cap and the package's total over its diffs, in bytes (task-package "Data"). */
+/** A diff's cap and the package's total over its diffs, in bytes (`docs/canon/task-package.md` "Caps"). */
 const DIFF_MAX = 8192;
 const DIFFS_TOTAL_MAX = 262_144;
 
@@ -476,7 +477,7 @@ function withinTotal(entries: readonly SnapshotDiff[]): { diffs: SnapshotDiff[];
   return { diffs, notes: leftOut === 0 ? [] : [`snapshot_diff: ${String(leftOut)} diff(s) past ${String(DIFFS_TOTAL_MAX)} B left out`] };
 }
 
-/** T-0200: every field at the package's cap (task-package "Data", Caps), every snapshot node changed. */
+/** T-0200: every field at the package's cap (`docs/canon/task-package.md` "Caps"), every snapshot node changed. */
 function taskAtCaps(): StoredTask {
   const steps = Array.from({ length: 64 }, (_, index) => generatedStep(index));
   const rules = Array.from({ length: 64 }, (_, index) => generatedRule(index + 64));

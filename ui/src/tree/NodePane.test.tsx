@@ -6,7 +6,7 @@ import { App } from "../app/App";
 import type { NodeView, ShownLinks } from "../api/types";
 import { aBundle, aBundleItem, aLink, aNode, aProposal, aSearchHit, aSearchResults, aTreeView, someLayers } from "../test/builders";
 import { renderApp } from "../test/render";
-import type { StubClient } from "../test/stubClient";
+import { argsOf, type StubClient } from "../test/stubClient";
 import { LINKS, textOf, TREE, treeClient } from "../test/treeStub";
 
 // docs/features/ui-tree-node.md on a stub client: AC-05 (unknown REF), AC-06 (the text), AC-07
@@ -475,7 +475,7 @@ describe("the bundle (AC-10)", () => {
     const panel = await openTab("Bundle");
     await within(panel).findByText(/tokens 12 of 2000/);
     expect(client.getBundle).toHaveBeenCalledTimes(1);
-    expect(client.getBundle).toHaveBeenLastCalledWith("alpha", { node_ids: ["DOC-A"] });
+    expect(argsOf(client.getBundle).at(-1)).toEqual(["alpha", { node_ids: ["DOC-A"] }]);
     fireEvent.click(tab("Text"));
     fireEvent.click(tab("Bundle"));
     expect(client.getBundle).toHaveBeenCalledTimes(1);
@@ -485,7 +485,7 @@ describe("the bundle (AC-10)", () => {
     await waitFor(() => {
       expect(client.getBundle).toHaveBeenCalledTimes(2);
     });
-    expect(client.getBundle).toHaveBeenLastCalledWith("alpha", { node_ids: ["DOC-A"], budget: 5000 });
+    expect(argsOf(client.getBundle).at(-1)).toEqual(["alpha", { node_ids: ["DOC-A"], budget: 5000 }]);
     await within(panel).findByText(/tokens 12 of 5000/);
     fireEvent.submit(field.closest("form") ?? panel);
     await waitFor(() => {
@@ -533,7 +533,7 @@ describe("the bundle (AC-10)", () => {
     fireEvent.change(field, { target: { value: "4294967295" } });
     fireEvent.submit(field.closest("form") ?? panel);
     await waitFor(() => {
-      expect(client.getBundle).toHaveBeenLastCalledWith("alpha", { node_ids: ["DOC-A"], budget: 4294967295 });
+      expect(argsOf(client.getBundle).at(-1)).toEqual(["alpha", { node_ids: ["DOC-A"], budget: 4294967295 }]);
     });
     expect(within(panel).queryByRole("alert")).toBeNull();
   });
