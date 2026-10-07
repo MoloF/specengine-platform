@@ -1393,8 +1393,9 @@ fn dump_at(pair: &Pair, home: &Path) -> String {
 /// <path>`, `+++ proposed <path>`, `@@ -0,0 +1,<n> @@`, every other line
 /// `+`), `preview` `applies`, a file at the path → `unavailable`; `inbox`
 /// `PR-0001 | create | open | R-13 | …`; `export state` (`queue_schema` 3,
-/// 40 columns), `import-state` fresh, the re-export byte-identical,
-/// `user_version` 3. M: a column or a schema bump.
+/// 40 columns, as of this slice; format 2, schema 4, 41 columns since
+/// docs/features/task-package.md), `import-state` fresh, the re-export
+/// byte-identical, `user_version` 4. M: a column or a schema bump.
 #[test]
 fn ac14_review_inbox_and_backup_carry_a_create() {
     let pair = Pair::new("pk-ac14", "spec-a");
@@ -1458,17 +1459,20 @@ fn ac14_review_inbox_and_backup_carry_a_create() {
         .collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":2,\"queue_schema\":4,\"project\":\"lantern-keep\",\"proposals\":2,\
+             \"tasks\":0,\"runs\":0,"
         ),
         "{}",
         lines[0]
     );
+    // The queue's schema as docs/features/task-package.md leaves it: 41
+    // columns, schema 4; a create adds none.
     let columns = specengine_store::PROPOSAL_COLUMNS;
-    assert_eq!(columns.len(), 40);
+    assert_eq!(columns.len(), 41);
     for line in &lines[1..3] {
         let row: Value = serde_json::from_str(line).expect("a row");
         let row = row["proposals"].as_object().expect("a proposals row");
-        assert_eq!(row.len(), 40, "{line}");
+        assert_eq!(row.len(), 41, "{line}");
         assert_eq!(row["kind"], json!("create"), "{line}");
     }
     let first: Value = serde_json::from_str(&lines[1]).unwrap();
@@ -1488,10 +1492,10 @@ fn ac14_review_inbox_and_backup_carry_a_create() {
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
     assert_eq!(dump_at(&pair, &fresh), dump_at(&pair, &pair.home));
     assert_eq!(export(&pair, &fresh, &dumps.join("again.jsonl")), bytes);
-    assert_eq!(pair.sql("PRAGMA user_version;"), "3\n");
+    assert_eq!(pair.sql("PRAGMA user_version;"), "4\n");
     assert_eq!(
         pair.sql("SELECT count(*) FROM pragma_table_info('proposals');"),
-        "40\n"
+        "41\n"
     );
     let restored = specengine_store::SqliteQueue::open(
         common::data_dir(&fresh).join("lantern-keep.db"),

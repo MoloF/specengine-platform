@@ -150,13 +150,22 @@ fn token_bundles_and_observe_are_accepted() {
 /// docs/features/spec-cli-bundle.md, R9 / AC-13: `bundle_node` is read as
 /// a `u32` by `spec bundle`, so the gate takes it from 1 to `u32::MAX`
 /// and refuses the rest at its line with that range; every other cap
-/// keeps "at least 1" and no upper bound of its own.
+/// keeps "at least 1" and no upper bound of its own. Since
+/// docs/features/task-package.md (iteration 2, m1) `bundle_task`, read
+/// as a `u32` by a task's package, is capped the same way.
 #[test]
 fn bundle_node_is_capped_at_u32_max_and_no_other_key_is() {
-    let config = CheckConfig::from_toml("[budgets]\nbundle_node = 4294967295\n").expect("u32::MAX");
-    assert_eq!(config.budgets.bundle_node, Some(u64::from(u32::MAX)));
-    let config = CheckConfig::from_toml("[budgets]\nbundle_node = 1\n").expect("1");
-    assert_eq!(config.budgets.bundle_node, Some(1));
+    for key in ["bundle_node", "bundle_task"] {
+        let config =
+            CheckConfig::from_toml(&format!("[budgets]\n{key} = 4294967295\n")).expect("u32::MAX");
+        let read = |config: &CheckConfig| match key {
+            "bundle_node" => config.budgets.bundle_node,
+            _ => config.budgets.bundle_task,
+        };
+        assert_eq!(read(&config), Some(u64::from(u32::MAX)), "{key}");
+        let config = CheckConfig::from_toml(&format!("[budgets]\n{key} = 1\n")).expect("1");
+        assert_eq!(read(&config), Some(1), "{key}");
+    }
 
     for (value, text, line) in [
         ("4294967296", "[budgets]\n\nbundle_node = 4294967296\n", 3),
@@ -172,23 +181,26 @@ fn bundle_node_is_capped_at_u32_max_and_no_other_key_is() {
             2,
         ),
     ] {
-        let shown = CheckConfig::from_toml(text)
-            .err()
-            .unwrap_or_else(|| panic!("bundle_node = {value}: accepted"))
-            .at("specengine.toml");
-        assert_eq!(
-            shown,
-            format!(
-                "specengine.toml:{line}: `bundle_node` must be from 1 to 4294967295, not {value}"
-            )
-        );
+        for key in ["bundle_node", "bundle_task"] {
+            let text = text.replace("bundle_node", key);
+            let shown = CheckConfig::from_toml(&text)
+                .err()
+                .unwrap_or_else(|| panic!("{key} = {value}: accepted"))
+                .at("specengine.toml");
+            assert_eq!(
+                shown,
+                format!(
+                    "specengine.toml:{line}: `{key}` must be from 1 to 4294967295, not {value}"
+                )
+            );
+        }
     }
 
     // Past `u32::MAX`, the other caps still load.
     let config = CheckConfig::from_toml(
         "[budgets]\ntier0_bytes = 5000000000\ntier1_bytes = 5000000000\n\
          decision_bytes = 5000000000\nindex_bytes = 5000000000\n\
-         canon_bytes = 5000000000\nbundle_task = 5000000000\nbundle_node = 4294967295\n",
+         canon_bytes = 5000000000\nbundle_task = 4294967295\nbundle_node = 4294967295\n",
     )
     .expect("other caps past u32::MAX");
     assert_eq!(config.budgets.tier0_bytes, 5_000_000_000);
@@ -196,11 +208,11 @@ fn bundle_node_is_capped_at_u32_max_and_no_other_key_is() {
     assert_eq!(config.budgets.decision_bytes, 5_000_000_000);
     assert_eq!(config.budgets.index_bytes, 5_000_000_000);
     assert_eq!(config.budgets.canon_bytes, Some(5_000_000_000));
-    assert_eq!(config.budgets.bundle_task, Some(5_000_000_000));
+    assert_eq!(config.budgets.bundle_task, Some(4_294_967_295));
     assert_eq!(config.budgets.bundle_node, Some(4_294_967_295));
 
     // And keep their own wording below 1.
-    for (key, line) in [("tier0_bytes", 2), ("tier1_bytes", 2), ("bundle_task", 2)] {
+    for (key, line) in [("tier0_bytes", 2), ("tier1_bytes", 2)] {
         let shown = CheckConfig::from_toml(&format!("[budgets]\n{key} = 0\n"))
             .err()
             .unwrap_or_else(|| panic!("{key} = 0: accepted"))

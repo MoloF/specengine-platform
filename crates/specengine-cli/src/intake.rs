@@ -16,7 +16,9 @@
 //! 4. a discrepancy's `proposed_patch`: its target among them, then
 //!    `propose update` steps 1–4 (refusals prefixed `proposed_patch: `;
 //!    the findings it introduces stored with it, never refusing);
-//! 5. the place, as `propose update` step 5 (exit 2);
+//! 5. the place, as `propose update` step 5 (exit 2); with `--task T`, the
+//!    task of this repository taking a proposal raised there (canon
+//!    `tasks`, "Task-bound proposals"; exit 1), checked again in step 7;
 //! 6. corpus hits from the index this call refreshed: per target, each
 //!    link `spec show --links` lists (both ways, resolved, any type but
 //!    `mentions`) whose other end lies in a live `class: decision` document
@@ -27,7 +29,7 @@
 //! 7. the queue's hits and the insert in one `Immediate` transaction
 //!    ([`specengine_store::ProposalQueue::create_intake`]): stored only when
 //!    every hit is named in `distinct_from`; a patch becomes a linked
-//!    `update`, decided on its own.
+//!    `update`, decided on its own, bound to the item's task.
 //!
 //! The answer is the intake document (exit 0 whether stored or not):
 //! `{id, created, hits, related, linked, diagnostics, notes}`; past 10 hits
@@ -49,7 +51,7 @@ use specengine_core::proposal::Author;
 use specengine_model::{Direction, is_weak_link};
 use specengine_store::{
     GitEnv, Intake, NewIntake, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _,
-    ProposalStatus, QueueMatch,
+    ProposalStatus, QueueError, QueueMatch,
 };
 
 use crate::cap::SHOW_TAIL_NAMES;
@@ -58,6 +60,7 @@ use crate::proposals::{
     checked_now, escaped_error, finding_line, more_findings_note, open_context, queue_cannot,
 };
 use crate::propose::{checked_update, is_path_target, resolved_node, written_reference};
+use crate::task::bound_task;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The most bytes of a discrepancy's `--input` document: 8 MiB.
@@ -251,7 +254,17 @@ pub fn propose_question(
     globals: &Globals,
     request: &QuestionRequest,
 ) -> Result<IntakeOutcome, CliError> {
-    run_question(env, globals, request).map_err(escaped_error)
+    propose_question_with_task(env, globals, request, None)
+}
+
+/// [`propose_question`] with `--task T`: bound to that task.
+pub fn propose_question_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &QuestionRequest,
+    task: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_question(env, globals, request, task).map_err(escaped_error)
 }
 
 /// `spec propose discrepancy`: one discrepancy (and its proposed patch as a
@@ -262,7 +275,18 @@ pub fn propose_discrepancy(
     globals: &Globals,
     request: &DiscrepancyRequest,
 ) -> Result<IntakeOutcome, CliError> {
-    run_discrepancy(env, globals, request).map_err(escaped_error)
+    propose_discrepancy_with_task(env, globals, request, None)
+}
+
+/// [`propose_discrepancy`] with `--task T`: the item and its linked update
+/// bound to that task, in one transaction.
+pub fn propose_discrepancy_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &DiscrepancyRequest,
+    task: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_discrepancy(env, globals, request, task).map_err(escaped_error)
 }
 
 /// `--input F|-`: UTF-8 JSON of a discrepancy's arguments (the author's
@@ -317,6 +341,7 @@ fn run_question(
     env: &Env,
     globals: &Globals,
     request: &QuestionRequest,
+    task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let author = AuthorInput {
         role: request.author_role.as_deref(),
@@ -352,6 +377,7 @@ fn run_question(
             author: (&request.author_role, &request.author_model, &request.run),
             now: &request.now,
             git: &request.git,
+            task,
         },
         problem,
     )
@@ -361,6 +387,7 @@ fn run_discrepancy(
     env: &Env,
     globals: &Globals,
     request: &DiscrepancyRequest,
+    task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let input = &request.input;
     let author = AuthorInput {
@@ -388,6 +415,7 @@ fn run_discrepancy(
             author: (&request.author_role, &request.author_model, &request.run),
             now: &request.now,
             git: &request.git,
+            task,
         },
         problem,
     )
@@ -411,6 +439,8 @@ struct Item<'a> {
     author: (&'a Option<String>, &'a Option<String>, &'a Option<String>),
     now: &'a str,
     git: &'a GitEnv,
+    /// `--task T` as written.
+    task: Option<&'a str>,
 }
 
 /// A target resolved at step 3.
@@ -524,13 +554,20 @@ fn run_intake(
         }
     }
 
-    // 5. The place.
+    // 5. The place, and the task it is raised for.
     let place = context.git.place(&context.project.root).map_err(|error| {
         CliError::spec(format!(
             "the project root {} cannot be bound to a proposal: {error}",
             context.project.root.display()
         ))
     })?;
+    let task = match item.task {
+        Some(written) => match bound_task(&context, written, &place)? {
+            Ok(id) => Some(id),
+            Err(reason) => return Ok(IntakeOutcome::refused(&reason, messages)),
+        },
+        None => None,
+    };
 
     // 6. The corpus's accepted decisions on the targets.
     let graph = SpecGraph::new(
@@ -567,10 +604,22 @@ fn run_intake(
         .iter()
         .map(|hit| hit.name().to_owned())
         .collect();
-    let result = context
-        .queue
-        .create_intake(&new_intake, &corpus_names, patch.as_ref(), now)
-        .map_err(queue_cannot)?;
+    let result = match context.queue.create_intake_with_task(
+        &new_intake,
+        &corpus_names,
+        patch.as_ref(),
+        task.as_deref(),
+        now,
+    ) {
+        Ok(result) => result,
+        Err(QueueError::TaskRefused { reason, .. }) => {
+            return Ok(IntakeOutcome::refused(
+                &format!("--task: {reason}"),
+                messages,
+            ));
+        }
+        Err(error) => return Err(queue_cannot(error)),
+    };
     Ok(answer(
         corpus_hits,
         corpus_related,

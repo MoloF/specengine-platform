@@ -1,13 +1,15 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
+import { CUT_NOTICE, TOTAL_CUT_NOTICE } from "../tasks/SpecChangesPanel";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
 // The Tasks screen over the real mock, as `pnpm dev` shows it (docs/features/ui-tasks.md): AC-01
 // (what a route reads), AC-04 (harbor-sim's groups), AC-06 (the four staleness displays, the spec
 // changes as sent), AC-08 (proposals split by task_id; a decision read again; the review document
-// names no task since daemon-read, so the Inbox card links none), AC-11 (slow, empty, error, an unknown T), AC-14 (large).
+// names no task since daemon-read, so the Inbox card links none), AC-11 (slow, empty, error, an unknown T), AC-14 (large;
+// T-0200's diffs past the package's total).
 
 function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
@@ -254,6 +256,22 @@ describe("the large scenario (AC-14)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Package" }));
     const text = document.querySelector(".task-json")?.textContent ?? "";
     expect((JSON.parse(text) as { targets: unknown[] }).targets).toHaveLength(64);
+  });
+
+  it("shows T-0200's 32 diffs as sent and its 96 left out past the total as quiet lines, the daemon's note above", async () => {
+    await openTask("T-0200", "large");
+    expect(screen.getByRole("list", { name: "Notes from the daemon on this task" }).textContent).toBe(
+      "snapshot_diff: 96 diff(s) past 262144 B left out",
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /^Spec changes/ }));
+    const panel = screen.getByRole("tabpanel");
+    const entries = Array.from(panel.querySelectorAll<HTMLElement>(".snapshot-diff"));
+    const notes = entries.map((entry) => entry.querySelector(".cut-note")?.textContent);
+    expect([entries.length, within(panel).getAllByRole("figure").length]).toEqual([128, 32]);
+    expect(notes.slice(0, 32).every((note) => note === CUT_NOTICE)).toBe(true);
+    expect(notes.slice(32).every((note) => note === TOTAL_CUT_NOTICE)).toBe(true);
+    expect(entries.slice(32).every((entry) => entry.querySelector(".diff") === null)).toBe(true);
+    expect(within(panel).queryByText("No section diff attached.")).toBeNull();
   });
 
   it("shows a generated task in progress claimed, its run 1 running", async () => {

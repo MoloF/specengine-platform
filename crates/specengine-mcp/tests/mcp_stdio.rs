@@ -24,20 +24,26 @@ use serde_json::{Value, json};
 const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 
 /// `tools/list` of the measurement build: the four read tools (task spec
-/// `mcp-read`), the four queue tools (task spec `agent-intake`), the
-/// consent demo and the two probes, in wire order.
-const PROBES_BUILD_TOOLS: [&str; 11] = [
+/// `mcp-read`), the four queue tools (task spec `agent-intake`), the five
+/// task tools (docs/features/task-package.md), the consent demo and the
+/// two probes, in wire order.
+const PROBES_BUILD_TOOLS: [&str; 16] = [
     "ask_question",
+    "claim_task",
+    "complete_task",
     "get_context_bundle",
     "get_node",
     "get_proposal",
+    "get_task",
     "get_tree",
     "probe_output",
     "probe_sleep",
     "propose_change",
     "report_discrepancy",
+    "report_run",
     "review_proposal",
     "search",
+    "submit_plan",
 ];
 
 fn repository_root() -> PathBuf {

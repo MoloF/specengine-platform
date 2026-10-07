@@ -49,6 +49,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped
 - [docs/features/spec-index.md](features/spec-index.md) shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped
+- [docs/features/task-package.md](features/task-package.md) shipped
 - [docs/features/token-calibration.md](features/token-calibration.md) shipped
 - [docs/features/ui-graph.md](features/ui-graph.md) shipped
 - [docs/features/ui-health.md](features/ui-health.md) shipped

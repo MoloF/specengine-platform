@@ -22,8 +22,13 @@ import type { MockProposal, StoredReview } from "./build";
 // open run and a cut diff, T-0110 sent back with an owner note, T-0111 ready with its approval
 // place gone, T-0112 ready and unchanged, T-0113 a draft without a title; the list skips T-0106,
 // an unreadable row. ledger-api: T-0031 in progress, T-0033 in plan review, both with a profile.
-// `large` adds T-0200 to T-0519, the seven states in turn, T-0200 at every cap of the package;
-// each other one in progress claimed with run 1 open, as T-0109.
+// `large` adds T-0200 to T-0519, the seven states in turn, T-0200 at every cap of the package
+// (its 128 changed nodes past the diffs' total: 32 diffs, 96 entries `diff` null); each other one
+// in progress claimed with run 1 open, as T-0109.
+
+/** A diff's cap and the package's total over its diffs, in bytes (task-package "Data"). */
+const DIFF_MAX = 8192;
+const DIFFS_TOTAL_MAX = 262_144;
 
 /** A task as the mock stores it: the package less what the core computes per read from the queue. */
 export type StoredTask = Omit<TaskPackage, "open_proposals" | "assumptions">;
@@ -164,7 +169,7 @@ function tableDiff(node: SnapshotNode): SnapshotDiff {
   }
   let diff = "";
   for (const line of lines) {
-    if (diff.length + line.length + 1 > 8192) {
+    if (diff.length + line.length + 1 > DIFF_MAX) {
       break;
     }
     diff += `${line}\n`;
@@ -451,25 +456,46 @@ function stepPath(id: string): string {
   return `docs/spec/gen/d${d ?? "00"}/m${m ?? "00"}/s${k ?? "00"}.md`;
 }
 
-/** T-0200: every field at the package's cap (task-package "Data", Caps). */
+/**
+ * The entries as the core caps them in all: in snapshot order, once one would take the total past
+ * 262 144 B, it and every later one `diff` null, `cut` true, and one note says how many.
+ */
+function withinTotal(entries: readonly SnapshotDiff[]): { diffs: SnapshotDiff[]; notes: string[] } {
+  const bytes = new TextEncoder();
+  let total = 0;
+  let leftOut = 0;
+  const diffs = entries.map((entry) => {
+    const size = entry.diff === null ? 0 : bytes.encode(entry.diff).length;
+    if (leftOut > 0 || total + size > DIFFS_TOTAL_MAX) {
+      leftOut += 1;
+      return { ...entry, diff: null, cut: true };
+    }
+    total += size;
+    return entry;
+  });
+  return { diffs, notes: leftOut === 0 ? [] : [`snapshot_diff: ${String(leftOut)} diff(s) past ${String(DIFFS_TOTAL_MAX)} B left out`] };
+}
+
+/** T-0200: every field at the package's cap (task-package "Data", Caps), every snapshot node changed. */
 function taskAtCaps(): StoredTask {
   const steps = Array.from({ length: 64 }, (_, index) => generatedStep(index));
   const rules = Array.from({ length: 64 }, (_, index) => generatedRule(index + 64));
   const nodes = [...steps, ...rules].map((id) => snapshotNode(id, stepPath(id.replace(/^RULE-GEN-(\d\d-\d\d-\d\d)-\d$/, "MEC-GEN-$1"))));
-  const diffs = nodes.slice(0, 6).map((node) => {
+  const changed = nodes.map((node) => {
     const lines = [`--- snapshot ${node.path}`, `+++ current ${node.path}`, "@@ -1,200 +1,200 @@"];
     for (let line = 1; line <= 200; line += 1) {
       lines.push(`-Step line ${pad(line, 3)}: the crew waits for the tide.`, `+Step line ${pad(line, 3)}: the crew waits for the pilot boat.`);
     }
     let diff = "";
     for (const text of lines) {
-      if (diff.length + text.length + 1 > 8192) {
+      if (diff.length + text.length + 1 > DIFF_MAX) {
         break;
       }
       diff += `${text}\n`;
     }
     return { id: node.id, path: node.path, span_hash: node.span_hash, diff, cut: true };
   });
+  const capped = withinTotal(changed);
   const worktree = "/work/harbor-sim/T-0200";
   return task({
     id: "T-0200",
@@ -485,7 +511,7 @@ function taskAtCaps(): StoredTask {
     plan: sized("Plan at its cap:\n", 16384),
     owner_notes: [{ at: utc(1, 12), note: sized("Owner note at its cap:", 4096) }],
     spec_snapshot: snapshotOf(utc(1, 13), worktree, "task/T-0200", nodes),
-    snapshot_diff: diffs,
+    snapshot_diff: capped.diffs,
     claim: { at: utc(1, 14), role: SIM_CODER, worktree, branch: "task/T-0200" },
     runs: [
       run({
@@ -505,6 +531,7 @@ function taskAtCaps(): StoredTask {
     author: OWNER,
     created_at: utc(1, 11),
     updated_at: utc(2, 9),
+    notes: capped.notes,
   });
 }
 
@@ -569,12 +596,13 @@ function nodesOf(stored: StoredTask): Set<string> {
   return new Set(named);
 }
 
-function summaryOf(proposal: StoredReview): string {
+/** A question's text, else the rationale's first line; null when it has neither. */
+function summaryOf(proposal: StoredReview): string | null {
   if (proposal.kind === "question") {
-    return proposal.summary ?? "";
+    return proposal.summary;
   }
   const first = proposal.rationale?.split("\n")[0];
-  return first ?? proposal.summary ?? "";
+  return first ?? proposal.summary;
 }
 
 function assumptionOf(proposal: StoredReview): TaskAssumption | null {
@@ -593,14 +621,14 @@ export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]
   const nodes = nodesOf(stored);
   const listed = proposals
     .filter(({ review }) => LISTED_PROPOSAL.has(review.status))
-    .filter(({ review, task_id }) => task_id === stored.id || review.target_ids.some((id) => nodes.has(id)))
+    .filter(({ review }) => review.task_id === stored.id || review.target_ids.some((id) => nodes.has(id)))
     .sort((a, b) => a.review.id.localeCompare(b.review.id));
-  const open: TaskProposal[] = listed.map(({ review, task_id }) => ({
+  const open: TaskProposal[] = listed.map(({ review }) => ({
     id: review.id,
     kind: review.kind,
     status: review.status,
     target_ids: [...review.target_ids],
-    task_id,
+    task_id: review.task_id,
     summary: summaryOf(review),
   }));
   return {

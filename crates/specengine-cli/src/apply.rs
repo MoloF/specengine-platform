@@ -45,6 +45,13 @@
 //! never with the caller's local `GIT_*` variables; nothing outside the
 //! recorded worktree and the data directory is written.
 //!
+//! A task-bound `update` or section-form `create` recorded at step 10 or by
+//! a completion, in its task's compared place, refreshes the task's
+//! snapshot in the same transaction (canon `tasks`, "Task-bound
+//! proposals"): its target's entry and each snapshot node of its file
+//! enclosing or inside it whose pre-apply hash is its snapshot hash take
+//! the applied text and hash ([`task_refresh`]).
+//!
 //! A question or a discrepancy (canon `decision-record`, "Flags", "Steps")
 //! is approved into a decision record, one new file and one commit where it
 //! was raised ([`crate::decide`]); `--option N`, `--answer T`, `--canon REF`
@@ -58,16 +65,19 @@
 //! prompt too). `decided_by` the current repository's committer unless it
 //! holds a record issued at an earlier step 7 (then as an update's).
 
+use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use specengine_core::proposal::{CommitFacts, PROPOSAL_TRAILER, commit_message};
+use specengine_model::IdScheme;
 use specengine_store::{
     ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalKind, ProposalQueue as _,
-    ProposalStatus, QueueError, Seen, Source as _, WorkingTree, WorktreeGit, replace_file,
-    same_repository,
+    ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, TaskRefresh, WorkingTree,
+    WorktreeGit, replace_file, same_repository, span_hash,
 };
 
 use crate::location::open_index;
+use crate::package::position;
 use crate::preflight::{
     History, LookupError, Missing, Prepared, StepFailure, TrailerCommit, completes_when,
     completing, history, place_unchanged, prepare, recorded_project, recorded_root, trailer_lookup,
@@ -495,7 +505,26 @@ fn run_approve(
         &changes_only_the_path,
     ) {
         Ok(commit) => {
-            let applied = match context.queue.applied_with(&id, &commit, &decision, now) {
+            let refresh = task_refresh(
+                &context,
+                &proposal,
+                &prepared.recorded.config.scheme,
+                &prepared.bytes,
+                &prepared.patched,
+            );
+            let recorded = record_applied(
+                &mut context,
+                &id,
+                &commit,
+                Some(&decision),
+                refresh.as_ref(),
+                now,
+            )
+            .map(|(applied, refreshed)| {
+                refreshed_note(&proposal, &refreshed, &mut messages);
+                applied
+            });
+            let applied = match recorded {
                 Ok(applied) => applied,
                 Err(error) => match recorded_already(&context, &error, &commit, &mut messages) {
                     Some(stored) => stored,
@@ -811,11 +840,27 @@ pub(crate) fn complete(
             decided_by,
             note: request.note.clone(),
         };
-        context
-            .queue
-            .applied_with(id, commit, &decision, &request.now)
+        let refresh = completion_refresh(&request.git, context, proposal, commit);
+        record_applied(
+            context,
+            id,
+            commit,
+            Some(&decision),
+            refresh.as_ref(),
+            &request.now,
+        )
+        .map(|(applied, refreshed)| {
+            refreshed_note(proposal, &refreshed, &mut messages);
+            applied
+        })
     } else {
-        context.queue.applied(id, commit, &request.now)
+        let refresh = completion_refresh(&request.git, context, proposal, commit);
+        record_applied(context, id, commit, None, refresh.as_ref(), &request.now).map(
+            |(applied, refreshed)| {
+                refreshed_note(proposal, &refreshed, &mut messages);
+                applied
+            },
+        )
     };
     let applied = match recorded {
         Ok(applied) => applied,
@@ -837,6 +882,154 @@ pub(crate) fn complete(
     reindex(env, context, &applied, &mut messages);
     let document = with_diff(&applied, &request.git, &context.data_dir);
     Ok(ProposalOutcome::done(COMMAND, document, messages))
+}
+
+/// Step 10's and a completion's recording: `applied_with` (`decision`
+/// given) or `applied`, refreshing the task's snapshot in the same
+/// transaction when `refresh` is given; the nodes refreshed.
+fn record_applied(
+    context: &mut QueueContext,
+    id: &str,
+    commit: &str,
+    decision: Option<&Decision>,
+    refresh: Option<&TaskRefresh>,
+    now: &str,
+) -> Result<(Proposal, Vec<String>), QueueError> {
+    match (refresh, decision) {
+        (Some(refresh), decision) => context
+            .queue
+            .applied_refreshing(id, commit, decision, refresh, now),
+        (None, Some(decision)) => context
+            .queue
+            .applied_with(id, commit, decision, now)
+            .map(|applied| (applied, Vec::new())),
+        (None, None) => context
+            .queue
+            .applied(id, commit, now)
+            .map(|applied| (applied, Vec::new())),
+    }
+}
+
+/// `<task>: its snapshot of <nodes> refreshed by <PR>` when any was.
+fn refreshed_note(proposal: &Proposal, refreshed: &[String], messages: &mut Vec<Message>) {
+    if let (Some(task), false) = (&proposal.task_id, refreshed.is_empty()) {
+        messages.push(Message::Note(format!(
+            "{task}: its snapshot of {} refreshed by `{}`",
+            refreshed.join(", "),
+            proposal.id
+        )));
+    }
+}
+
+/// What a task-bound `update` or section-form `create` applied as
+/// `before` → `after` (its file's bytes, parsed under `scheme`) refreshes
+/// in its task's snapshot: only in the task's compared place (the claim's
+/// worktree and branch, else the snapshot's, its root there), the target's
+/// entry and each snapshot node of the file enclosing or inside the
+/// target whose pre-apply hash is its snapshot hash, with its applied text
+/// and hash (a node the apply left byte for byte takes nothing). `None`
+/// when nothing is refreshed (no task, no snapshot, another place, a parse
+/// that fails).
+pub(crate) fn task_refresh(
+    context: &QueueContext,
+    proposal: &Proposal,
+    scheme: &IdScheme,
+    before: &[u8],
+    after: &[u8],
+) -> Option<TaskRefresh> {
+    if proposal.new_file() || !proposal.kind.applies() {
+        return None;
+    }
+    let task = context
+        .queue
+        .get_task(proposal.task_id.as_deref()?)
+        .ok()??;
+    // A done or cancelled task's snapshot stays as it was.
+    if task.status.is_closed() {
+        return None;
+    }
+    let snapshot = task.snapshot.as_ref()?;
+    let (worktree, branch) = match &task.claim {
+        Some(claim) => (claim.worktree.as_str(), claim.branch.as_str()),
+        None => (
+            snapshot.place.worktree.as_str(),
+            snapshot.place.branch.as_str(),
+        ),
+    };
+    let place = &proposal.place;
+    if place.worktree != worktree
+        || place.branch != branch
+        || place.root_rel != snapshot.place.root_rel
+    {
+        return None;
+    }
+    let path = proposal.target_path.as_str();
+    let parse = |bytes: &[u8]| {
+        panic::catch_unwind(AssertUnwindSafe(|| {
+            specengine_core::parse(path, bytes, scheme)
+        }))
+        .ok()
+    };
+    let (parsed_before, parsed_after) = (parse(before)?, parse(after)?);
+    let target = parsed_before.nodes[position(&parsed_before, &proposal.target_id)?].span;
+    let mut entries = Vec::new();
+    for node in snapshot.nodes.iter().filter(|node| node.path == path) {
+        let Some(at) = position(&parsed_before, &node.id) else {
+            continue;
+        };
+        let was = &parsed_before.nodes[at];
+        let span = was.span;
+        let encloses = span.start <= target.start && target.end <= span.end;
+        let inside = target.start <= span.start && span.end <= target.end;
+        if !(encloses || inside) || span_hash(before, was) != node.span_hash {
+            continue;
+        }
+        let Some(now) = position(&parsed_after, &node.id).map(|at| &parsed_after.nodes[at]) else {
+            continue;
+        };
+        let Ok(text) = String::from_utf8(specengine_core::patch::span_bytes(after, now).to_vec())
+        else {
+            continue;
+        };
+        // A node whose bytes the apply left as they were takes nothing.
+        let hash = span_hash(after, now);
+        if hash == node.span_hash {
+            continue;
+        }
+        entries.push(RefreshEntry {
+            id: node.id.clone(),
+            was: node.span_hash.clone(),
+            span_hash: hash,
+            text,
+        });
+    }
+    (!entries.is_empty()).then(|| TaskRefresh {
+        task_id: task.id.clone(),
+        entries,
+    })
+}
+
+/// [`task_refresh`] of a completion: `before` the file at the completing
+/// commit's first parent, `after` at the commit, read where its history is
+/// ([`history`]), parsed under the recorded root's scheme; `None` when any
+/// of it cannot be read.
+fn completion_refresh(
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    commit: &str,
+) -> Option<TaskRefresh> {
+    proposal.task_id.as_ref()?;
+    let git = match history(git_env, context, proposal).ok()? {
+        History::Recorded(git) => git,
+        History::Current(git) => git.clone(),
+    };
+    let path = top_path(proposal);
+    let parent = git.parents(commit).ok()?.into_iter().next()?;
+    let before = git.blob_at(&parent, &path).ok()?;
+    let after = git.blob_at(commit, &path).ok()?;
+    let recorded = recorded_project(&recorded_root(proposal), &context.slug).ok()?;
+    task_refresh(context, proposal, &recorded.config.scheme, &before, &after)
 }
 
 /// `applied` with `commit` refused because another run (a completion)

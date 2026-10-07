@@ -7,7 +7,7 @@ description: Propose a new text for a spec section or document, or a new section
 
 The project's CLAUDE.md and its roles take precedence over this skill.
 
-Use this only where the project routes spec edits through the SpecEngine queue. Where the project changes its spec another way, follow that way instead.
+Use this only where the project routes spec edits through the SpecEngine queue; elsewhere follow the project's way.
 
 ## Steps
 
@@ -29,12 +29,13 @@ The same call with `"kind": "create"` adds what is not in the spec yet:
 
 ## After sending
 
-- The owner reviews it; on approval SpecEngine writes the file and a commit lands. Until then the file stays as it was: never edit the spec file yourself, and never apply your text by hand.
+- The owner reviews it; on approval SpecEngine writes the file and a commit lands. Never edit the spec file yourself or apply your text by hand.
 - `get_proposal` with its `id` as `proposal_id` gives its `status` and the owner's `decision_note`.
-- Refused for a stale `base`: the span changed since you read it. Read it again with `get_node`, redo your text on the current one, and send it again.
+- Refused for a stale `base`: the span changed since you read it; read it again with `get_node`, redo your text on it, and send it again.
 - Refused for the span's headings (an ID heading added, dropped or moved to another level, or a heading at the section's level or above inside it): keep the span's ID headings as they are, any new heading below the section's level; an ID section to add is a create (above); an ID section to remove is a question for the owner (the ask-owner skill).
-- A corrected text is a new proposal: the earlier one stays open beside it. Name the one it replaces in the new `rationale` and in your report. A corrected create: the earlier one holds its IDs (above).
-- Nothing waits for the owner: keep working, and name the proposal and its new IDs in your report where your work assumes them.
+- A corrected text is a new proposal: the earlier one stays open beside it. Name the one it replaces in its `rationale` and in your report. A corrected create: the earlier one holds its IDs (above).
+- Nothing waits for the owner: keep working; name the proposal and its new IDs in your report where your work assumes them.
+- On a task: `get_task` reads it, `submit_plan`, `claim_task`, `report_run` and `complete_task` move it; pass its `task_id` with each proposal.
 
 Arguments of `propose_change`:
 ```json

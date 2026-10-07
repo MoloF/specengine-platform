@@ -83,9 +83,9 @@ A run killed between steps 8 and 9 leaves the item `approved` with its record, t
 
 ## Queue and documents
 
-Queue step 2 -> 3 (`QUEUE_SCHEMA_VERSION` 3): `ADD COLUMN ... TEXT` `record_id`, `record_path` (root-relative, clean), `record_title`, `record_text`, `choice` (one-key JSON `{"option":1}`, `{"working_answer":true}`, `{"answer":"..."}`, core `Choice`); `PROPOSAL_COLUMNS` 40. Set together by `approve_record_from` (`RecordApproval {series, preview, path, title, text, choice}`), replaced by a later one, kept by `reopen_from`. A deciding kind: `create`, `approve`, `approve_from` -> `Invalid`; `applied`, `applied_with` without its record -> `Invalid`. Corrupt, named: any on an update; set partly; `record_id` no ID; `record_path` not clean; `choice` of another shape or kind, or out of range; an `approved` or `applied` deciding row without them. Events `.approved`, `.applied` add `record`.
+Queue step 2 -> 3 (`QUEUE_SCHEMA_VERSION` 3): `ADD COLUMN ... TEXT` `record_id`, `record_path` (root-relative, clean), `record_title`, `record_text`, `choice` (one-key JSON `{"option":1}`, `{"working_answer":true}`, `{"answer":"..."}`, core `Choice`); `PROPOSAL_COLUMNS` 40 (41 at step 4). Set together by `approve_record_from` (`RecordApproval {series, preview, path, title, text, choice}`), replaced by a later one, kept by `reopen_from`. A deciding kind: `create`, `approve`, `approve_from` -> `Invalid`; `applied`, `applied_with` without its record -> `Invalid`. Corrupt, named: any on an update; set partly; `record_id` no ID; `record_path` not clean; `choice` of another shape or kind, or out of range; an `approved` or `applied` deciding row without them. Events `.approved`, `.applied` add `record`.
 
-- **Review document** (`get_proposal`): after `linked`, `record_id`, `record_path`, `record_title`, `record_text`, `choice` (an object), absent `null`; text: `record_text` a block, `choice` compact JSON; `--brief`: `record_text` `null`.
+- **Review document** (`get_proposal`): after `linked`, `record_id`, `record_path`, `record_title`, `record_text`, `choice` (an object), then `task_id`, absent `null`; text: `record_text` a block, `choice` compact JSON; `--brief`: `record_text` `null`.
 - **Inbox**: + `record_id`; an applied one's last column ends ` [<record_id>]`.
 - **Intake match**: + `record`: a corpus hit's `id:`; an applied queue hit's `record_id`, with `path` its `record_path` and `answer` its `record_title` (approved but stopped, or reopened: as asked).
 - **Backup**: `queue-backup.md`. **MCP**: `mirror.rs` mirrors the keys; three tool descriptions name `spec approve`. **Plugin** 0.1.3: `ask-owner` reads a hit's `record`.
@@ -97,4 +97,4 @@ Accepted at shipping (2026-10-06); none blocks (ADR-0012).
 - A record hand-written under the issued ID elsewhere: `id-taken` at merge. A foreign file taking a kept ID's `<dir>/<ID>.md` (a merge) refuses every approve `exists` for good: only reject.
 - A queue restored from before step 7 while the record's commit is in a readable history: neither approve nor reject takes it.
 - Free text with a refused character is only rejected; a path target meets its record in corpus dedup only if `canon:` lands on it.
-- The killed-run hint with the project root below its worktree's top is tried by hand only; the no-title exit 2 (an answer with no non-blank line) is unreachable past the intake caps, untested.
+- The killed-run hint with the project root below its worktree's top is tried by hand only; the no-title exit 2 is unreachable past the intake caps, untested.

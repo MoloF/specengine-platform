@@ -59,6 +59,16 @@ fn valid_args(tool: &str) -> Value {
             ],
             "recommendation": 0, "author_role": "writer"
         }),
+        // docs/features/task-package.md: the task tools.
+        "get_task" => json!({"task_id": "T-0001"}),
+        "claim_task" => json!({"task_id": "T-0001", "role": "developer", "worktree": "."}),
+        "submit_plan" => json!({
+            "task_id": "T-0001", "plan_md": "1. Do.", "criteria": [], "affected_nodes": []
+        }),
+        "report_run" => json!({
+            "task_id": "T-0001", "outcome": "completed", "summary": "Done.", "changed_files": []
+        }),
+        "complete_task" => json!({"task_id": "T-0001"}),
         other => panic!("no arguments for {other}"),
     }
 }

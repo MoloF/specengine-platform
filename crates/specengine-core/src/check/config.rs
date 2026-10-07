@@ -370,10 +370,11 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
             target.decision_bytes = value;
         }
         target.canon_bytes = cap("canon_bytes", budgets.canon_bytes)?;
-        // `spec bundle` reads it as a `u32` (`bundle_node_from_toml`): the
-        // gate accepts no value that every bundle would refuse.
+        // `spec bundle` and a task package read them as a `u32`
+        // (`bundle_node_from_toml`, `bundle_task_from_toml`): the gate
+        // accepts no value that every bundle would refuse.
         target.bundle_node = capped("bundle_node", budgets.bundle_node, u64::from(u32::MAX))?;
-        target.bundle_task = cap("bundle_task", budgets.bundle_task)?;
+        target.bundle_task = capped("bundle_task", budgets.bundle_task, u64::from(u32::MAX))?;
     }
 
     if let Some(classes) = raw.classes {
@@ -447,6 +448,11 @@ pub struct BundleNode {
     pub line: usize,
 }
 
+/// `[budgets] bundle_task` as a task package reads it
+/// (`docs/canon/task-package.md` "Package"): the budget of a task's bundle
+/// and the line of its value.
+pub type BundleTask = BundleNode;
+
 /// `[budgets] bundle_node` alone (task spec `spec-cli-bundle`), read from
 /// the whole `specengine.toml` text without judging any other table or key:
 /// a broken `[classes]`, `[check]` or another `[budgets]` key never stops
@@ -454,6 +460,17 @@ pub struct BundleNode {
 /// `budgets` is no table. A value that is no integer from 1 to `u32::MAX`
 /// is an error at its line.
 pub fn bundle_node_from_toml(text: &str) -> Result<Option<BundleNode>, ConfigError> {
+    budget_from_toml(text, "bundle_node")
+}
+
+/// `[budgets] bundle_task` alone, as narrow as [`bundle_node_from_toml`]:
+/// only that key is judged, from 1 to `u32::MAX`.
+pub fn bundle_task_from_toml(text: &str) -> Result<Option<BundleTask>, ConfigError> {
+    budget_from_toml(text, "bundle_task")
+}
+
+/// One `[budgets]` key of the two above.
+fn budget_from_toml(text: &str, key: &str) -> Result<Option<BundleNode>, ConfigError> {
     let error_at = |span: Option<Range<usize>>, message: String| ConfigError {
         line: span.map(|span| super::text::line_of_str(text, span.start)),
         message,
@@ -465,7 +482,11 @@ pub fn bundle_node_from_toml(text: &str) -> Result<Option<BundleNode>, ConfigErr
     }
     let narrow: NarrowFile = toml::from_str(text)
         .map_err(|error| error_at(error.span(), error.message().trim().to_owned()))?;
-    let Some(value) = narrow.budgets.and_then(|budgets| budgets.bundle_node) else {
+    let value = narrow.budgets.and_then(|budgets| match key {
+        "bundle_task" => budgets.bundle_task,
+        _ => budgets.bundle_node,
+    });
+    let Some(value) = value else {
         return Ok(None);
     };
     let span = value.span();
@@ -482,7 +503,7 @@ pub fn bundle_node_from_toml(text: &str) -> Result<Option<BundleNode>, ConfigErr
         None => Err(error_at(
             Some(span.clone()),
             format!(
-                "`[budgets] bundle_node` must be a whole number of tokens from 1 to {}, not {}",
+                "`[budgets] {key}` must be a whole number of tokens from 1 to {}, not {}",
                 u32::MAX,
                 text.get(span).unwrap_or_default().trim()
             ),
@@ -499,7 +520,7 @@ struct LooseFile {
 }
 
 /// The top level once `budgets` is known to be a table: only its
-/// `bundle_node`, with the span of its value.
+/// `bundle_node` and `bundle_task`, with the spans of their values.
 #[derive(Deserialize)]
 struct NarrowFile {
     #[serde(default)]
@@ -510,6 +531,8 @@ struct NarrowFile {
 struct NarrowBudgets {
     #[serde(default)]
     bundle_node: Option<Spanned<toml::Value>>,
+    #[serde(default)]
+    bundle_task: Option<Spanned<toml::Value>>,
 }
 
 /// The `[[generators]]` entries, checked: `command` present, not blank, a

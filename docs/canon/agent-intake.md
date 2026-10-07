@@ -12,7 +12,7 @@ Phase 2 slice 3: an agent proposes a change, asks a question or reports a discre
 
 ## Tools
 
-Default build, each one CLI library call with a twin, answering as `mcp-read.md` "Parity". `A` = `--author-role R [--author-model M] [--run ID]`, over MCP `author_role, author_model?, run?`.
+Default build, each one CLI library call with a twin, answering as `mcp-read.md` "Parity". `A` = `--author-role R [--author-model M] [--run ID]`, over MCP `author_role, author_model?, run?`; writers `task_id?` = `--task T` (`tasks.md`).
 
 | Tool | ≙ `spec` | Answer |
 |---|---|---|
@@ -85,6 +85,6 @@ The new fields go through `escape_controls` (text, prompts, stderr: inbox, revie
 
 ## Known limits
 
-An agent's Bash `spec propose` without `A` stores `human`; a subagent in a task worktree binds to the session's tree (ADR-0032); a cancelled MCP write still stores (a repeat gets the hit); a scratch-`HOME` launcher (`fixtures/mcp/mcp.json`) hides its items from the owner's inbox; no dedup for `update`; rows by a path and by its later `id:` stay apart.
+An agent's Bash `spec propose` without `A` stores `human`; a subagent in a task worktree binds to the session's tree (ADR-0032); a cancelled MCP write still stores (a repeat gets the hit); a scratch-`HOME` launcher hides its items from the owner's inbox; no dedup for `update`; rows by a path and by its later `id:` stay apart.
 
-- **Unnameable hits**: over 64, or one whose path is over 256 bytes or holds a control character (listed; `distinct_from[i]` refuses it, the agent's only sign): the item is never stored. `unnameable` counts hit documents, not names: two accepted decisions sharing an ID (a `spec check` error) may read "cannot be stored" though naming the 64 names stores it. The note joins names with `, `: a path holding `, ` does not split back.
+- **Unnameable hits**: over 64, or one whose path is over 256 bytes or holds a control character (listed; `distinct_from[i]` refuses it, the agent's only sign): the item is never stored. `unnameable` counts hit documents, not names: two accepted decisions sharing an ID may read "cannot be stored" though naming them stores it. The note joins names with `, `: a path holding `, ` does not split back.

@@ -4,9 +4,10 @@
 //! report); stderr carries `note:`, `warning:` and error lines. No colour,
 //! no timing.
 //!
-//! The one check that stays here: `spec approve`, `spec reject` and `spec
-//! import-state` run only when stdin is a terminal (else exit 2, nothing
-//! read or logged, `import-state`'s file not opened); the
+//! The one check that stays here: `spec approve`, `spec reject`, `spec
+//! import-state` and the owner's `spec task approve|changes|cancel` run only
+//! when stdin is a terminal (else exit 2, nothing read or logged,
+//! `import-state`'s file not opened); the
 //! library asks its question through a callback, which prints it on stderr
 //! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
 //! (`now`, UTC) and the process's variables for git are passed in as well.
@@ -24,7 +25,9 @@ use specengine_cli::{
     GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText,
     QuestionRequest, RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES,
-    TreeRequest, render_json, render_text,
+    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -196,11 +199,121 @@ enum Command {
         #[arg(long, value_name = "T")]
         reason: String,
     },
-    /// Restore a dump written by `export state` into the project's empty proposal queue, rows as stored; asks for consent on the terminal.
+    /// Restore a dump written by `export state` into the project's empty queue, rows as stored; asks for consent on the terminal.
     ImportState {
         /// The dump, relative to the current directory.
         #[arg(value_name = "FILE")]
         file: PathBuf,
+    },
+    /// Work on the project's tasks: only the owner moves one to `ready` (approve, on a terminal); an agent reads its package, plans, claims, reports and completes it.
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum TaskCommand {
+    /// Make a `draft` task on nodes of the spec.
+    New {
+        /// The nodes it works on, each an ID, `slug/ID` or a root-relative `.md` path: 1 to 64.
+        #[arg(long = "nodes", required = true, num_args = 1.., value_name = "REF")]
+        nodes: Vec<String>,
+        /// A title, at most 256 bytes.
+        #[arg(long, value_name = "T")]
+        title: Option<String>,
+        /// The goal, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        goal: Option<String>,
+        /// The making agent's role (any of the three: an agent's task).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The making agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The making agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+    },
+    /// Print a task's brief (`--json`: its package): goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, bundle.
+    Show {
+        #[arg(
+            value_name = "T",
+            required_unless_present = "next",
+            conflicts_with = "next"
+        )]
+        id: Option<String>,
+        /// The lowest-numbered `ready` task of this repository.
+        #[arg(long)]
+        next: bool,
+    },
+    /// List this repository's tasks by number.
+    List {
+        /// Only tasks in this state (repeatable).
+        #[arg(long = "status", value_name = "S", value_parser = PossibleValuesParser::new(TaskStatus::ALL.map(TaskStatus::as_str)))]
+        statuses: Vec<String>,
+    },
+    /// The owner's approval: freeze the task's nodes from the files of this worktree and make it `ready`; asks for consent on the terminal.
+    Approve {
+        #[arg(value_name = "T")]
+        id: String,
+    },
+    /// The owner sends a planned task back with a note; asks for consent on the terminal.
+    Changes {
+        #[arg(value_name = "T")]
+        id: String,
+        /// What the plan must change, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        note: String,
+    },
+    /// The owner cancels a task not done yet; its proposals stay; asks for consent on the terminal.
+    Cancel {
+        #[arg(value_name = "T")]
+        id: String,
+    },
+    /// Submit a plan for the owner's review.
+    Plan {
+        #[arg(value_name = "T")]
+        id: String,
+        /// The plan (Markdown): a file, or `-` for stdin; at most 16384 bytes.
+        #[arg(long = "plan-file", value_name = "F")]
+        plan_file: PathBuf,
+        /// A criterion: one reference (an ID, `slug/ID`, a `.md` path) or free text (repeatable, at most 32).
+        #[arg(long = "criterion", value_name = "C")]
+        criteria: Vec<String>,
+        /// A node the work also touches (repeatable, at most 64).
+        #[arg(long = "affected", value_name = "REF")]
+        affected: Vec<String>,
+    },
+    /// Claim a `ready` task in a worktree of this repository: a run opens.
+    Claim {
+        #[arg(value_name = "T")]
+        id: String,
+        /// The project's own role name.
+        #[arg(long, value_name = "R")]
+        role: String,
+        /// The worktree the work happens in, on a branch.
+        #[arg(long, value_name = "DIR")]
+        worktree: PathBuf,
+    },
+    /// Close the task's open run with its outcome; the state is kept.
+    Report {
+        #[arg(value_name = "T")]
+        id: String,
+        /// completed, partial, failed or abandoned.
+        #[arg(long, value_name = "O")]
+        outcome: String,
+        /// What the run did, at most 4096 bytes.
+        #[arg(long, value_name = "S")]
+        summary: String,
+        /// A file the run changed (repeatable, at most 256).
+        #[arg(long = "changed", value_name = "FILE")]
+        changed: Vec<String>,
+    },
+    /// Complete a task whose run is reported: `done`.
+    Complete {
+        #[arg(value_name = "T")]
+        id: String,
     },
 }
 
@@ -232,6 +345,9 @@ enum Propose {
         /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
         #[arg(long)]
         brief: bool,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
     },
     /// Add a node: a new spec file at a free `.md` path (no --base), or new `{#ID}` sections below node TARGET (--base its span hash, the text its span with the sections added); the proposer names each new ID.
     Create {
@@ -259,6 +375,9 @@ enum Propose {
         /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
         #[arg(long)]
         brief: bool,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
     },
     /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question already answers it.
     Question {
@@ -289,6 +408,9 @@ enum Propose {
         /// The asking agent's run.
         #[arg(long, value_name = "ID")]
         run: Option<String>,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
     },
     /// Report a discrepancy between the spec and what was observed, with evidence and priced options; stored in the queue unless an accepted decision or a queued report already covers it.
     Discrepancy {
@@ -304,6 +426,9 @@ enum Propose {
         /// The reporting agent's run.
         #[arg(long, value_name = "ID")]
         run: Option<String>,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
     },
 }
 
@@ -500,6 +625,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_model,
                     run,
                     brief,
+                    task,
                 },
         } => {
             let text = if text_file.as_os_str() == "-" {
@@ -518,10 +644,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 now: now(),
                 git: process_git(env),
             };
+            let task = task.as_deref();
             Outcome::Proposal(Box::new(if brief {
-                specengine_cli::propose_brief(env, globals, &request)?
+                specengine_cli::propose_brief_with_task(env, globals, &request, task)?
             } else {
-                specengine_cli::propose(env, globals, &request)?
+                specengine_cli::propose_with_task(env, globals, &request, task)?
             }))
         }
         Command::Propose {
@@ -535,6 +662,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_model,
                     run,
                     brief,
+                    task,
                 },
         } => {
             let text = if text_file.as_os_str() == "-" {
@@ -553,10 +681,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 now: now(),
                 git: process_git(env),
             };
+            let task = task.as_deref();
             Outcome::Proposal(Box::new(if brief {
-                specengine_cli::propose_create_brief(env, globals, &request)?
+                specengine_cli::propose_create_brief_with_task(env, globals, &request, task)?
             } else {
-                specengine_cli::propose_create(env, globals, &request)?
+                specengine_cli::propose_create_with_task(env, globals, &request, task)?
             }))
         }
         Command::Propose {
@@ -571,8 +700,9 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_role,
                     author_model,
                     run,
+                    task,
                 },
-        } => Outcome::Intake(Box::new(specengine_cli::propose_question(
+        } => Outcome::Intake(Box::new(specengine_cli::propose_question_with_task(
             env,
             globals,
             &QuestionRequest {
@@ -589,6 +719,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 now: now(),
                 git: process_git(env),
             },
+            task.as_deref(),
         )?)),
         Command::Propose {
             kind:
@@ -597,6 +728,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_role,
                     author_model,
                     run,
+                    task,
                 },
         } => {
             let source = if input.as_os_str() == "-" {
@@ -605,7 +737,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 IntakeSource::File(input)
             };
             let input = specengine_cli::read_discrepancy_input(env, &source)?;
-            Outcome::Intake(Box::new(specengine_cli::propose_discrepancy(
+            Outcome::Intake(Box::new(specengine_cli::propose_discrepancy_with_task(
                 env,
                 globals,
                 &DiscrepancyRequest {
@@ -616,6 +748,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     now: now(),
                     git: process_git(env),
                 },
+                task.as_deref(),
             )?))
         }
         Command::Inbox { all } => Outcome::Inbox(specengine_cli::inbox(
@@ -688,7 +821,160 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &mut consent,
             )?)
         }
+        Command::Task { command } => run_task(env, globals, command)?,
     })
+}
+
+/// `spec task …`; the owner's three run only on a terminal.
+fn run_task(env: &Env, globals: &Globals, command: TaskCommand) -> Result<Outcome, CliError> {
+    let task = |outcome| Ok(Outcome::Task(Box::new(outcome)));
+    match command {
+        TaskCommand::New {
+            nodes,
+            title,
+            goal,
+            author_role,
+            author_model,
+            run,
+        } => task(specengine_cli::task_new(
+            env,
+            globals,
+            &TaskNewRequest {
+                nodes,
+                title,
+                goal,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            },
+        )?),
+        TaskCommand::Show { id, next } => {
+            Ok(Outcome::TaskShow(Box::new(specengine_cli::task_show(
+                env,
+                globals,
+                &TaskShowRequest {
+                    id,
+                    next,
+                    git: process_git(env),
+                },
+            )?)))
+        }
+        TaskCommand::List { statuses } => Ok(Outcome::TaskList(specengine_cli::task_list(
+            env,
+            globals,
+            &TaskListRequest {
+                // clap took only listed states.
+                statuses: statuses
+                    .iter()
+                    .filter_map(|status| TaskStatus::parse(status))
+                    .collect(),
+                git: process_git(env),
+            },
+        )?)),
+        TaskCommand::Approve { id } => {
+            require_terminal("task approve")?;
+            let mut consent = ask;
+            task(specengine_cli::task_approve(
+                env,
+                globals,
+                &decision(env, id, None),
+                &mut consent,
+            )?)
+        }
+        TaskCommand::Changes { id, note } => {
+            require_terminal("task changes")?;
+            let mut consent = ask;
+            task(specengine_cli::task_changes(
+                env,
+                globals,
+                &decision(env, id, Some(note)),
+                &mut consent,
+            )?)
+        }
+        TaskCommand::Cancel { id } => {
+            require_terminal("task cancel")?;
+            let mut consent = ask;
+            task(specengine_cli::task_cancel(
+                env,
+                globals,
+                &decision(env, id, None),
+                &mut consent,
+            )?)
+        }
+        TaskCommand::Plan {
+            id,
+            plan_file,
+            criteria,
+            affected,
+        } => {
+            let plan = if plan_file.as_os_str() == "-" {
+                ProposedText::Given(read_stdin(TEXT_MAX_BYTES, "the plan")?)
+            } else {
+                ProposedText::File(plan_file)
+            };
+            task(specengine_cli::task_plan(
+                env,
+                globals,
+                &TaskPlanRequest {
+                    id,
+                    plan,
+                    criteria,
+                    affected,
+                    now: now(),
+                    git: process_git(env),
+                },
+            )?)
+        }
+        TaskCommand::Claim { id, role, worktree } => task(specengine_cli::task_claim(
+            env,
+            globals,
+            &TaskClaimRequest {
+                id,
+                role,
+                worktree,
+                now: now(),
+                git: process_git(env),
+            },
+        )?),
+        TaskCommand::Report {
+            id,
+            outcome,
+            summary,
+            changed,
+        } => task(specengine_cli::task_report(
+            env,
+            globals,
+            &TaskReportRequest {
+                id,
+                outcome,
+                summary,
+                changed_files: changed,
+                now: now(),
+                git: process_git(env),
+            },
+        )?),
+        TaskCommand::Complete { id } => task(specengine_cli::task_complete(
+            env,
+            globals,
+            &TaskCompleteRequest {
+                id,
+                now: now(),
+                git: process_git(env),
+            },
+        )?),
+    }
+}
+
+/// An owner's task request.
+fn decision(env: &Env, id: String, note: Option<String>) -> TaskDecisionRequest {
+    TaskDecisionRequest {
+        id,
+        note,
+        now: now(),
+        git: process_git(env),
+    }
 }
 
 /// The process's directory and variables, for git (the library drops the
@@ -716,9 +1002,10 @@ fn read_stdin(max: usize, what: &str) -> Result<Vec<u8>, CliError> {
     Ok(bytes)
 }
 
-/// `spec approve`, `spec reject` and `spec import-state` decide on a
-/// terminal only: a stdin that is no terminal (a pipe, an agent's shell)
-/// exits 2 before anything is read or logged.
+/// `spec approve`, `spec reject`, `spec import-state` and the owner's `spec
+/// task approve|changes|cancel` decide on a terminal only: a stdin that is
+/// no terminal (a pipe, an agent's shell) exits 2 before anything is read
+/// or logged.
 fn require_terminal(command: &str) -> Result<(), CliError> {
     if std::io::stdin().is_terminal() {
         return Ok(());

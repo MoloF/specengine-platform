@@ -103,6 +103,7 @@ mod init;
 mod intake;
 mod links;
 mod location;
+mod package;
 mod preflight;
 mod project;
 mod proposals;
@@ -113,6 +114,7 @@ mod search;
 mod show;
 mod state;
 mod state_file;
+mod task;
 mod tree;
 
 use std::ffi::OsString;
@@ -129,7 +131,10 @@ pub use bundle::{
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use corpus::LeftOut;
-pub use create::{CreateRequest, propose_create, propose_create_brief};
+pub use create::{
+    CreateRequest, propose_create, propose_create_brief, propose_create_brief_with_task,
+    propose_create_with_task,
+};
 pub use documents::{DocumentEntry, documents};
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
@@ -141,7 +146,8 @@ pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use intake::{
     DiscrepancyRequest, INTAKE_INPUT_MAX_BYTES, INTAKE_MATCHES_MAX, IntakeDocument, IntakeMatch,
     IntakeOutcome, IntakeSource, MatchSource, QuestionRequest, propose_discrepancy,
-    propose_question, read_discrepancy_input,
+    propose_discrepancy_with_task, propose_question, propose_question_with_task,
+    read_discrepancy_input,
 };
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, data_dir, db_path, open_index};
@@ -149,7 +155,10 @@ pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
 pub use proposals::{Preview, ProposalDocument, ProposalOutcome, QueueCommand};
-pub use propose::{ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief};
+pub use propose::{
+    ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief, propose_brief_with_task,
+    propose_with_task,
+};
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use review::{ReviewRequest, review, review_brief};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search, search_with_view};
@@ -165,6 +174,14 @@ pub use specengine_core::intake::{
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;
+/// The task's caps and the outcomes a run reports (core's).
+pub use specengine_core::task::{
+    AFFECTED_MAX, CHANGED_FILE_MAX, CHANGED_FILES_MAX, CRITERIA_MAX, CRITERION_MAX,
+    CRITERION_TEXT_MAX, DEFAULT_TASK_BUDGET, DIFF_MAX, DIFFS_TOTAL_MAX, GOAL_MAX, NODES_MAX,
+    NOTE_MAX, PACKAGE_BUDGET, PLAN_MAX, RUN_SUMMARY_MAX, SNAPSHOT_MAX, TITLE_MAX,
+};
+/// The task package and its parts (the model's), for the bridges.
+pub use specengine_model::{RunOutcome, TaskPackage, TaskStatus};
 /// The caller's git environment a queue request carries.
 pub use specengine_store::GitEnv;
 /// `search`'s `--limit` bounds and default, its shortest term (the store's).
@@ -178,6 +195,12 @@ pub use state::{
     import_state,
 };
 pub use state_file::STATE_FORMAT;
+pub use task::{
+    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry, TaskListOutcome,
+    TaskListRequest, TaskNewRequest, TaskOutcome, TaskPlanRequest, TaskReportRequest,
+    TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
+    task_complete, task_list, task_new, task_plan, task_report, task_show,
+};
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
@@ -325,6 +348,12 @@ pub enum Outcome {
     StateExport(ExportStateOutcome),
     /// `import-state`: the rows restored, or the owner's refusal.
     StateImport(ImportStateOutcome),
+    /// `task new|plan|approve|changes|claim|report|complete|cancel`.
+    Task(Box<TaskOutcome>),
+    /// `task show`: the package.
+    TaskShow(Box<TaskShowOutcome>),
+    /// `task list`.
+    TaskList(TaskListOutcome),
 }
 
 impl Outcome {
@@ -341,6 +370,8 @@ impl Outcome {
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
             Self::StateImport(import) => import.exit(),
+            Self::Task(task) => task.exit(),
+            Self::TaskShow(show) => show.exit(),
             _ => Exit::Answered,
         }
     }
@@ -364,6 +395,9 @@ impl Outcome {
             Self::Inbox(outcome) => (&outcome.messages, None),
             Self::StateExport(outcome) => (&outcome.messages, None),
             Self::StateImport(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Task(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::TaskShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::TaskList(outcome) => (&outcome.messages, None),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -377,6 +411,9 @@ impl Outcome {
                 | Self::Inbox(_)
                 | Self::StateExport(_)
                 | Self::StateImport(_)
+                | Self::Task(_)
+                | Self::TaskShow(_)
+                | Self::TaskList(_)
         ) {
             for line in &mut lines {
                 *line = escape_controls(line);
@@ -403,6 +440,9 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Inbox(outcome) => inbox::render_text(outcome),
         Outcome::StateExport(outcome) => state::render_export_text(outcome),
         Outcome::StateImport(outcome) => state::render_import_text(outcome),
+        Outcome::Task(outcome) => task::render_text(outcome),
+        Outcome::TaskShow(outcome) => task::render_show_text(outcome),
+        Outcome::TaskList(outcome) => task::render_list_text(outcome),
     }
 }
 
@@ -425,6 +465,9 @@ impl serde::Serialize for Outcome {
             Self::Inbox(outcome) => outcome.serialize(serializer),
             Self::StateExport(outcome) => outcome.serialize(serializer),
             Self::StateImport(outcome) => outcome.serialize(serializer),
+            Self::Task(outcome) => outcome.serialize(serializer),
+            Self::TaskShow(outcome) => outcome.serialize(serializer),
+            Self::TaskList(outcome) => outcome.serialize(serializer),
         }
     }
 }

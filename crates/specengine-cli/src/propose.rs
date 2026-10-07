@@ -26,7 +26,9 @@
 //!
 //! A bare ID of a `scope = "feature"` prefix found in a feature document is
 //! stored as `slug/ID`, the form a later apply resolves alike. The answer
-//! is the proposal's review document.
+//! is the proposal's review document. `--task T` binds it to a task of this
+//! repository (canon `tasks`, "Task-bound proposals"): checked once the
+//! place is bound, and again inside the inserting transaction (exit 1).
 
 use std::fs;
 use std::io::Read as _;
@@ -44,7 +46,7 @@ use specengine_core::proposal::Author;
 use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative};
 use specengine_model::{IdScheme, IdScope, IdScript, ParsedFile, Reference, Span, grammar};
 use specengine_store::{
-    GitEnv, NamedBytes, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _,
+    GitEnv, NamedBytes, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _, QueueError,
     Source as _, WorkingTree, default_baseline, introduced_findings, load_check, patch_hash,
     span_hash, update_file,
 };
@@ -57,6 +59,7 @@ use crate::proposals::{
 };
 use crate::review::previewed;
 use crate::show::{latin_fix, no_reference, not_indexed, project_qualified, unclean_path};
+use crate::task::bound_task;
 use crate::{CliError, Env, Globals, Message, store_error};
 
 /// The most bytes of a proposed text (core's).
@@ -101,7 +104,7 @@ pub fn propose(
     globals: &Globals,
     request: &ProposeRequest,
 ) -> Result<ProposalOutcome, CliError> {
-    run_propose(env, globals, request).map_err(escaped_error)
+    propose_with_task(env, globals, request, None)
 }
 
 /// `spec propose update --brief` (MCP `propose_change`): [`propose`], its
@@ -115,10 +118,31 @@ pub fn propose_brief(
     propose(env, globals, request).map(briefed)
 }
 
+/// [`propose`] with `--task T` (`task`, as written): bound to that task.
+pub fn propose_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &ProposeRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    run_propose(env, globals, request, task).map_err(escaped_error)
+}
+
+/// [`propose_brief`] with `--task T`.
+pub fn propose_brief_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &ProposeRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    propose_with_task(env, globals, request, task).map(briefed)
+}
+
 fn run_propose(
     env: &Env,
     globals: &Globals,
     request: &ProposeRequest,
+    task: Option<&str>,
 ) -> Result<ProposalOutcome, CliError> {
     let now = checked_now(&request.now)?;
     // An author field outside its grammar exits 2, named as the intake
@@ -152,6 +176,13 @@ fn run_propose(
             messages,
         ))
     };
+    let task = match task {
+        Some(written) => match bound_task(&context, written, &place)? {
+            Ok(id) => Some(id),
+            Err(reason) => return refuse(reason, messages),
+        },
+        None => None,
+    };
     let text = match read_text(env, &request.text)? {
         Ok(text) => text,
         Err(reason) => return refuse(reason, messages),
@@ -182,14 +213,19 @@ fn run_propose(
         Err(reason) => return refuse(reason, messages),
     };
 
-    // 5. Stored, bound to the place found first.
-    let created = context
-        .queue
-        .create(
-            &checked.new_proposal(place, &request.rationale, author),
-            now,
-        )
-        .map_err(queue_cannot)?;
+    // 5. Stored, bound to the place found first (and to its task, checked
+    // again under the write lock).
+    let created = match context.queue.create_with_task(
+        &checked.new_proposal(place, &request.rationale, author),
+        task.as_deref(),
+        now,
+    ) {
+        Ok(created) => created,
+        Err(QueueError::TaskRefused { reason, .. }) => {
+            return refuse(format!("--task: {reason}"), messages);
+        }
+        Err(error) => return Err(queue_cannot(error)),
+    };
     let document = previewed(env, &request.git, &context, &created, &mut messages);
     Ok(ProposalOutcome::done(
         QueueCommand::Propose,

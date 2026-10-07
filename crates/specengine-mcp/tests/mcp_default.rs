@@ -3,11 +3,13 @@
 //! protocol eras — the four read tools and, since task spec `agent-intake`
 //! (AC-02, "Tools"), `get_proposal` (read-only too) and the three queue
 //! writers (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
-//! `openWorldHint` all `false`, no `requiresUserInteraction`) — each with
+//! `openWorldHint` all `false`, no `requiresUserInteraction`), and since
+//! docs/features/task-package.md `get_task` (read-only) and the four tools
+//! that move a task (writers' hints) — each with
 //! an `outputSchema`, `_meta["anthropic/maxResultSizeChars"]` =
 //! `MAX_RESULT_CHARS` and a description of at most 2 048 characters holding
 //! the determinism sentence; `instructions` are at most 2 048 bytes, name
-//! the eight and mention neither `review_proposal` nor a probe. The probe
+//! all thirteen and mention neither `review_proposal` nor a probe. The probe
 //! tools are absent (Phase 0 behaviour kept), and `probes` is no default
 //! feature of the manifest.
 //!
@@ -26,7 +28,7 @@ use common::*;
 
 #[cfg(not(feature = "probes"))]
 mod default_build {
-    use super::common::read::{ERAS, Era, READ_TOOLS, Session, TOOLS, WRITE_TOOLS};
+    use super::common::read::{ERAS, Era, READ_TOOLS, Session, TASK_TOOLS, TOOLS, WRITE_TOOLS};
     use super::common::*;
     use serde_json::{Value, json};
 
@@ -34,7 +36,8 @@ mod default_build {
 
     fn assert_tool(tool: &Value, era: Era) {
         let name = tool["name"].as_str().expect("name");
-        let annotations = if WRITE_TOOLS.contains(&name) {
+        let moves_a_task = TASK_TOOLS.contains(&name) && name != "get_task";
+        let annotations = if WRITE_TOOLS.contains(&name) || moves_a_task {
             json!({
                 "readOnlyHint": false,
                 "destructiveHint": false,

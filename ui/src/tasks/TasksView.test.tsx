@@ -7,6 +7,7 @@ import { sectionHash } from "../app/routes";
 import { aTaskEntry, aTaskPackage, aTaskProposal, aTaskRun } from "../test/builders";
 import { renderApp } from "../test/render";
 import { SOME_TASKS, taskClient } from "../test/taskStub";
+import { NO_DIFF_NOTICE, TOTAL_CUT_NOTICE } from "./SpecChangesPanel";
 
 // docs/features/ui-tasks.md on a stub client: AC-01 (what a route reads), AC-03 (an unknown state
 // in the DOM), AC-05 (filters), AC-07 (text, now rendered by ui-markdown; links), AC-09 (commands and Copy), AC-10
@@ -349,6 +350,51 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     }
     expect(panel.querySelector('.snapshot-diff[data-node="R-1"] .plain-tag')).toBeNull();
     expect(screen.getByRole("figure", { name: "Changes to R-GONE since approval" })).toBeTruthy();
+  });
+
+  it("puts a quiet line in place of a diff the package left out, never an empty diff (task-package Data)", async () => {
+    const nodes = ["R-1", "R-2", "R-3"].map((id) => ({ id, path: `docs/spec/${id.toLowerCase()}.md`, span_hash: `b3:${id}` }));
+    const [sent, past, none] = nodes;
+    if (sent === undefined || past === undefined || none === undefined) {
+      throw new Error("three nodes");
+    }
+    await openTask(
+      aTaskPackage({
+        id: "T-0045",
+        status: "ready",
+        stale: true,
+        spec_snapshot: { at: "2026-10-01T09:30:00Z", place: { worktree: "/work/alpha", root_rel: "", branch: "main", commit: "c0ffee" }, nodes },
+        snapshot_diff: [
+          { ...sent, diff: "--- snapshot docs/spec/r-1.md\n+++ current docs/spec/r-1.md\n@@ -1 +1 @@\n-old\n+new\n", cut: false },
+          { ...past, diff: null, cut: true },
+          { ...none, diff: null, cut: false },
+        ],
+        notes: ["snapshot_diff: 1 diff(s) past 262144 B left out"],
+      }),
+    );
+    showTab(/^Spec changes/);
+    const panel = screen.getByRole("tabpanel");
+    const entry = (id: string) => panel.querySelector(`.snapshot-diff[data-node="${id}"]`);
+    expect(Array.from(panel.querySelectorAll(".snapshot-diff"), (item) => item.getAttribute("data-node"))).toEqual(["R-1", "R-2", "R-3"]);
+    expect(within(panel).getAllByRole("figure").map((figure) => figure.getAttribute("aria-label"))).toEqual(["Changes to R-1 since approval"]);
+    expect(within(panel).queryByText("No section diff attached.")).toBeNull();
+    expect(entry("R-1")?.querySelector(".cut-note")).toBeNull();
+    for (const [id, notice] of [["R-2", TOTAL_CUT_NOTICE], ["R-3", NO_DIFF_NOTICE]] as const) {
+      const shown = entry(id);
+      expect([id, shown?.querySelector(".diff"), shown?.querySelector(".cut-note")?.textContent]).toEqual([id, null, notice]);
+      expect(shown?.querySelector(".snapshot-diff-head a")?.getAttribute("href")).toBe(sectionHash("alpha", "tree", id));
+      expect(shown?.querySelector(".snapshot-diff-head .mono.muted")?.textContent).toBe(`docs/spec/${id.toLowerCase()}.md`);
+      expect(shown?.querySelector(".plain-tag")).toBeNull();
+    }
+    expect(screen.getByRole("tab", { name: /^Spec changes/ }).textContent).toContain("3");
+  });
+
+  it("lists a task's proposal with no summary by its head alone (task-package Data)", async () => {
+    await openTask(aTaskPackage({ id: "T-0046", status: "ready", open_proposals: [aTaskProposal({ id: "PR-0008", task_id: "T-0046", summary: null })] }));
+    showTab(/^Proposals/);
+    const item = screen.getByRole("tabpanel").querySelector(".task-proposal");
+    expect(item?.querySelector(".task-proposal-head a")?.textContent).toBe("PR-0008");
+    expect(item?.querySelector(".task-proposal-summary")).toBeNull();
   });
 
   it("shows hostile title, note and role as text, never as markup", async () => {

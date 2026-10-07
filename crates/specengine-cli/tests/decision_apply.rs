@@ -1310,10 +1310,11 @@ fn assert_columns(line: &str, columns: &[&str]) {
 }
 
 /// AC-12, the backup half (the tools' half: `specengine-mcp`'s
-/// `mcp_decision.rs`): a decided item exported (`queue_schema` 3, each row
-/// the 40 columns in table order, the record's five as stored) and
-/// imported fresh: `dump()` equal, the re-export byte-identical. M: a
-/// column missing.
+/// `mcp_decision.rs`): a decided item exported (format 2, `queue_schema` 4
+/// since docs/features/task-package.md, each row the 41 columns in table
+/// order, the record's five as stored, `task_id` `null`) and imported
+/// fresh: `dump()` equal, the re-export byte-identical. M: a column
+/// missing.
 #[test]
 fn ac12_a_decided_item_round_trips_through_a_backup() {
     let pair = Pair::new("da-ac12", "spec-a");
@@ -1333,13 +1334,14 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let lines = dump_lines(&bytes);
     assert!(
         lines[0].starts_with(
-            "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":3,"
+            "{\"format\":2,\"queue_schema\":4,\"project\":\"lantern-keep\",\"proposals\":3,\
+             \"tasks\":0,\"runs\":0,"
         ),
         "{}",
         lines[0]
     );
     let columns = specengine_store::PROPOSAL_COLUMNS;
-    assert_eq!(columns.len(), 40);
+    assert_eq!(columns.len(), 41);
     for line in &lines[1..4] {
         assert_columns(line, &columns);
     }
@@ -1353,6 +1355,7 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
         json!(read_text(&pair.linked, &dec_path("DEC-0024")))
     );
     assert_eq!(row["choice"], json!("{\"option\":1}"));
+    assert!(row["task_id"].is_null(), "unbound: {row}");
     for line in &lines[2..4] {
         let row: Value = serde_json::from_str(line).unwrap();
         for column in &columns[35..] {
@@ -1380,12 +1383,14 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     assert_eq!(restored, pair.proposal(&id));
 }
 
-/// AC-12: a schema-2 dump (its 35 columns) restores, the five record
-/// columns `NULL`, and re-exports byte-identical as schema 3 (a schema-1
-/// dump: `intake_state.rs`, re-exported as 3 too); a schema-2 row carrying
-/// the record columns is refused naming its line; a database still at
-/// schema 2 exports as 3 unmigrated, and the first queue command steps it
-/// to `user_version` 3, its rows kept. M: a column missing.
+/// AC-12: a format-1 schema-2 dump (its 35 columns) restores, the five
+/// record columns and `task_id` `NULL`, and re-exports byte-identical as
+/// the current export (format 2, schema 4: docs/features/task-package.md
+/// "Backup"; a schema-1 dump: `intake_state.rs`, re-exported as 4 too); a
+/// schema-2 row carrying the later columns is refused naming its line; a
+/// database still at schema 2 (no `tasks`, `runs`, `task_id` either)
+/// exports as 4 unmigrated, and the first queue command steps it to
+/// `user_version` 4, its rows kept. M: a column missing.
 #[test]
 fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     let pair = Pair::new("da-ac12-old", "spec-a");
@@ -1403,9 +1408,20 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     let v3_lines = dump_lines(&v3);
     let before = dump_at(&pair, &pair.home);
     let record_nulls = ",\"record_id\":null,\"record_path\":null,\"record_title\":null,\
-\"record_text\":null,\"choice\":null}}";
+\"record_text\":null,\"choice\":null,\"task_id\":null}}";
     let mut v2_lines = v3_lines.clone();
-    v2_lines[0] = v2_lines[0].replacen("\"queue_schema\":3,", "\"queue_schema\":2,", 1);
+    assert!(
+        v2_lines[0].starts_with("{\"format\":2,\"queue_schema\":4,"),
+        "{}",
+        v2_lines[0]
+    );
+    v2_lines[0] = v2_lines[0]
+        .replacen(
+            "\"format\":2,\"queue_schema\":4,",
+            "\"format\":1,\"queue_schema\":2,",
+            1,
+        )
+        .replacen("\"tasks\":0,\"runs\":0,", "", 1);
     for line in &mut v2_lines[1..3] {
         assert!(line.ends_with(record_nulls), "{line}");
         *line = format!("{}}}}}", &line[..line.len() - record_nulls.len()]);
@@ -1420,7 +1436,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     assert_eq!(
         export(&pair, &home, &dumps.join("v2-again.jsonl")),
         v3,
-        "re-exported as queue_schema 3"
+        "re-exported as format 2, queue_schema 4"
     );
     // A schema-2 row with the record columns.
     let mut mixed = v2_lines.clone();
@@ -1439,12 +1455,15 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         .iter()
         .map(|column| format!("ALTER TABLE proposals DROP COLUMN {column};"))
         .collect();
-    pair.sql(&format!("{} PRAGMA user_version = 2;", drops.join(" ")));
+    pair.sql(&format!(
+        "{} DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 2;",
+        drops.join(" ")
+    ));
     assert_eq!(pair.sql("PRAGMA user_version;").trim(), "2");
     assert_eq!(
         export(&pair, &pair.home, &dumps.join("from-v2.jsonl")),
         v3,
-        "a version-2 DB exports as queue_schema 3"
+        "a version-2 DB exports as format 2, queue_schema 4"
     );
     assert_eq!(
         pair.sql("PRAGMA user_version;").trim(),
@@ -1452,13 +1471,13 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         "export steps nothing"
     );
     pair.inbox(&pair.main, true).expect("inbox");
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "3");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "4");
     assert_eq!(
         pair.sql("SELECT name FROM pragma_table_info('proposals');")
             .lines()
             .collect::<Vec<_>>(),
         specengine_store::PROPOSAL_COLUMNS,
-        "step 3 appends the five in order"
+        "steps 3 and 4 append the five and `task_id` in order"
     );
     assert_eq!(dump_at(&pair, &pair.home), before, "rows kept");
 }

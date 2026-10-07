@@ -42,8 +42,9 @@ use git::Sandbox;
 use specengine_core::proposal::Author;
 use specengine_store::{
     EVENT_COLUMNS, GitEnv, GitError, ListedWorktree, NewProposal, PROPOSAL_COLUMNS, Place,
-    ProposalKind, ProposalQueue as _, QueueCounts, QueueError, Restore, SqliteQueue, StoredEvent,
-    StoredProposal, StoredQueue, WorktreeGit, patch_hash,
+    ProposalKind, ProposalQueue as _, QueueCounts, QueueError, RUN_COLUMNS, Restore, SqliteQueue,
+    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, WorktreeGit,
+    patch_hash,
 };
 
 const T0: &str = "2026-10-05T21:14:03Z";
@@ -121,6 +122,26 @@ fn seqs(state: &StoredQueue) -> Vec<i64> {
     state.events.iter().map(|row| row.seq).collect()
 }
 
+/// `sqlite3 <db> <sql>`, which must succeed: its stdout.
+fn sqlite3_out(db: &Path, sql: &str) -> String {
+    let client = ["/usr/bin/sqlite3", "/bin/sqlite3", "/usr/local/bin/sqlite3"]
+        .into_iter()
+        .find(|candidate| Path::new(candidate).exists())
+        .expect("a sqlite3 client");
+    let output = Command::new(client)
+        .arg(db)
+        .arg(sql)
+        .stdin(Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(
+        output.status.success(),
+        "sqlite3 {sql}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
 /// `sqlite3 <db> <sql>`, which must succeed.
 fn sqlite3(db: &Path, sql: &str) {
     let client = ["/usr/bin/sqlite3", "/bin/sqlite3", "/usr/local/bin/sqlite3"]
@@ -162,8 +183,29 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
     for (slot, column) in named.columns.iter_mut().zip(&EVENT_COLUMNS[1..]) {
         *slot = Some((*column).to_owned());
     }
+    // Queue schema 4 (docs/features/task-package.md "Data"): `tasks`, all
+    // `TEXT`, and `runs`, `run` its one `INTEGER`, after `task_id`; the
+    // task row's `project` is the handle's (a restore refuses another's),
+    // the run's `task_id` that task's `id`.
+    let mut task = StoredTask {
+        columns: std::array::from_fn(|_| None),
+    };
+    for (slot, column) in task.columns.iter_mut().zip(TASK_COLUMNS) {
+        *slot = Some(column.to_owned());
+    }
+    task.columns[1] = Some("project".to_owned());
+    let mut run = StoredRun {
+        run: 1,
+        columns: Default::default(),
+    };
+    run.columns[0] = Some("id".to_owned());
+    for (slot, column) in run.columns.iter_mut().skip(1).zip(&RUN_COLUMNS[2..]) {
+        *slot = Some((*column).to_owned());
+    }
     let state = StoredQueue {
         proposals: vec![proposal],
+        tasks: vec![task],
+        runs: vec![run],
         events: vec![named],
     };
     assert_eq!(queue.restore(&state).expect("restore"), Restore::Restored);
@@ -173,13 +215,39 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
             .iter()
             .map(|column| serde_json::json!(column)),
     );
+    let mut tasks: Vec<serde_json::Value> = TASK_COLUMNS
+        .iter()
+        .map(|column| serde_json::json!(column))
+        .collect();
+    tasks[1] = serde_json::json!("project");
+    let mut runs = vec![serde_json::json!("id"), serde_json::json!(1)];
+    runs.extend(
+        RUN_COLUMNS[2..]
+            .iter()
+            .map(|column| serde_json::json!(column)),
+    );
     let want = format!(
-        "proposals\t{}\nevents\t{}\n",
+        "proposals\t{}\ntasks\t{}\nruns\t{}\nevents\t{}\n",
         serde_json::json!(PROPOSAL_COLUMNS.as_slice()),
+        serde_json::Value::Array(tasks),
+        serde_json::Value::Array(runs),
         serde_json::Value::Array(events)
     );
     assert_eq!(queue.dump().expect("dump"), want);
     assert_eq!(EVENT_COLUMNS[0], "seq");
+    assert_eq!(RUN_COLUMNS[..2], ["task_id", "run"]);
+    assert_eq!(
+        (
+            PROPOSAL_COLUMNS.len(),
+            TASK_COLUMNS.len(),
+            RUN_COLUMNS.len()
+        ),
+        (41, 17, 11)
+    );
+    // docs/features/task-package.md iteration 2: the task's compare-and-set
+    // key, its last column.
+    assert_eq!(TASK_COLUMNS[16], "revision");
+    assert_eq!(PROPOSAL_COLUMNS[40], "task_id");
     assert_eq!(queue.stored_rows().expect("stored rows"), state);
 }
 
@@ -212,15 +280,23 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
     );
     assert_eq!(queue.counts().expect("counts"), QueueCounts::default());
     assert!(queue.counts().unwrap().is_empty());
-    assert!(
-        queue.dump().is_err(),
-        "reading made no queue table: {:?}",
-        queue.dump()
+    // `dump()` skips a table that is not there (schema 4: a schema-3 DB
+    // has no `tasks`), so the tables are asked of SQLite itself.
+    assert_eq!(queue.dump().expect("dump"), "", "no row of any table");
+    assert_eq!(
+        sqlite3_out(
+            &db,
+            "SELECT name FROM sqlite_master WHERE name IN ('proposals', 'tasks', 'runs', \
+             'events');"
+        ),
+        "",
+        "reading made no queue table"
     );
 
     let state = StoredQueue {
         proposals: vec![row("PR-0001", PROJECT, false)],
         events: vec![event(1, PROJECT)],
+        ..Default::default()
     };
     assert_eq!(queue.restore(&state).expect("restore"), Restore::Restored);
     assert_eq!(queue.stored_rows().expect("stored rows"), state);
@@ -228,6 +304,8 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
         queue.counts().expect("counts"),
         QueueCounts {
             proposals: 1,
+            tasks: 0,
+            runs: 0,
             events: 1
         }
     );
@@ -236,16 +314,17 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
     assert_eq!(reopened.stored_rows().unwrap(), state);
 }
 
-/// A `user_version` above this build's (3, docs/features/decision-apply.md
+/// A `user_version` above this build's (4, docs/features/task-package.md
 /// "Data"): `open_existing` refuses it as `SchemaTooNew`.
 #[test]
 fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    sqlite3(&db, "PRAGMA user_version = 4");
+    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 4);
+    sqlite3(&db, "PRAGMA user_version = 5");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 4 }) => {}
+        Err(QueueError::SchemaTooNew { found: 5 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }
@@ -269,6 +348,7 @@ fn stored_rows_are_every_projects_rows_raw_in_id_and_seq_order() {
             row("PR-0001", PROJECT, false),
         ],
         events: vec![event(3, PROJECT), event(1, PROJECT), event(2, PROJECT)],
+        ..Default::default()
     };
     assert_eq!(queue.restore(&state).expect("restore"), Restore::Restored);
     let read = queue.stored_rows().expect("stored rows");
@@ -294,6 +374,8 @@ fn stored_rows_are_every_projects_rows_raw_in_id_and_seq_order() {
         queue.counts().unwrap(),
         QueueCounts {
             proposals: 5,
+            tasks: 0,
+            runs: 0,
             events: 4
         }
     );
@@ -336,6 +418,7 @@ fn restore_is_all_or_nothing_into_an_empty_queue_only() {
             row("PR-0001", PROJECT, false),
         ],
         events: vec![event(1, PROJECT)],
+        ..Default::default()
     };
     assert!(queue.restore(&repeated_id).is_err(), "a repeated id fails");
     assert_eq!(queue.dump().unwrap(), empty, "nothing kept");
@@ -344,6 +427,7 @@ fn restore_is_all_or_nothing_into_an_empty_queue_only() {
     let repeated_seq = StoredQueue {
         proposals: vec![row("PR-0001", PROJECT, false)],
         events: vec![event(1, PROJECT), event(2, PROJECT), event(1, PROJECT)],
+        ..Default::default()
     };
     assert!(
         queue.restore(&repeated_seq).is_err(),
@@ -358,10 +442,12 @@ fn restore_is_all_or_nothing_into_an_empty_queue_only() {
                 row("PR-0002", "other", false),
             ],
             events: Vec::new(),
+            ..Default::default()
         },
         StoredQueue {
             proposals: vec![row("PR-0001", PROJECT, false)],
             events: vec![event(1, PROJECT), event(2, "other")],
+            ..Default::default()
         },
     ] {
         match queue.restore(&foreign) {
@@ -384,11 +470,14 @@ fn restore_is_all_or_nothing_into_an_empty_queue_only() {
             row("PR-0002", PROJECT, false),
         ],
         events: vec![event(1, PROJECT), event(2, PROJECT)],
+        ..Default::default()
     };
     assert_eq!(
         queue.restore(&state).expect("restore"),
         Restore::Occupied(QueueCounts {
             proposals: 1,
+            tasks: 0,
+            runs: 0,
             events: 1
         })
     );
@@ -411,6 +500,7 @@ fn the_next_id_and_seq_follow_the_highest_restored() {
             row("PR-0007", PROJECT, false),
         ],
         events: (1..=5).map(|seq| event(seq, PROJECT)).collect(),
+        ..Default::default()
     };
     assert_eq!(queue.restore(&state).expect("restore"), Restore::Restored);
     assert_eq!(queue.stored_rows().unwrap(), state, "rows as given");

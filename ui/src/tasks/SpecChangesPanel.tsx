@@ -1,4 +1,4 @@
-import type { TaskPackage } from "../api/types";
+import type { SnapshotDiff, TaskPackage } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { removesAll } from "../ui/diff";
 import { DiffView } from "../ui/DiffView";
@@ -8,6 +8,12 @@ import { Part, When } from "./parts";
 
 /** The cut the core makes in a diff (`docs/features/task-package.md` "Data"). */
 export const CUT_NOTICE = "Diff cut by SpecEngine at 8 192 bytes; the file in the worktree holds the rest.";
+
+/** An entry past the package's total: `diff` null, `cut` true (`docs/features/task-package.md` "Data"). */
+export const TOTAL_CUT_NOTICE = "Diff cut: the package's diffs reached their size cap (262 144 bytes in all); the file in the worktree holds this change.";
+
+/** An entry with no diff and no cut: the daemon's notes on the task say why. */
+export const NO_DIFF_NOTICE = "No diff sent for this node; the daemon's notes on this task say why.";
 
 /** What a node whose diff removes it says in place of a link. */
 export const REMOVED = "Removed since approval";
@@ -34,9 +40,38 @@ function NodeName({ project, id, removed }: { project: string; id: string; remov
   );
 }
 
+/** Whether the entry's diff, as sent, removes the node's whole text; an entry with no diff tells nothing. */
+function removes(entry: SnapshotDiff): boolean {
+  return entry.diff !== null && removesAll(entry.diff);
+}
+
+/** A quiet line in place of hunks or under them. */
+function DiffNote({ text }: { text: string }) {
+  return (
+    <p className="note cut-note">
+      <Icon name="info" />
+      <span>{text}</span>
+    </p>
+  );
+}
+
+/** An entry's hunks as sent with the core's cut under them, or, with none sent, why. */
+function EntryDiff({ entry }: { entry: SnapshotDiff }) {
+  if (entry.diff === null) {
+    return <DiffNote text={entry.cut ? TOTAL_CUT_NOTICE : NO_DIFF_NOTICE} />;
+  }
+  return (
+    <>
+      <DiffView diff={entry.diff} label={`Changes to ${entry.id} since approval`} />
+      {entry.cut && <DiffNote text={CUT_NOTICE} />}
+    </>
+  );
+}
+
 /**
  * The Spec changes tab: the snapshot's place and nodes, then each `snapshot_diff` entry in the
- * daemon's order, its hunks as sent. Nothing is compared here: the diffs and `stale` are the core's.
+ * daemon's order, its hunks as sent (past the package's total, a line saying so). Nothing is
+ * compared here: the diffs and `stale` are the core's.
  */
 export function SpecChangesPanel({ project, task }: { project: string; task: TaskPackage }) {
   const snapshot = task.spec_snapshot;
@@ -51,7 +86,7 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
     );
   }
   const diffs = task.snapshot_diff;
-  const removed = new Set((diffs ?? []).filter((entry) => removesAll(entry.diff)).map((entry) => entry.id));
+  const removed = new Set((diffs ?? []).filter(removes).map((entry) => entry.id));
   return (
     <div className="task-panel">
       <Part title="Frozen at approval">
@@ -104,17 +139,11 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
             {diffs.map((entry, index) => (
               <li key={`${String(index)}-${entry.id}`} className="snapshot-diff" data-node={entry.id}>
                 <p className="snapshot-diff-head">
-                  <NodeName project={project} id={entry.id} removed={removesAll(entry.diff)} />
+                  <NodeName project={project} id={entry.id} removed={removes(entry)} />
                   <span className="mono muted">{entry.path}</span>
                 </p>
                 <p className="mono muted hash">At approval: {entry.span_hash}</p>
-                <DiffView diff={entry.diff} label={`Changes to ${entry.id} since approval`} />
-                {entry.cut && (
-                  <p className="note cut-note">
-                    <Icon name="info" />
-                    <span>{CUT_NOTICE}</span>
-                  </p>
-                )}
+                <EntryDiff entry={entry} />
               </li>
             ))}
           </ol>

@@ -14,8 +14,9 @@
 //!   of both worktrees is empty and their files as they were. M: `base`
 //!   required.
 //! - AC-17, the wire half: `INSTRUCTIONS` hold "Data"'s `propose_change`
-//!   line (146 bytes with its LF), 1 740 bytes; the `probes` build sends
-//!   them with the probe paragraph, 1 897 bytes.
+//!   line (146 bytes with its LF), 1 740 bytes as of this slice, 1 878
+//!   since docs/features/task-package.md's tasks line (138 bytes); the
+//!   `probes` build sends them with the probe paragraph, 2 035 bytes.
 //!
 //! The setup's git runs in the CLI tests' sandbox (`common/git.rs`,
 //! included by path, its repositories with automatic maintenance off);
@@ -366,13 +367,14 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
 }
 
 /// AC-17: `INSTRUCTIONS` hold "Data"'s `propose_change` line (146 bytes
-/// with its LF) and are 1 740 bytes; the default build sends them as is.
+/// with its LF) and are 1 878 bytes (1 740 and docs/features/task-package.md's
+/// 138-byte tasks line); the default build sends them as is.
 #[test]
 #[cfg(not(feature = "probes"))]
 fn ac17_the_instructions_name_create_within_their_budget() {
     assert_eq!(CHANGE_LINE.len(), 146);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1740);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1878);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -384,7 +386,9 @@ fn ac17_the_instructions_name_create_within_their_budget() {
 
 /// AC-17, the `probes` build: the instructions on the wire are
 /// `INSTRUCTIONS` and the probe paragraph of "Data" (a blank line, 157
-/// bytes), 1 897 bytes, at most 2 048 - 140.
+/// bytes), 1 897 bytes as of this slice; 2 035 of 2 048 since
+/// docs/features/task-package.md ("Description and interactions") adds
+/// its 138-byte tasks line.
 #[test]
 #[cfg(feature = "probes")]
 fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
@@ -396,8 +400,8 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     let discover = result(&session.request("server/discover", json!({}))).clone();
     let sent = discover["instructions"].as_str().expect("instructions");
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
-    assert_eq!(sent.len(), 1897);
-    assert!(sent.len() <= 2048 - 140);
+    assert_eq!(sent.len(), 2035);
+    assert!(sent.len() <= 2048);
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());
 }

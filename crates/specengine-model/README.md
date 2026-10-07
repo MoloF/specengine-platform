@@ -18,6 +18,7 @@ Types and pure functions, `serde` only: no I/O, no parser library, no other Spec
 | `script` | the look-alike table (fullwidth ASCII, Cyrillic and Greek letters identical to a Latin one); `IdScript` `latin` / `mixed` / `non-latin` (ADR-0009) |
 | `scheme` | `IdScheme::new(vec![PrefixSpec::number(..), PrefixSpec::name(..).with_aliases(..)])`, `Shape`, `IdScope`, `SchemeProblem` / `SchemeError` |
 | `grammar` | `scan` (text), `parse_reference` (one front-matter scalar), `parse_definition` (`id:`, `{#…}`), `parse_canon`, `split_superseded_by`, `is_slug` (the `slug` rule: qualifiers, feature-document stems) |
+| `task` | `TaskStatus` (ten states), `RunOutcome`, `TaskPackage` (25 keys, `TASK_PACKAGE_SCHEMA_VERSION` 1) and its parts, types only: `docs/canon/task-package.md` |
 | `reference`, `link`, `node`, `value`, `diagnostic`, `parsed` | what a parsed file is made of; `Anchor`, `AnchorOrigin`, `LINK_TYPES`, `MENTIONS`, `DiagnosticCode::ALL` (13 codes) |
 
 ## `[ids]` in `specengine.toml`

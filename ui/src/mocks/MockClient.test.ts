@@ -110,6 +110,18 @@ describe("the normal scenario", () => {
     expect(missing.notes.at(-1)).toBe("no proposal `PR-9999` in this project's queue");
   });
 
+  it("serves each review document's task_id after choice, null unbound, as task-package's Data", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const { proposals } = await client.getInbox("harbor-sim");
+    const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
+    for (const review of reviews) {
+      expect([review.id, Object.keys(review).slice(-3)]).toEqual([review.id, ["choice", "task_id", "notes"]]);
+    }
+    expect(reviews.find((review) => review.id === "PR-0041")?.task_id).toBe("T-0107");
+    expect(reviews.some((review) => review.task_id === null)).toBe(true);
+    expect((await client.getProposal("harbor-sim", "PR-9999")).task_id).toBeNull();
+  });
+
   it("returns copies the caller cannot change", async () => {
     const client = new MockClient("normal", { now: clock });
     const first = await client.getInbox("harbor-sim");

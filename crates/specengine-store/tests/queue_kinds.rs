@@ -608,13 +608,15 @@ fn a_corrupt_create_row_names_its_column() {
 // ------------------------------------------------------------- schema
 
 /// AC-14, the store half: creates change no schema: `QUEUE_SCHEMA_VERSION`
-/// 3, `user_version` 3 after a create, `proposals` 40 columns, the dump's
-/// header and column list as before; a create's row restores into a fresh
-/// queue and dumps the same. M: a column or a schema bump.
+/// as the queue stands (4 since docs/features/task-package.md, which adds
+/// `task_id`), `user_version` 4 after a create, `proposals` 41 columns,
+/// the dump's header and column list as before; a create's row restores
+/// into a fresh queue and dumps the same (the name, cited by
+/// docs/features/proposal-kinds.md, kept). M: a column or a schema bump.
 #[test]
 fn ac14_creates_keep_schema_3_and_40_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 3);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 40);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 4);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 41);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);
     let scratch = Scratch::new("qk-schema");
     let db = scratch.db("q");
@@ -631,10 +633,10 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "3");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "4");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "40"
+        "41"
     );
     assert_eq!(
         sqlite3(

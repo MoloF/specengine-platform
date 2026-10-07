@@ -8,7 +8,8 @@
 //!
 //! - AC-06: every backticked `^[a-z][a-z0-9]*(_[a-z0-9]+)+$` in a skill is
 //!   a tool or a property name anywhere in an input or output schema; all
-//!   eight tools backticked in some skill; no `mcp__`. M: `get_bundle`;
+//!   thirteen tools (eight, and docs/features/task-package.md's five)
+//!   backticked in some skill; no `mcp__`. M: `get_bundle`;
 //!   `node_id`; `get_proposal` gone everywhere;
 //!   `mcp__plugin_specengine_specengine__search`.
 //! - AC-07: each `json` block is an object; as `tools/call` arguments of
@@ -260,7 +261,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's eight tools"
+        "the default build's thirteen tools"
     );
     assert!(
         listed.properties.contains("node_ids"),

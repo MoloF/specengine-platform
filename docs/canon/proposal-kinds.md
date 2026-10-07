@@ -43,7 +43,7 @@ A live (`open`, `approved`) create of the project, from any worktree or reposito
 
 ## Queue row
 
-Schema 3, 40 columns, no `user_version` bump. File form: `target_id` the text's `id:` canonical, else the path; `target_path` the path; `target_ids` the new IDs in text order when `target_id` heads them, else `[path, new IDs]`; `base_hash`, `base_text` `NULL`; `new_text` the file; `patch_hash` `b3_hash(target_id LF LF new_text)`. Section form: an update's columns, `target_ids` `[target_id, new IDs]` (an id-less feature document: `[<path>, <slug>/AC-08]`). Both: place, `rationale`, `author`, `diagnostics` as an update's; intake and record columns `NULL`.
+No schema bump of its own (now 4, 41 columns: `tasks.md`). File form: `target_id` the text's `id:` canonical, else the path; `target_path` the path; `target_ids` the new IDs in text order when `target_id` heads them, else `[path, new IDs]`; `base_hash`, `base_text` `NULL`; `new_text` the file; `patch_hash` `b3_hash(target_id LF LF new_text)`. Section form: an update's columns, `target_ids` `[target_id, new IDs]` (an id-less feature document: `[<path>, <slug>/AC-08]`). Both: place, `rationale`, `author`, `diagnostics` as an update's; intake and record columns `NULL`.
 
 New IDs of a row: `target_ids` but the first, plus the first with no base when it is an ID. Corrupt, named: `target_ids` `NULL` or not a JSON list of IDs headed by `target_id`; the base set in part; `new_text`, `rationale` `NULL`; an intake or record column set. An older build reads it as corrupt by its `kind` (ADR-0017).
 
@@ -75,7 +75,7 @@ Store: `ProposalKind::Create` (`applies()` true, `decides()` false); `NewProposa
 
 `propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` required, enum `["update", "create"]` from core `UPDATE_KIND`, `CREATE_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> invalid-params (-32602) `base: ...`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
 
-Plugin 0.1.4, `propose-spec-change` "A new section or file": `kind: "create"`; a new file with `base: null`, its ID in `id:`; ID sections against the span's `span_hash`; the agent names each new ID. Taken by the spec or another's proposal: resend with the named next free ID. **Held by the agent's own earlier proposal** (a corrected create): never the next free ID, which would add the node twice; name that proposal, ask the owner to reject it, resend once `get_proposal` shows it rejected. Removing an ID section stays a question for the owner.
+Plugin (since 0.1.4), `propose-spec-change` "A new section or file": `kind: "create"`; a new file with `base: null`, its ID in `id:`; ID sections against the span's `span_hash`; the agent names each new ID. Taken by the spec or another's proposal: resend with the named next free ID. **Held by the agent's own earlier proposal** (a corrected create): never the next free ID, which would add the node twice; name that proposal, ask the owner to reject it, resend once `get_proposal` shows it rejected. Removing an ID section stays a question for the owner.
 
 ## Genre
 
@@ -87,5 +87,5 @@ Accepted at shipping (2026-10-07); none blocks (ADR-0012).
 
 - An ID created outside the queue on another branch: `id-taken` at merge. A stale open create holds its IDs until rejected; a wrong number guess costs one refused call.
 - Git's index lookup is case-sensitive (`:(literal)`): on a case-insensitive file system an index-only `R-15.md` does not stop a create at `r-15.md`; the apply fails at step 9 (pathspec did not match), cleaned up, exit 1, nothing lost. Decision records alike.
-- Between step 8's re-check and the write only the hard link guards: no test reaches that window without a product hook, so `rename` in its place is untested.
+- Between step 8's re-check and the write only the hard link guards: untestable without a product hook, so `rename` there is untested.
 - A generated directory or index outside the walk gets the walk's wording, not its own (exit 1 either way).

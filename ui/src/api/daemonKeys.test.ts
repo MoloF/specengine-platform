@@ -19,7 +19,8 @@ import type {
   SearchHit,
 } from "./types";
 
-// AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md: the provisional types of
+// AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-10 of
+// docs/features/task-package.md (the review document's `task_id`): the provisional types of
 // the daemon's documents. Each record names exactly its type's keys (`satisfies` fails `pnpm
 // build` otherwise) and equals the list the cited headings write; the keys the daemon serves (the
 // record less the base-only keys of a plain check, NEVER_SERVED) equal `fixtures/daemon-keys.json`,
@@ -45,7 +46,8 @@ const KEYS = {
     record_id: true,
   } satisfies Record<keyof InboxEntry, true>,
   // docs/canon/proposal-queue.md "Commands" to `updated_at`, docs/canon/agent-intake.md "Review
-  // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`.
+  // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`,
+  // docs/features/task-package.md "Data" (Review document) `task_id` after `choice`.
   Proposal: {
     id: true,
     project: true,
@@ -88,6 +90,7 @@ const KEYS = {
     record_title: true,
     record_text: true,
     choice: true,
+    task_id: true,
     notes: true,
   } satisfies Record<keyof Proposal, true>,
   // crates/specengine-cli/README.md "Output and the cap": `spec show --json`.
@@ -192,6 +195,7 @@ const CITED: Record<Named, string> = {
     "id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
     "target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked, " +
     "record_id, record_path, record_title, record_text, choice, " +
+    "task_id, " +
     "notes",
   NodeView: "ref, reason, notes, nodes",
   SearchHit: "id, kind, title, path, line, ord, archived, snippet",
@@ -237,8 +241,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 11 inbox-entry keys, 42 review keys", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 11, 42]);
+  it("counts 4 project keys, 11 inbox-entry keys, 43 review keys", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 11, 43]);
   });
 
   it("counts the daemon's keys of ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 (AC-09 of ui-live)", () => {
@@ -268,9 +272,9 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("names no task in an inbox entry or a review document", () => {
+  it("names no task in an inbox entry; the review document's task_id sits after choice, before notes", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
-    expect(Object.keys(KEYS.Proposal)).not.toContain("task_id");
+    expect(Object.keys(KEYS.Proposal).slice(-3)).toEqual(["choice", "task_id", "notes"]);
   });
 
   it("types a queue event as the stream sends it: {seq, type, payload}", () => {

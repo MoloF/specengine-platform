@@ -396,7 +396,7 @@ fn ac01_every_state_round_trips_into_a_fresh_queue() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":{STATE_FORMAT},\"queue_schema\":{QUEUE_SCHEMA_VERSION},\"project\":\"lantern-keep\",\"proposals\":7,\"events\":{}}}",
+            "{{\"format\":{STATE_FORMAT},\"queue_schema\":{QUEUE_SCHEMA_VERSION},\"project\":\"lantern-keep\",\"proposals\":7,\"tasks\":0,\"runs\":0,\"events\":{}}}",
             built.events
         )
     );
@@ -449,7 +449,8 @@ fn ac01_every_state_round_trips_into_a_fresh_queue() {
     assert_eq!(
         questions,
         [format!(
-            "restore 7 proposal(s) and {} event(s) of lantern-keep from {} into {}? [y/N]",
+            "restore 7 proposal(s), 0 task(s), 0 run(s) and {} event(s) of lantern-keep from {} \
+             into {}? [y/N]",
             built.events,
             file.display(),
             db.display()
@@ -634,7 +635,8 @@ fn ac04_a_non_empty_queue_is_refused_and_left_as_it_was() {
     assert_eq!(
         message,
         format!(
-            "spec: the queue of `lantern-keep` in {db} holds 2 proposal(s), 3 event(s): \
+            "spec: the queue of `lantern-keep` in {db} holds 2 proposal(s), 0 task(s), 0 run(s), \
+             3 event(s): \
              import-state restores only into an empty queue (a fresh data directory, or {db} \
              moved aside); nothing changed",
             db = db.display()
@@ -658,7 +660,7 @@ fn ac04_a_non_empty_queue_is_refused_and_left_as_it_was() {
     let mut queue = SqliteQueue::open(&foreign_db, "other").unwrap();
     let state = StoredQueue {
         proposals: vec![row],
-        events: Vec::new(),
+        ..Default::default()
     };
     assert_eq!(queue.restore(&state).unwrap(), Restore::Restored);
     drop(queue);
@@ -669,7 +671,7 @@ fn ac04_a_non_empty_queue_is_refused_and_left_as_it_was() {
         "import into a queue holding another project's row",
     );
     assert!(
-        message.contains("holds 1 proposal(s), 0 event(s)"),
+        message.contains("holds 1 proposal(s), 0 task(s), 0 run(s), 0 event(s)"),
         "{message}"
     );
     assert!(questions.is_empty(), "no prompt: {questions:?}");
@@ -701,7 +703,7 @@ fn ac04_a_non_empty_queue_is_refused_and_left_as_it_was() {
     );
     let message = cannot(&outcome, "a row arrived during the question");
     assert!(
-        message.contains("holds 1 proposal(s), 1 event(s)"),
+        message.contains("holds 1 proposal(s), 0 task(s), 0 run(s), 1 event(s)"),
         "{message}"
     );
     assert_eq!(questions.len(), 1);
@@ -843,7 +845,10 @@ fn ac05_a_defective_dump_is_refused_naming_the_line() {
 
     // Cut after a whole row.
     let (label, message) = refused_import(&pair, "cut", &dump_of(head));
-    assert_eq!(message, format!("{label}: header counts 2, 3; found 2, 2"));
+    assert_eq!(
+        message,
+        format!("{label}: header counts 2, 0, 0, 3; found 2, 0, 0, 2")
+    );
 }
 
 /// Import step 2's other defects, each exit 2 naming the line: not UTF-8,
@@ -951,8 +956,8 @@ fn every_other_defect_of_step_2_names_its_line() {
 
 // ------------------------------------------------------------------ AC-06
 
-/// AC-06: `format` 2 and `queue_schema` 4 (newer than this build's 3,
-/// docs/features/decision-apply.md "Data"): exit 2 with `upgrade
+/// AC-06: `format` 3 and `queue_schema` 5 (newer than this build's 2 and
+/// 4, docs/canon/tasks.md "Backup"): exit 2 with `upgrade
 /// SpecEngine`; a spec-b dump into spec-a: exit 2 naming both slugs; no
 /// prompt, the queue never made. M: either version check removed; the slug
 /// check removed.
@@ -961,8 +966,8 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let pair = Pair::new("qe-ac06", "spec-a");
     let (_, lines) = small_dump(&pair);
     for (name, from, to) in [
-        ("format-2", "\"format\":1,", "\"format\":2,"),
-        ("schema-4", "\"queue_schema\":3,", "\"queue_schema\":4,"),
+        ("format-3", "\"format\":2,", "\"format\":3,"),
+        ("schema-5", "\"queue_schema\":4,", "\"queue_schema\":5,"),
     ] {
         let mut newer = lines.clone();
         newer[0] = newer[0].replacen(from, to, 1);
@@ -980,7 +985,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let other_file = other.scratch.dir("dumps").join("zerkalo.jsonl");
     export_ok(&other, &other.home, &other.main, Some(&other_file), NOW);
     let bytes = fs::read(&other_file).unwrap();
-    assert!(bytes.starts_with(b"{\"format\":1,\"queue_schema\":3,\"project\":\"zerkalo\","));
+    assert!(bytes.starts_with(b"{\"format\":2,\"queue_schema\":4,\"project\":\"zerkalo\","));
     let (label, message) = refused_import(&pair, "spec-b", &bytes);
     assert!(message.starts_with(&format!("{label}:1: ")), "{message}");
     assert!(
@@ -1114,12 +1119,15 @@ fn ac08_the_destination_is_new_outside_the_worktree_and_private() {
     assert_no_partial(&outside);
     assert_eq!(
         render_text(&Outcome::StateExport(outcome.clone())),
-        format!("wrote {}: 1 proposal(s), 1 event(s)\n", out.display())
+        format!(
+            "wrote {}: 1 proposal(s), 0 task(s), 0 run(s), 1 event(s)\n",
+            out.display()
+        )
     );
     let json = json_of(&render_json(&Outcome::StateExport(outcome)));
     assert_eq!(
         json,
-        serde_json::json!({"path": out.display().to_string(), "proposals": 1, "events": 1})
+        serde_json::json!({"path": out.display().to_string(), "proposals": 1, "tasks": 0, "runs": 0, "events": 1})
     );
 
     // The default destination: `backups/` 0700, the file 0600, no partial;
@@ -1152,7 +1160,10 @@ fn ac08_the_destination_is_new_outside_the_worktree_and_private() {
     run.code(0);
     assert_eq!(
         run.stdout,
-        format!("wrote {}: 1 proposal(s), 1 event(s)\n", by_binary.display())
+        format!(
+            "wrote {}: 1 proposal(s), 0 task(s), 0 run(s), 1 event(s)\n",
+            by_binary.display()
+        )
     );
     assert_eq!(run.stderr, "", "{}", run.show());
     assert_eq!(fs::read(&by_binary).unwrap(), bytes);
@@ -1173,7 +1184,7 @@ fn ac08_the_destination_is_new_outside_the_worktree_and_private() {
     run.code(0);
     assert_eq!(
         run.json(),
-        serde_json::json!({"path": by_json.display().to_string(), "proposals": 1, "events": 1})
+        serde_json::json!({"path": by_json.display().to_string(), "proposals": 1, "tasks": 0, "runs": 0, "events": 1})
     );
     let run = spec_in(
         &pair,
@@ -1229,7 +1240,7 @@ fn ac08_the_worktree_top_or_the_root_without_git_bounds_the_destination() {
     assert_eq!((outcome.proposals, outcome.events), (0, 0));
     assert_eq!(
         fs::read(&out).unwrap(),
-        b"{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":0,\"events\":0}\n"
+        b"{\"format\":2,\"queue_schema\":4,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"events\":0}\n"
     );
     assert!(
         !data_dir(&pair.home).exists(),
@@ -1259,15 +1270,15 @@ fn export_refuses_another_projects_row_and_both_refuse_another_config() {
             "proposal",
             StoredQueue {
                 proposals: vec![proposal],
-                events: Vec::new(),
+                ..Default::default()
             },
             "proposal `PR-0001`",
         ),
         (
             "event",
             StoredQueue {
-                proposals: Vec::new(),
                 events: vec![event],
+                ..Default::default()
             },
             "event 1",
         ),
@@ -2236,7 +2247,7 @@ fn iter2_every_text_is_escaped_as_serde_json_writes_it() {
     };
     let mut expected = format!(
         "{{\"format\":{STATE_FORMAT},\"queue_schema\":{QUEUE_SCHEMA_VERSION},\"project\":{},\
-         \"proposals\":{},\"events\":{}}}\n",
+         \"proposals\":{},\"tasks\":0,\"runs\":0,\"events\":{}}}\n",
         json(&pair.slug),
         stored.proposals.len(),
         stored.events.len()
@@ -2352,7 +2363,7 @@ fn iter3_the_top_id_round_trips_and_nothing_is_proposed_after_it() {
     let exported = fs::read(&top).unwrap();
     let lines = lines_of(&exported);
     assert!(
-        lines[0].ends_with(",\"proposals\":2,\"events\":2}"),
+        lines[0].ends_with(",\"proposals\":2,\"tasks\":0,\"runs\":0,\"events\":2}"),
         "{}",
         lines[0]
     );

@@ -301,7 +301,8 @@ fn ac09_the_queue_tools_take_a_path_as_their_twins_do() {
 /// `report_discrepancy` name the path form (description and input
 /// schema), within 2 048 characters; `INSTRUCTIONS` byte-unchanged by this
 /// slice and on the wire as is: 1 740 bytes, its BLAKE3 pinned, as
-/// docs/features/proposal-kinds.md AC-17 re-pins them.
+/// docs/features/proposal-kinds.md AC-17 re-pins them (1 878 since
+/// docs/features/task-package.md's tasks line, re-pinned below).
 #[test]
 fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
@@ -338,9 +339,22 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
         Some(specengine_mcp::INSTRUCTIONS)
     );
     drop(session.finish());
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1740);
+    // docs/features/task-package.md re-pins them: its tasks line (138
+    // bytes with its LF) under "Queue"; without it, the text this slice
+    // pinned (1 740 bytes, `4b08078c…`).
+    let tasks_line = "- get_task, claim_task, submit_plan, report_run, complete_task = spec task \
+                      show|claim|plan|report|complete; the three above take task_id.\n";
+    assert_eq!(tasks_line.len(), 138);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.matches(tasks_line).count(), 1);
+    let before = specengine_mcp::INSTRUCTIONS.replacen(tasks_line, "", 1);
+    assert_eq!(before.len(), 1740);
+    assert_eq!(
+        blake3_hex(before.as_bytes()),
+        "4b08078cc4c40004f3dab85d8f1e2bc856c175424177514088a91a69ba7d1c0e"
+    );
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1878);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "4b08078cc4c40004f3dab85d8f1e2bc856c175424177514088a91a69ba7d1c0e"
+        "ddfb9e41d87cdf36799384c35c4da847913ca4f28746b14babc1f76d283bbc7d"
     );
 }

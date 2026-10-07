@@ -1,8 +1,8 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3; a higher version is a newer build's:
-//! refused),
+//! user_version` (0 → 1 → 2 → 3 → 4; a higher version is a newer
+//! build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
@@ -66,14 +66,22 @@
 //!   comparison of places is [`crate::same_repository`].
 //! - **Time**: every time stamp is given by the caller (an injected clock),
 //!   `YYYY-MM-DDTHH:MM:SSZ`, stored as given.
-//! - **Backup** (`docs/canon/queue-backup.md` "Store", `queue/state.rs`):
-//!   every row of both tables read as stored in one snapshot
-//!   ([`SqliteQueue::stored_rows`]), and inserted as given into an empty
-//!   queue ([`SqliteQueue::restore`]).
+//! - **Backup** (`docs/canon/queue-backup.md` "Store", `queue/state.rs`;
+//!   format 2: `docs/canon/tasks.md` "Backup"): every row of the four
+//!   tables read as stored in one snapshot ([`SqliteQueue::stored_rows`]),
+//!   and inserted as given into an empty queue ([`SqliteQueue::restore`]).
+//! - **Tasks** (`docs/canon/tasks.md` "Store", `queue/tasks.rs`): step 4
+//!   adds `tasks`, `runs` and a proposal's `task_id`; a proposal binds to a
+//!   task at creation ([`ProposalQueue::create_with_task`],
+//!   [`ProposalQueue::create_intake_with_task`]), checked inside the
+//!   inserting transaction; an applied task-bound proposal refreshes the
+//!   task's snapshot in its recording transaction
+//!   ([`SqliteQueue::applied_refreshing`]).
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
 mod state;
+mod tasks;
 
 use std::fmt;
 use std::fs;
@@ -102,12 +110,19 @@ use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
 pub use state::{
-    EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, Restore, StoredEvent, StoredProposal,
-    StoredQueue, proposal_columns,
+    EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredEvent,
+    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, proposal_columns,
+};
+pub use tasks::{
+    EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED, EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED,
+    EVENT_TASK_COMPLETED, EVENT_TASK_CREATED, EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED,
+    EVENT_TASK_RUN_REPORTED, NewTask, RefreshEntry, Run, SnapshotEntry, StoredNote, Task,
+    TaskChange, TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableTask, binding_problem,
+    claimed_elsewhere, task_event,
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 3;
+pub const QUEUE_SCHEMA_VERSION: i64 = 4;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -159,6 +174,24 @@ ALTER TABLE proposals ADD COLUMN record_text TEXT;
 ALTER TABLE proposals ADD COLUMN choice TEXT;
 ";
 
+/// Step 3 → 4: the tasks and their runs (`docs/canon/tasks.md` "Store"),
+/// and a proposal's task.
+const STEP_4: &str = "
+CREATE TABLE tasks (
+  id TEXT PRIMARY KEY,
+  project TEXT, git_common_dir TEXT, status TEXT,
+  title TEXT, goal TEXT, targets TEXT, plan TEXT, criteria TEXT, affected_nodes TEXT,
+  owner_notes TEXT, snapshot TEXT, claim TEXT, author TEXT,
+  created_at TEXT, updated_at TEXT, revision TEXT
+) STRICT;
+CREATE TABLE runs (
+  task_id TEXT, run INTEGER, role TEXT, worktree TEXT, branch TEXT, author TEXT,
+  started_at TEXT, ended_at TEXT, outcome TEXT, summary TEXT, changed_files TEXT,
+  PRIMARY KEY (task_id, run)
+) STRICT;
+ALTER TABLE proposals ADD COLUMN task_id TEXT;
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -174,7 +207,7 @@ const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_co
      rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
      created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
      price_of_other, evidence, options, recommendation, distinct_from, linked, record_id, \
-     record_path, record_title, record_text, choice";
+     record_path, record_title, record_text, choice, task_id";
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -493,6 +526,8 @@ pub struct Proposal {
     /// the first, and the first too for a new file declaring an `id:`);
     /// empty for any other kind.
     pub new_ids: Vec<String>,
+    /// The task it was raised for (`T-NNNN`); never changes.
+    pub task_id: Option<String>,
 }
 
 impl Proposal {
@@ -666,6 +701,11 @@ pub enum QueueError {
     /// A create's new ID `id` is held by the live create `by` (`open` or
     /// `approved`, any repository of the project). Nothing written.
     Reserved { id: String, by: String },
+    /// A task change refused (`docs/canon/tasks.md` "Transitions",
+    /// "Task-bound proposals"): no such task, a state or run that does not
+    /// allow it, a lost compare-and-set, a proposal the task does not take.
+    /// `reason` is one line; nothing written.
+    TaskRefused { id: String, reason: String },
 }
 
 impl From<StoreError> for QueueError {
@@ -707,6 +747,7 @@ impl fmt::Display for QueueError {
             Self::Reserved { id, by } => {
                 write!(f, "`{id}` is reserved by `{by}`, a live create")
             }
+            Self::TaskRefused { reason, .. } => f.write_str(reason),
         }
     }
 }
@@ -761,6 +802,18 @@ pub trait ProposalQueue {
     /// the project holds (any repository, read inside this transaction):
     /// [`QueueError::Reserved`], nothing written.
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError>;
+    /// [`Self::create`] bound to the task `task` (`T-NNNN`), when given:
+    /// read inside the inserting transaction, it must be the project's,
+    /// of the proposal's repository, neither `done` nor `cancelled`, and,
+    /// once claimed, claimed in the proposal's worktree; else
+    /// [`QueueError::TaskRefused`], nothing written
+    /// (`docs/canon/tasks.md` "Task-bound proposals").
+    fn create_with_task(
+        &mut self,
+        proposal: &NewProposal,
+        task: Option<&str>,
+        now: &str,
+    ) -> Result<Proposal, QueueError>;
     /// The new IDs the project's live creates (`open`, `approved`, any
     /// repository) hold, by proposal ID number then in text order; read
     /// only. A row whose targets do not read holds none.
@@ -778,6 +831,17 @@ pub trait ProposalQueue {
         intake: &NewIntake,
         corpus_hits: &[String],
         patch: Option<&NewProposal>,
+        now: &str,
+    ) -> Result<IntakeResult, QueueError>;
+    /// [`Self::create_intake`] bound to the task `task`, checked as
+    /// [`Self::create_with_task`] checks it before the dedup; the linked
+    /// update takes the same `task_id` in the same transaction.
+    fn create_intake_with_task(
+        &mut self,
+        intake: &NewIntake,
+        corpus_hits: &[String],
+        patch: Option<&NewProposal>,
+        task: Option<&str>,
         now: &str,
     ) -> Result<IntakeResult, QueueError>;
     /// The project's proposal `id`; `Ok(None)` when there is none.
@@ -971,11 +1035,21 @@ impl SqliteQueue {
 
     /// The canonical dump of the queue's tables, every project's: one line
     /// per row, `<table>\t<JSON array of every column>`, `proposals` by ID
-    /// number, then `events` by `seq`. Equal dumps: the same queue.
+    /// number, `tasks` by ID number, `runs` by task and number, then
+    /// `events` by `seq` (a table a DB does not hold yet left out). Equal
+    /// dumps: the same queue.
     pub fn dump(&self) -> Result<String, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut out = String::new();
-        for (table, order) in [("proposals", ID_ORDER), ("events", "ORDER BY seq")] {
+        for (table, order) in [
+            ("proposals", ID_ORDER),
+            ("tasks", ID_ORDER),
+            ("runs", tasks::RUN_ORDER),
+            ("events", "ORDER BY seq"),
+        ] {
+            if !schema::has_table(&tx, table)? {
+                continue;
+            }
             let mut statement = tx
                 .prepare(&format!("SELECT * FROM main.{table} {order}"))
                 .db()?;
@@ -1222,14 +1296,17 @@ impl SqliteQueue {
     }
 
     /// [`ProposalQueue::applied`] (`decision` `None`: from `approved` only)
-    /// and [`ProposalQueue::applied_with`] (also from `open`, deciding).
+    /// and [`ProposalQueue::applied_with`] (also from `open`, deciding), as
+    /// [`Self::applied_refreshing`] when `refresh` is given: the stored
+    /// proposal and the snapshot nodes refreshed.
     fn applied_if(
         &mut self,
         id: &str,
         commit: &str,
         decision: Option<&Decision>,
+        refresh: Option<&TaskRefresh>,
         now: &str,
-    ) -> Result<Proposal, QueueError> {
+    ) -> Result<(Proposal, Vec<String>), QueueError> {
         check_time(now)?;
         let project = self.project.clone();
         let tx = self.write()?;
@@ -1280,9 +1357,36 @@ impl SqliteQueue {
             &with_record(json!({ "id": id, "commit": commit }), record.as_deref()),
             now,
         )?;
+        let refreshed = match refresh {
+            Some(refresh) if current.task_id.as_deref() == Some(refresh.task_id.as_str()) => {
+                tasks::refresh_snapshot(&tx, &project, id, refresh, now)?
+            }
+            _ => Vec::new(),
+        };
         let stored = existing(&tx, &project, id)?;
         tx.commit().db()?;
-        Ok(stored)
+        Ok((stored, refreshed))
+    }
+
+    /// A task-bound `update` or section-form `create` applied in its task's
+    /// compared place (`docs/canon/tasks.md` "Task-bound proposals"):
+    /// [`ProposalQueue::applied`] (`decision` `None`) or
+    /// [`ProposalQueue::applied_with`], and in the same transaction each
+    /// snapshot node of `refresh` still frozen at its pre-apply hash takes
+    /// the applied text and hash, one `task.refreshed` each (`task`,
+    /// `proposal`, `node`). A task that does not read, or a proposal not
+    /// bound to `refresh.task_id`, refreshes nothing: recording the commit
+    /// never fails for the task's sake. The stored proposal and the nodes
+    /// refreshed, in snapshot order.
+    pub fn applied_refreshing(
+        &mut self,
+        id: &str,
+        commit: &str,
+        decision: Option<&Decision>,
+        refresh: &TaskRefresh,
+        now: &str,
+    ) -> Result<(Proposal, Vec<String>), QueueError> {
+        self.applied_if(id, commit, decision, Some(refresh), now)
     }
 
     /// [`ProposalQueue::approve_record_from`].
@@ -1442,8 +1546,9 @@ enum Hold<'a> {
 }
 
 /// The queue's schema steps, in one `Immediate` transaction: 0 → 1 makes
-/// the tables, 1 → 2 adds the intake columns, 2 → 3 the record columns
-/// (0 → 3 runs all three);
+/// the tables, 1 → 2 adds the intake columns, 2 → 3 the record columns,
+/// 3 → 4 the tasks, their runs and a proposal's task (0 → 4 runs all
+/// four);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -1473,6 +1578,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 2 {
         tx.execute_batch(STEP_3).db()?;
         version = 3;
+    }
+    if version == 3 {
+        tx.execute_batch(STEP_4).db()?;
+        version = 4;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -1656,6 +1765,12 @@ impl RawRow {
         };
         let linked = take();
         let record_columns: [Option<String>; 5] = std::array::from_fn(|_| take());
+        let task_id = take();
+        if let Some(task) = &task_id
+            && specengine_core::task::task_number(task).is_none()
+        {
+            return Err(corrupt(&id, "task_id", format!("{task:?} is no task ID")));
+        }
         let new_ids = if kind == ProposalKind::Create {
             columns.decode_create(&id, &target_id, base_hash.is_empty(), linked.as_deref())?
         } else {
@@ -1701,6 +1816,7 @@ impl RawRow {
             linked,
             record,
             new_ids,
+            task_id,
         })
     }
 }
@@ -2154,13 +2270,14 @@ fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
 }
 
 /// Inserts `proposal` (an `update` or a `create`) as `open` under the
-/// next ID, `linked` to the given proposal; a create's `target_ids` set
-/// ([`create_targets`]), an update's `NULL`; its ID.
+/// next ID, `linked` to the given proposal, bound to `task`; a create's
+/// `target_ids` set ([`create_targets`]), an update's `NULL`; its ID.
 fn insert_update(
     tx: &Transaction<'_>,
     project: &str,
     proposal: &NewProposal,
     linked: Option<&str>,
+    task: Option<&str>,
     now: &str,
 ) -> Result<String, QueueError> {
     let author = to_json(&proposal.author)?;
@@ -2181,7 +2298,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL)"
+             NULL, NULL, ?22)"
         ),
         rusqlite::params![
             id,
@@ -2205,6 +2322,7 @@ fn insert_update(
             now,
             linked,
             target_ids,
+            task,
         ],
     )
     .db()?;
@@ -2326,6 +2444,7 @@ fn insert_intake(
     tx: &Transaction<'_>,
     project: &str,
     new: &NewIntake,
+    task: Option<&str>,
     now: &str,
 ) -> Result<String, QueueError> {
     let intake = &new.intake;
@@ -2343,7 +2462,8 @@ fn insert_intake(
         &format!(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
-             ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL)"
+             ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
+             ?25)"
         ),
         rusqlite::params![
             id,
@@ -2370,6 +2490,7 @@ fn insert_intake(
             options,
             recommendation,
             distinct_from,
+            task,
         ],
     )
     .db()?;
@@ -2477,12 +2598,24 @@ struct MatchRow {
 
 impl ProposalQueue for SqliteQueue {
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError> {
+        self.create_with_task(proposal, None, now)
+    }
+
+    fn create_with_task(
+        &mut self,
+        proposal: &NewProposal,
+        task: Option<&str>,
+        now: &str,
+    ) -> Result<Proposal, QueueError> {
         check_time(now)?;
         if let Some(problem) = new_proposal_problem(proposal) {
             return Err(QueueError::Invalid(problem));
         }
         let project = self.project.clone();
         let tx = self.write()?;
+        if let Some(task) = task {
+            tasks::check_binding(&tx, &project, task, &proposal.place)?;
+        }
         // The live creates read under the write lock this one inserts
         // under: two creates of one new ID never both store.
         if !proposal.new_ids.is_empty() {
@@ -2496,7 +2629,7 @@ impl ProposalQueue for SqliteQueue {
                 }
             }
         }
-        let id = insert_update(&tx, &project, proposal, None, now)?;
+        let id = insert_update(&tx, &project, proposal, None, task, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let stored = existing(&tx, &project, &id)?;
         tx.commit().db()?;
@@ -2508,6 +2641,17 @@ impl ProposalQueue for SqliteQueue {
         intake: &NewIntake,
         corpus_hits: &[String],
         patch: Option<&NewProposal>,
+        now: &str,
+    ) -> Result<IntakeResult, QueueError> {
+        self.create_intake_with_task(intake, corpus_hits, patch, None, now)
+    }
+
+    fn create_intake_with_task(
+        &mut self,
+        intake: &NewIntake,
+        corpus_hits: &[String],
+        patch: Option<&NewProposal>,
+        task: Option<&str>,
         now: &str,
     ) -> Result<IntakeResult, QueueError> {
         check_time(now)?;
@@ -2529,6 +2673,9 @@ impl ProposalQueue for SqliteQueue {
         }
         let project = self.project.clone();
         let tx = self.write()?;
+        if let Some(task) = task {
+            tasks::check_binding(&tx, &project, task, &intake.place)?;
+        }
         // The dedup reads under the write lock it inserts under: a parallel
         // intake of the same item waits, then finds this one.
         let (hits, related) = queue_matches(&tx, &project, intake)?;
@@ -2550,11 +2697,12 @@ impl ProposalQueue for SqliteQueue {
                 linked: None,
             });
         }
-        let id = insert_intake(&tx, &project, intake, now)?;
+        let id = insert_intake(&tx, &project, intake, task, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let mut linked = None;
         if let Some(patch) = patch {
-            let update = insert_update(&tx, &project, patch, Some(&id), now)?;
+            // The linked update takes the item's task, in this transaction.
+            let update = insert_update(&tx, &project, patch, Some(&id), task, now)?;
             tx.execute(
                 "UPDATE main.proposals SET linked = ?1 WHERE id = ?2 AND project = ?3",
                 [update.as_str(), id.as_str(), project.as_str()],
@@ -2650,7 +2798,8 @@ impl ProposalQueue for SqliteQueue {
     }
 
     fn applied(&mut self, id: &str, commit: &str, now: &str) -> Result<Proposal, QueueError> {
-        self.applied_if(id, commit, None, now)
+        self.applied_if(id, commit, None, None, now)
+            .map(|(applied, _)| applied)
     }
 
     fn applied_with(
@@ -2660,7 +2809,8 @@ impl ProposalQueue for SqliteQueue {
         decision: &Decision,
         now: &str,
     ) -> Result<Proposal, QueueError> {
-        self.applied_if(id, commit, Some(decision), now)
+        self.applied_if(id, commit, Some(decision), None, now)
+            .map(|(applied, _)| applied)
     }
 
     fn reopen(

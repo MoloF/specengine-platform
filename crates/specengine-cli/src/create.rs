@@ -93,6 +93,7 @@ use crate::propose::{
 use crate::refresh::refresh;
 use crate::review::previewed;
 use crate::show::latin_fix;
+use crate::task::bound_task;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, store_error};
 
 /// What a create refuses as its writer.
@@ -127,7 +128,7 @@ pub fn propose_create(
     globals: &Globals,
     request: &CreateRequest,
 ) -> Result<ProposalOutcome, CliError> {
-    run_create(env, globals, request).map_err(escaped_error)
+    propose_create_with_task(env, globals, request, None)
 }
 
 /// `spec propose create --brief` (MCP `propose_change` of kind `create`):
@@ -138,6 +139,27 @@ pub fn propose_create_brief(
     request: &CreateRequest,
 ) -> Result<ProposalOutcome, CliError> {
     propose_create(env, globals, request).map(briefed)
+}
+
+/// [`propose_create`] with `--task T` (canon `tasks`, "Task-bound
+/// proposals"): bound to that task of this repository.
+pub fn propose_create_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &CreateRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    run_create(env, globals, request, task).map_err(escaped_error)
+}
+
+/// [`propose_create_brief`] with `--task T`.
+pub fn propose_create_brief_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &CreateRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    propose_create_with_task(env, globals, request, task).map(briefed)
 }
 
 /// What steps 2–3 make of a target and a text.
@@ -160,6 +182,7 @@ fn run_create(
     env: &Env,
     globals: &Globals,
     request: &CreateRequest,
+    task: Option<&str>,
 ) -> Result<ProposalOutcome, CliError> {
     let now = checked_now(&request.now)?;
     if let Some(problem) = author_problem(AuthorInput {
@@ -190,6 +213,13 @@ fn run_create(
             &reason,
             messages,
         ))
+    };
+    let task = match task {
+        Some(written) => match bound_task(&context, written, &place)? {
+            Ok(id) => Some(id),
+            Err(reason) => return refuse(reason, messages),
+        },
+        None => None,
     };
     let text = match read_text(env, &request.text)? {
         Ok(text) => text,
@@ -301,8 +331,11 @@ fn run_create(
             }
         }
     };
-    let created = match context.queue.create(&new, now) {
+    let created = match context.queue.create_with_task(&new, task.as_deref(), now) {
         Ok(created) => created,
+        Err(QueueError::TaskRefused { reason, .. }) => {
+            return refuse(format!("--task: {reason}"), messages);
+        }
         Err(QueueError::Reserved { id, by }) => {
             // Step 4's refusal, its holder's state read again.
             let reserved = context.queue.reserved().map_err(queue_cannot)?;

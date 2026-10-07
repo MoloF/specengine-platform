@@ -28,9 +28,11 @@ use common::{FIXTURES, fixture, read_text, repository_root};
 use specengine_core::ProjectConfig;
 
 /// The new sources of the slice, of docs/features/decision-apply.md
-/// (core `record`, CLI `decide`) and of docs/features/proposal-kinds.md
-/// (core and CLI `create`).
-const NEW_SOURCES: [&str; 15] = [
+/// (core `record`, CLI `decide`), of docs/features/proposal-kinds.md
+/// (core and CLI `create`) and of docs/features/task-package.md
+/// (docs/canon/task-package.md "Genre": model, core and store tasks, CLI `task` and `package`, the MCP
+/// task tools).
+const NEW_SOURCES: [&str; 21] = [
     "crates/specengine-core/src/patch.rs",
     "crates/specengine-core/src/proposal.rs",
     "crates/specengine-core/src/record.rs",
@@ -46,6 +48,12 @@ const NEW_SOURCES: [&str; 15] = [
     "crates/specengine-cli/src/review.rs",
     "crates/specengine-core/src/create.rs",
     "crates/specengine-cli/src/create.rs",
+    "crates/specengine-model/src/task.rs",
+    "crates/specengine-core/src/task.rs",
+    "crates/specengine-store/src/queue/tasks.rs",
+    "crates/specengine-cli/src/task.rs",
+    "crates/specengine-cli/src/package.rs",
+    "crates/specengine-mcp/src/tasks.rs",
 ];
 
 /// docs/features/proposal-kinds.md's new sources (AC-11).
@@ -432,4 +440,39 @@ fn ac20_no_dependency_is_added() {
             );
         }
     }
+}
+
+/// docs/canon/task-package.md "Genre" (ADR-0027): the task
+/// sources hold no literal naming an `[ids]` prefix of spec-a, spec-b or
+/// this repository, none equal to a kind of theirs but a class name, none
+/// holding `Cost`, `docs/` or `records/`: a task carries the project's
+/// words as data only. M: a kind literal (`"mechanic"`) in the package.
+#[test]
+fn task_package_the_task_sources_name_no_prefix_kind_or_directory() {
+    let (prefixes, kinds) = record_words();
+    let sources = [
+        "crates/specengine-model/src/task.rs",
+        "crates/specengine-core/src/task.rs",
+        "crates/specengine-store/src/queue/tasks.rs",
+        "crates/specengine-cli/src/task.rs",
+        "crates/specengine-cli/src/package.rs",
+        "crates/specengine-mcp/src/tasks.rs",
+    ];
+    let mut found = Vec::new();
+    for source in sources {
+        let text = fs::read_to_string(repository_root().join(source))
+            .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert!(text.len() > 1000, "{source} is read whole");
+        found.extend(record_offenders(source, &text, &prefixes, &kinds));
+    }
+    assert!(
+        found.is_empty(),
+        "project words in the task sources:\n{}",
+        found.join("\n")
+    );
+    let sample = "let k = \"mechanic\";\n";
+    assert_eq!(
+        record_offenders("sample.rs", sample, &prefixes, &kinds).len(),
+        1
+    );
 }

@@ -22,8 +22,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::{
     BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, Globals, MIN_TERM_CHARS,
-    OUTPUT_CAP_CHARS, Outcome, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
-    SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TreeRequest, render_json, render_text,
+    OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX,
+    SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TreeRequest, render_json,
+    render_text,
 };
 
 use crate::mirror::{
@@ -40,11 +41,19 @@ pub(crate) const MAX_RESULT_SIZE_KEY: &str = "anthropic/maxResultSizeChars";
 /// bounded tail (at most [`SHOW_TAIL_NAMES`] names per list) and the `note:`
 /// lines; the structured part is the same document as JSON, escaping a
 /// character into at most 6; the measured adversarial maximum is about
-/// 268 000. Not bounded by it, the corpus-defect residue: many holders of
-/// one ID (plain `show` JSON, without `--links`, keeps every holder's node:
-/// about 1 700 holders of one ID pass 500 000) and the `warning:` lines on
-/// stderr that list corpus defects.
+/// 268 000. `get_task`'s package and its notes keep within
+/// [`PACKAGE_BUDGET`] (460 000) by leaving out diff texts, then criteria
+/// references' texts, each such text cut at 8 192 B beforehand; its brief
+/// adds at most 40 000. Not bounded by it, the corpus-defect residue: many
+/// holders of one ID (plain `show` JSON, without `--links`, keeps every
+/// holder's node: about 1 700 holders of one ID pass 500 000) and the
+/// `warning:` lines on stderr that list corpus defects; a package whose
+/// other fields alone pass the budget (agent text escaped six-fold, many
+/// owner notes or open proposals, long corpus titles and paths).
 pub const MAX_RESULT_CHARS: u64 = 500_000;
+
+// A package at its budget and a brief at its cap fit the result.
+const _: () = assert!((PACKAGE_BUDGET + OUTPUT_CAP_CHARS) as u64 <= MAX_RESULT_CHARS);
 
 /// Claude Code truncates tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").

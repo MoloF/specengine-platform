@@ -7,6 +7,9 @@
 //! `SPECENGINE_WRITE_DAEMON_KEYS=1` regenerates the file from the daemon
 //! instead of asserting it unchanged. M: a review key missing.
 //!
+//! AC-10 of docs/features/task-package.md: `Proposal` holds `task_id`
+//! after `choice` (43 keys), `InboxEntry` none (11 keys).
+//!
 //! AC-09 of docs/features/ui-live.md, its Rust half: nine sets more, in
 //! the order the daemon sends their keys. `GraphView`, `GraphNode`,
 //! `GraphEdge`, `FollowedType` from graphs on A with nodes and edges (and
@@ -433,7 +436,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[0].1, ["slug", "name", "root", "branch"]);
     assert_eq!(sets[1].1.len(), 11, "{:?}", sets[1].1);
     assert!(!sets[1].1.contains(&"task_id".to_owned()));
-    assert!(!sets[2].1.contains(&"task_id".to_owned()));
+    // docs/features/task-package.md "Data", AC-10: the review document
+    // gains `task_id` after `choice`, 43 keys; inbox entries unchanged.
+    assert_eq!(sets[2].0, "Proposal");
+    assert_eq!(sets[2].1.len(), 43, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1[40..], ["choice", "task_id", "notes"]);
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();

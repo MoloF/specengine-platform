@@ -91,7 +91,7 @@ Tests: CLI `bundle.rs` (layers, REFs, keys), `bundle_fit.rs` (fitting, the hash 
 
 ## Not yet
 
-`--task`, task bundles, `bundle_task`, the package (Phase 2); proposals in layer 2; layers 5 and 9 (Phase 3; the keys stay, empty); the `bundles` log, `runs`, the follow-up-reads signal; the "changed since last time" header (06), 07 §1.1 Delta and Hints; MCP `compact`; a tokenizer crate.
+`spec bundle --task`, `get_context_bundle {task_id}` (`task-package.md`); proposals in layer 2; layers 5 and 9 (Phase 3; the keys stay, empty); the `bundles` log, `runs`, the follow-up-reads signal; the "changed since last time" header (06), 07 §1.1 Delta and Hints; MCP `compact`; a tokenizer crate.
 
 ## Open
 

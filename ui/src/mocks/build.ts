@@ -85,12 +85,11 @@ export type StoredReview = Proposal & {
 };
 
 /**
- * A queued proposal as the mock holds it: its review document (`getProposal`) and the task it was
- * raised for, which only the task package reads (`docs/features/task-package.md` "Data").
+ * A queued proposal as the mock holds it: its review document (`getProposal`), `task_id` the task
+ * it was raised for, which the review and the task package both read (`docs/features/task-package.md` "Data").
  */
 export interface MockProposal {
   review: StoredReview;
-  task_id: string | null;
 }
 
 const MINUTE = 60_000;
@@ -253,16 +252,16 @@ export function link(fields: Omit<MockLink, "reason" | "to" | "state"> & Partial
 }
 
 /**
- * A queued proposal: its whole review document, omitted keys null or empty as the review JSON
- * gives them (an update's `target_ids` its `[target_id]`), and the task it was raised for.
+ * A queued proposal: its whole review document in the review JSON's key order, omitted keys null
+ * or empty as it gives them (an update's `target_ids` its `[target_id]`; `task_id` null, unbound).
  */
-export function proposal(
-  fields: Pick<StoredReview, "id" | "project" | "kind" | "created_at"> & Partial<StoredReview> & { task_id?: string | null },
-): MockProposal {
-  const { task_id = null, ...given } = fields;
+export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | "created_at"> & Partial<StoredReview>): MockProposal {
+  const { id, project, kind, created_at, ...given } = fields;
   return {
-    task_id,
     review: {
+      id,
+      project,
+      kind,
       status: "open",
       target_id: null,
       target_path: null,
@@ -283,7 +282,8 @@ export function proposal(
       decided_at: null,
       decision_note: null,
       applied_commit: null,
-      updated_at: fields.created_at,
+      created_at,
+      updated_at: created_at,
       target_ids: fields.target_id === undefined || fields.target_id === null ? [] : [fields.target_id],
       severity: null,
       gap_type: null,
@@ -300,6 +300,7 @@ export function proposal(
       record_title: null,
       record_text: null,
       choice: null,
+      task_id: null,
       notes: [],
       ...given,
     },
@@ -379,6 +380,7 @@ export function noReview(id: string): Proposal {
     record_title: null,
     record_text: null,
     choice: null,
+    task_id: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

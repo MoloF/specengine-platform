@@ -29,11 +29,11 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `ui-live` (graph, check) shipped 2026-10-07; next, in order: `task-package` (ADR-0027), `ui-live-tasks`, `decision-staging` (ADR-0035); kinds `interpretation`, `amendment`, `decision` later.
-- Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
-- CLI: `task …`, `round new/answer`.
+- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `ui-live` (graph, check), `task-package` (7, ADR-0027) shipped 2026-10-07; next, in order: `ui-live-tasks`, `decision-staging` (ADR-0035); kinds `interpretation`, `amendment`, `decision` later.
+- Tasks, per project (`docs/canon/tasks.md`): states, the package, `spec_snapshot`, `stale`.
+- CLI: `task …`; `round new/answer`.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
-- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
+- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE (reads: `specengine-http`); agents' MCP is the `spec mcp` stdio bridge to it (MCP HTTP after MVP, 07 s1.1).
 - **Plugin** (06 §8; root `README.md`): hooks (07 §4, `gate` fail-closed), task prompts, stack-neutral roles, `/feature`; stack roles from a stack-profile plugin or the project (ADR-0027).
 - Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality: a synthetic non-Rust fixture in tests (07 §1.2, P2-5).

@@ -8,7 +8,7 @@ reviewed: 2026-10-07
 
 # ui -- the web UI
 
-The owner's screens, meaning 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home`, `ui-markdown`, `ui-health` shipped on mocks, `daemon-read`, `ui-live` on the daemon (2026-10-05 to -07); the rest: 08 s2 Phase 4.
+The owner's screens: 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home`, `ui-markdown`, `ui-health` shipped on mocks, `daemon-read`, `ui-live` on the daemon, `task-package` types (2026-10-05 to -07); the rest: 08 s2 Phase 4.
 
 ## Stack
 
@@ -18,7 +18,7 @@ A standalone pnpm project on strict TypeScript: no root `package.json`, no works
 
 - One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 s3). The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`.
 - App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
-- An endpoint 07 s3 lacks is named for `rust-developer` in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
+- An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
 - The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`docs/canon/decision-staging.md`, not built yet).
 
 ## Screen rules

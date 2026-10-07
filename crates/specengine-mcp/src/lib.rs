@@ -14,8 +14,11 @@
 //! tools `propose_change`, `ask_question`, `report_discrepancy` (writing
 //! only the proposal queue in the data directory, as `spec propose` does)
 //! and `get_proposal` (`spec review --brief`;
-//! `docs/canon/agent-intake.md` "Tools"); resources `spec://<slug>/tree`
-//! and `spec://<slug>/node/<id>` over the same calls.
+//! `docs/canon/agent-intake.md` "Tools"); the task tools `get_task`,
+//! `claim_task`, `submit_plan`, `report_run`, `complete_task` (`spec task
+//! show|claim|plan|report|complete`; `docs/canon/task-package.md` "MCP");
+//! resources `spec://<slug>/tree` and `spec://<slug>/node/<id>` over the
+//! same calls.
 //! Behind feature `probes`, the measurement build: the Phase 0 consent demo
 //! `review_proposal` (`_meta["anthropic/requiresUserInteraction"]: true`,
 //! a form through `elicitation/create` or a multi round-trip request) and
@@ -37,6 +40,7 @@ mod resources;
 #[cfg(feature = "probes")]
 mod review;
 mod server;
+mod tasks;
 
 pub use read::MAX_RESULT_CHARS;
 #[cfg(feature = "probes")]

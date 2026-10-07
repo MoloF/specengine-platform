@@ -3,8 +3,10 @@
 //! the checked values out.
 //!
 //! - `[project]` is closed: `slug` (a [`grammar::is_slug`] of at most
-//!   [`MAX_SLUG_BYTES`] bytes), `name`, `language`, all optional here; an
-//!   unknown key or a wrong type is an error at its line. A missing slug is
+//!   [`MAX_SLUG_BYTES`] bytes), `name`, `language`, `profile` (at most
+//!   [`MAX_PROFILE_BYTES`] bytes, carried verbatim into a task package and
+//!   never branched on: `docs/canon/task-package.md` "Genre"), all optional
+//!   here; an unknown key or a wrong type is an error at its line. A missing slug is
 //!   an error only where a command needs one ([`ProjectConfig::slug`]: the
 //!   index database is named by it), at the `[project]` line, else line 1.
 //! - `[ids]` and `[paths]` go through their own readers
@@ -39,6 +41,9 @@ use crate::scheme_toml::scheme_from_toml;
 /// The longest `[project] slug`, in bytes (a slug is ASCII).
 pub const MAX_SLUG_BYTES: usize = 64;
 
+/// The longest `[project] profile`, in UTF-8 bytes.
+pub const MAX_PROFILE_BYTES: usize = 64;
+
 /// The `[project]` table as written.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Project {
@@ -48,6 +53,9 @@ pub struct Project {
     pub name: Option<String>,
     /// The prose language, carried only.
     pub language: Option<String>,
+    /// The stack profile a task package names, verbatim; the engine never
+    /// branches on it.
+    pub profile: Option<String>,
 }
 
 /// A whole `specengine.toml` as the `spec` commands read it.
@@ -185,6 +193,20 @@ pub fn project_from_toml(text: &str) -> Result<ProjectConfig, ProjectError> {
         }
         project.name = table.name;
         project.language = table.language;
+        if let Some(profile) = table.profile {
+            let span = profile.span();
+            let profile = profile.into_inner();
+            if profile.len() > MAX_PROFILE_BYTES {
+                return Err(error_at(
+                    Some(span),
+                    format!(
+                        "`profile`: {} bytes; a profile has at most {MAX_PROFILE_BYTES}",
+                        profile.len()
+                    ),
+                ));
+            }
+            project.profile = Some(profile);
+        }
     }
     let scheme = scheme_from_toml(text)?;
     let paths = paths_from_toml(text)?;
@@ -286,6 +308,8 @@ struct ProjectTable {
     name: Option<String>,
     #[serde(default)]
     language: Option<String>,
+    #[serde(default)]
+    profile: Option<Spanned<String>>,
 }
 
 /// `[decision_records]`: exactly these three strings.

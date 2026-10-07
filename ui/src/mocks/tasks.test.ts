@@ -68,7 +68,7 @@ describe("the mock's tasks are fixed (AC-14)", () => {
       const project = queued.project.slug;
       const { tasks } = await client.getTasks(project);
       const ids = new Set(tasks.map((entry) => entry.id));
-      const bound = queued.proposals.flatMap((proposal) => proposal.task_id ?? []);
+      const bound = queued.proposals.flatMap(({ review }) => review.task_id ?? []);
       expect(bound.length).toBeGreaterThan(0);
       for (const id of bound) {
         expect([project, id, ids.has(id)]).toEqual([project, id, true]);
@@ -205,8 +205,17 @@ describe("T-0200 at every cap of the package (task-package Data, Caps)", () => {
     ]).toEqual([256, 4096, 16384, 64, 64, 64, 32, 128, 4096, 4096, 256]);
     expect(capped?.criteria.every((criterion) => criterion.text?.length === 1024)).toBe(true);
     expect(run?.changed_files.every((file) => file.length === 512)).toBe(true);
-    expect(capped?.snapshot_diff?.every((entry) => entry.cut && entry.diff.length <= 8192 && entry.diff.length > 8000)).toBe(true);
     expect(/^[\x20-\x7e\n]*$/.test(JSON.stringify(capped))).toBe(true);
+  });
+
+  it("caps its 128 diffs at 8 192 B each and 262 144 B in all: 32 sent, 96 null and cut, one note", () => {
+    const entries = capped?.snapshot_diff ?? [];
+    const sent = entries.flatMap((entry) => entry.diff ?? []);
+    expect([entries.length, sent.length, entries.every((entry) => entry.cut)]).toEqual([128, 32, true]);
+    expect(entries.slice(0, 32).every((entry) => entry.diff !== null && entry.diff.length <= 8192 && entry.diff.length > 8000)).toBe(true);
+    expect(entries.slice(32).every((entry) => entry.diff === null)).toBe(true);
+    expect(sent.reduce((total, diff) => total + diff.length, 0)).toBeLessThanOrEqual(262_144);
+    expect(capped?.notes).toEqual(["snapshot_diff: 96 diff(s) past 262144 B left out"]);
   });
 });
 

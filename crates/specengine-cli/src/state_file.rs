@@ -1,15 +1,17 @@
-//! The queue's dump, format 1 (canon `queue-backup`, "Format"): UTF-8
-//! compact JSON, one object per LF-ended line. The header
-//! `{"format":1,"queue_schema":3,"project":"<slug>","proposals":<p>,"events":<e>}`
+//! The queue's dump, format 2 (canon `tasks`, "Backup"; format 1: canon
+//! `queue-backup`, "Format"): UTF-8 compact JSON, one object per LF-ended
+//! line. The header
+//! `{"format":2,"queue_schema":4,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
-//! `proposals` row by ID number and every `events` row by `seq`, each
+//! `proposals` row by ID number, every `tasks` row by ID number, every
+//! `runs` row by task and number, every `events` row by `seq`, each
 //! `{"<table>":{…}}` with every column in table order: `TEXT` a string,
-//! `NULL` `null`, `seq` a number; `author`, `diagnostics`, `payload` stay
-//! the strings stored. No export time and no host inside: equal queues give
-//! equal bytes. A dump of queue schema 1 or 2 (canon `queue-backup`,
-//! "Format"; canon `decision-record`, "Queue and documents") still
-//! restores: its rows hold that schema's 24 or 35 columns, the later ones
-//! restored `NULL`.
+//! `NULL` `null`, `run` and `seq` numbers; JSON columns stay the strings
+//! stored. No export time and no host inside: equal queues give equal
+//! bytes. A format-1 dump (five header keys, queue schema 1, 2 or 3,
+//! `proposals` and `events` rows only) still restores: its rows hold that
+//! schema's 24, 35 or 40 columns, the later ones restored `NULL`; format 2
+//! is of queue schema 4 only.
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's
@@ -21,18 +23,33 @@ use std::io::{self, Write as _};
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use specengine_core::proposal::proposal_number;
+use specengine_core::task::task_number;
 use specengine_store::{
-    EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, StoredEvent, StoredProposal,
-    StoredQueue, proposal_columns,
+    EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredEvent,
+    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, proposal_columns,
 };
 
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 1;
+pub const STATE_FORMAT: u64 = 2;
+
+/// The oldest format this build restores: 1, proposals and events only.
+const PROPOSALS_ONLY_FORMAT: u64 = 1;
 
 /// The header's keys, in the order written.
-const HEADER_KEYS: [&str; 5] = ["format", "queue_schema", "project", "proposals", "events"];
+const HEADER_KEYS: [&str; 7] = [
+    "format",
+    "queue_schema",
+    "project",
+    "proposals",
+    "tasks",
+    "runs",
+    "events",
+];
+
+/// A format-1 header's keys.
+const HEADER_KEYS_1: [&str; 5] = ["format", "queue_schema", "project", "proposals", "events"];
 
 /// The dump of `state`, the queue of `slug` (see the module documentation):
 /// every string escaped by `serde_json` straight into the buffer, no text
@@ -47,8 +64,8 @@ pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
     serde_json::to_writer(&mut out, slug)?;
     writeln!(
         out,
-        ",\"proposals\":{},\"events\":{}}}",
-        counts.proposals, counts.events
+        ",\"proposals\":{},\"tasks\":{},\"runs\":{},\"events\":{}}}",
+        counts.proposals, counts.tasks, counts.runs, counts.events
     )?;
     for row in &state.proposals {
         out.extend_from_slice(b"{\"proposals\":{");
@@ -56,6 +73,27 @@ pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
             if index > 0 {
                 out.push(b',');
             }
+            push_column(&mut out, column, value.as_deref())?;
+        }
+        out.extend_from_slice(b"}}\n");
+    }
+    for row in &state.tasks {
+        out.extend_from_slice(b"{\"tasks\":{");
+        for (index, (column, value)) in TASK_COLUMNS.iter().zip(&row.columns).enumerate() {
+            if index > 0 {
+                out.push(b',');
+            }
+            push_column(&mut out, column, value.as_deref())?;
+        }
+        out.extend_from_slice(b"}}\n");
+    }
+    for row in &state.runs {
+        let [task_id, rest @ ..] = &row.columns;
+        out.extend_from_slice(b"{\"runs\":{");
+        push_column(&mut out, RUN_COLUMNS[0], task_id.as_deref())?;
+        write!(out, ",\"run\":{}", row.run)?;
+        for (column, value) in RUN_COLUMNS[2..].iter().zip(rest) {
+            out.push(b',');
             push_column(&mut out, column, value.as_deref())?;
         }
         out.extend_from_slice(b"}}\n");
@@ -101,6 +139,9 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
     let mut header: Option<Header> = None;
     let mut state = StoredQueue::default();
     let mut ids: HashMap<String, usize> = HashMap::new();
+    let mut task_ids: HashMap<String, usize> = HashMap::new();
+    let mut run_keys: HashMap<(String, i64), usize> = HashMap::new();
+    let mut run_lines: Vec<usize> = Vec::new();
     let mut seqs: HashMap<i64, usize> = HashMap::new();
     for (index, line) in body.split(|&byte| byte == b'\n').enumerate() {
         let number = index + 1;
@@ -109,9 +150,7 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
             header = Some(read_header(value, slug).map_err(|defect| at(number, &defect))?);
             continue;
         };
-        match read_row(value, &header.project, header.columns)
-            .map_err(|defect| at(number, &defect))?
-        {
+        match read_row(value, header).map_err(|defect| at(number, &defect))? {
             Row::Proposal(row) => {
                 // `read_row` took only an ID as the queue writes it.
                 let id = row.id().unwrap_or_default().to_owned();
@@ -122,6 +161,27 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
                     ));
                 }
                 state.proposals.push(*row);
+            }
+            Row::Task(row) => {
+                let id = row.id().unwrap_or_default().to_owned();
+                if let Some(first) = task_ids.insert(id, number) {
+                    return Err(at(
+                        number,
+                        &format!("`id` repeats the `tasks` row of line {first}"),
+                    ));
+                }
+                state.tasks.push(*row);
+            }
+            Row::Run(row) => {
+                let key = (row.task_id().unwrap_or_default().to_owned(), row.run);
+                if let Some(first) = run_keys.insert(key, number) {
+                    return Err(at(
+                        number,
+                        &format!("`task_id` and `run` repeat the `runs` row of line {first}"),
+                    ));
+                }
+                run_lines.push(number);
+                state.runs.push(*row);
             }
             Row::Event(row) => {
                 if let Some(first) = seqs.insert(row.seq, number) {
@@ -138,28 +198,62 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
     let Some(header) = header else {
         return Err(at(1, "no header line"));
     };
+    for (row, number) in state.runs.iter().zip(&run_lines) {
+        let task = row.task_id().unwrap_or_default();
+        if !task_ids.contains_key(task) {
+            return Err(at(
+                *number,
+                &format!("a run of `{task}`, a task the dump does not hold"),
+            ));
+        }
+    }
     let found = state.counts();
-    if found.proposals != header.proposals || found.events != header.events {
-        return Err(CliError::cannot(format!(
-            "{label}: header counts {}, {}; found {}, {}",
-            header.proposals, header.events, found.proposals, found.events
-        )));
+    let counts_differ = found.proposals != header.proposals
+        || found.tasks != header.tasks
+        || found.runs != header.runs
+        || found.events != header.events;
+    if counts_differ {
+        return Err(CliError::cannot(
+            if header.format == PROPOSALS_ONLY_FORMAT {
+                format!(
+                    "{label}: header counts {}, {}; found {}, {}",
+                    header.proposals, header.events, found.proposals, found.events
+                )
+            } else {
+                format!(
+                    "{label}: header counts {}, {}, {}, {}; found {}, {}, {}, {}",
+                    header.proposals,
+                    header.tasks,
+                    header.runs,
+                    header.events,
+                    found.proposals,
+                    found.tasks,
+                    found.runs,
+                    found.events
+                )
+            },
+        ));
     }
     Ok(state)
 }
 
 /// The header's values that the rows are checked against.
 struct Header {
+    format: u64,
     project: String,
     /// The `proposals` columns of its queue schema.
     columns: &'static [&'static str],
     proposals: u64,
+    tasks: u64,
+    runs: u64,
     events: u64,
 }
 
 /// A parsed row.
 enum Row {
     Proposal(Box<StoredProposal>),
+    Task(Box<StoredTask>),
+    Run(Box<StoredRun>),
     Event(StoredEvent),
 }
 
@@ -178,8 +272,9 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 }
 
 /// The header line: `format` first (a newer build's header may differ in
-/// all else), then exactly the five keys, `queue_schema`, `project` the
-/// root's slug, the counts.
+/// all else), then exactly the format's keys (format 1: five; 2: seven),
+/// `queue_schema` (format 1: 1 to 3; 2: this build's), `project` the root's
+/// slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
         entries
@@ -190,7 +285,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     let Some(format) = named("format") else {
         return Err(
             "no header: a dump's first line is `{\"format\":…,\"queue_schema\":…,\"project\":…,\
-             \"proposals\":…,\"events\":…}`"
+             \"proposals\":…,\"tasks\":…,\"runs\":…,\"events\":…}`"
                 .to_owned(),
         );
     };
@@ -203,20 +298,25 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
              {STATE_FORMAT}): upgrade SpecEngine"
         ));
     }
-    if format != STATE_FORMAT {
+    if format < PROPOSALS_ONLY_FORMAT {
         return Err(format!(
-            "the dump is of format {format}, which this build does not read (it reads format \
-             {STATE_FORMAT})"
+            "the dump is of format {format}, which this build does not read (it reads formats \
+             {PROPOSALS_ONLY_FORMAT} and {STATE_FORMAT})"
         ));
     }
+    let header_keys: &[&str] = if format == PROPOSALS_ONLY_FORMAT {
+        &HEADER_KEYS_1
+    } else {
+        &HEADER_KEYS
+    };
     let mut keys: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).collect();
     keys.sort_unstable();
-    let mut expected = HEADER_KEYS;
+    let mut expected = header_keys.to_vec();
     expected.sort_unstable();
     if keys != expected {
         return Err(format!(
-            "the header's keys are not exactly {}",
-            HEADER_KEYS
+            "the header's keys are not exactly {} (format {format})",
+            header_keys
                 .iter()
                 .map(|key| format!("`{key}`"))
                 .collect::<Vec<_>>()
@@ -233,11 +333,24 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
              {QUEUE_SCHEMA_VERSION}): upgrade SpecEngine"
         ));
     }
-    let Some(columns) = proposal_columns(schema) else {
-        return Err(format!(
-            "the dump's queue schema is {schema}, which this build does not restore (it \
-             restores queue schemas 1 to {QUEUE_SCHEMA_VERSION})"
-        ));
+    let columns = match proposal_columns(schema) {
+        Some(_) if format == PROPOSALS_ONLY_FORMAT && schema == QUEUE_SCHEMA_VERSION => None,
+        Some(_) if format != PROPOSALS_ONLY_FORMAT && schema != QUEUE_SCHEMA_VERSION => None,
+        columns => columns,
+    };
+    let Some(columns) = columns else {
+        return Err(if format == PROPOSALS_ONLY_FORMAT {
+            format!(
+                "the dump's queue schema is {schema}, which a format-1 dump does not hold (it \
+                 holds queue schemas 1 to {})",
+                QUEUE_SCHEMA_VERSION - 1
+            )
+        } else {
+            format!(
+                "the dump's queue schema is {schema}, which a format-{format} dump does not hold \
+                 (it holds queue schema {QUEUE_SCHEMA_VERSION})"
+            )
+        });
     };
     let Some(Json::String(project)) = named("project") else {
         return Err("the header's `project` is not a string".to_owned());
@@ -254,34 +367,51 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
             "the header's `{key}` is not a count (an integer ≥ 0)"
         )),
     };
+    let (tasks, runs) = if format == PROPOSALS_ONLY_FORMAT {
+        (0, 0)
+    } else {
+        (count("tasks")?, count("runs")?)
+    };
     Ok(Header {
+        format,
         project: project.clone(),
         columns,
         proposals: count("proposals")?,
+        tasks,
+        runs,
         events: count("events")?,
     })
 }
 
-/// A row line: `{"proposals":{…}}` or `{"events":{…}}`, every column of
-/// the table (`proposals`: of the header's queue schema) once and no other,
-/// `TEXT` a string or `null`, `seq` an integer ≥ 1, `id` as the queue writes
-/// it, `project` the header's.
-fn read_row(
-    mut entries: Vec<(String, Json)>,
-    project: &str,
-    proposal_columns: &[&str],
-) -> Result<Row, String> {
-    const SHAPE: &str = "not a row `{\"proposals\":{…}}` or `{\"events\":{…}}`";
+/// A row line: `{"proposals":{…}}`, `{"tasks":{…}}`, `{"runs":{…}}`
+/// (format 2) or `{"events":{…}}`, every column of the table
+/// (`proposals`: of the header's queue schema) once and no other, `TEXT` a
+/// string or `null`, `run` and `seq` integers ≥ 1, an `id` and a run's
+/// `task_id` as the queue writes them, `project` the header's.
+fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, String> {
+    const SHAPE: &str = "not a row `{\"<table>\":{…}}` of one table";
+    let project = header.project.as_str();
+    let with_tasks = header.format != PROPOSALS_ONLY_FORMAT;
     if entries.len() != 1 {
         return Err(SHAPE.to_owned());
     }
     let (table, value) = entries.remove(0);
     let columns: &[&str] = match table.as_str() {
-        "proposals" => proposal_columns,
+        "proposals" => header.columns,
+        "tasks" if with_tasks => &TASK_COLUMNS,
+        "runs" if with_tasks => &RUN_COLUMNS,
         "events" => &EVENT_COLUMNS,
+        _ if with_tasks => {
+            return Err(
+                "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs` and \
+                 `events` rows)"
+                    .to_owned(),
+            );
+        }
         _ => {
             return Err(
-                "a row of an unknown table (a dump holds `proposals` and `events` rows)".to_owned(),
+                "a row of an unknown table (a format-1 dump holds `proposals` and `events` rows)"
+                    .to_owned(),
             );
         }
     };
@@ -305,6 +435,59 @@ fn read_row(
             return Err(format!("the `{table}` row has no `{column}`"));
         };
         taken.push((*column, value));
+    }
+    if table == "tasks" {
+        let mut columns: [Option<String>; TASK_COLUMNS.len()] = std::array::from_fn(|_| None);
+        for (slot, (column, value)) in columns.iter_mut().zip(taken) {
+            *slot = text(column, value)?;
+        }
+        let row = StoredTask { columns };
+        if !row
+            .id()
+            .and_then(task_number)
+            .is_some_and(|number| number >= 1)
+        {
+            return Err(format!(
+                "`id` is not a task ID as the queue writes it (`T-` and 4 or more digits, \
+                 numbered from 1 to {})",
+                u64::MAX
+            ));
+        }
+        if row.project() != Some(project) {
+            return Err(format!("`project` is not the header's (`{project}`)"));
+        }
+        return Ok(Row::Task(Box::new(row)));
+    }
+    if table == "runs" {
+        let mut columns: [Option<String>; RUN_COLUMNS.len() - 1] = Default::default();
+        let mut run = None;
+        let mut slot = 0;
+        for (column, value) in taken {
+            if column == "run" {
+                run = match value {
+                    Json::Count(number) if number >= 1 => i64::try_from(number).ok(),
+                    _ => None,
+                };
+                if run.is_none() {
+                    return Err("`run` is not an integer ≥ 1".to_owned());
+                }
+                continue;
+            }
+            columns[slot] = text(column, value)?;
+            slot += 1;
+        }
+        let Some(run) = run else {
+            return Err("`run` is not an integer ≥ 1".to_owned());
+        };
+        let row = StoredRun { run, columns };
+        if !row
+            .task_id()
+            .and_then(task_number)
+            .is_some_and(|number| number >= 1)
+        {
+            return Err("`task_id` is not a task ID as the queue writes it".to_owned());
+        }
+        return Ok(Row::Run(Box::new(row)));
     }
     if table == "events" {
         let mut taken = taken.into_iter();

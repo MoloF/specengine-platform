@@ -23,7 +23,7 @@ function ProposalItems({ project, proposals }: { project: string; proposals: rea
               {proposal.target_ids.join(", ")}
             </span>
           </p>
-          <p className="task-text task-proposal-summary">{proposal.summary}</p>
+          {proposal.summary !== null && <p className="task-text task-proposal-summary">{proposal.summary}</p>}
         </li>
       ))}
     </ul>

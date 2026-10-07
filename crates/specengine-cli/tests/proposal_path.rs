@@ -1113,8 +1113,8 @@ fn export_to(pair: &Pair, home: &Path, out: &Path, now: &str) -> Vec<u8> {
 
 /// AC-10: AC-01's update and AC-07's question (both path targets)
 /// exported and imported into a fresh `HOME`: `dump()` equal, the re-export
-/// byte-identical, `queue_schema` 3 (docs/features/decision-apply.md
-/// "Data"); the restored rows read back by
+/// byte-identical, format 2, `queue_schema` 4 (docs/features/task-package.md
+/// "Backup"); the restored rows read back by
 /// `review`. M: a read-time ID check on `target_id`.
 #[test]
 fn ac10_path_targets_round_trip_through_a_backup() {
@@ -1141,7 +1141,8 @@ fn ac10_path_targets_round_trip_through_a_backup() {
     let text = String::from_utf8(bytes.clone()).expect("a UTF-8 dump");
     assert!(
         text.starts_with(
-            "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":2,\"queue_schema\":4,\"project\":\"lantern-keep\",\"proposals\":2,\
+             \"tasks\":0,\"runs\":0,"
         ),
         "{text}"
     );

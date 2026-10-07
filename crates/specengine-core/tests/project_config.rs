@@ -48,6 +48,7 @@ fn the_data_example_loads() {
             slug: Some("lantern-keep".into()),
             name: Some("Lantern Keep".into()),
             language: Some("en".into()),
+            profile: None,
         }
     );
     assert_eq!(config.project_line, Some(1));

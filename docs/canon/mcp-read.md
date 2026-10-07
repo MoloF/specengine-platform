@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1–1.3): agents read th
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the four read tools, the four queue tools (`agent-intake.md`) and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output`, `probe_sleep` and a paragraph of `instructions`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the four read tools, the four queue tools (`agent-intake.md`), the five task tools (`task-package.md` "MCP") and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output`, `probe_sleep` and a paragraph of `instructions`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1–1.3): agents read th
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, ≤ 2 048 bytes: Claude Code truncates at 2 048 characters and defers tools behind tool search): the eight tools (the queue's: only the queue written), REF forms, the flag map (`--kind` `kinds`, ROOT `root`, `--links` `with ["links"]`), the cut, the resources, determinism, "reads refresh SpecEngine's index in its data directory; nothing under the project root is written"; 1 740 B (1 897 with `probes`). Each description ≤ 2 048, ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, ≤ 2 048 bytes: Claude Code truncates at 2 048 characters and defers tools behind tool search): the thirteen tools (the queue's and the tasks': only the queue written), REF forms, the flag map (`--kind` `kinds`, ROOT `root`, `--links` `with ["links"]`), the cut, the resources, determinism, "reads refresh SpecEngine's index in its data directory; nothing under the project root is written"; 1 878 B (2 035 with `probes`). Each description ≤ 2 048, ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -48,28 +48,28 @@ Each request finds the project anew from the process's current directory and the
 
 ## Size
 
-`MAX_RESULT_CHARS` = 500 000 per tool, text and serialized `structuredContent` together. The bound: text ≤ 40 000 characters + one tail (≤ `SHOW_TAIL_NAMES` names per list) + note lines; JSON holds the printed items only, a character escaping into ≤ 6 (`\u00XX`). Measured maxima (text + JSON, debug): `get_node` of a control-character document 267 668, the largest; `get_tree` of control-character titles 246 644, of short lines 178 296, of 8 000 sections 129 924; `search` 231 083; a control-character bundle 246 360 (budget 1 000 000), 220 287 (12 000); `get_node` of a document of 8 000 ID sections 92 786. Unbounded residue (corpus defects): many holders of one ID in plain `show` JSON without `--links` (every holder's node kept: ~1 700 holders pass 500 000); `warning:` lines listing corpus defects; ID and path length.
+`MAX_RESULT_CHARS` = 500 000 per tool, text and serialized `structuredContent` together. The bound: text ≤ 40 000 characters + one tail (≤ `SHOW_TAIL_NAMES` names per list) + note lines; JSON holds the printed items only, a character escaping into ≤ 6 (`\u00XX`). Measured maxima (text + JSON, debug, control characters): `get_node` 267 668, `get_tree` 246 644, `search` 231 083, `get_context_bundle` 246 360. `get_task`: JSON and notes within `PACKAGE_BUDGET` 460 000, the brief 40 000 (`task-package.md` "Caps"): within 500 000 whenever its other fields fit (every cap at once: 496 338). Unbounded residue (corpus defects): many holders of one ID in plain `show` JSON without `--links` (every holder's node kept: ~1 700 holders pass 500 000); `warning:` lines listing corpus defects; ID and path length; a package's agent free text of control characters escaped six-fold (~+290 000) or `"`, `\` doubled in changed files (+131 000), ~60 owner notes of 4 096 B or as many open proposals on its nodes, long corpus titles and paths, corrupt-row notes.
 
 ## Latency
 
-AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8–28 ms, warm 2–6 ms; a copy of this repository's docs (83 files) cold 178–236 ms, warm 19–72 ms; 3 000 synthetic candidates: `get_context_bundle` 886 ms, at budget 10 000 1 821 ms, `get_tree` 593 ms. The warm call over 1 s opens the CLI README's "lighter resolver input". Pilots: not named yet.
+AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8–28 ms, warm 2–6 ms; a copy of this repository's docs (83 files) cold 178–236 ms, warm 19–72 ms; 3 000 synthetic candidates: `get_context_bundle` 886 ms, at budget 10 000 1 821 ms, `get_tree` 593 ms. The warm call over 1 s opens the CLI README's "lighter resolver input".
 
 ## Owner's check
 
 AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Recorded 2026-10-03**: Claude Code 2.1.288, `claude --mcp-config fixtures/mcp/mcp.json --strict-mcp-config` from the repository root, `MAX_MCP_OUTPUT_TOKENS` unset.
 
 - `${…}` expands: the DB landed in the scratch `HOME` (`$TMPDIR/specengine-mcp-home`); the owner's data directory was not created. `/mcp`: 7 tools, the `probes` set.
-- cwd = the session's: `get_tree {}` used this repository's config (`note: no document under [paths] spec "docs/spec"; give a ROOT`: no `[paths] spec`, no `parent:` here).
-- The four tools work: `search` "bundle budget" 12 hits (5 archived hidden); `get_node ADR-0031` ± `with: ["links"]`: 7 outgoing, 8 incoming, 4 left out (2 generated, 2 archived); `get_context_bundle ADR-0031` budget 2 000: 385 tokens, the target only, `more: 0` (ADRs cite by `mentions` only).
+- cwd = the session's: `get_tree {}` used this repository's config.
+- The four tools work: `search` "bundle budget" 12 hits; `get_node ADR-0031` ± `with: ["links"]`; `get_context_bundle ADR-0031` budget 2 000: 385 tokens.
 - `structuredContent` reaches the model: it gave `end_line` 18, `utf8` `true` of `get_node ADR-0031` (JSON only; `wc -l` 18).
 - Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file, `result (<N> characters across <M> lines) exceeds maximum allowed tokens`: the content cap lies in 48 000–60 000 (Phase 0: 48 000 in, 104 000 out).
 - Above it in total, `get_node` of 05 (text ≈ 40 000 characters, `truncated: false`, the same text in `structuredContent`, whose `truncated`, `sections` the model reported) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished. Read tools pass at this size: Q3's fallback not triggered.
-- `@specengine:` lists the template (`spec:// – node`) and documents by path (04…08, crate READMEs); `@spec…` alone suggests other Claude sessions; the `tree` resource was not seen.
+- `@specengine:` lists the template and documents by path; the `tree` resource was not seen.
 - Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (to ~268 000 combined, Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
 
 ## Tests
 
-`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default` (lists, annotations, texts), `mcp_read` (parity, errors, schemas), `mcp_resources`, `mcp_session` (discovery, freshness, cancellation, `HOME`), `mcp_door` (the single door in a git repository), `mcp_intake`, `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
+`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default` (lists, annotations, texts), `mcp_read` (parity, errors, schemas), `mcp_resources`, `mcp_session` (discovery, freshness, cancellation, `HOME`), `mcp_door` (the single door in a git repository), `mcp_intake`, `mcp_tasks` (task tools), `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
 
 ## Open
 

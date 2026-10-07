@@ -26,7 +26,8 @@
 //!   eleven keys after `updated_at` instead of an update's texts, `diff`,
 //!   `preview`; their decision record (canon `decision-record`, "Queue and
 //!   documents") the five after `linked`: `record_id`, `record_path`, `record_title`,
-//!   `record_text`, `choice` (an object). A create (task spec
+//!   `record_text`, `choice` (an object); then `task_id`, the task it was
+//!   raised for (canon `tasks`, "Task-bound proposals"). A create (task spec
 //!   `proposal-kinds`) is an update's document, `target_ids` as stored; a
 //!   new file's base `null`, its diff from an empty base.
 //! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts
@@ -153,6 +154,8 @@ pub struct ProposalDocument {
     pub record_text: Option<String>,
     /// `{"option":N}`, `{"working_answer":true}` or `{"answer":"…"}`.
     pub choice: Option<Choice>,
+    /// The task it was raised for; `null` unbound.
+    pub task_id: Option<String>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -217,6 +220,7 @@ impl ProposalDocument {
             record_title: proposal.record.as_ref().map(|record| record.title.clone()),
             record_text: proposal.record.as_ref().map(|record| record.text.clone()),
             choice: proposal.record.as_ref().map(|record| record.choice.clone()),
+            task_id: proposal.task_id.clone(),
             notes: Vec::new(),
         }
     }
@@ -782,6 +786,7 @@ fn review_text(document: &ProposalDocument) -> String {
         .as_ref()
         .and_then(|choice| serde_json::to_string(choice).ok());
     line(&mut out, "choice", choice.as_deref());
+    line(&mut out, "task_id", document.task_id.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
 }

@@ -1,7 +1,9 @@
-//! The JSON Schemas of the read tools (task spec `mcp-read`, "Data") and of
+//! The JSON Schemas of the read tools (task spec `mcp-read`, "Data"), of
 //! the queue tools (`docs/canon/agent-intake.md` "Review document",
 //! "Intake document", "Tools": the review and intake documents; the closed
-//! objects of `report_discrepancy`'s input).
+//! objects of `report_discrepancy`'s input) and of the task tools
+//! (`docs/canon/task-package.md` "Package", "MCP": the package, the task
+//! commands' document).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -440,6 +442,8 @@ pub(crate) struct ReviewDocument {
     pub record_text: Option<String>,
     /// The owner's choice.
     pub choice: Option<Choice>,
+    /// The task it was raised for; `null` unbound.
+    pub task_id: Option<String>,
     pub notes: Vec<String>,
 }
 
@@ -608,4 +612,197 @@ pub(crate) struct IntakeMatch {
 pub(crate) enum MatchSource {
     Corpus,
     Queue,
+}
+
+// ------------------------------------------------------------------- tasks
+
+/// The task package: `spec task show --json`
+/// (`docs/canon/task-package.md` "Package"); the model's `TaskPackage`,
+/// key for key.
+#[derive(JsonSchema)]
+pub(crate) struct TaskPackage {
+    /// Raised when a key is removed, renamed or re-meant.
+    pub schema_version: u32,
+    pub id: String,
+    pub project: String,
+    pub status: TaskState,
+    pub title: Option<String>,
+    pub goal: Option<String>,
+    /// `[project] profile`, verbatim.
+    pub profile: Option<String>,
+    /// A snapshot node changed or gone in the compared place; `null` when
+    /// it cannot be told (a note says why).
+    pub stale: Option<bool>,
+    pub targets: Vec<PackageTarget>,
+    pub criteria: Vec<TaskCriterion>,
+    pub affected_nodes: Vec<String>,
+    pub plan: Option<String>,
+    pub assumptions: Vec<PackageAssumption>,
+    pub open_proposals: Vec<PackageProposal>,
+    pub owner_notes: Vec<OwnerNote>,
+    /// `[]` until code bindings exist.
+    pub bindings: Vec<Binding>,
+    pub spec_snapshot: Option<SpecSnapshot>,
+    /// `[]` when not stale, `null` when staleness cannot be told.
+    pub snapshot_diff: Option<Vec<SnapshotDiff>>,
+    pub claim: Option<TaskClaim>,
+    pub runs: Vec<TaskRun>,
+    pub bundle: PackageBundle,
+    pub author: ProposalAuthor,
+    pub created_at: String,
+    pub updated_at: String,
+    pub notes: Vec<String>,
+}
+
+/// A task's state.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum TaskState {
+    Draft,
+    Analysis,
+    Review,
+    ChangesRequested,
+    Ready,
+    InProgress,
+    InReview,
+    Done,
+    Accepted,
+    Cancelled,
+}
+
+/// How a run ended, as reported.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum RunOutcome {
+    Completed,
+    Partial,
+    Failed,
+    Abandoned,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct PackageTarget {
+    pub id: Option<String>,
+    pub path: Option<String>,
+    /// Free: the project's kinds.
+    pub kind: Option<String>,
+    pub title: Option<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct TaskCriterion {
+    #[schemars(rename = "ref")]
+    pub reference: Option<String>,
+    pub text: Option<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct PackageAssumption {
+    pub proposal: String,
+    pub text: String,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct PackageProposal {
+    pub id: String,
+    /// Free: the queue's kinds.
+    pub kind: String,
+    pub status: ProposalState,
+    pub target_ids: Vec<String>,
+    pub task_id: Option<String>,
+    pub summary: Option<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct OwnerNote {
+    pub at: String,
+    pub note: String,
+}
+
+/// A code binding of a node: none until they exist.
+pub(crate) struct Binding;
+
+impl JsonSchema for Binding {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("Binding")
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        let mut object = JsonObject::new();
+        object.insert("type".to_owned(), Value::String("object".to_owned()));
+        Schema::from(object)
+    }
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct SpecSnapshot {
+    pub at: String,
+    pub place: SnapshotPlace,
+    pub nodes: Vec<SnapshotNode>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct SnapshotPlace {
+    pub worktree: String,
+    pub root_rel: String,
+    pub branch: String,
+    pub commit: String,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct SnapshotNode {
+    pub id: String,
+    pub path: String,
+    pub span_hash: String,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct SnapshotDiff {
+    pub id: String,
+    pub path: String,
+    pub span_hash: String,
+    /// `null` past the package's total.
+    pub diff: Option<String>,
+    pub cut: bool,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct TaskClaim {
+    pub at: String,
+    pub role: String,
+    pub worktree: String,
+    pub branch: String,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct TaskRun {
+    pub run: u64,
+    pub role: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub outcome: Option<RunOutcome>,
+    pub summary: Option<String>,
+    pub changed_files: Vec<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct PackageBundle {
+    pub node_ids: Vec<String>,
+    pub budget: u32,
+    pub bundle_hash: Option<String>,
+}
+
+/// `spec task claim|plan|report|complete --json`.
+#[derive(JsonSchema)]
+pub(crate) struct TaskDocument {
+    pub id: Option<String>,
+    pub status: Option<TaskState>,
+    /// The run the command opened or closed.
+    pub run: Option<u64>,
+    /// A refusal's reason last.
+    pub notes: Vec<String>,
 }

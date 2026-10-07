@@ -185,9 +185,10 @@ export type Choice = { option: number } | { working_answer: true } | { answer: s
  * every key present, absent `null`, lists `[]`. The exit-1 document (no such proposal here) has
  * every scalar `null` and its reason as the last of `notes`. A question or a discrepancy fills the
  * eleven keys after `updated_at` instead of an update's texts, `diff` and `preview`; a decided
- * one its record's five after `linked`.
+ * one its record's five after `linked`; `task_id`, after `choice`, the task it was raised for.
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
- * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data".
+ * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
+ * `docs/features/task-package.md` "Data".
  */
 export interface Proposal {
   id: string | null;
@@ -240,6 +241,8 @@ export interface Proposal {
   /** The record's bytes. */
   record_text: string | null;
   choice: Choice | null;
+  /** The task it was raised for (`--task`), never changed; null unbound. */
+  task_id: string | null;
   /** Why a preview is unavailable, what a reader should know, a refusal's reason last. */
   notes: string[];
 }
@@ -671,7 +674,8 @@ export interface TaskProposal {
   status: ProposalStatus;
   target_ids: string[];
   task_id: string | null;
-  summary: string;
+  /** A question's text, else the rationale's first line; null when it has neither. */
+  summary: string | null;
 }
 
 /** The owner's note of a `changes --note`, oldest first. Source: `docs/features/task-package.md` "Data". */
@@ -702,13 +706,17 @@ export interface SpecSnapshot {
   nodes: SnapshotNode[];
 }
 
-/** A node changed since approval: unified hunks from the snapshot text, cut at 8 192 B. Source: `docs/features/task-package.md` "Data". */
+/**
+ * A node changed since approval: unified hunks from the snapshot text, cut at 8 192 B at a line
+ * end (`cut`); past 262 144 B in all, this and every later entry `diff` null, `cut` true, and one
+ * note says how many. Source: `docs/features/task-package.md` "Data".
+ */
 export interface SnapshotDiff {
   id: string;
   path: string;
   /** The snapshot's (the old side). */
   span_hash: string;
-  diff: string;
+  diff: string | null;
   cut: boolean;
 }
 

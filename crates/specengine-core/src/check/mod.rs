@@ -74,8 +74,9 @@ pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use bundle::{BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers};
 pub use config::{
-    Budgets, BundleNode, CheckConfig, CheckRule, ClassContract, Classes, ConfigError, DEFAULT_GATE,
-    DocClass, Generator, Mode, Shard, ShardKind, bundle_node_from_toml, check_config_from_toml,
+    Budgets, BundleNode, BundleTask, CheckConfig, CheckRule, ClassContract, Classes, ConfigError,
+    DEFAULT_GATE, DocClass, Generator, Mode, Shard, ShardKind, bundle_node_from_toml,
+    bundle_task_from_toml, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};

@@ -17,6 +17,14 @@
 //! `HOME`, and the queue holds what was proposed. M: `propose_change`
 //! writes its target.
 //!
+//! AC-09 of docs/features/task-package.md (one door): the task tools join
+//! it — a `ready` task (`T-0001`, made and approved through the CLI
+//! library before the sessions, consent yes) is claimed in the
+//! repository's worktree, its run reported and the task completed across
+//! the two eras, `get_task` read by ID, by `next`, for an unknown task and
+//! with both or neither argument, refusals in between; the repository
+//! stays byte-identical and `git status` empty.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -36,6 +44,9 @@ use std::process::{Command, Stdio};
 use common::read::{ERAS, Era, Session, TOOLS, assert_bad_arguments, content_text};
 use common::*;
 use serde_json::{Value, json};
+use specengine_cli::{
+    Env, Exit, GitEnv, Globals, TaskDecisionRequest, TaskNewRequest, task_approve, task_new,
+};
 
 /// `git args` in `dir`: a cleared environment, no global or system config,
 /// a fixed identity. A repository it makes gets [`scratch_git::QUIET`] in
@@ -74,8 +85,9 @@ fn git(dir: &Path, home: &Path, args: &[&str]) -> String {
 }
 
 /// Valid and invalid calls of each tool (`base`: `RULE-STAM-REGEN`'s
-/// `span_hash`); a tool missing here fails the test when it is listed.
-fn calls_of(tool: &str, base: &str) -> Option<(Vec<Value>, Vec<Value>)> {
+/// `span_hash`, `root`: the repository's worktree, where `T-0001` is
+/// claimed); a tool missing here fails the test when it is listed.
+fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value>)> {
     let regen = "## Regeneration {#RULE-STAM-REGEN}\n\nStamina regenerates only at rest.\n";
     let calls = match tool {
         "get_tree" => (
@@ -208,6 +220,57 @@ fn calls_of(tool: &str, base: &str) -> Option<(Vec<Value>, Vec<Value>)> {
             ],
             vec![json!({}), json!({"proposal_id": 1})],
         ),
+        // docs/features/task-package.md AC-09: the task tools.
+        "get_task" => (
+            vec![
+                json!({"task_id": "T-0001"}),
+                json!({"next": true}),
+                json!({"task_id": "T-0099"}),
+                json!({"task_id": "T-0001", "next": true}),
+                json!({}),
+                json!({"next": false}),
+                json!({"task_id": "\u{0422}-0001"}),
+            ],
+            vec![json!({"task_id": 1}), json!({"bogus": true})],
+        ),
+        "claim_task" => (
+            vec![
+                json!({"task_id": "T-0001", "role": "developer", "worktree": root}),
+                json!({"task_id": "T-0001", "role": "developer", "worktree": "/nonexistent"}),
+            ],
+            vec![
+                json!({"task_id": "T-0001", "worktree": root}),
+                json!({"task_id": "T-0001", "role": "developer", "worktree": 7}),
+            ],
+        ),
+        "complete_task" => (
+            vec![json!({"task_id": "T-0001"}), json!({"task_id": "T-0099"})],
+            vec![json!({}), json!({"task_id": ["T-0001"]})],
+        ),
+        "report_run" => (
+            vec![
+                json!({"task_id": "T-0001", "outcome": "completed", "summary": "Done.",
+                    "changed_files": ["src/stamina.rs"]}),
+                json!({"task_id": "T-0001", "outcome": "finished", "summary": "Done.",
+                    "changed_files": []}),
+            ],
+            vec![
+                json!({"task_id": "T-0001", "outcome": "completed", "summary": "Done."}),
+                json!({"task_id": "T-0001", "outcome": "completed", "summary": "Done.",
+                    "changed_files": "src/stamina.rs"}),
+            ],
+        ),
+        "submit_plan" => (
+            vec![
+                json!({"task_id": "T-0001", "plan_md": "1. Do.", "criteria": ["MEC-STAMINA"],
+                "affected_nodes": ["RULE-STAM-REGEN"]}),
+            ],
+            vec![
+                json!({"task_id": "T-0001", "plan_md": "1. Do.", "criteria": "MEC-STAMINA",
+                    "affected_nodes": []}),
+                json!({"task_id": "T-0001", "criteria": [], "affected_nodes": []}),
+            ],
+        ),
         _ => return None,
     };
     Some(calls)
@@ -238,10 +301,53 @@ fn ac08_reads_write_nothing_under_the_project_root() {
         "",
         "committed clean"
     );
+    // The sandbox's own HOME and XDG directories exist before the
+    // snapshot of the scratch's paths.
+    let sandbox = scratch_git::Sandbox::new(scratch.path());
     let tree_before = snapshot(&root);
     let paths_before: BTreeSet<String> = snapshot(scratch.path()).into_keys().collect();
     let cwd = root.join("docs").join("spec");
     let mut base = None;
+
+    // A `ready` task through the CLI library (the owner's approve: consent
+    // yes): no MCP tool makes or approves one.
+    let env = Env {
+        cwd: root.clone(),
+        home: Some(home.clone().into_os_string()),
+        xdg_data_home: None,
+    };
+    let task_git = GitEnv::new(&root, sandbox.vars());
+    let made = task_new(
+        &env,
+        &Globals::default(),
+        &TaskNewRequest {
+            nodes: vec!["MEC-STAMINA".to_owned()],
+            title: Some("Tune the regeneration".to_owned()),
+            goal: None,
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: "2026-10-07T09:00:00Z".to_owned(),
+            git: task_git.clone(),
+        },
+    )
+    .expect("task new");
+    assert_eq!(made.id.as_deref(), Some("T-0001"), "{made:?}");
+    let mut yes = |_: &str| true;
+    let approved = task_approve(
+        &env,
+        &Globals::default(),
+        &TaskDecisionRequest {
+            id: "T-0001".to_owned(),
+            note: None,
+            now: "2026-10-07T09:00:01Z".to_owned(),
+            git: task_git,
+        },
+        &mut yes,
+    )
+    .expect("task approve");
+    assert_eq!(approved.exit(), Exit::Answered, "{approved:?}");
+    let root_text = root.to_str().expect("a UTF-8 root").to_owned();
 
     let mut called = BTreeSet::new();
     for era in ERAS {
@@ -257,7 +363,7 @@ fn ac08_reads_write_nothing_under_the_project_root() {
             })
             .clone();
         for name in tool_names(&list) {
-            let (valid, invalid) = calls_of(&name, &base)
+            let (valid, invalid) = calls_of(&name, &base, &root_text)
                 .unwrap_or_else(|| panic!("{name} is listed but this test has no call for it"));
             for args in valid {
                 let reply = session.call(&name, args.clone());
@@ -344,6 +450,16 @@ fn ac08_reads_write_nothing_under_the_project_root() {
             ("update".to_owned(), "open".to_owned(), None),
         ]
     );
+    // The task: claimed in the first era (its `complete` refused, the run
+    // open), its run reported; completed in the second.
+    let reply = session.call("get_task", json!({"task_id": "T-0001"}));
+    let package = &result(&reply)["structuredContent"];
+    assert_eq!(package["status"], json!("done"), "{reply}");
+    assert_eq!(package["claim"]["worktree"], json!(root_text), "{reply}");
+    let runs = package["runs"].as_array().expect("runs");
+    assert_eq!(runs.len(), 1, "{reply}");
+    assert_eq!(runs[0]["outcome"], json!("completed"));
+    assert_eq!(runs[0]["changed_files"], json!(["src/stamina.rs"]));
     drop(session.finish());
 
     assert_eq!(snapshot(&root), tree_before, "the repository changed");

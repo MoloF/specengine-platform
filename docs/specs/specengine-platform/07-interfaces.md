@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `task-package`; a question or discrepancy approved as a decision record shipped: `docs/canon/decision-record.md`; kind `create`: `docs/canon/proposal-kinds.md`; `decision`, `interpretation`, `amendment` later.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `tasks.md`; a question or discrepancy approved as a decision record shipped: `docs/canon/decision-record.md`; kind `create`: `docs/canon/proposal-kinds.md`; `decision`, `interpretation`, `amendment` later.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
@@ -31,15 +31,16 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | `get_impact` | `node_id` \| `qpath` \| `since: <commit>` | nodes, symbols, tests, tasks within the radius | graph + bindings; `since` = git diff → graph walk (change impact) |
 | `refs` | `node_id` | reverse lookup: all markers, tests, records referring to the node | needed **during** refactoring |
 | `unmapped` | `path?` | source tree with spec coverage percentage | where there is no spec (tracey `query unmapped`) |
-| `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`; `content` = the neutral brief | `next` — first `ready` by priority (as `bd ready` / `next_task`) |
-| `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | only `ready`; records the run in `runs` |
-| `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | analyst; → `review` (waits for the owner) |
+| `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`; `content` = the neutral brief | shipped; `next`: the lowest-numbered `ready` (priority later) |
+| `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | shipped; only `ready`; opens a run |
+| `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | shipped; → `review` |
 | `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only |
-| `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | `verified` is set by `spec verify`, not by this call |
+| `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | shipped; `verified` is set by `spec verify`, not by this call |
+| `complete_task` | `task_id` | task status | shipped; run reported → `done` |
 
-**Task package** (ADR-0027). One type in `specengine-model`; its JSON Schema is generated and pinned by a test. `schema_version`: a new key keeps it; a removed, renamed or re-meant key raises it. Every key is always present, absent = `null`; `compact` shortens only the Markdown `content`, never the key set. `spec task show T --json` emits the same document. The bundle body comes by reference (`bundle_hash` → `get_context_bundle`): a 10k-token bundle collides with the 48,000-character cap. `claim_task.role` is the project's own role name, stored verbatim (no enum). Stack wording, tracker tickets and routing belong to the project's skills (06 §8); a task stores no ticket key.
+**Task package** (ADR-0027; shipped: `docs/canon/task-package.md`). One type in `specengine-model`, its schema pinned by a test; a removed, renamed or re-meant key raises `schema_version`. Every key always present, absent = `null`; `compact` shortens only `content`. The bundle comes by reference (`bundle_hash` → `get_context_bundle`): a 10k-token bundle collides with the 48,000-character cap. `claim_task.role` is the project's own role name, verbatim. Stack wording, tracker tickets and routing belong to the project's skills (06 §8); a task stores no ticket key.
 
-Phase 2 contract checks (the `task-package` feature spec expands them): P2-1 `get_task` `structuredContent` = `spec task show --json`; P2-2 the pinned schema snapshot fails on a key removed or renamed without a bump; P2-3 a source scan (as `crates/specengine-core/tests/check_genre.rs`) finds no `cargo`, `nextest`, `clippy`, `bevy`, `pnpm`, `npm`, `nest`, `react`, `jira` or this repository's role names in the package and brief sources or `plugin/**`; P2-4 fixtures `spec-a` and `spec-b` give the same key set and `schema_version`; P2-5 a synthetic non-Rust fixture whose records hold no stack words yields none in the JSON or `content`; P2-6 changing `profile` changes only that value; P2-7 `claim_task` with `role = "nest-developer"` succeeds, stored verbatim; P2-8 no key starts with `block` (ADR-0012); P2-9 two projects in one daemon never see each other's tasks, deleting one database leaves the other intact, nothing is written to SpecEngine's repository; P2-10 `get_task` at the 10k budget stays under 48,000 characters; P2-11 the package alone carries the verbatim title, goal, criteria text, target titles and open questions; P2-12 a project without a profile runs `get_task` → `claim_task` → `report_run` → `complete_task` on generic prompts at MCP level.
+Phase 2 contract checks (tested; `task-package.md` "Genre"): P2-1 `get_task` `structuredContent` = `spec task show --json`; P2-2 the pinned schema snapshot fails on a key removed or renamed without a bump; P2-3 a source scan (as `crates/specengine-core/tests/check_genre.rs`) finds no `cargo`, `nextest`, `clippy`, `bevy`, `pnpm`, `npm`, `nest`, `react`, `jira` or this repository's role names in the package and brief sources or `plugin/**`; P2-4 fixtures `spec-a` and `spec-b` give the same key set and `schema_version`; P2-5 a synthetic non-Rust fixture whose records hold no stack words yields none in the JSON or `content`; P2-6 changing `profile` changes only that value; P2-7 `claim_task` with `role = "nest-developer"` succeeds, stored verbatim; P2-8 no key starts with `block` (ADR-0012); P2-9 two projects in one daemon never see each other's tasks, deleting one database leaves the other intact, nothing is written to SpecEngine's repository; P2-10 `get_task` at the 10k budget stays under 48,000 characters; P2-11 the package alone carries the verbatim title, goal, criteria text, target titles and open questions; P2-12 a project without a profile runs `get_task` → `claim_task` → `report_run` → `complete_task` on generic prompts at MCP level.
 
 **Human tools** (`owner` set, `_meta["anthropic/requiresUserInteraction"]: true`; 08 Phase 5) only **stage** (ADR-0035, `docs/canon/decision-staging.md`): `spec approve|reject` on a terminal confirms, so no form carries consent (no nonce, TTL or sealed `requestState` binding).
 
@@ -92,9 +93,9 @@ spec review PR-ID                        # to come: interactive edit/changes/def
 spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF]  # a terminal's [y/N]; no flag: the staged choice
 spec reject PR-ID --reason ...          # --reason optional when a reject is staged (decision-staging)
 
-# tasks
-spec task new --nodes ID… [--title ...] [--contour feature]
-spec task show T | list [--status ready]
+# tasks: shipped (+ an agent's plan, claim, report, complete), docs/canon/tasks.md
+spec task new --nodes REF… [--title ...]   # --contour: later
+spec task show T | --next | list [--status S]
 spec task approve T | changes T --note "..." | cancel T
 
 # code and drift
@@ -109,7 +110,7 @@ spec check [--staged | --changed] [--baseline F] [--debt]
 spec round new | round answer FILE
 spec ship SLUG [--accepted]
 spec compact --dry-run
-spec export                                          # to come (task-package): generated/queue.md
+spec export                                          # to come: generated/queue.md
 spec export state [--out PATH]                       # shipped: the queue's JSONL dump, docs/canon/queue-backup.md
 spec import-state FILE                               # shipped: restore it into an empty queue, a terminal's [y/N]
 spec export index [--stdout]                         # [paths] index by its registered generator (Q3)

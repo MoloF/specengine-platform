@@ -429,7 +429,7 @@ fn a_corrupt_record_row_names_its_column() {
             .unwrap_or_else(|| panic!("no column {name}"))
     };
     assert_eq!(
-        &PROPOSAL_COLUMNS[35..],
+        &PROPOSAL_COLUMNS[35..40],
         [
             "record_id",
             "record_path",
@@ -438,6 +438,7 @@ fn a_corrupt_record_row_names_its_column() {
             "choice"
         ]
     );
+    assert_eq!(&PROPOSAL_COLUMNS[40..], ["task_id"]);
     let cases: Vec<CorruptCase<'_>> = vec![
         (
             "an update with a record",

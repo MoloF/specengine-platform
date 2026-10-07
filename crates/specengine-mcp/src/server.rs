@@ -13,13 +13,27 @@ use rmcp::service::{QuitReason, RequestContext, ServerInitializeError};
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, tool_handler};
 use specengine_cli::{Env, Globals, OUTPUT_CAP_CHARS};
 
-use crate::read::holds_number;
+use crate::read::{holds, holds_number};
 use crate::resources;
+
+/// The `instructions` line of the task tools
+/// (`docs/canon/task-package.md` "MCP"): at most [`TASKS_LINE_LIMIT`]
+/// bytes.
+macro_rules! tasks_line {
+    () => {
+        "- get_task, claim_task, submit_plan, report_run, complete_task = spec task \
+show|claim|plan|report|complete; the three above take task_id."
+    };
+}
+
+/// The most bytes of the tasks line, its line end included.
+const TASKS_LINE_LIMIT: usize = 140;
 
 /// Server `instructions` (07 §1.1): Claude Code truncates them at 2 048
 /// characters and defers tool definitions behind tool search, so this is the
 /// server's most important text. ASCII only, so bytes equal characters.
-pub const INSTRUCTIONS: &str = "\
+pub const INSTRUCTIONS: &str = concat!(
+    "\
 SpecEngine keeps a project's specification as Markdown files in git next to the code. \
 Each tool is a spec command: content is what `spec <command> 2>&1` prints, \
 structuredContent its --json document.
@@ -36,6 +50,9 @@ create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy = spec propose question|discrepancy: what is decided \
 or asked comes back as hits, nothing stored unless distinct_from names each; keep \
 working on your working answer.
+",
+    tasks_line!(),
+    "
 
 REF: an ID, an alias, slug/ID, ID#SECTION or a root-relative .md path. Hints use the \
 command's flags: --kind is kinds, ROOT is root, --links is with [\"links\"]. Answers are \
@@ -48,7 +65,8 @@ Rules:
 - Reads refresh SpecEngine's index in its data directory; nothing under the project \
 root is written. Spec files change only when the owner approves a change.
 - Nothing is blocked by a discrepancy.
-- IDs are Latin only; a look-alike ID is refused with its Latin fix.";
+- IDs are Latin only; a look-alike ID is refused with its Latin fix."
+);
 
 /// Appended to [`INSTRUCTIONS`] when the measurement tools are built in
 /// (cut to leave room for the queue's lines, task spec `proposal-kinds`).
@@ -64,6 +82,10 @@ const TEXT_LIMIT: usize = 2048;
 
 const _: () = assert!(INSTRUCTIONS.is_ascii());
 const _: () = assert!(INSTRUCTIONS.len() <= TEXT_LIMIT);
+// The tasks line and its line end: fewer bytes than the limit for the
+// line alone.
+const _: () = assert!(tasks_line!().len() < TASKS_LINE_LIMIT);
+const _: () = assert!(holds(INSTRUCTIONS, tasks_line!()));
 // The cap the instructions state is the CLI's.
 const _: () = assert!(holds_number(
     INSTRUCTIONS,
@@ -124,7 +146,7 @@ impl SpecEngineServer {
     /// consent demo from the OS; without one, stateless reviews answer with a
     /// tool error and everything else keeps working.
     pub fn new(lifecycle: Lifecycle, globals: Globals) -> Self {
-        let tool_router = Self::read_tools() + Self::intake_tools();
+        let tool_router = Self::read_tools() + Self::intake_tools() + Self::task_tools();
         #[cfg(feature = "probes")]
         let tool_router = tool_router + Self::review_tools() + Self::probe_tools();
         Self {

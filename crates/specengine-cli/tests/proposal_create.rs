@@ -580,7 +580,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/features/decision-apply.md
 /// "Data", "Review document": the five of a decision record after
 /// `linked`).
-const REVIEW_KEYS: [&str; 42] = [
+const REVIEW_KEYS: [&str; 43] = [
     "id",
     "project",
     "kind",
@@ -622,6 +622,8 @@ const REVIEW_KEYS: [&str; 42] = [
     "record_title",
     "record_text",
     "choice",
+    // docs/features/task-package.md "Data": after `choice`, 43 keys.
+    "task_id",
     "notes",
 ];
 
@@ -763,6 +765,7 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         "record_title",
         "record_text",
         "choice",
+        "task_id",
     ] {
         assert!(value[absent].is_null(), "{absent}: {json}");
         assert!(

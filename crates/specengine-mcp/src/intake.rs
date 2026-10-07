@@ -7,7 +7,10 @@
 //! queue in SpecEngine's data directory, as the CLI does: nothing under the
 //! project root, no commit, no state change (no approve, reject, import or
 //! completion here). The author's role is always passed: an item raised
-//! here is an agent's. `get_proposal` reads only.
+//! here is an agent's. An optional `task_id` binds the item to a task
+//! (`spec propose … --task T`;
+//! `docs/canon/tasks.md` "Task-bound proposals"). `get_proposal` reads
+//! only.
 
 use std::borrow::Cow;
 
@@ -60,6 +63,7 @@ text: the new text, inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body when applied.
 author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \
 to 128 bytes each.
+task_id: its task (get_task).
 
 The findings the edit introduces are stored with it, never refusing: nothing is blocked by a \
 discrepancy. A refusal (stale base, a heading added or dropped, an unknown ID): an error \
@@ -85,6 +89,7 @@ price_of_other: what another answer would cost, at most 2048 bytes.
 severity: high, normal (absent) or low; it only orders the queue.
 distinct_from: at most 64 hits (an id, else a path) it is declared distinct from.
 author_role (required), author_model, run: who asks.
+task_id: as propose_change.
 
 A hit: an accepted decision document linked to a node (its id, path, and title as the \
 answer), or a question queued on a shared node with the same text, whitespace and case aside \
@@ -115,6 +120,7 @@ proposed_patch: {target, base, text, rationale} as propose_change takes them, th
 of node_ids: stored as a linked update (linked, its findings in diagnostics), decided on its \
 own.
 distinct_from, author_role (required), author_model, run: as ask_question.
+task_id: as propose_change takes it; the linked update takes it too.
 
 The owner decides it with `spec approve PR --option N` (a decision record) or settles it \
 with `spec reject PR --reason <answer>`. A refusal names the field (evidence[2].observed). ",
@@ -369,6 +375,8 @@ pub(crate) struct ChangeArgs {
     pub author_model: Option<String>,
     /// The proposing agent's run.
     pub run: Option<String>,
+    /// The task it is raised for (`T-` and 4 or more digits).
+    pub task_id: Option<String>,
 }
 
 /// `ask_question` arguments.
@@ -394,6 +402,8 @@ pub(crate) struct QuestionArgs {
     pub author_model: Option<String>,
     /// The asking agent's run.
     pub run: Option<String>,
+    /// The task it is raised for.
+    pub task_id: Option<String>,
 }
 
 /// `report_discrepancy` arguments.
@@ -429,6 +439,8 @@ pub(crate) struct DiscrepancyArgs {
     pub author_model: Option<String>,
     /// The reporting agent's run.
     pub run: Option<String>,
+    /// The task it and its linked update are raised for.
+    pub task_id: Option<String>,
 }
 
 /// `get_proposal` arguments.
@@ -467,6 +479,7 @@ impl SpecEngineServer {
             author_role,
             author_model,
             run,
+            task_id,
         } = args;
         // An update is written against its span: `base` is required, as
         // `spec propose update --base` is (a form error).
@@ -485,8 +498,9 @@ impl SpecEngineServer {
                 let text = ProposedText::Given(text.into_bytes());
                 let author_role = Some(author_role);
                 let (now, git) = (utc_now(), process_git(env));
+                let task = task_id.as_deref();
                 let outcome = match (kind, base) {
-                    (ChangeKind::Update, Some(base)) => specengine_cli::propose_brief(
+                    (ChangeKind::Update, Some(base)) => specengine_cli::propose_brief_with_task(
                         env,
                         globals,
                         &ProposeRequest {
@@ -500,8 +514,9 @@ impl SpecEngineServer {
                             now,
                             git,
                         },
+                        task,
                     ),
-                    (_, base) => specengine_cli::propose_create_brief(
+                    (_, base) => specengine_cli::propose_create_brief_with_task(
                         env,
                         globals,
                         &CreateRequest {
@@ -515,6 +530,7 @@ impl SpecEngineServer {
                             now,
                             git,
                         },
+                        task,
                     ),
                 };
                 outcome.map(|outcome| Outcome::Proposal(Box::new(outcome)))
@@ -555,8 +571,13 @@ impl SpecEngineServer {
                     now: utc_now(),
                     git: process_git(env),
                 };
-                specengine_cli::propose_question(env, globals, &request)
-                    .map(|outcome| Outcome::Intake(Box::new(outcome)))
+                specengine_cli::propose_question_with_task(
+                    env,
+                    globals,
+                    &request,
+                    args.task_id.as_deref(),
+                )
+                .map(|outcome| Outcome::Intake(Box::new(outcome)))
             })
             .await
             .into_tool_result("ask_question"))
@@ -600,8 +621,13 @@ impl SpecEngineServer {
                     now: utc_now(),
                     git: process_git(env),
                 };
-                specengine_cli::propose_discrepancy(env, globals, &request)
-                    .map(|outcome| Outcome::Intake(Box::new(outcome)))
+                specengine_cli::propose_discrepancy_with_task(
+                    env,
+                    globals,
+                    &request,
+                    args.task_id.as_deref(),
+                )
+                .map(|outcome| Outcome::Intake(Box::new(outcome)))
             })
             .await
             .into_tool_result("report_discrepancy"))

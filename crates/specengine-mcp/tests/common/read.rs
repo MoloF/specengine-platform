@@ -12,7 +12,8 @@ use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CliError, DiscrepancyInput, DiscrepancyRequest, Env, Exit, GitEnv, Globals,
     IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, ReviewRequest,
-    SearchRequest, ShowRequest, TreeRequest, render_json, render_text,
+    SearchRequest, ShowRequest, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TreeRequest, render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -31,16 +32,33 @@ pub const QUEUE_TOOLS: [&str; 4] = [
 /// The three queue tools that write the queue.
 pub const WRITE_TOOLS: [&str; 3] = ["ask_question", "propose_change", "report_discrepancy"];
 
-/// Every tool of the default build, in `tools/list` order (by name).
-pub const TOOLS: [&str; 8] = [
+/// The task tools of docs/features/task-package.md ("Description and
+/// interactions"), in `tools/list` order: one reads, four move a task as
+/// an agent may (the owner's three have none).
+pub const TASK_TOOLS: [&str; 5] = [
+    "claim_task",
+    "complete_task",
+    "get_task",
+    "report_run",
+    "submit_plan",
+];
+
+/// Every tool of the default build, in `tools/list` order (by name):
+/// thirteen since docs/features/task-package.md.
+pub const TOOLS: [&str; 13] = [
     "ask_question",
+    "claim_task",
+    "complete_task",
     "get_context_bundle",
     "get_node",
     "get_proposal",
+    "get_task",
     "get_tree",
     "propose_change",
     "report_discrepancy",
+    "report_run",
     "search",
+    "submit_plan",
 ];
 
 /// The words of P2-3 (07 §1.2): stack words and this repository's role
@@ -247,8 +265,9 @@ fn optional_text(args: &Value, key: &str) -> Option<String> {
 /// the clock `now` and the caller's git environment `git`:
 /// `propose_change` = `propose update … --brief`, `ask_question` =
 /// `propose question`, `report_discrepancy` = `propose discrepancy` (the
-/// arguments but the author's as its `--input`), `get_proposal` = `review
-/// --brief`; the author's role always passed.
+/// arguments but the author's and `task_id` as its `--input`),
+/// `get_proposal` = `review --brief`; the author's role always passed, an
+/// optional `task_id` as `--task` (docs/features/task-package.md).
 pub fn queue_library(
     tool: &str,
     args: &Value,
@@ -258,8 +277,9 @@ pub fn queue_library(
     git: &GitEnv,
 ) -> Expected {
     let text = |key: &str| args[key].as_str().unwrap_or_default().to_owned();
+    let task = args["task_id"].as_str();
     let outcome = match tool {
-        "propose_change" => specengine_cli::propose_brief(
+        "propose_change" => specengine_cli::propose_brief_with_task(
             env,
             globals,
             &ProposeRequest {
@@ -273,9 +293,10 @@ pub fn queue_library(
                 now: now.to_owned(),
                 git: git.clone(),
             },
+            task,
         )
         .map(|outcome| Outcome::Proposal(Box::new(outcome))),
-        "ask_question" => specengine_cli::propose_question(
+        "ask_question" => specengine_cli::propose_question_with_task(
             env,
             globals,
             &QuestionRequest {
@@ -293,17 +314,18 @@ pub fn queue_library(
                 now: now.to_owned(),
                 git: git.clone(),
             },
+            task,
         )
         .map(|outcome| Outcome::Intake(Box::new(outcome))),
         "report_discrepancy" => {
             let mut input = args.clone();
             let object = input.as_object_mut().expect("arguments object");
-            for key in ["author_role", "author_model", "run"] {
+            for key in ["author_role", "author_model", "run", "task_id"] {
                 object.remove(key);
             }
             let input: DiscrepancyInput =
                 serde_json::from_value(input).expect("a discrepancy's --input document");
-            specengine_cli::propose_discrepancy(
+            specengine_cli::propose_discrepancy_with_task(
                 env,
                 globals,
                 &DiscrepancyRequest {
@@ -314,6 +336,7 @@ pub fn queue_library(
                     now: now.to_owned(),
                     git: git.clone(),
                 },
+                task,
             )
             .map(|outcome| Outcome::Intake(Box::new(outcome)))
         }
@@ -331,6 +354,104 @@ pub fn queue_library(
     expected(outcome)
 }
 
+/// The task tools' twins (docs/features/task-package.md "Description and
+/// interactions"), with the clock `now` and the caller's git environment
+/// `git`: `get_task` = `task show T | --next` (an answer naming no task is
+/// an error result without `structuredContent`: the output schema is the
+/// package's; not exactly one of `task_id`, `next: true`: the tool's own
+/// error, no CLI twin), `claim_task` = `task claim`, `submit_plan` =
+/// `task plan --plan-file -`, `report_run` = `task report`,
+/// `complete_task` = `task complete`.
+pub fn task_library(
+    tool: &str,
+    args: &Value,
+    env: &Env,
+    globals: &Globals,
+    now: &str,
+    git: &GitEnv,
+) -> Expected {
+    let text = |key: &str| args[key].as_str().unwrap_or_default().to_owned();
+    let id = text("task_id");
+    let outcome = match tool {
+        "get_task" => {
+            let (id, next) = match (args["task_id"].as_str(), &args["next"]) {
+                (Some(id), Value::Null) => (Some(id.to_owned()), false),
+                (None, Value::Bool(true)) => (None, true),
+                _ => {
+                    return Expected {
+                        text: "spec: get_task takes exactly one of `task_id` and `next: true`\n"
+                            .to_owned(),
+                        document: None,
+                        is_error: true,
+                    };
+                }
+            };
+            let mut want = expected(
+                specengine_cli::task_show(
+                    env,
+                    globals,
+                    &TaskShowRequest {
+                        id,
+                        next,
+                        git: git.clone(),
+                    },
+                )
+                .map(|outcome| Outcome::TaskShow(Box::new(outcome))),
+            );
+            if want.is_error {
+                want.document = None;
+            }
+            return want;
+        }
+        "claim_task" => specengine_cli::task_claim(
+            env,
+            globals,
+            &TaskClaimRequest {
+                id,
+                role: text("role"),
+                worktree: text("worktree").into(),
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+        ),
+        "submit_plan" => specengine_cli::task_plan(
+            env,
+            globals,
+            &TaskPlanRequest {
+                id,
+                plan: ProposedText::Given(text("plan_md").into_bytes()),
+                criteria: strings(&args["criteria"]),
+                affected: strings(&args["affected_nodes"]),
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+        ),
+        "report_run" => specengine_cli::task_report(
+            env,
+            globals,
+            &TaskReportRequest {
+                id,
+                outcome: text("outcome"),
+                summary: text("summary"),
+                changed_files: strings(&args["changed_files"]),
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+        ),
+        "complete_task" => specengine_cli::task_complete(
+            env,
+            globals,
+            &TaskCompleteRequest {
+                id,
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+        ),
+        other => panic!("no task twin for tool {other}"),
+    };
+    expected(outcome.map(|outcome| Outcome::Task(Box::new(outcome))))
+}
+
 /// The same request through the CLI library (task spec, the tool table):
 /// `get_tree` = `tree`, `get_node` = `show`, `search` = `search` with the
 /// query as one word, `get_context_bundle` = `bundle`; a queue tool as
@@ -338,6 +459,16 @@ pub fn queue_library(
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if QUEUE_TOOLS.contains(&tool) {
         return queue_library(
+            tool,
+            args,
+            env,
+            globals,
+            &specengine_cli::utc_now(),
+            &server_git(env),
+        );
+    }
+    if TASK_TOOLS.contains(&tool) {
+        return task_library(
             tool,
             args,
             env,

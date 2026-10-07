@@ -75,6 +75,12 @@ const PINS: &[(&str, &str)] = &[
         "0.1.4",
         "15ba75c4dc6c91444ba96d26d92aed24799f5eb97aaa61ac89864f67b9c283d4",
     ),
+    // docs/canon/task-package.md "MCP" (plugin 0.1.5): `propose-spec-change` and
+    // `ask-owner` teach the task tools and `task_id` (PATCH).
+    (
+        "0.1.5",
+        "fab9129ccbc96720e2edfaf3ae1b546427bbf64b62e7fb79ff795a856494bf48",
+    ),
 ];
 
 /// The README's closed file set (its Files bullet), relative to `plugin/`.

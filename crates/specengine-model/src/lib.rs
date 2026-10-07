@@ -23,6 +23,7 @@ pub mod reference;
 pub mod scheme;
 pub mod script;
 pub mod span;
+pub mod task;
 pub mod value;
 
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
@@ -37,4 +38,10 @@ pub use reference::{CanonTarget, PathTarget, RefForm, Reference};
 pub use scheme::{IdScheme, IdScope, PrefixSpec, SchemeError, SchemeField, SchemeProblem, Shape};
 pub use script::IdScript;
 pub use span::Span;
+pub use task::{
+    OwnerNote, PackageAssumption, PackageBinding, PackageBundle, PackageProposal, PackageTarget,
+    RunOutcome, SnapshotDiff, SnapshotNode, SnapshotPlace, SpecSnapshot,
+    TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskClaim, TaskCriterion, TaskPackage,
+    TaskRun, TaskStatus,
+};
 pub use value::{FmValue, OrderedMap};

@@ -457,23 +457,26 @@ INSERT INTO events (project, type, payload, at)
 ";
 
 /// AC-10, the store half: a version-1 database read with `open_existing`
-/// gives its rows as 40 columns, the sixteen later ones `None`, and stays
-/// at version 1 (no step runs on a read); opened, it steps to 3 in place:
-/// the row kept and readable, the sixteen `NULL` in `dump()`, the next ID
-/// after it; `proposal_columns` knows 1 (the first 24), 2 (the first 35)
-/// and 3 (all 40), nothing else. M: a column left out of step 2; schema 1
-/// unknown.
+/// gives its rows as 41 columns, the seventeen later ones `None`, and stays
+/// at version 1 (no step runs on a read); opened, it steps to 4 in place
+/// (docs/features/task-package.md "Data": schema 4 adds `tasks`, `runs`
+/// and `proposals.task_id`): the row kept and readable, the seventeen
+/// `NULL` in `dump()`, the next ID after it; `proposal_columns` knows 1
+/// (the first 24), 2 (the first 35), 3 (the first 40) and 4 (all 41),
+/// nothing else. M: a column left out of step 2; schema 1 unknown.
 #[test]
-fn ac10_a_version_1_database_steps_to_3_keeping_its_rows() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 3);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 40);
+fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
+    assert_eq!(QUEUE_SCHEMA_VERSION, 4);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 41);
     assert_eq!(PROPOSAL_COLUMNS[24..35], INTAKE_COLUMNS);
-    assert_eq!(PROPOSAL_COLUMNS[35..], RECORD_COLUMNS);
+    assert_eq!(PROPOSAL_COLUMNS[35..40], RECORD_COLUMNS);
+    assert_eq!(PROPOSAL_COLUMNS[40], "task_id");
     assert_eq!(proposal_columns(1), Some(&PROPOSAL_COLUMNS[..24]));
     assert_eq!(proposal_columns(2), Some(&PROPOSAL_COLUMNS[..35]));
-    assert_eq!(proposal_columns(3), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(3), Some(&PROPOSAL_COLUMNS[..40]));
+    assert_eq!(proposal_columns(4), Some(&PROPOSAL_COLUMNS[..]));
     assert_eq!(proposal_columns(0), None);
-    assert_eq!(proposal_columns(4), None);
+    assert_eq!(proposal_columns(5), None);
 
     let scratch = Scratch::new("qi-v1");
     let db = scratch.db("q");
@@ -493,14 +496,24 @@ fn ac10_a_version_1_database_steps_to_3_keeping_its_rows() {
     assert_eq!(row.id(), Some("PR-0007"));
     assert_eq!(row.columns[2].as_deref(), Some("update"));
     assert_eq!(row.columns[23].as_deref(), Some(T0));
-    assert_eq!(row.columns.len(), 40, "{row:?}");
+    assert_eq!(row.columns.len(), 41, "{row:?}");
     assert!(
         row.columns[24..].iter().all(Option::is_none),
-        "the sixteen later columns None: {row:?}"
+        "the seventeen later columns None: {row:?}"
     );
+    assert!(state.tasks.is_empty() && state.runs.is_empty(), "no task");
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps the schema");
-    assert_eq!(user_version(&db), "3");
+    assert_eq!(user_version(&db), "4");
+    let tables: Vec<String> = sqlite3(
+        &db,
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('tasks', 'runs') \
+         ORDER BY name;",
+    )
+    .lines()
+    .map(str::to_owned)
+    .collect();
+    assert_eq!(tables, ["runs", "tasks"], "step 4 made both tables");
     let table: Vec<String> = sqlite3(&db, "SELECT name FROM pragma_table_info('proposals');")
         .lines()
         .map(str::to_owned)
@@ -519,8 +532,8 @@ fn ac10_a_version_1_database_steps_to_3_keeping_its_rows() {
     let dump = queue.dump().expect("dump");
     let proposals = dump.lines().next().expect("the proposals line");
     assert!(
-        proposals.ends_with(&format!("\"{T0}\",{}]", ["null"; 16].join(","))),
-        "the sixteen NULL: {proposals}"
+        proposals.ends_with(&format!("\"{T0}\",{}]", ["null"; 17].join(","))),
+        "the seventeen NULL: {proposals}"
     );
     let next = queue
         .create_intake(&question(&["A-1"], "Why?", &[]), &[], None, T1)
@@ -530,7 +543,7 @@ fn ac10_a_version_1_database_steps_to_3_keeping_its_rows() {
     assert_eq!(next.id, "PR-0008");
     drop(queue);
     let reopened = SqliteQueue::open(&db, PROJECT).expect("reopen");
-    assert_eq!(user_version(&db), "3", "stepped once");
+    assert_eq!(user_version(&db), "4", "stepped once");
     assert_eq!(reopened.get("PR-0008").unwrap().unwrap(), next);
 }
 

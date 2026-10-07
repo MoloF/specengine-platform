@@ -15,6 +15,7 @@ Use this when the spec is silent or ambiguous on what you need, or when the code
 - **A discrepancy**, `report_discrepancy`: the code and the spec disagree. Give a `summary`, how the code departs (`gap_type`), its `severity`, the `evidence` (the file, its symbol and lines where known, what is observed, what is documented), priced `options` to settle it and the index of your `recommendation` among them, and your `working_answer`.
 
 Both take the nodes the record is about in `node_ids` (IDs, or root-relative `.md` paths) and `author_role`: your role as the project names it.
+On a task, pass its `task_id` too; `get_proposal`'s `task_id` names it.
 
 ## Keep working
 

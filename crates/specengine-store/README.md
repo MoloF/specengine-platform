@@ -21,7 +21,7 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `spec check`, no database (`docs/canon/spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` -> `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) -> `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic -> a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)`; `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}`, `check_changed_with_notes` (against `HEAD`: `spec-check-git.md`), `check_staged` (the report). `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 7`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 - `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`.
-- Proposals (`docs/canon/{proposal-{queue,apply,kinds},queue-backup,agent-intake,decision-record}.md`): `ProposalQueue` (schema 3: `create_intake`, `next_record`, `approve_record_from`, `reserved` (`Reservation`)), `SqliteQueue::open(db, project)`, `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch; callers decode range-like names), `intent_to_add`, `is_intent_to_add`, `remove_cached`, `name_status`; `replace_file`, `create_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
+- Proposals (`docs/canon/{proposal-{queue,apply,kinds},queue-backup,agent-intake,decision-record}.md`): `ProposalQueue` (schema 4: `create_intake`, `next_record`, `approve_record_from`, `reserved` (`Reservation`)), tasks (`tasks.md`), `SqliteQueue::open(db, project)`, `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch; callers decode range-like names), `intent_to_add`, `is_intent_to_add`, `remove_cached`, `name_status`; `replace_file`, `create_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
 
 ## Rows
 
@@ -57,7 +57,7 @@ Working answer (the code) -> what the other answer triggers.
 - Q1 the pins above, transitive crates pending (04 s6) -> other pins change `build_graph.rs`.
 - Q2 `trigram case_sensitive 0` (`remove_diacritics 1` if `fts.rs` stays green), exact IDs outside FTS -> `unicode61`: prefix, substring, stem tests rewritten; a stemmer by `[project] language`: an ADR on `#universal`.
 - Q3 role keys + `roots` + `exclude` -> role keys only: spec-b rewritten, READMEs outside `docs/` unreachable (08 s4.1); `roots` only: role keys leave the walk.
-- Q4 `norm_hash`, 08 AC-13, `spec bump`: own increment, blocked by Q5 (the tracey reading, outside the pipeline).
+- Q4 `norm_hash`, 08 AC-13, `spec bump`: own increment, blocked by Q5 (the tracey reading).
 
 ## Open minors
 
