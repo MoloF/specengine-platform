@@ -22,7 +22,7 @@ Full list with reasons: `docs/canon/architecture.md`; every rule changes only th
 
 - The source of truth is files in the project's git; SQLite is an index and a queue, outside the repository (ADR-0001, ADR-0003).
 - Spec files are written only by `apply_proposal` once the owner confirms on a terminal, where the proposal was raised, as a separate commit with provenance (ADR-0004, ADR-0005, ADR-0032, ADR-0035).
-- **Nothing is blocked by a discrepancy.** The only control point is the owner approving a task; the hook is closed when the daemon is unavailable (ADR-0006, ADR-0012).
+- **Nothing is blocked by a discrepancy.** The only control point is the owner approving a task; the hook is closed without a verdict (ADR-0006, ADR-0012, ADR-0037).
 - The core knows no subject domain: project specifics live in its `specengine.toml` and importer (ADR-0008).
 - IDs are Latin-only, no mixed scripts; legacy IDs are aliases (ADR-0009).
 - Markers `// @implements ID@rev [tiers]`; legacy citations become `mentions` (ADR-0010, ADR-0016, ADR-0018).

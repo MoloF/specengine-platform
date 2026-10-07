@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-08
 ---
 
 # SpecEngine architecture rules
@@ -36,8 +36,8 @@ An approved proposal is applied in the task branch's worktree (the spec travels 
 <a id="control"></a>
 ## Control and no blocking
 
-- Discrepancies, questions and proposals block nothing. A node may have several open proposals; they are rebased on `base_hash` when applied. An agent keeps working on a working answer and marks `// @assumes PR-…`. If the decision differs from the working answer, a follow-up task is created. ADR-0012.
-- The only control point is the owner approving a task on a terminal (`spec task approve`; no MCP tool): `claim_task` takes only `ready` tasks. The `PreToolUse` hook checks only that. When the daemon is unavailable the hook is closed (exit 2). `observe` mode turns this check off too. ADR-0006, ADR-0012.
+- Discrepancies, questions and proposals block nothing. A node may have several open proposals, rebased on `base_hash` when applied. An agent keeps working on a working answer and marks `// @assumes PR-…`. A decision unlike the working answer makes a follow-up task. ADR-0012.
+- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook (`docs/canon/gate.md`) passes a gated write only on a verdict: an `in_progress` task claimed in its worktree and branch; else exit 2. ADR-0006, ADR-0012, ADR-0037.
 
 <a id="tasks"></a>
 ## Tasks and stack skills
