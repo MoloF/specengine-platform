@@ -6,6 +6,16 @@
 //! `propose`, `import_state`, `export_`, `init`, `index` in
 //! `crates/specengine-http/src`. M: the POST approves with an always-yes
 //! consent.
+//!
+//! AC-07 of docs/features/ui-live.md, the door amended ("Data", "The one
+//! door, amended"): `graph` and the plain `check` join the endpoints that
+//! change nothing; `check` leaves the forbidden names, `Staged`, `Changed`
+//! and `baseline` join them (a git mode or a client's file named anywhere
+//! in `src`, a field access included), each caught in a probe (positive
+//! controls: `CheckedTree::Changed`, `CheckedTree::Staged`, a `baseline`
+//! field written or set, and every writer of the old list), the plain
+//! `check(…, &CheckRequest::default())` call not. M: a handler calls
+//! `index`.
 
 mod common;
 
@@ -118,6 +128,9 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         format!("{p}/nodes/docs%2Fspec%2Fmovement%2Fstamina.md"),
         format!("{p}/search?query=stamina"),
         format!("{p}/bundle?node_ids=EDGE-STAM-ZERO"),
+        format!("{p}/graph?ref=MEC-STAMINA"),
+        format!("{p}/graph?ref=EDGE-STAM-ZERO&impact=true&types=depends_on&depth=1&archive=true"),
+        format!("{p}/check"),
         format!("{p}/inbox"),
         format!("{p}/proposals/PR-0001"),
         format!("{p}/proposals/PR-0002"),
@@ -322,8 +335,9 @@ fn sources() -> Vec<(PathBuf, String)> {
     files
 }
 
-/// The names no handler may name: the CLI's deciding, storing, exporting,
-/// importing, creating, indexing and checking calls.
+/// The names no handler may call: the CLI's deciding, storing, exporting,
+/// importing, creating and indexing calls (`check` left the list with
+/// docs/features/ui-live.md: the plain run is a read).
 fn forbidden(name: &str) -> bool {
     [
         "approve",
@@ -336,22 +350,37 @@ fn forbidden(name: &str) -> bool {
         "import_state",
         "init",
         "index",
-        "check",
     ]
     .contains(&name)
         || name.starts_with("export_")
+}
+
+/// The names `src` may not hold at all, a field access included: a check's
+/// git mode (`CheckedTree::Staged`, `CheckedTree::Changed`) or a client's
+/// baseline file (docs/features/ui-live.md "The one door, amended").
+fn not_plain(name: &str) -> bool {
+    ["Staged", "Changed", "baseline"].contains(&name)
+}
+
+/// What the scan reports in `code`: a forbidden call not after a `.`, a
+/// name of a check that is not the plain run anywhere.
+fn caught(code: &str) -> Vec<String> {
+    identifiers(&code_only(code))
+        .into_iter()
+        .filter(|(before, name)| (*before != '.' && forbidden(name)) || not_plain(name))
+        .map(|(_, name)| name)
+        .collect()
 }
 
 #[test]
 fn ac03_the_daemon_names_no_deciding_or_writing_call() {
     let mut named = Vec::new();
     for (path, text) in sources() {
-        for (before, name) in identifiers(&code_only(&text)) {
-            // A method or a field of something else (`.index`) is no CLI
-            // call; a path segment or a bare name is.
-            if before != '.' && forbidden(&name) {
-                named.push(format!("{}: {name}", path.display()));
-            }
+        // A method or a field of something else (`.index`) is no CLI call;
+        // a path segment or a bare name is. A check's mode or baseline is
+        // caught wherever it is named.
+        for name in caught(&text) {
+            named.push(format!("{}: {name}", path.display()));
         }
         for crate_name in ["rusqlite", "specengine_store"] {
             assert!(
@@ -370,10 +399,62 @@ fn ac03_the_daemon_names_no_deciding_or_writing_call() {
     // string, which is no call.
     let probe =
         "fn f() { let s = \"spec approve PR-1\"; // approve(x)\n specengine_cli::approve(&e); }";
-    let names: Vec<String> = identifiers(&code_only(probe))
-        .into_iter()
-        .filter(|(before, name)| *before != '.' && forbidden(name))
-        .map(|(_, name)| name)
-        .collect();
-    assert_eq!(names, ["approve"]);
+    assert_eq!(caught(probe), ["approve"]);
+}
+
+#[test]
+fn ac07_the_scan_catches_a_checks_git_mode_or_baseline_and_every_writer() {
+    // Positive controls: a check that is not the plain run.
+    for (probe, want) in [
+        (
+            "async fn check() { let request = CheckRequest { tree: \
+             CheckedTree::Changed(process_git(env)), ..CheckRequest::default() }; }",
+            vec!["Changed"],
+        ),
+        (
+            "fn f() { specengine_cli::check(env, globals, &CheckRequest { tree: \
+             specengine_cli::CheckedTree::Staged(git), ..Default::default() }) }",
+            vec!["Staged"],
+        ),
+        (
+            "fn f() { let r = CheckRequest { baseline: Some(path), ..CheckRequest::default() }; }",
+            vec!["baseline"],
+        ),
+        (
+            "fn f() { let mut r = CheckRequest::default(); r.baseline = Some(p.into()); }",
+            vec!["baseline"],
+        ),
+    ] {
+        assert_eq!(caught(probe), want, "{probe}");
+    }
+    // The old list still caught, called by path or bare.
+    for name in [
+        "approve",
+        "approve_with",
+        "reject",
+        "propose",
+        "propose_brief",
+        "propose_question",
+        "propose_discrepancy",
+        "import_state",
+        "init",
+        "index",
+        "export_index",
+        "export_state",
+    ] {
+        let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
+        assert_eq!(caught(&by_path), [name], "{by_path}");
+        let bare = format!("fn f() {{ {name}(&env, &globals, &r)?; }}");
+        assert_eq!(caught(&bare), [name], "{bare}");
+    }
+    // Negative controls: the plain run, and the names in a string or a
+    // comment, are no finding.
+    for probe in [
+        "async fn check() { args(\"check\", &[], &uri)?; \
+         specengine_cli::check(env, globals, &CheckRequest::default()).map(Outcome::Check) }",
+        "fn f() { let s = \"Staged Changed baseline index\"; } // CheckedTree::Changed, baseline",
+        "/* CheckRequest { baseline: Some(p) } */ fn f() { let n = list.index; }",
+    ] {
+        assert_eq!(caught(probe), Vec::<String>::new(), "{probe}");
+    }
 }

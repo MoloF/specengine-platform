@@ -1,15 +1,20 @@
 //! One CLI library call per request, and its response
-//! (docs/features/daemon-read.md "Description and interactions", "Data").
+//! (docs/features/daemon-read.md "Description and interactions", "Data";
+//! docs/features/ui-live.md "Data").
 //!
 //! A call runs on the blocking pool, one at a time per project (each read
-//! refreshes the project's index): the request waits for the project's
+//! refreshes the project's index; a check, which refreshes nothing, takes
+//! the turn too): the request waits for the project's
 //! turn in its own task, so a request whose client is gone before its
 //! turn is dropped unrun; the turn then goes with the call to the pool.
 //! The call: the process's `Env`, the project's root as the globals, the
-//! config read again (a slug changed since the start is a 503 naming
-//! both), one library function, its `--json` document. Exit 0 → 200 with the document; exit 1 → 404 with the exit-1
+//! config read again (a slug changed since the start, or a config the
+//! discovery refuses, is a 503), one library function, its `--json`
+//! document. Exit 0 → 200 with the document; exit 1 → 404 with the exit-1
 //! document (its `reason` set: data to the client); exit 2 → 503 with the
-//! error body, `message` the CLI's line(s) verbatim. A body is
+//! error body, `message` the CLI's line(s) verbatim. The check exception:
+//! a check's report is a 200 document whatever its verdict's exit, keyed
+//! on the outcome being a check (a `CliError` is still a 503). A body is
 //! `application/json; charset=utf-8`, compact: the CLI's bytes without the
 //! final line end. The error body is `{"status":<code>,"message":"…"}`,
 //! exactly two keys. The store and `rusqlite` are never touched here.
@@ -95,8 +100,24 @@ fn document(outcome: &Outcome) -> String {
 
 /// What a call gave on the blocking pool.
 enum Answered {
-    Document { exit: Exit, body: String },
+    Document { status: StatusCode, body: String },
     CannotRun(String),
+}
+
+/// The answer of `outcome`: the exit map (0 → 200, 1 → 404, 2 → the CLI's
+/// lines), but a check's report is a 200 document whatever its exit (the
+/// check exception, docs/features/ui-live.md "Data": keyed on the outcome
+/// being a check, never on its verdict).
+fn answered(outcome: &Outcome) -> Answered {
+    let status = match (outcome, outcome.exit()) {
+        (Outcome::Check(_), _) | (_, Exit::Answered) => StatusCode::OK,
+        (_, Exit::NotFound) => StatusCode::NOT_FOUND,
+        (_, Exit::CannotRun) => return Answered::CannotRun(outcome.stderr_lines().join("\n")),
+    };
+    Answered::Document {
+        status,
+        body: document(outcome),
+    }
 }
 
 /// Runs `command` once for `project` (see the module documentation) and
@@ -109,32 +130,19 @@ where
     let turn = Arc::clone(&project.turn).lock_owned().await;
     let joined = tokio::task::spawn_blocking(move || {
         let _turn = turn;
-        let answered = Env::from_process().and_then(|env| {
+        let called = Env::from_process().and_then(|env| {
             let globals = project.globals();
             found(&env, &globals, &project)?;
             command(&env, &globals)
         });
-        match answered {
-            Ok(outcome) => match outcome.exit() {
-                Exit::CannotRun => Answered::CannotRun(outcome.stderr_lines().join("\n")),
-                exit => Answered::Document {
-                    exit,
-                    body: document(&outcome),
-                },
-            },
+        match called {
+            Ok(outcome) => answered(&outcome),
             Err(error) => Answered::CannotRun(error.message),
         }
     })
     .await;
     match joined {
-        Ok(Answered::Document { exit, body }) => {
-            let status = if exit == Exit::Answered {
-                StatusCode::OK
-            } else {
-                StatusCode::NOT_FOUND
-            };
-            json(status, body)
-        }
+        Ok(Answered::Document { status, body }) => json(status, body),
         Ok(Answered::CannotRun(message)) => error(StatusCode::SERVICE_UNAVAILABLE, &message),
         Err(_) => internal(),
     }

@@ -137,7 +137,7 @@ export class MockClient implements SpecEngineClient {
     return bundleOf(this.project(project).corpus, options);
   }
 
-  /** Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client). */
+  /** The mock corpus's walk; the daemon serves its own (`docs/features/ui-live.md` "Data"). */
   async getGraph(project: string, options: GraphOptions): Promise<GraphView> {
     await this.read();
     return graphOf(this.project(project).corpus, options);
@@ -163,8 +163,8 @@ export class MockClient implements SpecEngineClient {
   }
 
   /**
-   * Served by the mock although the daemon lacks the endpoint (MISSING ENDPOINT in the client): the
-   * project's report for the scenario (src/mocks/check.ts), read only; a decision changes nothing in it.
+   * The project's report for the scenario (src/mocks/check.ts), read only; a decision changes
+   * nothing in it. The daemon serves its own (`docs/features/ui-live.md` "Data").
    */
   async getCheck(project: string): Promise<CheckReport> {
     await this.read();

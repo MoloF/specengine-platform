@@ -37,9 +37,10 @@
 //!   each giving its outcome or a [`CliError`];
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
-//! - [`tree_with_view`], [`show_with_view`], [`search_with_view`]: those
-//!   reads bounded by a [`View`], the daemon's [`View::Browser`] never cut
-//!   (task spec `daemon-read`); [`project_entry`], [`events_after`]: a
+//! - [`tree_with_view`], [`show_with_view`], [`search_with_view`],
+//!   [`graph_with_view`]: those reads bounded by a [`View`], the daemon's
+//!   [`View::Browser`] never cut (task specs `daemon-read`, `ui-live`);
+//!   [`project_entry`], [`events_after`]: a
 //!   served project's entry and the queue's events after a `seq`, which
 //!   only the daemon reads (no command prints them); [`EventsTail`] the
 //!   latter with its connection kept between a live tail's polls;
@@ -132,7 +133,9 @@ pub use create::{CreateRequest, propose_create, propose_create_brief};
 pub use documents::{DocumentEntry, documents};
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
-pub use graph::{FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph};
+pub use graph::{
+    FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
+};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use intake::{

@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [crates/specengine-http, crates/specengine-cli, ui]
 ref: ui-live analysis 2026-10-07 (HEAD 930cdea), every recommendation and Q1-Q6 working answer accepted; 08 s2 Phase 4 on Phase 2's daemon
+shipped: 2026-10-07
 adrs: []
 ---
 
@@ -10,102 +11,61 @@ adrs: []
 
 ## Why
 
-On the daemon, the UI's default client, Graph and Health say "Not built yet": `HttpClient.getGraph`, `getCheck` reject unsent (`notServed`); `specengine-http` serves neither `spec graph` nor `spec check`. This slice serves both over the shipped CLI calls, `graph` uncut, `check` the plain run with every verdict a 200 document; the client switches to them, the live tail re-reads them. A thin follow-up to `daemon-read`, Phase 4 on Phase 2's daemon (08 s2); tasks wait for `ui-live-tasks` (no `spec task list|show` yet).
+On the daemon, the UI's default client, Graph and Health said "Not built yet": `specengine-http` served neither `spec graph` nor `spec check`. Now both are served over the shipped CLI calls, `graph` uncut, `check` the plain run with every verdict a 200 document; the client fetches them, the live tail re-reads them. Tasks wait for `ui-live-tasks`. No new ADR (ADR-0033, 0012, 0034, 0006, 0008): the amended rules (one door, the exit map) were `daemon-read` working answers. How it works now: `crates/specengine-http/README.md`, CLI README "Output and the cap", `ui/README.md`.
 
-Rests on ADR-0033 and `docs/canon/architecture.md#ui`, ADR-0012 (`blocked` never a hold), ADR-0034 (the fence), ADR-0006 (no hook or CI reads it), ADR-0008 (no verdict, link type or kind in the daemon), `#storage`. No new ADR: the amended rules (one door, the exit map) were `daemon-read` working answers.
-
-**Working answers** (orchestrator 2026-10-07, the owner's standing instruction; open to his review): **Q1** tasks routes, `task.*` listeners, the Inbox "Task" link: `ui-live-tasks`, right after `task-package`; **Q2** `check` re-read on `proposal.applied` or a gap only while Health is on screen; **Q3** `check` takes the project's turn; **Q4** `graph` uncut on the server, the UI applies its drawing limits (`ui-graph` AC-09, AC-10); **Q5** order: `proposal-kinds` (committed first), this, `task-package`, `ui-live-tasks`, `decision-staging`; **Q6** a discovery refusal is a 503, as everywhere. **Assumptions**: A1 the REF a query value, not a path; A2 debt judged by the daemon's UTC date per call; A3 a direct file edit raises no event: seen at the next read ("Check again", other options, a remount: no `staleTime`, `provider.tsx`); A4 `depth=-1` passes `args.rs` `integer`: CLI exit 2, 503; A5 a walk here < 1 s (`docs/canon/mcp-read.md` "Latency").
-
-Roles: `rust-developer` `crates/specengine-http/src`, CLI `graph.rs`, `lib.rs`; `ui-developer` `ui/src`; `test-engineer` tests, `fixtures/daemon-keys.json`. Unchanged: CLI text and `--json`, MCP, store, hook, CI, `plugin/`; no new crate, dependency or UI package.
+**Working answers** (orchestrator 2026-10-07, open to the owner's review): Q1 tasks routes, `task.*` listeners, the Inbox "Task" link: `ui-live-tasks`; Q2 `check` re-read on `proposal.applied` or a gap only while Health is on screen; Q3 `check` takes the project's turn; Q4 `graph` uncut, the UI applies its drawing limits; Q5 order `proposal-kinds`, this, `task-package`, `ui-live-tasks`, `decision-staging`; Q6 only a config `discover` refuses (TOML syntax, the project tables) answers 503, a bad `[check]` table is a 200 cannot-check report. A1-A5: the REF a query value; debt by the UTC date per call; a file edit raises no event; `depth=-1` a 503; a walk < 1 s (4-52 ms).
 
 ## Description and interactions
 
-**Server**: two read routes beside `daemon-read`'s (`crates/specengine-http/README.md`), behind the fence, GET only (else 405), `no-store`, one CLI library call each in the project's turn, after `answer.rs` `found` (a changed slug, a config `discover` refuses: 503):
-
-- `GET /api/projects/:p/graph` -> `graph_with_view(env, globals, &request, View::Browser)`; it refreshes the index like `tree`;
-- `GET /api/projects/:p/check` -> `check(env, globals, &CheckRequest::default())`; no database, data directory or git, yet in the turn (Q3): one walk in flight per project, a queued request whose client left dropped unrun (`tests/turn.rs`).
-
-**CLI**: `graph_with_view(&Env, &Globals, &GraphRequest, View) -> Result<GraphOutcome, CliError>`; `graph` = it with `View::Capped`, bytes unchanged. `Browser`: `shown_nodes`, `shown_edges` the full counts, `truncated` false; `Capped` cuts as now (`docs/canon/spec-cli-graph.md` "Exit, cap, determinism"; a node cut drops every edge, `graph.rs`). No `check_with_view`: `check`'s JSON is never cut (W-1, `docs/canon/spec-check-cli.md` "spec check").
-
-**UI**: `getGraph`, `getCheck` fetch; Graph and Health keep their states (loading, error + Retry, the exit-1 reason); the tail re-reads both.
+`GET /api/projects/:p/graph` -> `graph_with_view(.., View::Browser)`, `GET .../check` -> `check(.., &CheckRequest::default())`: GET only, behind the fence, one call each in the project's turn after `answer.rs` `found`. CLI `graph` = `graph_with_view(.., View::Capped)`, bytes unchanged.
 
 ## Data
 
-### Graph: `GET /api/projects/:p/graph`
-
-Query, strict (README "Endpoints", **Query**), names = the JSON echo keys and `ui-graph`'s options: `ref` (required, once, any text; `%23` for `#`) -> `reference`; `impact` (`true`|`false`, once; absent false); `types` (repeated, any text, in order); `depth` (decimal integer, once); `archive` (`true`|`false`, once; absent false). 400, error body, nothing run: `ref` missing; a scalar repeated; `impact=yes`, `depth=x`, a bad `%`; an unknown name (`x=1`: ``... it takes ref, impact, types, depth, archive``). A link type is never validated (ADR-0008): an unknown one follows nothing, as on the CLI. Statuses, the generic map (`answer.rs` `run`): exit 0 -> 200, the document; 1 -> 404, the exit-1 document (`reason` set: an unknown REF, `ref=` empty); 2 -> 503, the error body (`depth` < 0, a look-alike ID, a `project:` REF, `HOME`).
-
-Example (`ui-graph` "Data"): `GET /api/projects/harbor-sim/graph?ref=MEC-TIDES%23RULE-TIDE-WINDOW&impact=true&types=depends_on&types=constrains&depth=3` -> 200, `spec --root R graph 'MEC-TIDES#RULE-TIDE-WINDOW' --impact --type depends_on --type constrains --depth 3 --json` stdout without its final LF, every node and edge.
-
-`GraphView` (`docs/canon/spec-cli-graph.md` "spec graph"), 11 keys, absent = `null`: `{ref, reason, impact, types: [{type, direction}], depth, archive, notes, left_out: {generated, tier3}, truncated, nodes: [{id, kind, title, path, line, distance, archived}], edges: [{src, type, dst, written, path, line, state, reason}]}`. Browser view: `truncated` false, the CLI's keys and order; uncut, the bytes equal.
-
-### Check: `GET /api/projects/:p/check`
-
-No query: any name -> 400 (``... it takes no query name``); nothing maps to `--staged`, `--changed` (git), `--baseline` (a client path), `--debt` (text only). `CheckRequest::default()`: the working tree on disk, untracked and ignored files included, `specengine.toml`, `.spec-debt.toml` from the root, `today_utc()` per call.
-
-**The check exception** (`answer.rs`), keyed on the outcome being `Outcome::Check`, never on a verdict word: `Ok` -> 200 whatever `exit()` (clean, observed 0; blocked 1; cannot-check 2, causes in `cannot_check`); `Err(CliError)` (discovery, Q6) or a changed slug -> 503. The generic map would make `blocked` a 404 and `cannot-check` a 503 losing its causes (`CheckOutcome::exit`). Body = `spec --root R check --json` stdout less its final LF, same `HOME`; stderr `note:` lines not carried. No cache: the answer depends on disk and the date; no watcher.
-
-`CheckReport` (`docs/canon/spec-check.md` "Output"), plain run, 6 keys: `{mode, verdict, counts: {documents, errors, warnings, debt, expired, stale, worst_w_bytes}, findings: [{code, severity, path, line, subject, message, fix?, debt?}], stale: [{code, path, subject, reason, expires, line}], cannot_check: [{path, message}]}`; `?` omitted when unset, never `null` (W-1); never `new_debt`, `introduced`. 200:
-
-```json
-{"mode":"enforce","verdict":"blocked","counts":{"documents":9,"errors":1,"warnings":0,"debt":0,"expired":0,"stale":0,"worst_w_bytes":24576},
-"findings":[{"code":"key-missing","severity":"error","path":"docs/spec/movement/sprint.md","line":1,"subject":"status","message":"..."}],"stale":[],"cannot_check":[]}
-```
+Graph query names = `spec graph`'s JSON echo keys: `ref` (required), `impact`, `types` (repeated, in order, never validated), `depth`, `archive`; the generic exit map. Check: no query name; the tree on disk, untracked and ignored files, the date per call, no database or git. **The check exception** (`answer.rs` `answered`), keyed on `Outcome::Check`, never on a verdict word: every report 200; a `CliError` or a changed slug 503. `CheckReport` (`docs/canon/spec-check.md` "Findings, debt, verdict"), plain: no `new_debt`, `introduced`. `fixtures/daemon-keys.json`: 15 sets (+9: a `stale` entry, a `cannot_check` cause among them), base-only keys listed once as never served. UI: a 200 report and a graph 404 are data; the tasks stay `notServed`.
 
 ### The one door, amended
 
-`daemon-read`'s rule (no handler "indexes or checks") becomes: no handler calls `approve`, `approve_with`, `reject`, `propose*`, `import_state`, `export_*`, `init`, `index`; `check` only as the plain run. `tests/door.rs` `forbidden`: `check` leaves; `Staged`, `Changed`, `baseline` join (a git mode or client path named in `src`), with a positive control, a probe calling `CheckedTree::Changed`. The only writes stay the reads' index refresh (`#storage`).
-
-### UI (`ui/README.md` "Contract seam")
-
-- `client.ts`: the `MISSING ENDPOINT` comments of `getGraph`, `getCheck` become `/** GET /api/projects/:p/graph (crates/specengine-http/README.md "Endpoints"; the browser view, uncut) */` and `/** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */`, asserted by `client.test.ts`; `getTasks`, `getTask` keep theirs.
-- `http.ts`: `getGraph(p, options)` -> `GET /api/projects/<p>/graph?` + `queryOf` of `ref`, `impact`, `types`, `depth`, `archive` (absent omitted, `types` repeated, `impact`, `archive` only `true`: `ui-graph` "Data"); `getCheck(p)` -> `GET /api/projects/<p>/check`. A 200 is data, a `blocked` report too; a graph 404 document data (the GET-404 branch); other non-2xx `ClientError` verbatim. `getTasks`, `getTask` still `notServed`, `DAEMON_READ_GAP` -> `docs/features/ui-live.md "Out of scope"`.
-- `queries.ts`: `READS_OF_THE_SPEC` = `["tree", "node", "search", "bundle", "graph", "check"]`; only reads on screen refetch, the rest marked stale (Q2). Query keys, `useCheck`'s options (no focus, reconnect, interval refetch), `READS_AFTER_DECISION` (a decision reads no `check`), event types unchanged.
-- `provisional.ts` unchanged. `fixtures/daemon-keys.json` gains nine sets, written by `tests/daemon_keys.rs` from the daemon: `GraphView` 11, `GraphNode` 7, `GraphEdge` 8, `FollowedType` 2 (a graph on A with edges); `CheckReport` 6, `CheckCounts` 7, `CheckFinding` 8, `DebtEntry` 6 (`stale`), `CheckCause` 2 (checks on copies of A with a `fix` finding (a look-alike ID), one in debt, a stale entry, a cannot-check). `CheckFinding` is the union of its instances in core's field order (`one_key_set` needs equal sets, panics on none); `expires` dates far from today. `daemonKeys.test.ts` compares all 15; the base-only keys (`CheckReport.new_debt`, `CheckCounts.introduced`, `.new_debt`, `CheckFinding.introduced`) listed once as never served.
+No handler calls `approve`, `reject`, `propose*`, `import_state`, `export_*`, `init`, `index`; `check` only plain. `tests/door.rs` forbids `Staged`, `Changed`, `baseline` instead of `check`.
 
 ## Rules and edge cases
 
-- WHEN the config no longer parses THEN both routes 503 with `discover`'s line, where `spec check` prints a cannot-check report (a parity gap, Q6).
-- WHEN a graph passes `OUTPUT_CAP_CHARS` THEN the daemon sends it whole, possibly megabytes (Q4).
-- WHEN a `check` runs THEN the project's other reads wait for it and it for them (Q3); another project's do not.
-- WHEN a file changes on disk without a queue event THEN nothing is pushed; the next read shows it (A3).
-- WHEN `proposal.applied` or a gap reaches `p` THEN `p`'s graph and check on screen read again, once each; other `proposal.*` events read neither.
-- Both read the registered root's files on disk, uncommitted edits included, never `HEAD` or the git index; neither writes under a root.
+- WHEN `proposal.applied` or a gap reaches `p` THEN `p`'s graph on screen and, Health on screen, its check are read again, once; other events neither; a check in flight is kept, not run twice.
+- Both read the root's files on disk, never `HEAD`, and write nothing under it; a file edit is seen at the next read (A3).
 
 ## Acceptance criteria
 
-Setup as `daemon-read`: git copies of `fixtures/spec-a` (A), `fixtures/spec-b` (B), a scratch `HOME`, a `--port 0` daemon per test (http `tests/common/mod.rs`). M: the mutation turning it red.
+Setup as `daemon-read`: git copies of `fixtures/spec-a` (A), `-b` (B), a scratch `HOME`, a `--port 0` daemon per test; Rust tests in `crates/specengine-http/tests/`. M: the mutation, seen red.
 
-- [ ] AC-01 -- graph parity: on A, `MEC-SPRINT`, `MEC-STAMINA#RULE-STAM-REGEN` (`%23`), `docs/spec/movement/sprint.md` (`%2F`) x {none, `impact=true`, `types=depends_on&types=constrains`, `depth=1`, `archive=true`}: 200, byte-equal to `spec --root A graph REF <flags> --json` stdout less its final LF, same `HOME` (M: `impact` ignored).
-- [ ] AC-02 -- uncut: A plus a generated document linking enough sections that the CLI cuts (its JSON `truncated` true, `edges` `[]`): the daemon's `truncated` false, its node and edge counts = the CLI text's `nodes <n>, edges <e>` (M: `View::Capped` in the handler; `graph` given `Browser`).
-- [ ] AC-03 -- graph query: an unknown REF -> 404, byte-equal to the CLI's exit-1 document; `ref` missing, `ref` twice, `impact=yes`, `depth=x`, `x=1` -> 400 naming the parameter, no data directory in a fresh `HOME`; `depth=-1` -> 503 (M: `ref` optional).
-- [ ] AC-04 -- check verdicts: copies of A clean, observed (`[check] mode = "observe"` + an error), blocked (enforce + an error), cannot-check (an invalid `.spec-debt.toml`): each 200, byte-equal to `spec --root R check --json` stdout less its final LF (M: the generic exit map).
-- [ ] AC-05 -- reach: `?staged=true`, `?baseline=x`, `?debt=true` -> 400; the daemon started with no `git` on `PATH`: `/check` 200; a fresh `HOME`: no data directory after; `git status --porcelain` empty, `HEAD` unchanged (M: `staged` wired to `CheckedTree::Staged`).
-- [ ] AC-06 -- turn: as `turn.rs`, `/check` requests queued behind a held turn, clients gone, run no walk; a `/check` on A waits for A's running read, not B's (M: `check` outside the turn).
-- [ ] AC-07 -- door: `door.rs` catches a probe calling `CheckedTree::Changed` and one naming `baseline`; `approve`, `reject`, `propose`, `import_state`, `export_*`, `init`, `index` still caught; `src` passes (M: a handler calls `index`).
-- [ ] AC-08 -- no domain: no string literal in `crates/specengine-http/src` holds, as a word, a verdict (`clean`, `observed`, `blocked`, `cannot-check`), a `LINK_TYPES` name or a kind (M: a branch on `"blocked"`).
-- [ ] AC-09 -- key sets: `daemon_keys.rs` writes the nine; the fixture holds 15 names; `daemonKeys.test.ts` checks all 15 against `provisional.ts` (M: a `GraphEdge` key dropped from `provisional.ts`).
-- [ ] AC-10 -- client (Vitest, stubbed `fetch`): `getGraph("harbor-sim", {ref: "MEC-TIDES#RULE-TIDE-WINDOW", impact: true, types: ["depends_on", "constrains"], depth: 3})` requests exactly the example URL; `getCheck("harbor-sim")` `/api/projects/harbor-sim/check`; a 200 `blocked` report resolves as data; a 503 -> `ClientError` verbatim (M: `types` dropped).
-- [ ] AC-11 -- `getTasks`, `getTask` -> `ClientError {status: 501, notServed: true}`, no `fetch`, naming `docs/features/ui-live.md "Out of scope"` (M: `getTasks` fetching).
-- [ ] AC-12 -- live (stubbed `EventSource`): `proposal.applied` on `p` refetches the graph on screen once, with Health on screen the check once; `proposal.created` neither; a gap both; a UI decision reads no `check`; another project's event nothing (M: `graph` left out of `READS_OF_THE_SPEC`).
-- [ ] AC-13 -- screens over `HttpClient` (stubbed `fetch`): Health on a 200 `blocked` report shows "Fails the check" and its findings, on `cannot-check` "Could not check" and the causes verbatim; Graph on a 404 document its `reason`; no "Not built yet" (M: `getCheck` still `notServed`).
-- [ ] AC-14 -- housekeeping: http tests, `mcp_read`, `mcp_size`, eval `build_graph.rs` (pins unchanged), `ui_policy`, `anonymity`, `doc_pointers` green; `pnpm lint` (0 warnings), `build`, `test`; the UI's 17 packages (M: an 18th); http, CLI READMEs <= 10 240 B, `ui/README.md` <= 8 192 B, `CLAUDE.md` not grown; docs gate clean, worst W <= the start's.
-- [ ] AC-15 -- owner's manual check: `specengine-http --root <this repository>`, `pnpm --dir ui dev`: Health's verdict and counts match `spec check`; a Graph matches `spec graph`; a terminal approval that applies refreshes both screens within 1 s, no reload. Open.
+- [x] AC-01 -- graph parity: on A, 3 REFs (`%23`, `%2F` among them) x {none, `impact=true`, two `types`, `depth=1`, `archive=true`}, `types` order, an unknown type: 200, byte-equal to `spec --root A graph REF <flags> --json` less its final LF (`graph.rs` `ac01_every_graph_is_the_clis_document_byte_for_byte`; M: `impact` ignored).
+- [x] AC-02 -- uncut: A + 700 sections linked `depends_on`: the CLI's JSON cut (`truncated` true, `edges` `[]`), the daemon's `truncated` false, counts = the CLI text's `nodes 701, edges 700` (`ac02_the_daemon_sends_whole_the_graph_the_cli_cuts`; M: `Capped` in the handler).
+- [x] AC-03 -- graph query: unknown REFs, `ref=` -> 404 = the CLI's exit-1 document; 16 malformed queries -> exact 400s, `HOME` left empty; `depth=-1`, a look-alike, `shared:DEC-0023` -> 503, the CLI's line (`ac03_the_graph_query_404_400_503`; M: `ref` optional).
+- [x] AC-04 -- check verdicts: copies of A clean, observed, blocked, cannot-check: each 200, byte-equal to `spec --root R check --json` (exits 0, 0, 1, 2) (`check.rs` `ac04_every_verdict_is_a_200_document_byte_equal_to_the_cli`; M: the generic exit map).
+- [x] AC-05 -- reach: 8 query names -> 400; no `git` on `PATH`: `/check` the CLI's bytes; `HOME` left empty; `git status --porcelain --ignored` empty, `HEAD` unchanged (`ac05_check_takes_no_query_needs_no_git_and_writes_nothing`, `check_and_graph_read_the_working_tree_on_disk_not_head`, `a_config_that_no_longer_parses_is_a_503_on_check_and_graph`; M: `staged` wired).
+- [x] AC-06 -- turn: queued `/check`s whose clients left run no walk (CPU ratio 0.28; 1.01 mutated); A's check waits for A's read, not B's (`turn.rs` `ac06_a_queued_check_dropped_by_its_client_never_walks`, `ac06_a_check_waits_for_its_own_projects_reads_not_anothers`; M: `check` outside the turn).
+- [x] AC-07 -- door: probes calling `CheckedTree::Changed`, naming `baseline` caught, the writers still; `src` passes; no endpoint changes the repository or queue (`door.rs` `ac07_the_scan_catches_a_checks_git_mode_or_baseline_and_every_writer`, `ac03_*`; M: a handler calls `index`).
+- [x] AC-08 -- no domain, **corrected**: no string literal in `crates/specengine-http/src` holds, as a case-insensitive word, a verdict (`clean`, `observed`, `blocked`, `cannot-check`), a `LINK_TYPES` name, or a kind of the union of every `kind = "..."` in the root and `fixtures/` `specengine.toml`s (8, 15 kinds); exempt only `decision` as a segment of a route-path literal (`app.rs` `"/api/projects/{p}/proposals/{id}/decision"`, `strip_suffix("/decision")`) (`no_domain.rs` `ac08_*`, 2 tests; M: a branch on `"blocked"`).
+- [x] AC-09 -- key sets: `daemon_keys.rs` writes the nine, the fixture 15 names; `daemonKeys.test.ts` checks all 15 against `provisional.ts`, each required when the fixture exists (`ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json`, "names exactly the fifteen types"; M: a fixture key dropped, red in Vitest and Rust). **Corrected**: a `GraphEdge` key dropped from `provisional.ts` is caught by `tsc` (`pnpm build`), not Vitest.
+- [x] AC-10 -- client (stubbed `fetch`): `getGraph("harbor-sim", {ref: "MEC-TIDES#RULE-TIDE-WINDOW", impact: true, types: ["depends_on", "constrains"], depth: 3})` requests exactly `/api/projects/harbor-sim/graph?ref=MEC-TIDES%23RULE-TIDE-WINDOW&impact=true&types=depends_on&types=constrains&depth=3`; each verdict's 200 data; 503, 400 -> `ClientError` verbatim (`http.test.ts` "each method hits its URL", "resolves the check's 200 `%s` report as data, never a refusal"; M: `types` dropped).
+- [x] AC-11 -- `getTasks`, `getTask` -> 501 `notServed`, no `fetch`, naming `docs/features/ui-live.md "Out of scope"` (`http.test.ts`, `client.test.ts`, `notServed.test.tsx`; M: `getTasks` fetching).
+- [x] AC-12 -- live: `proposal.applied` on alpha reads its graph and, Health on screen, its check once, nothing of beta; other events neither; a gap both; off screen the check stale; one `/check` during a walk; a UI decision no check (`live.test.tsx` "the graph and the check on the live tail", 8 tests; M: `graph` left out of `READS_OF_THE_SPEC`).
+- [x] AC-13 -- screens over `HttpClient`: Health "Fails the check" + finding, "Could not check" + causes, a 503 alert + Retry; Graph a 404's `reason`, "2 nodes, 1 edge", a 503 alert; never "Not built yet" (`liveScreens.test.tsx`, 6 tests; M: `getCheck` still `notServed`).
+- [x] AC-14 -- housekeeping: http, CLI, eval 896 passed; `mcp_read`, `mcp_size` 12/12; `build_graph.rs` pins unchanged; `pnpm lint` 0, `build`, `test` green; 17 packages; READMEs http 10 183, CLI 10 215, UI 8 188 B; `CLAUDE.md` untouched; docs gate clean, worst W <= 108 283 B (M: an 18th package).
+- [ ] AC-15 -- owner's manual check: `specengine-http --root <this repository>`, `pnpm --dir ui dev`: Health's verdict and counts match `spec check`; a Graph matches `spec graph`; a terminal approval that applies refreshes both within 1 s, no reload. Open.
 
 ## Out of scope
 
-`ui-live-tasks`, after `task-package`: `GET .../tasks`, `.../tasks/:id` (404 `TaskNotFound`), nine `task.*` listeners (the tail forwards any stored type), `["tasks"|"task", p]` invalidation, the Inbox "Task" link, `ui/src` citations moved off `task-package.md`. Staging events; file-change, drift events; `health` (Phase 3), `symbols`, Round; git modes or a baseline over HTTP; a server cache or watcher; a graph MCP tool; new packages, crates, dependencies.
-
-## Open
-
-- The owner's review of Q1-Q6 (working answers); AC-15.
+`ui-live-tasks`, after `task-package`: `GET .../tasks`, `.../tasks/:id` (404 `TaskNotFound`), nine `task.*` listeners, `["tasks"|"task", p]` invalidation, the Inbox "Task" link, `ui/src` citations moved off `task-package.md`. Staging, file-change, drift events; `health` (Phase 3), `symbols`, Round; git modes or a baseline over HTTP; a server cache or watcher; a graph MCP tool; new packages, crates, dependencies.
 
 ## Implementation
 
-Not built. **At shipping** (`spec-writer`), in place, caps never raised (overflow moves down a tier):
+Canon: http, CLI, UI READMEs, `spec-cli-graph.md`; 07 s3, 08 s2; `decision-staging.md`; amendment lines in `ui-graph`, `ui-health`, `daemon-read`. One Rust, two UI iterations; review 1 accepted (m1, m2, n4 fixed here; m3, n3 UI iteration 2; n1 to `ui-live-tasks`).
 
-- `crates/specengine-http/README.md` (10 221 B): "Endpoints" two rows; "Browser view"; "Answers and statuses" the check exception; "One door" (`check` only plain; `Staged`, `Changed`, `baseline` forbidden); "Worktrees"; "Concurrency"; "Known limits" (`discover` refusing: 503, the CLI a report; stderr `note:` lost; an uncut graph's size; a walk delays the project's reads); "Tests".
-- CLI README (10 238 B, net <= +2): "API" `graph_with_view`, "Output and the cap" `View`. `ui/README.md` (8 184 of 8 192 B): the state line. 07 s3: `graph`, `check` built. 08 s2: Phase 2's list, Phase 4's "next".
-- Drafts: `proposal-kinds.md` "Why" **Order** if still a draft; `decision-staging.md` "Data" one-door list (`check` plain allowed). Done 2026-10-07: `decision-staging.md` **Order**, `task-package.md` order pointer and `ui-live-tasks`.
-- Shipped specs, one "Amendment" line each: `ui-graph.md` AC-01, `ui-health.md` AC-01 (the comment, the 501), `daemon-read.md` AC-03 (`check` called, plain), AC-09 (15 key sets).
-- `CLAUDE.md` not grown; this spec compacted to "Why", criteria, a summary <= 3 KB, keeping "Out of scope" (cited by `http.ts`).
+| Module | What it does |
+|---|---|
+| CLI `graph.rs`, `lib.rs`, `cap.rs` | `graph_with_view`; the cut moved unchanged into `capped` |
+| http `app.rs`, `answer.rs` | the two routes; `answered(&Outcome)`: the exit map + the check exception |
+| UI `http.ts`, `client.ts`, `queries.ts` | `getGraph`, `getCheck`; comments; `READS_OF_THE_SPEC` + `graph`, `check` |
+
+Tests: http `graph.rs`, `check.rs`, `no_domain.rs`, UI `liveScreens.test.tsx` new; `turn`, `door`, `methods`, `projects`, `daemon_keys` changed. Trials: the UI's example URL byte-equal; at 700 sections the daemon 701 nodes, 700 edges, about 220 KB (the CLI's JSON 462 nodes, 0 edges); `/check` 4 ms on A, 27 ms at 700 sections.
+
+Deviations: the fence's Host refusal says "serves its own origin only" (was "answers", a `LINK_TYPES` name); the 404 route list names `graph`, `check`; Graph's first read sends `depth=2`; `client.ts` tasks comments still cite `daemon-read` (n1); Q6's gap. UI iteration 2: all 15 sets required when the fixture exists; `check` invalidated with `cancelRefetch: false` (a walk in flight kept). Owner: AC-15, Q1-Q6.

@@ -60,11 +60,12 @@ export interface GraphOptions {
 
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
- * endpoints (`docs/features/daemon-read.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx,
- * picks the implementation. A read answered with exit 1 (404 for tree, nodes, bundle, a proposal,
- * graph, task) resolves to its document, `reason` (a proposal: the last of `notes`) set; every
- * other failure rejects with a ClientError carrying the daemon's status and message verbatim
- * (exit 2: 503; no response: 0; a read the daemon does not serve yet: `notServed`, 501, nothing
+ * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data"; 07 §3).
+ * Only the bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for
+ * tree, nodes, bundle, a proposal, graph, task) resolves to its document, `reason` (a proposal: the
+ * last of `notes`) set; the check answers every verdict as a 200 report, data too; every other
+ * failure rejects with a ClientError carrying the daemon's status and message verbatim (exit 2:
+ * 503; no response: 0; a read the daemon does not serve yet, the tasks: `notServed`, 501, nothing
  * requested). Decisions are made on a terminal: the daemon refuses each one
  * (403) naming its `spec` command (docs/features/daemon-read.md, Q4). Tasks are read only: an owner
  * action is a command for a terminal (docs/features/ui-tasks.md).
@@ -86,13 +87,13 @@ export interface SpecEngineClient {
   search(project: string, options: SearchOptions): Promise<SearchResults>;
   /** GET /api/projects/:p/bundle */
   getBundle(project: string, options: BundleOptions): Promise<BundleView>;
-  /** MISSING ENDPOINT GET /api/projects/:p/graph (07 section 3 lists it; uncut; rust-developer, daemon-read "Out of scope") */
+  /** GET /api/projects/:p/graph (crates/specengine-http/README.md "Endpoints"; the browser view, uncut) */
   getGraph(project: string, options: GraphOptions): Promise<GraphView>;
   /** MISSING ENDPOINT GET /api/projects/:p/tasks (07 section 3 lists it; = spec task list --json; rust-developer, daemon-read "Out of scope") */
   getTasks(project: string): Promise<TaskList>;
   /** MISSING ENDPOINT GET /api/projects/:p/tasks/:id (07 section 3 lacks it; = spec task show T --json, uncut) */
   getTask(project: string, id: string): Promise<TaskPackage | TaskNotFound>;
-  /** MISSING ENDPOINT GET /api/projects/:p/check (= spec check --json; rust-developer, ui-live; 07 section 3's health is a later composite) */
+  /** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */
   getCheck(project: string): Promise<CheckReport>;
   /** POST /api/projects/:p/proposals/:id/decision */
   decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;

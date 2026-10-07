@@ -1,12 +1,31 @@
 import { describe, expect, it } from "vitest";
 import source from "./provisional.ts?raw";
-import type { BundleView, InboxEntry, NodeView, Project, Proposal, QueueEvent, SearchHit } from "./types";
+import type {
+  BundleView,
+  CheckCause,
+  CheckCounts,
+  CheckFinding,
+  CheckReport,
+  DebtEntry,
+  FollowedType,
+  GraphEdge,
+  GraphNode,
+  GraphView,
+  InboxEntry,
+  NodeView,
+  Project,
+  Proposal,
+  QueueEvent,
+  SearchHit,
+} from "./types";
 
-// AC-09 of docs/features/daemon-read.md: the provisional types of the daemon's documents. Each
-// record names exactly its type's keys (`satisfies` fails `pnpm build` otherwise) and equals the
-// list the cited headings write; the six AC-09 names equal `fixtures/daemon-keys.json`, which a
-// Rust test regenerates from the daemon on fixture A. While that file is absent the comparison is
-// skipped, saying so.
+// AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md: the provisional types of
+// the daemon's documents. Each record names exactly its type's keys (`satisfies` fails `pnpm
+// build` otherwise) and equals the list the cited headings write; the keys the daemon serves (the
+// record less the base-only keys of a plain check, NEVER_SERVED) equal `fixtures/daemon-keys.json`,
+// which a Rust test regenerates from the daemon on fixture A: daemon-read's six names, ui-live's
+// nine. While that file is absent the comparison is skipped, saying so; once it exists it names
+// all fifteen.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -100,6 +119,67 @@ const KEYS = {
     tail: true,
     more: true,
   } satisfies Record<keyof BundleView, true>,
+  // docs/canon/spec-cli-graph.md "spec graph": the JSON, a node, an edge, `types`' entries.
+  GraphView: {
+    ref: true,
+    reason: true,
+    impact: true,
+    types: true,
+    depth: true,
+    archive: true,
+    notes: true,
+    left_out: true,
+    truncated: true,
+    nodes: true,
+    edges: true,
+  } satisfies Record<keyof GraphView, true>,
+  GraphNode: { id: true, kind: true, title: true, path: true, line: true, distance: true, archived: true } satisfies Record<keyof GraphNode, true>,
+  GraphEdge: {
+    src: true,
+    type: true,
+    dst: true,
+    written: true,
+    path: true,
+    line: true,
+    state: true,
+    reason: true,
+  } satisfies Record<keyof GraphEdge, true>,
+  FollowedType: { type: true, direction: true } satisfies Record<keyof FollowedType, true>,
+  // docs/canon/spec-check.md "Findings, debt, verdict": the JSON, its counts, a finding.
+  CheckReport: {
+    mode: true,
+    verdict: true,
+    counts: true,
+    findings: true,
+    stale: true,
+    new_debt: true,
+    cannot_check: true,
+  } satisfies Record<keyof CheckReport, true>,
+  CheckCounts: {
+    documents: true,
+    errors: true,
+    warnings: true,
+    debt: true,
+    expired: true,
+    stale: true,
+    introduced: true,
+    new_debt: true,
+    worst_w_bytes: true,
+  } satisfies Record<keyof CheckCounts, true>,
+  CheckFinding: {
+    code: true,
+    severity: true,
+    path: true,
+    line: true,
+    subject: true,
+    message: true,
+    fix: true,
+    debt: true,
+    introduced: true,
+  } satisfies Record<keyof CheckFinding, true>,
+  // docs/features/ui-live.md "Data": a `stale` entry, a `cannot_check` cause.
+  DebtEntry: { code: true, path: true, subject: true, reason: true, expires: true, line: true } satisfies Record<keyof DebtEntry, true>,
+  CheckCause: { path: true, message: true } satisfies Record<keyof CheckCause, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -116,17 +196,76 @@ const CITED: Record<Named, string> = {
   NodeView: "ref, reason, notes, nodes",
   SearchHit: "id, kind, title, path, line, ord, archived, snippet",
   BundleView: "refs, reason, notes, task, budget, tokens, chars, bytes, bundle_hash, body, layers, tail, more",
+  GraphView: "ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges",
+  GraphNode: "id, kind, title, path, line, distance, archived",
+  GraphEdge: "src, type, dst, written, path, line, state, reason",
+  FollowedType: "type, direction",
+  CheckReport: "mode, verdict, counts, findings, stale, new_debt?, cannot_check",
+  CheckCounts: "documents, errors, warnings, debt, expired, stale, introduced?, new_debt?, worst_w_bytes",
+  CheckFinding: "code, severity, path, line, subject, message, fix?, debt?, introduced?",
+  DebtEntry: "code, path, subject, reason, expires, line",
+  CheckCause: "path, message",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
 
+/** daemon-read's six (docs/features/daemon-read.md AC-09). */
+const DAEMON_READ: readonly Named[] = ["Project", "InboxEntry", "Proposal", "NodeView", "SearchHit", "BundleView"];
+
+/** ui-live's nine (docs/features/ui-live.md AC-09). */
+const UI_LIVE: readonly Named[] = ["GraphView", "GraphNode", "GraphEdge", "FollowedType", "CheckReport", "CheckCounts", "CheckFinding", "DebtEntry", "CheckCause"];
+
+/**
+ * The keys only a check against a git base sends: the daemon runs the plain check, so it never
+ * serves them (`docs/canon/spec-check.md` "Findings, debt, verdict"; docs/features/ui-live.md "Data").
+ */
+const NEVER_SERVED: readonly (readonly [Named, string])[] = [
+  ["CheckReport", "new_debt"],
+  ["CheckCounts", "introduced"],
+  ["CheckCounts", "new_debt"],
+  ["CheckFinding", "introduced"],
+];
+
+/** The keys the daemon sends for a type: its record's, less the never-served ones. */
+function served(name: Named): string[] {
+  return Object.keys(KEYS[name]).filter((key) => !NEVER_SERVED.some(([type, never]) => type === name && never === key));
+}
+
 describe("the daemon's document types (AC-09)", () => {
   it.each(NAMES)("%s has exactly the cited keys, in order", (name) => {
-    expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name]);
+    // An optional key is cited with its `?` (W-1: omitted when unset, never null).
+    expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
   it("counts 4 project keys, 11 inbox-entry keys, 42 review keys", () => {
     expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 11, 42]);
+  });
+
+  it("counts the daemon's keys of ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 (AC-09 of ui-live)", () => {
+    expect(Object.fromEntries(UI_LIVE.map((name) => [name, served(name).length]))).toEqual({
+      GraphView: 11,
+      GraphNode: 7,
+      GraphEdge: 8,
+      FollowedType: 2,
+      CheckReport: 6,
+      CheckCounts: 7,
+      CheckFinding: 8,
+      DebtEntry: 6,
+      CheckCause: 2,
+    });
+    expect([...DAEMON_READ, ...UI_LIVE].sort()).toEqual([...NAMES].sort());
+  });
+
+  it("lists each base-only key once, a key of its type the citation marks optional", () => {
+    expect(NEVER_SERVED.map(([name, key]) => `${name}.${key}`)).toEqual([
+      "CheckReport.new_debt",
+      "CheckCounts.introduced",
+      "CheckCounts.new_debt",
+      "CheckFinding.introduced",
+    ]);
+    for (const [name, key] of NEVER_SERVED) {
+      expect([name, key, CITED[name].split(", ").includes(`${key}?`)]).toEqual([name, key, true]);
+    }
   });
 
   it("names no task in an inbox entry or a review document", () => {
@@ -143,6 +282,17 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf(`export interface ${type} `);
     expect(at).toBeGreaterThan(0);
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/daemon-read.md` "Data"');
+  });
+
+  it.each([
+    ...["GraphView", "GraphNode", "GraphEdge", "FollowedType"].map((type) => [type, '`docs/canon/spec-cli-graph.md` "spec graph"'] as const),
+    ...["CheckReport", "CheckCounts", "CheckFinding", "DebtEntry", "CheckCause"].map(
+      (type) => [type, '`docs/canon/spec-check.md` "Findings, debt, verdict"'] as const,
+    ),
+  ])("%s cites %s", (type, citation) => {
+    const at = Math.max(source.indexOf(`export interface ${type} `), source.indexOf(`export type ${type} =`));
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain(citation);
   });
 });
 
@@ -171,11 +321,11 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the six types", () => {
-    expect(Object.keys(sets).sort()).toEqual([...NAMES].sort());
+  it("names exactly the fifteen types: daemon-read's six, ui-live's nine", () => {
+    expect(Object.keys(sets).sort()).toEqual([...DAEMON_READ, ...UI_LIVE].sort());
   });
 
   it.each(NAMES)("%s: the daemon's keys are the type's", (name) => {
-    expect([...(sets[name] ?? [])].sort()).toEqual(Object.keys(KEYS[name]).sort());
+    expect([...(sets[name] ?? [])].sort()).toEqual(served(name).sort());
   });
 });

@@ -266,6 +266,8 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
         ("GET", "/api/projects/nope/nodes/MEC-STAMINA"),
         ("GET", "/api/projects/nope/search?query=stamina"),
         ("GET", "/api/projects/nope/bundle?node_ids=MEC-STAMINA"),
+        ("GET", "/api/projects/nope/graph?ref=MEC-STAMINA"),
+        ("GET", "/api/projects/nope/check"),
         ("GET", "/api/projects/nope/inbox"),
         ("GET", "/api/projects/nope/proposals/PR-0001"),
         ("GET", "/api/projects/nope/events"),
@@ -284,7 +286,9 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
         "/",
         "/api",
         "/api/projects/lantern-keep",
-        "/api/projects/lantern-keep/graph",
+        // `graph` and `check` are routes since docs/features/ui-live.md;
+        // `tasks` is not yet ("Out of scope").
+        "/api/projects/lantern-keep/tasks",
     ] {
         let reply = server.get(path);
         assert_eq!(reply.status, 404, "{path}: {}", reply.text());

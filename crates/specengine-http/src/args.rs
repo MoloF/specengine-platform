@@ -1,5 +1,7 @@
 //! The query string and the path's parts (docs/features/daemon-read.md
-//! "Data"): query names are the MCP arguments; an array repeats its key
+//! "Data"): query names are the MCP arguments (`graph`'s, which no MCP
+//! tool has, its JSON echo keys: docs/features/ui-live.md "Data"); an
+//! array repeats its key
 //! (`kinds=a&kinds=b`), an integer is decimal, a boolean `true` or
 //! `false`, `with` only `links`. 400: a name the endpoint does not take
 //! (listing its names), a scalar given twice, a bad value, a required

@@ -6,8 +6,10 @@
 //! is no read here), `Cache-Control: no-store` on every response and no
 //! `Access-Control-*` header on any.
 //!
-//! One door (docs/features/daemon-read.md "Rules and edge cases"): no
-//! handler here decides, stores, exports, imports, creates or checks; the
+//! One door (docs/features/daemon-read.md "Rules and edge cases", amended
+//! by docs/features/ui-live.md "Data"): no handler here decides, stores,
+//! exports, imports, creates or indexes, and it checks only as the plain
+//! run (the working tree on disk: no git mode, no client's file); the
 //! only writes are the reads' own, in the data directory.
 
 use std::sync::Arc;
@@ -21,8 +23,8 @@ use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use specengine_cli::{
-    BundleRequest, InboxRequest, Outcome, ReviewRequest, SearchRequest, ShowRequest, TreeRequest,
-    View, process_git, project_entry,
+    BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest, SearchRequest,
+    ShowRequest, TreeRequest, View, process_git, project_entry,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -86,6 +88,8 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/nodes/{*ref}", read(nodes))
         .route("/api/projects/{p}/search", read(search))
         .route("/api/projects/{p}/bundle", read(bundle))
+        .route("/api/projects/{p}/graph", read(graph))
+        .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
         .route(
@@ -133,7 +137,7 @@ fn fenced(port: u16, headers: &HeaderMap) -> Result<(), String> {
     let host = single(headers, &HOST, "Host")?;
     if !host.is_some_and(|host| own.iter().any(|own| own.as_bytes() == host)) {
         return Err(format!(
-            "refused: the Host header must be {} or {}: this server answers its own origin only",
+            "refused: the Host header must be {} or {}: this server serves its own origin only",
             own[0], own[1]
         ));
     }
@@ -220,7 +224,7 @@ fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, inbox, proposals/<id>, events}}",
+             nodes/<REF>, search, bundle, graph, check, inbox, proposals/<id>, events}}",
             uri.path()
         ),
     )
@@ -327,6 +331,44 @@ async fn bundle(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
     .map_err(Refusal::bad_request)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::bundle(env, globals, &request).map(Outcome::Bundle)
+    })
+    .await)
+}
+
+/// `GET …/graph`: `spec graph REF --json`, the browser view (every node
+/// and edge); `ref` required, `types` repeated, in order; a link type is
+/// never judged here.
+async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args(
+        "graph",
+        &["ref", "impact", "types", "depth", "archive"],
+        &uri,
+    )?;
+    let request = (|| {
+        Ok::<_, String>(GraphRequest {
+            reference: args.required_text("ref")?,
+            impact: args.boolean("impact")?.unwrap_or(false),
+            types: args.texts("types"),
+            depth: args.integer("depth")?,
+            archive: args.boolean("archive")?.unwrap_or(false),
+        })
+    })()
+    .map_err(Refusal::bad_request)?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::graph_with_view(env, globals, &request, View::Browser).map(Outcome::Graph)
+    })
+    .await)
+}
+
+/// `GET …/check`: `spec check --json`, the plain run only (the working
+/// tree on disk, the root's config and baseline, today's UTC date); no
+/// query name. Every report is a 200 document (`answer.rs`).
+async fn check(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    args("check", &[], &uri)?;
+    Ok(run(project, |env, globals| {
+        specengine_cli::check(env, globals, &CheckRequest::default()).map(Outcome::Check)
     })
     .await)
 }

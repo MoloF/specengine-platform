@@ -73,6 +73,7 @@ CheckVerdict, CheckMode, FindingSeverity = Known... | Unlisted  // KnownCheckVer
 Vitest (`ui/src/health/`, `mocks/check.test.ts`, `health.smoke`, else named), `ui_policy.rs`, the gates. M: the mutation turning it red, each applied and red.
 
 - [x] AC-01 - `client.ts?raw` holds the `/check` `MISSING ENDPOINT` comment; `HttpClient.getCheck` 501 `notServed`, no `fetch` (`http.test.ts`); counting stub: Health one `getCheck`, one `getInbox`, nothing else; the home no `getCheck` (M: the home calls it; `getCheck` fetching).
+  Amendment (ui-live, 2026-10-07): the comment names `GET /api/projects/:p/check`, every verdict a 200 document; `HttpClient.getCheck` fetches it, no 501 (`client.test.ts`, `http.test.ts`).
 - [x] AC-02 - the types cite existing headings (`doc_pointers`); key records (`provisional.test.ts`) 7, 9, 9, 6, 2; no `debt`, `fix`: neither shown (M: `debt !== null`; a key dropped).
 - [x] AC-03 - four verdicts, distinct labels and icons; `cannot-check` in `cannot-verify` (`tokens.test.ts`); `triage` neutral, raw, last; no `/block/i` in the view (M: the raw verdict; `cannot-check` toned clean).
 - [x] AC-04 - `cannot-check`: no "0 B", causes verbatim; no introduced count; the `health-value` span of rows 3-6 and task W holds no digit (M: `?? 0`; "0 B" on `cannot-check`).

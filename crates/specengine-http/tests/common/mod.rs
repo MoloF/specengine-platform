@@ -710,7 +710,17 @@ impl Server {
     /// `specengine-http args` in `cwd` under `HOME=home`, until its
     /// `listening` line; `Err` when it exits first.
     pub fn try_start(home: &Path, cwd: &Path, args: &[&OsStr]) -> Result<Self, Refused> {
-        let mut child = alarmed(Path::new(HTTP), args, &product_env(home))
+        Self::try_start_env(&product_env(home), cwd, args)
+    }
+
+    /// As [`Server::try_start`] with the environment `env` instead of
+    /// [`product_env`] (a `PATH` without git, say).
+    pub fn try_start_env(
+        env: &[(OsString, OsString)],
+        cwd: &Path,
+        args: &[&OsStr],
+    ) -> Result<Self, Refused> {
+        let mut child = alarmed(Path::new(HTTP), args, env)
             .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

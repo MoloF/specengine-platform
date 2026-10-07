@@ -14,6 +14,14 @@
 //! 0.6 and 0.7 where 2/7 is expected, near 1 when the dropped calls run),
 //! so it holds under a loaded machine. M: the turn locked with
 //! `blocking_lock` inside `spawn_blocking` (the dropped calls run anyway).
+//!
+//! AC-06 of docs/features/ui-live.md: a `check`, which refreshes nothing,
+//! takes the turn too. The same two phases with `/check` (one walk of the
+//! 4000 files is `T`): queued checks whose clients left run no walk. And
+//! with the generated corpus and A served by one daemon, a `/check` on the
+//! corpus sent while the corpus's reads hold the turn is answered after
+//! them, while a `/check` on A sent at the same time is answered before
+//! the corpus's first read ends. M: `check` outside the turn.
 
 mod common;
 
@@ -33,6 +41,8 @@ const FILES: usize = 4000;
 const QUEUED: usize = 5;
 
 const TREE: &str = "/api/projects/big-corpus/tree";
+
+const CHECK: &str = "/api/projects/big-corpus/check";
 
 /// A project of `FILES` generated mechanic files, committed once.
 fn corpus(scratch: &Scratch) -> std::path::PathBuf {
@@ -110,11 +120,11 @@ struct Phase {
 
 /// A first call, `QUEUED` more behind it (closed by their clients while
 /// the first runs when `drop_them`, else answered), a last call after
-/// them; `one` is a call's time alone.
-fn phase(server: &Server, one: Duration, drop_them: bool) -> Phase {
+/// them, all `GET path`; `one` is a call's time alone.
+fn phase(server: &Server, path: &str, one: Duration, drop_them: bool) -> Phase {
     let port = server.port;
     let host = format!("127.0.0.1:{port}");
-    let request = request_bytes("GET", TREE, &[("Host", &host)]);
+    let request = request_bytes("GET", path, &[("Host", &host)]);
     let before = cpu(server.pid());
     let started = Instant::now();
     let first = {
@@ -176,8 +186,8 @@ fn a_request_dropped_while_waiting_for_its_turn_never_runs() {
          the corpus must grow"
     );
 
-    let dropped = phase(&server, one, true);
-    let control = phase(&server, one, false);
+    let dropped = phase(&server, TREE, one, true);
+    let control = phase(&server, TREE, one, false);
     let cpu_ratio = dropped.cpu / control.cpu;
     let wall_ratio = dropped.last.as_secs_f64() / control.last.as_secs_f64();
     let report = format!(
@@ -196,5 +206,103 @@ fn a_request_dropped_while_waiting_for_its_turn_never_runs() {
     assert!(
         wall_ratio < 0.7,
         "the last call waited for the dropped requests' calls: {report}"
+    );
+}
+
+#[test]
+fn ac06_a_queued_check_dropped_by_its_client_never_walks() {
+    let scratch = Scratch::new("turn-check-dropped");
+    let root = corpus(&scratch);
+    let home = scratch.home("h");
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root)]);
+    let reply = server.get(CHECK);
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let started = Instant::now();
+    server.get(CHECK).status(200);
+    let one = started.elapsed();
+    assert!(
+        one >= Duration::from_millis(150),
+        "one check takes {one:?}: too fast for queued requests to be dropped while it runs; \
+         the corpus must grow"
+    );
+
+    let dropped = phase(&server, CHECK, one, true);
+    let control = phase(&server, CHECK, one, false);
+    let cpu_ratio = dropped.cpu / control.cpu;
+    let wall_ratio = dropped.last.as_secs_f64() / control.last.as_secs_f64();
+    let report = format!(
+        "one check {one:?}; dropped {dropped:?}; control {control:?}; CPU ratio \
+         {cpu_ratio:.2}, wall ratio {wall_ratio:.2} (2 walks against {} expected: {:.2})",
+        QUEUED + 2,
+        2.0 / (QUEUED + 2) as f64
+    );
+    eprintln!("{report}");
+    assert!(control.cpu > 0.0, "the control phase ran walks: {report}");
+    assert!(
+        cpu_ratio < 0.6,
+        "the dropped requests' checks walked (CPU): {report}"
+    );
+    assert!(
+        wall_ratio < 0.7,
+        "the last check waited for the dropped requests' walks: {report}"
+    );
+}
+
+/// `GET path` on `port` in a thread: its status and when its answer
+/// ended, measured from `start`.
+fn timed(port: u16, path: &str, start: Instant) -> thread::JoinHandle<(u16, Duration)> {
+    let host = format!("127.0.0.1:{port}");
+    let bytes = request_bytes("GET", path, &[("Host", &host)]);
+    thread::spawn(move || {
+        let reply = http_exchange(port, &bytes, HTTP_TIMEOUT);
+        (reply.status, start.elapsed())
+    })
+}
+
+#[test]
+fn ac06_a_check_waits_for_its_own_projects_reads_not_anothers() {
+    let scratch = Scratch::new("turn-check-projects");
+    let root = corpus(&scratch);
+    let a = scratch.repo("spec-a", "a", "main");
+    // A fresh HOME: the corpus's first read builds its whole index.
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root), &a]);
+    let port = server.port;
+    let start = Instant::now();
+    // The corpus's turn: its first read, then a second one queued.
+    let first = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    let second = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    // Sent while the corpus's reads hold its turn: a check of the corpus
+    // and one of A.
+    let own = timed(port, CHECK, start);
+    thread::sleep(Duration::from_millis(50));
+    let other = timed(port, "/api/projects/lantern-keep/check", start);
+
+    let (status, other_at) = other.join().expect("A's check");
+    assert_eq!(status, 200, "A's check");
+    let (status, first_at) = first.join().expect("the corpus's first read");
+    assert_eq!(status, 200, "the first read");
+    let (status, second_at) = second.join().expect("the corpus's second read");
+    assert_eq!(status, 200, "the second read");
+    let (status, own_at) = own.join().expect("the corpus's check");
+    assert_eq!(status, 200, "the corpus's check");
+    let report = format!(
+        "answers after the start: A's check {other_at:?}, the corpus's reads {first_at:?} and \
+         {second_at:?}, its check {own_at:?}"
+    );
+    eprintln!("{report}");
+    assert!(
+        first_at > Duration::from_millis(300),
+        "the first read is too quick to hold the turn while the checks arrive: {report}"
+    );
+    assert!(
+        other_at < first_at,
+        "A's check waited for another project's read: {report}"
+    );
+    assert!(
+        own_at > second_at,
+        "the corpus's check ran beside its project's reads, outside the turn: {report}"
     );
 }

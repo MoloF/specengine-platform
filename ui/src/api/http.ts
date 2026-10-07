@@ -2,6 +2,7 @@ import {
   ClientError,
   NOT_SERVED,
   type BundleOptions,
+  type GraphOptions,
   type NodeOptions,
   type SearchOptions,
   type SpecEngineClient,
@@ -26,11 +27,12 @@ import type {
   TreeView,
 } from "./types";
 
-// SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data"):
-// `fetch` and `EventSource`, no package. Same origin: the dev server proxies `/api` to
-// 127.0.0.1:7777 (vite.config.ts). A path segment (project, REF, proposal ID) is encoded once with
-// encodeURIComponent (`#` → %23, `/` → %2F); a query repeats an array's key, an absent option is
-// left out. Every answer is the CLI's document as sent: nothing is reworded or recomputed here.
+// SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data", the
+// graph and the check `docs/features/ui-live.md` "Data"): `fetch` and `EventSource`, no package.
+// Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
+// (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
+// query repeats an array's key, an absent option is left out. Every answer is the CLI's document
+// as sent: nothing is reworded or recomputed here.
 
 /** Where the daemon's paths start, on this page's origin. */
 const API = "/api";
@@ -111,9 +113,10 @@ function reasonOf(error: unknown): string {
 }
 
 /**
- * One request. 2xx: its JSON document. A GET's 404 that is not the error body: the exit-1
- * document, as data. Any other answer: a ClientError with the HTTP status and the error body's
- * `message` verbatim (another body: its text verbatim). No answer: status 0.
+ * One request. 2xx: its JSON document (the check's report whatever its verdict). A GET's 404 that
+ * is not the error body: the exit-1 document, as data. Any other answer: a ClientError with the
+ * HTTP status and the error body's `message` verbatim (another body: its text verbatim). No
+ * answer: status 0.
  */
 async function request(method: "GET" | "POST", path: string, body?: string): Promise<unknown> {
   const url = `${API}${path}`;
@@ -158,20 +161,20 @@ function emptyAnswer(asked: string, response: Response): string {
   return response.status === 502 ? `${said}: the dev server's proxy reached no daemon; is specengine-http running?` : said;
 }
 
-/** Where daemon-read leaves the graph and the tasks for a later slice. */
-const DAEMON_READ_GAP = 'docs/features/daemon-read.md "Out of scope"';
+/** Where ui-live leaves the tasks for `ui-live-tasks`, after task-package. */
+const DAEMON_READ_GAP = 'docs/features/ui-live.md "Out of scope"';
 
 /**
- * A read the daemon does not serve yet (`docs/features/daemon-read.md` "Out of scope"; the check:
- * `docs/features/ui-health.md` "Open"): refused here, nothing requested; `notServed`, status
- * NOT_SERVED (501), never 0 (no response: the daemon down). `where` names the spec that asks for it.
+ * A read the daemon does not serve yet, the tasks (`docs/features/ui-live.md` "Out of scope"):
+ * refused here, nothing requested; `notServed`, status NOT_SERVED (501), never 0 (no response: the
+ * daemon down). The message names the spec that leaves it out.
  */
-function notServed(endpoint: string, where = DAEMON_READ_GAP): Promise<never> {
+function notServed(endpoint: string): Promise<never> {
   return Promise.reject(
     new ClientError(
       {
         status: NOT_SERVED,
-        message: `Not served by the daemon yet: ${endpoint} is a missing endpoint (${where}). The mock serves it: open the UI with ?scenario=normal.`,
+        message: `Not served by the daemon yet: ${endpoint} is a missing endpoint (${DAEMON_READ_GAP}). The mock serves it: open the UI with ?scenario=normal.`,
       },
       { notServed: true },
     ),
@@ -237,9 +240,21 @@ export class HttpClient implements SpecEngineClient {
     return (await request("GET", `${projectPath(project)}/bundle${query}`)) as BundleView;
   }
 
-  /** A shorter signature than the interface's: no request is made, so no option is read. */
-  getGraph(project: string): Promise<GraphView> {
-    return notServed(`GET /api/projects/${project}/graph`);
+  /**
+   * `spec graph REF --json` as the browser view, uncut: the five options under their JSON echo
+   * names (`docs/features/ui-graph.md` "Data"), the REF a query value (`#` as %23), `types`
+   * repeated in order, `impact` and `archive` sent only as true, an absent option left out. A 404
+   * is the exit-1 document (an unknown REF), resolved as data.
+   */
+  async getGraph(project: string, options: GraphOptions): Promise<GraphView> {
+    const query = queryOf([
+      ["ref", options.ref],
+      ["impact", options.impact === true ? true : undefined],
+      ["types", options.types],
+      ["depth", options.depth],
+      ["archive", options.archive === true ? true : undefined],
+    ]);
+    return (await request("GET", `${projectPath(project)}/graph${query}`)) as GraphView;
   }
 
   getTasks(project: string): Promise<TaskList> {
@@ -250,9 +265,12 @@ export class HttpClient implements SpecEngineClient {
     return notServed(`GET /api/projects/${project}/tasks/${id}`);
   }
 
-  /** `spec check --json` for the project: no endpoint yet (docs/features/ui-health.md "Open"). */
-  getCheck(project: string): Promise<CheckReport> {
-    return notServed(`GET /api/projects/${project}/check`, 'docs/features/ui-health.md "Open"');
+  /**
+   * `spec check --json` for the project, the plain run, no query: every verdict is a 200 report,
+   * data (a check outcome, never a hold on work: ADR-0012); a 503 rejects in the daemon's words.
+   */
+  async getCheck(project: string): Promise<CheckReport> {
+    return (await request("GET", `${projectPath(project)}/check`)) as CheckReport;
   }
 
   /** Always refused by the daemon (403): its message names the terminal command. */

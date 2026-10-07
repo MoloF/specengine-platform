@@ -1,6 +1,7 @@
 //! `specengine-http --root DIR… [--port N]`: the daemon's read surface
-//! (task spec `daemon-read`), a read-only HTTP adapter over the CLI
-//! library, in the foreground, on `127.0.0.1` only.
+//! (task specs `daemon-read`, `ui-live`: `graph` and the plain `check`), a
+//! read-only HTTP adapter over the CLI library, in the foreground, on
+//! `127.0.0.1` only.
 //!
 //! Start (docs/features/daemon-read.md "Description and interactions"):
 //! each `--root` canonicalised and its own `specengine.toml` read, a slug
@@ -15,7 +16,8 @@
 //! - [`app`]: the router, the fence, the read endpoints, the refused
 //!   decision;
 //! - [`answer`]: one CLI library call per request on the blocking pool,
-//!   serialized per project, and its response;
+//!   serialized per project, and its response (a check's report a 200
+//!   whatever its verdict);
 //! - [`args`]: the query string and the path's REF;
 //! - [`tail`]: the live tail of the queue's `events` (SSE).
 

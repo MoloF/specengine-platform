@@ -6,10 +6,10 @@ import { errorAnswer, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../
 import { renderApp } from "../test/render";
 import { stubClient } from "../test/stubClient";
 
-// R-n7 of the daemon-read review: a read the daemon does not serve yet (graph, tasks, a task;
-// `docs/features/daemon-read.md` "Out of scope") is not built, not broken. Its screen says so with
-// the client's message verbatim and offers no Retry; a daemon down (no response, status 0) on the
-// same screen is an alert with Retry.
+// R-n7 of the daemon-read review: a read the daemon does not serve yet (the tasks, a task;
+// `docs/features/ui-live.md` "Out of scope", AC-11) is not built, not broken. Its screen says so
+// with the client's message verbatim and offers no Retry; a daemon down (no response, status 0) on
+// the same screen is an alert with Retry. The graph and the check are served: liveScreens.test.tsx.
 
 const NOT_BUILT = "Not built yet: the daemon has no endpoint for this read";
 
@@ -48,7 +48,6 @@ describe("a read the daemon does not serve yet (R-n7)", () => {
   it.each([
     ["Tasks", "#/alpha/tasks", "GET /api/projects/alpha/tasks"],
     ["a task", "#/alpha/tasks/T-0001", "GET /api/projects/alpha/tasks/T-0001"],
-    ["the Graph", "#/alpha/graph/MEC-TIDES", "GET /api/projects/alpha/graph"],
     ["the home's Tasks region", "#/alpha", "GET /api/projects/alpha/tasks"],
   ])("%s: not built, the client's message verbatim, no Retry, no alert", async (_name, hash, endpoint) => {
     const fetchStub = daemon();
@@ -56,30 +55,11 @@ describe("a read the daemon does not serve yet (R-n7)", () => {
     const note = await notBuilt();
     expect(note.getAttribute("role")).toBe("status");
     expect(within(note).getByText(/^Not served by the daemon yet: /).textContent).toBe(
-      `Not served by the daemon yet: ${endpoint} is a missing endpoint (docs/features/daemon-read.md "Out of scope"). The mock serves it: open the UI with ?scenario=normal.`,
+      `Not served by the daemon yet: ${endpoint} is a missing endpoint (docs/features/ui-live.md "Out of scope"). The mock serves it: open the UI with ?scenario=normal.`,
     );
     expect(screen.queryByRole("button", { name: /^Retry/ })).toBeNull();
     expect(screen.queryAllByRole("alert").filter((alert) => alert.textContent.includes("Not served"))).toEqual([]);
-    expect(urlsOf(fetchStub).filter((url) => /\/(tasks|graph)/.test(url))).toEqual([]);
-  });
-
-  it("Health on the daemon: the check not built in its three regions, the client's words, no Retry, no fetch of it; the queue read (AC-01 of ui-health)", async () => {
-    const fetchStub = daemon();
-    renderApp(new HttpClient(), "#/alpha/health");
-    await screen.findByRole("region", { name: "Debt and budgets" });
-    const notes = await screen.findAllByText(NOT_BUILT);
-    expect(notes).toHaveLength(3);
-    const words = screen.getAllByText(/^Not served by the daemon yet: /).map((element) => element.textContent);
-    expect(new Set(words)).toEqual(
-      new Set([
-        'Not served by the daemon yet: GET /api/projects/alpha/check is a missing endpoint (docs/features/ui-health.md "Open"). The mock serves it: open the UI with ?scenario=normal.',
-      ]),
-    );
-    expect(notes.map((title) => title.closest(".notice")?.getAttribute("role") ?? null)).toEqual(["status", null, null]);
-    expect(screen.queryAllByRole("button", { name: /^Retry/ })).toEqual([]);
-    expect(urlsOf(fetchStub).filter((url) => url.includes("/check"))).toEqual([]);
-    await screen.findByText("No proposal waits for your decision.");
-    expect(urlsOf(fetchStub)).toContain("/api/projects/alpha/inbox");
+    expect(urlsOf(fetchStub).filter((url) => url.includes("/tasks"))).toEqual([]);
   });
 
   it("the same screen, the daemon down: an alert with Retry, never the not-built note", async () => {

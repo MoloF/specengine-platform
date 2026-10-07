@@ -53,6 +53,7 @@ GraphEdge { src?; type; dst?; written; path; line: number; state: LinkState; rea
 Verifiers: Vitest, `ui_policy.rs` (`test-engineer`), the gates. M: the mutation turning it red; all 34 applied and red in iteration 1.
 
 - [x] AC-01 - `client.ts?raw` holds `getGraph`'s `MISSING ENDPOINT`; on a counting stub `#/harbor-sim/graph/MEC-TIDES` makes one `getGraph` `{ref: "MEC-TIDES", depth: 2}`, no `getTree`, `getNode`, `search`, `getBundle`; `#/harbor-sim/graph` none, the field focused (M: the comment removed; a view imports `src/mocks/`).
+  Amendment (ui-live, 2026-10-07): `getGraph`'s comment names `GET /api/projects/:p/graph`, no `MISSING ENDPOINT`; `HttpClient.getGraph` fetches it (`client.test.ts`, `http.test.ts`).
 - [x] AC-02 - the four types cite "spec graph"; per type a `satisfies Record<keyof T, true>` record equals the canon's keys (M: an extra `GraphNode` key; `distance` removed; the heading renamed).
 - [x] AC-03 - each change of REF, mode, chip, depth or archive: one call, an equal value none; under `slow` the previous answer stays, `aria-busy="true"`; a decision (success, 409) reruns graph keys (M: `types` not in the key; `"graph"` not invalidated).
 - [x] AC-04 - Impact sends `impact: true`; chips and `types` sent as Controls; the legend shows each `{type, direction}` as text, icon, pattern (M: chips sorted or hard-coded; `types` sent with all pressed; direction derived from the type name).

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-07
 ---
 
 # spec tree, spec graph, show --links
@@ -84,17 +84,17 @@ Nodes by (distance, path, ord), then edges by (type, path, line, column) in link
 
 Exit 0 answered: zero nodes, dangling parents or links, cycles. 1 only an unresolvable REF or ROOT (`show`'s reasons, JSON `reason`). 2 as `show`: usage, `--depth` not an integer ≥ 0, a look-alike or mixed-script ID (naming the Latin fix), `project:`, config, `HOME`, `StoreError`; JSON for 0 and 1 only.
 
-`OUTPUT_CAP_CHARS` cuts at a node, edge or link line, the first item whole. Tails: `[truncated: <k> of <n> nodes not shown; give a ROOT, lower --depth or add --kind]`, `[truncated: <k> of <n> nodes and <j> of <m> edges not shown; lower --depth or add --type]`, `show`'s (bounded: CLI README "Output and the cap") plus `; links not shown: <k>`. JSON holds exactly the printed items, `truncated: true`. `show --links`: the block counts toward the cap; a cut in the block falls at a line end and hides the node's text. Its JSON follows the text's cut (the same nodes, link lines, text bytes): the cut node's `omitted` is the tail's `<k>` (its unprinted links and those of the nodes and holders after it), 0 elsewhere; the cut node stays in JSON as the carrier of `truncated` and `omitted` even when its header was not printed.
+`OUTPUT_CAP_CHARS` cuts at a node, edge or link line, the first item whole. Tails: `[truncated: <k> of <n> nodes not shown; give a ROOT, lower --depth or add --kind]`, `[truncated: <k> of <n> nodes and <j> of <m> edges not shown; lower --depth or add --type]`, `show`'s (bounded: CLI README "Output and the cap") plus `; links not shown: <k>`. JSON holds exactly the printed items, `truncated: true` (the daemon's `View::Browser`: uncut). `show --links`: the block counts toward the cap; a cut in the block falls at a line end and hides the node's text. Its JSON follows the text's cut (the same nodes, link lines, text bytes): the cut node's `omitted` is the tail's `<k>` (its unprinted links and those of the nodes and holders after it), 0 elsewhere; the cut node stays in JSON as the carrier of `truncated` and `omitted` even when its header was not printed.
 
-Determinism: `BTreeMap`s and the orders above, never rowid, insertion or the absolute root; copies written in opposite orders at different roots give byte-identical text and JSON.
+Determinism: `BTreeMap`s and the orders above, never rowid, insertion or the absolute root; copies written in opposite orders at other roots give byte-identical text and JSON.
 
 ## API
 
 - model: `Direction {Out, In}` (`as_str`), `IMPACT_LINK_TYPES: [(&str, Direction); 5]`, `graph_direction`, `impact_direction`, `is_weak_link` (`&str -> …`).
 - core `check`: `SpecGraph::new(&CheckInput, &IdScheme, &Paths)`, reads no file; lookups `paths`, `file_of`, `standing`, `is_tier3`, `nodes`, `node`, `document`, `documents`, `name`, `line`, `locate(&Reference, written) -> Endpoint`; tree `parent -> Option<Parent>`, `listed_under`, `children`, `cycles`, `ancestors` (pass 4), `within`; links `edges`, `links(at, admit) -> NodeLinks`, `walk(starts, follow: Fn(&str) -> Option<Direction>, depth, admit) -> Walk`. Types `NodeAt {file, ord}`, `Standing {Live, Generated, Tier3}`, `Parent {None, Node {node, others}, Dangling {written, reason}, Skipped {written}, Cycle {members}}`, `Endpoint {Nodes, Dangling, Skipped, Unchecked}`, `LinkState` (`as_str`), `Edge` (`state`, `reason`, `written_end`), `NodeLinks`, `Walk`.
-- CLI: `tree(&Env, &Globals, &TreeRequest) -> TreeOutcome` (`TreeNode`, `TreeMark`), `graph(…, &GraphRequest) -> GraphOutcome` (`GraphNode`, `GraphEdge`, `FollowedType`), `ShowRequest {reference, links, archive}`, `ShownNode.links` (`ShownLinks`, `ShownLink`), `LeftOut`, `Outcome::{Tree, Graph}`; `corpus.rs` the input, live rule and REF location. Dependencies unchanged; `petgraph` only in core.
+- CLI: `tree(&Env, &Globals, &TreeRequest) -> TreeOutcome` (`TreeNode`, `TreeMark`), `graph(.., &GraphRequest) -> GraphOutcome` (`GraphNode`, `GraphEdge`, `FollowedType`), `ShowRequest {reference, links, archive}`, `ShownNode.links` (`ShownLinks`, `ShownLink`), `LeftOut`, `Outcome::{Tree, Graph}`; `corpus.rs` the input, live rule and REF location. `petgraph` only in core.
 
-Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `read_only.rs`, `freshness.rs`, `show.rs`, `genre.rs` over scratch copies of `fixtures/spec-a`, `-b` with their own `HOME`; core `spec_graph.rs`; eval `build_graph.rs` unchanged.
+Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `read_only.rs`, `freshness.rs`, `show.rs`, `genre.rs` over scratch copies of `fixtures/spec-a`, `-b` with their own `HOME`; core `spec_graph.rs`; eval `build_graph.rs`.
 
 ## Open
 

@@ -15,13 +15,16 @@ mod common;
 
 use common::{Reply, Scratch, Server, request_bytes, snapshot};
 
-/// Every read route of A, with a valid query.
-const READS: [&str; 8] = [
+/// Every read route of A, with a valid query (`graph`, `check`:
+/// docs/features/ui-live.md "Description and interactions").
+const READS: [&str; 10] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
     "/api/projects/lantern-keep/search?query=stamina",
     "/api/projects/lantern-keep/bundle?node_ids=MEC-STAMINA",
+    "/api/projects/lantern-keep/graph?ref=MEC-STAMINA",
+    "/api/projects/lantern-keep/check",
     "/api/projects/lantern-keep/inbox",
     "/api/projects/lantern-keep/proposals/PR-0001",
     "/api/projects/lantern-keep/events",
@@ -30,7 +33,7 @@ const READS: [&str; 8] = [
 const DECISION: &str = "/api/projects/lantern-keep/proposals/PR-0001/decision";
 
 /// Paths no route serves.
-const UNKNOWN: [&str; 8] = [
+const UNKNOWN: [&str; 10] = [
     "/",
     "/api",
     "/no/such/route",
@@ -39,6 +42,8 @@ const UNKNOWN: [&str; 8] = [
     "/api/projects/lantern-keep/nope",
     "/api/projects/lantern-keep/proposals/PR-0001/decision/more",
     "/api/projects/lantern-keep/tree/more",
+    "/api/projects/lantern-keep/check/more",
+    "/api/projects/lantern-keep/graph/MEC-STAMINA",
 ];
 
 /// Every method but GET and POST.

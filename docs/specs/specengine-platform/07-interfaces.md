@@ -120,7 +120,7 @@ spec export index [--stdout]                         # [paths] index by its regi
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads only: `specengine-http` (`crates/specengine-http/README.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|inbox|proposals/:id` (built); `graph|tasks|symbols|health` to come
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id` (built); `tasks|symbols|health` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (`decision-staging`; today POST 403), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)

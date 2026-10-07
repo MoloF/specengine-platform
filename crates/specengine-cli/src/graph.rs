@@ -21,7 +21,10 @@
 //! ```
 //!
 //! Nodes by (distance, path, position); edges by (type, path, line,
-//! column), each in link direction, an unresolved end as written.
+//! column), each in link direction, an unresolved end as written. The CLI
+//! prints the lines within [`crate::OUTPUT_CAP_CHARS`] ([`View::Capped`]:
+//! nodes first, a node cut drops every edge); the daemon's
+//! [`View::Browser`] shows every node and edge (task spec `ui-live`).
 
 use std::collections::BTreeSet;
 
@@ -32,7 +35,7 @@ use specengine_model::{
     Direction, IMPACT_LINK_TYPES, LINK_TYPES, graph_direction, impact_direction, is_weak_link,
 };
 
-use crate::cap::lines_within;
+use crate::cap::{View, lines_within};
 use crate::corpus::{Admission, LeftOut, depth_of, holders_warning, indexed, locate};
 use crate::links::state_suffix;
 use crate::project::discover;
@@ -131,6 +134,17 @@ pub fn graph(
     globals: &Globals,
     request: &GraphRequest,
 ) -> Result<GraphOutcome, CliError> {
+    graph_with_view(env, globals, request, View::Capped)
+}
+
+/// [`graph`], its answer bounded by `view` (the daemon's
+/// [`View::Browser`]: every node and edge shown, `truncated` false).
+pub fn graph_with_view(
+    env: &Env,
+    globals: &Globals,
+    request: &GraphRequest,
+    view: View,
+) -> Result<GraphOutcome, CliError> {
     let depth = depth_of(request.depth)?;
     let project = discover(env, globals)?;
     project.slug()?;
@@ -207,7 +221,17 @@ pub fn graph(
         .map(|index| edge_of(&graph, index))
         .collect();
     outcome.messages = messages;
-    let summary = summary(&outcome).chars().count() + 1;
+    (outcome.shown_nodes, outcome.shown_edges) = match view {
+        View::Capped => capped(&outcome),
+        View::Browser => (outcome.nodes.len(), outcome.edges.len()),
+    };
+    Ok(outcome)
+}
+
+/// How many nodes, then edges, fit within the cap: the nodes first; a node
+/// cut drops every edge.
+fn capped(outcome: &GraphOutcome) -> (usize, usize) {
+    let summary = summary(outcome).chars().count() + 1;
     let (shown_nodes, used) = lines_within(
         outcome
             .nodes
@@ -216,8 +240,7 @@ pub fn graph(
         summary,
         true,
     );
-    outcome.shown_nodes = shown_nodes;
-    outcome.shown_edges = if shown_nodes < outcome.nodes.len() {
+    let shown_edges = if shown_nodes < outcome.nodes.len() {
         0
     } else {
         lines_within(
@@ -230,7 +253,7 @@ pub fn graph(
         )
         .0
     };
-    Ok(outcome)
+    (shown_nodes, shown_edges)
 }
 
 fn not_found(mut outcome: GraphOutcome, reason: String, messages: Vec<Message>) -> GraphOutcome {

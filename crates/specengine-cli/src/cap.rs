@@ -48,9 +48,9 @@ pub const OUTPUT_CAP_CHARS: usize = 40_000;
 /// holders not shown), as its JSON `omitted`; the rest are counted.
 pub const SHOW_TAIL_NAMES: usize = 20;
 
-/// How a `tree`, `show` or `search` answer is bounded (task spec
-/// `daemon-read`, "Data"): the CLI and MCP read [`View::Capped`], the
-/// daemon [`View::Browser`].
+/// How a `tree`, `show`, `search` or `graph` answer is bounded (task specs
+/// `daemon-read`, `ui-live`, "Data"): the CLI and MCP read
+/// [`View::Capped`], the daemon [`View::Browser`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum View {
     /// Cut at [`OUTPUT_CAP_CHARS`] as the module documentation says; a

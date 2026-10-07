@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
-import { apiErrorOf, ClientError, isNotServed, NOT_SERVED, type SpecEngineClient } from "./client";
+import { aCheckFinding, aCheckReport, aGraphEdge, aGraphNode, aGraphView } from "../test/builders";
+import { apiErrorOf, ClientError, isNotServed, NOT_SERVED } from "./client";
 import { errorBodyOf, HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS, REOPEN_MAX_MS } from "./http";
 import type { QueueEvent } from "./types";
 
 // AC-09 of docs/features/daemon-read.md: the browser side of the daemon, over a stubbed `fetch`
 // and `EventSource`. Each method hits its URL, a REF encoded once; a 404 document resolves as data;
-// any other non-2xx rejects with the daemon's message verbatim; no response is status 0.
+// any other non-2xx rejects with the daemon's message verbatim; no response is status 0. AC-10 and
+// AC-11 of docs/features/ui-live.md: the graph and the check are fetched, every check verdict a
+// 200 report resolved as data; the tasks are still refused unsent.
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -79,6 +82,34 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/alpha/bundle?node_ids=MEC-TIDES&node_ids=RULE-X%23A&budget=2000",
     ],
     ["a project slug, encoded too", (client) => client.getInbox("a b"), "/api/projects/a%20b/inbox"],
+    // AC-10 of docs/features/ui-live.md: ui-graph's example, exactly.
+    [
+      "getGraph, ui-graph's example: `#` as %23, types repeated in order",
+      (client) => client.getGraph("harbor-sim", { ref: "MEC-TIDES#RULE-TIDE-WINDOW", impact: true, types: ["depends_on", "constrains"], depth: 3 }),
+      "/api/projects/harbor-sim/graph?ref=MEC-TIDES%23RULE-TIDE-WINDOW&impact=true&types=depends_on&types=constrains&depth=3",
+    ],
+    ["getGraph, the REF alone", (client) => client.getGraph("alpha", { ref: "MEC-SPRINT" }), "/api/projects/alpha/graph?ref=MEC-SPRINT"],
+    [
+      "getGraph, impact and archive sent only as true, no empty types",
+      (client) => client.getGraph("alpha", { ref: "MEC-SPRINT", impact: false, types: [], archive: false }),
+      "/api/projects/alpha/graph?ref=MEC-SPRINT",
+    ],
+    [
+      "getGraph, depth 0 and the archive, in the five names' order",
+      (client) => client.getGraph("alpha", { archive: true, depth: 0, types: ["mentions"], ref: "MEC-SPRINT" }),
+      "/api/projects/alpha/graph?ref=MEC-SPRINT&types=mentions&depth=0&archive=true",
+    ],
+    [
+      "getGraph, a path REF's `/` as %2F, any link type sent as given",
+      (client) => client.getGraph("alpha", { ref: "docs/spec/movement/sprint.md", types: ["no such type"] }),
+      "/api/projects/alpha/graph?ref=docs%2Fspec%2Fmovement%2Fsprint.md&types=no%20such%20type",
+    ],
+    [
+      "getGraph, non-Latin text as UTF-8, a REF holding %23 encoded once",
+      (client) => client.getGraph("alpha", { ref: `${String.fromCodePoint(0x417, 0x435)}%23X` }),
+      "/api/projects/alpha/graph?ref=%D0%97%D0%B5%2523X",
+    ],
+    ["getCheck: no query", (client) => client.getCheck("harbor-sim"), "/api/projects/harbor-sim/check"],
   ])("%s", async (_name, call, url) => {
     await call(new HttpClient());
     expect(urlsOf(fetchStub)).toEqual([url]);
@@ -97,25 +128,20 @@ describe("each method hits its URL (AC-09)", () => {
     expect(new HttpClient().dataSource).toBe("daemon");
   });
 
-  it("requests nothing the daemon does not serve: graph, tasks, a task (not served, 501, never 0; the gap named)", async () => {
+  it("requests nothing the daemon does not serve: the tasks, a task (not served, 501, never 0; ui-live's gap named; AC-11 of ui-live)", async () => {
     const client = new HttpClient();
-    for (const call of [(client as SpecEngineClient).getGraph("alpha", { ref: "MEC-TIDES" }), client.getTasks("alpha"), client.getTask("alpha", "T-0001")]) {
-      const error = await rejection(call);
-      // R-n7: status 0 says no response came (the daemon down); this read is not built.
-      expect(error.notServed).toBe(true);
-      expect(isNotServed(error)).toBe(true);
-      expect(error.status).toBe(NOT_SERVED);
-      expect(NOT_SERVED).toBe(501);
-      expect(error.message).toMatch(/^Not served by the daemon yet: GET \/api\/projects\/alpha\/(graph|tasks|tasks\/T-0001) is a missing endpoint/);
-    }
-    expect(fetchStub).not.toHaveBeenCalled();
-  });
-
-  it("requests no check: the not-served marker (501, notServed), never 0, the spec that asks for it named (AC-01 of ui-health)", async () => {
-    const error = await rejection(new HttpClient().getCheck("alpha"));
-    expect([error.status, error.notServed, isNotServed(error)]).toEqual([NOT_SERVED, true, true]);
-    expect(error.message).toBe(
-      'Not served by the daemon yet: GET /api/projects/alpha/check is a missing endpoint (docs/features/ui-health.md "Open"). The mock serves it: open the UI with ?scenario=normal.',
+    const errors = [await rejection(client.getTasks("alpha")), await rejection(client.getTask("alpha", "T-0001"))];
+    // R-n7: status 0 says no response came (the daemon down); this read is not built.
+    expect(errors.map((error) => [error.status, error.notServed, isNotServed(error)])).toEqual([
+      [NOT_SERVED, true, true],
+      [NOT_SERVED, true, true],
+    ]);
+    expect(NOT_SERVED).toBe(501);
+    expect(errors.map((error) => error.message)).toEqual(
+      ["GET /api/projects/alpha/tasks", "GET /api/projects/alpha/tasks/T-0001"].map(
+        (endpoint) =>
+          `Not served by the daemon yet: ${endpoint} is a missing endpoint (docs/features/ui-live.md "Out of scope"). The mock serves it: open the UI with ?scenario=normal.`,
+      ),
     );
     expect(fetchStub).not.toHaveBeenCalled();
   });
@@ -161,6 +187,54 @@ describe("answers (AC-09)", () => {
     expect(await client.getTree("alpha", { root: "R-404" })).toEqual(tree);
     expect(await client.getBundle("alpha", { node_ids: ["R-404"] })).toEqual(bundle);
     expect(await client.getProposal("alpha", "PR-9999")).toEqual(review);
+  });
+
+  it("resolves the graph's 404 exit-1 document as data, its reason set (AC-03 of ui-live)", async () => {
+    const unknown = aGraphView([], [], { ref: "R-404", reason: "`R-404` resolves to no ID and no alias", types: [], depth: null });
+    stubFetch(() => jsonAnswer(404, unknown));
+    expect(await new HttpClient().getGraph("alpha", { ref: "R-404" })).toEqual(unknown);
+  });
+
+  it("resolves a graph as sent, uncut: every node and edge, `truncated` as the daemon says", async () => {
+    const nodes = Array.from({ length: 300 }, (_, index) => aGraphNode({ id: `R-${String(index)}`, distance: index === 0 ? 0 : 1 }));
+    const edges = nodes.slice(1).map((node) => aGraphEdge({ src: "R-0", type: "depends_on", dst: node.id }));
+    const whole = aGraphView(nodes, edges);
+    stubFetch(() => jsonAnswer(200, whole));
+    const answer = await new HttpClient().getGraph("alpha", { ref: "R-0" });
+    expect([answer.nodes.length, answer.edges.length, answer.truncated]).toEqual([300, 299, false]);
+    expect(answer).toEqual(whole);
+  });
+
+  it.each([
+    ["clean", aCheckReport()],
+    ["observed", aCheckReport({ mode: "observe", verdict: "observed", findings: [aCheckFinding({ code: "key-missing" })], counts: { errors: 1 } })],
+    [
+      "blocked",
+      aCheckReport({
+        verdict: "blocked",
+        counts: { documents: 9, errors: 1, worst_w_bytes: 24576 },
+        findings: [aCheckFinding({ code: "key-missing", path: "docs/spec/movement/sprint.md", subject: "status", message: "..." })],
+      }),
+    ],
+    [
+      "cannot-check",
+      aCheckReport({ verdict: "cannot-check", counts: { documents: 0, worst_w_bytes: 0 }, cannot_check: [{ path: ".spec-debt.toml", message: "line 3: `expires` is not a YYYY-MM-DD date" }] }),
+    ],
+  ])("resolves the check's 200 `%s` report as data, never a refusal (AC-10 of ui-live)", async (_verdict, report) => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, report));
+    expect(await new HttpClient().getCheck("harbor-sim")).toEqual(report);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/harbor-sim/check"]);
+  });
+
+  it.each<[string, (client: HttpClient) => Promise<unknown>, number, string]>([
+    ["the check's 503", (client) => client.getCheck("alpha"), 503, "spec: `[check] mode` must be one of observe, enforce-introduced, enforce\nsecond line, verbatim"],
+    ["the graph's 503 (depth below 0)", (client) => client.getGraph("alpha", { ref: "R", depth: -1 }), 503, "spec: --depth: `-1` is not a number of 0 or more"],
+    ["the graph's 400", (client) => client.getGraph("alpha", { ref: "R" }), 400, "unknown query `x` for /graph: it takes ref, impact, types, depth, archive"],
+  ])("rejects %s with a ClientError, the daemon's message verbatim (AC-10 of ui-live)", async (_name, call, status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    const error = await rejection(call(new HttpClient()));
+    expect(error).toBeInstanceOf(ClientError);
+    expect([error.status, error.message, error.notServed]).toEqual([status, message, false]);
   });
 
   it("rejects a 404 carrying the error body (an unknown project or route) with its message", async () => {

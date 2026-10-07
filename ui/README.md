@@ -8,7 +8,7 @@ reviewed: 2026-10-07
 
 # ui -- the web UI
 
-The owner's screens, meaning 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home`, `ui-markdown`, `ui-health` shipped on mocks, `daemon-read` on `specengine-http` (2026-10-05 to -07); the rest: 08 s2 Phase 4.
+The owner's screens, meaning 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: `ui-shell`, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home`, `ui-markdown`, `ui-health` shipped on mocks, `daemon-read`, `ui-live` on the daemon (2026-10-05 to -07); the rest: 08 s2 Phase 4.
 
 ## Stack
 

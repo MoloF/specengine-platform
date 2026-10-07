@@ -162,9 +162,13 @@ function eventProposalId(payload: unknown): string | null {
 
 /**
  * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
- * spec (every tree, node, search and bundle of it, each `[read, project, …]`).
+ * spec (every tree, node, search, bundle and graph of it, and its check, each `[read, project, …]`;
+ * `docs/features/ui-live.md` "Rules and edge cases").
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check"] as const;
+
+/** The spec read that walks the whole corpus (`READS_OF_THE_SPEC`'s check). */
+const WALK = "check";
 
 /** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
 const APPLIED = "proposal.applied";
@@ -172,10 +176,11 @@ const APPLIED = "proposal.applied";
 /**
  * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
  * `proposal.*` event reads that project's inbox and that proposal again; `proposal.applied` also
- * that project's trees, nodes, searches and bundles (a spec file changed), no other project's and
- * no other read. A stream this client opened again after the browser gave up on it (events may be
- * missed, an apply among them) reads the inbox, every cached proposal and those spec reads of the
- * project again. Only the reads on screen are fetched; the rest are marked stale.
+ * that project's trees, nodes, searches, bundles, graphs and check (a spec file changed;
+ * `docs/features/ui-live.md` "Data"), no other project's and no other read. A stream this client
+ * opened again after the browser gave up on it (events may be missed, an apply among them) reads
+ * the inbox, every cached proposal and those spec reads of the project again. Only the reads on
+ * screen are fetched, once each (the check only while Health shows it); the rest are marked stale.
  */
 export function useLiveQueue(project: string | null) {
   const client = useClient();
@@ -186,8 +191,10 @@ export function useLiveQueue(project: string | null) {
     }
     const readSpecAgain = () => {
       // `[read, project]` matches that project's entries of the read whatever their options.
+      // The check is a full walk: one already running (Health entered, Check again) is kept and its
+      // answer taken, never cancelled for a second walk; any other read is read again at once.
       for (const read of READS_OF_THE_SPEC) {
-        void queryClient.invalidateQueries({ queryKey: [read, project] });
+        void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: read !== WALK });
       }
     };
     return client.subscribe(
@@ -339,9 +346,10 @@ export function useTask(project: string, id: string) {
 }
 
 /**
- * The project's `spec check` (docs/features/ui-health.md "Data"): read on entering Health and on
- * "Check again" (`refetch`) only: never on window focus, a reconnect or an interval, and not after a
- * decision (a full walk per read; the report carries no time).
+ * The project's `spec check` (docs/features/ui-health.md "Data"): read on entering Health, on
+ * "Check again" (`refetch`) and, while Health is on screen, after the live tail's apply or gap
+ * (useLiveQueue); never on window focus, a reconnect or an interval, and not after a decision (a
+ * full walk per read; the report carries no time).
  */
 export function useCheck(project: string) {
   const client = useClient();
