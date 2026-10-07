@@ -8,6 +8,7 @@ import { HealthView } from "../health/HealthView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
 import { HomeView } from "../overview/HomeView";
 import { InboxView } from "../inbox/InboxView";
+import { OutsideStageAlert } from "../inbox/OutsideStageAlert";
 import { Palette } from "../palette/Palette";
 import { TasksView } from "../tasks/TasksView";
 import { TreeView } from "../tree/TreeView";
@@ -171,8 +172,9 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
   const routeProject = projectOf(route);
-  // The shown project's live queue, once the daemon has named it among its projects.
-  useLiveQueue(routeProject !== null && projects.data?.some((project) => project.slug === routeProject) === true ? routeProject : null);
+  // The shown project's live queue, once the daemon has named it among its projects; a stage it
+  // says changed outside this tab is an alert above the view (docs/canon/decision-staging.md "UI").
+  const live = useLiveQueue(routeProject !== null && projects.data?.some((project) => project.slug === routeProject) === true ? routeProject : null);
 
   // `#/` is the first project's home, without a history entry of its own.
   useEffect(() => {
@@ -408,6 +410,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
             </ul>
           </nav>
           <main id="main" ref={main} tabIndex={-1} className="app-main">
+            {live.outside !== null && (
+              // A new alert per change, so each is spoken.
+              <OutsideStageAlert
+                key={live.outside.seq}
+                change={live.outside}
+                onDismiss={() => {
+                  live.dismiss();
+                  focusLater(() => main.current);
+                }}
+              />
+            )}
             <ErrorBoundary key={viewKey} fallback={(error, reset) => <ViewFailure error={error} onRetry={reset} />}>
               {view}
             </ErrorBoundary>

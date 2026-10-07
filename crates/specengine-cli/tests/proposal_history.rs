@@ -988,7 +988,7 @@ fn a_root_below_the_top_completes_by_its_commit() {
         &globals,
         &specengine_cli::RejectRequest {
             id: id.clone(),
-            reason: "Below the top.".to_owned(),
+            reason: Some("Below the top.".to_owned()),
             now: LATER.to_owned(),
             git: genv(&main.join("proj")),
         },

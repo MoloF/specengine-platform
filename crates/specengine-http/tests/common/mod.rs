@@ -836,6 +836,47 @@ impl Server {
         http_exchange(self.port, bytes, HTTP_TIMEOUT)
     }
 
+    /// `method path` with this server's own `Host`, `headers` and `body`
+    /// (its `Content-Length` added).
+    pub fn send(&self, method: &str, path: &str, headers: &[(&str, &str)], body: &[u8]) -> Reply {
+        let host = format!("127.0.0.1:{}", self.port);
+        let length = body.len().to_string();
+        let mut all = vec![("Host", host.as_str())];
+        all.extend_from_slice(headers);
+        all.push(("Content-Length", length.as_str()));
+        let mut bytes = request_bytes(method, path, &all);
+        bytes.extend_from_slice(body);
+        self.raw(&bytes)
+    }
+
+    /// A same-origin page's `POST path` (the stage route) with the JSON
+    /// `body`.
+    pub fn stage(&self, path: &str, body: &str) -> Reply {
+        self.send(
+            "POST",
+            path,
+            &[
+                ("Sec-Fetch-Site", "same-origin"),
+                ("Origin", &format!("http://127.0.0.1:{}", self.port)),
+                ("Content-Type", "application/json"),
+            ],
+            body.as_bytes(),
+        )
+    }
+
+    /// A same-origin page's `DELETE path` (the stage route).
+    pub fn unstage(&self, path: &str) -> Reply {
+        self.send(
+            "DELETE",
+            path,
+            &[
+                ("Sec-Fetch-Site", "same-origin"),
+                ("Origin", &format!("http://127.0.0.1:{}", self.port)),
+            ],
+            b"",
+        )
+    }
+
     /// As [`Server::request`], the answer complete within `timeout` (an
     /// answer that may be an endless stream).
     pub fn request_within(

@@ -1,6 +1,7 @@
 import {
   ClientError,
-  DECIDED_ELSEWHERE,
+  NO_SUCH_PROPOSAL,
+  STAGE_REFUSED,
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
@@ -11,20 +12,20 @@ import {
 import type {
   BundleView,
   CheckReport,
-  Decision,
-  DecisionResult,
   GraphView,
   Inbox,
   NodeView,
   Project,
   Proposal,
   SearchResults,
+  Stage,
+  StageChoice,
   TaskList,
   TaskNotFound,
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { fakeHex, inboxEntryOf, noReview, stamp, type MockProject, type StoredReview } from "./build";
+import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { checkReportOf } from "./check";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
@@ -40,23 +41,26 @@ export interface MockOptions {
   delayMs?: number;
 }
 
-const DECIDED_BY = "Mock Owner <owner@example.org>";
-
 /** The tree's note for a project with no spec document, as `spec tree` words it. */
 export const EMPTY_TREE_NOTE = 'no document under [paths] spec "docs/spec"; give a ROOT';
 
-/** A stable 40-hex fake commit id for a proposal. */
-function fakeSha(text: string): string {
-  return fakeHex(text, 40);
+/** The caps of a staged note and reason, as the CLI's (`docs/canon/decision-staging.md` "The stage"). */
+const NOTE_MAX_BYTES = 4096;
+
+/** The `conflict` scenario's stage made elsewhere: a reject another page staged meanwhile. */
+const ELSEWHERE: Stage = { decision: "reject", reason: "Staged in another tab (mock scenario: conflict)" };
+
+function bytesOf(text: string): number {
+  return new TextEncoder().encode(text).length;
 }
 
 /**
  * The typed mock behind SpecEngineClient: two invented projects, their spec and their queues in
- * memory (decisions change the queues until reload; an accepted change is applied in the
- * proposal's worktree, so no node text changes here: ADR-0032), and the scenario picked at
- * bootstrap. Reads answer as `spec serve` does for a browser: uncut, an unknown REF as its exit-1
- * document, a refusal (exit 2) as 503 with the CLI's words. A read's AbortSignal is ignored: no
- * daemon runs the read, so there is nothing to spare.
+ * memory (a staged choice changes the queue until reload; nothing is ever applied here, a stage
+ * is confirmed only on a terminal: ADR-0035), and the scenario picked at bootstrap. Reads answer
+ * as `spec serve` does for a browser: uncut, an unknown REF as its exit-1 document, a refusal
+ * (exit 2) as 503 with the CLI's words. A read's AbortSignal is ignored: no daemon runs the read,
+ * so there is nothing to spare.
  */
 export class MockClient implements SpecEngineClient {
   readonly dataSource = "mock";
@@ -66,6 +70,8 @@ export class MockClient implements SpecEngineClient {
   private readonly tasks = new Map<string, MockTasks>();
   private readonly delayMs: number;
   private readonly now: () => number;
+  /** `conflict`: the proposals another page has staged on already, once each. */
+  private readonly stagedElsewhere = new Set<string>();
 
   constructor(scenario: Scenario, options: MockOptions = {}) {
     this.scenario = scenario;
@@ -173,69 +179,94 @@ export class MockClient implements SpecEngineClient {
     return structuredClone(checkReportOf(project, this.scenario));
   }
 
-  async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {
+  /**
+   * Stages a choice as the daemon does (`docs/canon/decision-staging.md` "The stage", "Daemon"):
+   * on an open proposal read at its current `updated_at` only, the flags checked against its
+   * options, replacing any staged choice; nothing applied. The `conflict` scenario: the first stage
+   * of each proposal finds one staged meanwhile by another page, so it is refused 409 with the
+   * current document's reason, and the next one, on the new `updated_at`, is taken.
+   */
+  async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> {
     await this.wait();
+    const { stored, index, entry } = this.openProposal(project, id);
+    let current = stored.review;
+    if (this.scenario === "conflict" && !this.stagedElsewhere.has(`${project}/${id}`)) {
+      this.stagedElsewhere.add(`${project}/${id}`);
+      current = this.store(entry, index, stored, { ...current, staged: ELSEWHERE, staged_at: this.stamp(), updated_at: this.stamp() });
+    }
+    if (current.updated_at !== updatedAt) {
+      throw this.refusal(`\`${id}\` changed since it was read (updated ${current.updated_at}, read ${updatedAt}): read it again; nothing changed`);
+    }
+    if (stage.decision === "approve") {
+      this.checkApprove(current, stage);
+    } else if (stage.reason.trim() === "") {
+      throw new ClientError({ status: 400, message: "spec: --reason: the reason is blank" });
+    } else if (bytesOf(stage.reason) > NOTE_MAX_BYTES) {
+      throw new ClientError({ status: 400, message: `spec: --reason: over ${String(NOTE_MAX_BYTES)} bytes` });
+    }
+    const staged: Stage = stage.decision === "approve" ? { ...stage, span_hash: current.base_hash } : stage;
+    const at = this.stamp();
+    return structuredClone(this.store(entry, index, stored, { ...current, staged, staged_at: at, updated_at: at }));
+  }
+
+  /** Drops the staged choice of an open proposal; nothing staged: the document as it is. */
+  async unstageDecision(project: string, id: string): Promise<Proposal> {
+    await this.wait();
+    const { stored, index, entry } = this.openProposal(project, id);
+    if (stored.review.staged === null) {
+      return structuredClone(stored.review);
+    }
+    return structuredClone(this.store(entry, index, stored, { ...stored.review, staged: null, staged_at: null, updated_at: this.stamp() }));
+  }
+
+  /** The proposal a stage is for: unknown 404; not open 409 with its document's reason. */
+  private openProposal(project: string, id: string): { stored: MockProposal; index: number; entry: MockProject } {
     const entry = this.project(project);
     const index = entry.proposals.findIndex(({ review }) => review.id === id);
     const stored = entry.proposals[index];
     if (stored === undefined) {
-      throw new ClientError({ status: 404, message: `no open proposal ${id} in ${project}` });
+      throw new ClientError({ status: NO_SUCH_PROPOSAL, message: `no proposal \`${id}\` in this project's queue` });
     }
-    if (this.scenario === "conflict") {
-      entry.proposals.splice(index, 1);
-      throw new ClientError({
-        status: DECIDED_ELSEWHERE,
-        message: `${id} is no longer open: another session applied it as ${fakeSha(`${id}:elsewhere`).slice(0, 7)}`,
-      });
+    if (stored.review.status !== "open") {
+      throw this.refusal(`\`${id}\` is ${stored.review.status}, not open: only an open proposal takes a staged choice; nothing changed`);
     }
-    const current = stored.review;
-    const decided: StoredReview = {
-      ...current,
-      decided_by: DECIDED_BY,
-      decided_at: stamp(this.now(), 0),
-      updated_at: stamp(this.now(), 0),
-    };
-    switch (decision.decision) {
-      case "accept": {
-        if (current.preview === "conflicts") {
-          throw new ClientError({
-            status: 422,
-            message: `${id} conflicts with the current text of ${current.target_id ?? "its target"}; nothing was written`,
-          });
-        }
-        if (decision.option !== null && current.options[decision.option] === undefined) {
-          throw new ClientError({ status: 422, message: `${id} has no option ${String(decision.option)}` });
-        }
-        const sha = fakeSha(id);
-        const applied: StoredReview = { ...decided, status: "applied", applied_commit: sha, decision_note: decision.note };
-        entry.proposals.splice(index, 1);
-        return structuredClone({ proposal: applied, commit: { sha, subject: `spec: apply ${id}` } });
-      }
-      case "reject": {
-        if (decision.reason.trim() === "") {
-          throw new ClientError({ status: 422, message: "reject needs a non-empty reason" });
-        }
-        const rejected: StoredReview = { ...decided, status: "rejected", decision_note: decision.reason };
-        entry.proposals.splice(index, 1);
-        return structuredClone({ proposal: rejected, commit: null });
-      }
-      case "needs_clarification": {
-        if (decision.note.trim() === "") {
-          throw new ClientError({ status: 422, message: "needs_clarification needs a non-empty note" });
-        }
-        const sentBack: StoredReview = { ...decided, status: "changes_requested", decision_note: decision.note };
-        entry.proposals[index] = { ...stored, review: sentBack };
-        return structuredClone({ proposal: sentBack, commit: null });
-      }
-      case "defer": {
-        const deferred: StoredReview = { ...decided, status: "deferred", decision_note: decision.note };
-        entry.proposals[index] = { ...stored, review: deferred };
-        return structuredClone({ proposal: deferred, commit: null });
-      }
+    return { stored, index, entry };
+  }
+
+  /** The decision flags against the proposal's options, as `spec approve` checks them (`docs/canon/decision-record.md` "Flags"). */
+  private checkApprove(review: StoredReview, stage: Extract<StageChoice, { decision: "approve" }>): void {
+    const last = review.options.length - 1;
+    if (stage.option === null && last >= 0) {
+      throw new ClientError({ status: 400, message: `spec: \`${review.id}\` takes --option N (0-${String(last)})` });
+    }
+    if (stage.option !== null && last < 0) {
+      throw new ClientError({ status: 400, message: `spec: --option: \`${review.id}\` has no options` });
+    }
+    if (stage.option !== null && review.options[stage.option] === undefined) {
+      throw this.refusal(`--option ${String(stage.option)}: \`${review.id}\` has options 0-${String(last)}; nothing changed`);
+    }
+    if (stage.note !== null && bytesOf(stage.note) > NOTE_MAX_BYTES) {
+      throw new ClientError({ status: 400, message: `spec: --note: over ${String(NOTE_MAX_BYTES)} bytes` });
     }
   }
 
-  /** No live tail: the mock's queue changes only by this page's decisions, which read again themselves. */
+  /** A 409 as HttpClient rejects one: the refused review document carries `reason` as its last note. */
+  private refusal(reason: string): ClientError {
+    return new ClientError({ status: STAGE_REFUSED, message: reason });
+  }
+
+  /** Keeps a proposal's new review document in the queue and returns it. */
+  private store(entry: MockProject, index: number, stored: MockProposal, review: StoredReview): StoredReview {
+    entry.proposals[index] = { ...stored, review };
+    return review;
+  }
+
+  /** Now, as the queue stores a time (1 s resolution). */
+  private stamp(): string {
+    return stamp(this.now(), 0);
+  }
+
+  /** No live tail: the mock's queue changes only by this page's stages, which read again themselves. */
   subscribe(): () => void {
     return () => undefined;
   }

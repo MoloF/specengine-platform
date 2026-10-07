@@ -1,5 +1,10 @@
-//! `spec approve PR [--note T]` and `spec reject PR --reason T` (task spec
+//! `spec approve PR [--note T]` and `spec reject PR [--reason T]` (task spec
 //! `proposal-apply`, "Apply", "Idempotence", "Reject"): the one write door.
+//! A staged choice (canon `decision-staging`, "Terminal"; [`Staging`]) is
+//! taken by `spec approve PR` without flags (an approve) and `spec reject
+//! PR` without `--reason` (a reject), shown before the question, which is
+//! marked `staged`, and compared with the row byte for byte at step 7, a
+//! completion and a reject; typed flags win whole, the stage named unused.
 //!
 //! The apply, in the recorded worktree only:
 //!
@@ -80,14 +85,16 @@ use crate::location::open_index;
 use crate::package::position;
 use crate::preflight::{
     History, LookupError, Missing, Prepared, StepFailure, TrailerCommit, completes_when,
-    completing, history, place_unchanged, prepare, recorded_project, recorded_root, trailer_lookup,
-    trailer_lookup_here,
+    completing, history, place_unchanged, prepare_spanned, recorded_project, recorded_root,
+    trailer_lookup, trailer_lookup_here,
 };
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, checked_now,
     escaped_error, find, no_proposal, open_context, queue_cannot, queue_refusal, top_path,
     with_diff, written_id,
 };
+use crate::review::stale_note;
+use crate::stage::{self, Staging};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 use crate::{create, decide};
 
@@ -130,8 +137,10 @@ impl ApproveFlags {
 pub struct RejectRequest {
     /// `PR` as given.
     pub id: String,
-    /// `--reason T`: non-empty.
-    pub reason: String,
+    /// `--reason T`: non-empty, at most 4 096 bytes; left out only when a
+    /// reject is staged, whose reason it takes (canon `decision-staging`,
+    /// "Terminal").
+    pub reason: Option<String>,
     pub now: String,
     pub git: GitEnv,
 }
@@ -226,28 +235,41 @@ fn run_approve(
         }
         ProposalStatus::Open | ProposalStatus::Approved => {}
     }
-    if proposal.kind.decides() {
-        return decide::approve_record(env, request, flags, &mut context, &proposal, consent);
+    // `--note` (a reject's `--reason` too) at most 4 096 bytes
+    // (canon `decision-staging`, "The stage": as a stage's).
+    if let Some(reason) = request
+        .note
+        .as_deref()
+        .and_then(|note| stage::over_cap("--note", note))
+    {
+        return Ok(ProposalOutcome::refused(
+            COMMAND,
+            document(&proposal, &context.data_dir),
+            &reason,
+            messages,
+        ));
     }
-    if flags.any() {
-        let flag = match (flags.option, &flags.answer) {
-            (Some(_), _) => "--option",
-            (None, Some(_)) => "--answer",
-            (None, None) => "--canon",
-        };
-        let article = if proposal.kind == ProposalKind::Update {
-            "an"
-        } else {
-            "a"
-        };
-        return Err(CliError::spec(format!(
-            "`{flag}` decides a question or a discrepancy; `{id}` is {article} {}: `spec approve \
-             {id}` applies it as proposed; nothing changed",
-            proposal.kind.as_str()
-        )));
+    // The staged choice: taken when no flag is typed, else left unused,
+    // named (canon `decision-staging`, "Terminal").
+    let (request, flags, staging) = Staging::for_approve(&proposal, request, flags);
+    messages.extend(staging.notes());
+    let (request, flags) = (&request, &flags);
+    if proposal.kind.decides() {
+        return decide::approve_record(
+            env,
+            request,
+            flags,
+            &mut context,
+            &proposal,
+            &staging,
+            consent,
+        );
+    }
+    if let Some(reason) = flag_on_apply(&proposal, flags) {
+        return Err(CliError::spec(reason));
     }
     if proposal.new_file() {
-        return create::approve_file(env, request, &mut context, &proposal, consent);
+        return create::approve_file(env, request, &mut context, &proposal, &staging, consent);
     }
     // The proposal's own commit already on its branch: completed, no new
     // commit. Its branch read in the current repository when the recorded
@@ -265,6 +287,7 @@ fn run_approve(
                     &mut context,
                     &proposal,
                     &commit,
+                    &staging,
                     consent,
                     messages,
                 );
@@ -282,7 +305,15 @@ fn run_approve(
 
     // Until step 7 writes `approved`, this run holds nothing: a refusal
     // only logs, whatever state another run left.
-    let prepared = match prepare(env, &request.git, &context, &proposal, &mut messages) {
+    let mut span = None;
+    let prepared = match prepare_spanned(
+        env,
+        &request.git,
+        &context,
+        &proposal,
+        &mut messages,
+        &mut span,
+    ) {
         Ok(prepared) => prepared,
         Err(mut failure) => {
             if let Some(commit) = &failure.completing {
@@ -293,6 +324,7 @@ fn run_approve(
                     &mut context,
                     &proposal,
                     commit,
+                    &staging,
                     &mut asked,
                     messages,
                 );
@@ -339,12 +371,21 @@ fn run_approve(
             );
         }
     };
+    // A staged approve's staleness: a note at the prompt, never a refusal.
+    let stale = staging
+        .shown()
+        .and_then(|_| stale_note(&proposal, span.as_deref()));
+    if let Some(note) = &stale {
+        messages.push(Message::Note(note.clone()));
+    }
     let question = format!(
-        "apply {id} to {} on {} in {} ({})? [y/N]",
+        "{}apply {id} to {} on {} in {} ({}{})? [y/N]",
+        staging.preface(stale.as_deref()),
         prepared.top_path,
         proposal.place.branch,
         proposal.place.worktree,
-        prepared.preview.as_str()
+        prepared.preview.as_str(),
+        staging.mark()
     );
     if !consent(&noted(unknown.as_deref(), &escape_controls(&question))) {
         let mut document = with_diff(&proposal, &request.git, &context.data_dir);
@@ -357,10 +398,11 @@ fn run_approve(
         ));
     }
 
-    // Step 7: a compare-and-set on the state read.
+    // Step 7: a compare-and-set on the state read, the stage shown too.
     let decision = Decision {
         decided_by: decided_by.clone(),
         note: request.note.clone(),
+        staged_at: staging.staged_at(),
     };
     let held = match context.queue.approve_from(&id, &read, &decision, now) {
         Ok(approved) => approved.seen(),
@@ -369,7 +411,12 @@ fn run_approve(
             | QueueError::Status { .. }
             | QueueError::Invalid(_)),
         ) => {
-            let failure = StepFailure::refused(7, format!("{error}; nothing written"));
+            let replaced = match error {
+                QueueError::Changed { .. } => staging.replaced(&context, &id),
+                _ => None,
+            };
+            let reason = replaced.unwrap_or_else(|| format!("{error}; nothing written"));
+            let failure = StepFailure::refused(7, reason);
             return failed(
                 &mut context,
                 request,
@@ -569,6 +616,31 @@ fn run_approve(
             )
         }
     }
+}
+
+/// Why `flags` do not go with an `update` or a `create` (a decision flag
+/// decides a question or a discrepancy): exit 2's reason; `None` when none
+/// is given.
+pub(crate) fn flag_on_apply(proposal: &Proposal, flags: &ApproveFlags) -> Option<String> {
+    if !flags.any() {
+        return None;
+    }
+    let id = &proposal.id;
+    let flag = match (flags.option, &flags.answer) {
+        (Some(_), _) => "--option",
+        (None, Some(_)) => "--answer",
+        (None, None) => "--canon",
+    };
+    let article = if proposal.kind == ProposalKind::Update {
+        "an"
+    } else {
+        "a"
+    };
+    Some(format!(
+        "`{flag}` decides a question or a discrepancy; `{id}` is {article} {}: `spec approve {id}` \
+         applies it as proposed; nothing changed",
+        proposal.kind.as_str()
+    ))
 }
 
 /// Step 10: the branch's new commit, when its one parent is the old `HEAD`
@@ -775,13 +847,19 @@ pub(crate) fn noted(unknown: Option<&str>, question: &str) -> String {
 /// commit <sha> on <branch> in <worktree>? [y/N]`), decided by the
 /// worktree's committer identity, the current repository's when the
 /// worktree is not there (none: exit 2 before the prompt). Nothing but the
-/// queue and the data directory's index is written.
+/// queue and the data directory's index is written. A staged choice it
+/// confirms (`staging`, canon `decision-staging`, "Terminal") is
+/// shown before the question, which ends ` (staged)`; it is compared with
+/// the row again before the recording (`applied_with` compares nothing):
+/// changed → exit 1, nothing changed.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn complete(
     env: &Env,
     request: &ApproveRequest,
     context: &mut QueueContext,
     proposal: &Proposal,
     commit: &str,
+    staging: &Staging,
     consent: Consent<'_>,
     mut messages: Vec<Message>,
 ) -> Result<ProposalOutcome, CliError> {
@@ -823,8 +901,14 @@ pub(crate) fn complete(
                 messages,
             );
         };
+        let marked = if staging.shown().is_some() {
+            " (staged)"
+        } else {
+            ""
+        };
         let question = format!(
-            "complete {id} by its commit {commit} on {} in {read}? [y/N]",
+            "{}complete {id} by its commit {commit} on {} in {read}{marked}? [y/N]",
+            staging.preface(None),
             proposal.place.branch
         );
         if !consent(&escape_controls(&question)) {
@@ -836,9 +920,18 @@ pub(crate) fn complete(
                 messages,
             ));
         }
+        // The stage read (shown, unused or none), compared again as step 7
+        // compares it: the recording compares nothing.
+        if let Some(reason) = stage::changed_since(context, proposal) {
+            let document = with_diff(proposal, &request.git, &context.data_dir);
+            return Ok(ProposalOutcome::refused(
+                COMMAND, document, &reason, messages,
+            ));
+        }
         let decision = Decision {
             decided_by,
             note: request.note.clone(),
+            staged_at: staging.staged_at(),
         };
         let refresh = completion_refresh(&request.git, context, proposal, commit);
         record_applied(
@@ -1111,7 +1204,11 @@ fn run_reject(
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Reject;
     let now = checked_now(&request.now)?;
-    if request.reason.trim().is_empty() {
+    if request
+        .reason
+        .as_deref()
+        .is_some_and(|reason| reason.trim().is_empty())
+    {
         return Err(CliError::spec(
             "--reason is empty: say why the proposal is rejected",
         ));
@@ -1163,6 +1260,19 @@ fn run_reject(
             COMMAND, document, &reason, messages,
         ));
     }
+    if let Some(reason) = request
+        .reason
+        .as_deref()
+        .and_then(|reason| stage::over_cap("--reason", reason))
+    {
+        return Ok(ProposalOutcome::refused(
+            COMMAND, document, &reason, messages,
+        ));
+    }
+    // The reason typed, else a staged reject's (canon `decision-staging`,
+    // "Terminal").
+    let (reason, staging) = Staging::for_reject(&proposal, request.reason.as_deref())?;
+    messages.extend(staging.notes());
     // A proposal with a commit in history is never recorded as rejected;
     // nor one whose history git cannot read, when it may have a commit: an
     // update, or a question or a discrepancy holding a record issued at an
@@ -1220,11 +1330,13 @@ fn run_reject(
         ""
     };
     let question = format!(
-        "reject {approved}{id} ({} in {} on {} in {})? [y/N]",
+        "{}reject {approved}{id} ({} in {} on {} in {}{})? [y/N]",
+        staging.preface(None),
         proposal.target_id,
         top_path(&proposal),
         proposal.place.branch,
-        proposal.place.worktree
+        proposal.place.worktree,
+        staging.mark()
     );
     if !consent(&noted(unknown.as_deref(), &escape_controls(&question))) {
         return Ok(ProposalOutcome::refused(
@@ -1242,10 +1354,11 @@ fn run_reject(
     }
     let decision = Decision {
         decided_by,
-        note: Some(request.reason.clone()),
+        note: Some(reason),
+        staged_at: staging.staged_at(),
     };
-    // A compare-and-set on the state read: another run's change since
-    // refuses (exit 1).
+    // A compare-and-set on the state read (its stage too): another run's
+    // change since refuses (exit 1).
     let rejected = context
         .queue
         .reject_from(&id, &proposal.seen(), &decision, now);
@@ -1255,7 +1368,14 @@ fn run_reject(
             Ok(ProposalOutcome::done(COMMAND, document, messages))
         }
         Err(error) => {
-            let reason = queue_refusal(error)?;
+            let replaced = match error {
+                QueueError::Changed { .. } => staging.replaced(&context, &id),
+                _ => None,
+            };
+            let reason = match replaced {
+                Some(reason) => reason,
+                None => queue_refusal(error)?,
+            };
             Ok(ProposalOutcome::refused(
                 COMMAND, document, &reason, messages,
             ))

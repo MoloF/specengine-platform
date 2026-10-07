@@ -1,8 +1,18 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { apiErrorOf, DECIDED_ELSEWHERE, type BundleOptions, type GraphOptions, type NodeOptions, type SearchOptions, type TreeOptions } from "./client";
+import { useCallback, useEffect, useState } from "react";
+import {
+  apiErrorOf,
+  NO_SUCH_PROPOSAL,
+  STAGE_REFUSED,
+  type BundleOptions,
+  type GraphOptions,
+  type NodeOptions,
+  type SearchOptions,
+  type TreeOptions,
+} from "./client";
+import { endOwnWrite, isOwnStageEvent, outsideSince, startOwnWrite } from "./ownStages";
 import { useClient } from "./provider";
-import type { Decision, Inbox, Proposal } from "./types";
+import type { Inbox, Proposal, StageChoice } from "./types";
 
 /**
  * Query keys: every argument present, an absent one as `null`, `[]` or `false`, so two reads that
@@ -54,12 +64,6 @@ export const queryKeys = {
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
 };
-
-/**
- * The reads a decision can change, by their first key part: each is read again after one. A task's
- * open proposals and assumptions are the queue's (docs/features/ui-tasks.md "Data").
- */
-const READS_AFTER_DECISION = ["inbox", "proposal", "tree", "node", "search", "bundle", "graph", "tasks", "task"] as const;
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
 // false `archive` too; then the query's AbortSignal. A read invalidated while in flight is aborted
@@ -184,6 +188,38 @@ const APPLIED = "proposal.applied";
 /** A proposal's queue events (`docs/canon/proposal-queue.md` "States and events"). */
 const PROPOSAL_EVENT = "proposal.";
 
+/** The stage's two events (`docs/canon/decision-staging.md` "Queue"): the queue only, never a task or the spec. */
+const STAGED = "proposal.staged";
+const UNSTAGED = "proposal.unstaged";
+
+/** A stage event's stored stage: its payload's `staged` (undefined when it has none). */
+function stagedOf(payload: unknown): unknown {
+  return typeof payload === "object" && payload !== null && "staged" in payload ? payload.staged : undefined;
+}
+
+/** A stage event's time: its payload's `staged_at`, a string; else null. */
+function stagedAtOf(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null || !("staged_at" in payload)) {
+    return null;
+  }
+  return typeof payload.staged_at === "string" ? payload.staged_at : null;
+}
+
+/**
+ * A stage changed outside this tab, as the live tail said it (`docs/canon/decision-staging.md`
+ * "UI"): a `proposal.staged` or `.unstaged` event no write of this tab accounts for.
+ */
+export interface OutsideStage {
+  /** The project whose tail said it. */
+  project: string;
+  /** The proposal. */
+  id: string;
+  /** The new stage's time, as stored; null when the stage was removed. */
+  stagedAt: string | null;
+  /** The event's sequence number: each change its own alert. */
+  seq: number;
+}
+
 /** A task's queue events (`docs/canon/tasks.md` "Store"). */
 const TASK_EVENT = "task.";
 
@@ -192,17 +228,24 @@ const TASK_EVENT = "task.";
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
  * every task of it (a task's open proposals and assumptions are the queue's); `proposal.applied`
  * also that project's trees, nodes, searches, bundles, graphs and check (a spec file changed;
- * `docs/features/ui-live.md` "Data"). A `task.*` event reads that project's task list and that task
- * again (no string `id`: every task of it), never the inbox, a proposal or a spec read
- * (`docs/features/ui-live-tasks.md` "Data"). No other project's read, and no other read. A stream
- * this client opened again after the browser gave up on it (events may be missed, an apply among
- * them) reads the inbox, every cached proposal, those spec reads and the task reads of the project
- * again. Only the reads on screen are fetched, once each (the check only while Health shows it);
- * the rest are marked stale.
+ * `docs/features/ui-live.md` "Data"). A stage event, `proposal.staged` or `.unstaged`, reads only
+ * that project's inbox and that proposal again: a stage touches no task and no spec file
+ * (`docs/canon/decision-staging.md` "Queue"); one no write of this tab accounts for is returned as
+ * the outside change to show, until `dismiss` or the next one. A `task.*` event reads that
+ * project's task list and that task again (no string `id`: every task of it), never the inbox, a
+ * proposal or a spec read (`docs/features/ui-live-tasks.md` "Data"). No other project's read, and
+ * no other read. A stream this client opened again after the browser gave up on it (events may be
+ * missed, an apply among them) reads the inbox, every cached proposal, those spec reads and the
+ * task reads of the project again. Only the reads on screen are fetched, once each (the check only
+ * while Health shows it); the rest are marked stale.
  */
-export function useLiveQueue(project: string | null) {
+export function useLiveQueue(project: string | null): { outside: OutsideStage | null; dismiss: () => void } {
   const client = useClient();
   const queryClient = useQueryClient();
+  const [outside, setOutside] = useState<OutsideStage | null>(null);
+  const dismiss = useCallback(() => {
+    setOutside(null);
+  }, []);
   useEffect(() => {
     if (project === null) {
       return undefined;
@@ -240,6 +283,13 @@ export function useLiveQueue(project: string | null) {
         if (id !== null) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
         }
+        if (event.type === STAGED || event.type === UNSTAGED) {
+          const unstaged = event.type === UNSTAGED;
+          if (id !== null && !isOwnStageEvent(queryClient, project, id, unstaged, stagedOf(event.payload))) {
+            setOutside({ project, id, stagedAt: unstaged ? null : stagedAtOf(event.payload), seq: event.seq });
+          }
+          return;
+        }
         readTasksAgain();
         if (event.type === APPLIED) {
           readSpecAgain();
@@ -253,6 +303,7 @@ export function useLiveQueue(project: string | null) {
       },
     );
   }, [client, queryClient, project]);
+  return { outside: outside !== null && outside.project === project ? outside : null, dismiss };
 }
 
 /** The containment tree; while new options are read, the last tree stays up (no layout jump). */
@@ -376,7 +427,7 @@ export function useTask(project: string, id: string) {
 /**
  * The project's `spec check` (docs/features/ui-health.md "Data"): read on entering Health, on
  * "Check again" (`refetch`) and, while Health is on screen, after the live tail's apply or gap
- * (useLiveQueue); never on window focus, a reconnect or an interval, and not after a decision (a
+ * (useLiveQueue); never on window focus, a reconnect or an interval, and not after a stage (a
  * full walk per read; the report carries no time). Its query's AbortSignal is never taken: a walk
  * in flight is kept and its answer used, never aborted, whatever reads it again or unmounts.
  */
@@ -394,47 +445,62 @@ export function useCheck(project: string) {
 /** The check's read as Health shares it among its regions. */
 export type CheckQuery = ReturnType<typeof useCheck>;
 
-/** Accept and reject close a proposal (06 §3.4): it leaves the inbox; the other two keep it there. */
-function closes(decision: Decision): boolean {
-  return decision.decision === "accept" || decision.decision === "reject";
-}
+/**
+ * A stage of one proposal as the Inbox sends it: the owner's choice with the review document's
+ * `updated_at` as read, or, `stage` null, an unstage (`docs/canon/decision-staging.md` "UI").
+ */
+export type StageChange = { id: string; stage: StageChoice; updatedAt: string } | { id: string; stage: null };
 
 /**
- * One decideProposal call per submit. On success a closed proposal (accepted, rejected) leaves the
- * cached inbox at once, never written back as applied or rejected; a kept one (needs clarification,
- * deferred) takes the daemon's returned state, and its review document is the returned one. After a
- * success or a 409 (decided elsewhere) the project's inbox, proposals, tree, nodes, searches,
- * bundles, graphs and tasks are read again: an apply may change any.
+ * One stageDecision (or unstageDecision) call per submit; the stage is not a decision, so the
+ * proposal stays in the inbox. On success the cached review document is the returned one and the
+ * inbox entry keeps its place with the returned state and `staged_at`; after a success, a 409 (not
+ * open, changed since read) or a 404, only that project's inbox and that proposal are read again:
+ * a stage changes no task, no spec file and no check. Each write is noted as this tab's own, so its
+ * event on the live tail is never shown as a change made outside this tab (useLiveQueue).
  */
-export function useDecideProposal(project: string) {
+export function useStageDecision(project: string) {
   const client = useClient();
   const queryClient = useQueryClient();
-  const inboxKey = queryKeys.inbox(project);
-  function readAgain() {
-    for (const read of READS_AFTER_DECISION) {
-      void queryClient.invalidateQueries({ queryKey: [read, project] });
-    }
+  function readAgain(id: string) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
+  }
+  /** This tab's read of the proposal shows a stage, and no outside change was heard since it was read. */
+  function showsStage(id: string): boolean {
+    const read = queryClient.getQueryState<Proposal>(queryKeys.proposal(project, id));
+    return read?.data !== undefined && read.data.staged !== null && !outsideSince(queryClient, project, id, read.dataUpdatedAt);
   }
   return useMutation({
-    mutationFn: ({ id, decision }: { id: string; decision: Decision }) =>
-      client.decideProposal(project, id, decision),
-    onSuccess: (result, { id, decision }) => {
-      queryClient.setQueryData<Proposal>(queryKeys.proposal(project, id), result.proposal);
-      queryClient.setQueryData<Inbox>(inboxKey, (inbox) => {
+    mutationFn: (change: StageChange) =>
+      change.stage === null ? client.unstageDecision(project, change.id) : client.stageDecision(project, change.id, change.stage, change.updatedAt),
+    // A stage always logs its event; an unstage only when something is staged, which this tab
+    // knows only from a current read (none: nothing awaited, see outsideSince).
+    onMutate: (change) => (change.stage === null && !showsStage(change.id) ? null : startOwnWrite(queryClient, project, change.id, change.stage)),
+    onSuccess: (review, { id }, write) => {
+      if (write !== null) {
+        endOwnWrite(queryClient, project, id, write, false);
+      }
+      queryClient.setQueryData<Proposal>(queryKeys.proposal(project, id), review);
+      queryClient.setQueryData<Inbox>(queryKeys.inbox(project), (inbox) => {
         if (inbox === undefined) {
           return inbox;
         }
-        const status = result.proposal.status;
-        const proposals = closes(decision)
-          ? inbox.proposals.filter((entry) => entry.id !== id)
-          : inbox.proposals.map((entry) => (entry.id === id && status !== null ? { ...entry, status } : entry));
+        const proposals = inbox.proposals.map((entry) =>
+          entry.id === id ? { ...entry, status: review.status ?? entry.status, staged_at: review.staged_at } : entry,
+        );
         return { ...inbox, proposals };
       });
-      readAgain();
+      readAgain(id);
     },
-    onError: (error) => {
-      if (apiErrorOf(error).status === DECIDED_ELSEWHERE) {
-        readAgain();
+    onError: (error, { id }, write) => {
+      const status = apiErrorOf(error).status;
+      if (write !== undefined && write !== null) {
+        // No answer (status 0): the daemon may have stored it, so its event is still this tab's.
+        endOwnWrite(queryClient, project, id, write, status !== 0);
+      }
+      if (status === STAGE_REFUSED || status === NO_SUCH_PROPOSAL) {
+        readAgain(id);
       }
     },
   });

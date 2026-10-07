@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { apiErrorOf, DECIDED_ELSEWHERE } from "../api/client";
-import { useDecideProposal, useInbox, useProposal } from "../api/queries";
-import type { ApiError, Decision, DecisionResult, Proposal } from "../api/types";
+import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { apiErrorOf } from "../api/client";
+import { useInbox, useProposal, useStageDecision } from "../api/queries";
+import type { ApiError, Proposal, StageChoice } from "../api/types";
 import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
@@ -13,8 +13,7 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { DecisionDialog } from "./DecisionDialog";
-import { DECISION_KEYS, type DecisionKind } from "./decisions";
+import { confirmCommand, DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
 import { matchesFilter } from "./filter";
 import { severityRank } from "./labels";
 import { queueOrder } from "./order";
@@ -22,21 +21,21 @@ import { ProposalCard } from "./ProposalCard";
 import { ProposalList } from "./ProposalList";
 import { sharesTarget } from "./targets";
 
+/**
+ * The decision dialog arrives in a chunk of its own on the first opening; meanwhile focus stays on
+ * what opened it and nothing else opens (the dialog counts as open).
+ */
+const DecisionDialog = lazy(() => import("./DecisionDialog").then((module) => ({ default: module.DecisionDialog })));
+
 const LETTERS = new Map<string, DecisionKind>(DECISION_KEYS.map(([kind, key]) => [key, kind]));
 
-function announcementOf(id: string, result: DecisionResult, decision: Decision): string {
-  switch (decision.decision) {
-    case "accept":
-      return result.commit === null
-        ? `Accepted ${id}.`
-        : `Accepted ${id}: committed ${result.commit.sha} "${result.commit.subject}".`;
-    case "reject":
-      return `Rejected ${id}.`;
-    case "needs_clarification":
-      return `Sent ${id} back: needs clarification.`;
-    case "defer":
-      return `Deferred ${id}.`;
-  }
+/** What a stage says once stored: the decision, its time, the terminal command that confirms it. */
+function stagedAnnouncement(id: string, stage: StageChoice, review: Proposal): string {
+  const verb = stage.decision === "approve" ? WORDING.accept.verb : WORDING.reject.verb;
+  const at = review.staged_at === null ? "" : ` at ${review.staged_at}`;
+  const command = confirmCommand(stage.decision, id);
+  const confirm = command === null ? "Confirm it on a terminal." : `Confirm it on a terminal: ${command}.`;
+  return `Staged ${verb} on ${id}${at}; nothing is applied yet. ${confirm}`;
 }
 
 /**
@@ -51,12 +50,15 @@ interface OpenDecision {
 
 /**
  * The owner's queue: the inbox's entries by severity then age, the selected one's card from its
- * review document, the four decisions (the daemon refuses each, naming the terminal command).
+ * review document, the four decisions. Accept and Reject stage the owner's choice, confirmed only
+ * by `spec approve|reject PR` on a terminal (`docs/canon/decision-staging.md` "UI", ADR-0035); a
+ * staged proposal stays listed, its card showing the command and Unstage. Needs clarification and
+ * Defer send nothing.
  */
 export function InboxView({ project, selectedId }: { project: string; selectedId: string | null }) {
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
-  const decide = useDecideProposal(project);
+  const decide = useStageDecision(project);
   const now = useNow();
   const openShortcuts = useOpenShortcuts();
   const focusLater = useFocusLater();
@@ -76,7 +78,8 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState<OpenDecision | null>(null);
   const [result, setResult] = useState("");
-  const [problem, setProblem] = useState<{ id: string; message: string } | null>(null);
+  /** The daemon's words refusing the last unstage, by proposal. */
+  const [unstageRefusal, setUnstageRefusal] = useState<{ id: string; message: string } | null>(null);
 
   const ordered = inbox.data === undefined ? [] : queueOrder(inbox.data.proposals);
   const visible = ordered.filter((proposal) => matchesFilter(proposal, query));
@@ -141,10 +144,11 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
 
   /**
    * Opens a decision on the selected proposal once its review document is read (the options come
-   * from it); nothing while a dialog is open or a decision pending.
+   * from it, and the `updated_at` a stage is sent against); nothing while a dialog is open or a
+   * stage pending.
    */
   function openDialog(kind: DecisionKind) {
-    if (selected === null || reviewed === null || openDecision.current !== null || deciding.current || decide.isPending) {
+    if (selected === null || reviewed === null || reviewed.updated_at === null || openDecision.current !== null || deciding.current || decide.isPending) {
       return;
     }
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -169,63 +173,78 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     return true;
   }
 
-  /** After a decision leaves the dialog: select and focus the next item, else the heading. */
-  function focusNextAfter(id: string) {
-    const at = visible.findIndex((candidate) => candidate.id === id);
-    const next = visible[at + 1] ?? visible[at - 1];
-    if (next === undefined) {
-      focusLater(() => heading.current);
-      return;
-    }
-    select(next.id, true);
+  /** After a stage leaves the dialog: focus back on what opened it, else the selected item. */
+  function focusAfterStage(id: string) {
+    const back = returnFocus.current;
+    focusLater(() => (back?.isConnected === true ? back : itemElement(id)));
   }
 
   /**
-   * Sends the owner's decision once. Only the call is guarded: what follows a success runs outside
-   * the catch, so it can never be shown as a refusal. Resolves to the refusal for the dialog to show,
-   * or null when the dialog is closed (or gone with the view).
+   * Stages the owner's choice once, against the `updated_at` the dialog shows. Only the call is
+   * guarded: what follows a success runs outside the catch, so it can never be shown as a refusal.
+   * The proposal stays in the queue. Resolves to the refusal for the dialog to show (a 409 too: the
+   * inbox and the proposal are read again, and the dialog shows a changed proposal as changed), or
+   * null when the dialog is closed (or gone with the view).
    */
-  async function submitDecision(id: string, decision: Decision): Promise<string | null> {
+  async function submitStage(id: string, stage: StageChoice, updatedAt: string): Promise<string | null> {
     deciding.current = true;
-    let decided: DecisionResult;
+    let review: Proposal;
     try {
-      decided = await decide.mutateAsync({ id, decision });
+      review = await decide.mutateAsync({ id, stage, updatedAt });
     } catch (error) {
       deciding.current = false;
       return refused(id, apiErrorOf(error));
     }
     deciding.current = false;
-    const said = announcementOf(id, decided, decision);
+    const said = stagedAnnouncement(id, stage, review);
     announce(said);
     if (!mounted.current) {
       return null;
     }
-    setProblem(null);
+    setUnstageRefusal(null);
     setResult(said);
     if (closeOwnDialog(id)) {
-      focusNextAfter(id);
+      focusAfterStage(id);
     }
     return null;
   }
 
-  /** A refusal: 409 closes the dialog; any other stays in it, or is spoken when the view is gone. */
+  /** A refusal stays in the dialog, or is spoken when the view is gone. */
   function refused(id: string, refusal: ApiError): string | null {
-    if (refusal.status === DECIDED_ELSEWHERE) {
-      announce(`${id} was decided elsewhere; the inbox is read again. ${refusal.message}`, "assertive");
-      if (mounted.current) {
-        setResult("");
-        setProblem({ id, message: refusal.message });
-        if (closeOwnDialog(id)) {
-          focusNextAfter(id);
-        }
-      }
-      return null;
-    }
     if (!mounted.current) {
-      announce(`The daemon refused the decision on ${id}; nothing changed. ${refusal.message}`, "assertive");
+      announce(`The daemon refused to stage the decision on ${id}; nothing changed. ${refusal.message}`, "assertive");
       return null;
     }
     return refusal.message;
+  }
+
+  /** Drops the selected proposal's staged choice: one call; a refusal shows on the card in the daemon's words. */
+  async function unstage(id: string) {
+    if (deciding.current || openDecision.current !== null) {
+      return;
+    }
+    deciding.current = true;
+    try {
+      await decide.mutateAsync({ id, stage: null });
+    } catch (error) {
+      deciding.current = false;
+      const refusal = apiErrorOf(error);
+      announce(`The daemon refused to unstage ${id}; nothing changed. ${refusal.message}`, "assertive");
+      if (mounted.current) {
+        setUnstageRefusal({ id, message: refusal.message });
+      }
+      return;
+    }
+    deciding.current = false;
+    const said = `Unstaged the decision on ${id}; nothing is staged for it now.`;
+    announce(said);
+    if (!mounted.current) {
+      return;
+    }
+    setUnstageRefusal(null);
+    setResult(said);
+    // The Unstage button that had focus is gone with the staged choice.
+    focusLater(() => itemElement(id));
   }
 
   function onQueueKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -359,7 +378,11 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             others={ordered.filter((other) => sharesTarget(other, selected))}
             now={now}
             deciding={decide.isPending}
+            unstageRefusal={unstageRefusal !== null && unstageRefusal.id === selected.id ? unstageRefusal.message : null}
             onDecide={openDialog}
+            onUnstage={() => {
+              void unstage(selected.id);
+            }}
             onSelect={(id) => {
               select(id, true);
             }}
@@ -380,24 +403,20 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
           your control point is approving tasks.
         </p>
       </header>
-      {/* Visible copies; screen readers hear both through the page's live regions (useAnnounce). */}
+      {/* A visible copy; screen readers hear it through the page's live region (useAnnounce). */}
       {result !== "" && <p className="decision-result">{result}</p>}
-      {problem !== null && (
-        <div className="notice notice-problem">
-          <p>{problem.id} was decided elsewhere; the inbox is read again.</p>
-          <p className="verbatim">{problem.message}</p>
-        </div>
-      )}
       {body}
       {dialog !== null && (
-        <DecisionDialog
-          key={`${dialog.id}-${dialog.kind}`}
-          id={dialog.id}
-          proposal={reviewed !== null && reviewed.id === dialog.id ? reviewed : dialog.proposal}
-          kind={dialog.kind}
-          onCancel={closeDialog}
-          onSubmit={(decision) => submitDecision(dialog.id, decision)}
-        />
+        <Suspense fallback={null}>
+          <DecisionDialog
+            key={`${dialog.id}-${dialog.kind}`}
+            id={dialog.id}
+            proposal={reviewed !== null && reviewed.id === dialog.id ? reviewed : dialog.proposal}
+            kind={dialog.kind}
+            onCancel={closeDialog}
+            onSubmit={(stage, updatedAt) => submitStage(dialog.id, stage, updatedAt)}
+          />
+        </Suspense>
       )}
     </section>
   );

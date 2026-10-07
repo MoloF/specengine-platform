@@ -44,7 +44,7 @@ fn reject_with(
         &Globals::default(),
         &RejectRequest {
             id: id.to_owned(),
-            reason: reason.to_owned(),
+            reason: Some(reason.to_owned()),
             now: LATER.to_owned(),
             git: pair.git_env(&pair.main),
         },
@@ -230,6 +230,7 @@ fn reject_refuses_a_state_changed_during_the_prompt() {
         let decision = Decision {
             decided_by: "Another Run <other@example.org>".to_owned(),
             note: None,
+            staged_at: None,
         };
         queue
             .approve(&open, &decision, "2026-10-06T06:00:00Z")

@@ -780,9 +780,11 @@ fn ac08_a_claim_names_a_worktree_of_the_tasks_repository_on_a_branch() {
 // ------------------------------------------------------------- AC-10
 
 /// AC-10: `review --json` holds `task_id` right after `choice`, before
-/// `notes` (43 keys; `T-0001` bound, `null` unbound), its text a
-/// `task_id:` line; inbox entries keep their eleven keys, none `task_id`.
-/// M: `task_id` after `notes`.
+/// `notes` (43 keys; 45 since docs/features/decision-staging.md, `staged`,
+/// `staged_at` between `task_id` and `notes`; `T-0001` bound, `null`
+/// unbound), its text a `task_id:` line; inbox entries keep their eleven
+/// keys (twelve with `staged_at`), none `task_id`. M: `task_id` after
+/// `notes`.
 #[test]
 fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
     let pair = Pair::new("tk-ac10", "spec-a");
@@ -808,8 +810,12 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         let (text, raw) = common::proposal::printed(&pair.review_ok(&main, proposal));
         let value = json_of(&raw);
         let keys = task_common::keys(&raw);
-        assert_eq!(keys.len(), 43, "{keys:?}");
-        assert_eq!(keys[40..], ["choice", "task_id", "notes"], "{keys:?}");
+        assert_eq!(keys.len(), 45, "{keys:?}");
+        assert_eq!(
+            keys[40..],
+            ["choice", "task_id", "staged", "staged_at", "notes"],
+            "{keys:?}"
+        );
         assert_eq!(value["task_id"], want, "{proposal}");
         let line = format!("\ntask_id: {}\n", want.as_str().unwrap_or("-"));
         assert!(text.contains(&line), "{proposal}: {text}");
@@ -823,7 +829,7 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
     let listed = task_common::Ordered::of(&common::proposal::printed_inbox(&inbox).1);
     for index in 0..2 {
         let keys = listed.get("proposals").at(index).keys();
-        assert_eq!(keys.len(), 11, "{keys:?}");
+        assert_eq!(keys.len(), 12, "{keys:?}");
         assert!(!keys.contains(&"task_id".to_owned()), "{keys:?}");
     }
 }
@@ -977,7 +983,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":2,\"queue_schema\":4,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{{\"format\":2,\"queue_schema\":5,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":5,\"runs\":2,\"events\":{events}}}"
         )
     );
@@ -1084,11 +1090,12 @@ impl task_common::Tasks for RestoredHome<'_> {
 /// AC-11: format-1 dumps of queue schemas 1, 2 and 3 restore, the later
 /// columns `NULL`, and re-export as format 2 (schema 3 here; 1 and 2:
 /// `intake_state.rs`, `decision_apply.rs`); a database still at schema 3
-/// (no `tasks`, `runs`, `task_id`) exports as format 2, schema 4 without
-/// stepping. Refused, naming line 1, nothing made: a format-2 header of
-/// six keys or of `queue_schema` 3, a format-1 header of seven keys; a
-/// format-1 row holding `task_id`; a dump into a queue holding only a
-/// task. M: tasks left out.
+/// (no `tasks`, `runs`, `task_id`, stage) exports as format 2, schema 5
+/// (docs/features/decision-staging.md "Backup") without stepping.
+/// Refused, naming line 1, nothing made: a format-2 header of six keys or
+/// of `queue_schema` 3, a format-1 header of seven keys; a format-1 row
+/// holding `task_id`; a dump into a queue holding only a task. M: tasks
+/// left out.
 #[test]
 fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let pair = Pair::new("tk-ac11-old", "spec-a");
@@ -1107,23 +1114,18 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":2,\"queue_schema\":4,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":2,\"queue_schema\":5,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"events\":1}"
     );
-    // Format 1, schema 3: the header's five keys, rows without `task_id`.
+    // Format 1, schema 3: the header's five keys, rows without `task_id`
+    // and the stage's two.
+    let later = ",\"task_id\":null,\"staged\":null,\"staged_at\":null}}";
     let mut v3_lines = v4_lines.clone();
     v3_lines[0] = "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":1,\
                    \"events\":1}"
         .to_owned();
-    assert!(
-        v3_lines[1].ends_with(",\"task_id\":null}}"),
-        "{}",
-        v3_lines[1]
-    );
-    v3_lines[1] = format!(
-        "{}}}}}",
-        &v3_lines[1][..v3_lines[1].len() - ",\"task_id\":null}}".len()]
-    );
+    assert!(v3_lines[1].ends_with(later), "{}", v3_lines[1]);
+    v3_lines[1] = format!("{}}}}}", &v3_lines[1][..v3_lines[1].len() - later.len()]);
     let write = |name: &str, lines: &[String]| {
         let file = dumps.join(name);
         std::fs::write(&file, format!("{}\n", lines.join("\n"))).unwrap();
@@ -1147,7 +1149,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let mut six = v4_lines.clone();
     six[0] = six[0].replacen("\"runs\":0,", "", 1);
     let mut schema_3 = v4_lines.clone();
-    schema_3[0] = schema_3[0].replacen("\"queue_schema\":4,", "\"queue_schema\":3,", 1);
+    schema_3[0] = schema_3[0].replacen("\"queue_schema\":5,", "\"queue_schema\":3,", 1);
     let mut seven = v4_lines.clone();
     seven[0] = seven[0].replacen("\"format\":2,", "\"format\":1,", 1);
     let mut v3_row_4 = v3_lines.clone();
@@ -1172,7 +1174,8 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
 
     // A database still at queue schema 3.
     pair.sql(
-        "ALTER TABLE proposals DROP COLUMN task_id; DROP TABLE tasks; DROP TABLE runs; \
+        "ALTER TABLE proposals DROP COLUMN staged_at; ALTER TABLE proposals DROP COLUMN staged; \
+         ALTER TABLE proposals DROP COLUMN task_id; DROP TABLE tasks; DROP TABLE runs; \
          PRAGMA user_version = 3;",
     );
     let from_3 = dumps.join("from-3.jsonl");

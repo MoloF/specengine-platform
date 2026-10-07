@@ -33,6 +33,15 @@
 //! `TaskClaim`, `TaskRun`, `TaskBundle`, `Author`) from T-0001 to T-0004,
 //! each part from every package that holds one. M: a `TaskRun` key
 //! dropped from the fixture.
+//!
+//! AC-14 of docs/features/decision-staging.md, its Rust half ("Data",
+//! "Documents"): `Proposal` holds `staged`, `staged_at` between `task_id`
+//! and `notes` (45 keys), `InboxEntry` `staged_at` after `record_id` (12
+//! keys); two sets more, 34 in all, the stage's two shapes as the review
+//! document serves them after a same-origin POST: `StagedApprove` (6 keys,
+//! from a staged approve of the update, with its span hash, and of the
+//! discrepancy, with an option and a note) and `StagedReject` (2 keys, from
+//! the question's staged reject). M: the reject shape's `reason` dropped.
 
 mod common;
 mod task_state;
@@ -280,6 +289,31 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
 
     let server = Server::serve(&home, &cwd, &[&a, &observed, &cannot]);
     let p = "/api/projects/lantern-keep";
+    // decision-staging: each proposal staged, as a same-origin page stages,
+    // before the inbox and the reviews are read.
+    for (id, fields) in [
+        (&update, "\"decision\":\"approve\""),
+        (
+            &report,
+            "\"decision\":\"approve\",\"option\":1,\"note\":\"keep the cap\"",
+        ),
+        (
+            &question,
+            "\"decision\":\"reject\",\"reason\":\"asked before\"",
+        ),
+    ] {
+        let read = server
+            .get(&format!("{p}/proposals/{id}"))
+            .status(200)
+            .json();
+        let updated_at = read["updated_at"].as_str().expect("updated_at");
+        server
+            .stage(
+                &format!("{p}/proposals/{id}/decision"),
+                &format!("{{{fields},\"updated_at\":\"{updated_at}\"}}"),
+            )
+            .status(200);
+    }
     let projects = server.get("/api/projects").status(200).text().to_owned();
     let inbox = server
         .get(&format!("{p}/inbox"))
@@ -513,6 +547,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "Author",
             one_key_set("Author", &objects(&packages, "author"), keys_of),
         ),
+        (
+            "StagedApprove",
+            one_key_set("StagedApprove", &objects(&reviews[1..], "staged"), keys_of),
+        ),
+        (
+            "StagedReject",
+            one_key_set("StagedReject", &objects(&reviews[..1], "staged"), keys_of),
+        ),
     ]
 }
 
@@ -563,19 +605,26 @@ fn render(sets: &[(&str, Vec<String>)]) -> String {
 fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let sets = daemon_key_sets();
     let text = render(&sets);
-    // The counts the spec names: 4 project keys, 11 inbox-entry keys.
+    // The counts the spec names: 4 project keys, 12 inbox-entry keys
+    // (decision-staging: `staged_at` after `record_id`, never `staged`).
     assert_eq!(sets[0].1, ["slug", "name", "root", "branch"]);
-    assert_eq!(sets[1].1.len(), 11, "{:?}", sets[1].1);
+    assert_eq!(sets[1].1.len(), 12, "{:?}", sets[1].1);
     assert!(!sets[1].1.contains(&"task_id".to_owned()));
+    assert!(!sets[1].1.contains(&"staged".to_owned()));
+    assert_eq!(sets[1].1[10..], ["record_id", "staged_at"]);
     // docs/features/task-package.md "Data", AC-10: the review document
-    // gains `task_id` after `choice`, 43 keys; inbox entries unchanged.
+    // gains `task_id` after `choice`; decision-staging `staged`,
+    // `staged_at` after it, before `notes`: 45 keys.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 43, "{:?}", sets[2].1);
-    assert_eq!(sets[2].1[40..], ["choice", "task_id", "notes"]);
+    assert_eq!(sets[2].1.len(), 45, "{:?}", sets[2].1);
+    assert_eq!(
+        sets[2].1[40..],
+        ["choice", "task_id", "staged", "staged_at", "notes"]
+    );
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
-    assert_eq!(names.len(), 32, "{names:?}");
+    assert_eq!(names.len(), 34, "{names:?}");
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -605,7 +654,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // ui-live-tasks' seventeen (docs/features/ui-live-tasks.md "Key
     // sets"), in that order, with their counts; the package's 25 keys in
     // the canon's order, its `runs` items the seven of a run.
-    let counts: Vec<(&str, usize)> = sets[15..]
+    let counts: Vec<(&str, usize)> = sets[15..32]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
         .collect();
@@ -645,6 +694,15 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "changed_files"
         ]
     );
+    // decision-staging's two, last: the stage's shapes, keys in the canon's
+    // order ("The stage").
+    assert_eq!(sets[32].0, "StagedApprove");
+    assert_eq!(
+        sets[32].1,
+        ["decision", "option", "answer", "canon", "note", "span_hash"]
+    );
+    assert_eq!(sets[33].0, "StagedReject");
+    assert_eq!(sets[33].1, ["decision", "reason"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");

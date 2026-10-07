@@ -1,8 +1,11 @@
 //! AC-03 of docs/features/daemon-read.md: one door. On a repository with
 //! an open `update`, every endpoint, the decision POST too, leaves `git
 //! status --porcelain` empty, `HEAD`, the branches, the files, the
-//! proposal's state and the queue's `events` unchanged; the POST is a 403
-//! naming `spec approve PR-0001`; no call of `approve`, `reject`,
+//! proposal's state and the queue's `events` unchanged; the POST (the
+//! stage route since docs/features/decision-staging.md: its decision-POST
+//! block rewritten) refused from no page (403), a body that is no stage
+//! (400), an ID that is none (404), a DELETE with nothing staged 200 and
+//! no event; no call of `approve`, `reject`,
 //! `propose`, `import_state`, `export_`, `init`, `index` in
 //! `crates/specengine-http/src`. M: the POST approves with an always-yes
 //! consent.
@@ -165,40 +168,71 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
     assert_eq!(event.event.as_deref(), Some("proposal.created"));
     drop(stream);
 
-    // The decision POST: refused, its body unread, naming the terminal.
-    for body in ["", "{\"decision\":\"approve\",\"consent\":true}"] {
+    // The decision POST (the stage route, docs/features/decision-staging.md
+    // "Daemon"): from no page refused before its body is read (403); from a
+    // same-origin page a body that is no stage refused with the CLI's line
+    // (400); an ID that is no proposal's 404; DELETE with nothing staged
+    // 200, no event. Nothing stored by any of them.
+    let host = format!("127.0.0.1:{}", server.port);
+    let post = |path: &str, site: Option<&str>, body: &str| {
         let length = body.len().to_string();
-        let host = format!("127.0.0.1:{}", server.port);
-        let mut bytes = common::request_bytes(
-            "POST",
-            &format!("{p}/proposals/PR-0001/decision"),
-            &[
-                ("Host", &host),
-                ("Content-Type", "application/json"),
-                ("Content-Length", &length),
-            ],
-        );
+        let mut headers = vec![
+            ("Host", host.as_str()),
+            ("Content-Type", "application/json"),
+            ("Content-Length", length.as_str()),
+        ];
+        if let Some(site) = site {
+            headers.push(("Sec-Fetch-Site", site));
+        }
+        let mut bytes = common::request_bytes("POST", path, &headers);
         bytes.extend_from_slice(body.as_bytes());
-        let reply = server.raw(&bytes);
+        server.raw(&bytes)
+    };
+    let decision = format!("{p}/proposals/PR-0001/decision");
+    for body in ["", "{\"decision\":\"approve\",\"consent\":true}"] {
+        let reply = post(&decision, None, body);
         assert_eq!(reply.status, 403, "{}", reply.text());
-        let message = reply.error_message();
         assert_eq!(
-            message,
-            format!(
-                "decisions are made on a terminal: `spec approve PR-0001` or `spec reject PR-0001 \
-                 --reason \u{2026}` in {}; nothing changed",
-                a.display()
-            )
+            reply.error_message(),
+            "staging needs a same-origin page (not authentication: ADR-0034)"
+        );
+        let reply = post(&decision, Some("same-origin"), body);
+        assert_eq!(reply.status, 400, "{body:?}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(
+            message.starts_with("spec: the stage is not `{\"decision\":\"approve\"")
+                && message.ends_with("; nothing changed"),
+            "{body:?}: {message}"
         );
     }
-    // Not `PR-` and digits: `PR-…`.
-    let reply = server.request("POST", &format!("{p}/proposals/approve-all/decision"), &[]);
-    assert_eq!(reply.status, 403);
-    assert!(
-        reply.error_message().contains("`spec approve PR-\u{2026}`"),
+    // Not `PR-` and digits: no proposal, as the CLI judges it.
+    let updated_at = before.proposal["updated_at"].as_str().unwrap().to_owned();
+    let stage = format!("{{\"decision\":\"approve\",\"updated_at\":\"{updated_at}\"}}");
+    let reply = post(
+        &format!("{p}/proposals/approve-all/decision"),
+        Some("same-origin"),
+        &stage,
+    );
+    assert_eq!(reply.status, 404, "{}", reply.text());
+    assert_eq!(
+        reply.json()["notes"]
+            .as_array()
+            .and_then(|notes| notes.last()),
+        Some(&json!(
+            "no proposal `approve-all`: a proposal ID is `PR-` and 4 or more digits, as `spec \
+             inbox` lists it"
+        )),
         "{}",
         reply.text()
     );
+    // DELETE: from no page 403; from the page, nothing staged: 200, the
+    // document, no event.
+    let reply = server.request("DELETE", &decision, &[]);
+    assert_eq!(reply.status, 403, "{}", reply.text());
+    let reply = server.request("DELETE", &decision, &[("Sec-Fetch-Site", "same-origin")]);
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    assert_eq!(reply.json()["id"], json!("PR-0001"));
+    assert_eq!(reply.json()["staged"], json!(null));
     // Other methods on the decision: 405; a POST on a read: 405.
     for (method, path) in [
         ("GET", format!("{p}/proposals/PR-0001/decision")),

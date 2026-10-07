@@ -139,12 +139,17 @@ describe("the cases the slice names (Data, Mock)", () => {
     expect([...roles(ledger)].filter((role) => harborRoles.has(role))).toEqual([]);
   });
 
-  it("drop a decided proposal from the package's proposals and assumptions on the next read", async () => {
+  it("keep a staged proposal among the package's proposals and assumptions: a stage is not a decision (decision-staging, task-bound proposals)", async () => {
     const client = new MockClient("normal", { now: () => NOW });
-    await client.decideProposal("harbor-sim", "PR-0041", { decision: "reject", reason: "Not this way" });
+    const before = await packageFrom(client, "harbor-sim", "T-0107");
+    const read = (await client.getProposal("harbor-sim", "PR-0041")).updated_at ?? "";
+    await client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "Not this way" }, read);
     const pkg = await packageFrom(client, "harbor-sim", "T-0107");
-    expect(pkg.open_proposals.map((proposal) => proposal.id)).toEqual(["PR-0042", "PR-0044"]);
-    expect(pkg.assumptions.map((assumption) => assumption.proposal)).toEqual(["PR-0044"]);
+    expect(pkg.open_proposals.map((proposal) => [proposal.id, proposal.status, proposal.task_id])).toEqual(
+      before.open_proposals.map((proposal) => [proposal.id, proposal.status, proposal.task_id]),
+    );
+    expect(pkg.open_proposals.map((proposal) => proposal.id)).toContain("PR-0041");
+    expect(pkg.assumptions).toEqual(before.assumptions);
   });
 
   it("answer an unknown T with the exit-1 document, as data", async () => {

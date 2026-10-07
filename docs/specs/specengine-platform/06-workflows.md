@@ -83,7 +83,7 @@ The agent receives `PR-0042` and **keeps working** on the current spec or on the
 
 One queue in three places:
 
-**CLI** (shipped: `docs/canon/proposal-queue.md`, `agent-intake.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts` (a discrepancy: evidence, priced options); `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`, the only confirmation of a decision (ADR-0035). To come: a staged choice shown before the question (`decision-staging`), edit and accept, clarification, defer.
+**CLI** (shipped: `docs/canon/proposal-queue.md`, `agent-intake.md`): `spec inbox` lists `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale>` by ID, no labels or relative ages (ADR-0012, determinism); `spec review PR` prints the diff, introduced findings and `applies|rebases|conflicts` (a discrepancy: evidence, priced options); `spec approve`, `spec reject --reason` decide on a terminal, `[y/N]`, the only confirmation of a decision (ADR-0035), a staged choice shown before the question (`docs/canon/decision-staging.md`). To come: edit and accept, clarification, defer.
 
 **Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting. Accepting **stages** the choice; the card then shows the `spec approve PR` command to copy (`docs/canon/decision-staging.md`).
 

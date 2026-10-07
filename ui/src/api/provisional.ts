@@ -181,14 +181,49 @@ export interface CheckReport {
 export type Choice = { option: number } | { working_answer: true } | { answer: string };
 
 /**
+ * An approve staged on an open proposal: the flags of `spec approve`, absent `null`; `option`
+ * indexes `options`; `span_hash` the target's span hash when staged (an update's, a section-form
+ * create's), `null` for a deciding kind or a file-form create.
+ * Source: `docs/canon/decision-staging.md` "The stage".
+ */
+export interface StagedApprove {
+  decision: "approve";
+  option: number | null;
+  answer: string | null;
+  canon: string | null;
+  note: string | null;
+  span_hash: string | null;
+}
+
+/** A reject staged on an open proposal, with its reason. Source: `docs/canon/decision-staging.md` "The stage". */
+export interface StagedReject {
+  decision: "reject";
+  reason: string;
+}
+
+/**
+ * One staged choice of an open proposal, replaceable, kept only in the queue: an attribute, not a
+ * status; confirmed only by `spec approve|reject PR` on a terminal.
+ * Source: `docs/canon/decision-staging.md` "The stage".
+ */
+export type Stage = StagedApprove | StagedReject;
+
+/**
+ * What the UI stages, the decision POST's body less `updated_at`: the stage's fields without
+ * `span_hash`, which the daemon reads itself. Source: `docs/canon/decision-staging.md` "Daemon".
+ */
+export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
+
+/**
  * The review document of one proposal, as `spec review PR --json` (the daemon's `proposals/:id`):
  * every key present, absent `null`, lists `[]`. The exit-1 document (no such proposal here) has
  * every scalar `null` and its reason as the last of `notes`. A question or a discrepancy fills the
  * eleven keys after `updated_at` instead of an update's texts, `diff` and `preview`; a decided
- * one its record's five after `linked`; `task_id`, after `choice`, the task it was raised for.
+ * one its record's five after `linked`; `task_id`, after `choice`, the task it was raised for;
+ * `staged`, `staged_at` after it, the owner's staged choice (45 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
- * `docs/canon/tasks.md` "Task-bound proposals".
+ * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents".
  */
 export interface Proposal {
   id: string | null;
@@ -243,14 +278,19 @@ export interface Proposal {
   choice: Choice | null;
   /** The task it was raised for (`--task`), never changed; null unbound. */
   task_id: string | null;
-  /** Why a preview is unavailable, what a reader should know, a refusal's reason last. */
+  /** The owner's staged choice, confirmed only on a terminal; null when none is staged. */
+  staged: Stage | null;
+  /** When it was staged, UTC as stored (`YYYY-MM-DDTHH:MM:SSZ`); null when none is staged. */
+  staged_at: string | null;
+  /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
   notes: string[];
 }
 
 /**
  * One line of the owner's queue, `spec inbox --json`: `rationale` an update's first line (at most
- * 80 characters), `severity` and `summary` (its first line) a question's or a discrepancy's.
- * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/features/daemon-read.md` "Data".
+ * 80 characters), `severity` and `summary` (its first line) a question's or a discrepancy's;
+ * `staged_at` after `record_id` (12 keys). Sources: `docs/canon/proposal-queue.md` "Commands";
+ * `docs/features/daemon-read.md` "Data"; `docs/canon/decision-staging.md` "Documents".
  */
 export interface InboxEntry {
   id: string;
@@ -268,6 +308,8 @@ export interface InboxEntry {
   summary: string | null;
   /** A decided question's or discrepancy's record. */
   record_id: string | null;
+  /** When the owner's choice was staged, UTC as stored; null when none is staged. */
+  staged_at: string | null;
 }
 
 /** The owner's queue, as `spec inbox --json`: the current repository's open and approved proposals. Source: `docs/canon/proposal-queue.md` "Commands". */
@@ -558,32 +600,10 @@ export interface BundleView {
 }
 
 /**
- * The owner's decision on one proposal; `option` indexes `options`.
- * Sources: `docs/specs/specengine-platform/06-workflows.md` "3.4. What happens after the decision";
- * `docs/features/ui-shell.md` "Data".
- */
-export type Decision =
-  | { decision: "accept"; option: number | null; note: string | null }
-  | { decision: "reject"; reason: string }
-  | { decision: "needs_clarification"; note: string }
-  | { decision: "defer"; note: string | null };
-
-/** The commit `apply_proposal` made. Source: `docs/canon/proposal-apply.md` "Apply steps". */
-export interface Commit {
-  sha: string;
-  subject: string;
-}
-
-/** The proposal after the decision and, for an applied one, its commit. Source: `docs/features/ui-shell.md` "Data". */
-export interface DecisionResult {
-  proposal: Proposal;
-  commit: Commit | null;
-}
-
-/**
- * The daemon's error body, exactly these two keys (`message` the CLI's line(s) verbatim): 403 a
- * decision (made on a terminal), 503 a read that cannot run; 409 = decided elsewhere (the mock).
- * Sources: `docs/features/daemon-read.md` "Data"; `docs/features/ui-shell.md` "Data".
+ * The daemon's error body, exactly these two keys (`message` the CLI's line(s) verbatim): 400 a
+ * bad stage or its flags' usage, 403 a request past the fence, 503 a read or a stage that cannot
+ * run. Sources: `docs/features/daemon-read.md` "Data"; `docs/features/ui-shell.md` "Data";
+ * `docs/canon/decision-staging.md` "Daemon".
  */
 export interface ApiError {
   status: number;

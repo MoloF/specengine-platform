@@ -96,17 +96,17 @@ pub use git::GitEnv;
 pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, EVENT_APPLIED,
-    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED,
+    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, EVENT_STAGED,
     EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED, EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED,
     EVENT_TASK_COMPLETED, EVENT_TASK_CREATED, EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED,
-    EVENT_TASK_RUN_REPORTED, Event, EventsAfter, Intake, IntakeResult, NewIntake, NewProposal,
-    NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind,
-    ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError,
-    QueueMatch, RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation, Restore, Run,
-    Seen, SnapshotEntry, SqliteQueue, StoredEvent, StoredNote, StoredProposal, StoredQueue,
-    StoredRun, StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList, TaskRefresh,
-    TaskSeen, TaskSnapshot, UnreadableRow, UnreadableTask, binding_problem, claimed_elsewhere,
-    patch_hash, proposal_columns, task_event,
+    EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event, EventsAfter, Intake, IntakeResult, NewIntake,
+    NewProposal, NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding,
+    ProposalKind, ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts,
+    QueueError, QueueMatch, RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation,
+    Restore, Run, Seen, SnapshotEntry, SqliteQueue, Stage, StagedChoice, StoredEvent, StoredNote,
+    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange,
+    TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableRow, UnreadableTask, binding_problem,
+    claimed_elsewhere, patch_hash, proposal_columns, task_event,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};

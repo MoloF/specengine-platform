@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode, type ProposalQuery } from "../api/queries";
 import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types";
@@ -17,6 +17,12 @@ import { DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
 import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
+
+/**
+ * The staged choice arrives in a chunk of its own, loaded only for a proposal with one staged
+ * (`docs/canon/decision-staging.md` "UI"); until it does, the card says when it was staged.
+ */
+const StagedChoice = lazy(() => import("./StagedChoice").then((module) => ({ default: module.StagedChoice })));
 
 /** The target in the Spec tree: its text, links, bundle and other proposals. */
 function OpenInTree({ project, id }: { project: string; id: string }) {
@@ -384,7 +390,8 @@ function ReviewBody({
 /**
  * One proposal: its inbox entry at once, then its review document (`getProposal`): loading, the
  * daemon's error with Retry, the exit-1 document's notes, or every section it sends. A decision
- * needs the document (its options); until it is read the buttons do nothing.
+ * needs the document (its options and `updated_at`); until it is read the buttons do nothing. A
+ * staged choice shows under the decisions, with its terminal command and Unstage.
  */
 export function ProposalCard({
   project,
@@ -393,7 +400,9 @@ export function ProposalCard({
   others,
   now,
   deciding,
+  unstageRefusal,
   onDecide,
+  onUnstage,
   onSelect,
 }: {
   project: string;
@@ -403,9 +412,12 @@ export function ProposalCard({
   /** Other proposals in the queue on the same nodes: information only, nothing waits on them. */
   others: readonly InboxEntry[];
   now: number;
-  /** A decision is being sent: the buttons stay focusable but do nothing. */
+  /** A stage or an unstage is being sent: the buttons stay focusable but do nothing. */
   deciding: boolean;
+  /** The daemon's words when it refused to unstage this proposal. */
+  unstageRefusal: string | null;
   onDecide: (kind: DecisionKind) => void;
+  onUnstage: () => void;
   onSelect: (id: string) => void;
 }) {
   const failure = useRetainedFailure(review.error, review.isFetching);
@@ -413,7 +425,8 @@ export function ProposalCard({
   const retried = useRetryFocus(review.data, () => body.current);
   const targets = targetsOf(entry);
   const reviewed = review.data?.id === null ? undefined : review.data;
-  const ready = reviewed !== undefined;
+  // A stage is sent against the document's `updated_at`: without one there is nothing to stage on.
+  const ready = reviewed !== undefined && reviewed.updated_at !== null;
   const id = entry.id;
   // Rendered or Source for the targets' current sections, kept from proposal to proposal.
   const [textMode, setTextMode] = useState<TextMode>(DEFAULT_TEXT_MODE);
@@ -514,6 +527,17 @@ export function ProposalCard({
             </button>
           ))}
         </div>
+        {reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null && (
+          <Suspense
+            fallback={
+              <p className="staged-pending" aria-busy="true">
+                Staged <time dateTime={reviewed.staged_at}>{reviewed.staged_at}</time>; confirmed only on a terminal.
+              </p>
+            }
+          >
+            <StagedChoice id={id} review={reviewed} busy={deciding} refusal={unstageRefusal} onUnstage={onUnstage} />
+          </Suspense>
+        )}
       </header>
 
       <div className="card-body" ref={body} tabIndex={-1}>

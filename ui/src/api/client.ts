@@ -2,8 +2,6 @@ import type {
   ApiError,
   BundleView,
   CheckReport,
-  Decision,
-  DecisionResult,
   GraphView,
   Inbox,
   NodeView,
@@ -11,6 +9,7 @@ import type {
   Proposal,
   QueueEvent,
   SearchResults,
+  StageChoice,
   TaskList,
   TaskNotFound,
   TaskPackage,
@@ -66,14 +65,17 @@ export interface GraphOptions {
  * task) resolves to its document, `reason` (a proposal: the last of `notes`) set; the check answers
  * every verdict as a 200 report, data too; every other failure rejects with a ClientError carrying
  * the daemon's status and message verbatim (exit 2: 503; no response: 0; a read the daemon does not
- * serve yet, none today: `notServed`, 501, nothing requested). Decisions are made on a terminal: the
- * daemon refuses each one (403) naming its `spec` command (docs/features/daemon-read.md, Q4). Tasks
- * are read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
+ * serve yet, none today: `notServed`, 501, nothing requested). A decision is only staged here and
+ * confirmed on a terminal by `spec approve|reject PR` (`docs/canon/decision-staging.md` "Daemon",
+ * ADR-0035): the stage's two writes answer the review document; a write refused with the review
+ * document (409 not open or changed since read, 404 unknown) rejects with its last note. Tasks are
+ * read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
  *
  * `signal`: the query's AbortSignal. A read superseded before it answered (a burst of live events
  * reading the same task again) is aborted, so the daemon, which drops a request whose client left,
  * never runs it; the mock ignores it. The check takes none: a walk in flight is kept and its
- * answer taken, never aborted for a second one (`docs/features/ui-live.md` "Data").
+ * answer taken, never aborted for a second one (`docs/features/ui-live.md` "Data"); nor do the
+ * stage's writes: a write's answer is always taken.
  */
 export interface SpecEngineClient {
   /** Drives the permanent "Mock data" indicator. */
@@ -100,8 +102,12 @@ export interface SpecEngineClient {
   getTask(project: string, id: string, signal?: AbortSignal): Promise<TaskPackage | TaskNotFound>;
   /** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */
   getCheck(project: string): Promise<CheckReport>;
-  /** POST /api/projects/:p/proposals/:id/decision */
-  decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult>;
+  // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus
+  // `updated_at` as this page read it (changed since: 409); both answer the review document.
+  /** POST /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; stages, nothing applied) */
+  stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;
+  /** DELETE /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; nothing staged: no event) */
+  unstageDecision(project: string, id: string): Promise<Proposal>;
   /**
    * GET /api/projects/:p/events (SSE): `onEvent` per queue event of the project until the returned
    * function is called. `onGap` when the client opens the stream again after the browser gave up on
@@ -111,8 +117,14 @@ export interface SpecEngineClient {
   subscribe(project: string, onEvent: (event: QueueEvent) => void, onGap?: () => void): () => void;
 }
 
-/** HTTP 409: the proposal was decided elsewhere. */
-export const DECIDED_ELSEWHERE = 409;
+/**
+ * HTTP 409: the daemon refused a stage or an unstage with the current review document: the
+ * proposal is not open, an orphan's approve, or it changed since this page read it.
+ */
+export const STAGE_REFUSED = 409;
+
+/** HTTP 404: no such proposal for a stage or an unstage. */
+export const NO_SUCH_PROPOSAL = 404;
 
 /**
  * HTTP 501 Not Implemented: the status of a read the daemon does not serve yet, refused by the

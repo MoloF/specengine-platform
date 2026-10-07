@@ -9,7 +9,7 @@ ref: research-2026-09-28
 
 ## 1. SpecEngine repository layout
 
-Built: `CLAUDE.md` "Layout" and each subtree's README; the crates' planned roles: 05 §1. Still to come: `specengine-http`'s writes, `/mcp` and the embedded UI, the `spec` binary's alias `specengine`.
+Built: `CLAUDE.md` "Layout" and each subtree's README; the crates' planned roles: 05 §1. Still to come: `specengine-http`'s other writes, `/mcp` and the embedded UI, the `spec` binary's alias `specengine`.
 
 ## 2. Phases
 
@@ -19,22 +19,22 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 - ADR-0001…ADR-0025 with canon diffs; spikes: `docs/features/phase-0-spikes.md`.
 - Carried to Phase 1: pre-code reading (tracey sources and a run on one pilot crate, input for ADR-0019; limpet `anchor.rs`, sem, cgr docs, fiberplane/drift, amiss, `/speckit.converge`).
-- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ≈ 109 KB against ≤ 40 KB, driven by 05 and 04.
+- **Hold W** (`docs/canon/documentation-system.md` §1) is a standing rule: each task extracts its slice of 04-08 into `docs/features/<slug>.md` and moves the truth into canon on shipping; an exhausted section of 04-08 is shortened, an exhausted document gets `status: shipped`. Worst W (`spec check`'s summary): ~108 KB against <= 40 KB, driven by 05 and 04.
 
 ### Phase 1. Reading core — done 2026-10-05
 
-- Shipped (open questions: crate READMEs, `docs/canon/*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 and 4 (`bundle`), check increments 1–4 (`check` to `--changed`, the gate, process rules ADR-0031), index compaction, shards (ADR-0028, ADR-0030), MCP stdio reads, layer A identity, pilot schemes (§3 AC-10), import records, gaps and layout (§3 AC-6, §4.3), token calibration, pilot W (§3 AC-1, `docs/canon/w-measurement.md`).
+- Shipped (open questions: crate READMEs, `docs/canon/*`): the parser, the SQLite/FTS5 index, CLI passes 1, 3 and 4 (`bundle`), check increments 1-4 (`check` to `--changed`, the gate, process rules ADR-0031), index compaction, shards (ADR-0028, ADR-0030), MCP stdio reads, layer A identity, pilot schemes (§3 AC-10), import records, gaps and layout (§3 AC-6, §4.3), token calibration, pilot W (§3 AC-1, `docs/canon/w-measurement.md`).
 - **Pilot projects** (ADR-0008): `specengine.toml` and an importer for each, dry-run import, "before / after / hashes" reports; W on every task document.
 - **Migration order** (owner, 2026-10-05; no ADR, `docs/features/pilot-w.md` AC-12): pilot A first, then B, after an ADR on hyphenless codes superseding ADR-0009 (decision table there).
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `ui-live` (graph, check), `task-package` (7, ADR-0027), `ui-live-tasks` (task reads over HTTP) shipped 2026-10-07; next `decision-staging` (ADR-0035); kinds `interpretation`, `amendment`, `decision` later.
+- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `ui-live` (graph, check), `task-package` (7, ADR-0027), `ui-live-tasks` (tasks over HTTP) shipped 2026-10-07; `decision-staging` (ADR-0035) 2026-10-08; kinds `interpretation`, `amendment`, `decision` later.
 - Tasks, per project (`docs/canon/tasks.md`): states, the package, `spec_snapshot`, `stale`.
 - CLI: `task …`; `round new/answer`.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
-- Daemon `spec serve` (no UI): HTTP API + SSE (reads: `specengine-http`); agents' MCP is the `spec mcp` stdio bridge to it (MCP HTTP after MVP, 07 s1.1).
+- Daemon `spec serve` (no UI): HTTP API + SSE (reads, stages: `specengine-http`); agents' MCP is the `spec mcp` stdio bridge to it (MCP HTTP after MVP, 07 s1.1).
 - **Plugin** (06 §8; root `README.md`): hooks (07 §4, `gate` fail-closed), task prompts, stack-neutral roles, `/feature`; stack roles from a stack-profile plugin or the project (ADR-0027).
 - Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality: a synthetic non-Rust fixture in tests (07 §1.2, P2-5).
 
@@ -42,7 +42,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 - Symbol index (layer A: tree-sitter; layer B: the Bevy `schedule_data` dump; layer C: `ra_ap_ide` per ADR-0020 — B or C is required for generic system instances, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`, `get_impact`.
 - Layer C: items under attribute proc macros (`#[tokio::main]`-style) lose their monikers with the proc-macro server on; the scan must map an item through its expansion (`crates/specengine-ra/README.md`).
-- Markers `@implements/@verifies/@configures/@assumes` (with revision `@N`), `spec.lock` with `file_blob`, drift cascade (blob OID → normalized text → AST), `spec verify [--tests] [--changed]` with Fix/Check/Pre-existing verdicts and exit codes 0/1/2, `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
+- Markers `@implements/@verifies/@configures/@assumes` (with revision `@N`), `spec.lock` with `file_blob`, drift cascade (blob OID -> normalized text -> AST), `spec verify [--tests] [--changed]` with Fix/Check/Pre-existing verdicts and exit codes 0/1/2, `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
 - Existing ID citations in code automatically become **weak** `mentions` links. Markers appear in new work and when code is touched; they are not added in bulk (ADR-0016).
 - Check codes lifted into constants are the first source of machine bindings `check → const → test`.
 
@@ -94,8 +94,8 @@ One core for all projects (ADR-0008); corpus specifics live only in `specengine.
 |---|---|---|
 | Documents with front-matter (requirements, decisions, features) | nodes and records, header normalization | `canon:` on decisions is kept; feature criteria → `{#AC-..}` sections (ADR-0026) |
 | Records as table rows (assumptions, questions, terms), also rows without an ID | one record per row, `immutable_text`; missing IDs issued (agent proposes, owner confirms) | status prefixes in cells ("closed …", "implemented in code …") → status + events; text verbatim |
-| Table-style headers and journals (registry, decisions, trade-offs, blockers, milestones) | registry → computed; journal → `DEC-NNN` with `cost`; blockers → high-severity questions; milestones → tasks | decisions without `cost` → debt baseline |
-| Principles and check codes | `principle`, `check`; code constants → markers | old designations → aliases (ADR-0009) |
+| Table-style headers and journals (registry, decisions, trade-offs, blockers, milestones) | registry -> computed; journal -> `DEC-NNN` with `cost`; blockers -> high-severity questions; milestones -> tasks | decisions without `cost` -> debt baseline |
+| Principles and check codes | `principle`, `check`; code constants -> markers | old designations -> aliases (ADR-0009) |
 | README files of code subtrees (Tier 1) | domain nodes | stay in place (locality), indexed as `domain` |
 | Roadmap state and queue | SpecEngine tasks | the markdown becomes generated |
 | An existing tree of mechanics or domains | `mechanic` + rings → domains | no tree → built **through the queue**: the analyst proposes a clustering, the owner approves (SpecEngine's first test of its own cycle) |

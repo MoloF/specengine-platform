@@ -2,8 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { aBundle, aCheckReport, aGraphView, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
-import { argsOf, stubClient, type StubClient } from "../test/stubClient";
-import { ClientError, DECIDED_ELSEWHERE } from "./client";
+import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
+import { ClientError, NO_SUCH_PROPOSAL, STAGE_REFUSED } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
 import {
   queryKeys,
@@ -11,21 +11,22 @@ import {
   useCachedInbox,
   useCachedTasks,
   useCheck,
-  useDecideProposal,
   useGraph,
   useInbox,
   useNode,
   useProjects,
   useProposal,
   useSearch,
+  useStageDecision,
   useTask,
   useTasks,
   useTree,
 } from "./queries";
 
 // AC-13 of docs/features/ui-tree-node.md: query keys carry every argument (absent as null, [] or
-// false); a request carries only the options given; after a decision, success or 409, the
-// project's inbox, tree, nodes, searches and bundles are read again.
+// false); a request carries only the options given. AC-14 of docs/features/decision-staging.md:
+// after a stage or an unstage, success, 409 or 404, only the project's inbox and that proposal are
+// read again, the entry kept in the inbox; a stage changes no task, spec read or check.
 
 describe("query keys", () => {
   it("hold every argument, absent ones as null, [] or false", () => {
@@ -163,15 +164,17 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
   });
 });
 
-function Decider({ onReady }: { onReady: (decide: ReturnType<typeof useDecideProposal>["mutate"]) => void }) {
-  const decide = useDecideProposal("alpha");
-  onReady(decide.mutate);
+type StageMutate = ReturnType<typeof useStageDecision>["mutate"];
+
+function Stager({ onReady }: { onReady: (stage: StageMutate) => void }) {
+  const stage = useStageDecision("alpha");
+  onReady(stage.mutate);
   return null;
 }
 
 function seeded(): QueryClient {
   const queryClient = createQueryClient();
-  queryClient.setQueryData(queryKeys.inbox("alpha"), { proposals: [anEntry({ id: "PR-1" })], notes: [] });
+  queryClient.setQueryData(queryKeys.inbox("alpha"), { proposals: [anEntry({ id: "PR-2" }), anEntry({ id: "PR-1" })], notes: [] });
   queryClient.setQueryData(queryKeys.proposal("alpha", "PR-1"), aProposal({ id: "PR-1" }));
   queryClient.setQueryData(queryKeys.proposal("alpha", "PR-2"), aProposal({ id: "PR-2" }));
   queryClient.setQueryData(queryKeys.proposal("beta", "PR-2"), aProposal({ id: "PR-2" }));
@@ -190,9 +193,11 @@ function seeded(): QueryClient {
   return queryClient;
 }
 
-const AFTER_DECISION = [
-  queryKeys.inbox("alpha"),
-  queryKeys.proposal("alpha", "PR-1"),
+/** The two reads a stage of PR-1 reads again. */
+const AFTER_STAGE = [queryKeys.inbox("alpha"), queryKeys.proposal("alpha", "PR-1")];
+
+/** Every other seeded read: none is read again after a stage. */
+const UNTOUCHED = [
   queryKeys.proposal("alpha", "PR-2"),
   queryKeys.tree("alpha", { archive: true }),
   queryKeys.node("alpha", "R-1"),
@@ -202,14 +207,19 @@ const AFTER_DECISION = [
   queryKeys.graph("alpha", { ref: "R-1", impact: true, types: ["t1"] }),
   queryKeys.tasks("alpha"),
   queryKeys.task("alpha", "T-0001"),
+  queryKeys.check("alpha"),
+  queryKeys.proposal("beta", "PR-2"),
+  queryKeys.tree("beta"),
+  queryKeys.task("beta", "T-0001"),
+  queryKeys.graph("beta", { ref: "R-1" }),
 ];
 
-async function decideWith(client: StubClient) {
+async function stageWith(client: StubClient, change: Parameters<StageMutate>[0]) {
   const queryClient = seeded();
-  let mutate: ReturnType<typeof useDecideProposal>["mutate"] | null = null;
+  let mutate: StageMutate | null = null;
   render(
     <ApiProvider client={client} queryClient={queryClient}>
-      <Decider
+      <Stager
         onReady={(next) => {
           mutate = next;
         }}
@@ -217,45 +227,69 @@ async function decideWith(client: StubClient) {
     </ApiProvider>,
   );
   act(() => {
-    mutate?.({ id: "PR-1", decision: { decision: "defer", note: null } });
+    mutate?.(change);
   });
   await waitFor(() => {
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
+    expect(client.stageDecision.mock.calls.length + client.unstageDecision.mock.calls.length).toBe(1);
   });
   return queryClient;
 }
 
-describe("after a decision (AC-13)", () => {
-  it("success: reads the project's inbox, tree, nodes, searches, bundles and graphs again; another project's stay", async () => {
-    const queryClient = await decideWith(stubClient([aProposal({ id: "PR-1" })]));
+const STAGE = { id: "PR-1", stage: { decision: "approve", option: null, answer: null, canon: null, note: "ok" }, updatedAt: "2026-10-01T10:00:00Z" } as const;
+
+function invalidated(queryClient: QueryClient, keys: readonly (readonly unknown[])[]): (boolean | undefined)[] {
+  return keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);
+}
+
+describe("after a stage (AC-14 of decision-staging)", () => {
+  it("success: keeps the entry with the returned staged_at, sets the returned document, reads only that inbox and proposal again", async () => {
+    const client = stubClient([aProposal({ id: "PR-1" }), aProposal({ id: "PR-2" })]);
+    const queryClient = await stageWith(client, STAGE);
     await waitFor(() => {
-      expect(AFTER_DECISION.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toEqual(AFTER_DECISION.map(() => true));
+      expect(invalidated(queryClient, AFTER_STAGE)).toEqual([true, true]);
     });
-    expect(queryClient.getQueryState(queryKeys.tree("beta"))?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(queryKeys.proposal("beta", "PR-2"))?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(queryKeys.graph("beta", { ref: "R-1" }))?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(queryKeys.task("beta", "T-0001"))?.isInvalidated).toBe(false);
-    // AC-01 of ui-health: the check is a full walk, read on entering Health and on Check again only.
-    expect(queryClient.getQueryState(queryKeys.check("alpha"))?.isInvalidated).toBe(false);
+    expect(invalidated(queryClient, UNTOUCHED)).toEqual(UNTOUCHED.map(() => false));
+    expect(client.stageDecision.mock.calls).toEqual([["alpha", "PR-1", STAGE.stage, STAGE.updatedAt]]);
+    const inbox = queryClient.getQueryData<{ proposals: { id: string; staged_at: string | null }[] }>(queryKeys.inbox("alpha"));
+    expect(inbox?.proposals.map((entry) => [entry.id, entry.staged_at])).toEqual([
+      ["PR-2", null],
+      ["PR-1", STAGED_AT],
+    ]);
+    expect(queryClient.getQueryData<{ staged_at: string | null }>(queryKeys.proposal("alpha", "PR-1"))?.staged_at).toBe(STAGED_AT);
   });
 
-  it("409: reads them again too", async () => {
+  it("an unstage: one DELETE, the same two reads again, nothing else", async () => {
     const client = stubClient([aProposal({ id: "PR-1" })]);
-    client.decideProposal.mockRejectedValueOnce(new ClientError({ status: DECIDED_ELSEWHERE, message: "decided elsewhere" }));
-    const queryClient = await decideWith(client);
+    const queryClient = await stageWith(client, { id: "PR-1", stage: null });
     await waitFor(() => {
-      expect(AFTER_DECISION.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toEqual(AFTER_DECISION.map(() => true));
+      expect(invalidated(queryClient, AFTER_STAGE)).toEqual([true, true]);
     });
+    expect(invalidated(queryClient, UNTOUCHED)).toEqual(UNTOUCHED.map(() => false));
+    expect(client.unstageDecision.mock.calls).toEqual([["alpha", "PR-1"]]);
+    expect(client.stageDecision).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["409", STAGE_REFUSED],
+    ["404", NO_SUCH_PROPOSAL],
+  ])("%s: reads that inbox and proposal again, nothing else", async (_name, status) => {
+    const client = stubClient([aProposal({ id: "PR-1" })]);
+    client.stageDecision.mockRejectedValueOnce(new ClientError({ status, message: "refused" }));
+    const queryClient = await stageWith(client, STAGE);
+    await waitFor(() => {
+      expect(invalidated(queryClient, AFTER_STAGE)).toEqual([true, true]);
+    });
+    expect(invalidated(queryClient, UNTOUCHED)).toEqual(UNTOUCHED.map(() => false));
   });
 
   it("another refusal: reads nothing again", async () => {
     const client = stubClient([aProposal({ id: "PR-1" })]);
-    client.decideProposal.mockRejectedValueOnce(new ClientError({ status: 422, message: "refused" }));
-    const queryClient = await decideWith(client);
+    client.stageDecision.mockRejectedValueOnce(new ClientError({ status: 400, message: "refused" }));
+    const queryClient = await stageWith(client, STAGE);
     await act(async () => {
       await Promise.resolve();
     });
-    expect(AFTER_DECISION.map((key) => queryClient.getQueryState(key)?.isInvalidated)).toEqual(AFTER_DECISION.map(() => false));
+    expect(invalidated(queryClient, [...AFTER_STAGE, ...UNTOUCHED])).toEqual([...AFTER_STAGE, ...UNTOUCHED].map(() => false));
   });
 });
 

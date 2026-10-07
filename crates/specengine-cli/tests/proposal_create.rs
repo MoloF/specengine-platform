@@ -580,7 +580,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/features/decision-apply.md
 /// "Data", "Review document": the five of a decision record after
 /// `linked`).
-const REVIEW_KEYS: [&str; 43] = [
+const REVIEW_KEYS: [&str; 45] = [
     "id",
     "project",
     "kind",
@@ -624,6 +624,10 @@ const REVIEW_KEYS: [&str; 43] = [
     "choice",
     // docs/features/task-package.md "Data": after `choice`, 43 keys.
     "task_id",
+    // docs/features/decision-staging.md "Documents": between `task_id` and
+    // `notes`, 45 keys.
+    "staged",
+    "staged_at",
     "notes",
 ];
 
@@ -707,12 +711,16 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
                 "rationale",
                 "record_id",
                 "severity",
+                "staged_at",
                 "status",
                 "summary",
                 "target_id",
                 "target_ids"
             ]
         );
+        // docs/features/decision-staging.md "Documents": `staged_at` after
+        // `record_id`, 12 keys; nothing staged: `null`.
+        assert!(entry["staged_at"].is_null(), "{entry}");
         // D1 of docs/features/daemon-read.md: an update's `target_ids` is
         // `[target_id]`, right after it.
         assert_eq!(
@@ -766,6 +774,8 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         "record_text",
         "choice",
         "task_id",
+        "staged",
+        "staged_at",
     ] {
         assert!(value[absent].is_null(), "{absent}: {json}");
         assert!(

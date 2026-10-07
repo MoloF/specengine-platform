@@ -1,7 +1,7 @@
 //! The queue's dump, format 2 (canon `tasks`, "Backup"; format 1: canon
 //! `queue-backup`, "Format"): UTF-8 compact JSON, one object per LF-ended
 //! line. The header
-//! `{"format":2,"queue_schema":4,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`
+//! `{"format":2,"queue_schema":5,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `events` row by `seq`, each
@@ -11,7 +11,9 @@
 //! bytes. A format-1 dump (five header keys, queue schema 1, 2 or 3,
 //! `proposals` and `events` rows only) still restores: its rows hold that
 //! schema's 24, 35 or 40 columns, the later ones restored `NULL`; format 2
-//! is of queue schema 4 only.
+//! holds queue schema 4 (41 columns, its stages restored `NULL`) or 5
+//! (this build's 43, a proposal's `staged`, `staged_at` with them: canon
+//! `decision-staging`, "Documents").
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's
@@ -36,6 +38,10 @@ pub const STATE_FORMAT: u64 = 2;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
+
+/// The first queue schema with tasks and runs: format 1 holds the schemas
+/// before it, format 2 it and those after (to this build's).
+const TASKS_SCHEMA: i64 = 4;
 
 /// The header's keys, in the order written.
 const HEADER_KEYS: [&str; 7] = [
@@ -273,7 +279,7 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 
 /// The header line: `format` first (a newer build's header may differ in
 /// all else), then exactly the format's keys (format 1: five; 2: seven),
-/// `queue_schema` (format 1: 1 to 3; 2: this build's), `project` the root's
+/// `queue_schema` (format 1: 1 to 3; 2: 4 to this build's), `project` the root's
 /// slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
@@ -333,24 +339,20 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
              {QUEUE_SCHEMA_VERSION}): upgrade SpecEngine"
         ));
     }
-    let columns = match proposal_columns(schema) {
-        Some(_) if format == PROPOSALS_ONLY_FORMAT && schema == QUEUE_SCHEMA_VERSION => None,
-        Some(_) if format != PROPOSALS_ONLY_FORMAT && schema != QUEUE_SCHEMA_VERSION => None,
-        columns => columns,
+    // Format 1 holds the schemas before the tasks, format 2 those since.
+    let held = if format == PROPOSALS_ONLY_FORMAT {
+        1..TASKS_SCHEMA
+    } else {
+        TASKS_SCHEMA..QUEUE_SCHEMA_VERSION + 1
     };
+    let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {
-        return Err(if format == PROPOSALS_ONLY_FORMAT {
-            format!(
-                "the dump's queue schema is {schema}, which a format-1 dump does not hold (it \
-                 holds queue schemas 1 to {})",
-                QUEUE_SCHEMA_VERSION - 1
-            )
-        } else {
-            format!(
-                "the dump's queue schema is {schema}, which a format-{format} dump does not hold \
-                 (it holds queue schema {QUEUE_SCHEMA_VERSION})"
-            )
-        });
+        return Err(format!(
+            "the dump's queue schema is {schema}, which a format-{format} dump does not hold (it \
+             holds queue schemas {} to {})",
+            held.start,
+            held.end - 1
+        ));
     };
     let Some(Json::String(project)) = named("project") else {
         return Err("the header's `project` is not a string".to_owned());

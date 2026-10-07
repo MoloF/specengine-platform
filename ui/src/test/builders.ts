@@ -66,6 +66,8 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     record_text: null,
     choice: null,
     task_id: null,
+    staged: null,
+    staged_at: null,
     notes: [],
     ...fields,
   };
@@ -86,6 +88,7 @@ export function entryOf(proposal: Proposal): InboxEntry {
     severity: proposal.severity,
     summary: proposal.summary,
     record_id: proposal.record_id,
+    staged_at: proposal.staged_at,
   };
 }
 
@@ -134,6 +137,8 @@ export function noReview(id: string): Proposal {
     record_text: null,
     choice: null,
     task_id: null,
+    staged: null,
+    staged_at: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

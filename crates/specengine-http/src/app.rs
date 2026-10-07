@@ -1,32 +1,40 @@
 //! The router (docs/features/daemon-read.md "Data"): the fence around the
 //! whole router (it runs before routing, so a route added later is fenced
-//! too), the read endpoints, the refused decision, the error bodies of an
+//! too), the read endpoints, the stage of a choice, the error bodies of an
 //! unknown route (404) and another method on a route (405, its `Allow`
-//! what the route serves: `GET` on a read, `POST` on the decision; `HEAD`
-//! is no read here), `Cache-Control: no-store` on every response and no
-//! `Access-Control-*` header on any.
+//! what the route serves: `GET` on a read, `POST, DELETE` on the stage;
+//! `HEAD` is no read here), `Cache-Control: no-store` on every response
+//! and no `Access-Control-*` header on any.
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
-//! by docs/features/ui-live.md "Data"): no handler here decides, stores,
+//! by docs/features/ui-live.md "Data" and
+//! `docs/canon/decision-staging.md` "Daemon"): no handler here decides,
 //! exports, imports, creates or indexes, and it checks only as the plain
-//! run (the working tree on disk: no git mode, no client's file); a task
-//! is only listed or shown, never moved (docs/features/ui-live-tasks.md
-//! "Description and interactions"); the only writes are the reads' own,
-//! in the data directory.
+//! run (the working tree on disk:
+//! no git mode, no client's file); a task is only listed or shown, never
+//! moved (docs/features/ui-live-tasks.md "Description and interactions").
+//! The one queue write is a proposal's staged choice, through the CLI
+//! library's `stage` and `unstage` (POST and DELETE on the stage route,
+//! past the fence only from a same-origin page: `Sec-Fetch-Site:
+//! same-origin`, which is not authentication, ADR-0034), confirmed only on
+//! a terminal (ADR-0035); the other writes are the reads' own, in the data
+//! directory.
 
 use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Request, State};
 use axum::handler::Handler;
-use axum::http::header::{ALLOW, CACHE_CONTROL, HOST, ORIGIN};
+use axum::http::header::{ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOST, ORIGIN};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
+use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest, SearchRequest,
-    ShowRequest, TaskListRequest, TaskShowRequest, TreeRequest, View, process_git, project_entry,
+    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
+    UnstageRequest, View, process_git, project_entry, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -98,7 +106,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/tasks/{id}", read(task))
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
-            post(decision).fallback(only_post),
+            post(stage).delete(unstage).fallback(only_stage),
         )
         .route("/api/projects/{p}/events", read(tail::events))
         .fallback(unknown_route)
@@ -203,13 +211,14 @@ async fn only_get(method: Method, uri: Uri) -> Response {
     method_refused(&method, &uri, "only GET is served here", Some("GET"))
 }
 
-/// 405 on the decision route.
-async fn only_post(method: Method, uri: Uri) -> Response {
+/// 405 on the stage route.
+async fn only_stage(method: Method, uri: Uri) -> Response {
     method_refused(
         &method,
         &uri,
-        "this path takes only POST (refused): decisions are made on a terminal",
-        Some("POST"),
+        "this path takes only POST (stage a choice) and DELETE (unstage it); a staged choice is \
+         confirmed on a terminal",
+        Some("POST, DELETE"),
     )
 }
 
@@ -452,31 +461,128 @@ async fn task(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
     .await)
 }
 
-/// `POST …/proposals/<id>/decision`: always 403 naming the terminal
-/// command; the body is never read, nothing is called.
-async fn decision(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
-    let (project, rest) = app.project_of(&uri)?;
-    let written = rest
+/// The most bytes of a stage's body
+/// (`docs/features/decision-staging.md` "Data").
+const STAGE_BODY_MAX: usize = 16_384;
+
+/// The project and the proposal ID (percent-decoded once, judged by the
+/// CLI) of the stage route `uri`, and the page's origin: only a same-origin
+/// page stages (`Sec-Fetch-Site: same-origin`; absent or `none`, which the
+/// fence lets a read through, is refused: 403). This is no authentication
+/// (ADR-0034): any local process can send the header.
+fn stage_target(
+    app: &App,
+    uri: &Uri,
+    headers: &HeaderMap,
+) -> Result<(Arc<Project>, String), Refusal> {
+    // The served slug first (an unknown one is a 404 on every route), then
+    // the page's origin, before anything of the proposal is read.
+    let (project, rest) = app.project_of(uri)?;
+    let site = headers.get(HeaderName::from_static("sec-fetch-site"));
+    if site.is_none_or(|site| site.as_bytes() != b"same-origin") {
+        return Err(Refusal::new(
+            StatusCode::FORBIDDEN,
+            "staging needs a same-origin page (not authentication: ADR-0034)",
+        ));
+    }
+    let raw = rest
         .strip_prefix("proposals/")
         .and_then(|rest| rest.strip_suffix("/decision"))
-        .and_then(|raw| percent_decode(raw).ok())
-        .filter(|id| is_proposal_id(id));
-    let id = written.as_deref().unwrap_or("PR-…");
+        .ok_or_else(|| unknown_route_of(uri))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    Ok((project, id))
+}
+
+/// `POST …/proposals/<id>/decision`: the owner's choice staged through the
+/// CLI library's `stage`, its body the CLI's `StageBody` (JSON only: 415
+/// otherwise; at most [`STAGE_BODY_MAX`] bytes: 413; a body that does not
+/// decode: 400 with the CLI's line); 200 the review document, 400 a usage
+/// defect, 404 unknown, 409 refused (the refused review document), 503
+/// cannot run (`answer.rs`).
+async fn stage(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = stage_target(&app, request.uri(), request.headers())?;
+    json_typed(request.headers())?;
+    let bytes = body(request).await?;
+    let body = StageBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
+    Ok(run(project, move |env, globals| {
+        let request = StageRequest {
+            id,
+            body,
+            now: utc_now(),
+            git: process_git(env),
+        };
+        specengine_cli::stage(env, globals, &request)
+            .map(|outcome| Outcome::Stage(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `DELETE …/proposals/<id>/decision`: the staged choice cleared through
+/// the CLI library's `unstage` (nothing staged: the document, no event);
+/// the body is never read.
+async fn unstage(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = stage_target(&app, request.uri(), request.headers())?;
+    Ok(run(project, move |env, globals| {
+        let request = UnstageRequest {
+            id,
+            now: utc_now(),
+            git: process_git(env),
+        };
+        specengine_cli::unstage(env, globals, &request)
+            .map(|outcome| Outcome::Stage(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// The body is JSON: one `Content-Type` whose media type is
+/// `application/json` (any parameter after it), else 415.
+fn json_typed(headers: &HeaderMap) -> Result<(), Refusal> {
+    let mut types = headers.get_all(CONTENT_TYPE).iter();
+    let json = match (types.next(), types.next()) {
+        (Some(value), None) => value.to_str().is_ok_and(|value| {
+            value
+                .split(';')
+                .next()
+                .is_some_and(|media| media.trim().eq_ignore_ascii_case("application/json"))
+        }),
+        _ => false,
+    };
+    if json {
+        return Ok(());
+    }
     Err(Refusal::new(
-        StatusCode::FORBIDDEN,
-        format!(
-            "decisions are made on a terminal: `spec approve {id}` or `spec reject {id} --reason …` \
-             in {}; nothing changed",
-            project.root.display()
-        ),
+        StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        "the body is JSON: send it with Content-Type: application/json",
     ))
 }
 
-/// `PR-` and digits.
-fn is_proposal_id(id: &str) -> bool {
-    id.strip_prefix("PR-").is_some_and(|digits| {
-        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
-    })
+/// The request's body, at most [`STAGE_BODY_MAX`] bytes (a longer one, or
+/// one declared longer, is a 413 and is not read further).
+async fn body(request: Request) -> Result<Vec<u8>, Refusal> {
+    let too_large = || {
+        Refusal::new(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            format!("the body is over {STAGE_BODY_MAX} bytes"),
+        )
+    };
+    let declared = request
+        .headers()
+        .get(CONTENT_LENGTH)
+        .and_then(|length| length.to_str().ok())
+        .and_then(|length| length.trim().parse::<u64>().ok());
+    if declared.is_some_and(|length| length > STAGE_BODY_MAX as u64) {
+        return Err(too_large());
+    }
+    let mut stream = request.into_body().into_data_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|_| Refusal::bad_request("the body cannot be read"))?;
+        if bytes.len() + chunk.len() > STAGE_BODY_MAX {
+            return Err(too_large());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -544,13 +650,5 @@ mod tests {
             )
             .is_err()
         );
-    }
-
-    #[test]
-    fn a_proposal_id_is_pr_and_digits() {
-        assert!(is_proposal_id("PR-0004"));
-        assert!(!is_proposal_id("PR-"));
-        assert!(!is_proposal_id("pr-0004"));
-        assert!(!is_proposal_id("PR-4a"));
     }
 }

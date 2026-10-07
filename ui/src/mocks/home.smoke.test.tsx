@@ -7,7 +7,7 @@ import type { Scenario } from "./scenario";
 // The home and the palette over the real mock, as `pnpm dev` shows them (docs/features/ui-home.md
 // "Data", AC-02, AC-03, AC-04, AC-06, AC-13; "Owner's manual check" for `large`).
 
-const METHODS = ["getProjects", "getInbox", "getTree", "getNode", "search", "getBundle", "getGraph", "getTasks", "getTask", "decideProposal"] as const;
+const METHODS = ["getProjects", "getInbox", "getTree", "getNode", "search", "getBundle", "getGraph", "getTasks", "getTask", "stageDecision", "unstageDecision"] as const;
 
 function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);

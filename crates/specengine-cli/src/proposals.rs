@@ -51,7 +51,7 @@ use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
 use specengine_store::{
-    Choice, GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue,
+    Choice, GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue, Stage,
     WorktreeGit, same_repository,
 };
 
@@ -156,6 +156,13 @@ pub struct ProposalDocument {
     pub choice: Option<Choice>,
     /// The task it was raised for; `null` unbound.
     pub task_id: Option<String>,
+    /// The owner's staged choice (canon `decision-staging`,
+    /// "The stage"): `{"decision":"approve",…}` or `{"decision":"reject",…}`;
+    /// `null` when nothing is staged. Not an answer: any local process can
+    /// write one; only the terminal confirms it.
+    pub staged: Option<Stage>,
+    /// When it was staged, UTC; `null` with it.
+    pub staged_at: Option<String>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -221,6 +228,8 @@ impl ProposalDocument {
             record_text: proposal.record.as_ref().map(|record| record.text.clone()),
             choice: proposal.record.as_ref().map(|record| record.choice.clone()),
             task_id: proposal.task_id.clone(),
+            staged: proposal.staged.as_ref().map(|staged| staged.stage.clone()),
+            staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
             notes: Vec::new(),
         }
     }
@@ -478,24 +487,31 @@ pub(crate) fn find(
         if gone && which == Find::OrGoneRepository {
             return Ok(Ok(proposal));
         }
-        if gone {
-            return Err(CliError::spec(format!(
-                "`{id}` belongs to the repository {} (worktree {}), which no longer exists: \
-                 `spec reject {id} --reason …` takes it out of the inbox unless its commit is in \
-                 history",
-                proposal.place.git_common_dir, proposal.place.worktree
-            )));
-        }
-        return Err(CliError::spec(format!(
-            "`{id}` belongs to another repository of the project `{}`: {} (worktree {}); this \
-             one is {}: run the command there",
-            context.slug,
-            proposal.place.git_common_dir,
-            proposal.place.worktree,
-            context.common_dir.display()
-        )));
+        return Err(CliError::spec(elsewhere(context, &proposal, gone)));
     }
     Ok(Ok(proposal))
+}
+
+/// Why a proposal of another repository of the slug is not the current
+/// repository's to decide: its repository `gone` (an orphan, which only
+/// a rejection takes), or another one, which runs the command.
+pub(crate) fn elsewhere(context: &QueueContext, proposal: &Proposal, gone: bool) -> String {
+    let id = &proposal.id;
+    if gone {
+        return format!(
+            "`{id}` belongs to the repository {} (worktree {}), which no longer exists: `spec \
+             reject {id} --reason …` takes it out of the inbox unless its commit is in history",
+            proposal.place.git_common_dir, proposal.place.worktree
+        );
+    }
+    format!(
+        "`{id}` belongs to another repository of the project `{}`: {} (worktree {}); this one is \
+         {}: run the command there",
+        context.slug,
+        proposal.place.git_common_dir,
+        proposal.place.worktree,
+        context.common_dir.display()
+    )
 }
 
 /// The injected clock's time stamp must be `YYYY-MM-DDTHH:MM:SSZ`.
@@ -787,6 +803,9 @@ fn review_text(document: &ProposalDocument) -> String {
         .and_then(|choice| serde_json::to_string(choice).ok());
     line(&mut out, "choice", choice.as_deref());
     line(&mut out, "task_id", document.task_id.as_deref());
+    let staged = document.staged.as_ref().map(Stage::to_json);
+    line(&mut out, "staged", staged.as_deref());
+    line(&mut out, "staged_at", document.staged_at.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
 }

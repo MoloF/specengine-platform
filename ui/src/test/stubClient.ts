@@ -1,22 +1,25 @@
 import { vi } from "vitest";
-import type { BundleOptions, GraphOptions, NodeOptions, SearchOptions, SpecEngineClient, TreeOptions } from "../api/client";
+import { ClientError, type BundleOptions, type GraphOptions, type NodeOptions, type SearchOptions, type SpecEngineClient, type TreeOptions } from "../api/client";
 import type {
   BundleView,
   CheckReport,
-  Decision,
-  DecisionResult,
   GraphView,
   Inbox,
   NodeView,
   Project,
   Proposal,
   SearchResults,
+  Stage,
+  StageChoice,
   TaskList,
   TaskNotFound,
   TaskPackage,
   TreeView,
 } from "../api/types";
 import { aBundle, aCheckReport, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
+
+/** When the stub stores a stage: one fixed time, so a test can name it. */
+export const STAGED_AT = "2026-10-06T09:14:02Z";
 
 /** The stub's live tail: none. */
 const noLiveTail: SpecEngineClient["subscribe"] = () => () => undefined;
@@ -76,26 +79,29 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       Promise.resolve({ id, reason: `no task ${id} in this repository` }),
     ),
     getCheck: vi.fn<(project: string) => Promise<CheckReport>>(() => Promise.resolve(aCheckReport())),
-    decideProposal: vi.fn((_project: string, id: string, decision: Decision): Promise<DecisionResult> => {
+    // The daemon's stage on the stub's queue: an open proposal at the `updated_at` read, else 409;
+    // stored with STAGED_AT, the proposal kept in the queue.
+    stageDecision: vi.fn((_project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> => {
       const current = state.proposals.find((proposal) => proposal.id === id);
       if (current === undefined) {
-        return Promise.reject(new Error(`no proposal ${id}`));
+        return Promise.reject(new ClientError({ status: 404, message: `no proposal \`${id}\` in this project's queue` }));
       }
-      if (decision.decision === "accept") {
-        state.proposals = state.proposals.filter((proposal) => proposal.id !== id);
-        return Promise.resolve({
-          proposal: { ...current, status: "applied", applied_commit: "c0ffee1" },
-          commit: { sha: "c0ffee1", subject: `spec: apply ${id}` },
-        });
+      if (current.status !== "open" || current.updated_at !== updatedAt) {
+        return Promise.reject(new ClientError({ status: 409, message: `\`${id}\` is not open at ${updatedAt}; nothing changed` }));
       }
-      if (decision.decision === "reject") {
-        state.proposals = state.proposals.filter((proposal) => proposal.id !== id);
-        return Promise.resolve({ proposal: { ...current, status: "rejected" }, commit: null });
-      }
-      const status = decision.decision === "defer" ? "deferred" : "changes_requested";
-      const updated = { ...current, status };
+      const staged: Stage = stage.decision === "approve" ? { ...stage, span_hash: current.base_hash } : stage;
+      const updated: Proposal = { ...current, staged, staged_at: STAGED_AT, updated_at: STAGED_AT };
       state.proposals = state.proposals.map((proposal) => (proposal.id === id ? updated : proposal));
-      return Promise.resolve({ proposal: updated, commit: null });
+      return Promise.resolve(structuredClone(updated));
+    }),
+    unstageDecision: vi.fn((_project: string, id: string): Promise<Proposal> => {
+      const current = state.proposals.find((proposal) => proposal.id === id);
+      if (current === undefined) {
+        return Promise.reject(new ClientError({ status: 404, message: `no proposal \`${id}\` in this project's queue` }));
+      }
+      const updated: Proposal = current.staged === null ? current : { ...current, staged: null, staged_at: null, updated_at: "2026-10-06T09:15:00Z" };
+      state.proposals = state.proposals.map((proposal) => (proposal.id === id ? updated : proposal));
+      return Promise.resolve(structuredClone(updated));
     }),
     /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */
     subscribe: noLiveTail,

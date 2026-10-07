@@ -612,9 +612,10 @@ textarea.field {
   font-size: var(--font-size-s);
 }
 
+/* A stage's result: staged, not applied, so never the colour of an applied proposal. */
 .decision-result {
   padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--proposal-applied);
+  border-left: 3px solid var(--attention);
   border-radius: var(--radius-s);
   background: var(--surface-panel);
 }
@@ -2442,6 +2443,75 @@ mark {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+/* A staged decision (docs/canon/decision-staging.md "UI"): confirmed only on a terminal, so it
+   draws attention, never the colour of a done state. */
+.staged-choice {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--attention);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  min-width: 0;
+}
+
+.staged-choice .pairs {
+  justify-self: stretch;
+}
+
+.staged-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.staged-title .icon,
+.staged-mark .icon {
+  color: var(--attention);
+}
+
+.staged-line,
+.staged-pending {
+  overflow-wrap: anywhere;
+}
+
+.staged-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.staged-actions,
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.staged-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* A stage changed outside this tab: above the view, until dismissed. */
+.notice-outside-stage {
+  margin-bottom: var(--space-4);
+  border-color: var(--attention);
+}
+
+.notice-outside-stage .notice-title .icon {
+  color: var(--attention);
 }
 
 /* Owner commands: words, the command, Copy. */

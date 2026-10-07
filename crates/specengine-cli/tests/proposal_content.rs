@@ -328,7 +328,7 @@ fn a_two_path_trailer_commit_landing_during_the_reject_prompt_refuses_it() {
         &specengine_cli::Globals::default(),
         &specengine_cli::RejectRequest {
             id: id.clone(),
-            reason: "Dropped.".to_owned(),
+            reason: Some("Dropped.".to_owned()),
             now: common::proposal::LATER.to_owned(),
             git: pair.git_env(&pair.main),
         },

@@ -27,6 +27,8 @@ import type {
   SnapshotPlace,
   SnippetSegment,
   SpecSnapshot,
+  Stage,
+  StageChoice,
   TailEntry,
   TaskAssumption,
   TaskBundle,
@@ -564,5 +566,37 @@ describe("the check's types (AC-02 of ui-health)", () => {
     expect(KNOWN_CHECK_VERDICTS).toHaveLength(4);
     expect(KNOWN_CHECK_VERDICTS[0]).toBe("clean");
     expect(KNOWN_CHECK_VERDICTS[3]).toBe("cannot-check");
+  });
+});
+
+/** The staging canon (AC-14 of docs/features/decision-staging.md). */
+const STAGING = "`docs/canon/decision-staging.md`";
+
+describe("the stage's types (AC-14 of decision-staging)", () => {
+  it.each([
+    ["StagedApprove", "The stage"],
+    ["StagedReject", "The stage"],
+    ["Stage", "The stage"],
+    ["StageChoice", "Daemon"],
+    ["Proposal", "Documents"],
+    ["InboxEntry", "Documents"],
+  ])("%s cites the staging canon's %s", (type, heading) => {
+    expect(commentOf(type)).toContain(`${STAGING} "${heading}"`);
+  });
+
+  it("type a staged choice as one of the canon's two shapes, an approve's absent flags null", () => {
+    const approve: Stage = { decision: "approve", option: 1, answer: null, canon: null, note: "keep the cap", span_hash: null };
+    const reject: Stage = { decision: "reject", reason: "duplicate of PR-0003" };
+    expect([Object.keys(approve), Object.keys(reject)]).toEqual([
+      ["decision", "option", "answer", "canon", "note", "span_hash"],
+      ["decision", "reason"],
+    ]);
+    // What the UI sends: the stage less span_hash, which the daemon reads itself.
+    const sent: StageChoice = { decision: "approve", option: null, answer: null, canon: null, note: null };
+    expect(Object.keys(sent)).toEqual(["decision", "option", "answer", "canon", "note"]);
+  });
+
+  it("keep no decision, commit or apply result: the UI never decides (ADR-0035)", () => {
+    expect(source).not.toMatch(/export (type|interface) (Decision|DecisionResult|Commit)\b/);
   });
 });

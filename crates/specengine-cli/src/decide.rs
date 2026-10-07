@@ -77,19 +77,22 @@ use crate::proposals::{
 };
 use crate::propose::is_path_target;
 use crate::refresh::refresh;
+use crate::stage::Staging;
 use crate::{CliError, Env, Exit, Message, escape_controls, one_line};
 
 const COMMAND: QueueCommand = QueueCommand::Approve;
 
 /// `spec approve` of a question or a discrepancy, `open` or `approved`
 /// (`run_approve` has refused an applied or rejected one): see the module
-/// documentation.
+/// documentation. `request` and `flags` are a staged approve's when
+/// `staging` confirms one (`crate::stage`).
 pub(crate) fn approve_record(
     env: &Env,
     request: &ApproveRequest,
     flags: &ApproveFlags,
     context: &mut QueueContext,
     proposal: &Proposal,
+    staging: &Staging,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     let id = proposal.id.as_str();
@@ -99,7 +102,7 @@ pub(crate) fn approve_record(
             proposal.kind.as_str()
         )));
     };
-    let mut messages = Vec::new();
+    let mut messages = staging.notes();
 
     // First: the flags, the free text; nothing logged.
     let kept = match (proposal.status, &proposal.record) {
@@ -208,7 +211,9 @@ pub(crate) fn approve_record(
                     }
                 }
                 let commit = own.commit.clone();
-                return complete(env, request, context, proposal, &commit, consent, messages);
+                return complete(
+                    env, request, context, proposal, &commit, staging, consent, messages,
+                );
             }
             if let Some(first) = found.first() {
                 let failure = StepFailure::refused(
@@ -512,9 +517,11 @@ pub(crate) fn approve_record(
         }
         question.push('\n');
     }
+    question.push_str(&staging.preface(None));
     question.push_str(&format!(
-        "apply {id} as {record_id} ({}) on {} in {}? [y/N]",
+        "apply {id} as {record_id} ({}{}) on {} in {}? [y/N]",
         choice.described(),
+        staging.mark(),
         place.branch,
         place.worktree
     ));
@@ -523,10 +530,12 @@ pub(crate) fn approve_record(
         return refused(context, request, proposal, &reason, messages);
     }
 
-    // Step 7: the ID issued, the record set, as a compare-and-set.
+    // Step 7: the ID issued, the record set, as a compare-and-set (the
+    // stage shown too).
     let decision = Decision {
         decided_by: decided_by.clone(),
         note: request.note.clone(),
+        staged_at: staging.staged_at(),
     };
     let approval = RecordApproval {
         series,
@@ -559,7 +568,12 @@ pub(crate) fn approve_record(
             | QueueError::Status { .. }
             | QueueError::Invalid(_)),
         ) => {
-            let failure = StepFailure::refused(7, format!("{error}; nothing written"));
+            let replaced = match error {
+                QueueError::Changed { .. } => staging.replaced(context, id),
+                _ => None,
+            };
+            let reason = replaced.unwrap_or_else(|| format!("{error}; nothing written"));
+            let failure = StepFailure::refused(7, reason);
             return failed(context, request, proposal, None, failure, None, messages);
         }
         Err(error) => return Err(queue_cannot(error)),
@@ -724,8 +738,8 @@ fn refused(
 
 /// The flags of an open question or discrepancy checked (see the module
 /// documentation): its [`Choice`], a refusal (`Ok(Err)`, exit 1), or exit
-/// 2.
-fn first_checks(
+/// 2. A stage's flags are checked by it too (`crate::stage`).
+pub(crate) fn first_checks(
     proposal: &Proposal,
     intake: &Intake,
     flags: &ApproveFlags,

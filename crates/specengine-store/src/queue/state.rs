@@ -24,8 +24,9 @@ use crate::schema;
 /// "Store"): queue schema 1's 24, then the eleven step 2 appends
 /// (`docs/canon/agent-intake.md` "Stored"), then the five of a decision
 /// record step 3 appends (`docs/canon/decision-record.md` "Queue and documents"),
-/// then the task step 4 appends (`docs/canon/tasks.md` "Store").
-pub const PROPOSAL_COLUMNS: [&str; 41] = [
+/// then the task step 4 appends (`docs/canon/tasks.md` "Store"), then the
+/// stage step 5 appends (`docs/canon/decision-staging.md` "Queue").
+pub const PROPOSAL_COLUMNS: [&str; 43] = [
     "id",
     "project",
     "kind",
@@ -67,7 +68,12 @@ pub const PROPOSAL_COLUMNS: [&str; 41] = [
     "record_text",
     "choice",
     "task_id",
+    "staged",
+    "staged_at",
 ];
+
+/// The first queue schema with `tasks` and `runs` (step 3 → 4).
+const TASKS_SCHEMA: i64 = 4;
 
 /// The columns of queue schema 1's `proposals`: the first of
 /// [`PROPOSAL_COLUMNS`].
@@ -81,14 +87,19 @@ const SCHEMA_2_COLUMNS: usize = 35;
 /// [`PROPOSAL_COLUMNS`].
 const SCHEMA_3_COLUMNS: usize = 40;
 
+/// The columns of queue schema 4's `proposals`: the first of
+/// [`PROPOSAL_COLUMNS`].
+const SCHEMA_4_COLUMNS: usize = 41;
+
 /// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3 and 4 (this build's) are known, a dump of any restores; `None` for
+/// 3, 4 and 5 (this build's) are known, a dump of any restores; `None` for
 /// any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
         2 => Some(&PROPOSAL_COLUMNS[..SCHEMA_2_COLUMNS]),
         3 => Some(&PROPOSAL_COLUMNS[..SCHEMA_3_COLUMNS]),
+        4 => Some(&PROPOSAL_COLUMNS[..SCHEMA_4_COLUMNS]),
         QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
@@ -288,8 +299,9 @@ impl SqliteQueue {
     /// read transaction: `proposals` and `tasks` by ID number, `runs` by
     /// task and number, `events` by `seq`. A `TEXT` column that holds no
     /// UTF-8 text fails, naming row and column. A DB still at queue schema
-    /// 1, 2 or 3 (no step runs here) reads its 24, 35 or 40 proposal
-    /// columns, the later ones `None`, and no task.
+    /// 1, 2, 3 or 4 (no step runs here) reads its 24, 35, 40 or 41
+    /// proposal columns, the later ones `None`, and its tasks and runs from
+    /// schema 4 on (none before).
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
@@ -319,7 +331,7 @@ impl SqliteQueue {
             }
             drop(rows);
             drop(statement);
-            if version == QUEUE_SCHEMA_VERSION {
+            if version >= TASKS_SCHEMA {
                 let mut statement = tx
                     .prepare(&format!(
                         "SELECT {} FROM main.tasks {ID_ORDER}",

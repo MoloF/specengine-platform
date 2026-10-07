@@ -502,6 +502,7 @@ fn the_queue_tables_survive_a_stamp_change_and_a_rebuild() {
             &Decision {
                 decided_by: "Ann <a@example.org>".to_owned(),
                 note: None,
+                staged_at: None,
             },
             "2026-10-05T21:15:00Z",
         )
@@ -534,8 +535,9 @@ fn the_queue_tables_survive_a_stamp_change_and_a_rebuild() {
     assert_eq!(queue.dump().expect("queue dump"), dump, "reopened");
 }
 
-/// The queue's own schema steps (`PRAGMA user_version` 0 → 1 → 2 → 3 → 4,
-/// docs/features/task-package.md "Data"): a newer
+/// The queue's own schema steps (`PRAGMA user_version` 0 → 1 → 2 → 3 → 4
+/// → 5, docs/features/task-package.md and decision-staging.md "Data"): a
+/// newer
 /// version is refused (`SchemaTooNew`, nothing changed); IDs order by
 /// number and the next is the highest + 1, past `PR-9999` too.
 #[test]
@@ -581,7 +583,7 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .expect("user_version");
     assert_eq!(version, QUEUE_SCHEMA_VERSION);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 4);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 5);
     conn.execute(
         "UPDATE proposals SET id = 'PR-9999' WHERE id = 'PR-0002'",
         [],

@@ -2,14 +2,17 @@
 //! "Error body"), iteration 2 of the daemon: a read route answers any
 //! method but GET, `HEAD` included, with a 405 whose `Allow` is `GET` and
 //! whose message is `method <M> is not served on <path>: only GET is
-//! served here`; the decision route answers any method but POST with a 405
-//! whose `Allow` is `POST` and whose message says decisions are made on a
-//! terminal; an unknown path is a 404 for every method, no `Allow`; the
-//! fence's 403 carries no `Allow` whatever the method. None of them runs a
-//! call: a fresh `HOME` stays empty. M: `.head(only_get)` dropped (HEAD
-//! served by GET); the two 405 texts swapped; the fence back as a `layer`
-//! on the routes' router (axum adds its `Allow` to the fence's 403); the
-//! routes' fallback dropped (axum's bare 404).
+//! served here`; the decision route (the stage route since
+//! docs/features/decision-staging.md "Daemon") answers any method but POST
+//! and DELETE with a 405 whose `Allow` is `POST, DELETE` and whose message
+//! says a staged choice is confirmed on a terminal; its POST and DELETE
+//! without `Sec-Fetch-Site: same-origin` are a 403, no `Allow`; an unknown
+//! path is a 404 for every method, no `Allow`; the fence's 403 carries no
+//! `Allow` whatever the method. None of them runs a call: a fresh `HOME`
+//! stays empty. M: `.head(only_get)` dropped (HEAD served by GET); the two
+//! 405 texts swapped; the fence back as a `layer` on the routes' router
+//! (axum adds its `Allow` to the fence's 403); the routes' fallback dropped
+//! (axum's bare 404).
 
 mod common;
 
@@ -117,30 +120,43 @@ fn the_decision_route_answers_every_other_method_405_allow_post() {
     let a = scratch.repo("spec-a", "a", "main");
     let home = scratch.home("fresh");
     let server = Server::serve(&home, scratch.path(), &[&a]);
-    for method in ["GET", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"] {
-        let reply = server.request(method, DECISION, &[]);
-        let message = format!(
-            "method {method} is not served on {DECISION}: this path takes only POST \
-             (refused): decisions are made on a terminal"
-        );
-        assert_405(
-            &reply,
-            method,
-            "POST",
-            &message,
-            &format!("{method} {DECISION}"),
-        );
+    // A same-origin page's header too: the method decides, not the page.
+    for headers in [&[][..], &[("Sec-Fetch-Site", "same-origin")][..]] {
+        for method in ["GET", "HEAD", "PUT", "PATCH", "OPTIONS", "TRACE"] {
+            let reply = server.request(method, DECISION, headers);
+            let message = format!(
+                "method {method} is not served on {DECISION}: this path takes only POST \
+                 (stage a choice) and DELETE (unstage it); a staged choice is confirmed on a \
+                 terminal"
+            );
+            assert_405(
+                &reply,
+                method,
+                "POST, DELETE",
+                &message,
+                &format!("{method} {DECISION} {headers:?}"),
+            );
+        }
     }
-    // POST: the 403 naming the terminal command, no `Allow`.
-    let reply = server.request("POST", DECISION, &[]);
-    assert_eq!(reply.status, 403, "{}", reply.text());
-    assert_eq!(reply.header("allow"), None, "the POST's 403: {:?}", reply);
+    // POST and DELETE from no page (or the address bar's `none`): the 403
+    // that says it is no authentication, no `Allow`.
+    for method in ["POST", "DELETE"] {
+        for headers in [&[][..], &[("Sec-Fetch-Site", "none")][..]] {
+            let reply = server.request(method, DECISION, headers);
+            assert_eq!(reply.status, 403, "{method} {headers:?}: {}", reply.text());
+            assert_eq!(reply.header("allow"), None, "the {method}'s 403: {reply:?}");
+            assert!(reply.cors_headers().is_empty(), "{reply:?}");
+            assert_eq!(
+                reply.error_message(),
+                "staging needs a same-origin page (not authentication: ADR-0034)",
+                "{method} {headers:?}"
+            );
+        }
+    }
     assert!(
-        reply.error_message().contains("`spec approve PR-0001`"),
-        "{}",
-        reply.text()
+        snapshot(&home).is_empty(),
+        "a 405 or a refused POST, DELETE runs no call"
     );
-    assert!(snapshot(&home).is_empty(), "a 405 or the POST runs no call");
 }
 
 #[test]

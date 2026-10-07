@@ -81,6 +81,13 @@ const PINS: &[(&str, &str)] = &[
         "0.1.5",
         "fab9129ccbc96720e2edfaf3ae1b546427bbf64b62e7fb79ff795a856494bf48",
     ),
+    // docs/features/decision-staging.md "Description and interactions"
+    // (plugin 0.1.6, Q3): `ask-owner` "Whose words count": a staged choice
+    // is not an answer (PATCH).
+    (
+        "0.1.6",
+        "2c09c7549d1c78ed452af4e3e78d842bc8fc7a2d6b6a1bd2d38cc2b72b49d5e6",
+    ),
 ];
 
 /// The README's closed file set (its Files bullet), relative to `plugin/`.

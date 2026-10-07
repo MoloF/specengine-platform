@@ -11,8 +11,6 @@ import type {
   ApiError,
   BundleView,
   CheckReport,
-  Decision,
-  DecisionResult,
   GraphView,
   Inbox,
   NodeView,
@@ -20,6 +18,7 @@ import type {
   Proposal,
   QueueEvent,
   SearchResults,
+  StageChoice,
   TaskList,
   TaskNotFound,
   TaskPackage,
@@ -28,7 +27,8 @@ import type {
 
 // SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data", the
 // graph and the check `docs/features/ui-live.md` "Data", the tasks
-// `docs/features/ui-live-tasks.md` "Data"): `fetch` and `EventSource`, no package.
+// `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon"):
+// `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -38,10 +38,11 @@ import type {
 const API = "/api";
 
 /**
- * The queue's event types: the proposals' five
- * (`docs/canon/proposal-queue.md` "States and events"), then the tasks' nine
- * (`docs/canon/tasks.md` "Store"). An EventSource hands a named event only to a listener of that
- * name: a type missing here is never seen.
+ * The queue's event types: the proposals' seven
+ * (`docs/canon/proposal-queue.md` "States and events"; the stage's two after `apply_failed`:
+ * `docs/canon/decision-staging.md` "Queue"), then the tasks' nine (`docs/canon/tasks.md` "Store").
+ * An EventSource hands a named event only to a listener of that name: a type missing here is
+ * never seen.
  */
 export const QUEUE_EVENT_TYPES = [
   "proposal.created",
@@ -49,6 +50,8 @@ export const QUEUE_EVENT_TYPES = [
   "proposal.applied",
   "proposal.rejected",
   "proposal.apply_failed",
+  "proposal.staged",
+  "proposal.unstaged",
   "task.created",
   "task.planned",
   "task.approved",
@@ -96,6 +99,11 @@ function projectPath(project: string): string {
   return `/projects/${segment(project)}`;
 }
 
+/** A proposal's decision path: the stage's POST and DELETE. */
+function decisionPath(project: string, id: string): string {
+  return `${projectPath(project)}/proposals/${segment(id)}/decision`;
+}
+
 const NOT_JSON = Symbol("not JSON");
 
 function parsed(text: string): unknown {
@@ -119,6 +127,23 @@ export function errorBodyOf(value: unknown): ApiError | null {
   return typeof status === "number" && typeof message === "string" ? { status, message } : null;
 }
 
+/**
+ * The reason a refused write's review document gives: the last of its `notes` (the 409 of a stage
+ * on a proposal not open or changed since read, `docs/canon/decision-staging.md` "Daemon"); null
+ * for any other body.
+ */
+export function refusedReasonOf(value: unknown): string | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value) || !("notes" in value)) {
+    return null;
+  }
+  const notes: unknown = value.notes;
+  if (!Array.isArray(notes)) {
+    return null;
+  }
+  const last: unknown = notes.at(-1);
+  return typeof last === "string" && last !== "" ? last : null;
+}
+
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -129,14 +154,19 @@ interface Sent {
   signal?: AbortSignal;
 }
 
+/** A read, or one of the stage's two writes. */
+type Method = "GET" | "POST" | "DELETE";
+
 /**
  * One request. 2xx: its JSON document (the check's report whatever its verdict). A GET's 404 that
- * is not the error body: the exit-1 document, as data. Any other answer: a ClientError with the
- * HTTP status and the error body's `message` verbatim (another body: its text verbatim). No
- * answer: status 0. Aborted through `signal` (the read was superseded): the abort error as `fetch`
- * gave it, never a ClientError, since the daemon was not at fault.
+ * is not the error body: the exit-1 document, as data. A write's refusal carrying a review
+ * document (a stage's 409 or 404): a ClientError with the status and the document's last note.
+ * Any other answer: a ClientError with the HTTP status and the error body's `message` verbatim
+ * (another body: its text verbatim). No answer: status 0. Aborted through `signal` (the read was
+ * superseded): the abort error as `fetch` gave it, never a ClientError, since the daemon was not
+ * at fault.
  */
-async function request(method: "GET" | "POST", path: string, { body, signal }: Sent = {}): Promise<unknown> {
+async function request(method: Method, path: string, { body, signal }: Sent = {}): Promise<unknown> {
   const url = `${API}${path}`;
   const asked = `${method} ${url}`;
   let response: Response;
@@ -176,6 +206,10 @@ async function request(method: "GET" | "POST", path: string, { body, signal }: S
   }
   if (method === "GET" && response.status === 404 && value !== NOT_JSON) {
     return value;
+  }
+  const refused = method === "GET" ? null : refusedReasonOf(value);
+  if (refused !== null) {
+    throw new ClientError({ status: response.status, message: refused });
   }
   throw new ClientError({ status: response.status, message: text === "" ? emptyAnswer(asked, response) : text });
 }
@@ -287,9 +321,21 @@ export class HttpClient implements SpecEngineClient {
     return (await request("GET", `${projectPath(project)}/check`)) as CheckReport;
   }
 
-  /** Always refused by the daemon (403): its message names the terminal command. */
-  async decideProposal(project: string, id: string, decision: Decision): Promise<DecisionResult> {
-    return (await request("POST", `${projectPath(project)}/proposals/${segment(id)}/decision`, { body: JSON.stringify(decision) })) as DecisionResult;
+  /**
+   * Stages the owner's choice (`docs/canon/decision-staging.md` "Daemon"): a JSON body of exactly
+   * the stage's fields, then `updated_at` as this page read it; no AbortSignal (a write's answer is
+   * always taken). 200: the review document. A refusal carrying the document (409: not open, an
+   * orphan's approve, changed since read; 404): its last note; an error body (400 a flag's usage,
+   * 403 the fence, 503): its message verbatim.
+   */
+  async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> {
+    const body = JSON.stringify({ ...stage, updated_at: updatedAt });
+    return (await request("POST", decisionPath(project, id), { body })) as Proposal;
+  }
+
+  /** Drops the staged choice: DELETE on the same path, no body, no AbortSignal; 200 the review document. */
+  async unstageDecision(project: string, id: string): Promise<Proposal> {
+    return (await request("DELETE", decisionPath(project, id))) as Proposal;
   }
 
   /**

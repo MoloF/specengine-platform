@@ -71,6 +71,7 @@ fn owner(note: Option<&str>) -> Decision {
     Decision {
         decided_by: "Ann Owner <ann@example.org>".to_owned(),
         note: note.map(str::to_owned),
+        staged_at: None,
     }
 }
 
@@ -487,6 +488,7 @@ fn seen(status: ProposalStatus, updated_at: &str) -> Seen {
     Seen {
         status,
         updated_at: updated_at.to_owned(),
+        staged: None,
     }
 }
 
@@ -874,6 +876,7 @@ fn applied_with_takes_open_with_the_decision_and_approved_as_decided() {
     let other = Decision {
         decided_by: "Bob Other <bob@example.org>".to_owned(),
         note: Some("ignored".to_owned()),
+        staged_at: None,
     };
     let done = queue
         .applied_with(&second.id, "beef002", &other, T2)

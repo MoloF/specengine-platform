@@ -16,7 +16,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [crates/specengine-code/README.md](../crates/specengine-code/README.md) specengine-code — layer A: Rust and RON parsing, AST hash, markers, Bevy detector · crates/specengine-code · tier 1
 - [crates/specengine-core/README.md](../crates/specengine-core/README.md) specengine-core — the spec parser and the check · crates/specengine-core · tier 1
 - [crates/specengine-eval/README.md](../crates/specengine-eval/README.md) specengine-eval — the permanent measurement harness · crates/specengine-eval · tier 1
-- [crates/specengine-http/README.md](../crates/specengine-http/README.md) specengine-http -- the read surface over HTTP · crates/specengine-http · tier 1
+- [crates/specengine-http/README.md](../crates/specengine-http/README.md) specengine-http -- SpecEngine over HTTP · crates/specengine-http · tier 1
 - [crates/specengine-import/README.md](../crates/specengine-import/README.md) specengine-import — importers of existing spec corpora · crates/specengine-import · tier 1
 - [crates/specengine-mcp/README.md](../crates/specengine-mcp/README.md) specengine-mcp — the MCP server over stdio · crates/specengine-mcp · tier 1
 - [crates/specengine-model/README.md](../crates/specengine-model/README.md) specengine-model — the corpus model and the reference grammar · crates/specengine-model · tier 1

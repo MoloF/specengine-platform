@@ -1,12 +1,17 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { Proposal, QueueEvent } from "../api/types";
 import { aProposal, entryOf, noReview } from "../test/builders";
 import { renderApp } from "../test/render";
-import { argsOf, stubClient, type StubClient } from "../test/stubClient";
+import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 
-// AC-05, AC-07, AC-12, AC-13, AC-14 of docs/features/ui-shell.md, on a stub client.
+// AC-05, AC-07, AC-12, AC-13, AC-14 of docs/features/ui-shell.md, on a stub client; AC-14 of
+// docs/features/decision-staging.md (its UI part): Accept and Reject stage the owner's choice, one
+// call with the `updated_at` read, the proposal kept in the queue; the card shows the staged choice,
+// its terminal command with Copy (fixed words and a checked ID) and Unstage; a refusal stays in the
+// dialog in the daemon's words; Needs clarification and Defer send nothing; a stage changed outside
+// this tab is an alert.
 
 const QUEUE: Proposal[] = [
   aProposal({ id: "PR-4", severity: "low", created_at: "2026-10-01T09:00:00Z", summary: "Low one" }),
@@ -85,18 +90,18 @@ function isInert(element: Element): boolean {
   return false;
 }
 
-/** Holds the stub's next decision until `release()`; then it answers as the stub would. */
-function holdNextDecision(client: StubClient): { release: () => void } {
-  const answer = client.decideProposal.getMockImplementation();
+/** Holds the stub's next stage until `release()`; then it answers as the stub would. */
+function holdNextStage(client: StubClient): { release: () => void } {
+  const answer = client.stageDecision.getMockImplementation();
   if (answer === undefined) {
-    throw new Error("the stub has no decideProposal implementation");
+    throw new Error("the stub has no stageDecision implementation");
   }
   let release: () => void = () => undefined;
-  client.decideProposal.mockImplementationOnce(
-    (project, id, decision) =>
+  client.stageDecision.mockImplementationOnce(
+    (project, id, stage, updatedAt) =>
       new Promise((resolve, reject) => {
         release = () => {
-          answer(project, id, decision).then(resolve, reject);
+          answer(project, id, stage, updatedAt).then(resolve, reject);
         };
       }),
   );
@@ -139,7 +144,8 @@ describe("the Inbox on a stub client", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "High one" })).toBeTruthy();
     await screen.findByText("Title of R-1");
     expect(argsOf(client.getNode)).toContainEqual(["alpha", "R-1"]);
-    expect(client.decideProposal).not.toHaveBeenCalled();
+    expect(client.stageDecision).not.toHaveBeenCalled();
+    expect(client.unstageDecision).not.toHaveBeenCalled();
   });
 
   it("orders by severity, then age, unknown severity after low, raw text in a neutral badge (AC-07)", async () => {
@@ -345,17 +351,17 @@ describe("the card reads the review document (daemon-read \"Data\")", () => {
     expect(within(card).getByRole("button", { name: "Accept" }).getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("keeps the daemon's 403 in the dialog, its terminal command verbatim (AC-11)", async () => {
+  it("keeps the daemon's 403 in the dialog, in its own words (the fence: not authentication)", async () => {
     const { client } = await openInbox(QUEUE, "#/alpha/inbox/PR-2");
-    const message = "decisions are made on a terminal: `spec approve PR-2` or `spec reject PR-2 --reason …` in /work/alpha; nothing changed";
-    client.decideProposal.mockRejectedValueOnce(new ClientError({ status: 403, message }));
+    const message = "staging needs a same-origin page (not authentication: ADR-0034)";
+    client.stageDecision.mockRejectedValueOnce(new ClientError({ status: 403, message }));
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-2" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     const refusal = await within(dialog).findByRole("alert");
-    expect(refusal.textContent).toContain("The daemon refused the decision; nothing changed.");
+    expect(refusal.textContent).toContain("The daemon refused to stage it; nothing changed.");
     expect(within(refusal).getByText(message)).toBeTruthy();
     expect(screen.getByRole("dialog", { name: "Accept PR-2" })).toBe(dialog);
   });
@@ -379,11 +385,11 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     expect(task.getAttribute("href")).toBe("#/alpha/tasks/T-0107");
     expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Task");
     expect(within(card).queryByRole("link", { name: "T-0999" })).toBeNull();
-    // InboxEntry stays the daemon's 11 keys: the task comes only from the review document.
+    // InboxEntry stays the daemon's 12 keys: the task comes only from the review document.
     const inbox = await client.getInbox("alpha");
     expect(inbox.proposals.map((entry) => [entry.id, Object.keys(entry).length, "task_id" in entry])).toEqual([
-      ["PR-0041", 11, false],
-      ["PR-0044", 11, false],
+      ["PR-0041", 12, false],
+      ["PR-0044", 12, false],
     ]);
   });
 
@@ -692,23 +698,31 @@ describe("keyboard (AC-13)", () => {
   });
 });
 
-describe("decisions (AC-14)", () => {
+describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)", () => {
   async function openDialog(name: string, id = "PR-1") {
     const opened = await openInbox(QUEUE, `#/alpha/inbox/${id}`);
     const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     fireEvent.click(within(card).getByRole("button", { name }));
     const dialog = await screen.findByRole("dialog");
     return { ...opened, dialog };
   }
 
+  /** Opens Reject on PR-1 with a reason typed. */
+  async function openReject(reason = "Duplicate of PR-2") {
+    const opened = await openDialog("Reject");
+    fireEvent.change(within(opened.dialog).getByLabelText("Reason (required)"), { target: { value: reason } });
+    return opened;
+  }
+
   it("refuses an empty reason without calling, with a message", async () => {
     const { client, dialog } = await openDialog("Reject");
-    const submit = within(dialog).getByRole("button", { name: "Reject" });
+    const submit = within(dialog).getByRole("button", { name: "Stage reject" });
     fireEvent.click(submit);
     const missing = await within(dialog).findByText(/Write a reason/);
     const reason = within(dialog).getByLabelText("Reason (required)");
     expect(reason.getAttribute("aria-invalid")).toBe("true");
-    expect(client.decideProposal).not.toHaveBeenCalled();
+    expect(client.stageDecision).not.toHaveBeenCalled();
     // The alert speaks the message; the focused field does not repeat it until focus comes back.
     expect(missing.getAttribute("role")).toBe("alert");
     expect(document.activeElement).toBe(reason);
@@ -722,20 +736,32 @@ describe("decisions (AC-14)", () => {
     expect(reason.getAttribute("aria-describedby")).toBe(missing.id);
   });
 
-  it("refuses an empty clarification note without calling", async () => {
-    const { client, dialog } = await openDialog("Needs clarification");
-    expect(dialog.querySelector("h2")?.textContent).toBe("Needs clarification: PR-1");
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "   " } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Needs clarification" }));
-    expect(await within(dialog).findByText(/Write what the author should clarify/)).toBeTruthy();
-    expect(client.decideProposal).not.toHaveBeenCalled();
+  it.each([
+    ["Needs clarification", "Needs clarification: PR-1", "c"],
+    ["Defer", "Defer PR-1", "d"],
+  ])("%s sends nothing: the dialog says it is not built, has no field, and closes (AC-14 of decision-staging)", async (name, title, key) => {
+    const { client, dialog, list } = await openDialog(name);
+    expect(dialog.querySelector("h2")?.textContent).toBe(title);
+    expect(within(dialog).getByText("Not built yet: only Accept and Reject are staged")).toBeTruthy();
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+    expect(within(dialog).getAllByRole("button").map((button) => button.textContent)).toEqual(["Close"]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    fireEvent.keyDown(selectedOption(list), { key });
+    fireEvent.keyDown(within(await screen.findByRole("dialog", { name: title })).getByRole("button", { name: "Close" }), { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(client.stageDecision).not.toHaveBeenCalled();
+    expect(client.unstageDecision).not.toHaveBeenCalled();
   });
 
-  it("sends one call for a double click and for two submits in one tick", async () => {
-    const { client, dialog } = await openDialog("Reject");
-    const held = holdNextDecision(client);
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Duplicate of PR-2" } });
-    const submit = within(dialog).getByRole("button", { name: "Reject" });
+  it("sends one call for a double click and for two submits in one tick, with the updated_at it read", async () => {
+    const { client, dialog } = await openReject();
+    const held = holdNextStage(client);
+    const submit = within(dialog).getByRole("button", { name: "Stage reject" });
     const form = submit.closest("form");
     if (form === null) {
       throw new Error("no form");
@@ -747,10 +773,10 @@ describe("decisions (AC-14)", () => {
     fireEvent.click(submit);
     fireEvent.click(submit);
     await waitFor(() => {
-      expect(client.decideProposal).toHaveBeenCalled();
+      expect(client.stageDecision).toHaveBeenCalled();
     });
     expect(submit.getAttribute("aria-disabled")).toBe("true");
-    expect(submit.textContent).toBe("Sending");
+    expect(submit.textContent).toBe("Staging");
     fireEvent.click(submit);
     await act(async () => {
       held.release();
@@ -760,18 +786,17 @@ describe("decisions (AC-14)", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     // Everything the extra submits could have started has run by now: still the one call.
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
-    expect(client.decideProposal).toHaveBeenCalledWith("alpha", "PR-1", { decision: "reject", reason: "Duplicate of PR-2" });
+    expect(client.stageDecision.mock.calls).toEqual([["alpha", "PR-1", { decision: "reject", reason: "Duplicate of PR-2" }, "2026-10-01T10:00:00Z"]]);
   });
 
-  it("keeps the dialog open while a decision is sent: Esc, Cancel and the scrim do nothing", async () => {
-    const { client, dialog } = await openDialog("Defer");
-    const held = holdNextDecision(client);
-    const submit = within(dialog).getByRole("button", { name: "Defer" });
+  it("keeps the dialog open while a stage is sent: Esc, Cancel and the scrim do nothing", async () => {
+    const { client, dialog } = await openReject();
+    const held = holdNextStage(client);
+    const submit = within(dialog).getByRole("button", { name: "Stage reject" });
     submit.focus();
     fireEvent.click(submit);
     await waitFor(() => {
-      expect(client.decideProposal).toHaveBeenCalledTimes(1);
+      expect(client.stageDecision).toHaveBeenCalledTimes(1);
     });
     const cancel = within(dialog).getByRole("button", { name: "Cancel" });
     expect(submit.getAttribute("aria-disabled")).toBe("true");
@@ -797,27 +822,27 @@ describe("decisions (AC-14)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(politeRegion().textContent).toBe("Deferred PR-1.");
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
+    expect(politeRegion().textContent).toBe(`Staged Reject on PR-1 at ${STAGED_AT}; nothing is applied yet. Confirm it on a terminal.`);
+    expect(client.stageDecision).toHaveBeenCalledTimes(1);
   });
 
   it("opens no second decision while one is sent: the keys and the decision bar do nothing", async () => {
-    const { client, dialog, list } = await openDialog("Defer");
-    const held = holdNextDecision(client);
+    const { client, dialog, list } = await openReject();
+    const held = holdNextStage(client);
     const bar = within(screen.getByRole("article")).getByRole("group", { name: "Decide PR-1" });
-    fireEvent.click(within(bar).getByRole("button", { name: "Reject" }));
-    expect(screen.getAllByRole("dialog")).toEqual([dialog]);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
-    await waitFor(() => {
-      expect(client.decideProposal).toHaveBeenCalledTimes(1);
-    });
-    expect(within(bar).getByRole("button", { name: "Reject" }).getAttribute("aria-disabled")).toBe("true");
-    fireEvent.keyDown(selectedOption(list), { key: "c" });
-    fireEvent.keyDown(selectedOption(list), { key: "a" });
-    fireEvent.click(within(bar).getByRole("button", { name: "Reject" }));
     fireEvent.click(within(bar).getByRole("button", { name: "Accept" }));
     expect(screen.getAllByRole("dialog")).toEqual([dialog]);
-    expect(dialog.querySelector("h2")?.textContent).toBe("Defer PR-1");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
+    await waitFor(() => {
+      expect(client.stageDecision).toHaveBeenCalledTimes(1);
+    });
+    expect(within(bar).getByRole("button", { name: "Accept" }).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.keyDown(selectedOption(list), { key: "c" });
+    fireEvent.keyDown(selectedOption(list), { key: "a" });
+    fireEvent.click(within(bar).getByRole("button", { name: "Defer" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "Accept" }));
+    expect(screen.getAllByRole("dialog")).toEqual([dialog]);
+    expect(dialog.querySelector("h2")?.textContent).toBe("Reject PR-1");
     await act(async () => {
       held.release();
       await Promise.resolve();
@@ -825,77 +850,69 @@ describe("decisions (AC-14)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
-    expect(client.decideProposal).toHaveBeenCalledWith("alpha", "PR-1", { decision: "defer", note: null });
+    expect(client.stageDecision).toHaveBeenCalledTimes(1);
   });
 
   it("speaks the result from a live region the open dialog leaves out of the inert page", async () => {
-    const { dialog, list } = await openDialog("Defer");
+    const { dialog, list } = await openReject();
     expect(isInert(list)).toBe(true);
     expect(isInert(politeRegion())).toBe(false);
     expect(isInert(assertiveRegion())).toBe(false);
     expect(dialog.closest("[data-dialog-host]")?.contains(politeRegion())).toBe(false);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
     await waitFor(() => {
-      expect(politeRegion().textContent).toBe("Deferred PR-1.");
+      expect(politeRegion().textContent).toMatch(/^Staged Reject on PR-1 /);
     });
     expect(isInert(politeRegion())).toBe(false);
     expect(isInert(list)).toBe(false);
   });
 
-  it("announces an accepted proposal with the commit's sha and subject and focuses the next item", async () => {
-    const { client, dialog, list } = await openDialog("Accept");
-    fireEvent.change(within(dialog).getByLabelText("Note for the record (optional)"), { target: { value: "ok" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
+  it("stages a question's approve with no option: the dialog shows its working answer as the choice", async () => {
+    const question = aProposal({ id: "PR-0008", kind: "question", summary: "Does regeneration wait for rest?", working_answer: "Yes, 1.5 s" });
+    const { client } = await openInbox([question], "#/alpha/inbox/PR-0008");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Accept PR-0008" });
+    expect(within(dialog).queryAllByRole("radio")).toEqual([]);
+    expect(within(dialog).getByText("The working answer is recorded:")).toBeTruthy();
+    expect(within(dialog).getByText("Yes, 1.5 s")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(client.decideProposal).toHaveBeenCalledWith("alpha", "PR-1", { decision: "accept", option: 1, note: "ok" });
-    expect(politeRegion().textContent).toBe('Accepted PR-1: committed c0ffee1 "spec: apply PR-1".');
-    await waitFor(() => {
-      expect(optionIds(list)).not.toContain("PR-1");
-    });
-    expect(document.activeElement).toBe(selectedOption(list));
-    expect(selectedOption(list).dataset.proposal).toBe("PR-2");
-  });
-
-  it("drops an accepted proposal from the list at once, before the inbox is read again", async () => {
-    const { client, dialog, list } = await openDialog("Accept");
-    client.getInbox.mockImplementation(() => new Promise(() => undefined));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    await waitFor(() => {
-      expect(optionIds(list)).toEqual(["PR-2", "PR-4", "PR-3"]);
-    });
-    expect(client.getInbox).toHaveBeenCalledTimes(2);
-    expect(list.querySelector('[data-tone="proposal-applied"]')).toBeNull();
+    expect(client.stageDecision.mock.calls).toEqual([
+      ["alpha", "PR-0008", { decision: "approve", option: null, answer: null, canon: null, note: null }, "2026-10-01T10:00:00Z"],
+    ]);
+    const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
+    expect(within(staged).getByText("The working answer")).toBeTruthy();
   });
 
   it("keeps the dialog and the typed text when the daemon refuses, showing its words", async () => {
     const { client, dialog } = await openDialog("Reject");
-    const message = "PR-1 cannot be rejected: the worktree is gone (exit 2)";
-    client.decideProposal.mockRejectedValueOnce(new ClientError({ status: 422, message }));
+    const message = "spec: --reason: over 4096 bytes";
+    client.stageDecision.mockRejectedValueOnce(new ClientError({ status: 400, message }));
     const reason = within(dialog).getByRole("textbox");
     fireEvent.change(reason, { target: { value: "Out of scope for T-7" } });
-    const submit = within(dialog).getByRole("button", { name: "Reject" });
+    const submit = within(dialog).getByRole("button", { name: "Stage reject" });
     submit.focus();
     fireEvent.click(submit);
     expect(await within(dialog).findByText(message)).toBeTruthy();
     expect(screen.getByRole("dialog")).toBe(dialog);
     expect((reason as HTMLTextAreaElement).value).toBe("Out of scope for T-7");
     expect(submit.getAttribute("aria-disabled")).toBe("false");
-    expect(submit.textContent).toBe("Reject");
+    expect(submit.textContent).toBe("Stage reject");
+    // Nothing changed: no read again (only a 409 or a 404 reads the queue again).
+    expect(client.getInbox).toHaveBeenCalledTimes(1);
   });
 
   it("puts focus back in the text field after a refusal, where Esc still closes the dialog", async () => {
     const { client, dialog } = await openDialog("Reject");
-    const message = "PR-1 cannot be rejected: the index is being rebuilt";
-    client.decideProposal.mockRejectedValueOnce(new ClientError({ status: 503, message }));
+    const message = "spec: the queue cannot be read: database is locked";
+    client.stageDecision.mockRejectedValueOnce(new ClientError({ status: 503, message }));
     const reason = within(dialog).getByRole("textbox");
     fireEvent.change(reason, { target: { value: "Out of scope" } });
-    const submit = within(dialog).getByRole("button", { name: "Reject" });
+    const submit = within(dialog).getByRole("button", { name: "Stage reject" });
     submit.focus();
     fireEvent.click(submit);
     const refusal = (await within(dialog).findByText(message)).closest('[role="alert"]');
@@ -914,48 +931,46 @@ describe("decisions (AC-14)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
+    expect(client.stageDecision).toHaveBeenCalledTimes(1);
   });
 
-  it("on 409 closes the dialog, shows the message, reads the inbox again and the proposal is gone", async () => {
-    const { client, dialog, list } = await openDialog("Defer");
-    const message = "PR-1 is no longer open: another session applied it as 4be1f0c";
-    client.decideProposal.mockImplementationOnce(() => {
-      client.state.proposals = client.state.proposals.filter((proposal) => proposal.id !== "PR-1");
+  it("on 409 keeps the dialog with the daemon's words, reads the inbox and the proposal again, shows the new version; a new submit sends its updated_at", async () => {
+    const { client, dialog } = await openReject("Out of scope");
+    const message = "`PR-1` changed since it was read (updated 2026-10-06T09:00:00Z): read it again; nothing changed";
+    client.stageDecision.mockImplementationOnce(() => {
+      // Another page staged an approve on PR-1 meanwhile.
+      client.state.proposals = client.state.proposals.map((proposal) =>
+        proposal.id === "PR-1"
+          ? {
+              ...proposal,
+              staged: { decision: "approve", option: 0, answer: null, canon: null, note: null, span_hash: null },
+              staged_at: "2026-10-06T09:00:00Z",
+              updated_at: "2026-10-06T09:00:00Z",
+            }
+          : proposal,
+      );
       return Promise.reject(new ClientError({ status: 409, message }));
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
+    const refusal = (await within(dialog).findByText(message)).closest('[role="alert"]');
+    expect(refusal?.textContent).toContain("The daemon refused to stage it; nothing changed.");
+    expect(await within(dialog).findByText("This proposal changed since you opened it")).toBeTruthy();
+    expect(within(dialog).getByText("2026-10-06T09:00:00Z")).toBeTruthy();
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(client.getInbox).toHaveBeenCalledTimes(2);
+    expect(argsOf(client.getProposal).filter(([, id]) => id === "PR-1")).toHaveLength(2);
+    expect(within(dialog).getByLabelText("Reason (required)")).toHaveProperty("value", "Out of scope");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(await screen.findByText(message)).toBeTruthy();
-    expect(assertiveRegion().textContent).toBe(`PR-1 was decided elsewhere; the inbox is read again. ${message}`);
-    await waitFor(() => {
-      expect(client.getInbox).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => {
-      expect(optionIds(list)).not.toContain("PR-1");
-    });
+    expect(client.stageDecision.mock.calls.map((call) => call[3])).toEqual(["2026-10-01T10:00:00Z", "2026-10-06T09:00:00Z"]);
+    // Never a task or spec read: a stage changes neither.
+    expect(client.getTasks).not.toHaveBeenCalled();
+    expect(client.getTree).not.toHaveBeenCalled();
   });
 
-  it("keeps a deferred proposal in the queue with its new status", async () => {
-    const { client, dialog } = await openDialog("Defer");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    expect(client.decideProposal).toHaveBeenCalledWith("alpha", "PR-1", { decision: "defer", note: null });
-    expect(politeRegion().textContent).toBe("Deferred PR-1.");
-    const list = screen.getByRole("listbox");
-    await waitFor(() => {
-      const deferred = within(list)
-        .getAllByRole("option")
-        .find((option) => option.dataset.proposal === "PR-1");
-      expect(deferred?.querySelector('[data-tone="proposal-deferred"]')).not.toBeNull();
-    });
-  });
-
-  /** From Tasks into the Inbox (a history entry), a Defer on PR-1 sent, then browser Back to Tasks. */
+  /** From Tasks into the Inbox (a history entry), a reject staged on PR-1, then browser Back to Tasks. */
   async function leaveWhileSending(client: StubClient) {
     renderApp(client, "#/alpha/tasks");
     await screen.findByRole("heading", { level: 1, name: "Tasks" });
@@ -964,11 +979,12 @@ describe("decisions (AC-14)", () => {
     const card = await screen.findByRole("article");
     // A decision needs the review document: its sections are read before the buttons act.
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    fireEvent.click(within(card).getByRole("button", { name: "Defer" }));
-    const dialog = await screen.findByRole("dialog", { name: "Defer PR-1" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reject PR-1" });
+    fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "No" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
     await waitFor(() => {
-      expect(client.decideProposal).toHaveBeenCalledTimes(1);
+      expect(client.stageDecision).toHaveBeenCalledTimes(1);
     });
     expect(window.location.hash).toBe("#/alpha/inbox");
     await goBack();
@@ -981,28 +997,28 @@ describe("decisions (AC-14)", () => {
     return tasks;
   }
 
-  it("speaks a decision answered after the owner went Back, and neither moves the hash nor focus", async () => {
+  it("speaks a stage answered after the owner went Back, and neither moves the hash nor focus", async () => {
     const client = stubClient(QUEUE);
-    const held = holdNextDecision(client);
+    const held = holdNextStage(client);
     const tasks = await leaveWhileSending(client);
     await act(async () => {
       held.release();
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(politeRegion().textContent).toBe("Deferred PR-1.");
+      expect(politeRegion().textContent).toMatch(/^Staged Reject on PR-1 /);
     });
     expect(window.location.hash).toBe("#/alpha/tasks");
     expect(screen.getByRole("heading", { level: 1, name: "Tasks" })).toBe(tasks);
     expect(document.activeElement).toBe(tasks);
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
+    expect(client.stageDecision).toHaveBeenCalledTimes(1);
   });
 
   it("speaks a refusal answered after the owner went Back, in the daemon's words", async () => {
     const client = stubClient(QUEUE);
-    const message = "PR-1 cannot be deferred: the index is being rebuilt";
+    const message = "spec: the queue cannot be read: database is locked";
     let refuse: () => void = () => undefined;
-    client.decideProposal.mockImplementationOnce(
+    client.stageDecision.mockImplementationOnce(
       () =>
         new Promise((_resolve, reject) => {
           refuse = () => {
@@ -1016,7 +1032,7 @@ describe("decisions (AC-14)", () => {
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(assertiveRegion().textContent).toBe(`The daemon refused the decision on PR-1; nothing changed. ${message}`);
+      expect(assertiveRegion().textContent).toBe(`The daemon refused to stage the decision on PR-1; nothing changed. ${message}`);
     });
     expect(window.location.hash).toBe("#/alpha/tasks");
     expect(document.activeElement).toBe(tasks);
@@ -1034,22 +1050,7 @@ describe("decisions (AC-14)", () => {
     const list = await screen.findByRole("listbox");
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    fireEvent.click(within(card).getByRole("button", { name: "Defer" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Defer" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(selectedOption(list));
-    });
-    expect(client.getInbox).toHaveBeenCalledTimes(2);
-    fireEvent.keyDown(selectedOption(list), { key: "k" });
-    await waitFor(() => {
-      expect(selectedOption(list).dataset.proposal).toBe("PR-1");
-    });
-    await waitFor(() => {
-      expect(within(screen.getByRole("article")).getByRole("button", { name: "Accept" }).getAttribute("aria-disabled")).toBe("false");
-    });
+    selectedOption(list).focus();
     fireEvent.keyDown(selectedOption(list), { key: "a" });
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-1" });
     const opened = within(dialog).getByRole("radio", { name: /Spec to code/ });
@@ -1087,49 +1088,364 @@ describe("decisions (AC-14)", () => {
     const recommended = within(dialog).getByRole("radio", { name: /Drop the rule/ });
     expect((recommended as HTMLInputElement).checked).toBe(true);
     expect(document.activeElement).toBe(recommended);
-    expect(client.decideProposal).toHaveBeenCalledTimes(1);
+    expect(client.stageDecision).not.toHaveBeenCalled();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(client.decideProposal).toHaveBeenCalledTimes(2);
-    expect(client.decideProposal).toHaveBeenLastCalledWith("alpha", "PR-1", {
-      decision: "accept",
-      option: 2,
-      note: "Matches the tide table",
-    });
+    expect(client.stageDecision.mock.calls).toEqual([
+      ["alpha", "PR-1", { decision: "approve", option: 2, answer: null, canon: null, note: "Matches the tide table" }, "2026-10-01T11:00:00Z"],
+    ]);
   });
 
   it("shows no change notice for a re-read that leaves the open proposal as it was", async () => {
-    const { client, list } = await openInbox(QUEUE, "#/alpha/inbox/PR-2");
-    let answer: () => void = () => undefined;
-    client.getInbox.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          answer = () => {
-            // Equal proposals, new objects; the note shows that the read has landed.
-            resolve({ proposals: client.state.proposals.map(entryOf), notes: ["Read again."] });
-          };
-        }),
-    );
+    const client = stubClient(QUEUE);
+    let emit: (event: QueueEvent) => void = () => undefined;
+    client.subscribe = (_project, onEvent) => {
+      emit = onEvent;
+      return () => undefined;
+    };
+    renderApp(client, "#/alpha/inbox/PR-2");
+    const list = await screen.findByRole("listbox");
     const card = await screen.findByRole("article");
-    fireEvent.click(within(card).getByRole("button", { name: "Defer" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Defer" }));
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    selectedOption(list).focus();
+    fireEvent.keyDown(selectedOption(list), { key: "r" });
+    const dialog = await screen.findByRole("dialog", { name: "Reject PR-2" });
+    // Equal proposals, new objects; the note shows that the read has landed.
+    client.getInbox.mockImplementationOnce(() => Promise.resolve({ proposals: client.state.proposals.map(entryOf), notes: ["Read again."] }));
+    act(() => {
+      emit({ seq: 8, type: "proposal.apply_failed", payload: { id: "PR-2", step: 3, reason: "elsewhere" } });
+    });
+    expect(await screen.findByText("Read again.")).toBeTruthy();
+    await waitFor(() => {
+      expect(argsOf(client.getProposal).filter(([, id]) => id === "PR-2")).toHaveLength(2);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(within(dialog).queryByText("This proposal changed since you opened it")).toBeNull();
+    expect(dialog.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+/** A queue of PR-NNNN proposals: a discrepancy with three options, and a plain one. */
+const STAGING: Proposal[] = [
+  aProposal({
+    id: "PR-0004",
+    severity: "high",
+    kind: "discrepancy",
+    summary: "Stamina cap",
+    options: [
+      { label: "Code to spec", effect: "Fix the code", price: "One test" },
+      { label: "Spec to code", effect: "Edit the rule", price: "Balance changes" },
+      { label: "Keep the cap", effect: "Both stay", price: "A note" },
+    ],
+    recommendation: 0,
+  }),
+  aProposal({ id: "PR-0005", severity: "low", summary: "Plain one" }),
+];
+
+const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+
+function stubClipboard() {
+  const writeText = vi.fn(() => Promise.resolve());
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  return writeText;
+}
+
+function restoreClipboard() {
+  if (clipboard === undefined) {
+    Reflect.deleteProperty(navigator, "clipboard");
+  } else {
+    Object.defineProperty(navigator, "clipboard", clipboard);
+  }
+}
+
+/** The selected card's staged-choice region, once shown. */
+async function stagedRegion(): Promise<HTMLElement> {
+  return within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
+}
+
+describe("a staged choice on the card (AC-14 of decision-staging)", () => {
+  it("accept, option [2], a note: one stage, exactly that choice; the card says Staged <at> and the command, Copy, Unstage; still listed", async () => {
+    const writeText = stubClipboard();
+    try {
+      const { client, list } = await openInbox(STAGING, "#/alpha/inbox/PR-0004");
+      const card = await screen.findByRole("article");
+      await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+      const trigger = within(card).getByRole("button", { name: "Accept" });
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = await screen.findByRole("dialog", { name: "Accept PR-0004" });
+      expect(within(dialog).getByText(/Stages your approval; nothing is applied here/)).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole("radio", { name: /^\[2\] Keep the cap/ }));
+      fireEvent.change(within(dialog).getByLabelText("Note for the record (optional)"), { target: { value: "keep the cap" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+      expect(client.stageDecision.mock.calls).toEqual([
+        ["alpha", "PR-0004", { decision: "approve", option: 2, answer: null, canon: null, note: "keep the cap" }, "2026-10-01T10:00:00Z"],
+      ]);
+      expect(politeRegion().textContent).toBe(`Staged Accept on PR-0004 at ${STAGED_AT}; nothing is applied yet. Confirm it on a terminal: spec approve PR-0004.`);
+      const staged = await stagedRegion();
+      expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec approve PR-0004`);
+      expect(staged.querySelector("time")?.getAttribute("datetime")).toBe(STAGED_AT);
+      expect(within(staged).getByText("[2]").closest("dd")?.textContent).toBe("[2] Keep the cap");
+      expect(within(staged).getByText("keep the cap")).toBeTruthy();
+      fireEvent.click(within(staged).getByRole("button", { name: /^Copy/ }));
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledTimes(1);
+      });
+      expect(writeText.mock.calls).toEqual([["spec approve PR-0004"]]);
+      expect(within(staged).getByRole("button", { name: "Unstage PR-0004" })).toBeTruthy();
+      // Still listed, marked Staged; focus back on the button that opened the dialog.
+      expect(optionIds(list)).toEqual(["PR-0004", "PR-0005"]);
+      const item = within(list).getAllByRole("option")[0];
+      expect(item?.querySelector(".staged-mark")?.textContent).toBe("Staged");
+      expect(document.activeElement).toBe(trigger);
+      expect(client.unstageDecision).not.toHaveBeenCalled();
+    } finally {
+      restoreClipboard();
+    }
+  });
+
+  it("keeps a staged proposal in the list at once, before the inbox is read again", async () => {
+    const { client, list } = await openInbox(STAGING, "#/alpha/inbox/PR-0004");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    client.getInbox.mockImplementation(() => new Promise(() => undefined));
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reject PR-0004" });
+    fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "duplicate of PR-0003" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     await waitFor(() => {
+      expect(within(list).getAllByRole("option")[0]?.querySelector(".staged-mark")).not.toBeNull();
+    });
+    expect(optionIds(list)).toEqual(["PR-0004", "PR-0005"]);
+    expect(client.getInbox).toHaveBeenCalledTimes(2);
+    const staged = await stagedRegion();
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec reject PR-0004`);
+    expect(within(staged).getByText("duplicate of PR-0003")).toBeTruthy();
+  });
+
+  it("Unstage: one DELETE, the staged choice gone, the proposal still listed, focus on its item", async () => {
+    const queue = STAGING.map((proposal) =>
+      proposal.id === "PR-0004" ? { ...proposal, staged: { decision: "reject" as const, reason: "dup" }, staged_at: "2026-10-06T08:00:00Z" } : proposal,
+    );
+    const { client, list } = await openInbox(queue, "#/alpha/inbox/PR-0004");
+    const staged = await stagedRegion();
+    expect(within(list).getAllByRole("option")[0]?.querySelector(".staged-mark")).not.toBeNull();
+    const unstage = within(staged).getByRole("button", { name: "Unstage PR-0004" });
+    unstage.focus();
+    fireEvent.click(unstage);
+    await waitFor(() => {
+      expect(within(screen.getByRole("article")).queryByRole("region", { name: "Staged decision" })).toBeNull();
+    });
+    expect(client.unstageDecision.mock.calls).toEqual([["alpha", "PR-0004"]]);
+    expect(client.stageDecision).not.toHaveBeenCalled();
+    expect(optionIds(list)).toEqual(["PR-0004", "PR-0005"]);
+    await waitFor(() => {
       expect(document.activeElement).toBe(selectedOption(list));
     });
-    fireEvent.keyDown(selectedOption(list), { key: "r" });
-    const dialog = await screen.findByRole("dialog", { name: "Reject PR-4" });
+    expect(politeRegion().textContent).toBe("Unstaged the decision on PR-0004; nothing is staged for it now.");
+    expect(within(list).getAllByRole("option")[0]?.querySelector(".staged-mark")).toBeNull();
+  });
+
+  it("shows a refused unstage in the daemon's words on the card", async () => {
+    const queue = STAGING.map((proposal) =>
+      proposal.id === "PR-0004" ? { ...proposal, staged: { decision: "reject" as const, reason: "dup" }, staged_at: "2026-10-06T08:00:00Z" } : proposal,
+    );
+    const { client } = await openInbox(queue, "#/alpha/inbox/PR-0004");
+    const message = "`PR-0004` is approved, not open: nothing changed";
+    client.unstageDecision.mockRejectedValueOnce(new ClientError({ status: 409, message }));
+    fireEvent.click(within(await stagedRegion()).getByRole("button", { name: "Unstage PR-0004" }));
+    const alert = await within(await stagedRegion()).findByRole("alert");
+    expect(alert.textContent).toBe(`The daemon refused to unstage it; nothing changed.${message}`);
+    expect(assertiveRegion().textContent).toBe(`The daemon refused to unstage PR-0004; nothing changed. ${message}`);
+  });
+
+  it("offers no command and no Copy for an ID not of the form PR-NNNN: Copy never holds free text", async () => {
+    const odd = aProposal({ id: "PR-1; rm -rf ~", summary: "Odd", staged: { decision: "reject", reason: "spec approve PR-0004" }, staged_at: STAGED_AT });
+    await openInbox([odd], "#/alpha/inbox/PR-1%3B%20rm%20-rf%20~");
+    const staged = await stagedRegion();
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: no command is offered for this ID.`);
+    expect(within(staged).queryByRole("button", { name: /^Copy/ })).toBeNull();
+    expect(staged.querySelector("code")).toBeNull();
+    expect(within(staged).getByRole("button", { name: /^Unstage/ })).toBeTruthy();
+  });
+
+  it("a staged approve's dialog names the choice it replaces", async () => {
+    const queue = STAGING.map((proposal) =>
+      proposal.id === "PR-0004"
+        ? { ...proposal, staged: { decision: "approve" as const, option: 0, answer: null, canon: null, note: null, span_hash: null }, staged_at: "2026-10-06T08:00:00Z" }
+        : proposal,
+    );
+    await openInbox(queue, "#/alpha/inbox/PR-0004");
+    await stagedRegion();
+    fireEvent.click(within(screen.getByRole("article")).getByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reject PR-0004" });
+    expect(within(dialog).getByText(/It replaces the choice staged/).textContent).toBe("It replaces the choice staged 2026-10-06T08:00:00Z.");
+  });
+});
+
+describe("a stage changed outside this tab (AC-14 of decision-staging)", () => {
+  function live(proposals: Proposal[]) {
+    const client = stubClient(proposals);
+    let emit: (event: QueueEvent) => void = () => undefined;
+    client.subscribe = (_project, onEvent) => {
+      emit = onEvent;
+      return () => undefined;
+    };
+    return {
+      client,
+      emit: (event: QueueEvent) => {
+        act(() => {
+          emit(event);
+        });
+      },
+    };
+  }
+
+  const OUTSIDE = { decision: "approve", option: 1, answer: null, canon: null, note: "from elsewhere", span_hash: null };
+
+  it("an outside stage raises an alert naming the proposal and its time; Dismiss takes it away", async () => {
+    const { client, emit } = live(STAGING);
+    renderApp(client, "#/alpha/inbox/PR-0005");
+    await screen.findByRole("article");
+    emit({ seq: 30, type: "proposal.staged", payload: { id: "PR-0004", staged: OUTSIDE, staged_at: "2026-10-06T09:20:00Z" } });
+    const alert = await screen.findByText("The staged decision on PR-0004 changed outside this tab");
+    const notice = alert.closest<HTMLElement>('[role="alert"]');
+    if (notice === null) {
+      throw new Error("the alert has no role");
+    }
+    expect(notice.textContent).toContain("2026-10-06T09:20:00Z");
+    expect(within(notice).getByRole("link", { name: "Show PR-0004 in the Inbox" }).getAttribute("href")).toBe("#/alpha/inbox/PR-0004");
+    fireEvent.click(within(notice).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => {
+      expect(screen.queryByText("The staged decision on PR-0004 changed outside this tab")).toBeNull();
+    });
+  });
+
+  it("an outside unstage raises one too", async () => {
+    const { client, emit } = live(STAGING);
+    renderApp(client, "#/alpha/inbox");
+    await screen.findByRole("article");
+    emit({ seq: 31, type: "proposal.unstaged", payload: { id: "PR-0005" } });
+    const alert = (await screen.findByText("The staged decision on PR-0005 was removed outside this tab")).closest('[role="alert"]');
+    expect(alert?.textContent).toContain("Nothing is staged for it now.");
+  });
+
+  it("this tab's own stage and unstage raise none, their events before or after the answer", async () => {
+    const { client, emit } = live(STAGING);
+    renderApp(client, "#/alpha/inbox/PR-0004");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    // The event comes before the answer: held until it has been emitted.
+    const held = holdNextStage(client);
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reject PR-0004" });
+    fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "dup" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
+    await waitFor(() => {
+      expect(client.stageDecision).toHaveBeenCalledTimes(1);
+    });
+    emit({ seq: 40, type: "proposal.staged", payload: { id: "PR-0004", staged: { decision: "reject", reason: "dup" }, staged_at: STAGED_AT } });
     await act(async () => {
-      answer();
+      held.release();
       await Promise.resolve();
     });
-    expect(await screen.findByText("Read again.")).toBeTruthy();
-    expect(within(dialog).queryByText("This proposal changed since you opened it")).toBeNull();
-    expect(dialog.querySelector('[role="alert"]')).toBeNull();
+    await stagedRegion();
+    // The unstage's event comes after its answer.
+    fireEvent.click(within(await stagedRegion()).getByRole("button", { name: "Unstage PR-0004" }));
+    await waitFor(() => {
+      expect(client.unstageDecision).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(within(screen.getByRole("article")).queryByRole("region", { name: "Staged decision" })).toBeNull();
+    });
+    emit({ seq: 41, type: "proposal.unstaged", payload: { id: "PR-0004" } });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText(/outside this tab/)).toBeNull();
+    // A later stage of the same choice elsewhere is outside again: each write accounts for one event.
+    emit({ seq: 42, type: "proposal.staged", payload: { id: "PR-0004", staged: { decision: "reject", reason: "dup" }, staged_at: "2026-10-06T09:30:00Z" } });
+    expect(await screen.findByText("The staged decision on PR-0004 changed outside this tab")).toBeTruthy();
+  });
+
+  it("a stage of another choice than this tab sent is outside, even while its own is in flight", async () => {
+    const { client, emit } = live(STAGING);
+    renderApp(client, "#/alpha/inbox/PR-0004");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    holdNextStage(client);
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reject PR-0004" });
+    fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "dup" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
+    await waitFor(() => {
+      expect(client.stageDecision).toHaveBeenCalledTimes(1);
+    });
+    emit({ seq: 50, type: "proposal.staged", payload: { id: "PR-0004", staged: OUTSIDE, staged_at: "2026-10-06T09:20:00Z" } });
+    expect(await screen.findByText("The staged decision on PR-0004 changed outside this tab")).toBeTruthy();
+  });
+
+  it("an unstage that found nothing staged (200, no event) awaits no event: a later outside unstage still raises an alert", async () => {
+    const queue = STAGING.map((proposal) =>
+      proposal.id === "PR-0004" ? { ...proposal, staged: { decision: "reject" as const, reason: "dup" }, staged_at: "2026-10-06T08:00:00Z" } : proposal,
+    );
+    const { client, emit } = live(queue);
+    renderApp(client, "#/alpha/inbox/PR-0004");
+    await within(await screen.findByRole("article")).findByRole("heading", { level: 3, name: "Provenance" });
+    const staged = await stagedRegion();
+    // Another page unstages PR-0004; the re-read of it is slow, so the card still shows the stage.
+    const read = client.getProposal.getMockImplementation();
+    let release: () => void = () => undefined;
+    client.getProposal.mockImplementationOnce(
+      (project, id) =>
+        new Promise((resolve) => {
+          release = () => {
+            void read?.(project, id).then(resolve);
+          };
+        }),
+    );
+    client.state.proposals = client.state.proposals.map((proposal) => (proposal.id === "PR-0004" ? { ...proposal, staged: null, staged_at: null } : proposal));
+    emit({ seq: 70, type: "proposal.unstaged", payload: { id: "PR-0004" } });
+    expect(await screen.findByText("The staged decision on PR-0004 was removed outside this tab")).toBeTruthy();
+    // The owner unstages from the card read before: the daemon finds nothing staged, 200, no event.
+    fireEvent.click(within(staged).getByRole("button", { name: "Unstage PR-0004" }));
+    await waitFor(() => {
+      expect(client.unstageDecision).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(within(screen.getByRole("article")).queryByRole("region", { name: "Staged decision" })).toBeNull();
+    });
+    // Elsewhere a stage, then its removal: both are outside this tab, both said.
+    emit({ seq: 71, type: "proposal.staged", payload: { id: "PR-0004", staged: OUTSIDE, staged_at: "2026-10-06T09:40:00Z" } });
+    expect(await screen.findByText("The staged decision on PR-0004 changed outside this tab")).toBeTruthy();
+    emit({ seq: 72, type: "proposal.unstaged", payload: { id: "PR-0004" } });
+    expect(await screen.findByText("The staged decision on PR-0004 was removed outside this tab")).toBeTruthy();
+  });
+
+  it("other events raise none: an approval on a terminal clears a stage without an unstage event", async () => {
+    const { client, emit } = live(STAGING);
+    renderApp(client, "#/alpha/inbox");
+    await screen.findByRole("article");
+    emit({ seq: 60, type: "proposal.approved", payload: { id: "PR-0004", staged_at: STAGED_AT } });
+    emit({ seq: 61, type: "proposal.created", payload: { id: "PR-0006" } });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText(/outside this tab/)).toBeNull();
   });
 });

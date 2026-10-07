@@ -253,7 +253,8 @@ export function link(fields: Omit<MockLink, "reason" | "to" | "state"> & Partial
 
 /**
  * A queued proposal: its whole review document in the review JSON's key order, omitted keys null
- * or empty as it gives them (an update's `target_ids` its `[target_id]`; `task_id` null, unbound).
+ * or empty as it gives them (an update's `target_ids` its `[target_id]`; `task_id` null, unbound;
+ * nothing staged).
  */
 export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | "created_at"> & Partial<StoredReview>): MockProposal {
   const { id, project, kind, created_at, ...given } = fields;
@@ -301,6 +302,8 @@ export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | 
       record_text: null,
       choice: null,
       task_id: null,
+      staged: null,
+      staged_at: null,
       notes: [],
       ...given,
     },
@@ -333,6 +336,7 @@ export function inboxEntryOf(review: StoredReview): InboxEntry {
     severity: review.severity,
     summary: review.summary === null ? null : inboxLine(review.summary),
     record_id: review.record_id,
+    staged_at: review.staged_at,
   };
 }
 
@@ -381,6 +385,8 @@ export function noReview(id: string): Proposal {
     record_text: null,
     choice: null,
     task_id: null,
+    staged: null,
+    staged_at: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

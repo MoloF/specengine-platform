@@ -14,12 +14,13 @@
 //! previewed by its own steps 2–6 ([`crate::create`]): `applies` or
 //! `unavailable`; its diff is from an empty base.
 //! `--brief` ([`review_brief`], MCP `get_proposal`): the same document,
-//! brief.
+//! brief. A staged approve whose `span_hash` is not the target's now gets
+//! the staleness note (canon `decision-staging`, "Staleness").
 
-use specengine_store::{GitEnv, Proposal, ProposalStatus};
+use specengine_store::{GitEnv, Proposal, ProposalStatus, Stage};
 
 use crate::create::prepare_file;
-use crate::preflight::{completing, prepare, trailer_lookup};
+use crate::preflight::{completing, prepare_spanned, trailer_lookup};
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed,
     escaped_error, find, no_proposal, open_context, with_diff, written_id,
@@ -89,7 +90,7 @@ fn run_review(
 }
 
 /// The proposal's document with its diff and, open or approved, its
-/// preview.
+/// preview; a staged approve's staleness note.
 pub(crate) fn previewed(
     env: &Env,
     git_env: &GitEnv,
@@ -97,14 +98,39 @@ pub(crate) fn previewed(
     proposal: &Proposal,
     messages: &mut Vec<Message>,
 ) -> ProposalDocument {
-    let mut document = with_diff(proposal, git_env, &context.data_dir);
+    let run = preview_run(env, git_env, context, proposal, messages);
+    document_with(git_env, context, proposal, run)
+}
+
+/// What steps 2–6, read-only, gave for a proposal: its preview, a
+/// conflict's text, the notes, and the target's span hash as step 5 read
+/// it (an `update`'s or a section-form `create`'s, once resolved).
+#[derive(Debug, Default)]
+pub(crate) struct PreviewRun {
+    preview: Option<Preview>,
+    conflict: Option<String>,
+    notes: Vec<String>,
+    /// The target's span hash now; `None` unread.
+    pub span: Option<String>,
+}
+
+/// Steps 2–6 for an open or approved `update` or `create`, read-only
+/// ([`previewed`]); nothing run for any other.
+pub(crate) fn preview_run(
+    env: &Env,
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    messages: &mut Vec<Message>,
+) -> PreviewRun {
+    let mut run = PreviewRun::default();
     if !proposal.kind.applies()
         || !matches!(
             proposal.status,
             ProposalStatus::Open | ProposalStatus::Approved
         )
     {
-        return document;
+        return run;
     }
     // Its branch read in the current repository when the recorded worktree
     // is not there; a lookup git cannot make is named. Its own commit
@@ -112,7 +138,7 @@ pub(crate) fn previewed(
     let own_commit = match trailer_lookup(git_env, context, proposal) {
         Ok(found) => completing(&found).map(|own| own.commit.clone()),
         Err(error) => {
-            document.notes.push(one_line(&format!(
+            run.notes.push(one_line(&format!(
                 "cannot tell whether its commit is on `{}`: {error}",
                 proposal.place.branch
             )));
@@ -120,34 +146,76 @@ pub(crate) fn previewed(
         }
     };
     if let Some(commit) = own_commit {
-        document.preview = Some(Preview::Unavailable);
-        document.notes.push(format!(
+        run.preview = Some(Preview::Unavailable);
+        run.notes.push(format!(
             "its commit {commit} is on `{}`: `spec approve {}` completes it; no new apply is \
              needed",
             proposal.place.branch, proposal.id
         ));
-        return document;
+        return run;
     }
     let prepared = if proposal.new_file() {
         prepare_file(env, git_env, context, proposal, messages).map(|_| Preview::Applies)
     } else {
-        prepare(env, git_env, context, proposal, messages).map(|prepared| prepared.preview)
+        prepare_spanned(env, git_env, context, proposal, messages, &mut run.span)
+            .map(|prepared| prepared.preview)
     };
     match prepared {
-        Ok(preview) => document.preview = Some(preview),
+        Ok(preview) => run.preview = Some(preview),
         Err(failure) => match failure.conflict {
             Some(conflict) => {
-                document.preview = Some(Preview::Conflicts);
-                document.conflict = Some(conflict);
+                run.preview = Some(Preview::Conflicts);
+                run.conflict = Some(conflict);
             }
             None => {
-                document.preview = Some(Preview::Unavailable);
-                document.notes.push(one_line(&format!(
+                run.preview = Some(Preview::Unavailable);
+                run.notes.push(one_line(&format!(
                     "not applicable now (step {}): {}",
                     failure.step, failure.reason
                 )));
             }
         },
     }
+    run
+}
+
+/// `proposal`'s document with its diff and `run`'s preview, conflict and
+/// notes, then the staleness note of its staged approve
+/// ([`stale_note`]) when the change applies now (a conflict or an
+/// unavailable preview says what it does instead).
+pub(crate) fn document_with(
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    run: PreviewRun,
+) -> ProposalDocument {
+    let mut document = with_diff(proposal, git_env, &context.data_dir);
+    let applies = matches!(run.preview, Some(Preview::Applies | Preview::Rebases));
+    document.preview = run.preview;
+    document.conflict = run.conflict;
+    document.notes.extend(run.notes);
+    if applies && let Some(note) = stale_note(proposal, run.span.as_deref()) {
+        document.notes.push(note);
+    }
     document
+}
+
+/// Canon `decision-staging`, "Staleness": a staged approve whose
+/// `span_hash` is not the target's span hash `now` (step 5's reading):
+/// `staged against <h1>; the target is now <h2>: the change applies as it
+/// rebases`. Never a refusal; `None` when either hash is unknown or they
+/// are equal.
+pub(crate) fn stale_note(proposal: &Proposal, now: Option<&str>) -> Option<String> {
+    let staged = proposal.staged.as_ref()?;
+    let Stage::Approve {
+        span_hash: Some(then),
+        ..
+    } = &staged.stage
+    else {
+        return None;
+    };
+    let now = now?;
+    (then != now).then(|| {
+        format!("staged against {then}; the target is now {now}: the change applies as it rebases")
+    })
 }

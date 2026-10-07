@@ -5,7 +5,7 @@ import { MockClient } from "./MockClient";
 import { scenarioFromSearch, SLOW_MS } from "./scenario";
 
 // The mock behind SpecEngineClient (`ui/README.md` "Owner's manual steps"): scenarios by query,
-// decisions in memory.
+// stages in memory, as the daemon stages (AC-14 of docs/features/decision-staging.md: the mock alike).
 
 const NOW = Date.parse("2026-10-05T12:00:00Z");
 const clock = () => NOW;
@@ -97,6 +97,7 @@ describe("the normal scenario", () => {
         "severity",
         "summary",
         "record_id",
+        "staged_at",
       ]);
       const review = await client.getProposal("harbor-sim", entry.id);
       expect([review.id, review.kind, review.status, review.created_at]).toEqual([entry.id, entry.kind, entry.status, entry.created_at]);
@@ -115,8 +116,10 @@ describe("the normal scenario", () => {
     const { proposals } = await client.getInbox("harbor-sim");
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
     for (const review of reviews) {
-      expect([review.id, Object.keys(review).slice(-3)]).toEqual([review.id, ["choice", "task_id", "notes"]]);
+      expect([review.id, Object.keys(review).slice(-5)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "notes"]]);
+      expect([review.staged, review.staged_at]).toEqual([null, null]);
     }
+    expect(Object.keys(proposals[0] ?? {}).slice(-2)).toEqual(["record_id", "staged_at"]);
     expect(reviews.find((review) => review.id === "PR-0041")?.task_id).toBe("T-0107");
     expect(reviews.some((review) => review.task_id === null)).toBe(true);
     expect((await client.getProposal("harbor-sim", "PR-9999")).task_id).toBeNull();
@@ -139,55 +142,63 @@ describe("the normal scenario", () => {
     expect(missing.reason).toContain("R-404");
   });
 
-  it("accepts into applied with the commit, and the proposal leaves", async () => {
+  it("stages an approve: the review document keeps it with its time, the proposal stays open and listed", async () => {
     const client = new MockClient("normal", { now: clock });
-    const result = await client.decideProposal("harbor-sim", "PR-0041", { decision: "accept", option: 0, note: "go" });
-    expect(result.proposal.status).toBe("applied");
-    expect(result.commit?.subject).toBe("spec: apply PR-0041");
-    expect(result.commit?.sha).toMatch(/^[0-9a-f]{40}$/);
-    expect(result.proposal.applied_commit).toBe(result.commit?.sha);
-    expect(ids((await client.getInbox("harbor-sim")).proposals)).not.toContain("PR-0041");
+    const before = await client.getProposal("harbor-sim", "PR-0041");
+    const staged = await client.stageDecision("harbor-sim", "PR-0041", { decision: "approve", option: 1, answer: null, canon: null, note: "go" }, before.updated_at ?? "");
+    expect([staged.status, staged.staged, staged.staged_at, staged.updated_at]).toEqual([
+      "open",
+      { decision: "approve", option: 1, answer: null, canon: null, note: "go", span_hash: null },
+      "2026-10-05T12:00:00Z",
+      "2026-10-05T12:00:00Z",
+    ]);
+    expect(await client.getProposal("harbor-sim", "PR-0041")).toEqual(staged);
+    const entry = (await client.getInbox("harbor-sim")).proposals.find((proposal) => proposal.id === "PR-0041");
+    expect([entry?.status, entry?.staged_at]).toEqual(["open", "2026-10-05T12:00:00Z"]);
   });
 
-  it("rejects into rejected, and the proposal leaves", async () => {
+  it("stages an update's approve with its target's span hash; a reject with its reason; a second stage replaces the first", async () => {
     const client = new MockClient("normal", { now: clock });
-    const result = await client.decideProposal("harbor-sim", "PR-0042", { decision: "reject", reason: "Too early" });
-    expect(result.proposal.status).toBe("rejected");
-    expect(result.proposal.decision_note).toBe("Too early");
-    expect(result.commit).toBeNull();
-    expect(ids((await client.getInbox("harbor-sim")).proposals)).not.toContain("PR-0042");
+    const update = await client.getProposal("harbor-sim", "PR-0042");
+    const approved = await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, note: null }, update.updated_at ?? "");
+    expect(approved.staged).toEqual({ decision: "approve", option: null, answer: null, canon: null, note: null, span_hash: update.base_hash });
+    const rejected = await client.stageDecision("harbor-sim", "PR-0042", { decision: "reject", reason: "Too early" }, approved.updated_at ?? "");
+    expect(rejected.staged).toEqual({ decision: "reject", reason: "Too early" });
+    expect(ids((await client.getInbox("harbor-sim")).proposals)).toContain("PR-0042");
   });
 
-  it("sends back into changes_requested and defers into deferred; both stay", async () => {
+  it("unstages: both keys null; nothing staged, the document as it was", async () => {
     const client = new MockClient("normal", { now: clock });
-    const sentBack = await client.decideProposal("ledger-api", "PR-0007", {
-      decision: "needs_clarification",
-      note: "Which customers?",
-    });
-    expect(sentBack.proposal.status).toBe("changes_requested");
-    const deferred = await client.decideProposal("ledger-api", "PR-0009", { decision: "defer", note: null });
-    expect(deferred.proposal.status).toBe("deferred");
-    const inbox = (await client.getInbox("ledger-api")).proposals;
-    expect(inbox.find((proposal) => proposal.id === "PR-0007")?.status).toBe("changes_requested");
-    expect(inbox.find((proposal) => proposal.id === "PR-0009")?.status).toBe("deferred");
+    const before = await client.getProposal("ledger-api", "PR-0007");
+    expect(await client.unstageDecision("ledger-api", "PR-0007")).toEqual(before);
+    await client.stageDecision("ledger-api", "PR-0007", { decision: "reject", reason: "No" }, before.updated_at ?? "");
+    const unstaged = await client.unstageDecision("ledger-api", "PR-0007");
+    expect([unstaged.staged, unstaged.staged_at, unstaged.status]).toEqual([null, null, "open"]);
   });
 
-  it("refuses in the daemon's words: an empty reason, a conflicting apply, an unknown proposal", async () => {
+  it("refuses in the daemon's words, nothing stored: flag usage 400, not open or changed since read 409, unknown 404", async () => {
     const client = new MockClient("normal", { now: clock });
-    expect((await rejection(client.decideProposal("harbor-sim", "PR-0042", { decision: "reject", reason: " " }))).status).toBe(422);
-    const conflict = await rejection(client.decideProposal("harbor-sim", "PR-0046", { decision: "accept", option: 0, note: null }));
-    expect(conflict.status).toBe(422);
-    expect(conflict.message).toContain("conflicts");
-    expect(ids((await client.getInbox("harbor-sim")).proposals)).toContain("PR-0046");
-    expect((await rejection(client.decideProposal("harbor-sim", "PR-9999", { decision: "defer", note: null }))).status).toBe(404);
+    const read = (await client.getProposal("harbor-sim", "PR-0041")).updated_at ?? "";
+    const approve = (option: number | null) => ({ decision: "approve" as const, option, answer: null, canon: null, note: null });
+    const refusals = [
+      await rejection(client.stageDecision("harbor-sim", "PR-0041", approve(null), read)),
+      await rejection(client.stageDecision("harbor-sim", "PR-0042", approve(0), (await client.getProposal("harbor-sim", "PR-0042")).updated_at ?? "")),
+      await rejection(client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: " " }, read)),
+      await rejection(client.stageDecision("harbor-sim", "PR-0041", approve(5), read)),
+      await rejection(client.stageDecision("harbor-sim", "PR-0041", approve(0), "2026-01-01T00:00:00Z")),
+      await rejection(client.stageDecision("harbor-sim", "PR-0046", approve(0), (await client.getProposal("harbor-sim", "PR-0046")).updated_at ?? "")),
+      await rejection(client.stageDecision("harbor-sim", "PR-9999", approve(0), read)),
+      await rejection(client.unstageDecision("harbor-sim", "PR-0046")),
+    ];
+    expect(refusals.map((error) => error.status)).toEqual([400, 400, 400, 409, 409, 409, 404, 409]);
+    expect(refusals[5]?.message).toBe("`PR-0046` is deferred, not open: only an open proposal takes a staged choice; nothing changed");
+    expect((await client.getProposal("harbor-sim", "PR-0041")).staged).toBeNull();
   });
 
-  it("forgets every decision when made again (a reload)", async () => {
-    await new MockClient("normal", { now: clock }).decideProposal("harbor-sim", "PR-0041", {
-      decision: "reject",
-      reason: "No",
-    });
-    expect(ids((await new MockClient("normal", { now: clock }).getInbox("harbor-sim")).proposals)).toContain("PR-0041");
+  it("forgets every stage when made again (a reload)", async () => {
+    const first = new MockClient("normal", { now: clock });
+    await first.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "No" }, (await first.getProposal("harbor-sim", "PR-0041")).updated_at ?? "");
+    expect((await new MockClient("normal", { now: clock }).getProposal("harbor-sim", "PR-0041")).staged).toBeNull();
   });
 });
 
@@ -231,11 +242,16 @@ describe("the other scenarios", () => {
     expect(SLOW_MS).toBe(1500);
   });
 
-  it("conflict: a decision rejects 409 and the proposal leaves the inbox", async () => {
+  it("conflict: a first stage finds one staged elsewhere meanwhile, 409; the next, on the new updated_at, is taken", async () => {
     const client = new MockClient("conflict", { now: clock });
-    const error = await rejection(client.decideProposal("harbor-sim", "PR-0041", { decision: "defer", note: null }));
+    const read = (await client.getProposal("harbor-sim", "PR-0041")).updated_at ?? "";
+    const error = await rejection(client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "No" }, read));
     expect(error.status).toBe(409);
-    expect(error.message).toContain("PR-0041");
-    expect(ids((await client.getInbox("harbor-sim")).proposals)).not.toContain("PR-0041");
+    expect(error.message).toContain("`PR-0041` changed since it was read");
+    const now = await client.getProposal("harbor-sim", "PR-0041");
+    expect([now.status, now.staged?.decision, now.staged_at]).toEqual(["open", "reject", "2026-10-05T12:00:00Z"]);
+    expect(ids((await client.getInbox("harbor-sim")).proposals)).toContain("PR-0041");
+    const staged = await client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "No" }, now.updated_at ?? "");
+    expect(staged.staged).toEqual({ decision: "reject", reason: "No" });
   });
 });

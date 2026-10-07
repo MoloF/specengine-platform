@@ -147,13 +147,18 @@ impl StepFailure {
 
 /// Apply steps 2–6 for `proposal`, writing nothing but the data directory
 /// (the recorded root's index, git's scratch files): `spec approve`'s
-/// checks and `spec review`'s preview.
-pub(crate) fn prepare(
+/// checks and `spec review`'s preview. `span` is set to the target's span
+/// hash as step 5 reads it (`store::span_hash` of the resolved node), once
+/// step 4 resolved the target, and left `None` by a refusal before it: a
+/// staged choice's `span_hash` and its staleness note
+/// (canon `decision-staging`, "Staleness").
+pub(crate) fn prepare_spanned(
     env: &Env,
     git_env: &GitEnv,
     context: &QueueContext,
     proposal: &Proposal,
     messages: &mut Vec<Message>,
+    span: &mut Option<String>,
 ) -> Result<Prepared, StepFailure> {
     let place = &proposal.place;
     let path = proposal.target_path.as_str();
@@ -244,6 +249,7 @@ pub(crate) fn prepare(
 
     // Step 5: the text.
     let node = &parsed.nodes[ord];
+    *span = Some(span_hash(&bytes, node));
     let step = step_text(&git, &context.data_dir, &bytes, node, proposal)
         .map_err(|error| StepFailure::cannot(5, error.to_string()))?;
     let (text, preview) = match step {

@@ -28,45 +28,54 @@ describe("the UI over the mock", () => {
     expect(screen.getByText("Mock data")).toBeTruthy();
   });
 
-  it("accepts PR-0041 and announces the commit", async () => {
+  it("stages an accept on PR-0041: the card shows it with the terminal command, PR-0041 stays listed", async () => {
     renderMock("normal", "#/harbor-sim/inbox/PR-0041");
     const card = await screen.findByRole("article");
     await within(card).findByText("Entry only inside the tide window");
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-0041" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(
-        /^Accepted PR-0041: committed [0-9a-f]{40} "spec: apply PR-0041"\.$/,
+        /^Staged Accept on PR-0041 at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z; nothing is applied yet\. Confirm it on a terminal: spec approve PR-0041\.$/,
       );
     });
-    await waitFor(() => {
-      expect(within(screen.getByRole("listbox")).queryByText("PR-0041")).toBeNull();
-    });
+    const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
+    expect(within(staged).getByText("spec approve PR-0041").tagName).toBe("CODE");
+    expect(within(screen.getByRole("listbox")).getByText("PR-0041")).toBeTruthy();
   });
 
-  it("shows a refused apply in the daemon's words and keeps the dialog", async () => {
+  it("shows a refused stage in the daemon's words and keeps the dialog: a deferred proposal is not open", async () => {
     renderMock("normal", "#/harbor-sim/inbox/PR-0046");
     const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Note for the record (optional)"), { target: { value: "try" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept" }));
-    expect(await within(dialog).findByText(/conflicts with the current text of RULE-PILOT-REQ/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
+    expect(await within(dialog).findByText(/`PR-0046` is deferred, not open/)).toBeTruthy();
     expect(within(dialog).getByLabelText("Note for the record (optional)")).toHaveProperty("value", "try");
   });
 
-  it("conflict: a decision closes with the 409 message and the proposal leaves", async () => {
+  it("conflict: a stage made elsewhere meanwhile is refused, the dialog shows the new version; staged again, it is taken", async () => {
     renderMock("conflict", "#/ledger-api/inbox");
     const card = await screen.findByRole("article");
-    fireEvent.click(within(card).getByRole("button", { name: "Defer" }));
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Defer" }));
-    expect(await within(screen.getByRole("main")).findByText(/PR-0007 is no longer open/)).toBeTruthy();
-    expect(document.querySelector('[aria-live="assertive"]')?.textContent).toMatch(/PR-0007 is no longer open/);
+    fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "Out of scope" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
+    expect(await within(dialog).findByText(/`PR-0007` changed since it was read/)).toBeTruthy();
+    expect(await within(dialog).findByText("This proposal changed since you opened it")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Reason (required)")).toHaveProperty("value", "Out of scope");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
     await waitFor(() => {
-      expect(within(screen.getByRole("listbox")).queryByText("PR-0007")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
+    const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
+    expect(within(staged).getByText("Out of scope")).toBeTruthy();
+    expect(within(staged).getByText("spec reject PR-0007")).toBeTruthy();
+    expect(within(screen.getByRole("listbox")).getByText("PR-0007")).toBeTruthy();
     expect(screen.getByText("scenario: conflict")).toBeTruthy();
   });
 

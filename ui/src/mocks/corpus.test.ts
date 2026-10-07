@@ -244,10 +244,11 @@ describe("scenarios and decisions", () => {
     expect(first.truncated).toBe(false);
   });
 
-  it("an accept changes no node text: the change lands in the proposal's worktree", async () => {
+  it("a staged accept changes no node text: it is confirmed, and applied, only on a terminal", async () => {
     const client = mock();
     const before = await client.getNode("harbor-sim", "RULE-BERTH-DRAFT");
-    await client.decideProposal("harbor-sim", "PR-0042", { decision: "accept", option: null, note: null });
+    const read = (await client.getProposal("harbor-sim", "PR-0042")).updated_at ?? "";
+    await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, note: null }, read);
     expect(await client.getNode("harbor-sim", "RULE-BERTH-DRAFT")).toEqual(before);
   });
 });

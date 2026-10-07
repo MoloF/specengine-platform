@@ -174,11 +174,11 @@ enum Command {
         #[arg(long)]
         brief: bool,
     },
-    /// Apply an open proposal in its worktree as one commit (a question or a discrepancy: write its decision record, from the project's [decision_records] template, as one new file and one commit), or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask).
+    /// Apply an open proposal in its worktree as one commit (a question or a discrepancy: write its decision record, from the project's [decision_records] template, as one new file and one commit), or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask). Without flags, an approve staged from the UI is shown and confirmed with its flags.
     Approve {
         #[arg(value_name = "PR")]
         id: String,
-        /// A note kept with the decision (and in a decision record's `note` slot).
+        /// A note kept with the decision (and in a decision record's `note` slot), at most 4096 bytes.
         #[arg(long, value_name = "T")]
         note: Option<String>,
         /// A discrepancy: the owner's chosen option, from 0.
@@ -195,9 +195,9 @@ enum Command {
     Reject {
         #[arg(value_name = "PR")]
         id: String,
-        /// Why the proposal is rejected (non-empty).
+        /// Why the proposal is rejected (non-empty, at most 4096 bytes); left out, a reject staged from the UI gives it.
         #[arg(long, value_name = "T")]
-        reason: String,
+        reason: Option<String>,
     },
     /// Restore a dump written by `export state` into the project's empty queue, rows as stored; asks for consent on the terminal.
     ImportState {

@@ -444,7 +444,60 @@ pub(crate) struct ReviewDocument {
     pub choice: Option<Choice>,
     /// The task it was raised for; `null` unbound.
     pub task_id: Option<String>,
+    /// A choice staged for the owner to confirm on a terminal; any local
+    /// process can stage one, so it is no answer.
+    pub staged: Option<StagedShape>,
+    /// When it was staged.
+    pub staged_at: Option<String>,
     pub notes: Vec<String>,
+}
+
+/// A staged choice (`docs/canon/decision-staging.md` "The stage"): one of
+/// two closed objects.
+#[derive(JsonSchema)]
+#[schemars(untagged)]
+pub(crate) enum StagedShape {
+    Approve(StagedApprove),
+    Reject(StagedReject),
+}
+
+/// `spec approve PR` with these flags, staged.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct StagedApprove {
+    pub decision: ApproveWord,
+    /// A discrepancy's option, from 0.
+    pub option: Option<u64>,
+    /// A question's answer other than its working answer.
+    pub answer: Option<String>,
+    /// The section its record governs.
+    pub canon: Option<String>,
+    pub note: Option<String>,
+    /// The target's span hash when staged (an update's or a section-form
+    /// create's).
+    pub span_hash: Option<String>,
+}
+
+/// `spec reject PR --reason T`, staged.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct StagedReject {
+    pub decision: RejectWord,
+    pub reason: String,
+}
+
+/// An approve's word.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum ApproveWord {
+    Approve,
+}
+
+/// A reject's word.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum RejectWord {
+    Reject,
 }
 
 /// The owner's choice of a decided question or discrepancy: one key.

@@ -114,6 +114,7 @@ fn decision() -> Decision {
     Decision {
         decided_by: "Owner <owner@example.invalid>".to_owned(),
         note: Some("Because.".to_owned()),
+        staged_at: None,
     }
 }
 
@@ -438,7 +439,7 @@ fn a_corrupt_record_row_names_its_column() {
             "choice"
         ]
     );
-    assert_eq!(&PROPOSAL_COLUMNS[40..], ["task_id"]);
+    assert_eq!(&PROPOSAL_COLUMNS[40..], ["task_id", "staged", "staged_at"]);
     let cases: Vec<CorruptCase<'_>> = vec![
         (
             "an update with a record",

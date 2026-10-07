@@ -6,7 +6,9 @@
 //! `<severity>: <summary's first line>` (canon `agent-intake`,
 //! "Review document"), an applied one's ending ` [<record_id>]`
 //! (canon `decision-record`, "Queue and documents"); a create's
-//! `target_ids` its target then its new IDs (task spec `proposal-kinds`).
+//! `target_ids` its target then its new IDs (task spec `proposal-kinds`); a
+//! staged one's state `open (staged)`, its JSON entry's `staged_at` set
+//! (canon `decision-staging`, "Documents").
 //! Proposals of another repository of the same slug (the database is the
 //! slug's) are never listed: those of an existing one are counted in a
 //! note; those of a repository that no longer exists (orphans) are named
@@ -65,6 +67,9 @@ pub struct InboxEntry {
     pub summary: Option<String>,
     /// A question's or a discrepancy's decision record, from its step 7.
     pub record_id: Option<String>,
+    /// When the owner's choice was staged on it, UTC
+    /// (canon `decision-staging`); `null` when nothing is staged.
+    pub staged_at: Option<String>,
 }
 
 /// What `spec inbox` listed.
@@ -179,6 +184,7 @@ fn entry(proposal: &Proposal) -> InboxEntry {
         severity: intake.map(|intake| intake.severity.as_str().to_owned()),
         summary: intake.map(|intake| first_line(&intake.summary)),
         record_id: proposal.record.as_ref().map(|record| record.id.clone()),
+        staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
     }
 }
 
@@ -213,9 +219,14 @@ fn raw_text(outcome: &InboxOutcome) -> String {
         {
             last.push_str(&format!(" [{record}]"));
         }
+        // A staged choice marks its state: `open (staged)`.
+        let status = match entry.staged_at {
+            Some(_) => format!("{} (staged)", entry.status),
+            None => entry.status.clone(),
+        };
         out.push_str(&one_line(&format!(
-            "{} | {} | {} | {} | {} | {} | {last}",
-            entry.id, entry.kind, entry.status, entry.target_id, entry.branch, entry.created_at,
+            "{} | {} | {status} | {} | {} | {} | {last}",
+            entry.id, entry.kind, entry.target_id, entry.branch, entry.created_at,
         )));
         out.push('\n');
     }

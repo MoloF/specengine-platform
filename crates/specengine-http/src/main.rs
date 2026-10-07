@@ -1,7 +1,8 @@
 //! `specengine-http --root DIR… [--port N]`: the daemon's read surface
-//! (task specs `daemon-read`, `ui-live`: `graph` and the plain `check`), a
-//! read-only HTTP adapter over the CLI library, in the foreground, on
-//! `127.0.0.1` only.
+//! (task specs `daemon-read`, `ui-live`: `graph` and the plain `check`), an
+//! HTTP adapter over the CLI library that reads, and writes only a
+//! proposal's staged choice (task spec `decision-staging`), in the
+//! foreground, on `127.0.0.1` only.
 //!
 //! Start (docs/features/daemon-read.md "Description and interactions"):
 //! each `--root` canonicalised and its own `specengine.toml` read, a slug
@@ -13,11 +14,12 @@
 //! one SQLite transaction).
 //!
 //! - [`start`]: the arguments' projects;
-//! - [`app`]: the router, the fence, the read endpoints, the refused
-//!   decision;
+//! - [`app`]: the router, the fence, the read endpoints, the stage route
+//!   (POST stages a choice, DELETE clears it; confirmed only on a
+//!   terminal);
 //! - [`answer`]: one CLI library call per request on the blocking pool,
 //!   serialized per project, and its response (a check's report a 200
-//!   whatever its verdict);
+//!   whatever its verdict; a stage's status by its cause);
 //! - [`args`]: the query string and the path's REF;
 //! - [`tail`]: the live tail of the queue's `events` (SSE).
 
@@ -40,7 +42,7 @@ use specengine_cli::{Env, Exit};
 #[command(
     name = "specengine-http",
     version,
-    about = "SpecEngine's read surface over HTTP on 127.0.0.1: the CLI's documents and the queue's live events"
+    about = "SpecEngine over HTTP on 127.0.0.1: the CLI's documents and the queue's live events; it reads, and stages a choice confirmed on a terminal"
 )]
 struct Cli {
     /// A project root to serve: its own specengine.toml, a [project] slug

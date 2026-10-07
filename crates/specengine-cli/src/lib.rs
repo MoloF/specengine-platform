@@ -54,6 +54,10 @@
 //!   where the queue records a time, the clock's `now` ([`utc_now`]);
 //!   [`propose_brief`], [`propose_create_brief`], [`review_brief`]: their
 //!   brief answers;
+//! - [`stage`], [`unstage`]: the owner's choice staged on an `open`
+//!   proposal, or cleared (canon `decision-staging`; no command: the
+//!   daemon's decision route calls them), confirmed only by `approve` or
+//!   `reject` on a terminal ([`StageOutcome`]);
 //! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
 //!   discrepancy stored as a queue record (approved into a decision record,
 //!   or rejected with the answer), unless what is decided or asked already
@@ -112,6 +116,7 @@ mod refresh;
 mod review;
 mod search;
 mod show;
+mod stage;
 mod state;
 mod state_file;
 mod task;
@@ -184,12 +189,17 @@ pub use specengine_core::task::{
 pub use specengine_model::{RunOutcome, TaskPackage, TaskStatus};
 /// The caller's git environment a queue request carries.
 pub use specengine_store::GitEnv;
+/// A staged choice as the review document carries it (the store's).
+pub use specengine_store::Stage;
 /// `search`'s `--limit` bounds and default, its shortest term (the store's).
 pub use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
 };
 /// A search hit's snippet as structure (the browser view's).
 pub use specengine_store::{Snippet, SnippetSegment};
+pub use stage::{
+    StageBody, StageCause, StageOutcome, StageRequest, UnstageRequest, stage, unstage,
+};
 pub use state::{
     ExportStateOutcome, ExportStateRequest, ImportStateOutcome, ImportStateRequest, export_state,
     import_state,
@@ -343,6 +353,9 @@ pub enum Outcome {
     Proposal(Box<ProposalOutcome>),
     /// `propose question`, `propose discrepancy`: the intake document.
     Intake(Box<IntakeOutcome>),
+    /// [`stage`], [`unstage`] (no command; the daemon's): the review
+    /// document, and why nothing was stored.
+    Stage(Box<StageOutcome>),
     Inbox(InboxOutcome),
     /// `export state`: the dump written.
     StateExport(ExportStateOutcome),
@@ -369,6 +382,7 @@ impl Outcome {
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
+            Self::Stage(stage) => stage.exit(),
             Self::StateImport(import) => import.exit(),
             Self::Task(task) => task.exit(),
             Self::TaskShow(show) => show.exit(),
@@ -392,6 +406,10 @@ impl Outcome {
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Stage(outcome) => (
+                &outcome.proposal.messages,
+                outcome.proposal.refusal.as_deref(),
+            ),
             Self::Inbox(outcome) => (&outcome.messages, None),
             Self::StateExport(outcome) => (&outcome.messages, None),
             Self::StateImport(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -408,6 +426,7 @@ impl Outcome {
             self,
             Self::Proposal(_)
                 | Self::Intake(_)
+                | Self::Stage(_)
                 | Self::Inbox(_)
                 | Self::StateExport(_)
                 | Self::StateImport(_)
@@ -437,6 +456,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
+        Outcome::Stage(outcome) => proposals::render_text(&outcome.proposal),
         Outcome::Inbox(outcome) => inbox::render_text(outcome),
         Outcome::StateExport(outcome) => state::render_export_text(outcome),
         Outcome::StateImport(outcome) => state::render_import_text(outcome),
@@ -462,6 +482,7 @@ impl serde::Serialize for Outcome {
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),
+            Self::Stage(outcome) => outcome.serialize(serializer),
             Self::Inbox(outcome) => outcome.serialize(serializer),
             Self::StateExport(outcome) => outcome.serialize(serializer),
             Self::StateImport(outcome) => outcome.serialize(serializer),

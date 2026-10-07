@@ -1,5 +1,6 @@
 import type { InboxEntry } from "../api/types";
 import { Badge } from "../ui/Badge";
+import { Icon } from "../ui/Icon";
 import { formatAge, formatUtc } from "../ui/time";
 import { severityLook, statusLook } from "./labels";
 import { summaryOf } from "./summary";
@@ -7,7 +8,8 @@ import { targetsOf } from "./targets";
 
 /**
  * The queue as one Tab stop: a listbox whose selected option alone is tabbable. Moving with the
- * keys belongs to the queue around it.
+ * keys belongs to the queue around it. A proposal with a staged choice stays listed, marked
+ * Staged (`docs/canon/decision-staging.md` "UI").
  */
 export function ProposalList({
   proposals,
@@ -54,6 +56,15 @@ export function ProposalList({
                 <>
                   <span aria-hidden="true"> | </span>
                   <Badge name="Status" look={status} />
+                </>
+              )}
+              {proposal.staged_at !== null && (
+                <>
+                  <span aria-hidden="true"> | </span>
+                  <span className="staged-mark" title={`Staged ${proposal.staged_at}`}>
+                    <Icon name="terminal" />
+                    Staged
+                  </span>
                 </>
               )}
             </span>

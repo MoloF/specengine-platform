@@ -17,6 +17,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/agent-intake.md](features/agent-intake.md) shipped
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped
 - [docs/features/decision-apply.md](features/decision-apply.md) shipped
+- [docs/features/decision-staging.md](features/decision-staging.md) shipped
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped
 - [docs/features/import-layout.md](features/import-layout.md) shipped
 - [docs/features/import-records.md](features/import-records.md) shipped

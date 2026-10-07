@@ -7,7 +7,7 @@ import type { Scenario } from "./scenario";
 // Health over the real mock, as `pnpm dev` shows it (docs/features/ui-health.md AC-01, AC-03,
 // AC-04, AC-05, AC-09; "Owner's manual check" for cannot-check, empty, large, error and slow).
 
-const METHODS = ["getProjects", "getInbox", "getTree", "getNode", "search", "getBundle", "getGraph", "getTasks", "getTask", "getCheck", "decideProposal"] as const;
+const METHODS = ["getProjects", "getInbox", "getTree", "getNode", "search", "getBundle", "getGraph", "getTasks", "getTask", "getCheck", "stageDecision", "unstageDecision"] as const;
 
 function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);

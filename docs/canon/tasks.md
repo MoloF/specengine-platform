@@ -57,20 +57,20 @@ ADR-0032. `new` records the repository (its git common dir). `approve` records t
 
 ## Task-bound proposals
 
-`--task T` (MCP: `task_id` on `propose_change`, `ask_question`, `report_discrepancy`): a task of this repository, neither `done` nor `cancelled`; once claimed, raised in the claimed worktree. Else exit 1 `--task: <reason>` (another repository; closed; ``is claimed in the worktree <w>: a proposal bound to it is raised there, not in <here>``); not a task ID exit 1; a look-alike or `T` in `[ids]` exit 2. Checked once the place is bound and again in the inserting transaction (`QueueError::TaskRefused`). `task_id` never changes; a discrepancy's linked update takes it in the same transaction. Review document: `task_id` (`null` unbound) after `choice`, 43 keys, text line `task_id: <T or ->`; inbox entries unchanged (11 keys).
+`--task T` (MCP: `task_id` on `propose_change`, `ask_question`, `report_discrepancy`): a task of this repository, neither `done` nor `cancelled`; once claimed, raised in the claimed worktree. Else exit 1 `--task: <reason>` (another repository; closed; ``is claimed in the worktree <w>: a proposal bound to it is raised there, not in <here>``); not a task ID exit 1; a look-alike or `T` in `[ids]` exit 2. Checked once the place is bound and again in the inserting transaction (`QueueError::TaskRefused`). `task_id` never changes; a discrepancy's linked update takes it in the same transaction. Review document: `task_id` (`null` unbound) after `choice`, 45 keys, text line `task_id: <T or ->`; inbox entries none (12 keys).
 
 **Refresh**: WHEN `spec approve` applies a task-bound `update` or section-form `create` (step 10 or a completion: `proposal-apply.md`) whose worktree, branch and `root_rel` are the task's compared place THEN, in the transaction recording `applied` (`applied_refreshing`), each snapshot node of that file enclosing or inside the target whose pre-apply `span_hash` is its snapshot hash takes the applied text and hash: one `task.refreshed` each, `updated_at` and `revision` raised, note ``T-0001: its snapshot of <IDs> refreshed by `PR-0001` ``. A node the apply left byte for byte takes nothing, no event. Nothing refreshes for a file-form create, an unbound proposal, another place, a `done` or `cancelled` task. Nested spans: editing a section by hand changes its enclosing document's span too, so that document stays stale.
 
 ## Store
 
-Queue schema 4 (`QUEUE_SCHEMA_VERSION` 3 -> 4, step 4, one `Immediate` transaction; `proposal-queue.md` "Store"), `STRICT`, `TEXT` but `run`:
+Queue step 4 (`QUEUE_SCHEMA_VERSION` 3 -> 4, now 5; one `Immediate` transaction; `proposal-queue.md` "Store"), `STRICT`, `TEXT` but `run`:
 
 ```
 tasks(id PRIMARY KEY, project, git_common_dir, status, title, goal, targets, plan, criteria,
   affected_nodes, owner_notes, snapshot, claim, author, created_at, updated_at, revision)
 runs(task_id, run INTEGER, role, worktree, branch, author, started_at, ended_at, outcome,
   summary, changed_files, PRIMARY KEY (task_id, run))
-proposals: + task_id   -- PROPOSAL_COLUMNS 41
+proposals: + task_id   -- column 41 of 43
 ```
 
 `TASK_COLUMNS` 17, `RUN_COLUMNS` 11, pinned to `PRAGMA table_info`. JSON columns: `targets`, `affected_nodes` canonical IDs or paths; `criteria` `{ref, text}` (a reference's text `null`); `owner_notes` `{at, note, by}`; `snapshot` `{at, by, place, nodes: [{id, path, span_hash, text}]}`; `claim` `{at, role, worktree, branch}`; a task's and a run's `author` as a proposal's. IDs `T-` and 4 or more digits, highest + 1, never deleted; runs numbered from 1 per task.
@@ -81,8 +81,8 @@ API: `create_task`, `get_task`, `list_tasks`, `change_task(id, &TaskSeen, &TaskC
 
 ## Backup
 
-`STATE_FORMAT` 2; commands, bounds and import steps: `queue-backup.md`. Header `{"format":2,"queue_schema":4,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), events by `seq`. A schema 1-3 database exports unmigrated as format 2, schema 4, without tasks or runs.
+`STATE_FORMAT` 2; commands, bounds and import steps: `queue-backup.md`. Header `{"format":2,"queue_schema":5,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), events by `seq`. A schema 1-4 database exports unmigrated as format 2, schema 5 (1-3 without tasks or runs).
 
-Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`) or 2 (seven keys, schema 4 only). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven; a task ID not as the queue writes it; a task, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four).
+Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`) or 2 (seven keys, schemas 4-5). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven; a task ID not as the queue writes it; a task, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four).
 
 Count lines `wrote <D>: <p> proposal(s), <t> task(s), <r> run(s), <e> event(s)`, `restored <p> proposal(s), <t> task(s), <r> run(s), <e> event(s) into <db>`; prompt `restore <p> proposal(s), <t> task(s), <r> run(s) and <e> event(s) of <slug> from <FILE> into <db>? [y/N]`; the occupied refusal names the four counts; `--json` `{path|db, proposals, tasks, runs, events}`. `QueueCounts`, `StoredQueue` + `tasks`, `runs` (`StoredTask {columns: [_; 17]}`, `StoredRun {run, columns}`): a task alone makes a queue occupied.

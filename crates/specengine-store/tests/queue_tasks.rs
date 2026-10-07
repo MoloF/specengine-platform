@@ -208,15 +208,16 @@ fn task_events(queue: &SqliteQueue) -> Vec<(String, serde_json::Value)> {
 
 /// Schema 4: `tasks` and `runs` as `PRAGMA table_info` gives them (names
 /// in [`TASK_COLUMNS`] and [`RUN_COLUMNS`] order, `run` the one `INTEGER`,
-/// the key `id`, `(task_id, run)`), both `STRICT`; `proposals` 41 columns,
-/// `task_id` last. M: a column moved or retyped.
+/// the key `id`, `(task_id, run)`), both `STRICT`; `proposals` 43 columns
+/// (schema 5, docs/features/decision-staging.md), `task_id` the 41st, before
+/// `staged`, `staged_at`. M: a column moved or retyped.
 #[test]
 fn schema_4_makes_the_tasks_and_runs_tables() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 4);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 5);
     let scratch = Scratch::new("qt-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "4");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5");
     let info = |table: &str| {
         sqlite3(
             &db,
@@ -254,9 +255,10 @@ fn schema_4_makes_the_tasks_and_runs_tables() {
     );
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "41"
+        "43"
     );
     assert_eq!(PROPOSAL_COLUMNS[40], "task_id");
+    assert_eq!(PROPOSAL_COLUMNS[41..], ["staged", "staged_at"]);
     // Iteration 2: the task's compare-and-set key, `revision`, its last
     // column, `TEXT` (decimal from `1`), 17 in all.
     assert_eq!(TASK_COLUMNS.len(), 17);
@@ -276,9 +278,10 @@ fn schema_4_makes_the_tasks_and_runs_tables() {
 }
 
 /// A database at queue schema 1, 2 or 3 (a real queue's later columns and
-/// its `tasks`, `runs` dropped) steps to 4 when opened: its row kept and
-/// readable, `task_id` `NULL`, both tables made and empty, and a task
-/// created after; stepped once. M: step 4 skipped from 1 or 2.
+/// its `tasks`, `runs` dropped) steps to 4 and on to 5 when opened: its row
+/// kept and readable, `task_id` and the stage `NULL`, both tables made and
+/// empty, and a task created after; stepped once. M: step 4 skipped from 1
+/// or 2.
 #[test]
 fn schema_1_to_3_databases_step_to_4() {
     for (version, kept) in [(1, 24), (2, 35), (3, 40)] {
@@ -303,20 +306,21 @@ fn schema_1_to_3_databases_step_to_4() {
             kept.to_string()
         );
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "4", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5", "from {version}");
         assert_eq!(
             sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-            "41"
+            "43"
         );
         let kept_row = queue.get(&made.id).expect("get").expect("kept");
         assert_eq!(kept_row.task_id, None, "from {version}");
+        assert_eq!(kept_row.staged, None, "from {version}");
         assert_eq!(kept_row.new_text, "new");
         assert_eq!(queue.list_tasks(None).expect("tasks").tasks, []);
         let task = queue.create_task(&new_task(&["A-1"]), T1).expect("a task");
         assert_eq!(task.id, "T-0001", "from {version}");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "4");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5");
     }
 }
 
@@ -785,6 +789,7 @@ fn applied_refreshing_refreshes_only_nodes_still_frozen() {
     let decision = Decision {
         decided_by: "Owner <owner@example.invalid>".to_owned(),
         note: None,
+        staged_at: None,
     };
     let bound = queue
         .create_with_task(&update("A-2", "/r"), Some(&id), T0)
@@ -1083,6 +1088,7 @@ fn a_closed_tasks_snapshot_is_never_refreshed() {
     let decision = Decision {
         decided_by: "Owner <owner@example.invalid>".to_owned(),
         note: None,
+        staged_at: None,
     };
     for closing in [TaskChange::Cancel, TaskChange::Complete] {
         let id = queue.create_task(&new_task(&["A-1"]), T0).unwrap().id;

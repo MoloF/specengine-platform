@@ -10,11 +10,11 @@ reviewed: 2026-10-05
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phases 0-1 done (reading core: parser, index, CLI and MCP reads, graph, bundle, `spec check` 1-4, shards, layer A, pilot W; 2026-10-05); **Phase 2** in progress, slices 1-7, `daemon-read` shipped; UI on the daemon (ADR-0033). Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phases 0-1 done (reading core: parser, index, CLI and MCP reads, graph, bundle, `spec check` 1-4, shards, layer A, pilot W; 2026-10-05); **Phase 2** in progress, slices 1-7, `daemon-read`, `decision-staging` shipped; UI on the daemon. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
-`CLAUDE.md` → `docs/index.md` → at most three documents. A third step is a defect of the index or canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
+`CLAUDE.md` -> `docs/index.md` -> at most three documents. A third step is a defect of the index or canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
 
 ## Rules that must not be broken
 
@@ -38,12 +38,12 @@ Code and documentation change **only through the pipeline** `/feature <requireme
 
 | Role | Does | Writes only to |
 |---|---|---|
-| `requirement-analyst` | requirement analysis, assumptions, questions, criteria | — (nothing) |
+| `requirement-analyst` | requirement analysis, assumptions, questions, criteria | -- (nothing) |
 | `spec-writer` | task specs, ADR + canon diff, index | `docs/`, `CLAUDE.md`, `*/README.md`, `README.md`, `specengine.toml`, `.spec-debt.toml` |
 | `rust-developer` | Rust code | `Cargo.toml`, `crates/*/src`, `plugin/`, `.githooks/`, `.github/workflows/`, `scripts/`, `.cargo/` |
 | `ui-developer` | web UI | `ui/**`, except generated types |
 | `test-engineer` | tests and running checks | `crates/*/tests`, `fixtures/`, `#[cfg(test)]` |
-| `code-reviewer` | review against the spec and the rules | — (no Write/Edit) |
+| `code-reviewer` | review against the spec and the rules | -- (no Write/Edit) |
 
 The developer must not touch `docs/`: a discrepancy between spec and code must be visible, not smoothed over. At most three implementation iterations; if they run out, the task is not marked implemented. Roles do not commit: the owner commits. `.claude/**` is the owner's: a role puts its text in the spec; the owner applies it. Role models live in front-matter (Opus 5.5).
 
@@ -59,11 +59,11 @@ The pre-commit hook and CI reject a red check (`docs/README.md` "Enforcement").
 
 ## Layout
 
-- `docs/` — `canon/`, `decisions/`, specs (`features/`, `specs/`), index, archive.
-- `crates/specengine-{model,core,store,cli,code,eval,import,mcp,http,ra}` — the corpus model and reference grammar, the spec parser and check, the spec index (SQLite + FTS5), the `spec` binary, layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, the HTTP reads, layer C (outside `default-members`); each has a Tier 1 `README.md`.
-- `fixtures/` — test corpora with `expected.json`; `bevy-mini` and `ra-mini` are workspace-excluded.
-- `.claude/` — pipeline roles and commands.
-- `plugin/` — the Claude Code plugin (root `README.md`); `ui/` — the web UI.
+- `docs/` -- `canon/`, `decisions/`, specs (`features/`, `specs/`), index, archive.
+- `crates/specengine-{model,core,store,cli,code,eval,import,mcp,http,ra}` -- the corpus model and reference grammar, the spec parser and check, the spec index (SQLite + FTS5), the `spec` binary, layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, the HTTP server, layer C (outside `default-members`); each has a Tier 1 `README.md`.
+- `fixtures/` -- test corpora with `expected.json`; `bevy-mini` and `ra-mini` are workspace-excluded.
+- `.claude/` -- pipeline roles and commands.
+- `plugin/` -- the Claude Code plugin (root `README.md`); `ui/` -- the web UI.
 
 ## Owner's machine
 

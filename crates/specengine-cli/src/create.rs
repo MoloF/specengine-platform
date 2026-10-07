@@ -93,6 +93,7 @@ use crate::propose::{
 use crate::refresh::refresh;
 use crate::review::previewed;
 use crate::show::latin_fix;
+use crate::stage::Staging;
 use crate::task::bound_task;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, store_error};
 
@@ -1069,12 +1070,13 @@ pub(crate) fn approve_file(
     request: &ApproveRequest,
     context: &mut QueueContext,
     proposal: &Proposal,
+    staging: &Staging,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Approve;
     let id = proposal.id.as_str();
     let read = proposal.seen();
-    let mut messages = Vec::new();
+    let mut messages = staging.notes();
 
     // Its own commit completes it; another one with its trailer refuses a
     // new file. A lookup git cannot make is a note.
@@ -1083,7 +1085,9 @@ pub(crate) fn approve_file(
         Ok(found) => {
             if let Some(own) = completing(&found) {
                 let commit = own.commit.clone();
-                return complete(env, request, context, proposal, &commit, consent, messages);
+                return complete(
+                    env, request, context, proposal, &commit, staging, consent, messages,
+                );
             }
             if let Some(first) = found.first() {
                 let failure = StepFailure::refused(
@@ -1171,8 +1175,11 @@ pub(crate) fn approve_file(
 
     // Step 1: the owner's consent.
     let question = format!(
-        "apply {id} to {top_path} on {} in {} (new file)? [y/N]",
-        place.branch, place.worktree
+        "{}apply {id} to {top_path} on {} in {} (new file{})? [y/N]",
+        staging.preface(None),
+        place.branch,
+        place.worktree,
+        staging.mark()
     );
     if !consent(&noted(unknown.as_deref(), &escape_controls(&question))) {
         let mut document = with_diff(proposal, &request.git, &context.data_dir);
@@ -1185,10 +1192,11 @@ pub(crate) fn approve_file(
         ));
     }
 
-    // Step 7: a compare-and-set on the state read.
+    // Step 7: a compare-and-set on the state read (the stage shown too).
     let decision = Decision {
         decided_by: decided_by.clone(),
         note: request.note.clone(),
+        staged_at: staging.staged_at(),
     };
     let approved = match context
         .queue
@@ -1200,7 +1208,12 @@ pub(crate) fn approve_file(
             | QueueError::Status { .. }
             | QueueError::Invalid(_)),
         ) => {
-            let failure = StepFailure::refused(7, format!("{error}; nothing written"));
+            let replaced = match error {
+                QueueError::Changed { .. } => staging.replaced(context, id),
+                _ => None,
+            };
+            let reason = replaced.unwrap_or_else(|| format!("{error}; nothing written"));
+            let failure = StepFailure::refused(7, reason);
             return failed(
                 context,
                 request,

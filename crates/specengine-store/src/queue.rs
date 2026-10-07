@@ -1,7 +1,7 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4; a higher version is a newer
+//! user_version` (0 → 1 → 2 → 3 → 4 → 5; a higher version is a newer
 //! build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
@@ -77,9 +77,18 @@
 //!   inserting transaction; an applied task-bound proposal refreshes the
 //!   task's snapshot in its recording transaction
 //!   ([`SqliteQueue::applied_refreshing`]).
+//! - **Stages** (`docs/canon/decision-staging.md` "Queue",
+//!   `queue/stage.rs`): step 5 adds `staged`, `staged_at`; an `open`
+//!   proposal's one replaceable staged choice ([`Stage`]), set and cleared
+//!   by [`ProposalQueue::stage_from`] and [`ProposalQueue::unstage_from`]
+//!   as a compare-and-set on [`Seen`], which holds the stage read: every
+//!   compare-and-set op compares it too. Every op leaving `open` clears
+//!   both columns; `.approved` and `.rejected` carry `staged_at` when the
+//!   decision confirms the stage ([`Decision::staged_at`]).
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
+mod stage;
 mod state;
 mod tasks;
 
@@ -109,6 +118,7 @@ use crate::error::{Db, StoreError};
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
+pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
     EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredEvent,
     StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, proposal_columns,
@@ -122,7 +132,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 4;
+pub const QUEUE_SCHEMA_VERSION: i64 = 5;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -192,6 +202,13 @@ CREATE TABLE runs (
 ALTER TABLE proposals ADD COLUMN task_id TEXT;
 ";
 
+/// Step 4 → 5: a proposal's staged choice and its time
+/// (`docs/canon/decision-staging.md` "Queue"), appended in this order.
+const STEP_5: &str = "
+ALTER TABLE proposals ADD COLUMN staged TEXT;
+ALTER TABLE proposals ADD COLUMN staged_at TEXT;
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -207,7 +224,7 @@ const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_co
      rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
      created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
      price_of_other, evidence, options, recommendation, distinct_from, linked, record_id, \
-     record_path, record_title, record_text, choice, task_id";
+     record_path, record_title, record_text, choice, task_id, staged, staged_at";
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -528,6 +545,9 @@ pub struct Proposal {
     pub new_ids: Vec<String>,
     /// The task it was raised for (`T-NNNN`); never changes.
     pub task_id: Option<String>,
+    /// The owner's staged choice, on an `open` proposal only
+    /// (`docs/canon/decision-staging.md`).
+    pub staged: Option<StagedChoice>,
 }
 
 impl Proposal {
@@ -551,6 +571,7 @@ impl Proposal {
         Seen {
             status: self.status,
             updated_at: self.updated_at.clone(),
+            staged: self.staged.clone(),
         }
     }
 }
@@ -559,11 +580,14 @@ impl Proposal {
 /// the key of [`ProposalQueue::approve_from`] and
 /// [`ProposalQueue::reopen_from`]. Every change sets `updated_at`, and an
 /// `approved` → `approved` change only to a later time, so one key names
-/// one hold.
+/// one hold. The stage read is part of it: a stage replaced within the
+/// second `updated_at` resolves is a change too
+/// (`docs/canon/decision-staging.md` "Terminal").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Seen {
     pub status: ProposalStatus,
     pub updated_at: String,
+    pub staged: Option<StagedChoice>,
 }
 
 /// A stored row that does not decode: its ID (as stored), the column and
@@ -638,13 +662,19 @@ pub struct EventsAfter {
     pub full: bool,
 }
 
-/// An owner's decision: who and the optional note (an approval's `--note`,
-/// a rejection's `--reason`).
+/// An owner's decision: who, the optional note (an approval's `--note`,
+/// a rejection's `--reason`) and the stage it confirms.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decision {
     /// `Name <email>`.
     pub decided_by: String,
     pub note: Option<String>,
+    /// The `staged_at` of the staged choice this decision confirms (its
+    /// flags taken from the stage); `None` when it confirms none. Logged
+    /// with `.approved` and `.rejected`; a compare-and-set op refuses one
+    /// the proposal does not hold ([`QueueError::Invalid`]); `approve`,
+    /// `reject` and `applied_with` compare nothing and log it as given.
+    pub staged_at: Option<String>,
 }
 
 /// An apply attempt refused at `step` (2–10).
@@ -861,9 +891,13 @@ pub trait ProposalQueue {
     /// read: `open` → `approved` (logging `proposal.approved`), or
     /// `approved` → `approved` with the decision replaced (no event) when
     /// `now` is later than `seen.updated_at` (else [`QueueError::Invalid`]).
-    /// The stored state not `seen`: [`QueueError::Changed`], nothing
-    /// written; `applied`, `rejected`: [`QueueError::Status`]; a kind that
-    /// never applies: [`QueueError::Invalid`].
+    /// The stored state not `seen` (its stage too): [`QueueError::Changed`],
+    /// nothing written; `applied`, `rejected`: [`QueueError::Status`]; a
+    /// kind that never applies: [`QueueError::Invalid`]. Leaving `open`
+    /// clears the stage (this op, `approve`, `approve_record_from`,
+    /// `applied`, `applied_with`, `reject`, `reject_from`), and
+    /// `.approved`, `.rejected` add `staged_at` when the decision confirms
+    /// it ([`Decision::staged_at`]).
     fn approve_from(
         &mut self,
         id: &str,
@@ -971,6 +1005,25 @@ pub trait ProposalQueue {
         decision: &Decision,
         now: &str,
     ) -> Result<Proposal, QueueError>;
+    /// Stages `stage` on an `open` proposal, replacing any earlier one, as a
+    /// compare-and-set on `seen`
+    /// (`docs/canon/decision-staging.md` "Queue"): `staged`, `staged_at` =
+    /// `updated_at` = `now`, logging
+    /// `proposal.staged` (`staged`, `staged_at`). The state no longer
+    /// `seen`: [`QueueError::Changed`]; not `open`: [`QueueError::Status`];
+    /// a stage the kind cannot hold ([`Stage::problem`]):
+    /// [`QueueError::Invalid`]; nothing written.
+    fn stage_from(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        stage: &Stage,
+        now: &str,
+    ) -> Result<Proposal, QueueError>;
+    /// Clears an `open` proposal's stage as [`Self::stage_from`] sets one
+    /// (`updated_at` = `now`), logging `proposal.unstaged`: `Ok(true)`;
+    /// nothing staged: `Ok(false)`, nothing written, no event.
+    fn unstage_from(&mut self, id: &str, seen: &Seen, now: &str) -> Result<bool, QueueError>;
     /// The project's events, by `seq`.
     fn events(&self) -> Result<Vec<Event>, QueueError>;
 }
@@ -1227,10 +1280,12 @@ impl SqliteQueue {
                     current.updated_at
                 )));
             }
+            confirms(&current, decision)?;
         }
         tx.execute(
             "UPDATE main.proposals SET status = ?1, decided_by = ?2, decided_at = ?3, \
-             decision_note = ?4, updated_at = ?3 WHERE id = ?5 AND project = ?6",
+             decision_note = ?4, updated_at = ?3, staged = NULL, staged_at = NULL \
+             WHERE id = ?5 AND project = ?6",
             rusqlite::params![
                 ProposalStatus::Approved.as_str(),
                 decision.decided_by,
@@ -1242,7 +1297,13 @@ impl SqliteQueue {
         )
         .db()?;
         if current.status == ProposalStatus::Open {
-            log(&tx, &project, EVENT_APPROVED, &json!({ "id": id }), now)?;
+            log(
+                &tx,
+                &project,
+                EVENT_APPROVED,
+                &with_staged(json!({ "id": id }), decision),
+                now,
+            )?;
         }
         let stored = existing(&tx, &project, id)?;
         tx.commit().db()?;
@@ -1267,12 +1328,16 @@ impl SqliteQueue {
             (ProposalStatus::Open, _) | (ProposalStatus::Approved, Some(_)) => {}
             _ => return Err(status_error(current)),
         }
-        if seen.is_some_and(|seen| current.seen() != *seen) {
-            return Err(changed(current));
+        if let Some(seen) = seen {
+            if current.seen() != *seen {
+                return Err(changed(current));
+            }
+            confirms(&current, decision)?;
         }
         tx.execute(
             "UPDATE main.proposals SET status = ?1, decided_by = ?2, decided_at = ?3, \
-             decision_note = ?4, updated_at = ?3 WHERE id = ?5 AND project = ?6",
+             decision_note = ?4, updated_at = ?3, staged = NULL, staged_at = NULL \
+             WHERE id = ?5 AND project = ?6",
             rusqlite::params![
                 ProposalStatus::Rejected.as_str(),
                 decision.decided_by,
@@ -1287,7 +1352,7 @@ impl SqliteQueue {
             &tx,
             &project,
             EVENT_REJECTED,
-            &json!({ "id": id, "reason": decision.note }),
+            &with_staged(json!({ "id": id, "reason": decision.note }), decision),
             now,
         )?;
         let stored = existing(&tx, &project, id)?;
@@ -1328,19 +1393,24 @@ impl SqliteQueue {
                     rusqlite::params![decision.decided_by, now, decision.note, id, project],
                 )
                 .db()?;
+                // Deliberately no compare-and-set (module documentation,
+                // "Runs"): the stage it confirms, if any, as the caller says.
                 log(
                     &tx,
                     &project,
                     EVENT_APPROVED,
-                    &with_record(json!({ "id": id }), record.as_deref()),
+                    &with_staged(
+                        with_record(json!({ "id": id }), record.as_deref()),
+                        decision,
+                    ),
                     now,
                 )?;
             }
             _ => return Err(status_error(current)),
         }
         tx.execute(
-            "UPDATE main.proposals SET status = ?1, applied_commit = ?2, updated_at = ?3 \
-             WHERE id = ?4 AND project = ?5",
+            "UPDATE main.proposals SET status = ?1, applied_commit = ?2, updated_at = ?3, \
+             staged = NULL, staged_at = NULL WHERE id = ?4 AND project = ?5",
             [
                 ProposalStatus::Applied.as_str(),
                 commit,
@@ -1446,11 +1516,13 @@ impl SqliteQueue {
         if next != approval.preview {
             return Err(QueueError::Issued { next });
         }
+        confirms(&current, decision)?;
         let choice = to_json(&approval.choice)?;
         tx.execute(
             "UPDATE main.proposals SET status = ?1, decided_by = ?2, decided_at = ?3, \
              decision_note = ?4, updated_at = ?3, record_id = ?5, record_path = ?6, \
-             record_title = ?7, record_text = ?8, choice = ?9 WHERE id = ?10 AND project = ?11",
+             record_title = ?7, record_text = ?8, choice = ?9, staged = NULL, staged_at = NULL \
+             WHERE id = ?10 AND project = ?11",
             rusqlite::params![
                 ProposalStatus::Approved.as_str(),
                 decision.decided_by,
@@ -1471,7 +1543,7 @@ impl SqliteQueue {
                 &tx,
                 &project,
                 EVENT_APPROVED,
-                &json!({ "id": id, "record": approval.preview }),
+                &with_staged(json!({ "id": id, "record": approval.preview }), decision),
                 now,
             )?;
         }
@@ -1547,8 +1619,9 @@ enum Hold<'a> {
 
 /// The queue's schema steps, in one `Immediate` transaction: 0 → 1 makes
 /// the tables, 1 → 2 adds the intake columns, 2 → 3 the record columns,
-/// 3 → 4 the tasks, their runs and a proposal's task (0 → 4 runs all
-/// four);
+/// 3 → 4 the tasks, their runs and a proposal's task, 4 → 5 a proposal's
+/// stage (0 → 5 runs all five; a schema-4 DB opens as 5, every stage
+/// `NULL`);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -1582,6 +1655,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 3 {
         tx.execute_batch(STEP_4).db()?;
         version = 4;
+    }
+    if version == 4 {
+        tx.execute_batch(STEP_5).db()?;
+        version = 5;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -1766,11 +1843,14 @@ impl RawRow {
         let linked = take();
         let record_columns: [Option<String>; 5] = std::array::from_fn(|_| take());
         let task_id = take();
+        let staged_columns = [take(), take()];
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
             return Err(corrupt(&id, "task_id", format!("{task:?} is no task ID")));
         }
+        let new_file = kind == ProposalKind::Create && base_hash.is_empty();
+        let staged = stage::decode(&id, kind, status, new_file, staged_columns)?;
         let new_ids = if kind == ProposalKind::Create {
             columns.decode_create(&id, &target_id, base_hash.is_empty(), linked.as_deref())?
         } else {
@@ -1817,6 +1897,7 @@ impl RawRow {
             record,
             new_ids,
             task_id,
+            staged,
         })
     }
 }
@@ -1988,6 +2069,35 @@ fn with_record(mut payload: Value, record: Option<&str>) -> Value {
         object.insert("record".to_owned(), Value::String(record.to_owned()));
     }
     payload
+}
+
+/// `payload` with `staged_at` added, last, when `decision` confirms a stage
+/// (the payload's other keys sort before it, so a JSON map of either order
+/// writes it last).
+fn with_staged(mut payload: Value, decision: &Decision) -> Value {
+    if let (Some(at), Value::Object(object)) = (&decision.staged_at, &mut payload) {
+        object.insert("staged_at".to_owned(), Value::String(at.clone()));
+    }
+    payload
+}
+
+/// A decision confirming a stage confirms the one `current` holds (its
+/// `staged_at`), else [`QueueError::Invalid`], nothing written.
+fn confirms(current: &Proposal, decision: &Decision) -> Result<(), QueueError> {
+    let Some(at) = &decision.staged_at else {
+        return Ok(());
+    };
+    if current
+        .staged
+        .as_ref()
+        .is_some_and(|staged| staged.at == *at)
+    {
+        return Ok(());
+    }
+    Err(QueueError::Invalid(format!(
+        "`{}` holds no choice staged at {at}: the decision confirms none",
+        current.id
+    )))
 }
 
 /// The highest number `<prefix>-<digits>` of the project's stored
@@ -2241,9 +2351,20 @@ fn log(
     payload: &Value,
     at: &str,
 ) -> Result<(), QueueError> {
+    log_text(tx, project, event_type, &payload.to_string(), at)
+}
+
+/// [`log`] of a payload already written as JSON text.
+fn log_text(
+    tx: &Transaction<'_>,
+    project: &str,
+    event_type: &str,
+    payload: &str,
+    at: &str,
+) -> Result<(), QueueError> {
     tx.execute(
         "INSERT INTO main.events (project, type, payload, at) VALUES (?1, ?2, ?3, ?4)",
-        [project, event_type, &payload.to_string(), at],
+        [project, event_type, payload, at],
     )
     .db()?;
     Ok(())
@@ -2298,7 +2419,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22)"
+             NULL, NULL, ?22, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -2463,7 +2584,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25)"
+             ?25, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -2863,6 +2984,22 @@ impl ProposalQueue for SqliteQueue {
         now: &str,
     ) -> Result<Proposal, QueueError> {
         self.reject_from(id, seen, decision, now)
+    }
+
+    fn stage_from(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        stage: &Stage,
+        now: &str,
+    ) -> Result<Proposal, QueueError> {
+        self.stage_if(id, seen, Some(stage), now)
+            .map(|(stored, _)| stored)
+    }
+
+    fn unstage_from(&mut self, id: &str, seen: &Seen, now: &str) -> Result<bool, QueueError> {
+        self.stage_if(id, seen, None, now)
+            .map(|(_, written)| written)
     }
 
     fn events(&self) -> Result<Vec<Event>, QueueError> {

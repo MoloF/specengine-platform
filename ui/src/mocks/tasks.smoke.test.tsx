@@ -186,7 +186,7 @@ describe("proposals and the Inbox (AC-08)", () => {
     expect(screen.getByRole("link", { name: "PR-0041" }).getAttribute("href")).toBe("#/harbor-sim/inbox/PR-0041");
   });
 
-  it("links PR-0041's Inbox card to T-0107; after PR-0041 is rejected, T-0107 is read again without it", async () => {
+  it("links PR-0041's Inbox card to T-0107; a reject staged on PR-0041 is no decision: T-0107 still holds it (decision-staging)", async () => {
     const { getTask } = renderMock("normal", "#/harbor-sim/tasks/T-0107");
     await screen.findByRole("tab", { name: "Overview", selected: true });
     expect(within(document.querySelector(".task-assumptions") ?? document.body).getByText("PR-0041")).toBeTruthy();
@@ -201,20 +201,21 @@ describe("proposals and the Inbox (AC-08)", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog", { name: "Reject PR-0041" });
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "The window stays." } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage reject" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
+    expect(await within(screen.getByRole("article")).findByText("spec reject PR-0041")).toBeTruthy();
+    // The stage read no task again.
+    expect(getTask).toHaveBeenCalledTimes(1);
 
     await goTo("#/harbor-sim/tasks/T-0107");
     await waitFor(() => {
       expect(getTask).toHaveBeenCalledTimes(2);
     });
-    await waitFor(() => {
-      expect(document.querySelector(".task-assumptions")?.textContent).not.toContain("PR-0041");
-    });
+    expect(within(document.querySelector(".task-assumptions") ?? document.body).getByText("PR-0041")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: /^Proposals/ }));
-    expect(listed("Raised by this task")).toEqual(["PR-0042"]);
+    expect(listed("Raised by this task")).toEqual(["PR-0041", "PR-0042"]);
   });
 });
 

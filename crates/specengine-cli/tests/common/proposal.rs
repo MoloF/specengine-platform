@@ -294,7 +294,7 @@ impl Pair {
             &Globals::default(),
             &RejectRequest {
                 id: id.to_owned(),
-                reason: reason.to_owned(),
+                reason: Some(reason.to_owned()),
                 now: LATER.to_owned(),
                 git: self.git_env(cwd),
             },

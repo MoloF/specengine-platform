@@ -70,7 +70,7 @@ Plugin skills carry them (`plugin-skills`: `read-spec`, `ask-owner`, `propose-sp
 spec init [--import IMPORTER]            # specengine.toml, layout, migration (08 §4)
 spec index [--full]                      # rebuild the index (incremental by BLAKE3)
 spec serve [--port 7777]                 # daemon: HTTP + SSE + MCP(HTTP) + UI + watcher
-specengine-http --root DIR... [--port N]  # built: its read surface, crates/specengine-http/README.md
+specengine-http --root DIR... [--port N]  # built: reads, staging; crates/specengine-http/README.md
 spec mcp                                 # MCP over stdio (for .mcp.json)
 
 # tree and nodes
@@ -120,9 +120,9 @@ spec export index [--stdout]                         # [paths] index by its regi
 
 ## 3. HTTP (daemon)
 
-- `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads only: `specengine-http` (`crates/specengine-http/README.md`).
+- `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` (`crates/specengine-http/README.md`).
 - `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id` (built); `symbols|health` to come
-- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (`decision-staging`; today POST 403), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
+- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)
 - `/` — Web UI (embedded via `rust-embed`)

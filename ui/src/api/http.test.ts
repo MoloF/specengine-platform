@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
-import { aCheckFinding, aCheckReport, aGraphEdge, aGraphNode, aGraphView, aTaskEntry, aTaskPackage } from "../test/builders";
+import { aCheckFinding, aCheckReport, aGraphEdge, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage } from "../test/builders";
 import { apiErrorOf, ClientError, isNotServed } from "./client";
-import { errorBodyOf, HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS, REOPEN_MAX_MS } from "./http";
+import { errorBodyOf, HttpClient, QUEUE_EVENT_TYPES, refusedReasonOf, REOPEN_FIRST_MS, REOPEN_MAX_MS } from "./http";
 import httpSource from "./http.ts?raw";
 import type { QueueEvent } from "./types";
 
@@ -12,7 +12,11 @@ import type { QueueEvent } from "./types";
 // AC-11 of docs/features/ui-live.md: the graph and the check are fetched, every check verdict a
 // 200 report resolved as data. AC-08 and AC-09 of docs/features/ui-live-tasks.md: the tasks are
 // fetched too (the list with no query, a task's ID one path segment), a 404 `{id, reason}` resolved
-// as data; the live tail listens to the nine `task.*` types after the five `proposal.*`.
+// as data; the live tail listens to the nine `task.*` types after the five `proposal.*`. AC-13 and
+// AC-14 of docs/features/decision-staging.md: the stage is a POST of exactly the stage plus
+// `updated_at`, the unstage a DELETE, neither with an AbortSignal; a refusal carrying the review
+// document rejects with its last note; the tail listens to the seven `proposal.*` types, the
+// stage's two after `apply_failed`, sixteen in all.
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -127,12 +131,33 @@ describe("each method hits its URL (AC-09)", () => {
     expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
   });
 
-  it("posts a decision to its URL with the decision as JSON", async () => {
-    await new HttpClient().decideProposal("alpha", "PR-0004", { decision: "reject", reason: "No" });
+  it("stages an approve: one POST to the decision path, its body exactly the stage plus updated_at (AC-14 of decision-staging)", async () => {
+    await new HttpClient().stageDecision(
+      "alpha",
+      "PR-0004",
+      { decision: "approve", option: 2, answer: null, canon: null, note: "keep the cap" },
+      "2026-10-06T09:14:02Z",
+    );
     expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/proposals/PR-0004/decision"]);
     const init = fetchStub.mock.calls[0]?.[1];
     expect(init?.method).toBe("POST");
-    expect(init?.body).toBe('{"decision":"reject","reason":"No"}');
+    expect(init?.body).toBe('{"decision":"approve","option":2,"answer":null,"canon":null,"note":"keep the cap","updated_at":"2026-10-06T09:14:02Z"}');
+    expect(init?.headers).toEqual({ Accept: "application/json", "Content-Type": "application/json" });
+  });
+
+  it("stages a reject: its reason, then updated_at, nothing else; the ID one path segment", async () => {
+    await new HttpClient().stageDecision("a b", "PR-0004/x", { decision: "reject", reason: "duplicate of PR-0003" }, "2026-10-06T09:14:02Z");
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/a%20b/proposals/PR-0004%2Fx/decision"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.body).toBe('{"decision":"reject","reason":"duplicate of PR-0003","updated_at":"2026-10-06T09:14:02Z"}');
+  });
+
+  it("unstages with a DELETE on the same path, no body (AC-14 of decision-staging)", async () => {
+    await new HttpClient().unstageDecision("alpha", "PR-0004");
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/proposals/PR-0004/decision"]);
+    const init = fetchStub.mock.calls[0]?.[1];
+    expect(init?.method).toBe("DELETE");
+    expect(init?.body).toBeUndefined();
+    expect(init?.headers).toEqual({ Accept: "application/json" });
   });
 
   it("is the daemon: dataSource `daemon`", () => {
@@ -167,12 +192,13 @@ describe("each method hits its URL (AC-09)", () => {
     expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
   });
 
-  it("sends the check and a decision with no AbortSignal: a walk in flight is never aborted", async () => {
+  it("sends the check, a stage and an unstage with no AbortSignal: a walk in flight is never aborted, a write's answer always taken", async () => {
     const client = new HttpClient();
     await client.getCheck("alpha");
-    await client.decideProposal("alpha", "PR-0004", { decision: "defer", note: null });
+    await client.stageDecision("alpha", "PR-0004", { decision: "reject", reason: "No" }, "2026-10-06T09:14:02Z");
+    await client.unstageDecision("alpha", "PR-0004");
     await client.getTasks("alpha");
-    expect(fetchStub.mock.calls.map((call) => call[1] !== undefined && "signal" in call[1])).toEqual([false, false, false]);
+    expect(fetchStub.mock.calls.map((call) => call[1] !== undefined && "signal" in call[1])).toEqual([false, false, false, false]);
   });
 
   it("rejects an aborted read with the abort error as fetch gave it, never a ClientError of the daemon", async () => {
@@ -333,7 +359,7 @@ describe("answers (AC-09)", () => {
   it.each([
     [503, "spec: the index cannot be read: database is locked\nsecond line, verbatim"],
     [400, "unknown query `kind` for /search: query, kinds, limit, archive"],
-    [403, "decisions are made on a terminal: `spec approve PR-0004` or `spec reject PR-0004 --reason …` in /work/alpha; nothing changed"],
+    [403, "refused: Origin http://evil.example is not this daemon's"],
     [405, "method PUT not allowed"],
   ])("rejects a %i with the error body's message verbatim", async (status, message) => {
     stubFetch(() => errorAnswer(status, message));
@@ -342,11 +368,60 @@ describe("answers (AC-09)", () => {
     expect(apiErrorOf(error)).toEqual({ status, message });
   });
 
-  it("rejects the decision with the daemon's 403 in its own words, the terminal command in it", async () => {
-    const message = "decisions are made on a terminal: `spec approve PR-0004` or `spec reject PR-0004 --reason …` in /work/alpha; nothing changed";
-    stubFetch(() => errorAnswer(403, message));
-    const error = await rejection(new HttpClient().decideProposal("alpha", "PR-0004", { decision: "accept", option: null, note: null }));
-    expect([error.status, error.message]).toEqual([403, message]);
+  it("resolves a stage's and an unstage's 200 to the review document as sent", async () => {
+    const staged = aProposal({
+      id: "PR-0004",
+      staged: { decision: "approve", option: 1, answer: null, canon: null, note: "n", span_hash: null },
+      staged_at: "2026-10-06T09:14:02Z",
+      updated_at: "2026-10-06T09:14:02Z",
+    });
+    stubFetch((_url, init) => jsonAnswer(200, init?.method === "DELETE" ? { ...staged, staged: null, staged_at: null } : staged));
+    const client = new HttpClient();
+    expect(await client.stageDecision("alpha", "PR-0004", { decision: "approve", option: 1, answer: null, canon: null, note: "n" }, "2026-10-06T09:00:00Z")).toEqual(staged);
+    expect(await client.unstageDecision("alpha", "PR-0004")).toEqual({ ...staged, staged: null, staged_at: null });
+  });
+
+  it.each<[string, "POST" | "DELETE", number]>([
+    ["a stage's 409 (changed since read)", "POST", 409],
+    ["an unstage's 409 (not open)", "DELETE", 409],
+    ["a stage's 404 (the exit-1 document)", "POST", 404],
+  ])("rejects %s carrying the review document with its last note, never the raw JSON (AC-14 of decision-staging)", async (_name, method, status) => {
+    const reason = "`PR-0004` is approved, not open: nothing changed";
+    stubFetch(() => jsonAnswer(status, aProposal({ id: "PR-0004", status: "approved", notes: ["rebases: RULE-X changed", reason] })));
+    const client = new HttpClient();
+    const call = method === "POST" ? client.stageDecision("alpha", "PR-0004", { decision: "reject", reason: "No" }, "2026-10-06T09:14:02Z") : client.unstageDecision("alpha", "PR-0004");
+    const error = await rejection(call);
+    expect(error).toBeInstanceOf(ClientError);
+    expect([error.status, error.message, error.notServed]).toEqual([status, reason, false]);
+  });
+
+  it.each([
+    [400, "spec: `PR-0004` is a question: --option is for a discrepancy (exit 2)"],
+    [403, "staging needs a same-origin page (not authentication: ADR-0034)"],
+    [413, "the body is over 16384 bytes"],
+    [415, "the body must be application/json"],
+    [503, "spec: the queue cannot be read: database is locked\nsecond line, verbatim"],
+  ])("rejects a stage's %i error body with its message verbatim", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    const error = await rejection(new HttpClient().stageDecision("alpha", "PR-0004", { decision: "reject", reason: "No" }, "2026-10-06T09:14:02Z"));
+    expect(apiErrorOf(error)).toEqual({ status, message });
+  });
+
+  it("reads a refused write's reason only from a review document's last note", () => {
+    expect(refusedReasonOf({ id: "PR-1", notes: ["a", "the reason"] })).toBe("the reason");
+    expect(refusedReasonOf({ notes: [] })).toBeNull();
+    expect(refusedReasonOf({ notes: ["a", 7] })).toBeNull();
+    expect(refusedReasonOf({ notes: "the reason" })).toBeNull();
+    expect(refusedReasonOf({ status: 409, message: "x" })).toBeNull();
+    expect(refusedReasonOf(["the reason"])).toBeNull();
+    expect(refusedReasonOf(null)).toBeNull();
+  });
+
+  it("never takes a GET's error answer for a refused write: a read's 409 with notes is its text", async () => {
+    const body = { notes: ["not a write"] };
+    stubFetch(() => jsonAnswer(409, body));
+    const error = await rejection(new HttpClient().getInbox("alpha"));
+    expect([error.status, error.message]).toEqual([409, JSON.stringify(body)]);
   });
 
   it("gives another error body's text verbatim, and says when there is none", async () => {
@@ -358,9 +433,12 @@ describe("answers (AC-09)", () => {
     expect(empty.message).toBe("GET /api/projects answered 502 Bad Gateway with an empty body: the dev server's proxy reached no daemon; is specengine-http running?");
   });
 
-  it("never takes a POST's 404 for a document", async () => {
+  it("never takes a POST's or a DELETE's 404 for a document", async () => {
     stubFetch(() => jsonAnswer(404, { proposal: null }));
-    expect((await rejection(new HttpClient().decideProposal("alpha", "PR-1", { decision: "defer", note: null }))).status).toBe(404);
+    const client = new HttpClient();
+    const staged = await rejection(client.stageDecision("alpha", "PR-1", { decision: "reject", reason: "No" }, "2026-10-06T09:14:02Z"));
+    const unstaged = await rejection(client.unstageDecision("alpha", "PR-1"));
+    expect([staged.status, staged.message, unstaged.status, unstaged.message]).toEqual([404, '{"proposal":null}', 404, '{"proposal":null}']);
   });
 
   it("rejects with status 0 when no response came", async () => {
@@ -399,19 +477,22 @@ describe("the live tail (AC-09)", () => {
     return source;
   }
 
-  it("opens the project's stream, listens to the queue's fourteen event types and hands each over parsed", () => {
+  it("opens the project's stream, listens to the queue's sixteen event types and hands each over parsed", () => {
     const events: QueueEvent[] = [];
     const stop = new HttpClient().subscribe("alpha", (event) => events.push(event));
     const source = only();
     expect(source.url).toBe("/api/projects/alpha/events");
-    // docs/canon/proposal-queue.md "States and events": the five types; then docs/canon/tasks.md
-    // "Store": the nine (AC-09 of ui-live-tasks). Each a listener of its own, in this order.
+    // docs/canon/proposal-queue.md "States and events": the seven types, the stage's two after
+    // `apply_failed` (AC-13 of decision-staging); then docs/canon/tasks.md "Store": the nine (AC-09
+    // of ui-live-tasks). Each a listener of its own, in this order.
     expect(source.types()).toEqual([
       "proposal.created",
       "proposal.approved",
       "proposal.applied",
       "proposal.rejected",
       "proposal.apply_failed",
+      "proposal.staged",
+      "proposal.unstaged",
       "task.created",
       "task.planned",
       "task.approved",
@@ -423,6 +504,7 @@ describe("the live tail (AC-09)", () => {
       "task.refreshed",
     ]);
     expect([...QUEUE_EVENT_TYPES]).toEqual(source.types());
+    expect(QUEUE_EVENT_TYPES).toHaveLength(16);
     source.open();
     source.emit("proposal.created", '{"id":"PR-0005"}', "12");
     source.emit("proposal.rejected", '{"id":"PR-0002","reason":"no"}', "13");
@@ -456,6 +538,20 @@ describe("the live tail (AC-09)", () => {
       source.emit(type, data, String(70 + index));
     });
     expect(events).toEqual(sent.map(([type, data], index) => ({ seq: 70 + index, type, payload: JSON.parse(data) as unknown })));
+  });
+
+  it("hands the stage's two events over as {seq, type, payload}, the stored payload parsed (AC-13 of decision-staging)", () => {
+    const events: QueueEvent[] = [];
+    new HttpClient().subscribe("alpha", (event) => events.push(event));
+    const source = only();
+    source.open();
+    const staged = '{"id":"PR-0004","staged":{"decision":"approve","option":1,"answer":null,"canon":null,"note":"keep the cap","span_hash":null},"staged_at":"2026-10-06T09:14:02Z"}';
+    source.emit("proposal.staged", staged, "90");
+    source.emit("proposal.unstaged", '{"id":"PR-0004"}', "91");
+    expect(events).toEqual([
+      { seq: 90, type: "proposal.staged", payload: JSON.parse(staged) as unknown },
+      { seq: 91, type: "proposal.unstaged", payload: { id: "PR-0004" } },
+    ]);
   });
 
   it("leaves a dropped stream to the browser: it resumes with Last-Event-ID, so no gap is said (R-n6)", () => {

@@ -23,6 +23,8 @@ import type {
   SnapshotNode,
   SnapshotPlace,
   SpecSnapshot,
+  StagedApprove,
+  StagedReject,
   TaskAssumption,
   TaskBundle,
   TaskClaim,
@@ -38,12 +40,14 @@ import type {
 
 // AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-07 of
 // docs/features/ui-live-tasks.md, the review document's `task_id` (`docs/canon/tasks.md`
-// "Task-bound proposals"): the provisional types of the daemon's documents. Each record names
-// exactly its type's keys (`satisfies` fails `pnpm build` otherwise) and equals the list the cited
-// headings write; the keys the daemon serves (the record less the base-only keys of a plain check,
-// NEVER_SERVED) equal `fixtures/daemon-keys.json`, which a Rust test regenerates from the daemon on
-// fixture A: daemon-read's six names, ui-live's nine, ui-live-tasks' seventeen. While that file is
-// absent the comparison is skipped, saying so; once it exists it names all thirty-two.
+// "Task-bound proposals"), AC-14 of docs/features/decision-staging.md (the review document's
+// `staged`, `staged_at`, an inbox entry's `staged_at`, the stage's two shapes): the provisional
+// types of the daemon's documents. Each record names exactly its type's keys (`satisfies` fails
+// `pnpm build` otherwise) and equals the list the cited headings write; the keys the daemon serves
+// (the record less the base-only keys of a plain check, NEVER_SERVED) equal
+// `fixtures/daemon-keys.json`, which a Rust test regenerates from the daemon on fixture A:
+// daemon-read's six names, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two. While
+// that file is absent the comparison is skipped, saying so; once it exists it names all thirty-four.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -61,10 +65,12 @@ const KEYS = {
     severity: true,
     summary: true,
     record_id: true,
+    staged_at: true,
   } satisfies Record<keyof InboxEntry, true>,
   // docs/canon/proposal-queue.md "Commands" to `updated_at`, docs/canon/agent-intake.md "Review
   // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`,
-  // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`.
+  // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`,
+  // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`.
   Proposal: {
     id: true,
     project: true,
@@ -108,8 +114,13 @@ const KEYS = {
     record_text: true,
     choice: true,
     task_id: true,
+    staged: true,
+    staged_at: true,
     notes: true,
   } satisfies Record<keyof Proposal, true>,
+  // docs/canon/decision-staging.md "The stage": its two shapes, keys in its order.
+  StagedApprove: { decision: true, option: true, answer: true, canon: true, note: true, span_hash: true } satisfies Record<keyof StagedApprove, true>,
+  StagedReject: { decision: true, reason: true } satisfies Record<keyof StagedReject, true>,
   // crates/specengine-cli/README.md "Output and the cap": `spec show --json`.
   NodeView: { ref: true, reason: true, notes: true, nodes: true } satisfies Record<keyof NodeView, true>,
   // Same heading: a hit.
@@ -260,13 +271,16 @@ type Named = keyof typeof KEYS;
 /** The key lists as the cited headings write them, copied verbatim (the review document's joined). */
 const CITED: Record<Named, string> = {
   Project: "slug, name, root, branch",
-  InboxEntry: "id, kind, status, target_id, target_ids, branch, created_at, rationale, severity, summary, record_id",
+  InboxEntry: "id, kind, status, target_id, target_ids, branch, created_at, rationale, severity, summary, record_id, staged_at",
   Proposal:
     "id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
     "target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked, " +
     "record_id, record_path, record_title, record_text, choice, " +
     "task_id, " +
+    "staged, staged_at, " +
     "notes",
+  StagedApprove: "decision, option, answer, canon, note, span_hash",
+  StagedReject: "decision, reason",
   NodeView: "ref, reason, notes, nodes",
   SearchHit: "id, kind, title, path, line, ord, archived, snippet",
   BundleView: "refs, reason, notes, task, budget, tokens, chars, bytes, bundle_hash, body, layers, tail, more",
@@ -328,8 +342,11 @@ const UI_LIVE_TASKS: readonly Named[] = [
   "Author",
 ];
 
+/** decision-staging's two: the stage's shapes (docs/features/decision-staging.md "Data", "Documents"). */
+const DECISION_STAGING: readonly Named[] = ["StagedApprove", "StagedReject"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS];
+const ALL: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS, ...DECISION_STAGING];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -353,8 +370,12 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 11 inbox-entry keys, 43 review keys", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 11, 43]);
+  it("counts 4 project keys, 12 inbox-entry keys, 45 review keys (AC-14 of decision-staging)", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 45]);
+  });
+
+  it("counts the stage's two shapes: 6 keys staged as an approve, 2 as a reject (AC-14 of decision-staging)", () => {
+    expect(DECISION_STAGING.map((name) => served(name).length)).toEqual([6, 2]);
   });
 
   it("counts the daemon's keys of ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 (AC-09 of ui-live)", () => {
@@ -375,8 +396,8 @@ describe("the daemon's document types (AC-09)", () => {
   it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks)", () => {
     expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
-    expect(ALL).toHaveLength(32);
-    expect(new Set(ALL).size).toBe(32);
+    expect(ALL).toHaveLength(34);
+    expect(new Set(ALL).size).toBe(34);
   });
 
   it("lists each base-only key once, a key of its type the citation marks optional", () => {
@@ -391,9 +412,14 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("names no task in an inbox entry; the review document's task_id sits after choice, before notes", () => {
+  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, then notes", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
-    expect(Object.keys(KEYS.Proposal).slice(-3)).toEqual(["choice", "task_id", "notes"]);
+    expect(Object.keys(KEYS.Proposal).slice(-5)).toEqual(["choice", "task_id", "staged", "staged_at", "notes"]);
+  });
+
+  it("gives an inbox entry the stage's time alone, after record_id: the stage itself is the review document's", () => {
+    expect(Object.keys(KEYS.InboxEntry).slice(-2)).toEqual(["record_id", "staged_at"]);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("staged");
   });
 
   it("types a queue event as the stream sends it: {seq, type, payload}", () => {
@@ -444,7 +470,7 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the thirty-two types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen", () => {
+  it("names exactly the thirty-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two", () => {
     expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
   });
 

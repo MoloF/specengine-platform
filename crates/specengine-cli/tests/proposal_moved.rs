@@ -141,7 +141,7 @@ fn reject_as(
         &Globals::default(),
         &RejectRequest {
             id: id.to_owned(),
-            reason: "Not wanted.".to_owned(),
+            reason: Some("Not wanted.".to_owned()),
             now: LATER.to_owned(),
             git,
         },

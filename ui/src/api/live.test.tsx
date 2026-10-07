@@ -10,13 +10,13 @@ import {
   queryKeys,
   useBundle,
   useCheck,
-  useDecideProposal,
   useGraph,
   useInbox,
   useLiveQueue,
   useNode,
   useProposal,
   useSearch,
+  useStageDecision,
   useTask,
   useTasks,
   useTree,
@@ -31,7 +31,8 @@ import type { Proposal, TaskListEntry } from "./types";
 // docs/features/ui-live.md: the spec reads include the graphs and, while Health shows it, the check.
 // AC-10 of docs/features/ui-live-tasks.md: a `task.*` event reads that project's task list and that
 // task again (no string `id`: every task of it), nothing else; a `proposal.*` event and a gap read
-// them too.
+// them too. AC-13 of docs/features/decision-staging.md: a stage event, `proposal.staged` or
+// `.unstaged`, reads that project's inbox and that proposal again, never a task or a spec read.
 
 const QUEUE: Record<string, Proposal[]> = {
   alpha: [aProposal({ id: "PR-0001", summary: "First" }), aProposal({ id: "PR-0002", summary: "Second" })],
@@ -170,6 +171,18 @@ describe("a queue event (AC-09)", () => {
     },
   );
 
+  it.each([
+    ["proposal.staged", '{"id":"PR-0002","staged":{"decision":"reject","reason":"dup"},"staged_at":"2026-10-06T09:14:02Z"}'],
+    ["proposal.unstaged", '{"id":"PR-0002"}'],
+  ])("%s reads that project's inbox and that proposal again, no spec read (AC-13 of decision-staging)", async (type, data) => {
+    const { fetchStub, source } = await live();
+    act(() => {
+      source.emit(type, data, "52");
+    });
+    await settled();
+    expect(urlsOf(fetchStub).sort()).toEqual(["/api/projects/alpha/inbox", "/api/projects/alpha/proposals/PR-0002"]);
+  });
+
   it("proposal.applied also reads that project's trees, nodes, searches and bundles again, nothing of another project (R-n10)", async () => {
     const { fetchStub, source } = await live();
     act(() => {
@@ -260,7 +273,7 @@ interface Hold {
   next: Promise<void> | null;
 }
 
-/** ui-live's daemon: each project's inbox, PR-0001, a graph and a check (held by `hold`); a decision answered as applied. */
+/** ui-live's daemon: each project's inbox, PR-0001, a graph and a check (held by `hold`); a stage answered as stored. */
 function graphAndCheckDaemon(hold: Hold = { next: null }) {
   return stubFetch((url, init) => graphAndCheckAnswer(url, init, hold));
 }
@@ -282,7 +295,7 @@ function graphAndCheckAnswer(url: string, init: RequestInit | undefined, hold: H
     return hold.next === null ? report() : hold.next.then(report);
   }
   if (match[3] !== undefined && init?.method === "POST") {
-    return jsonAnswer(200, { proposal: aProposal({ id: "PR-0001", status: "applied" }), commit: { sha: "abc1234", subject: "spec: apply PR-0001" } });
+    return jsonAnswer(200, aProposal({ id: "PR-0001", staged: { decision: "reject", reason: "dup" }, staged_at: "2026-10-06T09:14:02Z" }));
   }
   return jsonAnswer(200, aProposal({ id: "PR-0001" }));
 }
@@ -302,11 +315,11 @@ function ProjectOnScreen({ project, health }: { project: string; health: boolean
   return health ? <HealthOnScreen project={project} /> : null;
 }
 
-type Decide = ReturnType<typeof useDecideProposal>["mutate"];
+type Decide = ReturnType<typeof useStageDecision>["mutate"];
 
-/** Alpha's decision, handed to the test. */
+/** Alpha's stage, handed to the test. */
 function Decider({ onDecide }: { onDecide: (decide: Decide) => void }) {
-  onDecide(useDecideProposal("alpha").mutate);
+  onDecide(useStageDecision("alpha").mutate);
   return null;
 }
 
@@ -496,18 +509,18 @@ describe("the graph and the check on the live tail (AC-12 of ui-live)", () => {
     expect(urlsOf(fetchStub).filter((url) => url === ALPHA_CHECK)).toEqual([ALPHA_CHECK]);
   });
 
-  it("a decision made in the UI reads the graph again, never the check", async () => {
+  it("a stage made in the UI reads neither the graph nor the check: only alpha's inbox and that proposal (AC-14 of decision-staging)", async () => {
     const { fetchStub, queryClient, decide } = await graphAndCheck();
     act(() => {
-      decide({ id: "PR-0001", decision: { decision: "accept", option: null, note: null } });
+      decide({ id: "PR-0001", stage: { decision: "reject", reason: "dup" }, updatedAt: "2026-10-01T10:00:00Z" });
     });
     await waitFor(() => {
-      expect(urlsOf(fetchStub)).toContain(ALPHA_GRAPH);
+      expect(urlsOf(fetchStub)).toContain("/api/projects/alpha/inbox");
     });
     await quiet(queryClient, true);
-    expect(urlsOf(fetchStub)).toContain("/api/projects/alpha/proposals/PR-0001/decision");
-    expect(urlsOf(fetchStub).filter((url) => url.includes("/check"))).toEqual([]);
+    expect(urlsOf(fetchStub).sort()).toEqual(["/api/projects/alpha/proposals/PR-0001/decision", ...ALPHA_QUEUE].sort());
     expect(queryClient.getQueryState(queryKeys.check("alpha"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(queryKeys.graph("alpha", { ref: "MEC-TIDES" }))?.isInvalidated).toBe(false);
   });
 });
 
@@ -653,7 +666,20 @@ describe("the task reads on the live tail (AC-10 of ui-live-tasks)", () => {
     expect(stale(queryClient, queryKeys.task("beta", "T-0109"))).toBe(false);
   });
 
-  it.each(QUEUE_EVENT_TYPES.filter((type) => type.startsWith("proposal.")))("%s reads the inbox, that proposal, alpha's list and its open task (WA-4)", async (type) => {
+  it.each(["proposal.staged", "proposal.unstaged"])("%s reads the inbox and that proposal, no task read, nothing of beta (AC-13 of decision-staging)", async (type) => {
+    const { fetchStub, queryClient, source } = await tasksLive();
+    act(() => {
+      source.emit(type, '{"id":"PR-0001"}', "85");
+    });
+    await still(queryClient);
+    expect(urlsOf(fetchStub).sort()).toEqual(["/api/projects/alpha/inbox", "/api/projects/alpha/proposals/PR-0001"]);
+    expect(stale(queryClient, queryKeys.tasks("alpha"))).toBe(false);
+    expect(stale(queryClient, queryKeys.task("alpha", "T-0107"))).toBe(false);
+    expect(stale(queryClient, queryKeys.task("alpha", "T-0109"))).toBe(false);
+    expect(stale(queryClient, queryKeys.tree("alpha", {}))).toBe(false);
+  });
+
+  it.each(QUEUE_EVENT_TYPES.filter((type) => type.startsWith("proposal.") && !type.endsWith("staged")))("%s reads the inbox, that proposal, alpha's list and its open task (WA-4)", async (type) => {
     const { fetchStub, queryClient, source } = await tasksLive();
     act(() => {
       source.emit(type, '{"id":"PR-0001"}', "84");

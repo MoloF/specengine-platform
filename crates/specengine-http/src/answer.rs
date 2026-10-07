@@ -14,7 +14,10 @@
 //! document (its `reason` set: data to the client); exit 2 → 503 with the
 //! error body, `message` the CLI's line(s) verbatim. The check exception:
 //! a check's report is a 200 document whatever its verdict's exit, keyed
-//! on the outcome being a check (a `CliError` is still a 503). A body is
+//! on the outcome being a check (a `CliError` is still a 503). A stage's
+//! answer (`docs/canon/decision-staging.md` "Daemon") is keyed on its
+//! cause: none 200, a usage defect 400, unknown 404, refused 409 (a
+//! `CliError` is still a 503). A body is
 //! `application/json; charset=utf-8`, compact: the CLI's bytes without the
 //! final line end. The error body is `{"status":<code>,"message":"…"}`,
 //! exactly two keys. The store and `rusqlite` are never touched here.
@@ -25,7 +28,9 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
-use specengine_cli::{CliError, Env, Exit, Globals, Outcome, ProjectRoot, discover, render_json};
+use specengine_cli::{
+    CliError, Env, Exit, Globals, Outcome, ProjectRoot, StageCause, discover, render_json,
+};
 
 use crate::start::Project;
 
@@ -100,15 +105,43 @@ fn document(outcome: &Outcome) -> String {
 
 /// What a call gave on the blocking pool.
 enum Answered {
-    Document { status: StatusCode, body: String },
+    Document {
+        status: StatusCode,
+        body: String,
+    },
+    /// The error body of a request the CLI refused as a usage defect.
+    Refused {
+        status: StatusCode,
+        message: String,
+    },
     CannotRun(String),
 }
 
 /// The answer of `outcome`: the exit map (0 → 200, 1 → 404, 2 → the CLI's
 /// lines), but a check's report is a 200 document whatever its exit (the
 /// check exception, docs/features/ui-live.md "Data": keyed on the outcome
-/// being a check, never on its verdict).
+/// being a check, never on its verdict), and a stage's answer is keyed on
+/// its cause (`docs/canon/decision-staging.md` "Daemon"): none 200, a
+/// usage defect 400 (the error body, the CLI's line), unknown 404, refused
+/// 409 (the refused review document).
 fn answered(outcome: &Outcome) -> Answered {
+    if let Outcome::Stage(stage) = outcome {
+        let status = match stage.cause {
+            None => StatusCode::OK,
+            Some(StageCause::Usage) => {
+                return Answered::Refused {
+                    status: StatusCode::BAD_REQUEST,
+                    message: outcome.stderr_lines().join("\n"),
+                };
+            }
+            Some(StageCause::Unknown) => StatusCode::NOT_FOUND,
+            Some(StageCause::Refused) => StatusCode::CONFLICT,
+        };
+        return Answered::Document {
+            status,
+            body: document(outcome),
+        };
+    }
     let status = match (outcome, outcome.exit()) {
         (Outcome::Check(_), _) | (_, Exit::Answered) => StatusCode::OK,
         (_, Exit::NotFound) => StatusCode::NOT_FOUND,
@@ -143,6 +176,7 @@ where
     .await;
     match joined {
         Ok(Answered::Document { status, body }) => json(status, body),
+        Ok(Answered::Refused { status, message }) => error(status, &message),
         Ok(Answered::CannotRun(message)) => error(StatusCode::SERVICE_UNAVAILABLE, &message),
         Err(_) => internal(),
     }

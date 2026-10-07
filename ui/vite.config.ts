@@ -45,9 +45,10 @@ function ownOrigins(localPort: number | undefined): string[] {
 
 /**
  * A proxied request's Origin is removed only when it is this server's own: the UI itself (a
- * same-origin POST, the decision, carries one), which the daemon then answers (its 403 for a
- * decision). Any other Origin (another page or port, a LAN address, a list of two) is sent on
- * unchanged, and the daemon refuses it, 403 in its own words.
+ * same-origin POST or DELETE, the decision's stage, carries one), which the daemon then answers;
+ * the browser's `Sec-Fetch-Site: same-origin` goes on unchanged, as the stage needs it. Any other
+ * Origin (another page or port, a LAN address, a list of two) is sent on unchanged, and the
+ * daemon refuses it, 403 in its own words.
  */
 function dropOwnOrigin(proxyReq: OutgoingRequest, req: IncomingRequest): void {
   const origin = proxyReq.getHeader("origin");
