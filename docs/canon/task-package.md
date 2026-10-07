@@ -28,7 +28,7 @@ ADR-0027: one versioned, stack-neutral document of the approved spec an agent wo
 
 - `targets`: resolved now in the compared place; a node gone keeps its stored `id` (`null` for a path target) and `path` (else the snapshot's), `kind`, `title` `null`.
 - `criteria`: free text, or `ref` and its text now in the compared place (`null` gone; cut: "Caps").
-- `open_proposals`: `open` and `approved` proposals of the task's repository whose `target_ids` meet the snapshot (before approval: what it would freeze) or bound to the task; `summary` a question's or discrepancy's summary, else the rationale's first line. `assumptions`: their questions' `working_answer`, discrepancies' recommended option label.
+- `open_proposals`: `open` and `approved` proposals of the task's repository whose `target_ids` meet the snapshot (before approval: what it would freeze) or bound to the task; `summary` a question's or discrepancy's summary, else the rationale's first line, `null` for an empty rationale. `assumptions`: their questions' `working_answer`, discrepancies' recommended option label.
 - `owner_notes` `{at, note}` per `changes --note`, oldest first; `bindings` `[]` until Phase 3; `runs` by number.
 - `spec_snapshot`: place and nodes, no texts (they stay stored); a node's `id` is never `null`: an ID, `slug/ID`, or an id-less document's path.
 - `bundle`: by reference (`get_context_bundle` with `node_ids` and `budget` gives the text): the targets, `[budgets] bundle_task` else 10 000 (`DEFAULT_TASK_BUDGET`), `spec bundle`'s `bundle_hash` now, `null` with a note `bundle: <why>` when it cannot be made.
