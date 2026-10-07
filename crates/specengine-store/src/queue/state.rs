@@ -23,7 +23,7 @@ use crate::schema;
 /// Every column of `proposals`, in table order (canon `proposal-queue.md`,
 /// "Store"): queue schema 1's 24, then the eleven step 2 appends
 /// (`docs/canon/agent-intake.md` "Stored"), then the five of a decision
-/// record step 3 appends (task spec `decision-apply`, "Data").
+/// record step 3 appends (`docs/canon/decision-record.md` "Queue and documents").
 pub const PROPOSAL_COLUMNS: [&str; 40] = [
     "id",
     "project",

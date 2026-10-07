@@ -161,7 +161,8 @@ pub struct IntakeMatch {
     /// an applied one's record title; `null` for a related item.
     pub answer: Option<String>,
     /// A hit's decision record: a decision's `id:`, an applied proposal's
-    /// `record_id` (task spec `decision-apply`); `null` for a related item.
+    /// `record_id` (canon `decision-record`, "Queue and documents"); `null`
+    /// for a related item.
     pub record: Option<String>,
 }
 

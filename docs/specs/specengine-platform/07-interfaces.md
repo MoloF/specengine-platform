@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `task-package`; a question or discrepancy approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `decision`, `interpretation`, `amendment`: `proposal-kinds`.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (canon `docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `task-package`; a question or discrepancy approved as a decision record shipped: `docs/canon/decision-record.md`; kind `create`: `docs/canon/proposal-kinds.md`; `decision`, `interpretation`, `amendment` later.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
@@ -85,6 +85,7 @@ spec bundle REF… [--budget N]            # shipped, default 2000: docs/canon/s
 
 # owner queue: shipped, docs/canon/proposal-queue.md; a decided question or discrepancy: docs/canon/decision-record.md
 spec propose update ID --base HASH --text-file F|- --rationale T
+spec propose create TARGET [--base HASH] ...  # docs/canon/proposal-kinds.md
 spec propose question|discrepancy …     # shipped: docs/canon/agent-intake.md
 spec inbox [--all]                       # to come: --severity, --task
 spec review PR-ID                        # to come: interactive edit/changes/defer

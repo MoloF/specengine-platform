@@ -36,11 +36,15 @@
 //!   the `[ids]` clash, the author, the apply commit's message;
 //! - [`intake`] — the pure half of the agent intake: the two kinds that
 //!   never apply, their enums, caps and field checks, the dedup's
-//!   normalised text (`docs/canon/agent-intake.md` "Rules", "Dedup").
+//!   normalised text (`docs/canon/agent-intake.md` "Rules", "Dedup");
+//! - [`create`] — the pure half of a proposal's `create`: a text's ID
+//!   sites as written, what one written ID is, and new `{#ID}` sections
+//!   spliced into a node's span (task spec `proposal-kinds`).
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod check;
+pub mod create;
 mod front_matter;
 mod glob;
 pub mod intake;
@@ -106,6 +110,7 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
     };
     let FrontMatter {
         id,
+        written_id: _,
         kind,
         title,
         rev,

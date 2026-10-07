@@ -10,7 +10,7 @@
 //! - `[ids]` and `[paths]` go through their own readers
 //!   ([`scheme_from_toml`], [`paths_from_toml`]), lines kept; no `[ids]` is
 //!   the empty scheme.
-//! - `[decision_records]` (task spec `decision-apply`, "Data"): exactly
+//! - `[decision_records]` (`docs/canon/decision-record.md` "Config"): exactly
 //!   `prefix`, `dir`, `template`, three strings; `prefix` an `[ids]` entry
 //!   of shape `number` and scope `project` (a legacy alias is an error
 //!   naming the canonical prefix), `dir` and `template` root-relative paths

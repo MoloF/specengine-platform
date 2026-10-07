@@ -10,12 +10,15 @@
 //! current repository when the recorded worktree is not there; a lookup git
 //! cannot make is a note too. A question or a discrepancy (canon
 //! `agent-intake`, "Review document") never applies: no diff, no preview,
-//! no step run.
+//! no step run. A create's new file (task spec `proposal-kinds`) is
+//! previewed by its own steps 2–6 ([`crate::create`]): `applies` or
+//! `unavailable`; its diff is from an empty base.
 //! `--brief` ([`review_brief`], MCP `get_proposal`): the same document,
 //! brief.
 
 use specengine_store::{GitEnv, Proposal, ProposalStatus};
 
+use crate::create::prepare_file;
 use crate::preflight::{completing, prepare, trailer_lookup};
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed,
@@ -125,8 +128,13 @@ pub(crate) fn previewed(
         ));
         return document;
     }
-    match prepare(env, git_env, context, proposal, messages) {
-        Ok(prepared) => document.preview = Some(prepared.preview),
+    let prepared = if proposal.new_file() {
+        prepare_file(env, git_env, context, proposal, messages).map(|_| Preview::Applies)
+    } else {
+        prepare(env, git_env, context, proposal, messages).map(|prepared| prepared.preview)
+    };
+    match prepared {
+        Ok(preview) => document.preview = Some(preview),
         Err(failure) => match failure.conflict {
             Some(conflict) => {
                 document.preview = Some(Preview::Conflicts);

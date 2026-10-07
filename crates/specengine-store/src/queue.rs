@@ -11,8 +11,15 @@
 //!   `question` and a `discrepancy` decide: their fields live in the eleven
 //!   columns step 2 adds ([`Intake`]), the update's five text columns NULL.
 //!   They are stored by [`ProposalQueue::create_intake`], whose dedup reads
-//!   the queue inside the inserting transaction.
-//! - **Records** (task spec `decision-apply`, "Data"): a deciding kind is
+//!   the queue inside the inserting transaction. A `create` (task spec
+//!   `proposal-kinds`) applies as an update does: a new file (its base
+//!   `NULL`) or new `{#ID}` sections in a node's span; its targets and new
+//!   IDs live in `target_ids` (no new column, no schema step), and
+//!   [`ProposalQueue::create`] stores it only when no live (`open`,
+//!   `approved`) create of the project, any repository, holds one of its
+//!   new IDs, checked inside the inserting transaction
+//!   ([`QueueError::Reserved`]; [`ProposalQueue::reserved`] reads them).
+//! - **Records** (`docs/canon/decision-record.md` "Queue and documents"): a deciding kind is
 //!   approved only with its decision record ([`DecisionRecord`], the five
 //!   columns step 3 adds), by [`ProposalQueue::approve_record_from`], which
 //!   issues the record's ID under the write lock ([`RecordSeries`]: one
@@ -79,8 +86,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specengine_core::check::Finding;
 use specengine_core::intake::{
-    DISCREPANCY_KIND, Evidence, GapType, IntakeOption, IntakeSeverity, QUESTION_KIND,
-    normalized_summary,
+    CREATE_KIND, DISCREPANCY_KIND, Evidence, GapType, IntakeOption, IntakeSeverity, QUESTION_KIND,
+    UPDATE_KIND, normalized_summary,
 };
 use specengine_core::is_clean_relative;
 use specengine_core::proposal::{
@@ -142,8 +149,8 @@ ALTER TABLE proposals ADD COLUMN distinct_from TEXT;
 ALTER TABLE proposals ADD COLUMN linked TEXT;
 ";
 
-/// Step 2 → 3: a decision record's columns, appended in this order (task
-/// spec `decision-apply`, "Data").
+/// Step 2 → 3: a decision record's columns, appended in this order
+/// (`docs/canon/decision-record.md` "Queue and documents").
 const STEP_3: &str = "
 ALTER TABLE proposals ADD COLUMN record_id TEXT;
 ALTER TABLE proposals ADD COLUMN record_path TEXT;
@@ -183,9 +190,9 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
-/// What a proposal does: `update` applies; the intake kinds decide (an
-/// approval writes a decision record), or are settled by a rejection whose
-/// reason is the answer.
+/// What a proposal does: `update` and `create` apply (a file written and
+/// committed); the intake kinds decide (an approval writes a decision
+/// record), or are settled by a rejection whose reason is the answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
@@ -195,16 +202,25 @@ pub enum ProposalKind {
     Question,
     /// A discrepancy with evidence and priced options.
     Discrepancy,
+    /// Add a node: a new spec file, or new `{#ID}` sections in a node's
+    /// span.
+    Create,
 }
 
 impl ProposalKind {
-    pub const ALL: [Self; 3] = [Self::Update, Self::Question, Self::Discrepancy];
+    pub const ALL: [Self; 4] = [
+        Self::Update,
+        Self::Question,
+        Self::Discrepancy,
+        Self::Create,
+    ];
 
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Update => "update",
+            Self::Update => UPDATE_KIND,
             Self::Question => QUESTION_KIND,
             Self::Discrepancy => DISCREPANCY_KIND,
+            Self::Create => CREATE_KIND,
         }
     }
 
@@ -212,9 +228,10 @@ impl ProposalKind {
         Self::ALL.into_iter().find(|kind| kind.as_str() == text)
     }
 
-    /// Only an `update` replaces a node's span.
+    /// An `update` replaces a node's span; a `create` writes a new file or
+    /// a span with new sections: both are applied as one commit.
     pub const fn applies(self) -> bool {
-        matches!(self, Self::Update)
+        matches!(self, Self::Update | Self::Create)
     }
 
     /// A question or a discrepancy: its approval writes a decision record.
@@ -302,24 +319,32 @@ impl From<&Finding> for ProposalFinding {
 /// times.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewProposal {
+    /// [`ProposalKind::Update`] or [`ProposalKind::Create`].
     pub kind: ProposalKind,
-    /// `ID`, or `slug/ID` for a feature-scoped one.
+    /// `ID`, or `slug/ID` for a feature-scoped one; a document without an
+    /// `id:` by its path. A create's new file: its `id:`, else its path.
     pub target_id: String,
     /// Root-relative.
     pub target_path: String,
     pub place: Place,
-    /// `b3:` of the span's bytes at creation.
-    pub base_hash: String,
-    /// The span at creation (the merge base of a later apply).
-    pub base_text: String,
-    /// Its replacement, as spliced.
+    /// `b3:` of the span's bytes at creation; `None` only for a create's
+    /// new file (with `base_text`).
+    pub base_hash: Option<String>,
+    /// The span at creation (the merge base of a later apply); `None` only
+    /// for a create's new file.
+    pub base_text: Option<String>,
+    /// Its replacement, as spliced; a new file's bytes.
     pub new_text: String,
-    /// [`patch_hash`] of the three above.
+    /// [`patch_hash`] of the three above (an absent base as `""`).
     pub patch_hash: String,
     pub rationale: String,
     pub author: Author,
     /// The findings the edit introduces.
     pub diagnostics: Vec<ProposalFinding>,
+    /// A create's new IDs, canonical (`slug/ID` for a feature-scoped one),
+    /// in text order: a new file's `id:` first when it declares one; empty
+    /// for an update.
+    pub new_ids: Vec<String>,
 }
 
 /// The fields of a `question` or a `discrepancy`
@@ -464,9 +489,28 @@ pub struct Proposal {
     /// A question's or a discrepancy's decision record, from its step 7
     /// on; `None` for an update.
     pub record: Option<DecisionRecord>,
+    /// A create's new IDs, canonical, in text order (its `target_ids` but
+    /// the first, and the first too for a new file declaring an `id:`);
+    /// empty for any other kind.
+    pub new_ids: Vec<String>,
 }
 
 impl Proposal {
+    /// A create of a new file: no base (`base_hash` stored `NULL`, read as
+    /// `""`).
+    pub fn new_file(&self) -> bool {
+        self.kind == ProposalKind::Create && self.base_hash.is_empty()
+    }
+
+    /// Every target, canonical: an intake's, as given; a create's
+    /// `target_id` then its other new IDs; an update's `[target_id]`.
+    pub fn target_ids(&self) -> Vec<String> {
+        if let Some(intake) = &self.intake {
+            return intake.target_ids.clone();
+        }
+        create_targets(&self.target_id, self.new_file(), &self.new_ids)
+    }
+
     /// Its state as read now: the key of a compare-and-set change.
     pub fn seen(&self) -> Seen {
         Seen {
@@ -619,6 +663,9 @@ pub enum QueueError {
     /// longer the next (another run took it meanwhile); `next` is. Nothing
     /// written.
     Issued { next: String },
+    /// A create's new ID `id` is held by the live create `by` (`open` or
+    /// `approved`, any repository of the project). Nothing written.
+    Reserved { id: String, by: String },
 }
 
 impl From<StoreError> for QueueError {
@@ -657,6 +704,9 @@ impl fmt::Display for QueueError {
                 f,
                 "the record ID previewed was issued meanwhile; the next is `{next}`"
             ),
+            Self::Reserved { id, by } => {
+                write!(f, "`{id}` is reserved by `{by}`, a live create")
+            }
         }
     }
 }
@@ -670,9 +720,33 @@ impl std::error::Error for QueueError {
     }
 }
 
-/// `b3:` of `target_id` LF `base_hash` LF `new_text` (07 §1.2).
+/// `b3:` of `target_id` LF `base_hash` LF `new_text` (07 §1.2); a create's
+/// new file: `base_hash` `""`.
 pub fn patch_hash(target_id: &str, base_hash: &str, new_text: &str) -> String {
     b3_hash(&patch_hash_input(target_id, base_hash, new_text))
+}
+
+/// A new ID a live create holds ([`ProposalQueue::reserved`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reservation {
+    /// Canonical (`slug/ID` for a feature-scoped one).
+    pub id: String,
+    /// The create holding it.
+    pub by: String,
+    /// `open` or `approved`.
+    pub status: ProposalStatus,
+}
+
+/// A create's `target_ids`: `new_ids` alone for a new file whose first new
+/// ID is its `target_id` (its `id:`), else `target_id` then `new_ids`.
+fn create_targets(target_id: &str, new_file: bool, new_ids: &[String]) -> Vec<String> {
+    if new_file && new_ids.first().map(String::as_str) == Some(target_id) {
+        return new_ids.to_vec();
+    }
+    let mut targets = Vec::with_capacity(new_ids.len() + 1);
+    targets.push(target_id.to_owned());
+    targets.extend(new_ids.iter().cloned());
+    targets
 }
 
 /// The proposal queue of one project. Every change is one `Immediate`
@@ -681,8 +755,16 @@ pub trait ProposalQueue {
     /// Stores `proposal` as `open` under the next ID (highest + 1, taken in
     /// this transaction), with `created_at` = `updated_at` = `now`, and
     /// logs `proposal.created`. A kind that never applies is
-    /// [`QueueError::Invalid`] ([`Self::create_intake`] stores it).
+    /// [`QueueError::Invalid`] ([`Self::create_intake`] stores it); so is
+    /// an update without its base or with new IDs, a create's base given in
+    /// part, or its new IDs repeated. A create whose new ID a live create of
+    /// the project holds (any repository, read inside this transaction):
+    /// [`QueueError::Reserved`], nothing written.
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError>;
+    /// The new IDs the project's live creates (`open`, `approved`, any
+    /// repository) hold, by proposal ID number then in text order; read
+    /// only. A row whose targets do not read holds none.
+    fn reserved(&self) -> Result<Vec<Reservation>, QueueError>;
     /// The intake's step 7, one `Immediate` transaction: the queue's hits
     /// and related items read under the write lock ([`IntakeResult`]);
     /// when every hit, `corpus_hits` (names) and the queue's (IDs), is
@@ -1217,8 +1299,13 @@ impl SqliteQueue {
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
         if !current.kind.decides() {
+            let article = if current.kind == ProposalKind::Update {
+                "an"
+            } else {
+                "a"
+            };
             return Err(QueueError::Invalid(format!(
-                "`{id}` is an {}: its approval writes no decision record",
+                "`{id}` is {article} {}: its approval writes no decision record",
                 current.kind.as_str()
             )));
         }
@@ -1501,7 +1588,9 @@ impl RawRow {
                 format!("{:?} is no object ID", place.base_commit),
             ));
         }
-        // An update's texts; the intake kinds store them NULL.
+        // An update's texts; the intake kinds store them NULL, a create's
+        // new file its base.
+        let base_columns = [take(), take()];
         let mut update_text = |column: &str| {
             let value = take();
             if kind.applies() {
@@ -1510,11 +1599,32 @@ impl RawRow {
                 Ok(String::new())
             }
         };
-        let base_hash = update_text("base_hash")?;
-        let base_text = update_text("base_text")?;
         let new_text = update_text("new_text")?;
         let patch_hash = update_text("patch_hash")?;
         let rationale = update_text("rationale")?;
+        let [base_hash, base_text] = match (kind, base_columns) {
+            (ProposalKind::Create, [None, None]) => [String::new(), String::new()],
+            (ProposalKind::Create, [Some(hash), _]) if hash.is_empty() => {
+                return Err(corrupt(&id, "base_hash", "it is empty on a create"));
+            }
+            (ProposalKind::Create, [Some(hash), Some(text)]) => [hash, text],
+            (ProposalKind::Create, [hash, _]) => {
+                let column = if hash.is_none() {
+                    "base_hash"
+                } else {
+                    "base_text"
+                };
+                return Err(corrupt(
+                    &id,
+                    column,
+                    "it is NULL while the base's other column is set",
+                ));
+            }
+            (_, [hash, text]) if kind.applies() => {
+                [required(hash, "base_hash")?, required(text, "base_text")?]
+            }
+            _ => [String::new(), String::new()],
+        };
         let author_text = required(take(), "author")?;
         let author: Author =
             serde_json::from_str(&author_text).map_err(|error| corrupt(&id, "author", error))?;
@@ -1546,6 +1656,11 @@ impl RawRow {
         };
         let linked = take();
         let record_columns: [Option<String>; 5] = std::array::from_fn(|_| take());
+        let new_ids = if kind == ProposalKind::Create {
+            columns.decode_create(&id, &target_id, base_hash.is_empty(), linked.as_deref())?
+        } else {
+            Vec::new()
+        };
         let intake = if kind.applies() {
             None
         } else {
@@ -1585,6 +1700,7 @@ impl RawRow {
             intake,
             linked,
             record,
+            new_ids,
         })
     }
 }
@@ -1602,7 +1718,16 @@ fn decode_record(
 ) -> Result<Option<DecisionRecord>, UnreadableRow> {
     if !kind.decides() {
         if let Some(at) = columns.iter().position(Option::is_some) {
-            return Err(corrupt(id, RECORD_COLUMNS[at], "an update holds no record"));
+            let holder = if kind == ProposalKind::Update {
+                "an update"
+            } else {
+                "a create"
+            };
+            return Err(corrupt(
+                id,
+                RECORD_COLUMNS[at],
+                format!("{holder} holds no record"),
+            ));
         }
         return Ok(None);
     }
@@ -1666,6 +1791,37 @@ fn decode_record(
         text,
         choice,
     }))
+}
+
+/// `text` has a canonical ID's shape: an optional `slug/` (a lower-case
+/// letter, then lower-case letters, digits and `-`), an ASCII prefix (a
+/// capital letter, then capitals and digits), `-`, a body of ASCII letters,
+/// digits and `-`, not ending in `-`.
+fn is_canonical_id(text: &str) -> bool {
+    let id = match text.split_once('/') {
+        Some((slug, id)) => {
+            let slug_ok = slug.starts_with(|c: char| c.is_ascii_lowercase())
+                && slug
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+            if !slug_ok {
+                return false;
+            }
+            id
+        }
+        None => text,
+    };
+    id.split_once('-').is_some_and(|(prefix, body)| {
+        prefix.starts_with(|c: char| c.is_ascii_uppercase())
+            && prefix
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+            && !body.is_empty()
+            && !body.ends_with('-')
+            && body
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
 }
 
 /// `text` has a record ID's shape: an ASCII prefix (a capital letter, then
@@ -1765,6 +1921,62 @@ struct IntakeColumns {
 }
 
 impl IntakeColumns {
+    /// The new IDs of a `create` row (`new_file`: its base `NULL`):
+    /// `target_ids` a JSON list of canonical IDs headed by `target_id`
+    /// (a new file without an `id:`: its path), each once, every other
+    /// intake column and `linked` `NULL`; else the row is corrupt, named.
+    fn decode_create(
+        &self,
+        id: &str,
+        target_id: &str,
+        new_file: bool,
+        linked: Option<&str>,
+    ) -> Result<Vec<String>, UnreadableRow> {
+        let others = [
+            ("severity", &self.severity),
+            ("gap_type", &self.gap_type),
+            ("summary", &self.summary),
+            ("working_answer", &self.working_answer),
+            ("price_of_other", &self.price_of_other),
+            ("evidence", &self.evidence),
+            ("options", &self.options),
+            ("recommendation", &self.recommendation),
+            ("distinct_from", &self.distinct_from),
+        ];
+        if let Some((column, _)) = others.iter().find(|(_, value)| value.is_some()) {
+            return Err(corrupt(id, column, "a create holds no intake field"));
+        }
+        if linked.is_some() {
+            return Err(corrupt(id, "linked", "a create is linked to nothing"));
+        }
+        let text = self
+            .target_ids
+            .as_deref()
+            .ok_or_else(|| corrupt(id, "target_ids", "it is NULL on a create"))?;
+        let targets: Vec<String> =
+            serde_json::from_str(text).map_err(|error| corrupt(id, "target_ids", error))?;
+        if targets.first().map(String::as_str) != Some(target_id) {
+            return Err(corrupt(
+                id,
+                "target_ids",
+                "its first ID is not the row's `target_id`",
+            ));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for (at, target) in targets.iter().enumerate() {
+            // Its target, a document without an `id:`, by its path.
+            let path = at == 0 && is_path(target);
+            if !(path || is_canonical_id(target)) || !seen.insert(target.as_str()) {
+                return Err(corrupt(
+                    id,
+                    "target_ids",
+                    format!("{target:?} is no canonical ID, or repeated"),
+                ));
+            }
+        }
+        Ok(new_ids_of(&targets, new_file))
+    }
+
     /// The fields of a `question` or `discrepancy` row: a column its kind
     /// requires NULL, JSON not of its shape, an enum or `recommendation`
     /// out of range make the row corrupt, named.
@@ -1941,8 +2153,9 @@ fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
     Ok(proposal_id(next))
 }
 
-/// Inserts `proposal` (an `update`) as `open` under the next ID, `linked`
-/// to the given proposal; its ID.
+/// Inserts `proposal` (an `update` or a `create`) as `open` under the
+/// next ID, `linked` to the given proposal; a create's `target_ids` set
+/// ([`create_targets`]), an update's `NULL`; its ID.
 fn insert_update(
     tx: &Transaction<'_>,
     project: &str,
@@ -1952,13 +2165,22 @@ fn insert_update(
 ) -> Result<String, QueueError> {
     let author = to_json(&proposal.author)?;
     let diagnostics = to_json(&proposal.diagnostics)?;
+    let target_ids = (proposal.kind == ProposalKind::Create)
+        .then(|| {
+            to_json(&create_targets(
+                &proposal.target_id,
+                proposal.base_hash.is_none(),
+                &proposal.new_ids,
+            ))
+        })
+        .transpose()?;
     let id = next_id(tx)?;
     let place = &proposal.place;
     tx.execute(
         &format!(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
-             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
+             ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
              NULL, NULL)"
         ),
         rusqlite::params![
@@ -1982,10 +2204,119 @@ fn insert_update(
             diagnostics,
             now,
             linked,
+            target_ids,
         ],
     )
     .db()?;
     Ok(id)
+}
+
+/// Why `proposal` is no proposal [`ProposalQueue::create`] stores: a kind
+/// that never applies, an update without its base or with new IDs, a
+/// create's base given in part, a new file whose `id:` is not its first
+/// new ID, a new ID empty or repeated.
+fn new_proposal_problem(proposal: &NewProposal) -> Option<String> {
+    let kind = proposal.kind;
+    if !kind.applies() {
+        return Some(format!(
+            "`create` stores a proposal that applies, not a {}: `create_intake` stores it",
+            kind.as_str()
+        ));
+    }
+    let based = proposal.base_hash.is_some();
+    if based != proposal.base_text.is_some() {
+        return Some("a proposal's base is its hash and its text, both or neither".to_owned());
+    }
+    if kind == ProposalKind::Update {
+        if !based {
+            return Some("an update is written against its base".to_owned());
+        }
+        if !proposal.new_ids.is_empty() {
+            return Some("an update adds no ID".to_owned());
+        }
+        return None;
+    }
+    if proposal.base_hash.as_deref() == Some("") {
+        return Some("a create's base hash is empty".to_owned());
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for id in &proposal.new_ids {
+        if id.is_empty() || !seen.insert(id.as_str()) {
+            return Some(format!("a create's new ID {id:?} is empty or repeated"));
+        }
+    }
+    if !based
+        && !is_path(&proposal.target_id)
+        && proposal.new_ids.first() != Some(&proposal.target_id)
+    {
+        return Some(format!(
+            "a new file's target `{}` is neither its path nor its first new ID",
+            proposal.target_id
+        ));
+    }
+    None
+}
+
+/// A stored target names a document by its root-relative path (it ends in
+/// `.md`), not an ID.
+fn is_path(target: &str) -> bool {
+    target.ends_with(specengine_core::DOCUMENT_EXTENSION)
+}
+
+/// A create row's new IDs from its stored `target_ids` (headed by its
+/// `target_id`): all but the first, and the first too for a new file (no
+/// base) whose target is an ID.
+fn new_ids_of(target_ids: &[String], new_file: bool) -> Vec<String> {
+    match target_ids.split_first() {
+        Some((first, _)) if new_file && !is_path(first) => target_ids.to_vec(),
+        Some((_, rest)) => rest.to_vec(),
+        None => Vec::new(),
+    }
+}
+
+/// The live creates' new IDs ([`ProposalQueue::reserved`]), read in `conn`
+/// (a write transaction's, for [`ProposalQueue::create`]).
+fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation>, QueueError> {
+    let mut statement = conn
+        .prepare(&format!(
+            "SELECT id, status, base_hash, target_ids FROM main.proposals \
+             WHERE project = ?1 AND kind = ?2 AND status IN (?3, ?4) {ID_ORDER}"
+        ))
+        .db()?;
+    let rows: Vec<[Option<String>; 4]> = statement
+        .query_map(
+            [
+                project,
+                CREATE_KIND,
+                ProposalStatus::Open.as_str(),
+                ProposalStatus::Approved.as_str(),
+            ],
+            |row| Ok([row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?]),
+        )
+        .db()?
+        .collect::<rusqlite::Result<_>>()
+        .db()?;
+    let mut held = Vec::new();
+    for [id, status, base_hash, target_ids] in rows {
+        let (Some(id), Some(status)) = (id, status.as_deref().and_then(ProposalStatus::parse))
+        else {
+            continue;
+        };
+        let Some(targets) = target_ids
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Vec<String>>(text).ok())
+        else {
+            continue;
+        };
+        for new_id in new_ids_of(&targets, base_hash.is_none()) {
+            held.push(Reservation {
+                id: new_id,
+                by: id.clone(),
+                status,
+            });
+        }
+    }
+    Ok(held)
 }
 
 /// Inserts a question or a discrepancy as `open` under the next ID: the
@@ -2147,14 +2478,24 @@ struct MatchRow {
 impl ProposalQueue for SqliteQueue {
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError> {
         check_time(now)?;
-        if !proposal.kind.applies() {
-            return Err(QueueError::Invalid(format!(
-                "`create` stores a proposal that applies, not a {}: `create_intake` stores it",
-                proposal.kind.as_str()
-            )));
+        if let Some(problem) = new_proposal_problem(proposal) {
+            return Err(QueueError::Invalid(problem));
         }
         let project = self.project.clone();
         let tx = self.write()?;
+        // The live creates read under the write lock this one inserts
+        // under: two creates of one new ID never both store.
+        if !proposal.new_ids.is_empty() {
+            let held = live_reservations(&tx, &project)?;
+            for new_id in &proposal.new_ids {
+                if let Some(holder) = held.iter().find(|held| held.id == *new_id) {
+                    return Err(QueueError::Reserved {
+                        id: new_id.clone(),
+                        by: holder.by.clone(),
+                    });
+                }
+            }
+        }
         let id = insert_update(&tx, &project, proposal, None, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let stored = existing(&tx, &project, &id)?;
@@ -2179,7 +2520,9 @@ impl ProposalQueue for SqliteQueue {
         if intake.intake.target_ids.is_empty() {
             return Err(QueueError::Invalid("an intake names no target".to_owned()));
         }
-        if patch.is_some_and(|patch| !patch.kind.applies()) {
+        if patch.is_some_and(|patch| {
+            patch.kind != ProposalKind::Update || new_proposal_problem(patch).is_some()
+        }) {
             return Err(QueueError::Invalid(
                 "a linked proposal is an update".to_owned(),
             ));
@@ -2228,6 +2571,13 @@ impl ProposalQueue for SqliteQueue {
             created: Some(created),
             linked,
         })
+    }
+
+    fn reserved(&self) -> Result<Vec<Reservation>, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let held = live_reservations(&tx, &self.project)?;
+        tx.commit().db()?;
+        Ok(held)
     }
 
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError> {

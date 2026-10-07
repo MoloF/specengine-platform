@@ -483,13 +483,14 @@ fn the_queue_tables_survive_a_stamp_change_and_a_rebuild() {
                         branch: "main".to_owned(),
                         base_commit: "1".repeat(40),
                     },
-                    base_hash: "b3:00".to_owned(),
-                    base_text: "old".to_owned(),
+                    base_hash: Some("b3:00".to_owned()),
+                    base_text: Some("old".to_owned()),
                     new_text: "new".to_owned(),
                     patch_hash: patch_hash(target, "b3:00", "new"),
                     rationale: "why".to_owned(),
                     author: Author::human(),
                     diagnostics: Vec::new(),
+                    new_ids: Vec::new(),
                 },
                 "2026-10-05T21:14:03Z",
             )
@@ -559,13 +560,14 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
             branch: "main".to_owned(),
             base_commit: "1".repeat(40),
         },
-        base_hash: "b3:00".to_owned(),
-        base_text: "old".to_owned(),
+        base_hash: Some("b3:00".to_owned()),
+        base_text: Some("old".to_owned()),
         new_text: "new".to_owned(),
         patch_hash: "b3:11".to_owned(),
         rationale: "why".to_owned(),
         author: Author::human(),
         diagnostics: Vec::new(),
+        new_ids: Vec::new(),
     };
     for target in ["A-1", "A-2", "A-3"] {
         queue
@@ -634,13 +636,14 @@ fn queue_proposal(target: &str) -> specengine_store::NewProposal {
             branch: "main".to_owned(),
             base_commit: "1".repeat(40),
         },
-        base_hash: "b3:00".to_owned(),
-        base_text: "old".to_owned(),
+        base_hash: Some("b3:00".to_owned()),
+        base_text: Some("old".to_owned()),
         new_text: "new".to_owned(),
         patch_hash: "b3:11".to_owned(),
         rationale: "why".to_owned(),
         author: Author::human(),
         diagnostics: Vec::new(),
+        new_ids: Vec::new(),
     }
 }
 

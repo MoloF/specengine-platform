@@ -24,9 +24,11 @@
 //!   `notes` the reasons a preview is unavailable and a refusal's reason.
 //!   The intake kinds (canon `agent-intake`, "Review document") fill the
 //!   eleven keys after `updated_at` instead of an update's texts, `diff`,
-//!   `preview`; their decision record (task spec `decision-apply`) the five
-//!   after `linked`: `record_id`, `record_path`, `record_title`,
-//!   `record_text`, `choice` (an object).
+//!   `preview`; their decision record (canon `decision-record`, "Queue and
+//!   documents") the five after `linked`: `record_id`, `record_path`, `record_title`,
+//!   `record_text`, `choice` (an object). A create (task spec
+//!   `proposal-kinds`) is an update's document, `target_ids` as stored; a
+//!   new file's base `null`, its diff from an empty base.
 //! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts
 //!   (`record_text` too), `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
 //!   (the rest counted in a note), the text cut at [`OUTPUT_CAP_CHARS`].
@@ -126,7 +128,8 @@ pub struct ProposalDocument {
     pub applied_commit: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    /// The canonical IDs: an update's `[target_id]`.
+    /// The canonical IDs: an update's `[target_id]`; a create's
+    /// `target_id` then its other new IDs.
     pub target_ids: Vec<String>,
     pub severity: Option<IntakeSeverity>,
     pub gap_type: Option<GapType>,
@@ -162,6 +165,9 @@ impl ProposalDocument {
     pub fn of(proposal: &Proposal) -> Self {
         let applies = proposal.kind.applies();
         let text = |value: &str| applies.then(|| value.to_owned());
+        // A new file has no base.
+        let based = applies && !proposal.new_file();
+        let base = |value: &str| based.then(|| value.to_owned());
         let intake = proposal.intake.as_ref();
         Self {
             id: Some(proposal.id.clone()),
@@ -173,8 +179,8 @@ impl ProposalDocument {
             worktree: Some(proposal.place.worktree.clone()),
             branch: Some(proposal.place.branch.clone()),
             base_commit: Some(proposal.place.base_commit.clone()),
-            base_hash: text(&proposal.base_hash),
-            base_text: text(&proposal.base_text),
+            base_hash: base(&proposal.base_hash),
+            base_text: base(&proposal.base_text),
             new_text: text(&proposal.new_text),
             patch_hash: text(&proposal.patch_hash),
             rationale: text(&proposal.rationale),
@@ -189,10 +195,7 @@ impl ProposalDocument {
             applied_commit: proposal.applied_commit.clone(),
             created_at: Some(proposal.created_at.clone()),
             updated_at: Some(proposal.updated_at.clone()),
-            target_ids: intake.map_or_else(
-                || vec![proposal.target_id.clone()],
-                |intake| intake.target_ids.clone(),
-            ),
+            target_ids: proposal.target_ids(),
             severity: intake.map(|intake| intake.severity),
             gap_type: intake.and_then(|intake| intake.gap_type),
             summary: intake.map(|intake| intake.summary.clone()),

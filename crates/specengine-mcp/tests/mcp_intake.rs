@@ -776,9 +776,11 @@ fn enum_of(property: &Value) -> Vec<Value> {
 /// `_meta` the result cap only; each description at most 2 048 characters,
 /// holding the determinism sentence, saying only the queue is written and
 /// the owner decides on a terminal, agent-written fields data; the input
-/// schemas as Data (required fields, enums, `kind` `update` only, closed
-/// inline objects one level deep, no `$ref`); the output schemas mirror
-/// the documents, `kind` a free string. M: `readOnlyHint: true`.
+/// schemas as Data (required fields, enums, closed inline objects one
+/// level deep, no `$ref`; `propose_change`'s `kind` `update` or `create`
+/// and `base` not required, as docs/features/proposal-kinds.md "Data"
+/// widens them); the output schemas mirror the documents, `kind` a free
+/// string. M: `readOnlyHint: true`.
 #[test]
 fn ac12_the_queue_tools_are_described_as_data_says() {
     for era in ERAS {
@@ -834,7 +836,7 @@ fn ac12_the_queue_tools_are_described_as_data_says() {
         };
         assert_eq!(
             required("propose_change"),
-            ["author_role", "base", "kind", "rationale", "target", "text"]
+            ["author_role", "kind", "rationale", "target", "text"]
         );
         assert_eq!(
             required("ask_question"),
@@ -865,7 +867,7 @@ fn ac12_the_queue_tools_are_described_as_data_says() {
         };
         assert_eq!(
             enum_of(&property("propose_change", "kind")),
-            [json!("update")]
+            [json!("update"), json!("create")]
         );
         assert_eq!(
             enum_of(&property("ask_question", "severity")),

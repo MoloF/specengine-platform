@@ -26,6 +26,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/import.md](canon/import.md) Import: record model and rules · crates/specengine-import · tier 2
 - [docs/canon/mcp-read.md](canon/mcp-read.md) MCP read tools and resources · crates/specengine-mcp, crates/specengine-cli · tier 2
 - [docs/canon/proposal-apply.md](canon/proposal-apply.md) Proposal apply: consent, steps, completion, reject · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/queue-backup.md](canon/queue-backup.md) Queue backup and restore · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
@@ -42,7 +43,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/decision-staging.md](features/decision-staging.md) Decision staging · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
-- [docs/features/proposal-kinds.md](features/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/task-package.md](features/task-package.md) Task package · specengine · draft
 - [docs/features/ui-live.md](features/ui-live.md) UI live: graph and check over HTTP · crates/specengine-http, crates/specengine-cli, ui · draft

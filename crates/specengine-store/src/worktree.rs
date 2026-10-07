@@ -3,8 +3,9 @@
 //! check of one path, `git merge-file`, `git diff --no-index`, `git commit
 //! --only` with the caller's message, the trailer lookup on a branch, a
 //! file's blob at a commit, and the atomic replace of one file. A decision
-//! record (task spec `decision-apply`, steps 8–10): a new file created
-//! without ever replacing one ([`create_file`]), its intent-to-add entry
+//! record (`docs/canon/decision-record.md` "Steps") or a create's new file:
+//! a new file created without ever replacing one ([`create_file`]), its
+//! intent-to-add entry
 //! and its removal ([`WorktreeGit::intent_to_add`],
 //! [`WorktreeGit::remove_cached`]), the name-status of a commit
 //! ([`WorktreeGit::name_status`]).

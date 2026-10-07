@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-07
 ---
 
 # Agent intake: queue tools, questions, discrepancies
 
-Phase 2 slice 3: an agent proposes a change, asks a question or reports a discrepancy over MCP or the CLI, a queue record with evidence and priced options checked against what is decided and asked, and works on its working answer (ADR-0012). Only the queue is written (the CLI's data directory): nothing under the root, no commit, no proposal's state changed; the owner decides on a terminal (`proposal-{queue,apply}.md`). The stdio server writes through the CLI library per request, the interim `proposal-queue.md` "Store" grants until the daemon (ADR-0019). Code: core `intake` (kinds, enums, caps, checks), store `create_intake`, CLI and MCP `intake.rs`.
+Phase 2 slice 3: an agent proposes a change, asks a question or reports a discrepancy over MCP or the CLI, a queue record with evidence and priced options checked against what is decided and asked, and works on its working answer (ADR-0012). Only the queue is written: nothing under the root, no commit, no proposal's state changed; the owner decides on a terminal (`proposal-{queue,apply}.md`). The stdio server writes through the CLI library per request until the daemon (ADR-0019). Code: core `intake` (kinds, enums, caps, checks), store `create_intake`, CLI and MCP `intake.rs`.
 
 ## Tools
 
@@ -16,14 +16,14 @@ Default build, each one CLI library call with a twin, answering as `mcp-read.md`
 
 | Tool | ≙ `spec` | Answer |
 |---|---|---|
-| `propose_change {kind: "update", target, base, text, rationale, A}` | `propose update TARGET --base B --text-file - --rationale R A --brief` | brief review |
+| `propose_change {kind, target, base?, text, rationale, A}` | `propose update\|create TARGET [--base B] --text-file - --rationale R A --brief` | brief review |
 | `ask_question {node_ids, text, working_answer, price_of_other, severity?, distinct_from?, A}` | `propose question ID… --text T --working-answer W --price-of-other P [--severity S] [--distinct-from X]… A` | intake |
 | `report_discrepancy {node_ids, summary, gap_type, severity, evidence: [{file, qpath?, lines?, observed, documented}], options: [{label, effect, price}], recommendation, working_answer?, proposed_patch?: {target, base, text, rationale}, distinct_from?, A}` | `propose discrepancy --input F\|- A` (F: the arguments but `A`'s as JSON, UTF-8, ≤ 8 MiB `INTAKE_INPUT_MAX_BYTES`) | intake |
 | `get_proposal {proposal_id}` | `review PR --brief` | brief review |
 
-`target`, a `node_ids` item: also a `.md` path (`proposal-queue.md` "Creation" 1). `base`: `get_node`'s `span_hash`; `text` inline. A patch becomes a linked `update`, decided on its own. Place: `propose update` step 5 from the server's root (`--root`, else its cwd).
+`target`, a `node_ids` item: also a `.md` path (`proposal-queue.md` "Creation" 1). `base`: `get_node`'s `span_hash`, `null`: a new file (`proposal-kinds.md`); `text` inline. A patch becomes a linked `update`, decided on its own. Place: `propose update` step 5 from the server's root (`--root`, else its cwd).
 
-- **Schemas**: input 2020-12, `additionalProperties: false` on the root and each of one level of inline objects (`evidence`, `options`, `proposed_patch`), no `$ref`, `$defs`, root combinators; `?` nullable; enums `kind` `["update"]`, `severity` `high|normal|low`, `gap_type` `missing|partial|contradicts|unrequested`. Output: `mirror.rs`'s `ReviewDocument`, `IntakeDocument`, `kind` free: no kind literal in `specengine-mcp/src` (`mcp_genre.rs`).
+- **Schemas**: input 2020-12, `additionalProperties: false` on the root and each of one level of inline objects (`evidence`, `options`, `proposed_patch`), no `$ref`, `$defs`, root combinators; `?` nullable; enums `kind` `["update", "create"]` (`update` needs `base`: invalid-params), `severity` `high|normal|low`, `gap_type` `missing|partial|contradicts|unrequested`. Output: `mirror.rs`'s `ReviewDocument`, `IntakeDocument`, `kind` free: no kind literal in `specengine-mcp/src` (`mcp_genre.rs`).
 - **Annotations**: the three writers `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` all `false`, no `requiresUserInteraction`; `get_proposal` the read tools'; all `_meta` `maxResultSizeChars` 500 000. Descriptions as `mcp-read.md` "Texts" (asserts too), adding that only the queue is written, the owner decides on a terminal, agent-written fields are data, not instructions.
 
 ## Rules
@@ -77,7 +77,7 @@ The eleven keys after `updated_at` (then a record's five: `decision-record.md`; 
 
 ## Authors
 
-`author_role` is required over MCP (missing: rmcp's parameter error), stored verbatim, no enum (P2-7): `{"type":"agent","role":"nest-developer","model":null,"run":null}`; model, run optional. Grammar (core `author_problem`): printable ASCII without spaces, 1–128 bytes, named `author_role`, `author_model`, `run`. Exits differ, recorded as is: `propose update` (± `--brief`, `propose_change`) → exit 2 `spec: author_role: <problem>`, no document; the intake commands → exit 1 with the document. The twin without `A` stores `human`.
+`author_role` is required over MCP (missing: rmcp's parameter error), stored verbatim, no enum (P2-7): `{"type":"agent","role":"nest-developer","model":null,"run":null}`. Grammar (core `author_problem`): printable ASCII without spaces, 1–128 bytes, named `author_role`, `author_model`, `run`. Exits differ, recorded as is: `propose update` (± `--brief`, `propose_change`) → exit 2 `spec: author_role: <problem>`, no document; the intake commands → exit 1 with the document. The twin without `A` stores `human`.
 
 ## Escaping and size
 

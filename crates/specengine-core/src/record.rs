@@ -1,8 +1,10 @@
-//! A decision record made from the queue (task spec `decision-apply`,
-//! "Data"): the project's `[decision_records]` table, the slots of its
-//! template and their one-pass render, the record's ID and title, the
-//! owner's choice, and the structure a rendered record must have. Pure:
-//! nothing is read or written here.
+//! A decision record made from the queue
+//! (`docs/canon/decision-record.md` "Template", "ID"): the project's
+//! `[decision_records]` table, the slots of its template and their one-pass
+//! render, the record's ID and title, the owner's choice, and the structure
+//! a rendered record must have; the form a number-shape ID is written in
+//! ([`record_form`], a create's new IDs). Pure: nothing is read or written
+//! here.
 //!
 //! Domain-free (ADR-0008): the record's prefix, directory and shape come
 //! only from the project's table and its tracked template; the engine
@@ -26,7 +28,7 @@ use serde::ser::SerializeMap as _;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 use specengine_model::grammar::{self, Canon};
-use specengine_model::{CanonTarget, DiagnosticCode, IdScheme, ParsedFile, PrefixSpec};
+use specengine_model::{CanonTarget, DiagnosticCode, IdScheme, ParsedFile, PrefixSpec, Shape};
 
 use crate::check::DocClass;
 use crate::front_matter;
@@ -394,6 +396,23 @@ pub fn record_title(text: &str) -> String {
 /// `-`, the number zero-padded to `width` (more digits past it).
 pub fn record_id(prefix: &str, width: u32, number: u64) -> String {
     format!("{prefix}-{number:0width$}", width = width as usize)
+}
+
+/// `id` as [`record_id`] writes its number, when `id` is an ID of `spec`'s
+/// `number`-shape prefix written otherwise (`R-7`, `R-007` of a width 2:
+/// `R-07`; more digits than the width, unpadded, are as written); `None`
+/// when it is so written, or no such ID.
+pub fn record_form(id: &str, spec: &PrefixSpec) -> Option<String> {
+    if spec.shape != Shape::Number {
+        return None;
+    }
+    let digits = id.strip_prefix(spec.prefix.as_str())?.strip_prefix('-')?;
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let number: u64 = digits.parse().ok()?;
+    let form = record_id(&spec.prefix, spec.width.unwrap_or(1), number);
+    (form != id).then_some(form)
 }
 
 /// The number of `id` when it is an ID of `spec`'s prefix or of one of its

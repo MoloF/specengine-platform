@@ -20,11 +20,11 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError,
-    DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest, Globals, GraphRequest,
-    INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
-    IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText, QuestionRequest,
-    RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES, TreeRequest,
-    render_json, render_text,
+    CreateRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest, Globals,
+    GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
+    InitRequest, IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText,
+    QuestionRequest, RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES,
+    TreeRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -152,7 +152,7 @@ enum Command {
         #[command(subcommand)]
         what: Export,
     },
-    /// Propose a change to one node, ask the owner a question or report a discrepancy; no file is touched until the owner approves a change.
+    /// Propose a change to one node or a new one, ask the owner a question or report a discrepancy; no file is touched until the owner approves a change.
     Propose {
         #[command(subcommand)]
         kind: Propose,
@@ -215,6 +215,33 @@ enum Propose {
         #[arg(long, value_name = "HASH")]
         base: String,
         /// The new text: a file, or `-` for stdin (UTF-8, at most 1 MiB).
+        #[arg(long = "text-file", value_name = "F")]
+        text_file: PathBuf,
+        /// Why; the commit's body when applied.
+        #[arg(long, value_name = "T")]
+        rationale: String,
+        /// The proposing agent's role (any of the three: an agent's proposal).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The proposing agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The proposing agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
+        #[arg(long)]
+        brief: bool,
+    },
+    /// Add a node: a new spec file at a free `.md` path (no --base), or new `{#ID}` sections below node TARGET (--base its span hash, the text its span with the sections added); the proposer names each new ID.
+    Create {
+        /// A root-relative `.md` path naming nothing yet (a new file), or an ID, `slug/ID` or `.md` path of a node to add sections to.
+        #[arg(value_name = "TARGET")]
+        target: String,
+        /// New sections only: the span hash the text was written against (`spec show`: `span b3:…`, JSON `span_hash`).
+        #[arg(long, value_name = "HASH")]
+        base: Option<String>,
+        /// The text: the whole new file, or the node's span with its new sections; a file, or `-` for stdin (UTF-8, at most 1 MiB).
         #[arg(long = "text-file", value_name = "F")]
         text_file: PathBuf,
         /// Why; the commit's body when applied.
@@ -495,6 +522,41 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 specengine_cli::propose_brief(env, globals, &request)?
             } else {
                 specengine_cli::propose(env, globals, &request)?
+            }))
+        }
+        Command::Propose {
+            kind:
+                Propose::Create {
+                    target,
+                    base,
+                    text_file,
+                    rationale,
+                    author_role,
+                    author_model,
+                    run,
+                    brief,
+                },
+        } => {
+            let text = if text_file.as_os_str() == "-" {
+                ProposedText::Given(read_stdin(TEXT_MAX_BYTES, "the text")?)
+            } else {
+                ProposedText::File(text_file)
+            };
+            let request = CreateRequest {
+                target,
+                base,
+                text,
+                rationale,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            };
+            Outcome::Proposal(Box::new(if brief {
+                specengine_cli::propose_create_brief(env, globals, &request)?
+            } else {
+                specengine_cli::propose_create(env, globals, &request)?
             }))
         }
         Command::Propose {

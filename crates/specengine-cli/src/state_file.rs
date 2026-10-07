@@ -7,8 +7,9 @@
 //! `NULL` `null`, `seq` a number; `author`, `diagnostics`, `payload` stay
 //! the strings stored. No export time and no host inside: equal queues give
 //! equal bytes. A dump of queue schema 1 or 2 (canon `queue-backup`,
-//! "Format"; task spec `decision-apply`) still restores: its rows hold that
-//! schema's 24 or 35 columns, the later ones restored `NULL`.
+//! "Format"; canon `decision-record`, "Queue and documents") still
+//! restores: its rows hold that schema's 24 or 35 columns, the later ones
+//! restored `NULL`.
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's

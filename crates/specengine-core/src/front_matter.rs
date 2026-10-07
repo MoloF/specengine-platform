@@ -100,6 +100,8 @@ pub(crate) struct DocumentId {
 #[derive(Default)]
 pub(crate) struct FrontMatter {
     pub id: Option<DocumentId>,
+    /// `id:` as written, when it is a string (an ID or not), and its line.
+    pub written_id: Option<(String, usize)>,
     /// Declared `kind` and its line.
     pub kind: Option<(String, usize)>,
     pub title: Option<String>,
@@ -343,6 +345,7 @@ impl Reader<'_> {
             self.mistyped(name, &value, line, "a string");
             return;
         };
+        self.out.written_id = Some((text.clone(), line));
         let at = self.verbatim_at(&value, text);
         match grammar::parse_definition(text, at.unwrap_or(0), self.scheme) {
             Some(definition) => {

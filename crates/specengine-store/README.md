@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-07
 ---
 
 # specengine-store -- the spec index
 
-A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). The DB, outside the repository (ADR-0001, ADR-0003), also holds the proposal queue, not derived. A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`). Callers: the CLI (updating before every read; checks parse afresh), `specengine-eval`.
+A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). The DB, outside the repository (ADR-0001, ADR-0003), also holds the proposal queue, not derived. A default member on `-model`, `-core`, `rusqlite =0.40.2` (`bundled`: SQLite 3.53.2, FTS5; never `sqlx`: `links = "sqlite3"`), `blake3`, `serde_json` (`float_roundtrip`). Callers: the CLI (updating before every read), `specengine-eval`.
 
 ## API
 
@@ -21,7 +21,7 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `spec check`, no database (`docs/canon/spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` -> `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) -> `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic -> a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)`; `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}`, `check_changed_with_notes` (against `HEAD`: `spec-check-git.md`), `check_staged` (the report). `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 7`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 - `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`.
-- Proposals (`docs/canon/{proposal-queue,proposal-apply,queue-backup,agent-intake,decision-record}.md`): `ProposalQueue` (queue schema 3: `create_intake`, `next_record`, `approve_record_from`), `SqliteQueue::open(db, project)`, `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch; callers decode range-like names), `intent_to_add`, `is_intent_to_add`, `remove_cached`, `name_status`; `replace_file`, `create_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
+- Proposals (`docs/canon/{proposal-{queue,apply,kinds},queue-backup,agent-intake,decision-record}.md`): `ProposalQueue` (schema 3: `create_intake`, `next_record`, `approve_record_from`, `reserved` (`Reservation`)), `SqliteQueue::open(db, project)`, `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch; callers decode range-like names), `intent_to_add`, `is_intent_to_add`, `remove_cached`, `name_status`; `replace_file`, `create_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
 
 ## Rows
 
@@ -67,4 +67,4 @@ Working answer (the code) -> what the other answer triggers.
 - Races, accepted: `read` checks components, then reads; `resolve` names the parent when an entry's type cannot be read.
 - `GitIndex` holds each blob twice (`read` returns owned bytes); untested: `RootGone` by a spawn race, a file-system boundary.
 
-Tests: `tests/`, by `docs/features/{spec-index,spec-check,proposal-apply,agent-intake,decision-apply}.md` criteria.
+Tests: `tests/`, by `docs/features/{spec-index,spec-check,proposal-{apply,kinds},agent-intake,decision-apply}.md`.

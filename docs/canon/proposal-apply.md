@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-07
 ---
 
 # Proposal apply: consent, steps, completion, reject
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `docs/canon/architecture.md#apply`). Commands, states, store ops, escaping, git safety: `docs/canon/proposal-queue.md`. An apply writes the target file (a question's or discrepancy's: a new decision record, `decision-record.md`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7–10, completion), `preflight.rs` (steps 2–6, the trailer lookup); store `WorktreeGit` (place, status, identity, `merge_file`, `commit_only`, history and trailer reads), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `docs/canon/architecture.md#apply`). Commands, states, store ops, escaping, git safety: `docs/canon/proposal-queue.md`. An apply writes the target file (or a new file: a decision record, `decision-record.md`; a create's, `proposal-kinds.md`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7–10, completion), `preflight.rs` (steps 2–6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only`, git reads), `replace_file`, `update_file`.
 
 ## Consent
 
@@ -28,7 +28,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 2. **Place**: the worktree exists, top and common dir as recorded, `HEAD` on the recorded branch with a commit, no merge, rebase, cherry-pick, revert, bisect or sequencer state; else exit 2 (`the proposal's worktree <w> no longer exists`, `a <operation> is in progress in <w>: finish or abort it first`, …).
 3. **File**: the recorded root's own `specengine.toml`, its slug the queue's (else exit 2); the target listed by its walk, read by `WorkingTree` of `<worktree>/<root_rel>` with no symlink component, UTF-8, not generated nor immutable, tracked, `git status --porcelain=v1 -z --untracked-files=all` of it empty; else exit 1.
 4. **Resolve**: one holder in the recorded root's refreshed index (data directory), at `target_path`, located in a fresh parse of the bytes just read, never by stored offsets; a path target: that parse's document, no holder lookup (one ≠ `target_path` refused; completion alike).
-5. **Text**: span hash = `base_hash` → the new text (`applies`); else `git merge-file -p -L current -L base -L proposed` over scratch files: clean → the merge (`rebases`), conflict → exit 1, its text on stdout. The patched file equal to the file as read → exit 1, already in place (its own commit: completed; another `Proposal:` commit named with why). A text to write and a `Proposal:` commit that applied it on its parent without completing it → exit 1 naming it, never merged again on top.
+5. **Text**: span hash = `base_hash` → the new text (`applies`); else `git merge-file -p -L current -L base -L proposed` over scratch files: clean → the merge (`rebases`), conflict → exit 1, its text on stdout. Each side of a section gets a final LF, a clean merge loses one: a line added after its last line merges with an edit of the line before. The patched file equal to the file as read → exit 1, already in place (its own commit: completed; another `Proposal:` commit named with why). A text to write and a `Proposal:` commit that applied it on its parent without completing it → exit 1 naming it, never merged again on top.
 6. **Structure**: creation's check 3 on this file. Then the identity, `git var GIT_COMMITTER_IDENT` minus the date in the worktree; none → exit 2 (logged as step 7), before the prompt.
 7. **Approved**: `approve_from` on the state read; another run's change since → exit 1, nothing written.
 8. **Write**: the place re-checked (branch, `HEAD` at step 2's commit, no operation; exit 1 here), the file re-read and equal to step 3's bytes (else exit 1 `` `<path>` changed while being applied; nothing written ``), then replaced atomically: a sibling `.<name>.specengine-<pid>-<n>.tmp` (a dot-name the walk skips) with its mode, synced, renamed over it.
@@ -78,7 +78,6 @@ Accepted at shipping (2026-10-05); none blocks (ADR-0012).
 - A reject running while a live apply commits between reject's second check and its write leaves it rejected with its commit in history (the apply's step 10 exits 1, `rejected`): needs a cross-process lock (daemon).
 - An end-of-line or clean/smudge filter on spec files (`core.autocrlf`, `eol=crlf`): completion compares raw blobs with worktree bytes, so an apply interrupted at step 10 can be neither completed nor rejected (later: `cat-file --filters`).
 - The trailer names no project: with several SpecEngine roots in a repository, or a reset data directory, another proposal's same-ID commit on the branch blocks reject; with the base pruned the whole-branch read (its cost grows with history) finds older ones too; approve refuses only when that commit applied the text.
-- After a repository move, approve exits 2 and reject refuses on the commit: move back, `git worktree repair`, approve.
 - A reverted apply commit: approve refused at step 5, reject refused; way out: a completing commit (the hint).
 - A path target follows no rename (step 3 refuses; no re-targeting).
 - An orphan whose branch was renamed and base pruned is rejected without the lookup, even with its commit on the renamed branch.

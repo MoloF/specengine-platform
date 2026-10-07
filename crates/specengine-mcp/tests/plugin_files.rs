@@ -69,6 +69,12 @@ const PINS: &[(&str, &str)] = &[
         "0.1.3",
         "876d2d50da902c32c8e29a4389972469ee4aad5e05834a1fcc4927b3ad577dfc",
     ),
+    // docs/features/proposal-kinds.md "Data", AC-15: `propose-spec-change`
+    // teaches the kind `create` (PATCH).
+    (
+        "0.1.4",
+        "15ba75c4dc6c91444ba96d26d92aed24799f5eb97aaa61ac89864f67b9c283d4",
+    ),
 ];
 
 /// The README's closed file set (its Files bullet), relative to `plugin/`.

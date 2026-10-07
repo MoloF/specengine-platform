@@ -8,6 +8,14 @@
 //! slice adds no dependency ("Roles": no manifest or lock change, no
 //! `similar`, no `rusqlite_migration`). M: a hard-coded prefix; `similar`
 //! added.
+//!
+//! docs/features/proposal-kinds.md AC-11, the scan half ("Rules",
+//! "Genre"): its new sources, core and CLI `create`, are scanned as the
+//! slice's and as docs/features/decision-apply.md's record sources (no
+//! prefix, kind, `docs/` or `records/` literal), and no source of the
+//! store, the CLI or the MCP server writes the kind `create` as a literal:
+//! core's `CREATE_KIND` names it. M: a `"create"` or prefix literal
+//! outside core.
 
 #![cfg(unix)]
 
@@ -19,9 +27,10 @@ use std::fs;
 use common::{FIXTURES, fixture, read_text, repository_root};
 use specengine_core::ProjectConfig;
 
-/// The new sources of the slice, and of docs/features/decision-apply.md
-/// (core `record`, CLI `decide`).
-const NEW_SOURCES: [&str; 13] = [
+/// The new sources of the slice, of docs/features/decision-apply.md
+/// (core `record`, CLI `decide`) and of docs/features/proposal-kinds.md
+/// (core and CLI `create`).
+const NEW_SOURCES: [&str; 15] = [
     "crates/specengine-core/src/patch.rs",
     "crates/specengine-core/src/proposal.rs",
     "crates/specengine-core/src/record.rs",
@@ -35,6 +44,21 @@ const NEW_SOURCES: [&str; 13] = [
     "crates/specengine-cli/src/proposals.rs",
     "crates/specengine-cli/src/propose.rs",
     "crates/specengine-cli/src/review.rs",
+    "crates/specengine-core/src/create.rs",
+    "crates/specengine-cli/src/create.rs",
+];
+
+/// docs/features/proposal-kinds.md's new sources (AC-11).
+const CREATE_SOURCES: [&str; 2] = [
+    "crates/specengine-core/src/create.rs",
+    "crates/specengine-cli/src/create.rs",
+];
+
+/// The crates whose sources take the kind names from core's constants.
+const OUTSIDE_CORE: [&str; 3] = [
+    "crates/specengine-store/src",
+    "crates/specengine-cli/src",
+    "crates/specengine-mcp/src",
 ];
 
 /// docs/features/decision-apply.md's new sources (AC-03).
@@ -211,6 +235,82 @@ fn ac03_the_record_sources_name_no_prefix_kind_heading_or_directory() {
         .map(|found| found.split(':').nth(1).expect("a line"))
         .collect();
     assert_eq!(lines, ["1", "3", "4", "2"], "{seen:?}");
+}
+
+/// docs/features/proposal-kinds.md AC-11, the scan half: core and CLI
+/// `create` hold no literal naming an `[ids]` prefix of spec-a, spec-b or
+/// this repository, none equal to a kind of theirs, none holding `docs/`
+/// or `records/` (the proposer names the path and the IDs, ADR-0008); no
+/// `.rs` file of the store, the CLI or the MCP server holds the literal
+/// `"create"` (core `CREATE_KIND` is its only spelling). M: a `"create"`
+/// or prefix literal outside core.
+#[test]
+fn proposal_kinds_ac11_the_create_sources_name_no_prefix_kind_or_directory() {
+    let (prefixes, kinds) = record_words();
+    assert!(
+        prefixes.contains("R") && prefixes.contains("REQ") && prefixes.contains("QST"),
+        "{prefixes:?}"
+    );
+    let mut found = Vec::new();
+    for source in CREATE_SOURCES {
+        let text = fs::read_to_string(repository_root().join(source))
+            .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert!(text.len() > 1000, "{source} is read whole");
+        found.extend(record_offenders(source, &text, &prefixes, &kinds));
+    }
+    assert!(
+        found.is_empty(),
+        "project words in the create sources:\n{}",
+        found.join("\n")
+    );
+    let kind = specengine_core::intake::CREATE_KIND;
+    assert_eq!(kind, "create");
+    let mut literal_kinds = Vec::new();
+    let mut scanned = 0;
+    for dir in OUTSIDE_CORE {
+        for (source, text) in rust_sources(&repository_root().join(dir)) {
+            scanned += 1;
+            for (number, line) in text.lines().enumerate() {
+                if literals(line).contains(&kind) {
+                    literal_kinds.push(format!("{source}:{}", number + 1));
+                }
+            }
+        }
+    }
+    assert!(scanned >= 30, "{scanned} sources scanned");
+    assert!(
+        literal_kinds.is_empty(),
+        "the kind `{kind}` written as a literal outside core:\n{}",
+        literal_kinds.join("\n")
+    );
+    // The scan sees what it must refuse.
+    let sample = "let k = \"create\";\n// \"create\" in a comment\n";
+    assert_eq!(
+        literals(sample.lines().next().unwrap()),
+        ["create"],
+        "the literal is seen"
+    );
+    assert!(literals(sample.lines().nth(1).unwrap()).is_empty());
+}
+
+/// Every `.rs` file under `dir`, recursively, by path: `(path, text)`.
+fn rust_sources(dir: &std::path::Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(next) = stack.pop() {
+        for entry in fs::read_dir(&next).unwrap_or_else(|error| panic!("{next:?}: {error}")) {
+            let path = entry.expect("an entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                let text =
+                    fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
+                out.push((path.display().to_string(), text));
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 /// The scan sees what it must refuse.

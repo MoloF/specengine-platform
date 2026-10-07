@@ -2,14 +2,22 @@
 //! "Stored", "Dedup", "Rules" 2): the two queue kinds that never apply, their
 //! closed enums, the caps every caller checks (UTF-8 bytes), the field
 //! checks in input order, and the normalised text the queue's dedup
-//! compares. Nothing is read, written or resolved here, and no project's
-//! word appears (ADR-0008): the kinds and enums are the engine's.
+//! compares; beside them the names of the two kinds that apply. Nothing is
+//! read, written or resolved here, and no project's word appears
+//! (ADR-0008): the kinds and enums are the engine's.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
 use crate::proposal::{TEXT_MAX_BYTES, author_field_problem};
+
+/// The kind of a proposal replacing one node's span.
+pub const UPDATE_KIND: &str = "update";
+
+/// The kind of a proposal adding a node: a new spec file, or new `{#ID}`
+/// sections inside one node's span (task spec `proposal-kinds`).
+pub const CREATE_KIND: &str = "create";
 
 /// The kind of a question raised to the owner: a queue record only, never
 /// applied (owner's Q2).

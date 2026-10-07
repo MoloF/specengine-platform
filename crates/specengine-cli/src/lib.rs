@@ -12,12 +12,14 @@
 //! spec `proposal-apply`, the proposal queue: `spec propose update`, `spec
 //! inbox`, `spec review`, `spec approve` (the one write door: the target
 //! file replaced in the proposal's recorded worktree and committed there;
-//! a question's or a discrepancy's decision record created there, task
-//! spec `decision-apply`) and `spec reject`; the queue's backup (canon `queue-backup`,
-//! "Commands"): `spec export state` and `spec import-state`; the agent
+//! a question's or a discrepancy's decision record created there, canon
+//! `decision-record`, "Steps") and `spec reject`; the queue's backup (canon
+//! `queue-backup`, "Commands"): `spec export state` and `spec import-state`; the agent
 //! intake (canon `agent-intake`, "Tools"): `spec propose question`, `spec
 //! propose discrepancy` and the `--brief` answers of `spec propose update`
-//! and `spec review` (MCP's intake tools call these).
+//! and `spec review` (MCP's intake tools call these); task spec
+//! `proposal-kinds`: `spec propose create`, a new spec file or new `{#ID}`
+//! sections through the queue, applied as one commit.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -41,14 +43,16 @@
 //!   served project's entry and the queue's events after a `seq`, which
 //!   only the daemon reads (no command prints them); [`EventsTail`] the
 //!   latter with its connection kept between a live tail's polls;
-//! - [`propose`], [`inbox`], [`review`], [`approve`], [`reject`]: the
-//!   queue's commands; all but `inbox` answer with the review document
+//! - [`propose`], [`propose_create`], [`inbox`], [`review`], [`approve`],
+//!   [`reject`]: the queue's commands; all but `inbox` answer with the
+//!   review document
 //!   ([`ProposalDocument`]); `approve` and `reject` take the owner's
 //!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt; [`approve_with`]
 //!   takes a decision's [`ApproveFlags`]), and every
 //!   request carries the caller's git environment ([`process_git`]) and,
 //!   where the queue records a time, the clock's `now` ([`utc_now`]);
-//!   [`propose_brief`], [`review_brief`]: their brief answers;
+//!   [`propose_brief`], [`propose_create_brief`], [`review_brief`]: their
+//!   brief answers;
 //! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
 //!   discrepancy stored as a queue record (approved into a decision record,
 //!   or rejected with the answer), unless what is decided or asked already
@@ -74,7 +78,7 @@
 //! under the project root but `spec init`, which creates its one file,
 //! `spec export index`, which writes only `[paths] index`, and `spec
 //! approve`, which writes only the proposal's target file (or creates its
-//! decision record) and commits it in the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
+//! new file, or its decision record) and commits it in the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
 //! `bundle`, `propose`, `inbox`, `review`, `reject` and `import-state` write
 //! only the data directory (`propose question` and `propose discrepancy`
 //! too), `export state` only its dump (never inside the worktree), `check`
@@ -87,6 +91,7 @@ mod bundle;
 mod cap;
 mod check;
 mod corpus;
+mod create;
 mod decide;
 mod documents;
 mod events;
@@ -123,6 +128,7 @@ pub use bundle::{
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use corpus::LeftOut;
+pub use create::{CreateRequest, propose_create, propose_create_brief};
 pub use documents::{DocumentEntry, documents};
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
@@ -146,12 +152,13 @@ pub use review::{ReviewRequest, review, review_brief};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search, search_with_view};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
 pub use specengine_core::ProjectConfig;
-/// The intake's input types, enums and caps (core's), for the bridges.
+/// The intake's input types, enums and caps (core's), for the bridges;
+/// the names of the kinds `propose_change` takes.
 pub use specengine_core::intake::{
-    ANSWER_MAX, DISTINCT_ITEM_MAX, DISTINCT_MAX, DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX,
-    Evidence, GapType, IntakeOption, IntakeSeverity, LABEL_MAX, LINE_LIMIT, LOCATION_MAX,
-    NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, RATIONALE_MAX,
-    SUMMARY_MAX,
+    ANSWER_MAX, CREATE_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX, DiscrepancyInput, EVIDENCE_MAX,
+    EVIDENCE_TEXT_MAX, Evidence, GapType, IntakeOption, IntakeSeverity, LABEL_MAX, LINE_LIMIT,
+    LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch,
+    RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND,
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;

@@ -300,7 +300,8 @@ fn ac09_the_queue_tools_take_a_path_as_their_twins_do() {
 /// AC-09's descriptions: `propose_change`, `ask_question` and
 /// `report_discrepancy` name the path form (description and input
 /// schema), within 2 048 characters; `INSTRUCTIONS` byte-unchanged by this
-/// slice (1 675 bytes, its BLAKE3 pinned) and on the wire as is.
+/// slice and on the wire as is: 1 740 bytes, its BLAKE3 pinned, as
+/// docs/features/proposal-kinds.md AC-17 re-pins them.
 #[test]
 fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
@@ -337,9 +338,9 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
         Some(specengine_mcp::INSTRUCTIONS)
     );
     drop(session.finish());
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1675);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1740);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "54a8dd348c9cd4f6612ecec44fff3c2080664684c939a420051dc1c91b73355e"
+        "4b08078cc4c40004f3dab85d8f1e2bc856c175424177514088a91a69ba7d1c0e"
     );
 }

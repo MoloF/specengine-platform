@@ -50,8 +50,8 @@ fn new_proposal(target: &str, common_dir: &str) -> NewProposal {
         target_path: "docs/x.md".to_owned(),
         place: place(common_dir),
         patch_hash: patch_hash(target, &base_hash, "new"),
-        base_hash,
-        base_text: "base".to_owned(),
+        base_hash: Some(base_hash),
+        base_text: Some("base".to_owned()),
         new_text: "new".to_owned(),
         rationale: "Why.\nSecond line.".to_owned(),
         author: Author::human(),
@@ -63,6 +63,7 @@ fn new_proposal(target: &str, common_dir: &str) -> NewProposal {
             subject: "X-1".to_owned(),
             message: "no such ID".to_owned(),
         }],
+        new_ids: Vec::new(),
     }
 }
 

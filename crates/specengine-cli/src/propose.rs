@@ -34,6 +34,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 
 use specengine_core::check::{CheckInput, Resolver};
+use specengine_core::create::{Sections, SectionsError, add_sections};
 use specengine_core::intake::{AuthorInput, author_problem, rationale_problem};
 use specengine_core::patch::{
     HolderError, LocateError, TargetForm, locate, one_holder, span_bytes, target_form,
@@ -41,7 +42,7 @@ use specengine_core::patch::{
 };
 use specengine_core::proposal::Author;
 use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative};
-use specengine_model::{IdScheme, IdScope, IdScript, ParsedFile, Reference, grammar};
+use specengine_model::{IdScheme, IdScope, IdScript, ParsedFile, Reference, Span, grammar};
 use specengine_store::{
     GitEnv, NamedBytes, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _,
     Source as _, WorkingTree, default_baseline, introduced_findings, load_check, patch_hash,
@@ -199,7 +200,7 @@ fn run_propose(
 
 /// What steps 1–4 make of a target, a base and a text: everything an
 /// `update` stores but its place, rationale and author.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CheckedUpdate {
     /// Canonical: `ID`, or `slug/ID` for a feature-scoped one; for a
     /// document without an `id:`, its root-relative path.
@@ -211,6 +212,24 @@ pub(crate) struct CheckedUpdate {
     /// As spliced.
     pub new_text: String,
     pub diagnostics: Vec<ProposalFinding>,
+    /// [`SpanRule::Sections`]: what the new sections are, for the new-ID
+    /// checks (task spec `proposal-kinds`); `None` for an update.
+    pub sections: Option<SectionsFound>,
+}
+
+/// New `{#ID}` sections spliced into the target's span
+/// ([`SpanRule::Sections`]).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct SectionsFound {
+    /// The file as read.
+    pub before: Vec<u8>,
+    /// The target's span in it.
+    pub base_span: Span,
+    /// The patched file, its fresh parse and the added sections' positions
+    /// in it ([`Sections::added`]).
+    pub after: Vec<u8>,
+    pub parsed: ParsedFile,
+    pub added: Vec<usize>,
 }
 
 impl CheckedUpdate {
@@ -227,14 +246,27 @@ impl CheckedUpdate {
             target_id: self.target_id.clone(),
             target_path: self.path.clone(),
             place,
-            base_hash: self.base_hash.clone(),
-            base_text: self.base_text.clone(),
+            base_hash: Some(self.base_hash.clone()),
+            base_text: Some(self.base_text.clone()),
             new_text: self.new_text.clone(),
             rationale: rationale.to_owned(),
             author,
             diagnostics: self.diagnostics.clone(),
+            new_ids: Vec::new(),
         }
     }
+}
+
+/// What a span's new text may change: an update's structure rule, or a
+/// create's new sections (task spec `proposal-kinds`, "Rules and edge
+/// cases" 2–3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpanRule {
+    /// Creation 3: every `{#ID}` and level kept, none added.
+    Update,
+    /// Creation 3 with `{#ID}` sections added below the target: every
+    /// (ID, level) of the file kept in order, at least one added.
+    Sections,
 }
 
 /// A stored target names a document by its path: it ends in `.md`, the
@@ -490,6 +522,36 @@ pub(crate) fn checked_update(
     today: &str,
     messages: &mut Vec<Message>,
 ) -> Result<Result<CheckedUpdate, String>, CliError> {
+    checked_span(
+        project,
+        input,
+        written,
+        reference,
+        Some(base),
+        text,
+        today,
+        messages,
+        SpanRule::Update,
+    )
+}
+
+/// [`checked_update`] under `rule`: [`SpanRule::Sections`] (a create's
+/// section form, task spec `proposal-kinds`) refuses a missing `base` once
+/// the target resolves (`` `<target>` exists ``), and splices by
+/// [`add_sections`]; its validation is left to the caller, after the new
+/// IDs' checks (`diagnostics` empty).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn checked_span(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    written: &str,
+    reference: Option<Reference>,
+    base: Option<&str>,
+    text: &str,
+    today: &str,
+    messages: &mut Vec<Message>,
+    rule: SpanRule,
+) -> Result<Result<CheckedUpdate, String>, CliError> {
     let scheme = &project.config.scheme;
     let resolver = Resolver::new(input, scheme, &project.config.paths);
     // The holder, and what names the node in it: an ID, else the document.
@@ -504,6 +566,9 @@ pub(crate) fn checked_update(
             Err(reason) => return Ok(Err(reason)),
         },
         Err(reason) => return Ok(Err(reason)),
+    };
+    let Some(base) = base else {
+        return Ok(Err(exists_refusal(written)));
     };
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let bytes = match tree.read(&path) {
@@ -567,6 +632,41 @@ pub(crate) fn checked_update(
     };
 
     // 3. The structure.
+    if rule == SpanRule::Sections {
+        let sections = match panic::catch_unwind(AssertUnwindSafe(|| {
+            add_sections(&path, &bytes, &parsed, ord, text, scheme)
+        })) {
+            Ok(Ok(sections)) => sections,
+            Ok(Err(error)) => return Ok(Err(sections_refusal(&target_id, &error))),
+            Err(_) => {
+                return Ok(Err(format!(
+                    "`{target_id}`: the spec parser failed on the edited file"
+                )));
+            }
+        };
+        let Sections {
+            base_span,
+            text: new_text,
+            bytes: after,
+            parsed: after_parsed,
+            added,
+        } = sections;
+        return Ok(Ok(CheckedUpdate {
+            target_id,
+            path,
+            base_hash,
+            base_text,
+            new_text,
+            diagnostics: Vec::new(),
+            sections: Some(SectionsFound {
+                before: bytes,
+                base_span,
+                after,
+                parsed: after_parsed,
+                added,
+            }),
+        }));
+    }
     let update = match update_file(&path, &bytes, &parsed, ord, text, scheme) {
         Ok(update) => update,
         Err(error) => return Ok(Err(format!("`{target_id}`: {error}"))),
@@ -599,12 +699,33 @@ pub(crate) fn checked_update(
         base_text,
         new_text: update.text,
         diagnostics,
+        sections: None,
     }))
+}
+
+/// A create's refusal of a target that exists (`--base` missing): it
+/// never replaces a file.
+pub(crate) fn exists_refusal(target: &str) -> String {
+    format!(
+        "`{target}` exists: a create never replaces a file; to add ID sections to it, name its \
+         span_hash with --base"
+    )
+}
+
+/// A create's section rule refused, naming the target.
+fn sections_refusal(target_id: &str, error: &SectionsError) -> String {
+    match error {
+        SectionsError::NoNewId => error.to_string(),
+        _ => format!("`{target_id}`: {error}"),
+    }
 }
 
 /// The proposed text: UTF-8, at most [`TEXT_MAX_BYTES`] (else a refusal,
 /// `Ok(Err)`); a file that cannot be read exits 2.
-fn read_text(env: &Env, text: &ProposedText) -> Result<Result<String, String>, CliError> {
+pub(crate) fn read_text(
+    env: &Env,
+    text: &ProposedText,
+) -> Result<Result<String, String>, CliError> {
     let bytes = match text {
         ProposedText::Given(bytes) => bytes.clone(),
         ProposedText::File(path) => {
@@ -660,7 +781,7 @@ fn canonical_id(
 }
 
 /// `id`'s prefix has `scope = "feature"`.
-fn feature_scoped(scheme: &IdScheme, id: &str) -> bool {
+pub(crate) fn feature_scoped(scheme: &IdScheme, id: &str) -> bool {
     id.split_once('-')
         .and_then(|(prefix, _)| scheme.prefix(prefix))
         .is_some_and(|spec| spec.scope == IdScope::Feature)

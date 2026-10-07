@@ -29,7 +29,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; next, in order: `proposal-kinds` (`create`; then `interpretation`, `amendment`, `decision`), `ui-live` (graph, check), `task-package` (ADR-0027), `ui-live-tasks`, `decision-staging` (ADR-0035).
+- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `ui-shell` (Phase 4, ADR-0033), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets for overlays), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`) shipped 2026-10-07; next, in order: `ui-live` (graph, check), `task-package` (ADR-0027), `ui-live-tasks`, `decision-staging` (ADR-0035); kinds `interpretation`, `amendment`, `decision` later.
 - Tasks, per project: states, the versioned stack-neutral package (ADR-0027), `spec_snapshot`, `stale`, `changes_requested`.
 - CLI: `task …`, `round new/answer`.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).

@@ -45,10 +45,13 @@
 //! never with the caller's local `GIT_*` variables; nothing outside the
 //! recorded worktree and the data directory is written.
 //!
-//! A question or a discrepancy (task spec `decision-apply`) is approved
-//! into a decision record, one new file and one commit where it was raised
-//! ([`crate::decide`]); `--option N`, `--answer T`, `--canon REF` are its
-//! flags only (on an update: exit 2). Reject settles it with the answer as
+//! A question or a discrepancy (canon `decision-record`, "Flags", "Steps")
+//! is approved into a decision record, one new file and one commit where it
+//! was raised ([`crate::decide`]); `--option N`, `--answer T`, `--canon REF`
+//! are its flags only (on an update or a create: exit 2). A create's new
+//! file (task spec `proposal-kinds`) is one new file and one commit too
+//! ([`crate::create`]); its new sections apply as an update. Reject settles
+//! a question or a discrepancy with the answer as
 //! its reason, refused as an update's when a commit of it is in history
 //! (its record's: none completes one with no record issued); holding no
 //! record, a history git cannot read refuses nothing (a note, before the
@@ -59,11 +62,11 @@ use std::path::Path;
 
 use specengine_core::proposal::{CommitFacts, PROPOSAL_TRAILER, commit_message};
 use specengine_store::{
-    ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalQueue as _, ProposalStatus,
-    QueueError, Seen, Source as _, WorkingTree, WorktreeGit, replace_file, same_repository,
+    ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalKind, ProposalQueue as _,
+    ProposalStatus, QueueError, Seen, Source as _, WorkingTree, WorktreeGit, replace_file,
+    same_repository,
 };
 
-use crate::decide;
 use crate::location::open_index;
 use crate::preflight::{
     History, LookupError, Missing, Prepared, StepFailure, TrailerCommit, completes_when,
@@ -76,6 +79,7 @@ use crate::proposals::{
     with_diff, written_id,
 };
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
+use crate::{create, decide};
 
 /// `spec approve` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,8 +95,8 @@ pub struct ApproveRequest {
     pub git: GitEnv,
 }
 
-/// `spec approve`'s flags of a question or a discrepancy (task spec
-/// `decision-apply`); all `None` for an update.
+/// `spec approve`'s flags of a question or a discrepancy (canon
+/// `decision-record`, "Flags"); all `None` for an update or a create.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApproveFlags {
     /// `--option N`: a discrepancy's chosen option, from 0.
@@ -221,11 +225,19 @@ fn run_approve(
             (None, Some(_)) => "--answer",
             (None, None) => "--canon",
         };
+        let article = if proposal.kind == ProposalKind::Update {
+            "an"
+        } else {
+            "a"
+        };
         return Err(CliError::spec(format!(
-            "`{flag}` decides a question or a discrepancy; `{id}` is an {}: `spec approve {id}` \
-             applies it as proposed; nothing changed",
+            "`{flag}` decides a question or a discrepancy; `{id}` is {article} {}: `spec approve \
+             {id}` applies it as proposed; nothing changed",
             proposal.kind.as_str()
         )));
+    }
+    if proposal.new_file() {
+        return create::approve_file(env, request, &mut context, &proposal, consent);
     }
     // The proposal's own commit already on its branch: completed, no new
     // commit. Its branch read in the current repository when the recorded

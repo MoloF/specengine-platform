@@ -54,9 +54,11 @@
 //!   local variable dropped; [`replace_file`] the atomic write;
 //!   [`update_file`], [`span_hash`], [`introduced_findings`] the update of
 //!   one span over core's pure half; a question's or a discrepancy's
-//!   decision record (docs/features/decision-apply.md): its ID issued under
-//!   the queue's write lock ([`RecordSeries`], [`RecordApproval`]), the new
-//!   file [`create_file`] makes without ever replacing one.
+//!   decision record (`docs/canon/decision-record.md` "ID", "Steps"): its ID
+//!   issued under the queue's write lock ([`RecordSeries`],
+//!   [`RecordApproval`]), the new file [`create_file`] makes without ever
+//!   replacing one (a create's new file too); a create's new IDs held while
+//!   it is live ([`Reservation`], [`QueueError::Reserved`]).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -98,8 +100,8 @@ pub use queue::{
     EventsAfter, Intake, IntakeResult, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, Proposal,
     ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
     QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch, RecordApproval, RecordSeries,
-    Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue, TailEvent, UnreadableRow,
-    patch_hash, proposal_columns,
+    Reservation, Restore, Seen, SqliteQueue, StoredEvent, StoredProposal, StoredQueue, TailEvent,
+    UnreadableRow, patch_hash, proposal_columns,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};

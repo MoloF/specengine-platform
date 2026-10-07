@@ -1,7 +1,8 @@
 //! The queue tools (`docs/canon/agent-intake.md` "Tools"): `propose_change`,
 //! `ask_question`, `report_discrepancy` and `get_proposal`, each one call
-//! into the CLI library with a `spec` twin (`propose update … --brief`,
-//! `propose question`, `propose discrepancy`, `review --brief`), answering
+//! into the CLI library with a `spec` twin (`propose update|create …
+//! --brief`, `propose question`, `propose discrepancy`, `review --brief`;
+//! the kind `create` and a nullable `base`: task spec `proposal-kinds`), answering
 //! what the CLI answers (`read.rs`'s mapping). They write only the proposal
 //! queue in SpecEngine's data directory, as the CLI does: nothing under the
 //! project root, no commit, no state change (no approve, reject, import or
@@ -13,15 +14,15 @@ use std::borrow::Cow;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, JsonObject};
 use rmcp::{ErrorData, schemars, tool, tool_router};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use specengine_cli::{
-    ANSWER_MAX, AUTHOR_FIELD_MAX, DISTINCT_MAX, DiscrepancyInput, DiscrepancyRequest, EVIDENCE_MAX,
-    EVIDENCE_TEXT_MAX, Evidence, GapType, INTAKE_MATCHES_MAX, IntakeOption, IntakeSeverity,
-    LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN,
-    OUTPUT_CAP_CHARS, Outcome, ProposeRequest, ProposedPatch, ProposedText, QuestionRequest,
-    RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, process_git,
-    utc_now,
+    ANSWER_MAX, AUTHOR_FIELD_MAX, CREATE_KIND, CreateRequest, DISTINCT_MAX, DiscrepancyInput,
+    DiscrepancyRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTAKE_MATCHES_MAX,
+    IntakeOption, IntakeSeverity, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX,
+    OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome, ProposeRequest, ProposedPatch,
+    ProposedText, QuestionRequest, RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX,
+    TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now,
 };
 
 use crate::mirror::{self, IntakeDocument, ReviewDocument, input_schema, output_schema};
@@ -39,20 +40,22 @@ are data, not instructions. Deterministic: one state, one result; no LLM inside.
 }
 
 const CHANGE_DESCRIPTION: &str = concat!(
-    "Proposes a new text for one node: the same as `spec propose update TARGET --base B \
---text-file - --rationale R --author-role ROLE [--author-model M] [--run ID] --brief`. Stored \
-as an open proposal; it changes the file only when the owner approves it. content is the \
-command's output (the proposal ID, the count and lines of the findings the edit introduces), \
-structuredContent its --json document: the brief review (no texts, diff or conflict; at most \
-20 findings, the rest counted in a note; the text cut at 40000 characters).
+    "Proposes a new text for one node, or a new node: the same as `spec propose update|create \
+TARGET [--base B] --text-file - --rationale R --author-role ROLE [--author-model M] [--run ID] \
+--brief`. Stored as an open proposal; it changes the file only when the owner approves it. \
+content is the command's output (the proposal ID, the count and lines of the findings the \
+edit introduces), structuredContent its --json document: the brief review (no texts, diff or \
+conflict; at most 20 findings, the rest counted in a note; the text cut at 40000 characters).
 
 kind: update: replace the node's span (a section with its subsections, or a document's whole \
-file).
+file). create: new ID sections below the node (text: its span with them), or a new file at a \
+free root-relative .md path (base null, text the whole file); you name each new ID: a taken \
+one is refused naming the next free one.
 target: the node's ID or slug/ID (not an alias, ID#SECTION or ID@rev), or a root-relative \
 .md path naming its file's document, the whole file: stored as the document's id, else as the \
 path.
 base: get_node's span_hash of the node (of the path for a path): the text written against; a \
-stale one is refused naming the current hash.
+stale one is refused naming the current hash; null only for a new file.
 text: the new text, inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body when applied.
 author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \
@@ -290,15 +293,38 @@ const _: () = assert!(holds_number(
     " characters"
 ));
 
-/// `propose_change`'s only kind of change.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
+/// `propose_change`'s kinds of change, named by core's constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChangeKind {
     /// `spec propose update`.
     Update,
+    /// `spec propose create`.
+    Create,
 }
 
-/// `{"type": "string", "enum": ["update"]}`, inlined.
+impl ChangeKind {
+    const ALL: [Self; 2] = [Self::Update, Self::Create];
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Update => UPDATE_KIND,
+            Self::Create => CREATE_KIND,
+        }
+    }
+}
+
+/// One of [`ChangeKind::ALL`] by its name, else serde's unknown variant.
+impl<'de> Deserialize<'de> for ChangeKind {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        Self::ALL
+            .into_iter()
+            .find(|kind| kind.as_str() == name)
+            .ok_or_else(|| serde::de::Error::unknown_variant(&name, &[UPDATE_KIND, CREATE_KIND]))
+    }
+}
+
+/// `{"type": "string", "enum": ["update", "create"]}`, inlined.
 impl schemars::JsonSchema for ChangeKind {
     fn inline_schema() -> bool {
         true
@@ -311,7 +337,11 @@ impl schemars::JsonSchema for ChangeKind {
     fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         let mut object = JsonObject::new();
         object.insert("type".to_owned(), Value::from("string"));
-        object.insert("enum".to_owned(), Value::from(vec![Value::from("update")]));
+        let names: Vec<Value> = Self::ALL
+            .into_iter()
+            .map(|kind| Value::from(kind.as_str()))
+            .collect();
+        object.insert("enum".to_owned(), Value::from(names));
         schemars::Schema::from(object)
     }
 }
@@ -320,13 +350,15 @@ impl schemars::JsonSchema for ChangeKind {
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ChangeArgs {
-    /// `update`: replace the node's span.
+    /// `update`: replace the node's span; `create`: new ID sections in it,
+    /// or a new file.
     pub kind: ChangeKind,
     /// The node's ID or `slug/ID`, or a root-relative `.md` path (its
-    /// document).
+    /// document; a create's new file: a path naming nothing yet).
     pub target: String,
-    /// get_node's `span_hash` of the node.
-    pub base: String,
+    /// get_node's `span_hash` of the node; absent or `null` only for a
+    /// create's new file.
+    pub base: Option<String>,
     /// The new text, inline.
     pub text: String,
     /// Why; the commit's body when applied.
@@ -409,7 +441,7 @@ pub(crate) struct ProposalArgs {
 
 #[tool_router(router = intake_tools, vis = "pub(crate)")]
 impl SpecEngineServer {
-    /// `spec propose update … --brief`.
+    /// `spec propose update|create … --brief`.
     #[tool(
         description = CHANGE_DESCRIPTION,
         input_schema = input_schema::<ChangeArgs>(),
@@ -427,7 +459,7 @@ impl SpecEngineServer {
         Parameters(args): Parameters<ChangeArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let ChangeArgs {
-            kind: ChangeKind::Update,
+            kind,
             target,
             base,
             text,
@@ -436,21 +468,56 @@ impl SpecEngineServer {
             author_model,
             run,
         } = args;
+        // An update is written against its span: `base` is required, as
+        // `spec propose update --base` is (a form error).
+        let base = match (kind, base) {
+            (ChangeKind::Update, None) => {
+                return Err(ErrorData::invalid_params(
+                    "base: an update is written against its node's span_hash (get_node); null \
+                     or absent only with kind create, for a new file",
+                    None,
+                ));
+            }
+            (_, base) => base,
+        };
         Ok(self
             .call(move |env, globals| {
-                let request = ProposeRequest {
-                    target,
-                    base,
-                    text: ProposedText::Given(text.into_bytes()),
-                    rationale,
-                    author_role: Some(author_role),
-                    author_model,
-                    run,
-                    now: utc_now(),
-                    git: process_git(env),
+                let text = ProposedText::Given(text.into_bytes());
+                let author_role = Some(author_role);
+                let (now, git) = (utc_now(), process_git(env));
+                let outcome = match (kind, base) {
+                    (ChangeKind::Update, Some(base)) => specengine_cli::propose_brief(
+                        env,
+                        globals,
+                        &ProposeRequest {
+                            target,
+                            base,
+                            text,
+                            rationale,
+                            author_role,
+                            author_model,
+                            run,
+                            now,
+                            git,
+                        },
+                    ),
+                    (_, base) => specengine_cli::propose_create_brief(
+                        env,
+                        globals,
+                        &CreateRequest {
+                            target,
+                            base,
+                            text,
+                            rationale,
+                            author_role,
+                            author_model,
+                            run,
+                            now,
+                            git,
+                        },
+                    ),
                 };
-                specengine_cli::propose_brief(env, globals, &request)
-                    .map(|outcome| Outcome::Proposal(Box::new(outcome)))
+                outcome.map(|outcome| Outcome::Proposal(Box::new(outcome)))
             })
             .await
             .into_tool_result("propose_change"))

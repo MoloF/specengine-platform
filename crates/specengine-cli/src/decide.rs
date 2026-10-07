@@ -1,6 +1,6 @@
 //! `spec approve PR [--note T] [--option N | --answer T] [--canon REF]` of
-//! a question or a discrepancy (task spec `decision-apply`, "Rules and edge
-//! cases"): the owner's choice made an accepted decision record in the
+//! a question or a discrepancy (canon `decision-record`, "Flags", "Steps"):
+//! the owner's choice made an accepted decision record in the
 //! project's own shape, one new file and one `spec: apply PR-…` commit in
 //! the recorded worktree, nothing else.
 //!
@@ -67,7 +67,7 @@ use crate::apply::{
 };
 use crate::location::open_index;
 use crate::preflight::{
-    Placed, StepFailure, adds_record, completes_when, completing, place_step, place_unchanged,
+    Placed, StepFailure, adds_file, completes_when, completing, place_step, place_unchanged,
     recorded_project, trailer_lookup,
 };
 use crate::project::{CONFIG_FILE, ProjectRoot};
@@ -351,7 +351,15 @@ pub(crate) fn approve_record(
         return before(context, StepFailure::cannot(4, reason), messages);
     }
     let top_path = top_of(proposal, &path);
-    if let Err(reason) = path_free(&git, &recorded.root, &path, &top_path, "nothing changed") {
+    if let Err(reason) = path_free(
+        &git,
+        &recorded.root,
+        &path,
+        &top_path,
+        RECORD,
+        "nothing changed",
+        "nothing changed",
+    ) {
         let reason =
             left_behind(&git, &recorded.root, &path, &top_path, proposal).unwrap_or(reason);
         return before(context, StepFailure::refused(4, reason), messages);
@@ -573,7 +581,15 @@ pub(crate) fn approve_record(
     if let Err(failure) = place_unchanged(&git, &head, place) {
         return after(context, failure, messages);
     }
-    if let Err(reason) = path_free(&git, &recorded.root, &path, &top_path, "nothing written") {
+    if let Err(reason) = path_free(
+        &git,
+        &recorded.root,
+        &path,
+        &top_path,
+        RECORD,
+        "nothing written",
+        "nothing written",
+    ) {
         return after(context, StepFailure::refused(8, reason), messages);
     }
     let created = match create_file(&recorded.root, &path, text.as_bytes()) {
@@ -581,7 +597,7 @@ pub(crate) fn approve_record(
         Err(CreateFileError::Exists) => {
             return after(
                 context,
-                StepFailure::refused(8, exists(&path, "nothing written")),
+                StepFailure::refused(8, exists(&path, RECORD, "nothing written")),
                 messages,
             );
         }
@@ -643,7 +659,8 @@ pub(crate) fn approve_record(
 
     // Step 10: this run's commit adds the record and nothing else.
     let adds_the_record = |commit: &str| -> Result<(), String> {
-        adds_record(&git, &head, commit, &top_path, &text).map_err(|why| format!("it {why}"))
+        adds_file(&git, &head, commit, &top_path, &text, "the record")
+            .map_err(|why| format!("it {why}"))
     };
     let commit = match verify(&git, &head, &approved, &adds_the_record) {
         Ok(commit) => commit,
@@ -1015,19 +1032,27 @@ fn introduced(
     }
 }
 
-/// `` `<path>` exists `` refusal.
-fn exists(path: &str, tail: &str) -> String {
-    format!("`{path}` exists: a decision record never replaces a file; {tail}")
+/// What a refusal of a decision record's path names as its writer.
+const RECORD: &str = "a decision record";
+
+/// `` `<path>` exists `` refusal: `what` (a decision record, a create)
+/// never replaces a file.
+pub(crate) fn exists(path: &str, what: &str, tail: &str) -> String {
+    format!("`{path}` exists: {what} never replaces a file; {tail}")
 }
 
 /// Step 4 (and 8): nothing at `path` under `root` (a dangling symlink
-/// too) nor in git's index (`top_path`), and every existing component of
-/// its way a directory, no symlink; else why, ending in `tail`.
-fn path_free(
+/// too) nor in git's index (`top_path`, as `git` names it), and every
+/// existing component of its way a directory, no symlink; else why, `what`
+/// naming the writer ([`exists`]), ending in `exists_tail` when something
+/// is there, else in `tail`.
+pub(crate) fn path_free(
     git: &WorktreeGit,
     root: &Path,
     path: &str,
     top_path: &str,
+    what: &str,
+    exists_tail: &str,
     tail: &str,
 ) -> Result<(), String> {
     let components: Vec<&str> = path.split('/').collect();
@@ -1039,11 +1064,10 @@ fn path_free(
         match fs::symlink_metadata(&at) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
             Err(error) => return Err(format!("cannot read `{shown}`: {error}; {tail}")),
-            Ok(_) if last => return Err(exists(path, tail)),
+            Ok(_) if last => return Err(exists(path, what, exists_tail)),
             Ok(meta) if meta.file_type().is_symlink() => {
                 return Err(format!(
-                    "`{shown}` is a symlink: a decision record is never written through one; \
-                     {tail}"
+                    "`{shown}` is a symlink: {what} is never written through one; {tail}"
                 ));
             }
             Ok(meta) if !meta.is_dir() => {
@@ -1055,7 +1079,7 @@ fn path_free(
         }
     }
     match git.is_tracked(top_path) {
-        Ok(true) => Err(exists(path, tail)),
+        Ok(true) => Err(exists(path, what, exists_tail)),
         Ok(false) => Ok(()),
         Err(error) => Err(format!(
             "cannot tell whether git's index holds `{path}`: {error}; {tail}"
@@ -1095,6 +1119,7 @@ fn left_behind(
     let (id, record_id) = (&proposal.id, &record.id);
     Some(exists(
         path,
+        RECORD,
         &format!(
             "it holds `{record_id}`'s record as an interrupted apply left it, with an \
              intent-to-add entry in git's index; two ways out in {}: commit it by hand (`git \

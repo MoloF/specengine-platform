@@ -31,7 +31,8 @@ Reads:
 - get_context_bundle(node_ids, budget?) = spec bundle: nodes' context within a budget.
 - get_proposal(proposal_id) = spec review --brief.
 Queue (writes only the proposal queue; the owner decides on a terminal):
-- propose_change = spec propose update: a node's new text against its span_hash.
+- propose_change = spec propose update|create: a node's new text against its span_hash; \
+create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy = spec propose question|discrepancy: what is decided \
 or asked comes back as hits, nothing stored unless distinct_from names each; keep \
 working on your working answer.
@@ -49,15 +50,13 @@ root is written. Spec files change only when the owner approves a change.
 - Nothing is blocked by a discrepancy.
 - IDs are Latin only; a look-alike ID is refused with its Latin fix.";
 
-/// Appended to [`INSTRUCTIONS`] when the measurement tools are built in.
+/// Appended to [`INSTRUCTIONS`] when the measurement tools are built in
+/// (cut to leave room for the queue's lines, task spec `proposal-kinds`).
 #[cfg(feature = "probes")]
 const PROBE_INSTRUCTIONS: &str = "
 
-Measurement build (feature probes), for the owner's MCP checklist only: \
-review_proposal(proposal_id), the Phase 0 consent demo, asks the human owner through \
-a form to approve or reject and returns the answer; every call prompts the human, \
-nothing is recorded. probe_output(tokens) returns filler of about that many tokens; \
-probe_sleep(seconds) waits, then returns.";
+Probes build, owner's checklist only: review_proposal(proposal_id) asks the owner by form; \
+probe_output(tokens) returns filler; probe_sleep(seconds) waits.";
 
 /// Claude Code truncates `instructions` and tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").

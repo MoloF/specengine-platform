@@ -4,8 +4,9 @@
 //! <target_id> | <branch> | <created_at> | <rationale's first line, at most
 //! 80 characters>`; a question's or a discrepancy's last column
 //! `<severity>: <summary's first line>` (canon `agent-intake`,
-//! "Review document"), an applied one's ending ` [<record_id>]` (task spec
-//! `decision-apply`).
+//! "Review document"), an applied one's ending ` [<record_id>]`
+//! (canon `decision-record`, "Queue and documents"); a create's
+//! `target_ids` its target then its new IDs (task spec `proposal-kinds`).
 //! Proposals of another repository of the same slug (the database is the
 //! slug's) are never listed: those of an existing one are counted in a
 //! note; those of a repository that no longer exists (orphans) are named
@@ -171,10 +172,7 @@ fn entry(proposal: &Proposal) -> InboxEntry {
         kind: proposal.kind.as_str().to_owned(),
         status: proposal.status.as_str().to_owned(),
         target_id: proposal.target_id.clone(),
-        target_ids: intake.map_or_else(
-            || vec![proposal.target_id.clone()],
-            |intake| intake.target_ids.clone(),
-        ),
+        target_ids: proposal.target_ids(),
         branch: proposal.place.branch.clone(),
         created_at: proposal.created_at.clone(),
         rationale: intake.is_none().then(|| first_line(&proposal.rationale)),

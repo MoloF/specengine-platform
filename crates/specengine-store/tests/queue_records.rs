@@ -92,12 +92,13 @@ fn update() -> NewProposal {
         target_path: "docs/x.md".to_owned(),
         place: place(),
         patch_hash: patch_hash("A-1", &base_hash, "new"),
-        base_hash,
-        base_text: "base".to_owned(),
+        base_hash: Some(base_hash),
+        base_text: Some("base".to_owned()),
         new_text: "new".to_owned(),
         rationale: "Why.".to_owned(),
         author: author(),
         diagnostics: Vec::new(),
+        new_ids: Vec::new(),
     }
 }
 

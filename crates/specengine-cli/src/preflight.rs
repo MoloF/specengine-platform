@@ -29,6 +29,13 @@
 //!    the proposal's own commit;
 //! 6. structure: creation's check on this file (exit 1).
 //!
+//! A create's new sections (task spec `proposal-kinds`) take the same
+//! steps: 4 also finds its new IDs free in the refreshed index, checked
+//! once step 5's text is known not to be in place (a text in place is step
+//! 5's refusal, its own commit a completion), 6 is the section rule on the
+//! merged span, adding exactly its stored new IDs. A create's new file has
+//! its own steps ([`crate::create`]).
+//!
 //! [`place_unchanged`] repeats step 2's branch, `HEAD` and operation
 //! checks right before the write (step 8).
 //!
@@ -43,9 +50,11 @@
 //! of its commit's tree, the one read now when the tree has none. A base
 //! commit not there (pruned after a rebase): the branch's whole history is
 //! read; a branch not there is named with the way out. A question's or a
-//! discrepancy's commit (task spec `decision-apply`) completes it with one
-//! parent, adding exactly its record's path, the blob there its stored
-//! `record_text` byte for byte, never rendered again ([`record_commit`]).
+//! discrepancy's commit (canon `decision-record`, "Completion")
+//! completes it with one parent, adding exactly its record's path, the blob
+//! there its stored `record_text` byte for byte, never rendered again
+//! ([`record_commit`]); a create's new file (task spec `proposal-kinds`)
+//! alike, its blob the stored `new_text` ([`file_commit`]).
 //!
 //! Git runs `-C <worktree>` (a [`History::Current`] lookup: `-C` the
 //! current project root), stdin null, without the caller's local `GIT_*`
@@ -59,17 +68,19 @@ use std::path::{Path, PathBuf};
 
 use specengine_core::ProjectConfig;
 use specengine_core::check::Resolver;
+use specengine_core::create::add_sections;
 use specengine_core::patch::{
-    HolderError, is_section, locate, one_holder, span_bytes, update_refusal, update_text,
+    HolderError, is_section, locate, one_holder, span_bytes, splice, update_refusal, update_text,
 };
 use specengine_core::proposal::PROPOSAL_TRAILER;
 use specengine_model::node::Node;
 use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
-    GitEnv, GitError, Merge, Place, Proposal, Source as _, SpecIndex as _, WorkingTree,
-    WorktreeGit, same_repository, span_hash, update_file,
+    GitEnv, GitError, Merge, Place, Proposal, ProposalKind, Source as _, SpecIndex as _,
+    WorkingTree, WorktreeGit, same_repository, span_hash, update_file,
 };
 
+use crate::create::{Corpus, canonical_in};
 use crate::location::{OpenIndex, open_index};
 use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
 use crate::proposals::{Preview, QueueContext, top_of, top_path};
@@ -226,6 +237,10 @@ pub(crate) fn prepare(
     if let Some(refusal) = update_refusal(&parsed, ord, scheme) {
         return Err(StepFailure::refused(3, format!("`{target}`: {refusal}")));
     }
+    // A create's new IDs are checked free at step 4 once step 5's text is
+    // known not to be in place already (below): a text in place defines
+    // them in this very file, which step 5 explains.
+    let create = proposal.kind == ProposalKind::Create;
 
     // Step 5: the text.
     let node = &parsed.nodes[ord];
@@ -253,9 +268,55 @@ pub(crate) fn prepare(
         }
     };
 
-    // Step 6: the structure.
-    let update = update_file(path, &bytes, &parsed, ord, &text, scheme)
-        .map_err(|error| StepFailure::refused(6, format!("`{target}`: {error}")))?;
+    // Step 6: the structure: an update's rule; a create's new sections,
+    // exactly its stored new IDs (a text already in place: below). A
+    // create's text to write: first step 4's new IDs, free in the index
+    // refreshed now.
+    let patched = if create {
+        let spliced = splice(&bytes, node.span, update_text(&text, is_section(node)));
+        if spliced == bytes {
+            spliced
+        } else {
+            let corpus = Corpus::of(&input, scheme, &recorded.config.paths);
+            if let Some((id, holder)) = proposal
+                .new_ids
+                .iter()
+                .find_map(|id| Some((id, corpus.holder(id)?)))
+            {
+                return Err(StepFailure::refused(
+                    4,
+                    format!("{}; nothing changed", holder.taken(id)),
+                ));
+            }
+            let sections = panic::catch_unwind(AssertUnwindSafe(|| {
+                add_sections(path, &bytes, &parsed, ord, &text, scheme)
+            }))
+            .map_err(|_| StepFailure::refused(6, format!("the spec parser failed on `{path}`")))?
+            .map_err(|error| StepFailure::refused(6, format!("`{target}`: {error}")))?;
+            let slug = resolver.feature_slug(path);
+            let added: Vec<String> = sections
+                .added
+                .iter()
+                .filter_map(|&at| sections.parsed.nodes.get(at)?.id.as_deref())
+                .map(|id| canonical_in(scheme, slug, id))
+                .collect();
+            if added != proposal.new_ids {
+                return Err(StepFailure::refused(
+                    6,
+                    format!(
+                        "`{target}`: the merged text adds {}, the proposal {}",
+                        listed(&added),
+                        listed(&proposal.new_ids)
+                    ),
+                ));
+            }
+            sections.bytes
+        }
+    } else {
+        update_file(path, &bytes, &parsed, ord, &text, scheme)
+            .map_err(|error| StepFailure::refused(6, format!("`{target}`: {error}")))?
+            .bytes
+    };
     // The proposal's `Proposal:` commits on the branch. Step 5's text
     // already there (the patched file is the file as read; equal bytes
     // pass step 6 always): completed by its own commit, or one that does
@@ -265,7 +326,7 @@ pub(crate) fn prepare(
     let config_now = || Ok(recorded.config.clone());
     let then = approve_or_reject(proposal);
     let found = trailer_commits(&git, &context.data_dir, proposal, &config_now, &then);
-    if update.bytes == bytes {
+    if patched == bytes {
         return Err(already_in_place(proposal, found.as_deref()));
     }
     if let Ok(found) = &found
@@ -281,9 +342,20 @@ pub(crate) fn prepare(
         index,
         tree,
         bytes,
-        patched: update.bytes,
+        patched,
         preview,
     })
+}
+
+/// IDs as a refusal lists them: `` `A`, `B` ``, or `none`.
+fn listed(ids: &[String]) -> String {
+    if ids.is_empty() {
+        return "none".to_owned();
+    }
+    ids.iter()
+        .map(|id| format!("`{id}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Step 2 passed: git in the recorded worktree, its top, and the branch's
@@ -547,7 +619,11 @@ enum StepText {
 
 /// Step 5 on `bytes`, a file holding the target at `node`: the span hashes
 /// to `base_hash` → the new text; else `git merge-file -p` of current, base
-/// and proposed (scratch files in `scratch`).
+/// and proposed (scratch files in `scratch`). A section's three sides are
+/// each given a final line ending, dropped from a clean merge: its span
+/// never ends in one (the parser's trimming), so text added after its last
+/// line would otherwise change that line and conflict with an edit of the
+/// line before it (task spec `proposal-kinds` AC-07).
 fn step_text(
     git: &WorktreeGit,
     scratch: &Path,
@@ -558,12 +634,29 @@ fn step_text(
     if span_hash(bytes, node) == proposal.base_hash {
         return Ok(StepText::Text(proposal.new_text.clone(), Preview::Applies));
     }
+    let section = is_section(node);
+    let side = |text: &[u8]| {
+        let mut side = text.to_vec();
+        if section {
+            side.push(b'\n');
+        }
+        side
+    };
     let merged = git.merge_file(
         scratch,
-        span_bytes(bytes, node),
-        proposal.base_text.as_bytes(),
-        proposal.new_text.as_bytes(),
+        &side(span_bytes(bytes, node)),
+        &side(proposal.base_text.as_bytes()),
+        &side(proposal.new_text.as_bytes()),
     )?;
+    let merged = match merged {
+        Merge::Clean(mut merged) => {
+            if section && merged.last() == Some(&b'\n') {
+                merged.pop();
+            }
+            Merge::Clean(merged)
+        }
+        conflict => conflict,
+    };
     Ok(match merged {
         Merge::Clean(merged) => match String::from_utf8(merged) {
             Ok(merged) => StepText::Text(merged, Preview::Rebases),
@@ -664,6 +757,15 @@ fn applied_before(proposal: &Proposal, found: &[TrailerCommit]) -> Option<StepFa
 /// What completes a proposal by its commit, for a refusal naming one that
 /// does not (steps 5 and 10, `spec reject`).
 pub(crate) fn completes_when(proposal: &Proposal) -> String {
+    if proposal.new_file() {
+        return format!(
+            "a commit on `{}` with the trailer `{PROPOSAL_TRAILER}: {id}`, one parent, adding \
+             only `{}` with the proposal's text completes it (`spec approve {id}`)",
+            proposal.place.branch,
+            top_path(proposal),
+            id = proposal.id
+        );
+    }
     if let Some(record) = &proposal.record {
         return format!(
             "a commit on `{}` with the trailer `{PROPOSAL_TRAILER}: {id}`, one parent, adding \
@@ -924,6 +1026,8 @@ fn trailer_commits(
         .map(|commit| {
             if proposal.kind.decides() {
                 record_commit(git, proposal, commit)
+            } else if proposal.new_file() {
+                file_commit(git, proposal, commit)
             } else {
                 trailer_commit(git, scratch, proposal, config_now, commit)
             }
@@ -942,7 +1046,9 @@ fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Trai
             let path = top_of(proposal, &record.path);
             match git.parents(&commit) {
                 Ok(parents) => match parents.as_slice() {
-                    [parent] => adds_record(git, parent, &commit, &path, &record.text).err(),
+                    [parent] => {
+                        adds_file(git, parent, &commit, &path, &record.text, "the record").err()
+                    }
                     parents => Some(format!("has {} parents", parents.len())),
                 },
                 Err(error) => Some(one_line(&format!("cannot be read: {error}"))),
@@ -956,16 +1062,44 @@ fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Trai
     }
 }
 
+/// One trailer commit of a create's new file judged: it completes it with
+/// one parent, adding exactly the target's path, its blob there the stored
+/// `new_text` byte for byte.
+fn file_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> TrailerCommit {
+    let path = top_path(proposal);
+    let not_completing = match git.parents(&commit) {
+        Ok(parents) => match parents.as_slice() {
+            [parent] => adds_file(
+                git,
+                parent,
+                &commit,
+                &path,
+                &proposal.new_text,
+                "the proposal's text",
+            )
+            .err(),
+            parents => Some(format!("has {} parents", parents.len())),
+        },
+        Err(error) => Some(one_line(&format!("cannot be read: {error}"))),
+    };
+    TrailerCommit {
+        commit,
+        not_completing,
+        carries: false,
+    }
+}
+
 /// `commit` against `parent` adds exactly `path` (top-relative) and
 /// nothing else, its blob there `text` byte for byte; else why not:
-/// `changes <status> <path>, …`, `does not carry the record`, `cannot be
-/// read: <git's error>`.
-pub(crate) fn adds_record(
+/// `changes <status> <path>, …`, `does not carry <what>` (`the record`,
+/// `the proposal's text`), `cannot be read: <git's error>`.
+pub(crate) fn adds_file(
     git: &WorktreeGit,
     parent: &str,
     commit: &str,
     path: &str,
     text: &str,
+    what: &str,
 ) -> Result<(), String> {
     let unreadable = |error: &dyn std::fmt::Display| one_line(&format!("cannot be read: {error}"));
     match git.name_status(parent, commit) {
@@ -978,7 +1112,7 @@ pub(crate) fn adds_record(
     }
     match git.blob_at(commit, path) {
         Ok(bytes) if bytes == text.as_bytes() => Ok(()),
-        Ok(_) => Err("does not carry the record".to_owned()),
+        Ok(_) => Err(format!("does not carry {what}")),
         Err(error) => Err(unreadable(&error)),
     }
 }

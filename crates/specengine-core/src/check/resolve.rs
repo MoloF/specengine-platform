@@ -475,8 +475,10 @@ impl<'a> Resolver<'a> {
     }
 }
 
-/// The slug of `path` when it is `<features>/<slug>.md`, the stem a slug.
-fn feature_stem<'p>(features: &str, path: &'p str) -> Option<&'p str> {
+/// The slug of `path` when it is `<features>/<slug>.md`, the stem a slug
+/// (judged without the disk: a file the walk lists there is a feature
+/// document).
+pub fn feature_stem<'p>(features: &str, path: &'p str) -> Option<&'p str> {
     let stem = path
         .strip_prefix(features)?
         .strip_prefix('/')?

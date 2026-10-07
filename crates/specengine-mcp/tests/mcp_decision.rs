@@ -12,8 +12,8 @@
 //!   summary reported again answers with the record (`created: false`).
 //! - AC-16, the descriptions: `ask_question`, `report_discrepancy` and
 //!   `get_proposal` name `spec approve`; `INSTRUCTIONS` byte-unchanged
-//!   (its length and BLAKE3 as `mcp_path.rs` pins them). M: no
-//!   description edited.
+//!   (its length and BLAKE3 as `mcp_path.rs` pins them, re-pinned by
+//!   docs/features/proposal-kinds.md AC-17). M: no description edited.
 //!
 //! The setup's git and the library's approve run in the CLI tests' sandbox
 //! (`common/git.rs`, included by path); every server with a cleared
@@ -332,9 +332,9 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
         "get_proposal names the record's keys"
     );
     drop(session.finish());
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1675);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1740);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "54a8dd348c9cd4f6612ecec44fff3c2080664684c939a420051dc1c91b73355e"
+        "4b08078cc4c40004f3dab85d8f1e2bc856c175424177514088a91a69ba7d1c0e"
     );
 }
