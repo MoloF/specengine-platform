@@ -4,13 +4,13 @@
     "name": "MoloF"
   },
   "metadata": {
-    "description": "SpecEngine for agents: the spec MCP server, skills to read the spec, raise questions and discrepancies, propose spec changes and work on tasks, and the task gate on file writes."
+    "description": "SpecEngine for agents: the spec MCP server, skills to read the spec, raise questions and discrepancies, propose spec changes and work on tasks, the roles analyst, spec-author, implementer, tester and reviewer with /specengine:feature to run a task through them, and the task gate on file writes."
   },
   "plugins": [
     {
       "name": "specengine",
       "source": "./specengine",
-      "description": "SpecEngine for agents: the spec MCP server, skills to read the spec, raise questions and discrepancies, propose spec changes and work on tasks, and the task gate on file writes."
+      "description": "SpecEngine for agents: the spec MCP server, skills to read the spec, raise questions and discrepancies, propose spec changes and work on tasks, the roles analyst, spec-author, implementer, tester and reviewer with /specengine:feature to run a task through them, and the task gate on file writes."
     }
   ]
 }

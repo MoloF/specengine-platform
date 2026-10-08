@@ -57,7 +57,7 @@ The MCP server remembers nothing between calls; a `cancel` stages nothing (the a
 
 ### 1.4. Prompts (= slash commands in Claude Code)
 
-Plugin skills carry them: `read-spec`, `ask-owner`, `propose-spec-change` (`plugin-skills`); `/specengine:analyze <task>` (the plan, 06 §2), `implement <task>` (claim, run, completion; `plugin-gate`). Reserved: `prepare-task <node…>` (a task draft), `round` (the owner's question sheet, 06 §5).
+Plugin skills carry them: `read-spec`, `ask-owner`, `propose-spec-change`; `/specengine:analyze <task>` (the plan, 06 §2), `implement <task>` (claim, run, completion); owner-only `/specengine:feature` (06 §8). Reserved: `prepare-task <node…>` (a task draft), `round` (the owner's question sheet, 06 §5).
 
 ### 1.5. Notifications
 
@@ -160,7 +160,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 }
 ```
 
-Built (`plugin-gate`): only `PreToolUse`, its wrapper running `spec gate --stdin` (`docs/canon/gate.md`); the other three later. `Bash` is not gated: hooks cannot fully close shell writes, a limit stated openly.
+Built (`plugin-gate`): only `PreToolUse`, its wrapper running `spec gate --stdin` (`docs/canon/gate.md`); the other three later. `Bash` is not gated: hooks cannot fully close shell writes, a stated limit.
 
 ## 5. `specengine.toml` (at the project repository root)
 

@@ -10,11 +10,11 @@ reviewed: 2026-10-08
 
 A local specification engine for projects built together with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phases 0-1 done (parser, index, CLI/MCP reads, graph, bundle, check 1-4, shards, layer A, pilot W); **Phase 2** in progress, slices 1-7, `daemon-read`, `decision-staging`, `plugin-gate`, `round`, `ui-round` shipped; UI over HTTP. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phases 0-1 done (parser, index, CLI/MCP reads, graph, bundle, check 1-4, shards, layer A, pilot W); **Phase 2** in progress, slices 1-7, `daemon-read`, `decision-staging`, `plugin-{gate,roles}`, `round`, `ui-round` shipped; UI over HTTP. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
-`CLAUDE.md` -> `docs/index.md` -> at most three documents. A third step is a defect of the index or canon: fix it. The archive is read by id only. Long files: headings first, then the section you need. Details: `docs/README.md`.
+`CLAUDE.md` -> `docs/index.md` -> at most three documents. A third step is an index or canon defect: fix it. The archive is read by id only. Long files: headings first, then the needed section. Details: `docs/README.md`.
 
 ## Rules that must not be broken
 

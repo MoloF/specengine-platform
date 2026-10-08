@@ -32,6 +32,14 @@
 //!   backticks `claim_task`, `report_run`, `complete_task` and the table's
 //!   arguments, `analyze` `submit_plan` and its arguments. M: `claim_task`
 //!   dropped; `submit_plan` dropped.
+//! - docs/features/plugin-roles.md R-6, T-3, T-4: six skills (`feature`
+//!   joins the five) under the same rules, `feature` backticking
+//!   `get_task`, `submit_plan`, `claim_task`, `report_run`,
+//!   `complete_task`, `ask_question`, `report_discrepancy`, `task_id`;
+//!   sixteen files under `plugin/` (the five agents too) in the word scan.
+//!   M: `claim_task` dropped from `feature`; "at most 3 rounds" in it;
+//!   `cargo` in the implementer. The agents' own rules:
+//!   `plugin_roles.rs`.
 //!
 //! Compiles to nothing with `--features probes` (the ACs name the default
 //! build). The repository is only read.
@@ -57,7 +65,7 @@ use serde_json::Value;
 const PRECEDENCE: &str = "The project's CLAUDE.md and its roles take precedence over this skill.";
 
 /// AC-11's list: what each skill backticks.
-const NAMES: [(&str, &[&str]); 5] = [
+const NAMES: [(&str, &[&str]); 6] = [
     (
         "read-spec",
         &["get_context_bundle", "get_node", "search", "get_tree"],
@@ -106,6 +114,20 @@ const NAMES: [(&str, &[&str]); 5] = [
             "complete_task",
         ],
     ),
+    // docs/features/plugin-roles.md R-6.
+    (
+        "feature",
+        &[
+            "get_task",
+            "submit_plan",
+            "claim_task",
+            "report_run",
+            "complete_task",
+            "ask_question",
+            "report_discrepancy",
+            "task_id",
+        ],
+    ),
 ];
 
 /// The words no file under `plugin/` holds besides P2-3's (AC-08; the root
@@ -138,6 +160,7 @@ fn committed() -> Skills {
         [
             "analyze",
             "ask-owner",
+            "feature",
             "implement",
             "propose-spec-change",
             "read-spec"
@@ -621,7 +644,17 @@ fn plugin_files() -> BTreeMap<String, String> {
     }
     let mut out = BTreeMap::new();
     walk(&plugin_dir(), &plugin_dir(), &mut out);
-    assert_eq!(out.len(), 10, "{:?}", out.keys());
+    assert_eq!(out.len(), 16, "{:?}", out.keys());
+    for agent in [
+        "analyst",
+        "implementer",
+        "reviewer",
+        "spec-author",
+        "tester",
+    ] {
+        let path = format!("specengine/agents/{agent}.md");
+        assert!(out.contains_key(&path), "{path} scanned");
+    }
     out
 }
 
@@ -772,6 +805,36 @@ fn ac08_no_stack_word_digit_or_enum_value() {
         Vec::<String>::new()
     );
 
+    // plugin-roles T-4, M: "at most 3 rounds" in `feature` (the bound in
+    // words).
+    let mut rounds = skills.clone();
+    rounds
+        .get_mut("feature")
+        .unwrap()
+        .push_str("\nAt most 3 rounds.\n");
+    assert_names(
+        &skill_text_problems(&rounds, &listed),
+        "feature:",
+        "at most 3 rounds",
+    );
+    assert_names(
+        &skill_text_problems(&rounds, &listed),
+        "a digit",
+        "3 rounds",
+    );
+    // plugin-roles T-4, M: `cargo` in the implementer (the word scan covers
+    // the agents).
+    let mut agent = files.clone();
+    agent
+        .get_mut("specengine/agents/implementer.md")
+        .unwrap()
+        .push_str("\nBuild with cargo.\n");
+    assert_names(
+        &word_problems(&agent),
+        "plugin/specengine/agents/implementer.md: the word \"cargo\"",
+        "cargo in the implementer",
+    );
+
     // M: a backticked enum value.
     let normal = edited(
         &skills,
@@ -877,6 +940,24 @@ fn ac11_each_skill_names_its_names_and_yields_to_the_project() {
         "analyze: `submit_plan` not backticked",
         "submit_plan dropped",
     );
+    // plugin-roles T-3, M: `claim_task` dropped from `feature` (still in
+    // `implement` and `analyze`, so only this check sees it); each of
+    // `feature`'s names in turn.
+    for name in NAMES
+        .iter()
+        .find(|(skill, _)| *skill == "feature")
+        .expect("feature's names")
+        .1
+    {
+        let mut out = skills.clone();
+        let text = out.get_mut("feature").unwrap();
+        *text = text.replace(&format!("`{name}`"), "the tool");
+        assert_names(
+            &ac11_problems(&out),
+            &format!("feature: `{name}` not backticked"),
+            name,
+        );
+    }
     // `report_run` and `complete_task` out of `implement`.
     for name in ["report_run", "complete_task"] {
         let mut out = skills.clone();

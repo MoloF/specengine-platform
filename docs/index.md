@@ -26,6 +26,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2
 - [docs/canon/import.md](canon/import.md) Import: record model and rules · crates/specengine-import · tier 2
 - [docs/canon/mcp-read.md](canon/mcp-read.md) MCP read tools and resources · crates/specengine-mcp, crates/specengine-cli · tier 2
+- [docs/canon/plugin.md](canon/plugin.md) Plugin: skills and roles · plugin · tier 2
 - [docs/canon/proposal-apply.md](canon/proposal-apply.md) Proposal apply: consent, steps, completion, reject · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
@@ -47,7 +48,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
-- [docs/features/plugin-roles.md](features/plugin-roles.md) Plugin roles · plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress

@@ -50,8 +50,8 @@ use std::process::Command;
 use common::{Scratch, repository_root};
 use parity_config::{
     DANGLING, EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, INDEX_SHARD, SKIP_FILES,
-    add_dangling_mention, claimed, mutated, root_toml, roots, skipped_file, skipped_files,
-    std_walk, with_roots,
+    add_dangling_mention, claimed, glob_matches, mutated, root_toml, roots, skipped_file,
+    skipped_files, std_walk, with_roots,
 };
 use specengine_core::check::{
     CheckConfig, CheckInput, Mode, Report, ShardKind, Verdict, is_tier3_file, render_index,
@@ -193,16 +193,37 @@ fn under(files: &BTreeSet<String>, dir: &str) -> BTreeSet<String> {
 
 // ------------------------------------------------------------------ AC-03
 
-/// The plugin's five skill bodies (the root `README.md` "Claude Code plugin",
-/// its Files bullet; `analyze` and `implement` since docs/features/plugin-gate.md):
-/// under `roots` through `plugin`, kept out of the walk by `exclude` alone.
-const SKILL_FILES: [&str; 5] = [
+/// The plugin's six skill bodies (the root `README.md` "Claude Code plugin",
+/// its Files bullet; `analyze` and `implement` since docs/features/plugin-gate.md,
+/// `feature` since docs/features/plugin-roles.md): under `roots` through
+/// `plugin`, kept out of the walk by `exclude` alone.
+const SKILL_FILES: [&str; 6] = [
     "plugin/specengine/skills/analyze/SKILL.md",
     "plugin/specengine/skills/ask-owner/SKILL.md",
+    "plugin/specengine/skills/feature/SKILL.md",
     "plugin/specengine/skills/implement/SKILL.md",
     "plugin/specengine/skills/propose-spec-change/SKILL.md",
     "plugin/specengine/skills/read-spec/SKILL.md",
 ];
+
+/// The plugin's five agent bodies (docs/features/plugin-roles.md "Data",
+/// "Files"): under `roots` through `plugin`, kept out of the walk by the
+/// second `exclude` glob alone (T-5).
+const AGENT_FILES: [&str; 5] = [
+    "plugin/specengine/agents/analyst.md",
+    "plugin/specengine/agents/implementer.md",
+    "plugin/specengine/agents/reviewer.md",
+    "plugin/specengine/agents/spec-author.md",
+    "plugin/specengine/agents/tester.md",
+];
+
+/// The skill glob and the agents glob of [`SKIP_FILES`].
+const SKILL_GLOB: &str = "plugin/specengine/skills/*/SKILL.md";
+const AGENT_GLOB: &str = "plugin/specengine/agents/*.md";
+
+fn set(paths: &[&str]) -> BTreeSet<String> {
+    paths.iter().map(|path| (*path).to_owned()).collect()
+}
 
 /// `toml` with the quoted `glob` taken out of `exclude` (with the comma
 /// after it, if any; a comma left before `]` is TOML's trailing comma).
@@ -253,23 +274,30 @@ fn the_walk_is_the_std_walk_of_this_repository() {
 
     // docs/features/plugin-skills.md AC-12: `plugin` is a root; the
     // skill bodies stay out by `exclude` (the std walk's frozen
-    // `SKIP_FILES`), and dropping that exclude makes exactly the five join.
+    // `SKIP_FILES`), and dropping that exclude makes exactly the six join;
+    // the agent bodies likewise (docs/features/plugin-roles.md T-5).
     // Mutation: `plugin` out of `roots` — the first assertion fails, and
     // without the exclude nothing joins.
     assert!(
         listed_roots.iter().any(|root| root == "plugin"),
         "`plugin` in `roots`: {listed_roots:?}"
     );
-    assert_eq!(SKIP_FILES, ["plugin/specengine/skills/*/SKILL.md"]);
+    assert_eq!(SKIP_FILES, [SKILL_GLOB, AGENT_GLOB]);
     assert_eq!(
         skipped_files(&repository),
-        SKILL_FILES.map(str::to_owned).into_iter().collect(),
-        "the files the frozen rule leaves out"
+        &set(&SKILL_FILES) | &set(&AGENT_FILES),
+        "the files the frozen rules leave out"
     );
-    for skill in SKILL_FILES {
-        assert!(repository.join(skill).is_file(), "{skill} exists");
-        assert!(skipped_file(skill), "{skill} matches the frozen rule");
-        assert!(!expected.contains(skill), "{skill} in the std walk");
+    for (glob, files) in [
+        (SKILL_GLOB, &SKILL_FILES[..]),
+        (AGENT_GLOB, &AGENT_FILES[..]),
+    ] {
+        for file in files {
+            assert!(repository.join(file).is_file(), "{file} exists");
+            assert!(skipped_file(file), "{file} matches the frozen rule");
+            assert!(glob_matches(glob, file), "{file} matches {glob}");
+            assert!(!expected.contains(*file), "{file} in the std walk");
+        }
     }
     for other in [
         "plugin/specengine/SKILL.md",
@@ -278,25 +306,45 @@ fn the_walk_is_the_std_walk_of_this_repository() {
         "plugin/specengine/skills/x/README.md",
         "plugin/other/skills/x/SKILL.md",
         "docs/skills/x/SKILL.md",
+        // docs/features/plugin-roles.md T-5: the agents glob is one level.
+        "plugin/specengine/agents.md",
+        "plugin/specengine/agents/.md",
+        "plugin/specengine/agents/x/y.md",
+        "plugin/specengine/agents/x.mdx",
+        "plugin/other/agents/x.md",
+        "docs/agents/x.md",
+        "plugin/specengine/skills/x/analyst.md",
     ] {
-        assert!(!skipped_file(other), "{other} is not a skill body");
+        assert!(!skipped_file(other), "{other} is no skill or agent body");
     }
-    let no_exclude = without_exclude(&toml, SKIP_FILES[0]);
-    let joined: BTreeSet<String> = walked(&repository, &no_exclude)
+    // Each glob dropped joins exactly its own files; both, all eleven.
+    for (glob, files, what) in [
+        (SKILL_GLOB, &SKILL_FILES[..], "the skill exclude dropped"),
+        (AGENT_GLOB, &AGENT_FILES[..], "the agents exclude dropped"),
+    ] {
+        let no_exclude = without_exclude(&toml, glob);
+        let joined: BTreeSet<String> = walked(&repository, &no_exclude)
+            .difference(&expected)
+            .cloned()
+            .collect();
+        assert_eq!(joined, set(files), "{what}");
+        assert!(walked(&repository, &no_exclude).is_superset(&expected));
+        let unrooted = with_roots(&no_exclude, |roots| roots.retain(|root| root != "plugin"));
+        assert_eq!(
+            walked(&repository, &unrooted),
+            expected,
+            "`plugin` out of `roots`, {what}: nothing joins"
+        );
+    }
+    let neither = without_exclude(&without_exclude(&toml, SKILL_GLOB), AGENT_GLOB);
+    let joined: BTreeSet<String> = walked(&repository, &neither)
         .difference(&expected)
         .cloned()
         .collect();
     assert_eq!(
         joined,
-        SKILL_FILES.map(str::to_owned).into_iter().collect(),
-        "the skill exclude dropped"
-    );
-    assert!(walked(&repository, &no_exclude).is_superset(&expected));
-    let unrooted = with_roots(&no_exclude, |roots| roots.retain(|root| root != "plugin"));
-    assert_eq!(
-        walked(&repository, &unrooted),
-        expected,
-        "`plugin` out of `roots`, the exclude dropped: nothing joins"
+        &set(&SKILL_FILES) | &set(&AGENT_FILES),
+        "both dropped"
     );
 
     // Mutation: no `**/_*.md` — the templates join, nothing else.
@@ -436,28 +484,43 @@ fn this_repository_is_clean_under_the_root_config() {
     // dropped — exactly one `class-missing` per skill body (their
     // front-matter is Claude Code's); every other finding is on a skill
     // body (its `name`, `description` keys) or an index one.
-    let unexcluded = write_config(
-        &scratch.join("unexcluded"),
-        &without_exclude(&toml, SKIP_FILES[0]),
-    );
-    let skills = check_worktree(&repository, &unexcluded, None, TODAY);
-    assert!(skills.cannot_check.is_empty(), "{:?}", skills.cannot_check);
-    let class_missing: Vec<&str> = skills
-        .findings
-        .iter()
-        .filter(|f| f.code == "class-missing")
-        .map(|f| f.path.as_str())
-        .collect();
-    assert_eq!(class_missing, SKILL_FILES, "{:#?}", skills.lines(true));
-    assert!(
-        skills
+    // docs/features/plugin-roles.md T-5: the agents exclude dropped —
+    // exactly one `class-missing` per agent body, the same way. Neither
+    // a skill nor an agent body gives a front-matter finding: the check's
+    // own YAML parser reads each block (a broken one would be
+    // `frontmatter-yaml`, its fields dropped).
+    for (name, glob, files) in [
+        ("unexcluded", SKILL_GLOB, &SKILL_FILES[..]),
+        ("unexcluded-agents", AGENT_GLOB, &AGENT_FILES[..]),
+    ] {
+        let unexcluded = write_config(&scratch.join(name), &without_exclude(&toml, glob));
+        let joined = check_worktree(&repository, &unexcluded, None, TODAY);
+        assert!(joined.cannot_check.is_empty(), "{:?}", joined.cannot_check);
+        let class_missing: Vec<&str> = joined
             .findings
             .iter()
-            .all(|f| SKILL_FILES.contains(&f.path.as_str()) || f.code.starts_with("index-")),
-        "{:#?}",
-        skills.lines(true)
-    );
-    assert_ne!(skills.verdict, Verdict::Clean, "{:#?}", skills.lines(true));
+            .filter(|f| f.code == "class-missing")
+            .map(|f| f.path.as_str())
+            .collect();
+        assert_eq!(class_missing, files, "{glob}: {:#?}", joined.lines(true));
+        assert!(
+            joined
+                .findings
+                .iter()
+                .all(|f| files.contains(&f.path.as_str()) || f.code.starts_with("index-")),
+            "{glob}: {:#?}",
+            joined.lines(true)
+        );
+        assert!(
+            joined
+                .findings
+                .iter()
+                .all(|f| !f.code.starts_with("frontmatter-")),
+            "{glob}: {:#?}",
+            joined.lines(true)
+        );
+        assert_ne!(joined.verdict, Verdict::Clean, "{:#?}", joined.lines(true));
+    }
 
     // Mutation (a scratch copy): the five-digit mention back in
     // docs/canon/spec-check.md — exactly that one warning, at its line, so
@@ -1132,8 +1195,8 @@ fn resolve_relative(path: &str) -> String {
 // ------------------------------------------------------------------ AC-05
 
 /// A scratch copy of the repository's documents (the std walk's list) and
-/// of the files the walk leaves out by `SKIP_FILES` (the skill bodies under
-/// the `plugin` root). The bytes only: `fs::copy` clones on macOS, which a
+/// of the files the walk leaves out by `SKIP_FILES` (the skill and agent
+/// bodies under the `plugin` root). The bytes only: `fs::copy` clones on macOS, which a
 /// sandboxed run refuses (`EPERM`), and carries extended attributes along.
 fn scratch_copy(scratch: &Scratch, documents: &BTreeSet<String>, dir: &str) -> PathBuf {
     let root = scratch.join(dir);

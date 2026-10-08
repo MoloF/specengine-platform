@@ -10,6 +10,9 @@
 //! scratch tree, a Cyrillic letter in each of the six plugin files flagging
 //! all six (mutations: `plugin` out of `AREAS`; `.claude-plugin` skipped as
 //! a dot directory), and on this repository's six files.
+//! T-6 of docs/features/plugin-roles.md: the six paths it adds (the five
+//! agents, `skills/feature/SKILL.md`) are scanned the same way, a Cyrillic
+//! letter in each flagged, and the repository walk reads each.
 //! The ID prefixes of a runtime census config (08 §4.3;
 //! `crates/specengine-import/README.md`) are not grepped here: such a
 //! config may name single letters or prefixes this repository uses itself,
@@ -45,6 +48,17 @@ const PLUGIN_FILES: [&str; 6] = [
     "plugin/specengine/skills/ask-owner/SKILL.md",
     "plugin/specengine/skills/propose-spec-change/SKILL.md",
     "plugin/specengine/skills/read-spec/SKILL.md",
+];
+
+/// The six paths docs/features/plugin-roles.md adds to the plugin ("Data",
+/// "Files").
+const ROLE_FILES: [&str; 6] = [
+    "plugin/specengine/agents/analyst.md",
+    "plugin/specengine/agents/implementer.md",
+    "plugin/specengine/agents/reviewer.md",
+    "plugin/specengine/agents/spec-author.md",
+    "plugin/specengine/agents/tester.md",
+    "plugin/specengine/skills/feature/SKILL.md",
 ];
 
 /// Directories under the scanned areas that hold generated or installed text
@@ -357,13 +371,14 @@ fn plugin_tree_is_scanned_with_its_manifests() {
     let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
     let line = format!("\"{letter}\"\n");
     let tree = Scratch::new("plugin-tree");
-    for relative in PLUGIN_FILES {
+    for relative in PLUGIN_FILES.iter().chain(&ROLE_FILES) {
         tree.write(relative, &line);
     }
     for skipped in [
         "plugin/.git/HEAD",
         "plugin/specengine/.cache/x.json",
         "plugin/specengine/skills/read-spec/.hidden/x.md",
+        "plugin/specengine/agents/.hidden/x.md",
     ] {
         tree.write(skipped, &line);
     }
@@ -376,6 +391,7 @@ fn plugin_tree_is_scanned_with_its_manifests() {
     );
     let mut want: Vec<String> = PLUGIN_FILES
         .iter()
+        .chain(&ROLE_FILES)
         .map(|path| format!("{path}:1: cyrillic"))
         .collect();
     want.sort();
@@ -390,7 +406,7 @@ fn the_repository_walk_reads_the_plugin_files() {
         .into_iter()
         .map(|(path, _)| path.strip_prefix(&root).unwrap_or(&path).to_path_buf())
         .collect();
-    for expected in PLUGIN_FILES {
+    for expected in PLUGIN_FILES.iter().chain(&ROLE_FILES) {
         assert!(
             relatives.iter().any(|path| path == Path::new(expected)),
             "{expected} is not scanned"

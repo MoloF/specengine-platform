@@ -6,7 +6,8 @@
 //! AC-03's independent std walk: every `*.md` under the root outside
 //! `.`-named directories and the frozen [`SKIP_DIRS`], its name not
 //! starting with `_`, its path not matching the frozen [`SKIP_FILES`]
-//! (docs/features/plugin-skills.md AC-12).
+//! (docs/features/plugin-skills.md AC-12; the agents glob since
+//! docs/features/plugin-roles.md T-5).
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -55,24 +56,35 @@ pub const SKIP_DIRS: [&str; 5] = [
 ];
 
 /// The files the std walk never lists, by a root-relative glob whose `*`
-/// is one whole path segment (docs/features/plugin-skills.md AC-12;
-/// frozen beside [`SKIP_DIRS`]): the plugin's skill bodies, whose
-/// front-matter is Claude Code's (`name`, `description`), not a document
-/// class. The root config's `exclude` holds the same glob.
-pub const SKIP_FILES: [&str; 1] = ["plugin/specengine/skills/*/SKILL.md"];
+/// stands within one path segment (docs/features/plugin-skills.md AC-12;
+/// frozen beside [`SKIP_DIRS`]): the plugin's skill bodies and, since
+/// docs/features/plugin-roles.md "Data" "Files", its agent bodies, whose
+/// front-matter is Claude Code's (`name`, `description`, ...), not a
+/// document class. The root config's `exclude` holds the same globs.
+pub const SKIP_FILES: [&str; 2] = [
+    "plugin/specengine/skills/*/SKILL.md",
+    "plugin/specengine/agents/*.md",
+];
 
 /// Whether the root-relative `/` path `relative` matches one of
-/// [`SKIP_FILES`]: as many segments, each equal or a `*` one.
+/// [`SKIP_FILES`]: as many segments, each equal, or `*` followed by a
+/// suffix that a longer segment ends with (`*` alone: any non-empty one).
 pub fn skipped_file(relative: &str) -> bool {
-    SKIP_FILES.iter().any(|glob| {
-        let pattern: Vec<&str> = glob.split('/').collect();
-        let path: Vec<&str> = relative.split('/').collect();
-        pattern.len() == path.len()
-            && pattern
-                .iter()
-                .zip(&path)
-                .all(|(want, got)| *want == *got || (*want == "*" && !got.is_empty()))
-    })
+    SKIP_FILES.iter().any(|glob| glob_matches(glob, relative))
+}
+
+/// Whether the root-relative `/` path `relative` matches the one `glob`
+/// (the [`skipped_file`] rule).
+pub fn glob_matches(glob: &str, relative: &str) -> bool {
+    let pattern: Vec<&str> = glob.split('/').collect();
+    let path: Vec<&str> = relative.split('/').collect();
+    pattern.len() == path.len()
+        && pattern.iter().zip(&path).all(|(want, got)| {
+            *want == *got
+                || want
+                    .strip_prefix('*')
+                    .is_some_and(|suffix| got.len() > suffix.len() && got.ends_with(suffix))
+        })
 }
 
 /// This repository (both including crates live at `crates/<name>`).

@@ -37,6 +37,18 @@
 //!   path, and `version`, are the last of [`PINS`]; versions strictly
 //!   increasing. M: a `SKILL.md` edited, `PINS` unchanged; an entry
 //!   repeating the version.
+//! - docs/features/plugin-roles.md R-1, R-2, T-1: the sixteen files (the
+//!   five agents `specengine/agents/*.md` and `skills/feature/SKILL.md`
+//!   join the ten); `PINS` last `0.3.0`. M: an unlisted
+//!   `specengine/agents/x.md`; `skills/feature/SKILL.md` removed; an agent
+//!   edited, `PINS` unchanged.
+//! - plugin-roles R-6, T-3 (AC-05): the owner-invoked `feature` holds
+//!   exactly `name`, `description`, `argument-hint`,
+//!   `disable-model-invocation: true` in that order, its description
+//!   outside the 1 200 B sum (D5); the five model-invoked skills keep two
+//!   keys. M: `disable-model-invocation` dropped; `argument-hint` first; a
+//!   4 097 B body; a 1 024-character `feature` description keeps the sum
+//!   green.
 //! - plugin-gate AC-13: `hooks/hooks.json` is one `PreToolUse` event with
 //!   one entry: `type` `command`, the matcher fully matching `Edit`,
 //!   `Write`, `MultiEdit`, `NotebookEdit` (a plain alternation of tool
@@ -105,17 +117,31 @@ const PINS: &[(&str, &str)] = &[
         "0.2.0",
         "6b6fa534635ed35a5d0de35206efcf462a98df677553a584eaf6a2c9979ef028",
     ),
+    // docs/features/plugin-roles.md "Data", R-2 (0.2.0 -> 0.3.0, MINOR):
+    // the five roles `agents/*.md` and the owner-invoked skill `feature`.
+    (
+        "0.3.0",
+        "acb1bbdb64d85643a9b11271d8010ed10dc884fcabf8bf63a49c9fb119b9d023",
+    ),
 ];
 
-/// The README's closed file set (its Files bullet), relative to `plugin/`.
-const FILES: [&str; 10] = [
+/// The closed file set, relative to `plugin/`, in byte order: the README's
+/// ten (its Files bullet) and docs/features/plugin-roles.md "Data" "Files"
+/// (the five agents and `skills/feature/SKILL.md`), sixteen.
+const FILES: [&str; 16] = [
     ".claude-plugin/marketplace.json",
     "specengine/.claude-plugin/plugin.json",
     "specengine/.mcp.json",
+    "specengine/agents/analyst.md",
+    "specengine/agents/implementer.md",
+    "specengine/agents/reviewer.md",
+    "specengine/agents/spec-author.md",
+    "specengine/agents/tester.md",
     "specengine/hooks/gate.sh",
     "specengine/hooks/hooks.json",
     "specengine/skills/analyze/SKILL.md",
     "specengine/skills/ask-owner/SKILL.md",
+    "specengine/skills/feature/SKILL.md",
     "specengine/skills/implement/SKILL.md",
     "specengine/skills/propose-spec-change/SKILL.md",
     "specengine/skills/read-spec/SKILL.md",
@@ -453,7 +479,7 @@ fn ac03_problems(tree: &Tree) -> Vec<String> {
     let wanted = BTreeSet::from(FILES);
     let mut problems: Vec<String> = found
         .difference(&wanted)
-        .map(|path| format!("plugin/{path}: outside Data's ten files"))
+        .map(|path| format!("plugin/{path}: outside the sixteen files"))
         .collect();
     problems.extend(
         wanted
@@ -485,6 +511,8 @@ fn ac03_the_plugin_tree_is_data_s_ten_files() {
         "specengine/skills/.DS_Store",
         "specengine/skills/read-spec/.DS_Store",
         "specengine/hooks/.DS_Store",
+        "specengine/agents/.DS_Store",
+        "specengine/skills/feature/.DS_Store",
     ] {
         write(&copy, ds_store, b"\0\0\0\x01Bud1");
     }
@@ -498,6 +526,9 @@ fn ac03_the_plugin_tree_is_data_s_ten_files() {
         "specengine/hooks/x.sh",
         "specengine/hooks/hooks.json.bak",
         "specengine/agents/x.md",
+        "specengine/agents/analyst.md.bak",
+        "specengine/agents/roles/analyst.md",
+        "specengine/skills/feature/notes.md",
         "README.md",
         "specengine/skills/read-spec/notes.md",
         ".claude-plugin/plugin.json",
@@ -505,10 +536,29 @@ fn ac03_the_plugin_tree_is_data_s_ten_files() {
         write(&copy, extra, b"{}\n");
         assert_names(
             &ac03_problems(&read_tree(&copy)),
-            &format!("plugin/{extra}: outside Data's ten files"),
+            &format!("plugin/{extra}: outside the sixteen files"),
             extra,
         );
         fs::remove_file(copy.join(extra)).unwrap();
+        if extra == "specengine/agents/roles/analyst.md" {
+            fs::remove_dir(copy.join("specengine/agents/roles")).unwrap();
+        }
+    }
+    assert_eq!(ac03_problems(&read_tree(&copy)), Vec::<String>::new());
+    // plugin-roles T-1, M: `skills/feature/SKILL.md` removed; an agent
+    // removed (each named missing, nothing else).
+    for gone in [
+        "specengine/skills/feature/SKILL.md",
+        "specengine/agents/reviewer.md",
+    ] {
+        let bytes = fs::read(copy.join(gone)).unwrap();
+        fs::remove_file(copy.join(gone)).unwrap();
+        assert_eq!(
+            ac03_problems(&read_tree(&copy)),
+            [format!("plugin/{gone}: missing")],
+            "{gone} removed"
+        );
+        fs::write(copy.join(gone), bytes).unwrap();
     }
     std::os::unix::fs::symlink("SKILL.md", copy.join("specengine/skills/read-spec/x.md"))
         .expect("a symlink");
@@ -588,14 +638,48 @@ fn ac04_the_server_entry_is_data_s_value() {
 // ------------------------------------------------------------------ AC-05
 
 /// A skill file split as the README's A skill bullet writes it: `name`,
-/// `description`, the body after the closing `---` line.
+/// `description`, then (on `feature` alone) `argument-hint` and
+/// `disable-model-invocation`, the body after the closing `---` line.
 struct Skill<'t> {
     name: &'t str,
     description: &'t str,
+    /// The values of the keys after `description`, in order.
+    rest: Vec<&'t str>,
     body: &'t [u8],
 }
 
-fn split_skill<'t>(bytes: &'t [u8]) -> Result<Skill<'t>, String> {
+/// The owner-invoked skill (docs/features/plugin-roles.md "Data", "Skill
+/// front-matter"): four keys in order, its description outside the
+/// 1 200 B sum (D5).
+const FEATURE: &str = "feature";
+
+/// The front-matter keys of `feature`, in order.
+const FEATURE_KEYS: [&str; 4] = [
+    "name",
+    "description",
+    "argument-hint",
+    "disable-model-invocation",
+];
+
+/// The front-matter keys of the five model-invoked skills, in order.
+const SKILL_KEYS: [&str; 2] = ["name", "description"];
+
+/// The keys the skill in directory `dir` holds, in order.
+fn wanted_keys(dir: &str) -> &'static [&'static str] {
+    if dir == FEATURE {
+        &FEATURE_KEYS
+    } else {
+        &SKILL_KEYS
+    }
+}
+
+/// The skill directory of a `specengine/skills/<dir>/SKILL.md` path.
+fn skill_dir(path: &str) -> Option<&str> {
+    path.strip_prefix("specengine/skills/")
+        .and_then(|rest| rest.strip_suffix("/SKILL.md"))
+}
+
+fn split_skill<'t>(bytes: &'t [u8], wanted: &[&str]) -> Result<Skill<'t>, String> {
     let text = std::str::from_utf8(bytes).map_err(|e| format!("not UTF-8: {e}"))?;
     let rest = text
         .strip_prefix("---\n")
@@ -607,9 +691,10 @@ fn split_skill<'t>(bytes: &'t [u8]) -> Result<Skill<'t>, String> {
         .iter()
         .map(|line| line.split_once(':').map_or(*line, |(key, _)| key))
         .collect();
-    if keys != ["name", "description"] {
+    if keys != wanted {
         return Err(format!(
-            "front-matter keys {keys:?}, not [name, description]"
+            "front-matter keys {keys:?}, not [{}]",
+            wanted.join(", ")
         ));
     }
     let value = |line: &'t str, key: &str| -> Result<&'t str, String> {
@@ -617,11 +702,36 @@ fn split_skill<'t>(bytes: &'t [u8]) -> Result<Skill<'t>, String> {
             .and_then(|rest| rest.strip_prefix(": "))
             .ok_or(format!("`{key}: ` with one space"))
     };
+    let mut values = Vec::new();
+    for (line, key) in lines.iter().zip(wanted) {
+        values.push(value(line, key)?);
+    }
     Ok(Skill {
-        name: value(lines[0], "name")?,
-        description: value(lines[1], "description")?,
+        name: values[0],
+        description: values[1],
+        rest: values[2..].to_vec(),
         body,
     })
+}
+
+/// A plain one-line YAML scalar (README "A skill"): no indicator first, no
+/// `: `, ` #` or trailing `:`, no outer whitespace; problems as `{at}: …`.
+fn plain_scalar_problems(at: &str, key: &str, value: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if value
+        .chars()
+        .next()
+        .is_some_and(|first| "-?:,[]{}#&*!|>'\"%@`".contains(first))
+    {
+        problems.push(format!("{at}: {key} starts with an indicator"));
+    }
+    if value.contains(": ") || value.contains(" #") || value.ends_with(':') {
+        problems.push(format!("{at}: {key} is not a plain scalar"));
+    }
+    if value != value.trim() {
+        problems.push(format!("{at}: {key} has outer whitespace"));
+    }
+    problems
 }
 
 fn is_skill_name(name: &str) -> bool {
@@ -639,15 +749,12 @@ fn ac05_problems(tree: &Tree) -> Vec<String> {
     let mut descriptions = 0;
     let mut skills = 0;
     for (path, bytes) in &tree.files {
-        let Some(dir) = path
-            .strip_prefix("specengine/skills/")
-            .and_then(|rest| rest.strip_suffix("/SKILL.md"))
-        else {
+        let Some(dir) = skill_dir(path) else {
             continue;
         };
         skills += 1;
         let at = format!("plugin/{path}");
-        let skill = match split_skill(bytes) {
+        let skill = match split_skill(bytes, wanted_keys(dir)) {
             Ok(skill) => skill,
             Err(problem) => {
                 problems.push(format!("{at}: {problem}"));
@@ -670,20 +777,22 @@ fn ac05_problems(tree: &Tree) -> Vec<String> {
                 "{at}: description of {characters} characters, not 1 to 1 024"
             ));
         }
-        if description
-            .chars()
-            .next()
-            .is_some_and(|first| "-?:,[]{}#&*!|>'\"%@`".contains(first))
-        {
-            problems.push(format!("{at}: description starts with an indicator"));
+        problems.extend(plain_scalar_problems(&at, "description", description));
+        if dir == FEATURE {
+            // Outside the in-context sum: never loaded (D5).
+            let (hint, invocation) = (skill.rest[0], skill.rest[1]);
+            if hint.is_empty() {
+                problems.push(format!("{at}: argument-hint is empty"));
+            }
+            problems.extend(plain_scalar_problems(&at, "argument-hint", hint));
+            if invocation != "true" {
+                problems.push(format!(
+                    "{at}: disable-model-invocation is {invocation:?}, not true"
+                ));
+            }
+        } else {
+            descriptions += description.len();
         }
-        if description.contains(": ") || description.contains(" #") || description.ends_with(':') {
-            problems.push(format!("{at}: description is not a plain scalar"));
-        }
-        if description != description.trim() {
-            problems.push(format!("{at}: description has outer whitespace"));
-        }
-        descriptions += description.len();
         if skill.body.len() > 4096 {
             problems.push(format!("{at}: body of {} B, over 4 096", skill.body.len()));
         }
@@ -700,12 +809,17 @@ fn ac05_problems(tree: &Tree) -> Vec<String> {
 }
 
 const READ_SPEC: &str = "specengine/skills/read-spec/SKILL.md";
+const FEATURE_SKILL: &str = "specengine/skills/feature/SKILL.md";
 const ASK_OWNER: &str = "specengine/skills/ask-owner/SKILL.md";
 
 /// `tree` with the description of `path` replaced by `description`.
 fn with_description(tree: &Tree, path: &str, description: &str) -> Tree {
     let text = String::from_utf8(tree.files[path].clone()).unwrap();
-    let old = split_skill(text.as_bytes()).unwrap().description.to_owned();
+    let dir = skill_dir(path).expect("a skill path");
+    let old = split_skill(text.as_bytes(), wanted_keys(dir))
+        .unwrap()
+        .description
+        .to_owned();
     edited(
         tree,
         path,
@@ -717,7 +831,8 @@ fn with_description(tree: &Tree, path: &str, description: &str) -> Tree {
 /// `tree` with the body of `path` padded or cut to `size` bytes.
 fn with_body_size(tree: &Tree, path: &str, size: usize) -> Tree {
     let bytes = &tree.files[path];
-    let body_len = split_skill(bytes).unwrap().body.len();
+    let dir = skill_dir(path).expect("a skill path");
+    let body_len = split_skill(bytes, wanted_keys(dir)).unwrap().body.len();
     let head = bytes[..bytes.len() - body_len].to_vec();
     let mut body = bytes[bytes.len() - body_len..].to_vec();
     body.resize(size, b'x');
@@ -738,7 +853,7 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
         .keys()
         .filter(|path| path.ends_with("/SKILL.md"))
         .collect();
-    assert_eq!(skills.len(), 5, "{skills:?}");
+    assert_eq!(skills.len(), 6, "{skills:?}");
 
     // M: `name` other than the directory.
     let renamed = edited(&tree, READ_SPEC, "name: read-spec\n", "name: read-specs\n");
@@ -848,6 +963,125 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
         "breaks the grammar",
         "65 characters",
     );
+
+    // docs/features/plugin-roles.md R-6, T-3: `feature`'s four keys.
+    let feature = &tree.files[FEATURE_SKILL];
+    let split = split_skill(feature, &FEATURE_KEYS).expect("feature's four keys");
+    assert_eq!(split.name, FEATURE);
+    assert_eq!(split.rest, ["<requirement in words> or <task ID>", "true"]);
+    // M: `disable-model-invocation` dropped.
+    let invoked = edited(&tree, FEATURE_SKILL, "disable-model-invocation: true\n", "");
+    assert_names(
+        &ac05_problems(&invoked),
+        "plugin/specengine/skills/feature/SKILL.md: front-matter keys",
+        "disable-model-invocation dropped",
+    );
+    // M: `argument-hint` first.
+    let hint = "argument-hint: <requirement in words> or <task ID>\n";
+    let first = edited(&tree, FEATURE_SKILL, hint, "");
+    let first = edited(
+        &first,
+        FEATURE_SKILL,
+        "---\nname: feature\n",
+        &format!("---\n{hint}name: feature\n"),
+    );
+    assert_names(
+        &ac05_problems(&first),
+        "plugin/specengine/skills/feature/SKILL.md: front-matter keys",
+        "argument-hint first",
+    );
+    // `false`, an extra key, a broken hint.
+    for (from, to, needle) in [
+        (
+            "disable-model-invocation: true\n",
+            "disable-model-invocation: false\n",
+            "disable-model-invocation is \"false\", not true",
+        ),
+        (
+            "disable-model-invocation: true\n",
+            "disable-model-invocation: true\nmodel: inherit\n",
+            "front-matter keys",
+        ),
+        (
+            hint,
+            "argument-hint: a requirement: or a task ID\n",
+            "argument-hint is not a plain scalar",
+        ),
+    ] {
+        let mutated = edited(&tree, FEATURE_SKILL, from, to);
+        assert_names(&ac05_problems(&mutated), needle, to);
+    }
+    // The five model-invoked skills keep two keys.
+    let invocable = edited(
+        &tree,
+        READ_SPEC,
+        "name: read-spec\n",
+        "name: read-spec\ndisable-model-invocation: true\n",
+    );
+    assert_names(
+        &ac05_problems(&invocable),
+        "plugin/specengine/skills/read-spec/SKILL.md: front-matter keys",
+        "a model-invoked skill with the owner's keys",
+    );
+    // M: a 4 097 B body (4 096 B passes).
+    let over = with_body_size(&tree, FEATURE_SKILL, 4097);
+    assert_names(
+        &ac05_problems(&over),
+        "feature/SKILL.md: body of 4097 B",
+        "feature 4 097 B",
+    );
+    let at_cap = with_body_size(&tree, FEATURE_SKILL, 4096);
+    assert_eq!(
+        ac05_problems(&at_cap),
+        Vec::<String>::new(),
+        "feature 4 096 B"
+    );
+    // A 1 024-character `feature` description keeps the 1 200 B sum green
+    // (it is outside the sum); 1 025 is too long; a `: ` breaks it.
+    let longest = with_description(&tree, FEATURE_SKILL, &"a".repeat(1024));
+    assert_eq!(
+        ac05_problems(&longest),
+        Vec::<String>::new(),
+        "feature 1 024"
+    );
+    let long = with_description(&tree, FEATURE_SKILL, &"a".repeat(1025));
+    assert_names(
+        &ac05_problems(&long),
+        "feature/SKILL.md: description of 1025 characters",
+        "feature 1 025",
+    );
+    let colon = with_description(&tree, FEATURE_SKILL, "Run a task: from words to done.");
+    assert_names(
+        &ac05_problems(&colon),
+        "feature/SKILL.md: description is not a plain scalar",
+        "feature `: `",
+    );
+    // The five's sum still counts: 1 200 B over them is red.
+    let rest: usize = tree
+        .files
+        .iter()
+        .filter_map(|(path, bytes)| {
+            let dir = skill_dir(path)?;
+            (dir != FEATURE && path != READ_SPEC).then(|| {
+                split_skill(bytes, wanted_keys(dir))
+                    .unwrap()
+                    .description
+                    .len()
+            })
+        })
+        .sum();
+    let fill = with_description(&tree, READ_SPEC, &"a".repeat(1200 - rest));
+    assert_eq!(
+        ac05_problems(&fill),
+        Vec::<String>::new(),
+        "1 200 B together"
+    );
+    let spill = with_description(&tree, READ_SPEC, &"a".repeat(1201 - rest));
+    assert_names(
+        &ac05_problems(&spill),
+        "together, over 1 200",
+        "1 201 B together",
+    );
 }
 
 // ------------------------------------------------------------------ AC-10
@@ -936,6 +1170,42 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "a SKILL.md edited",
     );
+    // plugin-roles T-1, M: an agent edited, PINS unchanged (one byte
+    // appended to each agent and to `feature` in turn; `Bash` out of the
+    // analyst's front-matter).
+    for path in tree
+        .files
+        .keys()
+        .filter(|path| path.starts_with("specengine/agents/") || *path == FEATURE_SKILL)
+    {
+        let mut appended = tree.clone();
+        appended.files.get_mut(path).unwrap().push(b'\n');
+        assert_names(&ac10_problems(&appended, PINS), "not the last pin's", path);
+    }
+    let unbashed = edited(
+        &tree,
+        "specengine/agents/analyst.md",
+        "disallowedTools: Write, Edit, MultiEdit, NotebookEdit, Bash\n",
+        "disallowedTools: Write, Edit, MultiEdit, NotebookEdit\n",
+    );
+    assert_names(
+        &ac10_problems(&unbashed, PINS),
+        "not the last pin's",
+        "Bash out of the analyst's",
+    );
+    // A sixth agent with no pin.
+    let mut sixth = tree.clone();
+    sixth
+        .files
+        .insert("specengine/agents/x.md".to_owned(), b"---\n".to_vec());
+    assert_names(
+        &ac10_problems(&sixth, PINS),
+        "not the last pin's",
+        "agents/x.md",
+    );
+    // The pin of plugin-roles: 0.3.0, after 0.2.0.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.3.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.2.0");
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

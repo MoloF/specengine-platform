@@ -1,152 +1,55 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [plugin]
 ref: plugin-roles analysis 2026-10-08 (HEAD b7009de); Claude Code docs read 2026-10-08, build 2.1.294; the orchestrator's Q1-Q3 per the owner's pre-approval; 08 s2 Phase 2, Plugin
+shipped: 2026-10-08
 ---
 
 # Plugin roles
 
 ## Why
 
-**Task.** Role pipelines live per project, copied by hand, and touch no queue (this repository's `/feature` drafts no task, its spec writer writes `docs/`; pilot A copies its role names), so the Phase 2 live check (08 s2) has nothing to run on and P2-12 (07 s1.2) stands only over MCP. Outcome: in any SpecEngine project one owner-invoked skill takes a requirement in words through analysis, approval on a terminal, implementation, review and tests to `done`, spec changes as proposals. Prompts and tests, no crate source. ADR-0015, ADR-0027 ("Cost": generic roles take commands from the project's `CLAUDE.md`), `docs/canon/architecture.md#distribution`, `#tasks`, `#apply`; no new ADR.
+Role pipelines lived per project, copied by hand, and touched no queue (this repository's `/feature` drafts no task, its spec writer writes `docs/`; pilot A copied its role names), so the Phase 2 live check (08 s2) had nothing to run on and P2-12 (07 s1.2) stood only over MCP. Now in any SpecEngine project the owner's `/specengine:feature` takes a requirement in words through analysis, approval on a terminal, implementation, review and tests to `done`, spec changes as proposals, routed project -> profile -> generic by the project's `CLAUDE.md`. ADR-0015, ADR-0027 ("Cost"); no new ADR.
 
-**Contradiction, resolved per Q1.** 06 s8 let the spec writer write "the feature spec and criterion markers" and "Implementation", against `#apply`, 05 s1 principle 3 and 06 s0. This draft restates 06 s8 and adds the spec author to 06 s0: SpecEngine's roles write no spec file; a project's own spec role is its layer's choice.
+Resolved per Q1: 06 s8 let the spec writer write the feature spec, criterion markers and "Implementation", against `docs/canon/architecture.md#apply`, 05 s1 principle 3 and 06 s0; 06 s8 is restated and 06 s0 gains the spec author: SpecEngine's roles write no spec file. Decided here: `feature` is a skill with `disable-model-invocation: true`, not `commands/feature.md` (skills supersede commands; a plugin skill's bare alias yields to a project command holding the name); roles `analyst`, `spec-author`, `implementer`, `tester`, `reviewer`.
 
-## Description and interactions
-
-**Roles** `plugin/specengine/agents/<name>.md`, always called `specengine:<name>` (WA-3). `reviewer`, not `spec-reviewer`: it reviews code against the spec, and `specengine:reviewer` coexists with a project `reviewer` (D2).
-
-| Role | Stage | Does | `disallowedTools` |
-|---|---|---|---|
-| `analyst` | analysis | a requirement's targets; on a task: package, bundle, gaps as records with working answers, `submit_plan`; never claims, edits, approves | Write, Edit, MultiEdit, NotebookEdit, Bash |
-| `spec-author` | spec, update | the project's documentation convention in brief (`spec check` decides); each spec change a proposal with `task_id`; may run `spec check`, the registered generators | the first four |
-| `implementer` | implementation | the package in the claimed worktree; commands, path areas from the project's `CLAUDE.md`; markers where its languages take them | none |
-| `tester` | tests | tests as the project's `CLAUDE.md` says, `@verifies`; results its own claim | none |
-| `reviewer` | review | the change (Bash: diffs, checks) against the package and the project's rules; findings or accept | the first four |
-
-Each role stands alone, names the skills it loads with the Skill tool (`specengine:read-spec`, `ask-owner`, `propose-spec-change`, `analyze`, `implement`; WA-10, D6), raises gaps with a working answer and `task_id`, writes in the project's language (its `CLAUDE.md`, else `[project] language`; WA-9), never commits.
-
-**`/specengine:feature`** is `skills/feature/SKILL.md`, `disable-model-invocation: true`, not `commands/feature.md` (WA-7): skills supersede commands for new work, and a plugin skill's bare alias yields to a command holding the name, so a project's own `/feature` keeps it (D3). Cost: one owner-invoked skill, two more keys, its description outside the in-context sum (D5).
-
-**Routing** (WA-4): per stage (`analysis`, `spec`, `implementation`, `review`, `tests`) the role a `Stage | Role` table in the project's `CLAUDE.md` names (its own agent or a profile's, as called), else `specengine:<role>`. Precedence project -> profile -> generic lives there, not in name shadowing; no `specengine.toml` key (`#tasks`). No table (pilot A today): all generic. This repository keeps its own `/feature`.
-
-**Leg 1**, a requirement in words (WA-5):
-
-1. the analysis role finds the targets (none: the nearest existing parent document), a title, a goal;
-2. the session runs `spec task new --nodes ... --title ... --goal ... --author-role <that role>` (no MCP tool; `spec` off `PATH`: the hint and the owner's command, end);
-3. the analysis role: `get_task`, gaps with `task_id`, `submit_plan`;
-4. the session prints the owner's step, `spec task approve <T>` (or `changes`) on a terminal, then `/specengine:feature <T>`, and ends.
-
-**Leg 2**, a task ID, by `get_task`'s status:
-
-- `draft`, `changes_requested`: leg 1 steps 3-4; `review`: the owner's step, end;
-- `ready`: one `claim_task` by the session (`role` the implementation role as called, `worktree` its top); `in_progress` claimed here, run open: no claim; then the spec role (feature spec, node edits); implementation, review, tests until accepted and green, at most the project's `CLAUDE.md` bound, else three rounds (WA-8); the spec role ("Implementation", canon diff); `report_run`; `complete_task` last;
-- rounds out: `report_run`, outcome not completed, open findings in the summary, no `complete_task`;
-- claimed elsewhere, run closed, `done`, `cancelled`: say which and the owner's options; end.
-
-Never: wait or poll for approval (04 s4, 07 s1.5), approve, commit, write a spec file, use another worktree. A `stale` package is reported, never blocks; a refused write goes to the owner (`specengine:implement`).
-
-**Canon at shipping**: the root `README.md` (11 835 of 12 288 B) cannot take the role rules; a Tier 2 `docs/canon/plugin.md` (scope `[plugin]`) takes "Changing it", both tables and routing; the README keeps install and a pointer.
-
-## Data
-
-```yaml
----
-name: analyst
-description: Analyse a requirement or a SpecEngine task when /specengine:feature or the project routes to it. Find the targets, raise gaps with working answers, submit the plan; never claim, edit or approve.
-model: inherit
-disallowedTools: Write, Edit, MultiEdit, NotebookEdit, Bash
----
-```
-
-```yaml
----
-name: feature
-description: Run a SpecEngine task through the project's stages, from a requirement in words to a plan awaiting approval, or from an approved task to done.
-argument-hint: <requirement in words> or <task ID>
-disable-model-invocation: true
----
-```
-
-A project's `CLAUDE.md` routing, unnamed stages generic:
-
-```markdown
-| Stage | Role |
-|---|---|
-| spec | docs-keeper |
-| implementation | stackprofile:implementer |
-```
-
-**Files**, sixteen: the README's ten, `specengine/agents/{analyst,spec-author,implementer,tester,reviewer}.md`, `specengine/skills/feature/SKILL.md`. `plugin.json` `0.3.0`; its, `metadata.description` and the entry's descriptions equal, naming the roles and `/specengine:feature`; `PINS` appended. `specengine.toml` `exclude` + `plugin/specengine/agents/*.md` (now).
-
-## Rules and edge cases
-
-**Agent front-matter** (WA-2): `name`, `description`, `model`, and on analyst, spec-author, reviewer `disallowedTools`, in order, one `key: value` line each, nothing else; `name` the stem, `^[a-z0-9]+(-[a-z0-9]+)*$`, no P2-3 role name; `description` one plain YAML line (no indicator first, no `: `, ` #`), 1-1 024 characters, the five <= 1 000 B together (ADR-0015 "Cost"), scoped to SpecEngine tasks; `model: inherit`, no `effort` (WA-6, Q3); body <= 4 096 B. Nothing else: `tools` drops MCP tools, four keys are ignored (D4), `isolation` moves the role to a worktree the gate refuses, `skills` naming is undocumented; unparseable front-matter loads with its fields dropped (D4), a broken `disallowedTools` an unrestricted role: parse strictly.
-
-**Skill front-matter**: as "Data", in order, nothing else; the description outside the 1 200 B sum (D5), one plain line <= 1 024 characters; body <= 4 096 B. The five model-invoked skills keep two keys.
-
-**Content** (the skills' rules, extended to agents): English; no P2-3 word, `mechanic`, `edge-case`, `mcp__`; outside `json` blocks no digit but a list's `N. `; no backticked enum value; every backticked snake_case name a tool or a `tools/list` schema property; no project fact, path, ID, command, cap or `[zones]` name; the round bound in words. Each agent holds "The project's CLAUDE.md and its roles take precedence over this role." verbatim; the skill the skills' sentence and "This leg ends here: never wait for the approval."
-
-**Writes** (WA-1): front-matter and prompt only. Bash writes pass every role and the gate (07 s4 limit); prompts forbid shell writes to spec files; the gate stays role-blind; an agent's `spec task approve` exits 2. **Version** 0.3.0 MINOR; then a text PATCH, a role, skill or key MINOR.
-
-**Claude Code docs, 2.1.294.** Documented: D1 plugin agents are `<plugin>:<name>` (typeahead, hooks; not `/agents`); D2 they rank last, a project `reviewer` and `specengine:reviewer` are two; D3 `commands/<f>.md` is `/<plugin>:<f>`, skills supersede commands, a plugin skill gets a bare alias unless a command holds it; D4 the agent keys, `permissionMode`, `hooks`, `mcpServers`, `initialPrompt` ignored, unknown keys silently, `tools` drops MCP tools; D5 `disable-model-invocation` keeps the description out of context; D6 plugin subagents see the MCP tools and load skills; D7 `validate --strict` checks skill, agent, command front-matter. Undocumented: what O-1 to O-3 record (bare `/feature` beside a project command, against "a skill beats a `.claude/commands/` file").
-
-**Working answers**, marked inline (D1, D2, D4, D6 firm WA-2, WA-3, WA-10); also WA-11 the live check by `--plugin-dir`, no install; WA-12 markers where the project's languages take them, no comment syntax in plugin text; texts English (ADR-0024). Q2: one plugin (ADR-0015), per SpecEngine project, `--scope local`; the roles come with the gate hook, open without `[gate]`.
-
-**Risks**: collisions (pilot A's `/feature`, same-named roles; O-3); context and auto-delegation (O-5); genre leaks past the word scan (the reviewer reads; spec roots from `[paths]`); no convention text in consumer projects (`spec check` decides); verification a role's claim until `spec verify`; undocumented behaviour ("Open").
+How it works now: `docs/canon/plugin.md`; install: the root `README.md` "Claude Code plugin".
 
 ## Acceptance criteria
 
-M: the mutation that must turn it red. Developer (`plugin/`):
+M: the mutation that turned it red; 39 run on the real files, all red. "Roles": `crates/specengine-mcp/tests/plugin_roles.rs`.
 
-- [ ] R-1 -- under `plugin/` exactly "Files" sixteen, `.DS_Store` ignored.
-- [ ] R-2 -- `0.3.0`; three equal descriptions naming the roles and `/specengine:feature`; `PINS` ends `("0.3.0", <BLAKE3 of plugin/specengine/>)`.
-- [ ] R-3 -- agents as "Agent front-matter", `disallowedTools` exactly as "Roles", order free.
-- [ ] R-4 -- agents and skill as "Content".
-- [ ] R-5 -- backticked: analyst `get_task`, `get_context_bundle`, `ask_question`, `report_discrepancy`, `task_id`, `working_answer`, `submit_plan`, never `claim_task`; spec-author `get_node`, `propose_change`, `span_hash`, `task_id`; the others `get_task`, `report_discrepancy`, `task_id`; implementer, tester hold `CLAUDE.md`; every role "the project's language".
-- [ ] R-6 -- the skill as "Skill front-matter"; its body backticks `get_task`, `submit_plan`, `claim_task`, `report_run`, `complete_task`, `ask_question`, `report_discrepancy`, `task_id`, holds `spec task new`, `spec task approve`, each role as `specengine:<name>`, `Stage | Role`, the leg-end sentence; no word `poll`.
-
-Spec writer:
-
-- [x] S-1 -- this draft: criteria, WA-1-WA-12, Q1-Q3 (owner review open), D1-D7.
-- [x] S-2 -- the `exclude`; `docs/README.md` "Walk" names it; the README "Files" bullet points here.
-- [x] S-3 -- 06 s0, s8 per Q1, WA-3, WA-4: no line of 06 lets a spec writer write a spec file.
-- [ ] S-4 -- shipping: `docs/canon/plugin.md` <= 12 288 B; 07 s1.4 lists `/specengine:feature`; 08 s2 "Plugin"; `CLAUDE.md` State; README "Status"; `export index && check` clean with the agents, no plugin finding, worst W <= 108 468 B.
-- [ ] S-5 -- no `.claude/**` edit; no owner text.
-
-Test engineer:
-
-- [ ] T-1 -- `plugin_files.rs` `FILES` sixteen, `PINS` last `0.3.0` (M: an unlisted `specengine/agents/x.md`; `skills/feature/SKILL.md` removed; an agent edited, `PINS` unchanged).
-- [ ] T-2 -- new `plugin_roles.rs`: R-3, R-5 (M: `tools: Read, Grep, Glob` on analyst; `permissionMode: acceptEdits`; `effort: high`; `isolation: worktree`; `model: claude-opus-5-5`; `disallowedTools: [Write, Edit`; `Edit` out of reviewer's, `Write` out of spec-author's, `Bash` out of analyst's; `name` not the stem; `name: spec-writer`; descriptions over 1 000 B; `submit_plan` out of analyst; `claim_task` into analyst; a precedence sentence dropped; `CLAUDE.md` out of implementer).
-- [ ] T-3 -- R-6 (`plugin_files.rs` AC-05, `plugin_skills.rs` AC-11, `plugin_roles.rs`; M: `disable-model-invocation` dropped; `argument-hint` first; a 4 097 B body; `specengine:tester`, `claim_task`, `spec task approve` or the leg-end sentence dropped; "poll `get_task` until it is ready" added); a 1 024-character `feature` description keeps the 1 200 B sum green.
-- [ ] T-4 -- AC-08's scan and rules over the agents (M: `cargo` in implementer; `mechanic` in spec-author; "at most 3 rounds" in the skill; `` `partial` `` in reviewer; `get_bundle` in tester; `mcp__plugin_specengine_specengine__get_task` in analyst); `mcp_tasks.rs` green.
-- [ ] T-5 -- `parity_config/mod.rs` `SKIP_FILES` + the agents glob; `check_parity.rs`: it dropped -> exactly the five agents join; the skill glob dropped -> exactly six `SKILL.md` (M: either out of `SKIP_FILES`).
-- [ ] T-6 -- `anonymity.rs`: a Cyrillic letter in each of the six new paths flagged.
-- [ ] T-7 -- workspace nextest, clippy `-D warnings`, fmt, `spec check` green; `git diff crates/*/src` empty.
-
-## Owner's live check
-
-Record the version; a scratch copy of `fixtures/spec-c`, `[gate]` `selective`, `spec` on `PATH`, `claude --plugin-dir <clone>/plugin/specengine`:
-
-- O-1 `claude plugin validate --strict` passes on `plugin`, `plugin/specengine`; with `permissionMode: acceptEdits` in a role (ignored, D4): recorded.
-- O-2 typeahead lists the five as `specengine:<name>`; the skill's calls run each; the Agent tool's `subagent_type` form and a `skills:` list's naming recorded.
-- O-3 with scratch `.claude/agents/reviewer.md`, `.claude/commands/feature.md`: bare `/feature` runs the project's, `/specengine:feature` the plugin's; without the command bare `/feature` the plugin's; `--agent reviewer`, deny `Agent(reviewer)`, `Agent(specengine:reviewer)` recorded.
-- O-4 the analyst cannot Edit or run Bash, reads `get_task`, calls `submit_plan`; `inherit` runs on the session's model.
-- O-5 `/context`: five role descriptions, none for `feature`; bytes recorded.
-- O-6 leg 1 ends at `review` with the owner's step; `spec task approve` on a terminal; leg 2 claims; a role's write in the claimed worktree passes, an unclaimed one is refused, stderr to the model; proposals in `spec inbox`; `report_run`, `complete_task` -> `done`; `git log`: spec files changed only by `spec approve` commits.
-- O-7 plugin-skills AC-13, plugin-gate AC-16 closed or recorded.
-
-## Out of scope
-
-Other 07 s4 hooks; a role-aware gate (hooks now name a subagent's scoped type; supplementing ADR-0037 takes a new ADR); `[zones]` role write rules; profiles, stack roles (ADR-0027); new MCP tools (reserved `prepare-task`, `round`); `spec verify`, marker binding (Phase 3); `.claude/**` here or in a pilot; installing the plugin; a separate gate plugin.
-
-## Open
-
-1. Q1-Q3 decided by the orchestrator per the owner's pre-approval; the owner's explicit review is open. Another Q1 (roles writing spec files) or Q2 (a separate gate plugin) takes a new ADR; another Q3 is a PATCH.
-2. The live check. Fallbacks: the skill taking a bare `/feature` from a project command -> `commands/feature.md` (MINOR); the Agent tool refusing scoped names -> back to this spec before shipping.
-3. The owner's reviews of ADR-0037 and ADR-0038 stay open, unrelated.
+- [x] R-1 -- sixteen files under `plugin/` (`plugin_files.rs` `ac03_the_plugin_tree_is_data_s_ten_files`; M: an unlisted `agents/x.md`; `skills/feature/SKILL.md` removed).
+- [x] R-2 -- 0.3.0, three equal descriptions naming the roles and `/specengine:feature`, `PINS` (Roles `r2_the_three_descriptions_name_the_roles_and_the_skill`, `plugin_files.rs` `ac10_the_content_and_version_are_the_last_pin`; M: an agent edited, `PINS` unchanged).
+- [x] R-3 -- agent front-matter, `disallowedTools`, budgets (Roles `r3_each_agent_has_the_front_matter_of_its_role`; core `plugin_front_matter.rs` `each_role_and_the_skill_parse_as_their_lines`, `a_broken_block_is_named`; M: `tools: Read, Grep, Glob`; `permissionMode: acceptEdits`; `effort: high`; `isolation: worktree`; `model: claude-opus-5-5`; `disallowedTools: [Write, Edit`; `Edit`, `Write`, `Bash` each out of its role; `name` not the stem; `name: spec-writer`; descriptions 1 001 B; a 4 097 B body; `: ` in a description).
+- [x] R-4 -- content (Roles `r4_the_agents_and_the_skill_keep_the_content_rules`, `plugin_skills.rs` `ac08_no_stack_word_digit_or_enum_value`, `mcp_tasks.rs` `p2_3_the_task_sources_and_the_plugin_name_no_stack_word`; M: a precedence sentence dropped; `get_bundle`; `mcp__plugin_specengine_specengine__get_task`; `cargo`; `mechanic`; "at most 3 rounds"; `` `partial` ``). Project facts and `[zones]` names: the reviewer's.
+- [x] R-5 -- names per role (Roles `r5_each_role_names_its_tools_and_its_project`; M: `submit_plan` out of analyst; `claim_task` into it; `CLAUDE.md` out of implementer).
+- [x] R-6 -- the skill (Roles `r6_the_skill_runs_a_task_and_never_waits`, `plugin_files.rs` `ac05_each_skill_file_has_data_s_front_matter_and_budgets`, `plugin_skills.rs` `ac11_each_skill_names_its_names_and_yields_to_the_project`; M: `disable-model-invocation` dropped; `argument-hint` first; a 4 097 B body; `specengine:tester`, `claim_task`, `spec task approve`, the leg-end sentence each dropped; "poll `get_task` until it is ready"; "wait until approved").
+- [x] S-1 -- this spec. S-2 -- `specengine.toml` `exclude` + `plugin/specengine/agents/*.md`, `docs/README.md` "Walk". S-3 -- 06 s0, s8 per Q1.
+- [x] S-4 -- `docs/canon/plugin.md` (12 201 B) from the README's rules + roles, routing, legs, install, verification; README shortened to install and a pointer; 07 s1.4, 08 s2, `CLAUDE.md` State; `export index && check` clean, worst W <= 108 468 B.
+- [x] S-5 -- no `.claude/**` edit; no owner text: this repository keeps its own `/feature`.
+- [x] T-1 to T-6 -- as R-1 to R-6; T-5 `check_parity.rs` (`SKILL_FILES` six, `AGENT_FILES` five; M: either exclude dropped); T-6 `anonymity.rs` `all_text_is_english_no_cyrillic_letters` (M: a Cyrillic letter in each of the six new paths).
+- [x] T-7 -- workspace nextest 2 084 passed (20 skipped), clippy, fmt, `spec check` clean; `crates/*/src` unchanged.
 
 ## Implementation
 
-Filled in after implementation.
+Three iterations; `claude plugin validate --strict` passes on 2.1.294 for `plugin` and `plugin/specengine`.
+
+| File | What it does |
+|---|---|
+| `plugin/specengine/agents/{analyst,spec-author,implementer,tester,reviewer}.md` | the five roles, `docs/canon/plugin.md` "Roles"; 3 298, 3 243, 3 764, 3 144, 2 928 B; descriptions 980 of 1 000 B |
+| `plugin/specengine/skills/feature/SKILL.md` | `/specengine:feature`, "Routing and legs"; 4 298 B, body 4 038 |
+| `plugin.json`, `marketplace.json` | 0.3.0, descriptions naming the roles; `PINS` `("0.3.0", "acb1bbdb64d85643a9b11271d8010ed10dc884fcabf8bf63a49c9fb119b9d023")` |
+| mcp `tests/plugin_roles.rs` (new), `plugin_files.rs`, `plugin_skills.rs`; core `tests/plugin_front_matter.rs` (new, strict YAML) | R-1 to R-6 |
+| store `tests/check_parity.rs`, `parity_config/mod.rs`; eval `tests/anonymity.rs` | T-5, T-6 |
+
+Accepted deviations: 1 `$ARGUMENTS`; 2 "its run already reported" for "run closed"; 3 implementation on the proposed text while proposals wait; 4 no `poll`: "never ... re-read the task until it changes"; 5 `author_role`, claim `role` as called; 6 markers backticked; 7 plugin descriptions name roles bare. Iteration 2 (review major): the claim rule, as an implementer following `implement` could report and complete before review; repository leaks dropped; `get_proposal`, `@assumes`. Iteration 3: review always runs; a refused claim ends the leg. Tests: `parity_config` `skipped_file` now matches a `*suffix` segment (`glob_matches`), not only a whole `*`.
+
+## Open
+
+1. Q1-Q3 decided by the orchestrator per the owner's pre-approval; the owner's review is open. Another Q1 (roles writing spec files) or Q2 (a separate gate plugin) takes a new ADR; another Q3 is a PATCH.
+2. Owner's live check (version recorded; a `fixtures/spec-c` copy, `[gate]` `selective`, `--plugin-dir`), only what the docs leave open: O-1 validate with `permissionMode` in a role; O-2 the Agent tool's name form, `skills:` naming; O-3 beside scratch `.claude/agents/reviewer.md`, `.claude/commands/feature.md`: bare `/feature` runs the project's, `--agent reviewer`, deny `Agent(reviewer)` vs `Agent(specengine:reviewer)`; O-4 the analyst lacks Edit and Bash, reaches `submit_plan`; O-5 `/context`: no `feature` description; O-6 the cycle to `done`, spec files changed only by `spec approve`; O-7 plugin-skills AC-13, plugin-gate AC-16. Fallbacks: bare `/feature` taken from a project command -> `commands/feature.md` (MINOR); scoped names refused -> reopen.
+3. Later PATCH: `propose-spec-change` "send again once `get_proposal` shows it rejected" reads as a wait under `/specengine:feature`.
+4. Comments citing the README "Claude Code plugin" for moved rules (mcp, store, eval tests; the MCP README) still resolve: retarget to `docs/canon/plugin.md` when touched. Untested: Claude Code's YAML parser vs `serde-saphyr`; Bash writes.
+5. The owner's reviews of ADR-0037 and ADR-0038 stay open, unrelated.
