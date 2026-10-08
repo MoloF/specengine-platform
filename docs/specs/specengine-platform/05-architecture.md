@@ -39,7 +39,7 @@ Principles:
 3. **One writing door** into spec files — `apply_proposal`, confirmed by a human on a terminal; the UI or an MCP form only stages (ADR-0035). Agents read and propose, never write (ADR-0004).
 4. **Local and native.** The daemon listens on `127.0.0.1` only. Docker is a launch option, not the primary mode.
 5. **Several projects in one daemon**: consumer projects are registered by path. The shared library (§3.6) is a separate project they reference.
-6. **The daemon is the sole SQLite writer** (tracey topology, 04 §1.5). `spec mcp` (stdio), the CLI and hooks are thin bridges to the daemon over a Unix socket. If the daemon is not running, the bridge starts it; after idling it exits. No races between processes for the DB, no re-reading the model on every call (Reqvire lesson: 17–80 s per read).
+6. **One daemon per data directory** (tracey topology, 04 §1.5), for the browser; hooks never need it (ADR-0039). CLI and stdio MCP write SQLite directly (WAL, CAS). A `spec mcp` socket bridge, auto-starting it as sole writer, waits for a trigger: a watcher index, MCP staging forms, measured busy exits.
 
 ## 2. File layout in the project repository
 

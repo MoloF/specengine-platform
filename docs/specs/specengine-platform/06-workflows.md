@@ -109,7 +109,7 @@ On the next `get_task`/`get_context_bundle` the agent gets a fresh bundle headed
 Discrepancies, questions and proposals **block nothing**. The guarantee "nothing goes into final development without me" rests on one thing: **the developer takes only a task the owner approved**.
 
 1. **In SpecEngine**: `claim_task` returns only `ready`. `ready` is set by the owner (`spec task approve`), and open proposals do not prevent it. If a task node changed after approval, the task is marked `stale`: an informational flag, the agent gets the diff in the bundle.
-2. **Claude Code `PreToolUse` hook** (built: `docs/canon/gate.md`) on `Edit|Write|MultiEdit|NotebookEdit` for the zones `[gate]` lists and any `specengine.toml`: a write passes only with an `in_progress` task claimed in its worktree and branch. The hook is a `command` (`spec gate`, 07 §4), not `http`, which lets the edit through when the service is down (04 §4). No verdict: **exit 2** (closed) (ADR-0006, ADR-0037). `Bash` is not gated.
+2. **Claude Code `PreToolUse` hook** (built: `docs/canon/gate.md`) on `Edit|Write|MultiEdit|NotebookEdit` for the zones `[gate]` lists and any `specengine.toml`: a write passes only with an `in_progress` task claimed in its worktree and branch. The hook is a `command` (`spec gate`, 07 §4), not `http`, which lets the edit through when the service is down (04 §4). No verdict: **exit 2** (closed), daemon or not (ADR-0039). `Bash` is not gated.
 3. **Selectivity**: only the listed zones (a contour: `contours`, later). Other edits go without it, but `spec verify` shows the drift. `mode = "observe"` stops nothing, records an uncovered write.
 
 ## 4. The machine found drift

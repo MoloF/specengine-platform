@@ -8,12 +8,12 @@ reviewed: 2026-10-08
 
 # Task gate: the write hook
 
-ADR-0037, supplementing ADR-0006 until `spec serve` (`docs/canon/architecture.md#control`), as built by `plugin-gate`: the plugin's hook runs `spec gate` before every agent file write. Code: CLI `gate.rs` (`gate`, `read_hook_input`, `gate_session`); core `gate.rs`, pure (`GateConfig`, `controlled`, `opens`, `fold`, `mentions_gate`); store `queue/gate.rs` (`open_for_gate`, `GateQueue::tasks`, `record_gate_observed`), `WorktreeGit::new_until`.
+ADR-0039 (`docs/canon/architecture.md#control`), as built by `plugin-gate`: the plugin's hook runs `spec gate` before every agent file write, with or without a daemon. Code: CLI `gate.rs` (`gate`, `read_hook_input`, `gate_session`); core `gate.rs`, pure (`GateConfig`, `controlled`, `opens`, `fold`, `mentions_gate`); store `queue/gate.rs` (`open_for_gate`, `GateQueue::tasks`, `record_gate_observed`), `WorktreeGit::new_until`.
 
 ## Rule
 
 - One question: does a task the owner approved cover this agent write? A write to a controlled path opens only when the file's worktree (the git top of its nearest existing directory, compared as a directory), on its current branch, holds an `in_progress` task of the same git common dir claimed there (`tasks.md` "Place"). A reported run keeps it open; `draft`, `review`, `changes_requested`, `ready`, `done`, `cancelled` do not. A submodule's file is refused even when claimed in the superproject: its git top differs.
-- Nothing else is read: no proposal, `stale`, `affected_nodes`, check, drift or index (ADR-0012), and no title or goal is printed. A plan's scope is not checked: files map to nodes only in Phase 3.
+- Nothing else is read: no proposal, `stale`, `affected_nodes`, check, drift, index (ADR-0012) or daemon (ADR-0039), and no title or goal is printed. A plan's scope is not checked: files map to nodes only in Phase 3.
 - No verdict is closed: exit 2 naming the cause. A pass is exit 0 with an empty stdout, never `allow`: Claude Code's permission prompts stay.
 - Threat model: a cooperative agent that forgets approval, not an adversary (as ADR-0034). Bash, other MCP servers, settings, git, `spec` itself and the owner's editor never pass through it (07 s4).
 

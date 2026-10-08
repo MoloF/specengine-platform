@@ -17,7 +17,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 - Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
 - A status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); `compact: bool` on reading tools (detail levels as in code-graph-mcp), on measured need.
-- **Primary transport: stdio via `spec mcp`** in `.mcp.json`, a bridge to the daemon (Phase 2; today the `specengine-mcp` binary): Claude Code (≥ 2.1.84) GETs the MCP HTTP endpoint for an SSE stream, a stateless 2026-07-28 server answers 405 and the connection drops (claude-code#39790, "not planned"). HTTP `/mcp` comes later, with GET/SSE and `legacy_session_mode`.
+- **Primary transport: stdio** (`specengine-mcp` in `.mcp.json`; a `spec mcp` bridge to the daemon on a trigger, 05 §1 (6)): Claude Code (≥ 2.1.84) GETs the MCP HTTP endpoint for an SSE stream, a stateless 2026-07-28 server answers 405 and the connection drops (claude-code#39790, "not planned"). HTTP `/mcp` comes later, with GET/SSE and `legacy_session_mode`.
 - State passes only via explicit handles (`task_id`, `proposal_id`).
 - **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call, its result a notification (MCP README): no polling tool, no "call again" protocol, no long-blocking "wait for approval".
 
@@ -69,9 +69,9 @@ Plugin skills carry them: `read-spec`, `ask-owner`, `propose-spec-change`; `/spe
 # projects and index
 spec init [--import IMPORTER]            # specengine.toml, layout, migration (08 §4)
 spec index [--full]                      # rebuild the index (incremental by BLAKE3)
-spec serve [--port 7777]                 # daemon: HTTP + SSE + MCP(HTTP) + UI + watcher
+spec serve [DIR...] [--port 7777]        # draft spec-serve.md: execs specengine-http
 specengine-http --root DIR... [--port N]  # built: reads, staging; crates/specengine-http/README.md
-spec mcp                                 # MCP over stdio (for .mcp.json)
+spec mcp                                 # on a trigger: MCP stdio bridge
 
 # tree and nodes
 spec tree [ROOT] [--depth N] [--kind K] [--archive]  # shipped: docs/canon/spec-cli-graph.md
@@ -124,8 +124,8 @@ spec export index [--stdout]                         # [paths] index by its regi
 - `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols|health` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
-- `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)
-- `/` — Web UI (embedded via `rust-embed`)
+- `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)
+- `/` — Web UI (`rust-embed` 8.12.0, slice `ui-embed`)
 
 ### Web UI — screens
 

@@ -16,7 +16,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0003](decisions/ADR-0003.md) Operational database outside the repo, queue in git as a generated file · storage · accepted
 - [ADR-0004](decisions/ADR-0004.md) An approved proposal is applied in the task branch's worktree · process · accepted
 - [ADR-0005](decisions/ADR-0005.md) Applying is a separate commit with provenance · process · accepted
-- [ADR-0006](decisions/ADR-0006.md) The gate is closed when the daemon is unavailable · process · accepted
 - [ADR-0007](decisions/ADR-0007.md) EARS is a hint, not a requirement · docs · accepted
 - [ADR-0008](decisions/ADR-0008.md) The core is universal; domain specifics live in the project config · architecture · accepted
 - [ADR-0009](decisions/ADR-0009.md) IDs are Latin only; legacy IDs are aliases · ids · accepted
@@ -47,5 +46,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0034](decisions/ADR-0034.md) No authentication inside SpecEngine · architecture · accepted
 - [ADR-0035](decisions/ADR-0035.md) Staged anywhere, confirmed only on a terminal · architecture · accepted
 - [ADR-0036](decisions/ADR-0036.md) UI markdown through react-markdown and remark-gfm · ui · accepted
-- [ADR-0037](decisions/ADR-0037.md) The task gate before spec serve · process · accepted
 - [ADR-0038](decisions/ADR-0038.md) One key per round answer · architecture · accepted
+- [ADR-0039](decisions/ADR-0039.md) The task gate needs no daemon · process · accepted

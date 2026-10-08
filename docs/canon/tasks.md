@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # Tasks: commands, transitions, place, store
 
-Phase 2 slice 7 (`docs/features/task-package.md`, ADR-0027): a task is a per-project queue record only the owner moves to `ready`, on a terminal (ADR-0006, ADR-0012); an agent reads its package (`task-package.md`), plans, claims, reports and completes it; spec edits meanwhile raise `stale`, never block. Code: core `task.rs` (IDs, `transition`, caps), store `queue/tasks.rs`, CLI `task.rs`, `package.rs`, MCP `tasks.rs`; library `task_{new,show,list,approve,changes,cancel,plan,claim,report,complete}` (`&Env, &Globals, &<Command>Request`, owner commands a `Consent`).
+Phase 2 slice 7 (`docs/features/task-package.md`, ADR-0027): a task is a per-project queue record only the owner moves to `ready`, on a terminal (ADR-0012); an agent reads its package (`task-package.md`), plans, claims, reports and completes it; spec edits meanwhile raise `stale`, never block. Code: core `task.rs` (IDs, `transition`, caps), store `queue/tasks.rs`, CLI `task.rs`, `package.rs`, MCP `tasks.rs`; library `task_{new,show,list,approve,changes,cancel,plan,claim,report,complete}` (`&Env, &Globals, &<Command>Request`, owner commands a `Consent`).
 
 ## Commands
 

@@ -37,7 +37,7 @@ An approved proposal is applied in the task branch's worktree (the spec travels 
 ## Control and no blocking
 
 - Discrepancies, questions and proposals block nothing. A node may have several open proposals, rebased on `base_hash` when applied. An agent keeps working on a working answer and marks `// @assumes PR-…`. A decision unlike the working answer makes a follow-up task. ADR-0012.
-- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook (`docs/canon/gate.md`) passes a gated write only on a verdict: an `in_progress` task claimed in its worktree and branch; else exit 2. ADR-0006, ADR-0012, ADR-0037.
+- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook (`docs/canon/gate.md`) passes a gated write only on a verdict: an `in_progress` task claimed in its worktree and branch; else exit 2. It never consults the daemon (`specengine-http`; `spec serve` later): a verdict is the same with the daemon up or down; only the browser needs it. ADR-0012, ADR-0039.
 
 <a id="tasks"></a>
 ## Tasks and stack skills

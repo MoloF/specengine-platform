@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # specengine-http -- SpecEngine over HTTP
 
-An HTTP adapter over the CLI library, 05 s1's fourth: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). Not ADR-0019's daemon: no sole writer, socket bridge, auto-start, gate or watcher (`spec serve` will launch it). No second consent channel: a staged decision is confirmed only on a terminal (ADR-0035); no hook consults it (ADR-0006).
+An HTTP adapter over the CLI library, 05 s1's fourth: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). Not ADR-0019's daemon: no sole writer, socket bridge, auto-start, gate or watcher (`spec serve` will launch it). No second consent channel: a staged decision is confirmed only on a terminal (ADR-0035); no hook consults it (ADR-0039).
 
 Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`; a default member; pins, licences: eval `build_graph.rs`.
 
