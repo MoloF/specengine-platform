@@ -16,10 +16,10 @@ ref: research-2026-09-28
 Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-mcp/README.md`): few tools, `instructions` and descriptions ≤ 2,048 characters; `readOnlyHint`; flat JSON Schema 2020-12 inputs, `outputSchema` + `structuredContent`, `content` the CLI's text; the CLI's 40,000-character cut and narrowing tails in place of pagination; both protocol eras over stdio; `rmcp` pinned exactly (04 §6); determinism stated in every description; the "one door" test (no agent tool writes to spec files), which every new tool keeps. Still to come:
 
 - Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
-- A status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); `compact: bool` on reading tools (detail levels in the spirit of code-graph-mcp), on measured need.
-- **Primary transport: stdio via `spec mcp`** in `.mcp.json`, a bridge to the daemon (Phase 2; today the `specengine-mcp` binary). Reason: Claude Code (≥ 2.1.84) issues a GET to the MCP HTTP endpoint to open an SSE stream, and a purely stateless 2026-07-28 server answers 405, so the connection drops (claude-code#39790 closed as "not planned"). HTTP `/mcp` is added later, with GET/SSE and `legacy_session_mode`.
-- State is passed only via explicit handles (`task_id`, `proposal_id`).
-- **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call and delivers its result as a notification (MCP README), so there is no polling tool and no "call again" protocol. A long-blocking "wait for approval" stays excluded.
+- A status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); `compact: bool` on reading tools (detail levels as in code-graph-mcp), on measured need.
+- **Primary transport: stdio via `spec mcp`** in `.mcp.json`, a bridge to the daemon (Phase 2; today the `specengine-mcp` binary): Claude Code (≥ 2.1.84) GETs the MCP HTTP endpoint for an SSE stream, a stateless 2026-07-28 server answers 405 and the connection drops (claude-code#39790, "not planned"). HTTP `/mcp` comes later, with GET/SSE and `legacy_session_mode`.
+- State passes only via explicit handles (`task_id`, `proposal_id`).
+- **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call, its result a notification (MCP README): no polling tool, no "call again" protocol, no long-blocking "wait for approval".
 
 ### 1.2. Tools (`core` set)
 
@@ -49,7 +49,7 @@ Phase 2 contract checks (tested; `task-package.md` "Genre"): P2-1 `get_task` `st
 | `review_proposal` | URL-mode elicitation to the UI card, or a form (option, note) staging the human's choice |
 | `approve_task` | the same for a task; `spec task approve` on a terminal confirms |
 
-The MCP server remembers nothing between calls; a `cancel` stages nothing (the agent does not re-open the form on its own), sending `notifications/cancelled` for the outstanding `elicitation/create`. No agent tool stages; `get_proposal` shows a stage.
+The MCP server remembers nothing between calls; a `cancel` stages nothing (the agent never re-opens the form itself), sending `notifications/cancelled` for the outstanding `elicitation/create`. No agent tool stages; `get_proposal` shows a stage.
 
 ### 1.3. Resources (for `@`-mentions)
 
@@ -61,7 +61,7 @@ Plugin skills carry them: `read-spec`, `ask-owner`, `propose-spec-change` (`plug
 
 ### 1.5. Notifications
 
-`subscriptions/listen` (2026-07-28) / `list_changed`: the server reports "proposal decided" and "task approved". ⚠ Per-URI subscription support in Claude Code is unconfirmed, so rely on polling `get_proposal`/`get_task` at the start of a step.
+`subscriptions/listen` (2026-07-28) / `list_changed`: the server reports "proposal decided" and "task approved". ⚠ Claude Code's per-URI subscriptions are unconfirmed: poll `get_proposal`/`get_task` at a step's start.
 
 ## 2. CLI (`spec`)
 
@@ -121,15 +121,15 @@ spec export index [--stdout]                         # [paths] index by its regi
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` (`crates/specengine-http/README.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id` (built); `symbols|health` to come
-- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id` (built); `round` (`ui-round`), `symbols|health` to come
+- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (built), `/round/answers` (`ui-round`), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)
 - `/` — Web UI (embedded via `rust-embed`)
 
 ### Web UI — screens
 
-UI in **English** (ADR-0014); spec content is shown as is (the project's language), fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam").
+UI in **English** (ADR-0014); spec content as is (the project's language), fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam").
 
 | Screen | Content |
 |---|---|
@@ -140,7 +140,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
 | **Health** | "what is left", drift, budgets, W metrics |
-| **Round** | question sheet in domain language for printing and sending + answer paste |
+| **Questions** | the round's sheet, answers staged at once, each confirmed on a terminal (`ui-round`); print, paste later |
 
 ## 4. Claude Code hooks (shipped by the plugin)
 
@@ -160,7 +160,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 }
 ```
 
-Built (`plugin-gate`): only `PreToolUse`, its wrapper running `spec gate --stdin` (`docs/canon/gate.md`); the other three later. `Bash` is not gated: writes via the shell cannot be fully closed by hooks, a limitation stated openly.
+Built (`plugin-gate`): only `PreToolUse`, its wrapper running `spec gate --stdin` (`docs/canon/gate.md`); the other three later. `Bash` is not gated: hooks cannot fully close shell writes, a limit stated openly.
 
 ## 5. `specengine.toml` (at the project repository root)
 

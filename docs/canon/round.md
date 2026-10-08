@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # Question rounds
 
-ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end on shipped machinery, no new kind, no new storage. `spec round new` prints the open questions and discrepancies on a sheet; `spec round answer` stages each returned answer, then asks its item's own `[y/N]`. Core `round` holds the pure parts (bounds, order key, grammar, reading time); CLI `round.rs` the commands, over `stage_with`, `record_ready`, `lists_proposal` and the store's existing ops.
+ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end on shipped machinery, no new kind, no new storage. `spec round new` prints the open questions and discrepancies on a sheet; `spec round answer` stages each returned answer, then asks its item's own `[y/N]`. Core `round`: bounds, order key, grammar, reading time; CLI `round.rs`: commands over `stage_with`, `record_ready`, `lists_proposal`, store ops. The UI half, `ui-round`, is planned, not built.
 
 ## Selection
 
