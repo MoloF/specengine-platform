@@ -96,15 +96,15 @@ verified_by = "owner"       # owner | ci — review record: who, when, against w
 verified_at = "2026-09-28"
 ```
 
-The file is generated, committed together with the code, and conflicts in it are resolved by `spec lock --regen`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
+Generated, committed with the code; `spec lock --regen` resolves its conflicts. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
 
 **What goes into `norm_hash`** (after Doorstop): the section text and semantic fields (`links`, for records `working_answer` etc.). **Excluded** are presentational and process fields: `title`, `status`, `tier`, `owner`, `reviewed`. Renaming a heading must not invalidate coverage.
 
-**Node revision `rev`** (after tracey and OpenFastTrace): a monotonic number in front-matter. `spec check --staged` in pre-commit **fails if `norm_hash` changed but `rev` did not**. `spec bump` raises the revisions of changed nodes in the git index; `spec bump --editorial ID` marks the edit as editorial and updates `spec_hash` in the lock without raising the revision. "Rewrote the meaning, coverage stayed green" becomes impossible, and typos do not create false drift.
+**Node revision `rev`** (after tracey and OpenFastTrace): a monotonic number in front-matter. `spec check --staged` in pre-commit **fails if `norm_hash` changed but `rev` did not**. `spec bump` raises changed nodes' revisions in the git index; `spec bump --editorial ID` marks the edit editorial and updates `spec_hash` in the lock without a new revision. "Rewrote the meaning, coverage stayed green" is impossible, and typos make no false drift.
 
 ### 3.6. Shared library
 
-A separate project `shared`: Bevy 0.19 conventions, test rules (probes, named mutations, "no mocks"), RON data rules, common glossary. A project node references it via `links: { adopts: [shared:PAT-PROBES@rev] }` with a pinned revision. When `shared` changes, SpecEngine shows the project an "update available" notice but never applies it itself.
+A separate project `shared`: Bevy 0.19 conventions, test rules (probes, named mutations, "no mocks"), RON data rules, common glossary. A project node references it via `links: { adopts: [shared:PAT-PROBES@rev] }` with a pinned revision. A change in `shared` shows the project "update available"; SpecEngine never applies it itself.
 
 ## 4. Checks (`spec check`)
 
@@ -207,7 +207,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 
 **Marker grammar** (`.rs` and `.ron` alike) and **RON binding** (own lexer, §9; the field path is the `qpath`, `data/movement.ron#root.stamina.regen_per_second`): `docs/canon/code-identity.md`. In Rust a marker applies to the next item; Rust binding (Phase 3) follows the RON principles.
 
-**Revision in the marker** (`@3`, ADR-0018) — tracey discipline. First the code is brought to the new rule text, **then** the marker is raised, and the raise is visible in the code diff as a review record. Marker `@2` on a node with `rev: 3` means `spec_ahead` even without a lock. Marker `@4` on a node with `rev: 3` means `predated` (reference to a non-existent revision; OpenFastTrace reports this error separately). A marker without a revision is allowed for weak bindings and in adoption mode.
+**Revision in the marker** (`@3`, ADR-0018) — tracey discipline. First the code is brought to the new rule text, **then** the marker is raised, and the raise is visible in the code diff as a review record. Marker `@2` on a node with `rev: 3` means `spec_ahead` even without a lock. Marker `@4` on a node with `rev: 3` means `predated` (a non-existent revision; OpenFastTrace reports it separately). A marker without a revision is allowed for weak bindings and in adoption mode.
 
 **Drift-check cascade** — the next level runs only if the previous one said "changed":
 
@@ -237,7 +237,7 @@ Git as the truth gives "since verification" diffs for free: the old spec text an
 
 ### 5.5. Node evidence level
 
-Computed and shown in the UI and in the context bundle. The answer to "agents get their power from the test suite, not from prose":
+Computed, shown in the UI and the context bundle. The answer to "agents get their power from the test suite, not from prose":
 
 | Level | Evidence |
 |---|---|
@@ -252,7 +252,7 @@ The coverage requirement is set **on the node**, not globally (OpenFastTrace `Ne
 
 ## 6. Context bundle (`get_context_bundle`)
 
-Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, budget, fitting, the tail and `bundle_hash`: `docs/canon/spec-cli-bundle.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9 (Phase 3); the `bundles` log and the follow-up-reads signal: more than three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete".
+Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, budget, fitting, the tail and `bundle_hash`: `docs/canon/spec-cli-bundle.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9 (Phase 3); the `bundles` log and the follow-up-reads signal: over three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete".
 
 ## 7. Proposals, owner queue and gates
 
@@ -263,12 +263,12 @@ The full scenario is in `06-workflows.md`. The engine invariants:
 3. **Deduplication** against accepted decisions and the queue: re-asking a settled question is the most expensive noise in the queue (canon `agent-intake`).
 4. `approve` calls `apply_proposal` (`docs/canon/proposal-apply.md`; a question or discrepancy: a decision record, `decision-apply`): applied where raised (ADR-0004, ADR-0032), one commit `spec: apply PR-0042` with provenance (ADR-0005). To come: hashes recomputed.
 5. **Nothing blocks** (ADR-0012): several proposals may be open on a node; on apply each rebases from its `base_hash` by three-way merge, a conflict refused with its text (shipped; resolving it in a UI diff: later). The only control point is **task approval by the owner**: `claim_task` from MCP hands out only `ready`, and `ready` is set by a human.
-6. **Reconciliation with the working answer**: agent code written before the decision carries `// @assumes PR-…`. If the decision diverges from the working answer, a follow-up task is created.
+6. **Reconciliation with the working answer**: agent code written before the decision carries `// @assumes PR-…`; a decision diverging from the working answer creates a follow-up task.
 7. **Task staleness** (`docs/canon/task-package.md`): a `spec_snapshot` node changed in the compared place sets an informational `stale` per read, with the diff; its own proposals applied there refresh the snapshot.
 
 ## 8. Operational-state reliability
 
-**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk, the queue's own `user_version` steps: shipped (store README, `docs/canon/proposal-queue.md`). Still to come: `PRAGMA optimize` from time to time; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID). Queue backup: `docs/canon/queue-backup.md`, never in git; `docs/generated/queue.md`: `task-package`.
+**SQLite.** `rusqlite` `bundled`, FTS5, PRAGMAs, `Immediate` writes, the walk, the queue's own `user_version` steps: shipped (store README, `docs/canon/proposal-queue.md`). Still to come: a periodic `PRAGMA optimize`; WAL fails on network and synced file systems, so the DB lives in the user's data directory (`crates/specengine-cli/README.md`) and the daemon warns about a repository on iCloud Desktop/Dropbox; watching by `notify` 8.2 (not 9.0-rc) + `notify-debouncer-full` 0.7 (merges atomic saves by file ID). Queue backup: `docs/canon/queue-backup.md`, never in git; `docs/generated/queue.md`: `task-package`.
 
 ## 9. Technology stack (versions — in `04-prior-art-and-stack.md` §6)
 
@@ -280,7 +280,7 @@ The full scenario is in `06-workflows.md`. The engine invariants:
 | DB | SQLite (`rusqlite` bundled, FTS5) | local, no server |
 | Markdown | `pulldown-cmark` (heading attributes, offsets) | `{#ID}` sections and exact spans for patches |
 | YAML | `serde-saphyr` | `serde_yaml` is deprecated, forks unmaintained since 2024 |
-| AST | `tree-sitter` 0.27 + `tree-sitter-rust`; RON — own lexer | `tree-sitter-ron` 0.2.0 has no crate API for 0.27 (loads only beside a second C runtime: undefined behaviour that broke Rust parsing), rejects `#![enable(..)]` and raw strings, 5–6× slower; the lexer is parse-clean on 97.5–100 % of pilot files (the rest malformed). Resolved identity — layer C (§5.1) |
+| AST | `tree-sitter` 0.27 + `tree-sitter-rust`; RON — own lexer | `tree-sitter-ron` 0.2.0 has no crate API for 0.27 (only beside a second C runtime: undefined behaviour, broke Rust parsing), rejects `#![enable(..)]` and raw strings, 5–6× slower; the lexer is parse-clean on 97.5–100 % of pilot files (the rest malformed). Resolved identity — layer C (§5.1) |
 | Hash | `blake3` | fast, stable |
 | Git | system `git` via `std::process` (at first), later `gix` | worktrees, diff, `merge-file`, show without bindings |
 | Watch | `notify` | live drift in the daemon |
