@@ -48,3 +48,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0035](decisions/ADR-0035.md) Staged anywhere, confirmed only on a terminal · architecture · accepted
 - [ADR-0036](decisions/ADR-0036.md) UI markdown through react-markdown and remark-gfm · ui · accepted
 - [ADR-0037](decisions/ADR-0037.md) The task gate before spec serve · process · accepted
+- [ADR-0038](decisions/ADR-0038.md) One key per round answer · architecture · accepted

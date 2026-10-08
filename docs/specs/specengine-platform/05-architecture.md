@@ -258,7 +258,7 @@ Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, budget, f
 
 The full scenario is in `06-workflows.md`. The engine invariants:
 
-1. A discrepancy comes **with evidence**, a **gap type** `missing | partial | contradicts | unrequested` (Spec Kit converge vocabulary; `unrequested`: code nobody asked for) and **priced options**; a question with a working answer and the other way's price (`docs/canon/agent-intake.md`).
+1. A discrepancy comes **with evidence**, a **gap type** and **priced options**; a question with a working answer and the other way's price (`docs/canon/agent-intake.md`).
 2. It is validated before the owner sees it: introduced findings attached, never refusing (`docs/canon/proposal-queue.md` "Creation").
 3. **Deduplication** against accepted decisions and the queue: re-asking a settled question is the most expensive noise in the queue (canon `agent-intake`).
 4. `approve` calls `apply_proposal` (`docs/canon/proposal-apply.md`; a question or discrepancy: a decision record, `decision-apply`): applied where raised (ADR-0004, ADR-0032), one commit `spec: apply PR-0042` with provenance (ADR-0005). To come: hashes recomputed.

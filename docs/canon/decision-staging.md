@@ -12,9 +12,9 @@ ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), b
 
 ## Rule
 
-- A decision on a proposal, approve or reject, is confirmed only by `spec approve|reject PR` on a terminal: its `[y/N]` is **the only confirmation of a decision**. The only control point stays the owner's task approval (ADR-0012, `#control`).
+- A decision on a proposal, approve or reject, is confirmed only on a terminal by **its own `[y/N]`**: `spec approve|reject PR`'s, or `spec round answer`'s per answer it staged (ADR-0038). The only control point stays the owner's task approval (ADR-0012, `#control`).
 - Anything else only **stages**: the UI's decision dialog now, later an MCP form or URL mode onto a UI card (08 Phase 5). A stage is one replaceable choice per `open` proposal, the same flags as the CLI's, kept only in the queue: no file, no git, no apply step. It is an attribute, not a status: a staged proposal is `open`, listed, and blocks nothing; a task's `task_id`, snapshot and package are untouched.
-- Agents never stage: no MCP tool writes a stage (ADR-0004); `get_proposal` shows one, and the plugin's `ask-owner` counts it as no answer.
+- Agents never stage: no MCP tool writes one (ADR-0004), `round answer` exits 2 without a terminal; `get_proposal` shows one, `ask-owner` counts it as no answer.
 - Who staged is unknowable (ADR-0034): the commit's provenance stays the terminal's (ADR-0005); the event log keeps every stage.
 
 ## The stage
@@ -81,5 +81,5 @@ The review document: `staged` (the object or `null`), `staged_at` between `task_
 
 - Any local process of any account can read everything served and stage (loopback is not per-user); the fence stops other sites' pages. `specengine-http` is a queue writer.
 - None confirms from an ordinary shell; a process faking a terminal (`script`) can, as with flags today.
-- Residual: a reflex `y` on a stage an agent or a page injected. Mitigations: the whole choice and its time on one line before the key, the outside-change alert, the event log, no MCP stage tool, the header rule. The UI offers four choices; two are staged, the CLI confirms them.
+- Residual: a reflex `y` on a stage an agent or a page injected. Mitigations: the whole choice and its time on one line before the key, the outside-change alert, the event log, no MCP stage tool, the header rule.
 - Hosting or a shared machine: infrastructure first (ADR-0034).

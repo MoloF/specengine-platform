@@ -29,9 +29,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `task-package` (7, ADR-0027) shipped 2026-10-07 (UI: Phase 4); `decision-staging` (ADR-0035), `plugin-gate` (ADR-0037) 2026-10-08; `plugin-roles` next; kinds `interpretation`, `amendment`, `decision` later.
-- Tasks, per project (`docs/canon/tasks.md`): states, the package, `spec_snapshot`, `stale`.
-- CLI: `task …`; `round new/answer`.
+- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `task-package` (7, ADR-0027) shipped 2026-10-07 (UI: Phase 4); `decision-staging` (ADR-0035), `plugin-gate` (ADR-0037) 2026-10-08; next `round` (ADR-0038), then `plugin-roles`; kinds `interpretation`, `amendment`, `decision` later.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (no UI): HTTP API + SSE (reads, stages: `specengine-http`); agents' MCP is the `spec mcp` stdio bridge to it (MCP HTTP after MVP, 07 s1.1).
@@ -48,7 +46,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 4. Web UI — ~2-3 weeks
 
-Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` and `ui-markdown` (ADR-0036) 2026-10-06, `ui-health`, `ui-live`, `ui-live-tasks` 2026-10-07; next `ui-round` (endpoints: its "Open").
+Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` and `ui-markdown` (ADR-0036) 2026-10-06, `ui-health`, `ui-live`, `ui-live-tasks` 2026-10-07; next `ui-round` (`round`'s "Out of scope").
 
 ### Phase 5. Maturity — ~2 weeks
 
