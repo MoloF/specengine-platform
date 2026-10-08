@@ -14,7 +14,9 @@
 //!    recorded root's refreshed index, located in a fresh parse of the
 //!    bytes just read, never by stored offsets (exit 1); a path target
 //!    (task spec `queue-path-targets`): the document of that parse, no
-//!    holder lookup;
+//!    holder lookup; an interpretation's decision (task spec
+//!    `kind-interpretation`) still a live accepted one, the target outside
+//!    it (exit 1, `--decision: <why>`);
 //! 5. text: the span hashes to `base_hash` → the new text (`applies`);
 //!    else `git merge-file -p -L current -L base -L proposed` over scratch
 //!    files in the data directory: clean → the merge (`rebases`), conflict
@@ -67,7 +69,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use specengine_core::ProjectConfig;
-use specengine_core::check::Resolver;
+use specengine_core::check::{CheckInput, Resolver};
 use specengine_core::create::add_sections;
 use specengine_core::patch::{
     HolderError, is_section, locate, one_holder, span_bytes, splice, update_refusal, update_text,
@@ -81,6 +83,7 @@ use specengine_store::{
 };
 
 use crate::create::{Corpus, canonical_in};
+use crate::interpret::{Decided, decision_step};
 use crate::location::{OpenIndex, open_index};
 use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
 use crate::proposals::{Preview, QueueContext, top_of, top_path};
@@ -105,6 +108,28 @@ pub(crate) struct Prepared {
     pub patched: Vec<u8>,
     /// [`Preview::Applies`] or [`Preview::Rebases`].
     pub preview: Preview,
+    /// An interpretation's decision as step 4 found it again (the prompt
+    /// names its path); `None` for any other kind.
+    pub interprets: Option<Decided>,
+}
+
+/// What apply steps 2–6 read on their way, kept whatever they answer.
+#[derive(Debug, Default)]
+pub(crate) struct StepRead {
+    /// The target's span hash as step 5 reads it (`store::span_hash` of the
+    /// resolved node), once step 4 resolved the target; `None` before.
+    pub span: Option<String>,
+    /// The recorded root and its index as step 4 refreshed it; `None` when
+    /// a step stopped before.
+    pub corpus: Option<RecordedCorpus>,
+}
+
+/// A proposal's recorded root and its refreshed index, as the check's
+/// input.
+#[derive(Debug)]
+pub(crate) struct RecordedCorpus {
+    pub recorded: ProjectRoot,
+    pub input: CheckInput,
 }
 
 /// A refusal at an apply step.
@@ -147,18 +172,18 @@ impl StepFailure {
 
 /// Apply steps 2–6 for `proposal`, writing nothing but the data directory
 /// (the recorded root's index, git's scratch files): `spec approve`'s
-/// checks and `spec review`'s preview. `span` is set to the target's span
-/// hash as step 5 reads it (`store::span_hash` of the resolved node), once
-/// step 4 resolved the target, and left `None` by a refusal before it: a
-/// staged choice's `span_hash` and its staleness note
-/// (canon `decision-staging`, "Staleness").
+/// checks and `spec review`'s preview. `read` gets what the steps read,
+/// kept by a refusal too ([`StepRead`]): the span hash (a staged choice's
+/// `span_hash` and its staleness note, canon `decision-staging`,
+/// "Staleness") and the recorded root's index refreshed at step 4 (the
+/// review's note on an update in a decision's `canon:`).
 pub(crate) fn prepare_spanned(
     env: &Env,
     git_env: &GitEnv,
     context: &QueueContext,
     proposal: &Proposal,
     messages: &mut Vec<Message>,
-    span: &mut Option<String>,
+    read: &mut StepRead,
 ) -> Result<Prepared, StepFailure> {
     let place = &proposal.place;
     let path = proposal.target_path.as_str();
@@ -232,7 +257,14 @@ pub(crate) fn prepare_spanned(
         .index
         .indexed_input()
         .map_err(|error| StepFailure::cannot(4, error.to_string()))?;
-    let resolver = Resolver::new(&input, scheme, &recorded.config.paths);
+    let input = &read
+        .corpus
+        .insert(RecordedCorpus {
+            recorded: recorded.clone(),
+            input,
+        })
+        .input;
+    let resolver = Resolver::new(input, scheme, &recorded.config.paths);
     let target = proposal.target_id.as_str();
     let ord = if is_path_target(target) {
         document_of(&parsed, target, path).map_err(|reason| StepFailure::refused(4, reason))?
@@ -249,7 +281,16 @@ pub(crate) fn prepare_spanned(
 
     // Step 5: the text.
     let node = &parsed.nodes[ord];
-    *span = Some(span_hash(&bytes, node));
+    read.span = Some(span_hash(&bytes, node));
+    // Step 4 of an interpretation (task spec `kind-interpretation`): its
+    // decision checked again in the index refreshed now.
+    let interprets = match &proposal.interpretation {
+        Some(interpretation) => Some(
+            decision_step(&recorded, input, interpretation, path)
+                .map_err(|reason| StepFailure::refused(4, reason))?,
+        ),
+        None => None,
+    };
     let step = step_text(&git, &context.data_dir, &bytes, node, proposal)
         .map_err(|error| StepFailure::cannot(5, error.to_string()))?;
     let (text, preview) = match step {
@@ -283,7 +324,7 @@ pub(crate) fn prepare_spanned(
         if spliced == bytes {
             spliced
         } else {
-            let corpus = Corpus::of(&input, scheme, &recorded.config.paths);
+            let corpus = Corpus::of(input, scheme, &recorded.config.paths);
             if let Some((id, holder)) = proposal
                 .new_ids
                 .iter()
@@ -350,6 +391,7 @@ pub(crate) fn prepare_spanned(
         bytes,
         patched,
         preview,
+        interprets,
     })
 }
 

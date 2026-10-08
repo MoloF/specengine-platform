@@ -840,6 +840,29 @@ textarea.field {
   color: var(--text-secondary);
 }
 
+/* An interpretation: the decision, then the agent's two texts, each label above its value. */
+.interpretation {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.interpretation-part,
+.decision-ref {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.interpretation dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+.interpretation dd {
+  min-width: 0;
+}
+
 .other-list li {
   display: flex;
   flex-wrap: wrap;
@@ -2567,7 +2590,9 @@ mark {
   font-size: var(--font-size-s);
 }
 
-.round-text {
+/* Agent text verbatim, on the Questions screen and in an interpretation: wrapped, never cut, each line taking its own direction. */
+.round-text,
+.agent-text {
   max-width: 72ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

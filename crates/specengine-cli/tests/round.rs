@@ -3418,3 +3418,111 @@ fn ui_round_the_answers_body_the_project_the_clock_and_the_limit_are_judged_firs
     );
     assert!(staged_events(&pair).is_empty());
 }
+
+// ------------------------------------------- kind-interpretation AC-R8
+
+/// An open interpretation of spec-a's `RULE-STAM-REGEN` carrying
+/// `DEC-0023` (docs/features/kind-interpretation.md), raised in `cwd`.
+fn interpretation(pair: &Pair, cwd: &Path) -> String {
+    let (hash, text) = pair.span(cwd, "RULE-STAM-REGEN");
+    let outcome = specengine_cli::propose_interpretation(
+        &pair.env(cwd),
+        &Globals::default(),
+        &specengine_cli::InterpretRequest {
+            target: "RULE-STAM-REGEN".to_owned(),
+            base: hash,
+            decision: "DEC-0023".to_owned(),
+            how: "Rest is any speed under 40 % of walking.".to_owned(),
+            why: "DEC-0023 says rest; the rule names no speed.".to_owned(),
+            text: ProposedText::Given(
+                edit(
+                    &text,
+                    "Base rate 10 units/s,",
+                    "Base rate 10 units/s at rest,",
+                )
+                .into_bytes(),
+            ),
+            rationale: "Carry DEC-0023 into the rule.".to_owned(),
+            author_role: Some("spec-author".to_owned()),
+            author_model: None,
+            run: None,
+            now: NOW.to_owned(),
+            git: pair.git_env(cwd),
+        },
+        None,
+    )
+    .expect("propose interpretation");
+    assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
+    outcome.document.id.expect("an ID")
+}
+
+/// docs/features/kind-interpretation.md AC-R8 (Q5): an interpretation is
+/// not on the sheet, counted among the open change proposals; its `round
+/// answer` line is refused `is a change proposal (interpretation)`,
+/// nothing staged; staged (an approve through the daemon's stage), `round
+/// answer --staged` notes it among the change proposals not asked.
+#[test]
+fn kind_interpretation_ac_r8_an_interpretation_is_a_change_proposal_of_the_round() {
+    let pair = Pair::new("rd-ki-r8", "spec-a");
+    let main = pair.main.clone();
+    let asked = question(
+        &pair,
+        &main,
+        &["EDGE-STAM-ZERO"],
+        "Does an empty bar stop the run?",
+    );
+    let changed = update(&pair, &main);
+    let interpreted = interpretation(&pair, &main);
+    let sheet = sheet(&pair, &main, None);
+    let (text, json_text) = printed_sheet(&sheet);
+    assert_eq!(
+        ids(&parsed(&json_text)["items"]),
+        std::slice::from_ref(&asked)
+    );
+    assert!(!text.contains(&format!("## {interpreted} - ")), "{text}");
+    assert!(
+        text.ends_with(&format!(
+            "note: 2 open change proposal(s) not on this sheet: {changed}, {interpreted}; spec \
+             inbox lists them\n"
+        )),
+        "{text}"
+    );
+
+    let file = answers_file(
+        &pair,
+        "reply.md",
+        format!("project: {SLUG}\n{interpreted}: ok\n"),
+    );
+    let mut terminal = Scripted::keys(&[]);
+    let run = answered(&pair, &main, Some(&file), &mut terminal);
+    assert_eq!(
+        terminal.report(),
+        format!(
+            "{interpreted} line 2: refused: `{interpreted}` is a change proposal \
+             (interpretation): `spec approve {interpreted}` decides it; nothing staged\n\
+             answers: 0 staged, 0 left open, 1 refused\n"
+        )
+    );
+    assert!(terminal.questions.is_empty());
+    assert_eq!(staged_events(&pair), Vec::<String>::new());
+    assert_eq!(run.exit(), Exit::NotFound);
+
+    stage_now(&pair, &main, &interpreted, approve_body(None), LATER);
+    let mut terminal = Scripted::keys(&[]);
+    let run = answered(&pair, &main, None, &mut terminal);
+    assert_eq!(
+        run.notes,
+        [format!(
+            "1 staged change proposal(s) not asked: {interpreted}; spec approve <ID> confirms each"
+        )]
+    );
+    assert!(terminal.questions.is_empty(), "{:?}", terminal.questions);
+    assert_eq!(
+        stored_stage(&pair, &interpreted).map(|stage| match stage {
+            Stage::Approve { span_hash, .. } => span_hash.is_some(),
+            Stage::Reject { .. } => false,
+        }),
+        Some(true),
+        "the staged approve holds its span hash"
+    );
+}

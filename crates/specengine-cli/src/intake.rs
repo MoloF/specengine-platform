@@ -844,7 +844,7 @@ fn node_of(graph: &SpecGraph<'_>, target: &Target) -> Option<NodeAt> {
 }
 
 /// `file` is a live document of `class: decision` with `status: accepted`.
-fn accepted_decision(graph: &SpecGraph<'_>, file: usize) -> bool {
+pub(crate) fn accepted_decision(graph: &SpecGraph<'_>, file: usize) -> bool {
     if graph.standing(file) != Standing::Live {
         return false;
     }
@@ -860,7 +860,7 @@ fn accepted_decision(graph: &SpecGraph<'_>, file: usize) -> bool {
 }
 
 /// An exit-2 error of a field's resolution, naming the field.
-fn prefixed(error: CliError, field: &str) -> CliError {
+pub(crate) fn prefixed(error: CliError, field: &str) -> CliError {
     let message = match error.message.strip_prefix("spec: ") {
         Some(rest) => format!("spec: {field}: {rest}"),
         None => error.message,

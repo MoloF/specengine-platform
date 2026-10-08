@@ -39,14 +39,14 @@ afterEach(() => {
 });
 
 describe("the normal scenario", () => {
-  it("lists harbor-sim's open questions and discrepancies in round order, notes the change proposal, lists no deferred one", async () => {
+  it("lists harbor-sim's open questions and discrepancies in round order, notes the change proposals (an interpretation among them), lists no deferred one", async () => {
     const sheet = await new MockClient("normal", { now: clock }).getRound("harbor-sim");
     expect(sheet.project).toBe("harbor-sim");
     expect(sheet.items.map((item) => item.id)).toEqual(["PR-0041", "PR-0048", "PR-0043", "PR-0047", "PR-0044"]);
     expect(sheet.items.map((item) => item.tasks.map((task) => task.id))).toEqual([["T-0107"], [], ["T-0112"], [], ["T-0107", "T-0112"]]);
     expect(sheet.more).toBe(0);
     expect(sheet.minutes).toBeGreaterThan(0);
-    expect(sheet.notes).toEqual(["1 open change proposal(s) not on this sheet: PR-0042; spec inbox lists them"]);
+    expect(sheet.notes).toEqual(["2 open change proposal(s) not on this sheet: PR-0042 and PR-0049; spec inbox lists them"]);
     expect(Object.keys(sheet.items[0] ?? {})).toEqual([
       "id",
       "kind",
@@ -103,6 +103,7 @@ describe("the normal scenario", () => {
       { id: "PR-0044", stage: option(7, readAt(sheet, "PR-0044")) },
       { id: "PR-0047", stage: working("2026-01-01T00:00:00Z") },
       { id: "PR-0042", stage: working(AT) },
+      { id: "PR-0049", stage: working(AT) },
       { id: "PR-0046", stage: option(0, AT) },
       { id: "PR-9999", stage: working(AT) },
     ];
@@ -114,6 +115,7 @@ describe("the normal scenario", () => {
       ["PR-0044", "refused", null, "option 7: `PR-0044` has options 0-1"],
       ["PR-0047", "refused", null, `\`PR-0047\` changed since it was read: updated at ${readAt(sheet, "PR-0047")}, the choice was made on the one of 2026-01-01T00:00:00Z; read it again`],
       ["PR-0042", "refused", null, "`PR-0042` is a change proposal (update): `spec approve PR-0042` decides it"],
+      ["PR-0049", "refused", null, "`PR-0049` is a change proposal (interpretation): `spec approve PR-0049` decides it"],
       ["PR-0046", "refused", null, "`PR-0046` is deferred"],
       ["PR-9999", "refused", null, "no proposal `PR-9999` in this project's queue"],
     ]);

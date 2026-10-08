@@ -69,10 +69,19 @@ fn ac01_the_show_hash_proposes_pr_0001_from_the_linked_worktree_writing_nothing(
         let (stdout, json) = printed(&outcome);
         assert_eq!(stdout, "PR-0001\nintroduced: 0\n", "{}", case.fixture);
         assert_eq!(json_of(&json)["id"], "PR-0001", "{}", case.fixture);
-        assert!(
-            Outcome::Proposal(Box::new(outcome.clone()))
-                .stderr_lines()
-                .is_empty(),
+        // docs/features/kind-interpretation.md W7: spec-b's target lies in
+        // ADR-0001's `canon:` section: a note, never a refusal.
+        let notes: Vec<String> = match case.fixture {
+            "spec-b" => vec![format!(
+                "note: {target} is in the `canon:` section of ADR-0001: a change carrying one \
+                 is `spec propose interpretation {target} --decision ADR-0001`",
+                target = case.target
+            )],
+            _ => Vec::new(),
+        };
+        assert_eq!(
+            Outcome::Proposal(Box::new(outcome.clone())).stderr_lines(),
+            notes,
             "{}: {outcome:?}",
             case.fixture
         );
@@ -580,7 +589,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/features/decision-apply.md
 /// "Data", "Review document": the five of a decision record after
 /// `linked`).
-const REVIEW_KEYS: [&str; 45] = [
+const REVIEW_KEYS: [&str; 46] = [
     "id",
     "project",
     "kind",
@@ -628,6 +637,9 @@ const REVIEW_KEYS: [&str; 45] = [
     // `notes`, 45 keys.
     "staged",
     "staged_at",
+    // docs/features/kind-interpretation.md "Data": after `staged_at`, 46
+    // keys.
+    "interpretation",
     "notes",
 ];
 

@@ -1354,9 +1354,9 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     let mut problems = Vec::new();
     let plugin: Value = serde_json::from_str(plugin).expect("plugin.json");
     let market: Value = serde_json::from_str(marketplace).expect("marketplace.json");
-    if plugin["version"] != "0.3.0" {
+    if plugin["version"] != "0.4.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.3.0",
+            "plugin.json: version {}, not 0.4.0",
             plugin["version"]
         ));
     }
@@ -1426,6 +1426,6 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.3.0\"", "\"0.2.0\"", 1);
-    assert_names(&r2_problems(&older, &market), "not 0.3.0", "0.2.0");
+    let older = plugin.replacen("\"0.4.0\"", "\"0.2.0\"", 1);
+    assert_names(&r2_problems(&older, &market), "not 0.4.0", "0.2.0");
 }

@@ -13,10 +13,12 @@ use std::path::Path;
 
 use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
+use specengine_core::intake::INTERPRETATION_KIND;
 
 use super::{
     ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, corrupt, migrate, tasks, user_version,
 };
+
 use crate::error::{Db, StoreError};
 use crate::schema;
 
@@ -25,8 +27,10 @@ use crate::schema;
 /// (`docs/canon/agent-intake.md` "Stored"), then the five of a decision
 /// record step 3 appends (`docs/canon/decision-record.md` "Queue and documents"),
 /// then the task step 4 appends (`docs/canon/tasks.md` "Store"), then the
-/// stage step 5 appends (`docs/canon/decision-staging.md` "Queue").
-pub const PROPOSAL_COLUMNS: [&str; 43] = [
+/// stage step 5 appends (`docs/canon/decision-staging.md` "Queue"), then
+/// the interpretation step 6 appends (task spec `kind-interpretation`),
+/// named after its kind (core's constant, the kind's one spelling).
+pub const PROPOSAL_COLUMNS: [&str; 44] = [
     "id",
     "project",
     "kind",
@@ -70,6 +74,7 @@ pub const PROPOSAL_COLUMNS: [&str; 43] = [
     "task_id",
     "staged",
     "staged_at",
+    INTERPRETATION_KIND,
 ];
 
 /// The first queue schema with `tasks` and `runs` (step 3 → 4).
@@ -91,15 +96,20 @@ const SCHEMA_3_COLUMNS: usize = 40;
 /// [`PROPOSAL_COLUMNS`].
 const SCHEMA_4_COLUMNS: usize = 41;
 
+/// The columns of queue schema 5's `proposals`: the first of
+/// [`PROPOSAL_COLUMNS`].
+const SCHEMA_5_COLUMNS: usize = 43;
+
 /// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3, 4 and 5 (this build's) are known, a dump of any restores; `None` for
-/// any other.
+/// 3, 4, 5 and 6 (this build's) are known, a dump of any restores; `None`
+/// for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
         2 => Some(&PROPOSAL_COLUMNS[..SCHEMA_2_COLUMNS]),
         3 => Some(&PROPOSAL_COLUMNS[..SCHEMA_3_COLUMNS]),
         4 => Some(&PROPOSAL_COLUMNS[..SCHEMA_4_COLUMNS]),
+        5 => Some(&PROPOSAL_COLUMNS[..SCHEMA_5_COLUMNS]),
         QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
@@ -299,7 +309,7 @@ impl SqliteQueue {
     /// read transaction: `proposals` and `tasks` by ID number, `runs` by
     /// task and number, `events` by `seq`. A `TEXT` column that holds no
     /// UTF-8 text fails, naming row and column. A DB still at queue schema
-    /// 1, 2, 3 or 4 (no step runs here) reads its 24, 35, 40 or 41
+    /// 1, 2, 3, 4 or 5 (no step runs here) reads its 24, 35, 40, 41 or 43
     /// proposal columns, the later ones `None`, and its tasks and runs from
     /// schema 4 on (none before).
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {

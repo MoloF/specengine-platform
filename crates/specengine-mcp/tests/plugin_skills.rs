@@ -1100,3 +1100,49 @@ fn decision_apply_ac16_ask_owner_teaches_a_decided_item() {
         "the skill unedited",
     );
 }
+
+/// docs/features/kind-interpretation.md AC-R12 ("Plugin"): the
+/// propose-spec-change skill teaches the kind (`"kind": "interpretation"`,
+/// a section "Carrying an accepted decision into a rule") and its three
+/// fields `decision`, `how`, `why` by their names, a superseded decision
+/// resent with its successor; the `spec-author` role names the kind; the
+/// plugin is 0.4.0 (`plugin_files.rs` pins its hash: a text changed with
+/// the version kept turns that test red). The names are the server's:
+/// each a property of `propose_change`. M: the field names dropped.
+#[test]
+fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
+    let skills = committed();
+    let skill = &skills["propose-spec-change"];
+    assert!(
+        skill.contains("\n## Carrying an accepted decision into a rule\n"),
+        "{skill}"
+    );
+    assert!(skill.contains("`\"kind\": \"interpretation\"`"), "{skill}");
+    for field in ["`decision`", "`how`", "`why`"] {
+        assert!(skill.contains(field), "{field} in the skill");
+    }
+    assert!(
+        skill.contains("superseded") && skill.contains("successor"),
+        "the superseded decision's way out"
+    );
+    let role = fs::read_to_string(plugin_dir().join("specengine/agents/spec-author.md"))
+        .expect("spec-author.md");
+    assert!(
+        role.contains("as an interpretation") && role.contains("`\"kind\": \"interpretation\"`"),
+        "{role}"
+    );
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(plugin_dir().join("specengine/.claude-plugin/plugin.json"))
+            .expect("plugin.json"),
+    )
+    .expect("JSON");
+    assert_eq!(manifest["version"], "0.4.0");
+    // The fields are `propose_change`'s properties on the wire.
+    let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
+    let list = session.tools();
+    let properties = &tool(&list, "propose_change")["inputSchema"]["properties"];
+    for field in ["decision", "how", "why"] {
+        assert!(properties.get(field).is_some(), "{field}: {properties}");
+    }
+    drop(session.finish());
+}

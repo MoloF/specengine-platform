@@ -305,6 +305,7 @@ fn run_create(
             author,
             diagnostics,
             new_ids: new_ids.clone(),
+            interpretation: None,
         },
         None => {
             // A new file is named by its `id:`, else by its path.
@@ -329,6 +330,7 @@ fn run_create(
                 author,
                 diagnostics,
                 new_ids: new_ids.clone(),
+                interpretation: None,
             }
         }
     };

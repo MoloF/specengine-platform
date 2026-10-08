@@ -16,7 +16,7 @@ A standalone pnpm project on strict TypeScript: no root `package.json`, no works
 
 ## Contract seam
 
-- One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 s3); reads take the query's `AbortSignal` (superseded: aborted; not the check), writes none; the round's `getRound`, `stageRoundAnswers` alike. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`.
+- One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 s3); reads take the query's `AbortSignal` (superseded: aborted; not the check), writes none; the round's `getRound`, `stageRoundAnswers` alike. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily (a loading line; failed: why, reload).
 - App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
 - An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent (none now), `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
 - The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`docs/canon/decision-staging.md`).
@@ -36,7 +36,7 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 
 ## Dependencies
 
-The owner's allowlist: the 17 below (2026-10-05; the last two 2026-10-06, ADR-0036). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree.
+The owner's allowlist: the 17 below (2026-10-05; the last two ADR-0036). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree.
 
 | Package | Version | Role |
 |---|---|---|
@@ -58,13 +58,13 @@ The owner's allowlist: the 17 below (2026-10-05; the last two 2026-10-06, ADR-00
 | `react-markdown` | 10.1.0 | markdown, `src/markdown/` only |
 | `remark-gfm` | 4.0.1 | GFM for it |
 
-**Held back.** TypeScript 7 (outside `typescript-eslint`'s peer range), jsdom 30 (Node >= 24.15, the laptop 24.14): for the owner after a Node upgrade.
+**Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, the laptop 24.14): for the owner after a Node upgrade.
 
 **Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
 
 ## Gates
 
-Run in `ui/` by the UI roles, each exits on its own:
+Run in `ui/` by the UI roles; none watches:
 
 | Command | Does |
 |---|---|
@@ -78,7 +78,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Laptop rules
 
 - Role runs never start `pnpm dev`, `vite`, `vite preview`, bare `vitest` or any watcher: they do not exit. Wrap each gate: `perl -e 'alarm 600; exec @ARGV' pnpm --dir ui test`.
-- Vitest: `watch: false`, at most 2 workers, in the config.
+- Vitest config: `watch: false`, at most 2 workers.
 - The docs walk descends `node_modules`, symlinks skipped: cheap only in pnpm's isolated layout.
 
 ## Owner's manual steps

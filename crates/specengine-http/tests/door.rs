@@ -38,6 +38,13 @@
 //! probe by path and bare; `round_new`, the staging call
 //! `round_stage_answers` and the handler `round_answers` not. M: the
 //! handler calls `round_answer` with an always-yes terminal.
+//!
+//! AC-T3 of docs/features/kind-interpretation.md, the daemon's half: an
+//! interpretation raised over MCP (`propose_change`, kind
+//! `interpretation`, a separate `specengine-mcp` process) before the
+//! endpoints are called leaves `git status` empty and the files as
+//! committed; it is served (`proposals/PR-0002`, its `interpretation`) and
+//! no endpoint changes it. M: a file write in propose.
 
 mod common;
 
@@ -46,8 +53,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use common::{
-    Scratch, Server, Stream, ask, propose_update, repository_root, run_product, snapshot, spec_bin,
-    spec_json,
+    Mcp, Scratch, Server, Stream, ask, propose_update, repository_root, run_product, snapshot,
+    spec_bin, spec_json,
 };
 use serde_json::json;
 use specengine_cli::{Env, EventLine, Globals, events_after};
@@ -136,11 +143,49 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         "## Depletion {#EDGE-STAM-ZERO}\n- Stamina reaches 0: `Exhausted` after 0.2 s.\n",
     );
     assert_eq!(id, "PR-0001");
+    let committed = snapshot(&a);
+    // kind-interpretation AC-T3: an interpretation over MCP.
+    let mut mcp = Mcp::start(&home, &a);
+    let shown = mcp.request(
+        1,
+        "tools/call",
+        json!({"name": "get_node", "arguments": {"id": "RULE-STAM-REGEN"}}),
+    );
+    let node = &shown["result"]["structuredContent"]["nodes"][0];
+    let base = node["span_hash"].as_str().expect("a span_hash").to_owned();
+    let text = node["text"].as_str().expect("a text").replacen(
+        "Base rate 10 units/s,",
+        "Base rate 10 units/s at rest,",
+        1,
+    );
+    let reply = mcp.request(
+        2,
+        "tools/call",
+        json!({"name": "propose_change", "arguments": {"kind": "interpretation",
+            "target": "RULE-STAM-REGEN", "base": base, "decision": "DEC-0023",
+            "how": "Rest is any speed under 40 % of walking.",
+            "why": "DEC-0023 says rest; the rule names no speed.",
+            "text": text, "rationale": "Carry DEC-0023 into the rule.",
+            "author_role": "spec-author"}}),
+    );
+    mcp.finish();
+    assert_eq!(
+        reply["result"]["structuredContent"]["id"],
+        json!("PR-0002"),
+        "{reply}"
+    );
+    assert_eq!(
+        reply["result"]["structuredContent"]["interpretation"]["decision"],
+        json!("DEC-0023"),
+        "{reply}"
+    );
+    assert_eq!(snapshot(&a), committed, "nothing under the root written");
     let before = state(&scratch, &home, &cwd, &a);
     assert_eq!(before.porcelain, "", "the copy is committed");
     assert_eq!(before.proposal["status"], json!("open"));
-    assert_eq!(before.events.len(), 1, "{:?}", before.events);
+    assert_eq!(before.events.len(), 2, "{:?}", before.events);
     assert_eq!(before.events[0].1, "proposal.created");
+    assert_eq!(before.events[1].1, "proposal.created");
 
     let server = Server::serve(&home, &cwd, &[&a]);
     let p = "/api/projects/lantern-keep";
@@ -262,6 +307,14 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         assert_eq!(reply.status, 405, "{method} {path}: {}", reply.text());
         reply.error_message();
     }
+    // The interpretation, served as raised.
+    let served = server
+        .get(&format!("{p}/proposals/PR-0002"))
+        .status(200)
+        .json();
+    assert_eq!(served["kind"], json!("interpretation"));
+    assert_eq!(served["status"], json!("open"));
+    assert_eq!(served["interpretation"]["decision"], json!("DEC-0023"));
     drop(server);
 
     let after = state(&scratch, &home, &cwd, &a);

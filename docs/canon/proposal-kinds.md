@@ -8,7 +8,7 @@ reviewed: 2026-10-07
 
 # Proposal kinds: create
 
-Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kind `create` adds a new spec file (**file form**) or new `{#ID}` sections in one node's span (**section form**), applied by `spec approve` as one commit where it was raised (ADR-0004, ADR-0005, ADR-0032). The proposer names the path and every new ID (ADR-0008); the queue reserves them while the proposal is live. `update` keeps its node set (`proposal-queue.md` "Creation" 3); decision kinds: `agent-intake.md`, `decision-record.md`; `interpretation`: planned (`kind-interpretation`); `decision`, `amendment`: later slices. Code: core `create.rs` (`id_sites`, `written_id` -> `NoId|Alias|LookAlike|Id`, `add_sections`), `record_form`; store `ProposalKind::Create`, `reserved()`; CLI `create.rs` (propose, the new file's apply), `propose.rs` (`SpanRule::Sections`), `preflight.rs` (section steps, `file_commit`); MCP `intake.rs`.
+Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kind `create` adds a new spec file (**file form**) or new `{#ID}` sections in one node's span (**section form**), applied by `spec approve` as one commit where it was raised (ADR-0004, ADR-0005, ADR-0032). The proposer names the path and every new ID (ADR-0008); the queue reserves them while the proposal is live. `update` keeps its node set (`proposal-queue.md` "Creation" 3); decision kinds: `agent-intake.md`, `decision-record.md`; `interpretation`: `proposal-interpretation.md`; `decision`, `amendment`: later slices. Code: core `create.rs` (`id_sites`, `written_id` -> `NoId|Alias|LookAlike|Id`, `add_sections`), `record_form`; store `ProposalKind::Create`, `reserved()`; CLI `create.rs` (propose, the new file's apply), `propose.rs` (`SpanRule::Sections`), `preflight.rs` (section steps, `file_commit`); MCP `intake.rs`.
 
 ## Forms
 
@@ -21,8 +21,8 @@ Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kin
 
 In order; the first refusal answers, exit 1 unless named; nothing stored or reserved:
 
-1. **Form** (exit 2): clap, the author grammar; the place bound (Creation 5) before the text is read, so an unbound root exits 2 first.
-2. **Target**. A path no indexed file has: `--base` -> ``nothing at `<path>`: a new file is written against no base; drop --base``; the path clean, `.md`, in the walk (core `Paths::in_walk_scope`; else `` `<p>` is no file the walk would list ``), not under `[paths] generated`, not `[paths] index` nor a shard (live or archive) of the `index = true` `[[generators]]` entry (read when the root's check tables load): `` `<p>` is the project's index (`[paths] index`) | the index's archive shard | a shard of the index: only `spec export index` writes it, never a proposal ``; no symlink or non-directory on its way, nothing there (a dangling symlink too) nor in git's index: `` `<p>` exists: a create never replaces a file; to add ID sections to it, name its span_hash with --base ``. Else the section form: Creation 1-2; no `--base` -> that `exists`.
+1. **Form** (exit 2): clap, the author grammar; the place bound (Creation 5) before the text is read: an unbound root exits 2 first.
+2. **Target**. A path no indexed file has: `--base` -> ``nothing at `<path>`: a new file is written against no base; drop --base``; the path clean, `.md`, in the walk (core `Paths::in_walk_scope`; else `` `<p>` is no file the walk would list ``), not under `[paths] generated`, not `[paths] index` nor a shard (live or archive) of the `index = true` `[[generators]]` entry: `` `<p>` is the project's index (`[paths] index`) | the index's archive shard | a shard of the index: only `spec export index` writes it, never a proposal ``; no symlink or non-directory on its way, nothing there (a dangling symlink too) nor in git's index: `` `<p>` exists: a create never replaces a file; to add ID sections to it, name its span_hash with --base ``. Else the section form: Creation 1-2; no `--base` -> that `exists`.
 3. **Text**: UTF-8, <= `TEXT_MAX_BYTES`, verbatim, parsed under the recorded root's scheme (a parser panic: refused). File form: `class: generated` refused. Section form: Creation 3's splice under the section rule (core `add_sections`): the file's (ID, heading level) pairs kept in order; refused: an ID dropped or moved, the `id:` changed, a level changed, a heading at the target's level or above, `` no new ID: the text adds no `{#ID}` section; `spec propose update` replaces a span ``. `update`'s rule is unchanged: any added ID refused.
 4. **New IDs**: the file form's `id:` and `{#ID}`s; the section form's added sections and any ID-shaped `{#...}` the parser took as no definition (an alias prefix, a look-alike) the span did not hold. Each in text order, canonical (`slug/ID` for a feature-scoped prefix in a feature document, ADR-0026), checked in order:
    - an `aliases_from` prefix -> `` `QST-033` (line N) is written with a legacy `aliases_from` prefix: a new ID is written with its canonical prefix, `Q-033` ``;
@@ -43,7 +43,7 @@ A live (`open`, `approved`) create of the project, from any worktree or reposito
 
 ## Queue row
 
-No schema bump of its own (now 5, 43 columns). File form: `target_id` the text's `id:` canonical, else the path; `target_path` the path; `target_ids` the new IDs in text order when `target_id` heads them, else `[path, new IDs]`; `base_hash`, `base_text` `NULL`; `new_text` the file; `patch_hash` `b3_hash(target_id LF LF new_text)`. Section form: an update's columns, `target_ids` `[target_id, new IDs]` (an id-less feature document: `[<path>, <slug>/AC-08]`). Both: place, `rationale`, `author`, `diagnostics` as an update's; intake and record columns `NULL`.
+No schema bump of its own (now 6, 44 columns). File form: `target_id` the text's `id:` canonical, else the path; `target_path` the path; `target_ids` the new IDs in text order when `target_id` heads them, else `[path, new IDs]`; `base_hash`, `base_text` `NULL`; `new_text` the file; `patch_hash` `b3_hash(target_id LF LF new_text)`. Section form: an update's columns, `target_ids` `[target_id, new IDs]` (an id-less feature document: `[<path>, <slug>/AC-08]`). Both: place, `rationale`, `author`, `diagnostics` as an update's; intake and record columns `NULL`.
 
 New IDs of a row: `target_ids` but the first, plus the first with no base when it is an ID. Corrupt, named: `target_ids` `NULL` or not a JSON list of IDs headed by `target_id`; the base set in part; `new_text`, `rationale` `NULL`; an intake or record column set. An older build reads it as corrupt by its `kind` (ADR-0017).
 
@@ -73,9 +73,13 @@ Store: `ProposalKind::Create` (`applies()` true, `decides()` false); `NewProposa
 
 ## MCP and plugin
 
-`propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` required, enum `["update", "create"]` from core `UPDATE_KIND`, `CREATE_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> invalid-params (-32602) `base: ...`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
+`propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` required, enum `["update", "create", "interpretation"]` from core `UPDATE_KIND`, `CREATE_KIND`, `INTERPRETATION_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> -32602 `base: ...`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
 
-Plugin (since 0.1.4), `propose-spec-change` "A new section or file": `kind: "create"`; a new file with `base: null`, its ID in `id:`; ID sections against the span's `span_hash`; the agent names each new ID. Taken by the spec or another's proposal: resend with the named next free ID. **Held by the agent's own earlier proposal** (a corrected create): never the next free ID, which would add the node twice; name that proposal, ask the owner to reject it, resend once `get_proposal` shows it rejected. Removing an ID section stays a question for the owner.
+Plugin (since 0.1.4), `propose-spec-change` "A new section or file": `kind: "create"`; a new file with `base: null`, its ID in `id:`; ID sections against the `span_hash`; the agent names each new ID. Taken by the spec or another's proposal: resend with the named next free ID. **Held by the agent's own earlier proposal** (a corrected create): never the next free ID, which would add the node twice; name that proposal, ask the owner to reject it, resend once `get_proposal` shows it rejected. Removing an ID section stays a question for the owner.
+
+## Interpretation
+
+An `update` naming an accepted decision, how it was applied and why (2026-10-09; MCP fields too): `proposal-interpretation.md`.
 
 ## Genre
 
@@ -83,9 +87,9 @@ Kind names from core constants only (`CREATE_KIND` beside `QUESTION_KIND`); no `
 
 ## Known limits
 
-Accepted at shipping (2026-10-07); none blocks (ADR-0012).
+Accepted at shipping (2026-10-07); none blocks.
 
-- An ID created outside the queue on another branch: `id-taken` at merge. A stale open create holds its IDs until rejected; a wrong number guess costs one refused call.
-- Git's index lookup is case-sensitive (`:(literal)`): on a case-insensitive file system an index-only `R-15.md` does not stop a create at `r-15.md`; the apply fails at step 9 (pathspec did not match), cleaned up, exit 1, nothing lost. Decision records alike.
-- Between step 8's re-check and the write only the hard link guards: untestable without a product hook, so `rename` there is untested.
+- An ID created outside the queue on another branch: `id-taken` at merge. A stale open create holds its IDs until rejected; a wrong guess costs one refused call.
+- Git's index lookup is case-sensitive (`:(literal)`): on a case-insensitive file system an index-only `R-15.md` does not stop a create at `r-15.md`; the apply fails at step 9, cleaned up, exit 1, nothing lost. Decision records alike.
+- Between step 8's re-check and the write only the hard link guards; untested (no product hook).
 - A generated directory or index outside the walk gets the walk's wording, not its own (exit 1 either way).

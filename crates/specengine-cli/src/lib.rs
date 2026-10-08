@@ -129,6 +129,7 @@ mod graph;
 mod inbox;
 mod init;
 mod intake;
+mod interpret;
 mod links;
 mod location;
 mod package;
@@ -185,6 +186,7 @@ pub use intake::{
     propose_discrepancy_with_task, propose_question, propose_question_with_task,
     read_discrepancy_input,
 };
+pub use interpret::{InterpretRequest, propose_interpretation, propose_interpretation_brief};
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir};
 pub use project::{
@@ -212,12 +214,14 @@ pub use serve::{
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
 pub use specengine_core::ProjectConfig;
 /// The intake's input types, enums and caps (core's), for the bridges;
-/// the names of the kinds `propose_change` takes.
+/// the names of the kinds `propose_change` takes, and a kind's name with
+/// its article.
 pub use specengine_core::intake::{
     ANSWER_MAX, CREATE_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX, DiscrepancyInput, EVIDENCE_MAX,
-    EVIDENCE_TEXT_MAX, Evidence, GapType, IntakeOption, IntakeSeverity, LABEL_MAX, LINE_LIMIT,
+    EVIDENCE_TEXT_MAX, Evidence, GapType, INTERPRETATION_FIELDS, INTERPRETATION_KIND,
+    INTERPRETATION_TEXT_MAX, IntakeOption, IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT,
     LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch,
-    RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND,
+    RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND, with_article,
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;

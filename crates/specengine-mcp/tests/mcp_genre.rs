@@ -448,3 +448,39 @@ fn ac11_the_garden_through_the_queue_tools_gets_no_stack_word() {
         );
     }
 }
+
+/// docs/features/kind-interpretation.md AC-R11 and AC-T2: no source of
+/// `crates/specengine-mcp/src` (the probes-only modules included) holds a
+/// change kind as a literal: `propose_change`'s enum and its checks take
+/// core's `UPDATE_KIND`, `CREATE_KIND`, `INTERPRETATION_KIND`. The scan
+/// sees a literal. M: a kind literal in `specengine-mcp/src`.
+#[test]
+fn kind_interpretation_the_change_kinds_are_no_literal_of_the_server() {
+    let kinds = [
+        specengine_cli::UPDATE_KIND,
+        specengine_cli::CREATE_KIND,
+        specengine_cli::INTERPRETATION_KIND,
+    ];
+    assert_eq!(kinds, ["update", "create", "interpretation"]);
+    let src = repository_root().join("crates/specengine-mcp/src");
+    let mut files: Vec<_> = fs::read_dir(&src)
+        .expect("src")
+        .map(|entry| entry.expect("entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+        .collect();
+    files.sort();
+    assert!(files.len() >= 8, "{files:?}");
+    let mut offenders = Vec::new();
+    for path in &files {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let source = fs::read_to_string(path).expect("source");
+        for (line, literal) in literals(&source) {
+            if kinds.contains(&literal.as_str()) {
+                offenders.push(format!("{name}:{line}: the kind literal {literal:?}"));
+            }
+        }
+    }
+    assert!(offenders.is_empty(), "{offenders:#?}");
+    let sample = "    kind: \"interpretation\",\n    // \"update\"\n";
+    assert_eq!(literals(sample), [(1, "interpretation".to_owned())]);
+}

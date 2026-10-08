@@ -859,14 +859,14 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     assert_refused(&verdict(&pair, &main, "src/a.rs"), "released");
 
     // A queue of a newer schema.
-    pair.sql("PRAGMA user_version = 6;");
+    pair.sql("PRAGMA user_version = 7;");
     let ran = spec_path(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         "Reinstall spec and the plugin from one commit.",
-        "schema 6",
+        "schema 7",
     );
-    pair.sql("PRAGMA user_version = 5;");
+    pair.sql("PRAGMA user_version = 6;");
 
     // The root outside git.
     let loose = pair.scratch.copy("spec-a", "no-git");

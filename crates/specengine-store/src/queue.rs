@@ -1,7 +1,7 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4 → 5; a higher version is a newer
+//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6; a higher version is a newer
 //! build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
@@ -19,6 +19,10 @@
 //!   `approved`) create of the project, any repository, holds one of its
 //!   new IDs, checked inside the inserting transaction
 //!   ([`QueueError::Reserved`]; [`ProposalQueue::reserved`] reads them).
+//!   An `interpretation` (task spec `kind-interpretation`) is an update
+//!   carrying an accepted decision: its `{decision, how, why}` live in the
+//!   JSON column step 6 adds ([`Interpretation`]), set on that kind only
+//!   (else the row is corrupt, named).
 //! - **Records** (`docs/canon/decision-record.md` "Queue and documents"): a deciding kind is
 //!   approved only with its decision record ([`DecisionRecord`], the five
 //!   columns step 3 adds), by [`ProposalQueue::approve_record_from`], which
@@ -107,9 +111,10 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension, Row, Transaction, Trans
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specengine_core::check::Finding;
+pub use specengine_core::intake::Interpretation;
 use specengine_core::intake::{
-    CREATE_KIND, DISCREPANCY_KIND, Evidence, GapType, IntakeOption, IntakeSeverity, QUESTION_KIND,
-    UPDATE_KIND, normalized_summary,
+    CREATE_KIND, DISCREPANCY_KIND, Evidence, GapType, INTERPRETATION_KIND, IntakeOption,
+    IntakeSeverity, QUESTION_KIND, UPDATE_KIND, normalized_summary, with_article,
 };
 use specengine_core::is_clean_relative;
 use specengine_core::proposal::{
@@ -138,7 +143,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 5;
+pub const QUEUE_SCHEMA_VERSION: i64 = 6;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -215,6 +220,12 @@ ALTER TABLE proposals ADD COLUMN staged TEXT;
 ALTER TABLE proposals ADD COLUMN staged_at TEXT;
 ";
 
+/// Step 5 → 6: an interpretation's `{decision, how, why}` (task spec
+/// `kind-interpretation`, "Data").
+const STEP_6: &str = "
+ALTER TABLE proposals ADD COLUMN interpretation TEXT;
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -230,7 +241,7 @@ const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_co
      rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
      created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
      price_of_other, evidence, options, recommendation, distinct_from, linked, record_id, \
-     record_path, record_title, record_text, choice, task_id, staged, staged_at";
+     record_path, record_title, record_text, choice, task_id, staged, staged_at, interpretation";
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -246,9 +257,10 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
-/// What a proposal does: `update` and `create` apply (a file written and
-/// committed); the intake kinds decide (an approval writes a decision
-/// record), or are settled by a rejection whose reason is the answer.
+/// What a proposal does: `update`, `create` and `interpretation` apply (a
+/// file written and committed); the intake kinds decide (an approval writes
+/// a decision record), or are settled by a rejection whose reason is the
+/// answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
@@ -261,14 +273,18 @@ pub enum ProposalKind {
     /// Add a node: a new spec file, or new `{#ID}` sections in a node's
     /// span.
     Create,
+    /// Replace one node's span carrying an accepted decision into it, with
+    /// how it was applied and why interpretation was needed.
+    Interpretation,
 }
 
 impl ProposalKind {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Update,
         Self::Question,
         Self::Discrepancy,
         Self::Create,
+        Self::Interpretation,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -277,6 +293,7 @@ impl ProposalKind {
             Self::Question => QUESTION_KIND,
             Self::Discrepancy => DISCREPANCY_KIND,
             Self::Create => CREATE_KIND,
+            Self::Interpretation => INTERPRETATION_KIND,
         }
     }
 
@@ -284,10 +301,17 @@ impl ProposalKind {
         Self::ALL.into_iter().find(|kind| kind.as_str() == text)
     }
 
-    /// An `update` replaces a node's span; a `create` writes a new file or
-    /// a span with new sections: both are applied as one commit.
+    /// Its name with its indefinite article: `an update`, `a create`
+    /// (core's [`with_article`]).
+    pub fn with_article(self) -> String {
+        with_article(self.as_str())
+    }
+
+    /// An `update` and an `interpretation` replace a node's span; a
+    /// `create` writes a new file or a span with new sections: each is
+    /// applied as one commit.
     pub const fn applies(self) -> bool {
-        matches!(self, Self::Update | Self::Create)
+        matches!(self, Self::Update | Self::Create | Self::Interpretation)
     }
 
     /// A question or a discrepancy: its approval writes a decision record.
@@ -375,7 +399,8 @@ impl From<&Finding> for ProposalFinding {
 /// times.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewProposal {
-    /// [`ProposalKind::Update`] or [`ProposalKind::Create`].
+    /// [`ProposalKind::Update`], [`ProposalKind::Create`] or
+    /// [`ProposalKind::Interpretation`].
     pub kind: ProposalKind,
     /// `ID`, or `slug/ID` for a feature-scoped one; a document without an
     /// `id:` by its path. A create's new file: its `id:`, else its path.
@@ -401,6 +426,9 @@ pub struct NewProposal {
     /// in text order: a new file's `id:` first when it declares one; empty
     /// for an update.
     pub new_ids: Vec<String>,
+    /// An interpretation's decision, `how` and `why`; set iff the kind is
+    /// [`ProposalKind::Interpretation`].
+    pub interpretation: Option<Interpretation>,
 }
 
 /// The fields of a `question` or a `discrepancy`
@@ -554,6 +582,9 @@ pub struct Proposal {
     /// The owner's staged choice, on an `open` proposal only
     /// (`docs/canon/decision-staging.md`).
     pub staged: Option<StagedChoice>,
+    /// An interpretation's decision, `how` and `why`; `None` for any other
+    /// kind.
+    pub interpretation: Option<Interpretation>,
 }
 
 impl Proposal {
@@ -1479,14 +1510,9 @@ impl SqliteQueue {
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
         if !current.kind.decides() {
-            let article = if current.kind == ProposalKind::Update {
-                "an"
-            } else {
-                "a"
-            };
             return Err(QueueError::Invalid(format!(
-                "`{id}` is {article} {}: its approval writes no decision record",
-                current.kind.as_str()
+                "`{id}` is {}: its approval writes no decision record",
+                current.kind.with_article()
             )));
         }
         match current.status {
@@ -1626,8 +1652,8 @@ enum Hold<'a> {
 /// The queue's schema steps, in one `Immediate` transaction: 0 → 1 makes
 /// the tables, 1 → 2 adds the intake columns, 2 → 3 the record columns,
 /// 3 → 4 the tasks, their runs and a proposal's task, 4 → 5 a proposal's
-/// stage (0 → 5 runs all five; a schema-4 DB opens as 5, every stage
-/// `NULL`);
+/// stage, 5 → 6 an interpretation's column (0 → 6 runs all six; a schema-5
+/// DB opens as 6, every `interpretation` `NULL`);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -1665,6 +1691,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 4 {
         tx.execute_batch(STEP_5).db()?;
         version = 5;
+    }
+    if version == 5 {
+        tx.execute_batch(STEP_6).db()?;
+        version = 6;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -1850,6 +1880,7 @@ impl RawRow {
         let record_columns: [Option<String>; 5] = std::array::from_fn(|_| take());
         let task_id = take();
         let staged_columns = [take(), take()];
+        let interpretation = decode_interpretation(&id, kind, take())?;
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
@@ -1904,8 +1935,56 @@ impl RawRow {
             new_ids,
             task_id,
             staged,
+            interpretation,
         })
     }
+}
+
+/// The `interpretation` column of a row: set (compact JSON
+/// `{"decision":…,"how":…,"why":…}`, keys in this order, each a string, not
+/// blank, `how` and `why` within their cap) iff the kind is
+/// [`ProposalKind::Interpretation`]; else the row is corrupt, named.
+fn decode_interpretation(
+    id: &str,
+    kind: ProposalKind,
+    column: Option<String>,
+) -> Result<Option<Interpretation>, UnreadableRow> {
+    // The column bears its kind's name.
+    const COLUMN: &str = INTERPRETATION_KIND;
+    let interprets = kind == ProposalKind::Interpretation;
+    let Some(text) = column else {
+        if interprets {
+            return Err(corrupt(
+                id,
+                COLUMN,
+                format!("it is NULL on {}", kind.with_article()),
+            ));
+        }
+        return Ok(None);
+    };
+    if !interprets {
+        return Err(corrupt(
+            id,
+            COLUMN,
+            format!("{} holds no interpretation", kind.with_article()),
+        ));
+    }
+    let shape = || {
+        corrupt(
+            id,
+            COLUMN,
+            "not the compact `{\"decision\":…,\"how\":…,\"why\":…}` of three strings",
+        )
+    };
+    let value: Interpretation = serde_json::from_str(&text).map_err(|_| shape())?;
+    // A key reordered or a text not compact: not its bytes.
+    if serde_json::to_string(&value).ok().as_deref() != Some(text.as_str()) {
+        return Err(shape());
+    }
+    if let Some(problem) = value.problem() {
+        return Err(corrupt(id, COLUMN, problem));
+    }
+    Ok(Some(value))
 }
 
 /// The record columns of a row ([`RECORD_COLUMNS`]): none on an update;
@@ -1921,15 +2000,10 @@ fn decode_record(
 ) -> Result<Option<DecisionRecord>, UnreadableRow> {
     if !kind.decides() {
         if let Some(at) = columns.iter().position(Option::is_some) {
-            let holder = if kind == ProposalKind::Update {
-                "an update"
-            } else {
-                "a create"
-            };
             return Err(corrupt(
                 id,
                 RECORD_COLUMNS[at],
-                format!("{holder} holds no record"),
+                format!("{} holds no record", kind.with_article()),
             ));
         }
         return Ok(None);
@@ -2396,9 +2470,10 @@ fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
     Ok(proposal_id(next))
 }
 
-/// Inserts `proposal` (an `update` or a `create`) as `open` under the
-/// next ID, `linked` to the given proposal, bound to `task`; a create's
-/// `target_ids` set ([`create_targets`]), an update's `NULL`; its ID.
+/// Inserts `proposal` (an `update`, a `create` or an `interpretation`) as
+/// `open` under the next ID, `linked` to the given proposal, bound to
+/// `task`; a create's `target_ids` set ([`create_targets`]), an update's
+/// `NULL`; an interpretation's `interpretation`; its ID.
 fn insert_update(
     tx: &Transaction<'_>,
     project: &str,
@@ -2418,6 +2493,7 @@ fn insert_update(
             ))
         })
         .transpose()?;
+    let interpretation = proposal.interpretation.as_ref().map(to_json).transpose()?;
     let id = next_id(tx)?;
     let place = &proposal.place;
     tx.execute(
@@ -2425,7 +2501,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22, NULL, NULL)"
+             NULL, NULL, ?22, NULL, NULL, ?23)"
         ),
         rusqlite::params![
             id,
@@ -2450,6 +2526,7 @@ fn insert_update(
             linked,
             target_ids,
             task,
+            interpretation,
         ],
     )
     .db()?;
@@ -2457,27 +2534,49 @@ fn insert_update(
 }
 
 /// Why `proposal` is no proposal [`ProposalQueue::create`] stores: a kind
-/// that never applies, an update without its base or with new IDs, a
-/// create's base given in part, a new file whose `id:` is not its first
-/// new ID, a new ID empty or repeated.
+/// that never applies, an update or an interpretation without its base or
+/// with new IDs, an interpretation's fields absent or unfit, or given on
+/// another kind, a create's base given in part, a new file whose `id:` is
+/// not its first new ID, a new ID empty or repeated.
 fn new_proposal_problem(proposal: &NewProposal) -> Option<String> {
     let kind = proposal.kind;
     if !kind.applies() {
         return Some(format!(
-            "`create` stores a proposal that applies, not a {}: `create_intake` stores it",
-            kind.as_str()
+            "`create` stores a proposal that applies, not {}: `create_intake` stores it",
+            kind.with_article()
         ));
+    }
+    let interprets = kind == ProposalKind::Interpretation;
+    match (&proposal.interpretation, interprets) {
+        (None, true) => {
+            return Some(format!(
+                "{} names its decision, how and why",
+                kind.with_article()
+            ));
+        }
+        (Some(_), false) => {
+            return Some(format!("{} carries no interpretation", kind.with_article()));
+        }
+        (Some(interpretation), true) => {
+            if let Some(problem) = interpretation.problem() {
+                return Some(format!("{}: {problem}", kind.with_article()));
+            }
+        }
+        (None, false) => {}
     }
     let based = proposal.base_hash.is_some();
     if based != proposal.base_text.is_some() {
         return Some("a proposal's base is its hash and its text, both or neither".to_owned());
     }
-    if kind == ProposalKind::Update {
+    if kind != ProposalKind::Create {
         if !based {
-            return Some("an update is written against its base".to_owned());
+            return Some(format!(
+                "{} is written against its base",
+                kind.with_article()
+            ));
         }
         if !proposal.new_ids.is_empty() {
-            return Some("an update adds no ID".to_owned());
+            return Some(format!("{} adds no ID", kind.with_article()));
         }
         return None;
     }
@@ -2590,7 +2689,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25, NULL, NULL)"
+             ?25, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -2784,8 +2883,8 @@ impl ProposalQueue for SqliteQueue {
         check_time(now)?;
         if intake.kind.applies() {
             return Err(QueueError::Invalid(format!(
-                "an intake stores a question or a discrepancy, not an {}",
-                intake.kind.as_str()
+                "an intake stores a question or a discrepancy, not {}",
+                intake.kind.with_article()
             )));
         }
         if intake.intake.target_ids.is_empty() {

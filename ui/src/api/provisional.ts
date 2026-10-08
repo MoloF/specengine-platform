@@ -220,10 +220,12 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
  * every scalar `null` and its reason as the last of `notes`. A question or a discrepancy fills the
  * eleven keys after `updated_at` instead of an update's texts, `diff` and `preview`; a decided
  * one its record's five after `linked`; `task_id`, after `choice`, the task it was raised for;
- * `staged`, `staged_at` after it, the owner's staged choice (45 keys).
+ * `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after them, an
+ * interpretation's decision and texts (46 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
- * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents".
+ * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
+ * `docs/features/kind-interpretation.md` "Data".
  */
 export interface Proposal {
   id: string | null;
@@ -282,8 +284,22 @@ export interface Proposal {
   staged: Stage | null;
   /** When it was staged, UTC as stored (`YYYY-MM-DDTHH:MM:SSZ`); null when none is staged. */
   staged_at: string | null;
+  /** The accepted decision a change carries and how it was read; null on any proposal that carries none. */
+  interpretation: Interpretation | null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
   notes: string[];
+}
+
+/**
+ * What a proposal carrying an accepted decision into a rule holds, keys in this order: `decision`
+ * the decision document's `id:`, `how` the decision was applied and `why` interpretation was
+ * needed, the agent's texts raw (never blank, at most 2 048 bytes each).
+ * Source: `docs/features/kind-interpretation.md` "Data".
+ */
+export interface Interpretation {
+  decision: string;
+  how: string;
+  why: string;
 }
 
 /**

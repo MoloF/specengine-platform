@@ -12,13 +12,13 @@ reviewed: 2026-10-08
 
 ## Consent
 
-`spec approve`, `spec reject`, `spec import-state` (`queue-backup.md`) and `spec round answer` (`round.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool, presumably `!` too, has none: use another terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
+`spec approve`, `spec reject`, `spec import-state` (`queue-backup.md`) and `spec round answer` (`round.md`) run only when stdin is a terminal (`main.rs`, `IsTerminal`); else exit 2 before anything is read or logged: ``spec: `spec approve` asks the owner for consent on a terminal, and stdin is not one (a pipe, a script or an agent's shell): run it in a terminal; nothing changed``. Claude Code's Bash tool has none: use another terminal. No `--yes`. The question goes to stderr, one line is read, only `y` or `yes` (lower case) consents; else exit 1 `` `PR` not applied: the answer was not `y`; nothing changed `` (`not completed`, `not rejected`), no event. Questions, escaped:
 
 - `apply PR-0001 to <path from the worktree top> on <branch> in <worktree> (applies|rebases)? [y/N]`, after steps 2-6 and the identity;
 - `complete PR-0001 by its commit <sha> on <branch> in <worktree>? [y/N]` (an `open` proposal's own commit; `in` the current project root when the lookup read the current repository);
 - `reject [approved ]PR-0001 (<target_id> in <path> on <branch> in <worktree>)? [y/N]`.
 
-A lookup git could not make is printed above the question (`note: cannot tell whether …`) and in the outcome's notes. A pseudo-terminal passes: a speed bump, not proof of presence (ADR-0034). A stage it confirms is printed above, the question marked `staged` (`decision-staging.md` "Terminal").
+A lookup git could not make is printed above the question (`note: cannot tell whether …`) and in the outcome's notes. A pseudo-terminal passes (ADR-0034). A stage it confirms is printed above, the question marked `staged` (`decision-staging.md` "Terminal").
 
 ## Apply steps
 
@@ -50,7 +50,7 @@ Proposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown
 Base-commit: <40 or 64 hex>
 ```
 
-`Decided-by`: the step-7 identity. `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`.
+`Decided-by`: the step-7 identity. `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply".
 
 ## Completion
 
@@ -72,11 +72,11 @@ Then `reject_from` on the state read (changed since -> exit 1); `decision_note` 
 
 ## Known limits
 
-Accepted at shipping (2026-10-05); none blocks (ADR-0012).
+Accepted at shipping (2026-10-05); none blocks.
 
 - Racing terminals meet git's `index.lock` (reported); hooks or signing needing stdin fail (bytes restored); Phase 3's rev rule (08 AC-13) will refuse apply commits without a rev bump.
-- A reject running while a live apply commits between reject's second check and its write leaves it rejected with its commit in history (the apply's step 10 exits 1, `rejected`): needs a cross-process lock (daemon).
-- An end-of-line or clean/smudge filter on spec files (`core.autocrlf`, `eol=crlf`): completion compares raw blobs with worktree bytes, so an apply interrupted at step 10 can be neither completed nor rejected (later: `cat-file --filters`).
+- A reject running while a live apply commits between reject's second check and its write leaves it rejected with its commit in history (the apply's step 10 exits 1, `rejected`): needs a cross-process lock.
+- An end-of-line or clean/smudge filter on spec files (`core.autocrlf`, `eol=crlf`): completion compares raw blobs with worktree bytes: an apply interrupted at step 10 is neither completed nor rejected (later: `cat-file --filters`).
 - The trailer names no project: with several SpecEngine roots in a repository, or a reset data directory, another proposal's same-ID commit on the branch blocks reject; with the base pruned the whole-branch read finds older ones too; approve refuses only when that commit applied the text.
 - A reverted apply commit: approve refused at step 5, reject refused; way out: a completing commit (the hint).
 - A path target follows no rename (step 3 refuses; no re-targeting).

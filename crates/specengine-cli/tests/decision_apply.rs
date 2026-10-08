@@ -1335,14 +1335,14 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let lines = dump_lines(&bytes);
     assert!(
         lines[0].starts_with(
-            "{\"format\":2,\"queue_schema\":5,\"project\":\"lantern-keep\",\"proposals\":3,\
+            "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":3,\
              \"tasks\":0,\"runs\":0,"
         ),
         "{}",
         lines[0]
     );
     let columns = specengine_store::PROPOSAL_COLUMNS;
-    assert_eq!(columns.len(), 43);
+    assert_eq!(columns.len(), 44);
     for line in &lines[1..4] {
         assert_columns(line, &columns);
     }
@@ -1390,13 +1390,13 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
 
 /// AC-12: a format-1 schema-2 dump (its 35 columns) restores, the five
 /// record columns, `task_id` and the stage `NULL`, and re-exports
-/// byte-identical as the current export (format 2, schema 5:
-/// docs/features/decision-staging.md "Backup"; a schema-1 dump:
-/// `intake_state.rs`, re-exported as 5 too); a schema-2 row carrying the
+/// byte-identical as the current export (format 2, schema 6:
+/// docs/features/kind-interpretation.md "Backup"; a schema-1 dump:
+/// `intake_state.rs`, re-exported as 6 too); a schema-2 row carrying the
 /// later columns is refused naming its line; a database still at schema 2
-/// (no `tasks`, `runs`, `task_id`, stage either) exports as 5 unmigrated,
-/// and the first queue command steps it to `user_version` 5, its rows
-/// kept. M: a column missing.
+/// (no `tasks`, `runs`, `task_id`, stage, interpretation either) exports as
+/// 6 unmigrated, and the first queue command steps it to `user_version` 6,
+/// its rows kept. M: a column missing.
 #[test]
 fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     let pair = Pair::new("da-ac12-old", "spec-a");
@@ -1414,16 +1414,17 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     let v3_lines = dump_lines(&v3);
     let before = dump_at(&pair, &pair.home);
     let record_nulls = ",\"record_id\":null,\"record_path\":null,\"record_title\":null,\
-\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null}}";
+\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\
+\"interpretation\":null}}";
     let mut v2_lines = v3_lines.clone();
     assert!(
-        v2_lines[0].starts_with("{\"format\":2,\"queue_schema\":5,"),
+        v2_lines[0].starts_with("{\"format\":2,\"queue_schema\":6,"),
         "{}",
         v2_lines[0]
     );
     v2_lines[0] = v2_lines[0]
         .replacen(
-            "\"format\":2,\"queue_schema\":5,",
+            "\"format\":2,\"queue_schema\":6,",
             "\"format\":1,\"queue_schema\":2,",
             1,
         )
@@ -1442,7 +1443,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     assert_eq!(
         export(&pair, &home, &dumps.join("v2-again.jsonl")),
         v3,
-        "re-exported as format 2, queue_schema 5"
+        "re-exported as format 2, queue_schema 6"
     );
     // A schema-2 row with the record columns.
     let mut mixed = v2_lines.clone();
@@ -1469,7 +1470,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     assert_eq!(
         export(&pair, &pair.home, &dumps.join("from-v2.jsonl")),
         v3,
-        "a version-2 DB exports as format 2, queue_schema 5"
+        "a version-2 DB exports as format 2, queue_schema 6"
     );
     assert_eq!(
         pair.sql("PRAGMA user_version;").trim(),
@@ -1477,13 +1478,14 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         "export steps nothing"
     );
     pair.inbox(&pair.main, true).expect("inbox");
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "5");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "6");
     assert_eq!(
         pair.sql("SELECT name FROM pragma_table_info('proposals');")
             .lines()
             .collect::<Vec<_>>(),
         specengine_store::PROPOSAL_COLUMNS,
-        "steps 3, 4 and 5 append the five, `task_id`, `staged` and `staged_at` in order"
+        "steps 3, 4, 5 and 6 append the five, `task_id`, `staged`, `staged_at` and \
+         `interpretation` in order"
     );
     assert_eq!(dump_at(&pair, &pair.home), before, "rows kept");
 }

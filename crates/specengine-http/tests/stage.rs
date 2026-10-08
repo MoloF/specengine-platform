@@ -335,7 +335,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         );
         assert!(reply.cors_headers().is_empty(), "{reply:?}");
         let document = reply.json();
-        assert_eq!(document.as_object().unwrap().len(), 45, "{document}");
+        assert_eq!(document.as_object().unwrap().len(), 46, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -347,7 +347,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         assert_eq!(document["updated_at"], json!(at), "updated_at = now");
         assert!(
             reply.text().contains(&format!(
-                "\"staged\":{staged},\"staged_at\":\"{at}\",\"notes\":"
+                "\"staged\":{staged},\"staged_at\":\"{at}\",\"interpretation\":null,\"notes\":"
             )),
             "the stage's bytes, keys in the canon's order: {}",
             reply.text()
@@ -1109,19 +1109,19 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    sqlite3(&db(&s.home), "PRAGMA user_version = 6;");
+    sqlite3(&db(&s.home), "PRAGMA user_version = 7;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
     );
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
-    assert!(message.contains('6') && message.contains('5'), "{message}");
+    assert!(message.contains('7') && message.contains('6'), "{message}");
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "6",
+        "7",
         "left alone"
     );
     assert_eq!(
@@ -1175,4 +1175,121 @@ fn the_page_is_judged_before_the_path_is_decoded() {
         assert!(reply.cors_headers().is_empty(), "{reply:?}");
     }
     assert_eq!(seqs(&s.home, &s.a), stored, "nothing stored");
+}
+
+// ------------------------------------------- kind-interpretation AC-R8
+
+/// docs/features/kind-interpretation.md AC-R8, the daemon's stage (no new
+/// route): an interpretation of `RULE-STAM-REGEN` carrying `DEC-0023`,
+/// raised through `spec propose interpretation`; `option`, `answer`,
+/// `canon` each 400 with the CLI's line naming the flag and the kind,
+/// nothing stored, no event; a plain approve 200, its stage holding the
+/// target's current `span_hash` ("Data"'s six keys), the document's 46
+/// keys with the interpretation; the repository untouched. M: `span_hash`
+/// null.
+#[test]
+fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
+    let s = setup("stage-ki-r8");
+    let shown = spec_json(&s.home, &s.cwd, &s.a, &["show", "RULE-STAM-REGEN"]).json();
+    let node = &shown["nodes"][0];
+    let span = node["span_hash"].as_str().expect("span_hash").to_owned();
+    let text = node["text"].as_str().expect("text").replacen(
+        "Base rate 10 units/s,",
+        "Base rate 10 units/s at rest,",
+        1,
+    );
+    let root = s.a.to_str().expect("UTF-8 root");
+    let run = run_product(
+        &spec_bin(),
+        &s.home,
+        &s.cwd,
+        &[
+            "--root",
+            root,
+            "propose",
+            "interpretation",
+            "RULE-STAM-REGEN",
+            "--base",
+            &span,
+            "--decision",
+            "DEC-0023",
+            "--how",
+            "Rest is any speed under 40 % of walking.",
+            "--why",
+            "DEC-0023 says rest; the rule names no speed.",
+            "--text-file",
+            "-",
+            "--rationale",
+            "Carry DEC-0023 into the rule.",
+            "--author-role",
+            "spec-author",
+        ],
+        text.as_bytes(),
+    );
+    run.code(0);
+    let id = run.stdout.lines().next().unwrap_or_default().to_owned();
+    assert_eq!(id, "PR-0004", "{}", run.show());
+    let before = repository(&s, &s.a);
+    let stored = seqs(&s.home, &s.a);
+    let unstaged = row(&s.home, &id);
+    let server = Server::serve(&s.home, &s.cwd, &[&s.a]);
+    for (flag, value) in [
+        ("option", "1"),
+        ("answer", "\"yes\""),
+        ("canon", "\"EDGE-STAM-ZERO\""),
+    ] {
+        let reply = stage_now(
+            &server,
+            &id,
+            &format!("\"decision\":\"approve\",\"{flag}\":{value}"),
+        );
+        assert_eq!(reply.status, 400, "--{flag}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(
+            message.starts_with("spec: ")
+                && message.contains(&format!("--{flag}"))
+                && message.contains("an interpretation"),
+            "--{flag}: {message}"
+        );
+        assert_eq!(row(&s.home, &id), unstaged, "--{flag}: nothing stored");
+    }
+    assert_eq!(seqs(&s.home, &s.a), stored, "no event");
+
+    let reply = stage_now(&server, &id, "\"decision\":\"approve\"");
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let document = reply.json();
+    assert_eq!(document.as_object().unwrap().len(), 46, "{document}");
+    assert_eq!(document["kind"], json!("interpretation"));
+    assert_eq!(
+        document["staged"],
+        json!({"decision": "approve", "option": null, "answer": null, "canon": null,
+            "note": null, "span_hash": span})
+    );
+    assert_eq!(
+        document["interpretation"],
+        json!({"decision": "DEC-0023", "how": "Rest is any speed under 40 % of walking.",
+            "why": "DEC-0023 says rest; the rule names no speed."})
+    );
+    let at = document["staged_at"]
+        .as_str()
+        .expect("staged_at")
+        .to_owned();
+    assert!(
+        reply.text().contains(&format!(
+            "\"staged_at\":\"{at}\",\"interpretation\":{{\"decision\":\"DEC-0023\","
+        )),
+        "{}",
+        reply.text()
+    );
+    assert_eq!(
+        row(&s.home, &id),
+        format!(
+            "open|{{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
+             \"note\":null,\"span_hash\":\"{span}\"}}|{at}|{at}"
+        )
+    );
+    // The review served after: the same stage.
+    assert_eq!(read(&server, &id)["staged"]["span_hash"], json!(span));
+    drop(server);
+    assert_eq!(repository(&s, &s.a), before, "the repository untouched");
 }

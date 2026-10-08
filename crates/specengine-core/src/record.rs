@@ -46,6 +46,10 @@ pub const CANON_MAX_BYTES: usize = 512;
 /// The status every record made from the queue is written with.
 pub const ACCEPTED: &str = "accepted";
 
+/// The status of a decision turned down (`spec check` takes it beside
+/// [`ACCEPTED`] and `superseded-by X`).
+pub const REJECTED: &str = "rejected";
+
 /// The cut title's last character.
 const ELLIPSIS: char = '…';
 

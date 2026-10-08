@@ -3,11 +3,12 @@
 //! rows, the backup's rows; `docs/canon/decision-staging.md` "The stage",
 //! "Queue"):
 //!
-//! - AC-02: a fresh queue stands at `user_version` 5, `proposals` holding
-//!   the 43 columns of `PROPOSAL_COLUMNS` (`PRAGMA table_info`), `staged`,
-//!   `staged_at` last; a schema-4 database is read unstepped (43 columns,
-//!   the two `None`) and opens as 5, its rows kept, both `NULL`; schema 6
-//!   is refused, left alone. M: the columns without the version bump.
+//! - AC-02: a fresh queue stands at `user_version` 6
+//!   (docs/features/kind-interpretation.md adds `interpretation` last),
+//!   `proposals` holding the 44 columns of `PROPOSAL_COLUMNS` (`PRAGMA
+//!   table_info`), `staged`, `staged_at` before it; a schema-4 database is
+//!   read unstepped (44 columns, the three `None`) and opens as 6, its rows
+//!   kept, all `NULL`; schema 7 is refused, left alone. M: the columns without the version bump.
 //! - The ops: `stage_from` sets both (`updated_at` = `now`) and logs one
 //!   `proposal.staged` `{id, staged, staged_at}` (the payload's bytes), a
 //!   second replaces; `unstage_from` clears both and logs one
@@ -20,7 +21,7 @@
 //!   another state, one column `NULL` alone, another shape, a flag of a
 //!   kind that takes none: a corrupt row, named (`get`, `list` fail,
 //!   `list_readable` skips it); `dump`, `restore`, `dump` byte-identical
-//!   with stages; `stored_rows` reads tasks at schema 4 and 5. M: export
+//!   with stages; `stored_rows` reads tasks at schema 4, 5 and 6. M: export
 //!   drops `staged`; `stored_rows` keeps `== 4`.
 
 mod common;
@@ -73,6 +74,7 @@ fn update(target: &str) -> NewProposal {
         author: Author::human(),
         diagnostics: Vec::new(),
         new_ids: Vec::new(),
+        interpretation: None,
     }
 }
 
@@ -91,6 +93,7 @@ fn new_file(path: &str, id: &str) -> NewProposal {
         author: author(),
         diagnostics: Vec::new(),
         new_ids: vec![id.to_owned()],
+        interpretation: None,
     }
 }
 
@@ -247,16 +250,20 @@ fn three(db: &Path) -> SqliteQueue {
 
 // -------------------------------------------------------------- schema
 
-/// AC-02: schema 5, its 43 columns; a schema-4 database read unstepped,
-/// then opened as 5 with its rows and both `NULL`; schema 6 refused.
+/// AC-02: schema 6, its 44 columns; a schema-4 database read unstepped,
+/// then opened as 6 with its rows and all three `NULL`; schema 7 refused.
 #[test]
-fn ac02_schema_5_holds_43_columns_and_a_schema_4_database_opens_as_5() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 5);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 43);
-    assert_eq!(PROPOSAL_COLUMNS[40..], ["task_id", "staged", "staged_at"]);
+fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
+    assert_eq!(QUEUE_SCHEMA_VERSION, 6);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
+    assert_eq!(
+        PROPOSAL_COLUMNS[40..],
+        ["task_id", "staged", "staged_at", "interpretation"]
+    );
     assert_eq!(proposal_columns(4), Some(&PROPOSAL_COLUMNS[..41]));
-    assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(6), None);
+    assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
+    assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(7), None);
 
     let scratch = Scratch::new("qst-schema");
     let db = scratch.db("q");
@@ -275,7 +282,7 @@ fn ac02_schema_5_holds_43_columns_and_a_schema_4_database_opens_as_5() {
         .expect("a task");
     let made = queue.stored_rows().expect("rows");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
     assert_eq!(
         sqlite3(
             &db,
@@ -286,14 +293,14 @@ fn ac02_schema_5_holds_43_columns_and_a_schema_4_database_opens_as_5() {
             .map(|name| format!("{name} TEXT"))
             .collect::<Vec<_>>()
             .join(","),
-        "`PRAGMA table_info` is PROPOSAL_COLUMNS, `staged`, `staged_at` TEXT last"
+        "`PRAGMA table_info` is PROPOSAL_COLUMNS, `staged`, `staged_at`, `interpretation` TEXT last"
     );
 
     // The database as task-package's build left it: schema 4, 41 columns.
     sqlite3(
         &db,
-        "ALTER TABLE proposals DROP COLUMN staged_at; ALTER TABLE proposals DROP COLUMN staged; \
-         PRAGMA user_version = 4;",
+        "ALTER TABLE proposals DROP COLUMN interpretation; ALTER TABLE proposals DROP COLUMN \
+         staged_at; ALTER TABLE proposals DROP COLUMN staged; PRAGMA user_version = 4;",
     );
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
@@ -309,12 +316,12 @@ fn ac02_schema_5_holds_43_columns_and_a_schema_4_database_opens_as_5() {
         "4",
         "a read steps nothing"
     );
-    assert_eq!(unstepped, made, "read at 43 columns, the two None");
+    assert_eq!(unstepped, made, "read at 44 columns, the three None");
     assert_eq!(unstepped.tasks.len(), 1, "its task read at schema 4");
     assert_eq!(unstepped.tasks[0].id(), Some(task.id.as_str()));
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
     assert_eq!(
         sqlite3(
             &db,
@@ -325,7 +332,8 @@ fn ac02_schema_5_holds_43_columns_and_a_schema_4_database_opens_as_5() {
     assert_eq!(
         sqlite3(
             &db,
-            "SELECT count(*) FROM proposals WHERE staged IS NULL AND staged_at IS NULL;"
+            "SELECT count(*) FROM proposals WHERE staged IS NULL AND staged_at IS NULL AND \
+             interpretation IS NULL;"
         ),
         "3"
     );
@@ -337,21 +345,21 @@ fn ac02_schema_5_holds_43_columns_and_a_schema_4_database_opens_as_5() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6", "stepped once");
 
-    // Schema 6: refused by a read and an open, left alone.
-    sqlite3(&db, "PRAGMA user_version = 6;");
+    // Schema 7: refused by a read and an open, left alone.
+    sqlite3(&db, "PRAGMA user_version = 7;");
     let dumped = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(QueueError::SchemaTooNew { found: 6 }) => {}
-            other => panic!("expected SchemaTooNew 6, got {other:?}"),
+            Err(QueueError::SchemaTooNew { found: 7 }) => {}
+            other => panic!("expected SchemaTooNew 7, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), dumped);
 }
 
@@ -980,7 +988,8 @@ fn ac12_dump_restore_dump_keeps_the_stages_byte_for_byte() {
         3,
         "the three stages read raw"
     );
-    // Each proposal line of the dump ends with its stage's two columns.
+    // Each proposal line of the dump ends with its stage's two columns and
+    // a `NULL` `interpretation`.
     let lines: Vec<&str> = dump
         .lines()
         .filter(|line| line.starts_with("proposals\t"))
@@ -991,7 +1000,10 @@ fn ac12_dump_restore_dump_keeps_the_stages_byte_for_byte() {
         reject_stage("asked before"),
         approve_stage(Some(1), None, None),
     ]) {
-        let tail = format!(",{},\"{T1}\"]", serde_json::Value::String(stage.to_json()));
+        let tail = format!(
+            ",{},\"{T1}\",null]",
+            serde_json::Value::String(stage.to_json())
+        );
         assert!(line.ends_with(&tail), "{line} ends with {tail}");
     }
 
@@ -1009,11 +1021,11 @@ fn ac12_dump_restore_dump_keeps_the_stages_byte_for_byte() {
     );
 }
 
-/// AC-12: `stored_rows` reads `tasks`, `runs` at schema 5 as at 4 (`>=`,
-/// not `==`): a schema-5 queue's task is exported. M: `stored_rows` keeps
+/// AC-12: `stored_rows` reads `tasks`, `runs` at schema 6 as at 4 (`>=`,
+/// not `==`): a schema-6 queue's task is exported. M: `stored_rows` keeps
 /// `== 4`.
 #[test]
-fn ac12_stored_rows_reads_the_tasks_of_a_schema_5_queue() {
+fn ac12_stored_rows_reads_the_tasks_of_a_schema_6_queue() {
     let scratch = Scratch::new("qst-tasks");
     let db = scratch.db("q");
     let mut queue = three(&db);
@@ -1030,8 +1042,8 @@ fn ac12_stored_rows_reads_the_tasks_of_a_schema_5_queue() {
         )
         .expect("a task");
     let state: StoredQueue = queue.stored_rows().expect("rows");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5");
-    assert_eq!(state.tasks.len(), 1, "the schema-5 queue's task: {state:?}");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(state.tasks.len(), 1, "the schema-6 queue's task: {state:?}");
     assert_eq!(state.tasks[0].id(), Some(task.id.as_str()));
     let mut fresh = SqliteQueue::open(scratch.db("fresh"), PROJECT).expect("open");
     fresh.restore(&state).expect("restore");

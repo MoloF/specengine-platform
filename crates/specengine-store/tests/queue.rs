@@ -64,6 +64,7 @@ fn new_proposal(target: &str, common_dir: &str) -> NewProposal {
             message: "no such ID".to_owned(),
         }],
         new_ids: Vec::new(),
+        interpretation: None,
     }
 }
 

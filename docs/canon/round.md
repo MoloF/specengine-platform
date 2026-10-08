@@ -16,7 +16,7 @@ ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end 
 
 - ``<n> more item(s) not on this sheet: spec round new --limit <m>`` (`m` the total, at most 200), first;
 - ``<n> held item(s) not on this sheet (approved: an apply in progress or stopped): <IDs>; spec approve <ID> completes each``;
-- ``<n> open change proposal(s) not on this sheet: <IDs>; spec inbox lists them`` (`update`, `create`);
+- ``<n> open change proposal(s) not on this sheet: <IDs>; spec inbox lists them`` (applying kinds);
 - ``<n> item(s) of another repository of the project `<slug>` not on this sheet: <IDs>; run `spec round new` there`` (open or held);
 - ``<n> item(s) of a repository that no longer exists not on this sheet: <IDs>; spec reject <ID> --reason ... takes one out``;
 - a corrupt row as `spec inbox` words it + `; not listed` (a task's: `; not counted among the waiting tasks`).

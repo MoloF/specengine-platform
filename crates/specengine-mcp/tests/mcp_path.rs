@@ -341,20 +341,22 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     drop(session.finish());
     // docs/features/task-package.md re-pins them: its tasks line (138
     // bytes with its LF) under "Queue"; without it, the text this slice
-    // pinned (1 740 bytes, `4b08078c…`).
+    // pinned (1 740 bytes, `4b08078c…`), 1 751 bytes since
+    // docs/features/kind-interpretation.md names `interpretation` (+15)
+    // and trims a tail (-4).
     let tasks_line = "- get_task, claim_task, submit_plan, report_run, complete_task = spec task \
                       show|claim|plan|report|complete; the three above take task_id.\n";
     assert_eq!(tasks_line.len(), 138);
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(tasks_line).count(), 1);
     let before = specengine_mcp::INSTRUCTIONS.replacen(tasks_line, "", 1);
-    assert_eq!(before.len(), 1740);
+    assert_eq!(before.len(), 1751);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "4b08078cc4c40004f3dab85d8f1e2bc856c175424177514088a91a69ba7d1c0e"
+        "d6fb71de8637207236bd66ea568655b0b0a2f97b1184a214dba5294754875ee1"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1878);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1889);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "ddfb9e41d87cdf36799384c35c4da847913ca4f28746b14babc1f76d283bbc7d"
+        "dfcb79b2882d639076986984f7a02ac29ce3facb05b5eaff9b3823af492349ab"
     );
 }

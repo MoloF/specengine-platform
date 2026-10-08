@@ -38,13 +38,14 @@ use specengine_cli::{
 };
 use specengine_store::{PROPOSAL_COLUMNS, ProposalQueue as _, ProposalStatus, SqliteQueue};
 
-/// The eleven columns of queue schema 2, the five of schema 3 and the
-/// `task_id` of schema 4, as the dump writes an unbound update's.
+/// The eleven columns of queue schema 2, the five of schema 3, the
+/// `task_id` of schema 4, the stage of schema 5 and the `interpretation` of
+/// schema 6, as the dump writes an unbound update's.
 const NULL_TAIL: &str = ",\"target_ids\":null,\"severity\":null,\"gap_type\":null,\
 \"summary\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":null,\
 \"options\":null,\"recommendation\":null,\"distinct_from\":null,\"linked\":null,\
 \"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\
-\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null}}";
+\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null}}";
 
 fn env_at(home: &Path, cwd: &Path) -> Env {
     Env {
@@ -228,8 +229,8 @@ fn assert_columns(line: &str, columns: &[&str]) {
 
 // ------------------------------------------------------------------ AC-10
 
-/// AC-10: every kind exported (header format 2, `queue_schema` 5 since
-/// docs/features/decision-staging.md, no task, each row the 43 columns in
+/// AC-10: every kind exported (header format 2, `queue_schema` 6 since
+/// docs/features/kind-interpretation.md, no task, each row the 44 columns in
 /// table order, a question's and a discrepancy's fields as stored, an
 /// undecided one's record columns, an unbound one's `task_id` and an
 /// unstaged one's `staged`, `staged_at` `null`), imported into a fresh
@@ -246,10 +247,10 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":2,\"queue_schema\":5,\"project\":\"lantern-keep\",\"proposals\":5,\
+        "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":5,\
          \"tasks\":0,\"runs\":0,\"events\":6}"
     );
-    assert_eq!(PROPOSAL_COLUMNS.len(), 43);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
     for row in &rows[1..6] {
         assert_columns(row, &PROPOSAL_COLUMNS);
         let value: Value = serde_json::from_str(row).unwrap();
@@ -303,9 +304,9 @@ fn ac10_every_kind_round_trips_at_schema_4() {
 }
 
 /// AC-10: a format-1 `queue_schema` 1 dump (its 24 columns) imports into
-/// a fresh queue, the nineteen later columns `NULL`; its export is a
-/// format-2 `queue_schema` 5 dump, equal to the current export of the same
-/// queue; a schema-1 row carrying a later column, or a schema-5 row
+/// a fresh queue, the twenty later columns `NULL`; its export is a
+/// format-2 `queue_schema` 6 dump, equal to the current export of the same
+/// queue; a schema-1 row carrying a later column, or a schema-6 row
 /// without them, is refused naming its line. M: schema 1 refused; a
 /// column left out.
 #[test]
@@ -329,7 +330,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":5,")
+        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":6,")
             && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,"),
         "{}",
         v3_lines[0]
@@ -337,7 +338,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":2,\"queue_schema\":5,",
+            "\"format\":2,\"queue_schema\":6,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
@@ -354,16 +355,16 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let fresh = pair.scratch.home("fresh");
     let outcome = import_ok(&fresh, &pair.main, &v1_file);
     assert_eq!((outcome.proposals, outcome.events), (2, 3));
-    assert_eq!(dump_of(&fresh), dump_of(&pair.home), "the nineteen NULL");
+    assert_eq!(dump_of(&fresh), dump_of(&pair.home), "the twenty NULL");
     let again = export_ok(&pair, &fresh, &dumps.join("again.jsonl"));
-    assert_eq!(again, v3, "re-exported as format 2, queue_schema 5");
+    assert_eq!(again, v3, "re-exported as format 2, queue_schema 6");
 
-    // A schema-1 row with the later columns; a schema-5 row without them.
+    // A schema-1 row with the later columns; a schema-6 row without them.
     let mut mixed = v1_lines.clone();
     mixed[2] = v3_lines[2].clone();
     let mut short = v3_lines.clone();
     short[2] = v1_lines[2].clone();
-    for (name, bad) in [("v1 with 43", mixed), ("v5 with 24", short)] {
+    for (name, bad) in [("v1 with 44", mixed), ("v6 with 24", short)] {
         let file = dumps.join(format!("{}.jsonl", name.replace(' ', "-")));
         fs::write(&file, format!("{}\n", bad.join("\n"))).unwrap();
         let home = pair
@@ -378,12 +379,12 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     }
 }
 
-/// AC-10: a database still at queue schema 1 (a real queue's nineteen
+/// AC-10: a database still at queue schema 1 (a real queue's twenty
 /// later columns and its `tasks` and `runs` tables dropped, its
-/// `user_version` 1) exports as format 2, `queue_schema` 5 without
-/// stepping (the nineteen `null`, the bytes of the current export); the
-/// first queue command that opens it (`spec inbox`) steps it to 5 in
-/// place: its rows kept, the nineteen `NULL`, both tables made.
+/// `user_version` 1) exports as format 2, `queue_schema` 6 without
+/// stepping (the twenty `null`, the bytes of the current export); the
+/// first queue command that opens it (`spec inbox`) steps it to 6 in
+/// place: its rows kept, the twenty `NULL`, both tables made.
 #[test]
 fn ac10_a_version_1_database_is_stepped_when_opened() {
     let pair = Pair::new("ai-ac10-db", "spec-a");
@@ -417,7 +418,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     let exported = export_ok(&pair, &pair.home, &dumps.join("from-v1.jsonl"));
     assert_eq!(
         exported, v3,
-        "a version-1 DB exports as format 2, queue_schema 5"
+        "a version-1 DB exports as format 2, queue_schema 6"
     );
     assert_eq!(
         sql(&db, "PRAGMA user_version;"),
@@ -427,12 +428,12 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
 
     let inbox = pair.inbox(&pair.main, false).expect("inbox");
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "5");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "6");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),
         PROPOSAL_COLUMNS,
-        "steps 2 to 5 append the nineteen in order"
+        "steps 2 to 6 append the twenty in order"
     );
     assert_eq!(
         sql(
@@ -442,5 +443,5 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
         "runs\ntasks",
         "step 4 makes both tables"
     );
-    assert_eq!(dump_of(&pair.home), before, "rows kept, the nineteen NULL");
+    assert_eq!(dump_of(&pair.home), before, "rows kept, the twenty NULL");
 }

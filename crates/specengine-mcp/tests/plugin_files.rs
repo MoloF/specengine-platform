@@ -123,6 +123,13 @@ const PINS: &[(&str, &str)] = &[
         "0.3.0",
         "acb1bbdb64d85643a9b11271d8010ed10dc884fcabf8bf63a49c9fb119b9d023",
     ),
+    // docs/features/kind-interpretation.md "Description and interactions",
+    // "Plugin" (0.3.0 -> 0.4.0, MINOR): `propose-spec-change` teaches the
+    // kind `interpretation`, `spec-author` names it.
+    (
+        "0.4.0",
+        "d795e5d8aa66c003158d935216f2f050776154d4af0944399ba165e34a7faa54",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
@@ -1203,9 +1210,9 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of plugin-roles: 0.3.0, after 0.2.0.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.3.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.2.0");
+    // The pin of kind-interpretation: 0.4.0, after plugin-roles' 0.3.0.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.4.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.3.0");
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

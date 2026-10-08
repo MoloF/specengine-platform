@@ -160,11 +160,10 @@ impl Stage {
     }
 
     /// Why a proposal of `kind` (`new_file`: a create's new file) cannot
-    /// hold this stage: a decision flag of a kind that takes none (an
-    /// `update` or a `create` takes none; a question no `--option`; a
-    /// discrepancy no `--answer`), a span hash on a kind that has no span
-    /// (a deciding kind, a create's new file), a blank reason; `None`: it
-    /// can.
+    /// hold this stage: a decision flag of a kind that takes none (a kind
+    /// that applies takes none; a question no `--option`; a discrepancy no
+    /// `--answer`), a span hash on a kind that has no span (a deciding
+    /// kind, a create's new file), a blank reason; `None`: it can.
     pub fn problem(&self, kind: ProposalKind, new_file: bool) -> Option<String> {
         match self {
             Self::Reject { reason } => reason
@@ -178,32 +177,40 @@ impl Stage {
                 span_hash,
                 ..
             } => {
-                let flag = match kind {
-                    ProposalKind::Update | ProposalKind::Create => {
-                        if option.is_some() {
-                            Some("option")
-                        } else if answer.is_some() {
-                            Some("answer")
-                        } else if canon.is_some() {
-                            Some("canon")
-                        } else {
-                            None
-                        }
+                // Keyed on what the kind does: one that applies takes no
+                // decision flag; a deciding kind is judged by name, every
+                // kind listed, so a new one must be judged here.
+                let flag = if kind.applies() {
+                    if option.is_some() {
+                        Some("option")
+                    } else if answer.is_some() {
+                        Some("answer")
+                    } else if canon.is_some() {
+                        Some("canon")
+                    } else {
+                        None
                     }
-                    ProposalKind::Question => option.is_some().then_some("option"),
-                    ProposalKind::Discrepancy => answer.is_some().then_some("answer"),
+                } else {
+                    match kind {
+                        ProposalKind::Question => option.is_some().then_some("option"),
+                        ProposalKind::Discrepancy => answer.is_some().then_some("answer"),
+                        // Judged above: they apply.
+                        ProposalKind::Update
+                        | ProposalKind::Create
+                        | ProposalKind::Interpretation => None,
+                    }
                 };
                 if let Some(flag) = flag {
                     return Some(format!(
-                        "a staged `{flag}` on a {}, which takes none",
-                        kind.as_str()
+                        "a staged `{flag}` on {}, which takes none",
+                        kind.with_article()
                     ));
                 }
                 let spanless = kind.decides() || new_file;
                 (spanless && span_hash.is_some()).then(|| {
                     format!(
-                        "a staged `span_hash` on a {} that has no target span",
-                        kind.as_str()
+                        "a staged `span_hash` on {} that has no target span",
+                        kind.with_article()
                     )
                 })
             }

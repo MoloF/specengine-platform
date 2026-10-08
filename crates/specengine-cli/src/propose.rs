@@ -26,7 +26,10 @@
 //!
 //! A bare ID of a `scope = "feature"` prefix found in a feature document is
 //! stored as `slug/ID`, the form a later apply resolves alike. The answer
-//! is the proposal's review document. `--task T` binds it to a task of this
+//! is the proposal's review document; a target that is, encloses or lies in
+//! a live accepted decision's `canon:` section is noted, naming `spec
+//! propose interpretation` (task spec `kind-interpretation`, W7), never
+//! refused. `--task T` binds it to a task of this
 //! repository (canon `tasks`, "Task-bound proposals"): checked once the
 //! place is bound, and again inside the inserting transaction (exit 1).
 
@@ -52,6 +55,7 @@ use specengine_store::{
 };
 
 use crate::corpus::indexed;
+use crate::interpret::canon_note;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{
     ProposalDocument, ProposalOutcome, QueueCommand, briefed, checked_now, escaped_error,
@@ -226,7 +230,18 @@ fn run_propose(
         }
         Err(error) => return Err(queue_cannot(error)),
     };
-    let document = previewed(env, &request.git, &context, &created, &mut messages);
+    let mut document = previewed(env, &request.git, &context, &created, &mut messages);
+    // An update in an accepted decision's `canon:` section: a note, never
+    // a refusal (task spec `kind-interpretation`, W7).
+    if let Some(note) = canon_note(
+        &context.project,
+        &input,
+        &created.target_id,
+        &created.target_path,
+    ) {
+        messages.push(Message::Note(note.clone()));
+        document.notes.push(note);
+    }
     Ok(ProposalOutcome::done(
         QueueCommand::Propose,
         document,
@@ -289,6 +304,7 @@ impl CheckedUpdate {
             author,
             diagnostics: self.diagnostics.clone(),
             new_ids: Vec::new(),
+            interpretation: None,
         }
     }
 }
@@ -588,6 +604,42 @@ pub(crate) fn checked_span(
     messages: &mut Vec<Message>,
     rule: SpanRule,
 ) -> Result<Result<CheckedUpdate, String>, CliError> {
+    let located = match located(project, input, written, reference, base.is_some())? {
+        Ok(located) => located,
+        Err(reason) => return Ok(Err(reason)),
+    };
+    let Some(base) = base else {
+        return Ok(Err(exists_refusal(written)));
+    };
+    checked_located(project, located, base, text, today, messages, rule)
+}
+
+/// Step 1's target as read now ([`located`]): its holder's path and bytes,
+/// their fresh parse, the node's position in it and its canonical ID.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Located {
+    /// Root-relative.
+    pub path: String,
+    pub bytes: Vec<u8>,
+    pub parsed: ParsedFile,
+    pub ord: usize,
+    /// Canonical: `ID`, `slug/ID`, or an id-less document's path.
+    pub target_id: String,
+}
+
+/// Step 1 over the index this call refreshed (`input`), `reference` from
+/// [`written_reference`]: the target resolved to one updatable node of a
+/// file read and parsed now (a path: its file's document). `based`: a base
+/// is given; without one, a target that resolves is refused as existing
+/// (`` `<target>` exists ``, a create's), before its file is read.
+/// `Ok(Err)`: the refusal.
+pub(crate) fn located(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    written: &str,
+    reference: Option<Reference>,
+    based: bool,
+) -> Result<Result<Located, String>, CliError> {
     let scheme = &project.config.scheme;
     let resolver = Resolver::new(input, scheme, &project.config.paths);
     // The holder, and what names the node in it: an ID, else the document.
@@ -603,9 +655,9 @@ pub(crate) fn checked_span(
         },
         Err(reason) => return Ok(Err(reason)),
     };
-    let Some(base) = base else {
+    if !based {
         return Ok(Err(exists_refusal(written)));
-    };
+    }
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let bytes = match tree.read(&path) {
         Ok(bytes) => bytes,
@@ -652,6 +704,34 @@ pub(crate) fn checked_span(
     if let Some(refusal) = update_refusal(&parsed, ord, scheme) {
         return Ok(Err(format!("`{target_id}`: {refusal}")));
     }
+    Ok(Ok(Located {
+        path,
+        bytes,
+        parsed,
+        ord,
+        target_id,
+    }))
+}
+
+/// Steps 2–4 on the target step 1 found ([`located`]), under `rule`, as
+/// [`checked_span`] runs them. `Ok(Err)`: the refusal.
+pub(crate) fn checked_located(
+    project: &ProjectRoot,
+    located: Located,
+    base: &str,
+    text: &str,
+    today: &str,
+    messages: &mut Vec<Message>,
+    rule: SpanRule,
+) -> Result<Result<CheckedUpdate, String>, CliError> {
+    let scheme = &project.config.scheme;
+    let Located {
+        path,
+        bytes,
+        parsed,
+        ord,
+        target_id,
+    } = located;
 
     // 2. The base.
     let node = &parsed.nodes[ord];
@@ -715,6 +795,7 @@ pub(crate) fn checked_span(
     }
 
     // 4. Validation: never a refusal.
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let root = &project.root;
     let config = NamedBytes::read(CONFIG_FILE, &root.join(CONFIG_FILE));
     let baseline = default_baseline(root);
@@ -800,7 +881,7 @@ fn qualified(scheme: &IdScheme, scope: Option<&str>, id: &str) -> String {
 /// The stored form of the target `id` held in `path`: `scope/ID` as
 /// written; a bare feature-scoped ID in a feature document `slug/ID`; else
 /// the ID.
-fn canonical_id(
+pub(crate) fn canonical_id(
     resolver: &Resolver<'_>,
     scheme: &IdScheme,
     path: &str,

@@ -50,6 +50,10 @@ use crate::{DOCUMENT_EXTENSION, Paths, WalkScope};
 /// document) and of a `supersedes:` item.
 const SUPERSEDES: &str = "supersedes";
 
+/// The link type of a document's `canon:` (path form here, reference form
+/// as its front-matter key): the section a decision governs.
+pub const CANON_LINK: &str = "canon";
+
 /// A node of the corpus: its file (an index into [`SpecGraph::paths`], path
 /// order) and its position in that file's parse (0: the document). Ordered
 /// by (path, position).
@@ -740,7 +744,7 @@ impl<'a> SpecGraph<'a> {
             {
                 let (end, note) = self.canon_path(target);
                 edges.push(Edge {
-                    link_type: "canon".to_owned(),
+                    link_type: CANON_LINK.to_owned(),
                     origin: LinkOrigin::Frontmatter,
                     file,
                     holder: at,

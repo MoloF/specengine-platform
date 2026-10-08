@@ -40,13 +40,13 @@ use common::*;
 use git::Sandbox;
 use serde_json::{Value, json};
 use specengine_cli::{
-    CREATE_KIND, CreateRequest, GitEnv, Globals, InboxRequest, Outcome, ProposedText, ShowRequest,
-    UPDATE_KIND, inbox, show,
+    CREATE_KIND, CreateRequest, GitEnv, Globals, INTERPRETATION_KIND, InboxRequest, Outcome,
+    ProposedText, ShowRequest, UPDATE_KIND, inbox, show,
 };
 
 /// "Data"'s `propose_change` line of the instructions, with its LF.
-const CHANGE_LINE: &str = "- propose_change = spec propose update|create: a node's new text \
-against its span_hash; create: new ID sections in it, or a new file (base null).\n";
+const CHANGE_LINE: &str = "- propose_change = spec propose update|create|interpretation: a node's \
+new text against its span_hash; create: new ID sections in it, or a new file (base null).\n";
 
 /// "Data"'s new file.
 const R13: &str = "docs/records/R/R-13.md";
@@ -342,7 +342,11 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
     let change = tool(&list, "propose_change");
     let schema = &change["inputSchema"];
     let kind = &schema["properties"]["kind"];
-    assert_eq!(kind["enum"], json!([UPDATE_KIND, CREATE_KIND]), "{kind}");
+    assert_eq!(
+        kind["enum"],
+        json!([UPDATE_KIND, CREATE_KIND, INTERPRETATION_KIND]),
+        "{kind}"
+    );
     let base = &schema["properties"]["base"];
     let nullable = base["type"]
         .as_array()
@@ -366,15 +370,17 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
     drop(session.finish());
 }
 
-/// AC-17: `INSTRUCTIONS` hold "Data"'s `propose_change` line (146 bytes
-/// with its LF) and are 1 878 bytes (1 740 and docs/features/task-package.md's
-/// 138-byte tasks line); the default build sends them as is.
+/// AC-17: `INSTRUCTIONS` hold "Data"'s `propose_change` line (161 bytes
+/// with its LF since docs/features/kind-interpretation.md names
+/// `interpretation`) and are 1 889 bytes (1 751 and
+/// docs/features/task-package.md's 138-byte tasks line); the default build
+/// sends them as is.
 #[test]
 #[cfg(not(feature = "probes"))]
 fn ac17_the_instructions_name_create_within_their_budget() {
-    assert_eq!(CHANGE_LINE.len(), 146);
+    assert_eq!(CHANGE_LINE.len(), 161);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1878);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1889);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -388,7 +394,7 @@ fn ac17_the_instructions_name_create_within_their_budget() {
 /// `INSTRUCTIONS` and the probe paragraph of "Data" (a blank line, 157
 /// bytes), 1 897 bytes as of this slice; 2 035 of 2 048 since
 /// docs/features/task-package.md ("Description and interactions") adds
-/// its 138-byte tasks line.
+/// its 138-byte tasks line; 2 046 since docs/features/kind-interpretation.md.
 #[test]
 #[cfg(feature = "probes")]
 fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
@@ -400,7 +406,7 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     let discover = result(&session.request("server/discover", json!({}))).clone();
     let sent = discover["instructions"].as_str().expect("instructions");
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
-    assert_eq!(sent.len(), 2035);
+    assert_eq!(sent.len(), 2046);
     assert!(sent.len() <= 2048);
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());

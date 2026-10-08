@@ -65,6 +65,7 @@ use crate::apply::{
     ApproveFlags, ApproveRequest, Consent, Made, complete, failed, made_anyway, noted,
     recorded_already, verify,
 };
+use crate::interpret::canon_target;
 use crate::location::open_index;
 use crate::preflight::{
     Placed, StepFailure, adds_file, completes_when, completing, place_step, place_unchanged,
@@ -705,10 +706,20 @@ pub(crate) fn approve_record(
                 )));
             }
         }
-        None => messages.push(Message::Note(format!(
-            "{record_id} names {canon} in `canon:`, its text unchanged: `spec propose update` \
-             changes it"
-        ))),
+        None => {
+            // The rule the record governs: its `canon:` resolved in the index
+            // updated now, else as written (task spec `kind-interpretation`).
+            let target = index
+                .index
+                .indexed_input()
+                .ok()
+                .and_then(|input| canon_target(&recorded, &input, &path))
+                .unwrap_or_else(|| canon.clone());
+            messages.push(Message::Note(format!(
+                "{record_id} names {canon} in `canon:`, its text unchanged: `spec propose \
+                 interpretation {target} --decision {record_id}` carries it there"
+            )));
+        }
     }
     let document = with_diff(&applied, &request.git, &context.data_dir);
     Ok(ProposalOutcome::done(COMMAND, document, messages))

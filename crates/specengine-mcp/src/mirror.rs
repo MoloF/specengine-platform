@@ -449,7 +449,21 @@ pub(crate) struct ReviewDocument {
     pub staged: Option<StagedShape>,
     /// When it was staged.
     pub staged_at: Option<String>,
+    /// An interpretation's decision, how and why; `null` on any other kind.
+    pub interpretation: Option<InterpretationShape>,
     pub notes: Vec<String>,
+}
+
+/// An interpretation (task spec `kind-interpretation`, "Data"): the
+/// accepted decision it interprets, how it was applied and why
+/// interpretation was needed.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct InterpretationShape {
+    /// The decision's ID.
+    pub decision: String,
+    pub how: String,
+    pub why: String,
 }
 
 /// A staged choice (`docs/canon/decision-staging.md` "The stage"): one of

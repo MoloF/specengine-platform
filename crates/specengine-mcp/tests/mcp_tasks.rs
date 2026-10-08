@@ -239,7 +239,7 @@ fn ac14_the_task_tools_and_their_schemas() {
     assert_eq!(TASKS_LINE.len(), 138);
     assert!(TASKS_LINE.len() < 140);
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(TASKS_LINE).count(), 1);
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1878);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1889);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();

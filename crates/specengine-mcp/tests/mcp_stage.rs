@@ -316,6 +316,15 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
             }
             let inputs = property_names(&tool["inputSchema"]);
             for property in ["staged", "staged_at", "decision", "consent"] {
+                // docs/features/kind-interpretation.md: `propose_change`'s
+                // `decision` names the accepted decision an interpretation
+                // carries (a string ID or null), never a staged choice.
+                if name == "propose_change" && property == "decision" {
+                    let decision = &tool["inputSchema"]["properties"]["decision"];
+                    assert_eq!(decision["type"], json!(["string", "null"]), "{decision}");
+                    assert!(decision.get("enum").is_none(), "{decision}");
+                    continue;
+                }
                 assert!(
                     !inputs.iter().any(|input| input == property),
                     "{era:?}: {name} takes `{property}`: {inputs:?}"

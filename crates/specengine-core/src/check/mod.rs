@@ -85,7 +85,7 @@ pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, re
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
 pub use resolve::{Resolution, Resolver};
 pub use spec_graph::{
-    Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
+    CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
 };
 pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
 pub use working_set::worst_w;

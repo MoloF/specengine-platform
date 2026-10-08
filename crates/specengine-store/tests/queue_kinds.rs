@@ -70,6 +70,7 @@ fn new_file(path: &str, id: Option<&str>, others: &[&str], common_dir: &str) -> 
         author: Author::new(Some("writer".to_owned()), None, None).expect("an agent"),
         diagnostics: Vec::new(),
         new_ids,
+        interpretation: None,
     }
 }
 
@@ -90,6 +91,7 @@ fn sections(target: &str, new_ids: &[&str]) -> NewProposal {
         author: Author::human(),
         diagnostics: Vec::new(),
         new_ids: new_ids.iter().map(|id| (*id).to_owned()).collect(),
+        interpretation: None,
     }
 }
 
@@ -609,16 +611,16 @@ fn a_corrupt_create_row_names_its_column() {
 // ------------------------------------------------------------- schema
 
 /// AC-14, the store half: creates change no schema: `QUEUE_SCHEMA_VERSION`
-/// as the queue stands (5 since docs/features/decision-staging.md, which
-/// adds `staged`, `staged_at`, after task-package's 4 and its `task_id`),
-/// `user_version` 5 after a create, `proposals` 43 columns,
+/// as the queue stands (6 since docs/features/kind-interpretation.md, which
+/// adds `interpretation`, after decision-staging's 5 and its `staged`,
+/// `staged_at`), `user_version` 6 after a create, `proposals` 44 columns,
 /// the dump's header and column list as before; a create's row restores
 /// into a fresh queue and dumps the same (the name, cited by
 /// docs/features/proposal-kinds.md, kept). M: a column or a schema bump.
 #[test]
 fn ac14_creates_keep_schema_3_and_40_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 5);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 43);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 6);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);
     let scratch = Scratch::new("qk-schema");
     let db = scratch.db("q");
@@ -635,10 +637,10 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "5");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "43"
+        "44"
     );
     assert_eq!(
         sqlite3(

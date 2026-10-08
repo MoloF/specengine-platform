@@ -183,6 +183,16 @@ function StageDialog({
       )}
       <p className="dialog-text">{shown.summary ?? shown.target_id ?? shown.kind ?? id}</p>
       <p className="dialog-text dialog-effect">{wording.effect}</p>
+      {shown.interpretation !== null && (
+        // Whatever its kind: the key alone says the change carries a decision.
+        <p className="dialog-text">
+          It interprets decision{" "}
+          <span className="mono">
+            <bdi>{shownSlot(shown.interpretation.decision)}</bdi>
+          </span>
+          ; the card's Interpretation section says how and why.
+        </p>
+      )}
       {shown.staged_at !== null && (
         <p className="dialog-text">
           It replaces the choice staged <time dateTime={shown.staged_at}>{shown.staged_at}</time>.

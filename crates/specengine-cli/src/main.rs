@@ -36,11 +36,12 @@ use specengine_cli::{
     CreateRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
     GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals, GraphRequest,
     INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
-    IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText, QuestionRequest,
-    RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
-    SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
-    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
+    IntakeSeverity, IntakeSource, InterpretRequest, Outcome, ProposeRequest, ProposedText,
+    QuestionRequest, RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest,
+    RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES,
+    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -439,6 +440,45 @@ enum Propose {
         #[arg(long, value_name = "T")]
         task: Option<String>,
     },
+    /// Replace the text of node TARGET as `update` does, carrying the accepted decision REF into it: how the decision was applied and why interpretation was needed go with it into the commit.
+    Interpretation {
+        /// An ID, `slug/ID`, or a root-relative `.md` path (its document: the whole file).
+        #[arg(value_name = "TARGET")]
+        target: String,
+        /// The span hash the text was written against (`spec show`: `span b3:…`, JSON `span_hash`).
+        #[arg(long, value_name = "HASH")]
+        base: String,
+        /// The accepted decision it interprets: an ID, `slug/ID` or a root-relative `.md` path of a live `class: decision` document with `status: accepted`, or of a node inside one.
+        #[arg(long, value_name = "REF")]
+        decision: String,
+        /// How the decision was applied (not blank, at most 2048 bytes).
+        #[arg(long, value_name = "T")]
+        how: String,
+        /// Why interpretation was needed (not blank, at most 2048 bytes).
+        #[arg(long, value_name = "T")]
+        why: String,
+        /// The new text: a file, or `-` for stdin (UTF-8, at most 1 MiB).
+        #[arg(long = "text-file", value_name = "F")]
+        text_file: PathBuf,
+        /// Why; the commit's body when applied.
+        #[arg(long, value_name = "T")]
+        rationale: String,
+        /// The proposing agent's role (any of the three: an agent's proposal).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The proposing agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The proposing agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
+        #[arg(long)]
+        brief: bool,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
+    },
     /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question already answers it.
     Question {
         /// The nodes the question is about, each an ID, `slug/ID`, or a root-relative `.md` path (its document): 1 to 16.
@@ -766,6 +806,49 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 specengine_cli::propose_create_brief_with_task(env, globals, &request, task)?
             } else {
                 specengine_cli::propose_create_with_task(env, globals, &request, task)?
+            }))
+        }
+        Command::Propose {
+            kind:
+                Propose::Interpretation {
+                    target,
+                    base,
+                    decision,
+                    how,
+                    why,
+                    text_file,
+                    rationale,
+                    author_role,
+                    author_model,
+                    run,
+                    brief,
+                    task,
+                },
+        } => {
+            let text = if text_file.as_os_str() == "-" {
+                ProposedText::Given(read_stdin(TEXT_MAX_BYTES, "the text")?)
+            } else {
+                ProposedText::File(text_file)
+            };
+            let request = InterpretRequest {
+                target,
+                base,
+                decision,
+                how,
+                why,
+                text,
+                rationale,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            };
+            let task = task.as_deref();
+            Outcome::Proposal(Box::new(if brief {
+                specengine_cli::propose_interpretation_brief(env, globals, &request, task)?
+            } else {
+                specengine_cli::propose_interpretation(env, globals, &request, task)?
             }))
         }
         Command::Propose {

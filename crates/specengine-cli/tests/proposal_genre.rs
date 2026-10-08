@@ -576,3 +576,46 @@ fn round_ac04_the_round_sources_name_no_prefix_kind_project_or_block() {
         2
     );
 }
+
+/// docs/features/kind-interpretation.md AC-T2 ("Rules and edge cases",
+/// Genre): no `.rs` file of the store, the CLI or the MCP server holds the
+/// literal `"interpretation"`: core's `INTERPRETATION_KIND` is its only
+/// spelling (the store's column, the MCP enum and the review's text take
+/// the constant). The scan sees what it must refuse. M: the literal in
+/// `apply.rs`.
+#[test]
+fn kind_interpretation_ac_t2_no_interpretation_literal_outside_core() {
+    let kind = specengine_core::intake::INTERPRETATION_KIND;
+    assert_eq!(kind, "interpretation");
+    let mut found = Vec::new();
+    let mut scanned = 0;
+    for dir in OUTSIDE_CORE {
+        for (source, text) in rust_sources(&repository_root().join(dir)) {
+            scanned += 1;
+            for (number, line) in text.lines().enumerate() {
+                if literals(line).contains(&kind) {
+                    found.push(format!("{source}:{}", number + 1));
+                }
+            }
+        }
+    }
+    assert!(scanned >= 30, "{scanned} sources scanned");
+    assert!(
+        found.is_empty(),
+        "the kind `{kind}` written as a literal outside core:\n{}",
+        found.join("\n")
+    );
+    // Core spells it once, as its constant.
+    let core = fs::read_to_string(repository_root().join("crates/specengine-core/src/intake.rs"))
+        .expect("core intake.rs");
+    let spelled: Vec<usize> = core
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| literals(line).contains(&kind))
+        .map(|(number, _)| number + 1)
+        .collect();
+    assert_eq!(spelled.len(), 1, "core intake.rs lines {spelled:?}");
+    let sample = "    if kind == \"interpretation\" {\n    // \"interpretation\"\n";
+    assert_eq!(literals(sample.lines().next().unwrap()), [kind]);
+    assert!(literals(sample.lines().nth(1).unwrap()).is_empty());
+}

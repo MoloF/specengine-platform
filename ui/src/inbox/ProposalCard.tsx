@@ -25,6 +25,13 @@ import { targetsOf } from "./targets";
  */
 const StagedChoice = lazy(() => import("./StagedChoice").then((module) => ({ default: module.StagedChoice })));
 
+/**
+ * An interpretation's section arrives in a chunk of its own too, loaded only for a proposal whose
+ * review document carries one (`docs/features/kind-interpretation.md` "Data"); until it does, its
+ * heading over a skeleton.
+ */
+const InterpretationSection = lazy(() => import("./InterpretationSection").then((module) => ({ default: module.InterpretationSection })));
+
 /** The target in the Spec tree: its text, links, bundle and other proposals. */
 function OpenInTree({ project, id }: { project: string; id: string }) {
   return (
@@ -234,6 +241,19 @@ function ReviewBody({
         <Section title="Rationale">
           <Prose className="prose" source={review.rationale} links={null} project={project} baseLevel={3} frontMatter={false} />
         </Section>
+      )}
+
+      {/* The key's presence alone decides it, never the kind (ADR-0031). */}
+      {review.interpretation !== null && (
+        <Suspense
+          fallback={
+            <Section title="Interpretation">
+              <Skeleton label="Loading the interpretation" lines={3} />
+            </Section>
+          }
+        >
+          <InterpretationSection project={project} interpretation={review.interpretation} />
+        </Suspense>
       )}
 
       {review.record_id !== null && (

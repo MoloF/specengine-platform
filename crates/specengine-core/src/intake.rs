@@ -2,7 +2,8 @@
 //! "Stored", "Dedup", "Rules" 2): the two queue kinds that never apply, their
 //! closed enums, the caps every caller checks (UTF-8 bytes), the field
 //! checks in input order, and the normalised text the queue's dedup
-//! compares; beside them the names of the two kinds that apply. Nothing is
+//! compares; beside them the names of the three kinds that apply, and an
+//! interpretation's fields ([`Interpretation`]). Nothing is
 //! read, written or resolved here, and no project's word appears
 //! (ADR-0008): the kinds and enums are the engine's.
 
@@ -18,6 +19,11 @@ pub const UPDATE_KIND: &str = "update";
 /// The kind of a proposal adding a node: a new spec file, or new `{#ID}`
 /// sections inside one node's span (task spec `proposal-kinds`).
 pub const CREATE_KIND: &str = "create";
+
+/// The kind of an `update` carrying an accepted decision into a rule: the
+/// decision it interprets, how it was applied and why interpretation was
+/// needed (task spec `kind-interpretation`); applied as an update.
+pub const INTERPRETATION_KIND: &str = "interpretation";
 
 /// The kind of a question raised to the owner: a queue record only, never
 /// applied (owner's Q2).
@@ -54,6 +60,8 @@ pub const DISTINCT_MAX: usize = 64;
 pub const DISTINCT_ITEM_MAX: usize = 256;
 /// The most bytes of a rationale (`propose update` and a proposed patch).
 pub const RATIONALE_MAX: usize = 4096;
+/// The most bytes of an interpretation's `how` and `why`.
+pub const INTERPRETATION_TEXT_MAX: usize = 2048;
 /// An evidence item's `lines` are below this line number.
 pub const LINE_LIMIT: u64 = 1_000_000_000;
 
@@ -154,6 +162,51 @@ pub struct ProposedPatch {
     pub base: String,
     pub text: String,
     pub rationale: String,
+}
+
+/// The fields of an interpretation, in stored order: its decision, how it
+/// was applied, why interpretation was needed (`propose_change` takes them
+/// by these names).
+pub const INTERPRETATION_FIELDS: [&str; 3] = ["decision", "how", "why"];
+
+/// What an interpretation carries beside an update's fields: the accepted
+/// decision it interprets (its document's `id:`), how the decision was
+/// applied and why interpretation was needed, verbatim. Stored as the
+/// compact JSON `{"decision":…,"how":…,"why":…}`, keys in this order.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Interpretation {
+    pub decision: String,
+    pub how: String,
+    pub why: String,
+}
+
+impl Interpretation {
+    /// Why it cannot be stored or read as one: a blank value, a `how` or
+    /// `why` over [`INTERPRETATION_TEXT_MAX`] bytes; `None`: it can.
+    pub fn problem(&self) -> Option<FieldProblem> {
+        if self.decision.trim().is_empty() {
+            return Some(FieldProblem::new("decision", blank()));
+        }
+        interpretation_text_problem("how", &self.how)
+            .or_else(|| interpretation_text_problem("why", &self.why))
+    }
+}
+
+/// A kind's name with its indefinite article: `an update`, `a create`.
+pub fn with_article(kind: &str) -> String {
+    let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
+        "an"
+    } else {
+        "a"
+    };
+    format!("{article} {kind}")
+}
+
+/// An interpretation's `how` or `why` (`field`, as the caller names it):
+/// not blank, at most [`INTERPRETATION_TEXT_MAX`] bytes.
+pub fn interpretation_text_problem(field: &str, value: &str) -> Option<FieldProblem> {
+    required(field, value, INTERPRETATION_TEXT_MAX)
 }
 
 /// A reported discrepancy as given (the MCP arguments but the author's,

@@ -227,6 +227,26 @@ pub struct CommitFacts<'a> {
     pub base_commit: &'a str,
 }
 
+/// The trailer naming the decision an applied interpretation carries, the
+/// last of its commit's; a completion never requires it.
+pub const INTERPRETS_TRAILER: &str = "Interprets";
+
+/// The label of an interpretation's `how` in its commit's body.
+pub const HOW_LABEL: &str = "How the decision was applied:";
+
+/// The label of an interpretation's `why` in its commit's body.
+pub const WHY_LABEL: &str = "Why interpretation was needed:";
+
+/// What the commit of an applied interpretation adds to [`CommitFacts`]
+/// (task spec `kind-interpretation`, "Data"), verbatim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Interprets<'a> {
+    /// The decision's `id:`.
+    pub decision: &'a str,
+    pub how: &'a str,
+    pub why: &'a str,
+}
+
 /// The message of the apply commit, given to `git commit --cleanup=verbatim`:
 ///
 /// ```text
@@ -240,9 +260,46 @@ pub struct CommitFacts<'a> {
 /// Base-commit: <hex>
 /// ```
 pub fn commit_message(facts: &CommitFacts<'_>) -> String {
+    commit_message_interpreting(facts, None)
+}
+
+/// [`commit_message`], and for an interpretation (`interprets`) its two
+/// labelled texts after the rationale and its trailer last:
+///
+/// ```text
+/// spec: apply PR-0007
+///
+/// <rationale>
+///
+/// How the decision was applied:
+/// <how>
+///
+/// Why interpretation was needed:
+/// <why>
+///
+/// Proposal: PR-0007
+/// Decided-by: …
+/// Proposed-by: …
+/// Base-commit: …
+/// Interprets: <decision>
+/// ```
+pub fn commit_message_interpreting(
+    facts: &CommitFacts<'_>,
+    interprets: Option<&Interprets<'_>>,
+) -> String {
+    let (body, trailer) = match interprets {
+        Some(interprets) => (
+            format!(
+                "\n\n{HOW_LABEL}\n{}\n\n{WHY_LABEL}\n{}",
+                interprets.how, interprets.why
+            ),
+            format!("{INTERPRETS_TRAILER}: {}\n", interprets.decision),
+        ),
+        None => (String::new(), String::new()),
+    };
     format!(
-        "{COMMIT_SUBJECT} {id}\n\n{rationale}\n\n{PROPOSAL_TRAILER}: {id}\nDecided-by: {decided_by}\n\
-         Proposed-by: {provenance}\nBase-commit: {base}\n",
+        "{COMMIT_SUBJECT} {id}\n\n{rationale}{body}\n\n{PROPOSAL_TRAILER}: {id}\nDecided-by: \
+         {decided_by}\nProposed-by: {provenance}\nBase-commit: {base}\n{trailer}",
         id = facts.id,
         rationale = facts.rationale,
         decided_by = facts.decided_by,

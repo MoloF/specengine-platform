@@ -25,6 +25,13 @@
 //! with both or neither argument, refusals in between; the repository
 //! stays byte-identical and `git status` empty.
 //!
+//! AC-T3 of docs/features/kind-interpretation.md: `propose_change` of kind
+//! `interpretation` joins the door: one carrying `DEC-0023` (stored, in
+//! each era), one naming the superseded `DEC-0007` (refused, nothing
+//! stored), and a `how` that is no string (a bad argument); the
+//! repository stays byte-identical, `git status` empty, and the queue
+//! holds both interpretations. M: a file write in propose.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -134,6 +141,14 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"kind": "update", "target": "RULE-NOPE", "base": base,
                     "text": regen, "rationale": "None.", "author_role": "writer",
                     "author_model": "m-1", "run": "r-1"}),
+                // docs/features/kind-interpretation.md AC-T3.
+                json!({"kind": "interpretation", "target": "RULE-STAM-REGEN", "base": base,
+                    "decision": "DEC-0023", "how": "Rest is any speed under 40 % of walking.",
+                    "why": "The rule names no speed.", "text": regen,
+                    "rationale": "Carry DEC-0023.", "author_role": "writer"}),
+                json!({"kind": "interpretation", "target": "RULE-STAM-REGEN", "base": base,
+                    "decision": "DEC-0007", "how": "Walking.", "why": "Superseded.",
+                    "text": regen, "rationale": "Old.", "author_role": "writer"}),
             ],
             vec![
                 json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": base,
@@ -142,6 +157,9 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                     "text": regen, "rationale": "Kind.", "author_role": "writer"}),
                 json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": base,
                     "text_file": "x.md", "rationale": "Path.", "author_role": "writer"}),
+                json!({"kind": "interpretation", "target": "RULE-STAM-REGEN", "base": base,
+                    "decision": "DEC-0023", "how": 7, "why": "w", "text": regen,
+                    "rationale": "Kind.", "author_role": "writer"}),
             ],
         ),
         "ask_question" => (
@@ -414,7 +432,7 @@ fn ac08_reads_write_nothing_under_the_project_root() {
     // its linked update (its repeat a hit); the second era's change only.
     let mut session = Session::open(Era::Legacy, &[], Some(&cwd), Home::At(&home));
     let mut stored = Vec::new();
-    for number in 1..=6 {
+    for number in 1..=8 {
         let id = format!("PR-{number:04}");
         let reply = session.call("get_proposal", json!({"proposal_id": id}));
         let result = result(&reply);
@@ -437,17 +455,19 @@ fn ac08_reads_write_nothing_under_the_project_root() {
         [
             ("question".to_owned(), "open".to_owned(), None),
             ("update".to_owned(), "open".to_owned(), None),
+            ("interpretation".to_owned(), "open".to_owned(), None),
             (
                 "discrepancy".to_owned(),
                 "open".to_owned(),
-                Some("PR-0004".to_owned())
+                Some("PR-0005".to_owned())
             ),
             (
                 "update".to_owned(),
                 "open".to_owned(),
-                Some("PR-0003".to_owned())
+                Some("PR-0004".to_owned())
             ),
             ("update".to_owned(), "open".to_owned(), None),
+            ("interpretation".to_owned(), "open".to_owned(), None),
         ]
     );
     // The task: claimed in the first era (its `complete` refused, the run

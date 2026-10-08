@@ -13,6 +13,7 @@ import type {
   GraphNode,
   GraphView,
   InboxEntry,
+  Interpretation,
   NodeView,
   OwnerNote,
   Project,
@@ -54,8 +55,10 @@ import type {
 // `fixtures/daemon-keys.json`, which a Rust test regenerates from the daemon on fixture A:
 // daemon-read's six names, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, and
 // ui-round's six (T-04 of docs/features/ui-round.md: the sheet, an item, a target, a task, the
-// answers document, an entry). While that file is absent the comparison is skipped, saying so; once
-// it exists it names all forty.
+// answers document, an entry) and kind-interpretation's one (AC-U1, AC-T4 of
+// docs/features/kind-interpretation.md: the review document's `interpretation`, the
+// `Interpretation` set). While that file is absent the comparison is skipped, saying so; once it
+// exists it names all forty-one.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -78,7 +81,8 @@ const KEYS = {
   // docs/canon/proposal-queue.md "Commands" to `updated_at`, docs/canon/agent-intake.md "Review
   // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`,
   // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`,
-  // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`.
+  // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`,
+  // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`.
   Proposal: {
     id: true,
     project: true,
@@ -124,8 +128,11 @@ const KEYS = {
     task_id: true,
     staged: true,
     staged_at: true,
+    interpretation: true,
     notes: true,
   } satisfies Record<keyof Proposal, true>,
+  // docs/features/kind-interpretation.md "Data": the row's JSON, keys in its order.
+  Interpretation: { decision: true, how: true, why: true } satisfies Record<keyof Interpretation, true>,
   // docs/canon/decision-staging.md "The stage": its two shapes, keys in its order.
   StagedApprove: { decision: true, option: true, answer: true, canon: true, note: true, span_hash: true } satisfies Record<keyof StagedApprove, true>,
   StagedReject: { decision: true, reason: true } satisfies Record<keyof StagedReject, true>,
@@ -321,7 +328,9 @@ const CITED: Record<Named, string> = {
     "record_id, record_path, record_title, record_text, choice, " +
     "task_id, " +
     "staged, staged_at, " +
+    "interpretation, " +
     "notes",
+  Interpretation: "decision, how, why",
   StagedApprove: "decision, option, answer, canon, note, span_hash",
   StagedReject: "decision, reason",
   NodeView: "ref, reason, notes, nodes",
@@ -398,11 +407,14 @@ const DECISION_STAGING: readonly Named[] = ["StagedApprove", "StagedReject"];
 /** ui-round's six: the sheet, an item, a target, a task, the answers document, an entry (docs/features/ui-round.md T-04). */
 const UI_ROUND: readonly Named[] = ["RoundSheet", "RoundItem", "RoundTarget", "RoundTask", "RoundAnswersOutcome", "RoundAnswerEntry"];
 
+/** kind-interpretation's one: an interpretation's decision and texts (docs/features/kind-interpretation.md "Data", AC-T4). */
+const KIND_INTERPRETATION: readonly Named[] = ["Interpretation"];
+
 /** The thirty-four types the fixture named before ui-round. */
 const BEFORE_ROUND: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS, ...DECISION_STAGING];
 
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_ROUND, ...UI_ROUND];
+const ALL: readonly Named[] = [...BEFORE_ROUND, ...UI_ROUND, ...KIND_INTERPRETATION];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -426,8 +438,14 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 12 inbox-entry keys, 45 review keys (AC-14 of decision-staging)", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 45]);
+  it("counts 4 project keys, 12 inbox-entry keys, 46 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation)", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 46]);
+  });
+
+  it("gives the review document an interpretation after staged_at, before notes, and its three keys (AC-U1 of kind-interpretation)", () => {
+    expect(Object.keys(KEYS.Proposal).slice(-3)).toEqual(["staged_at", "interpretation", "notes"]);
+    expect(KIND_INTERPRETATION.map((name) => served(name))).toEqual([["decision", "how", "why"]]);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("interpretation");
   });
 
   it("counts the stage's two shapes: 6 keys staged as an approve, 2 as a reject (AC-14 of decision-staging)", () => {
@@ -453,8 +471,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
-    expect(ALL).toHaveLength(40);
-    expect(new Set(ALL).size).toBe(40);
+    expect(ALL).toHaveLength(41);
+    expect(new Set(ALL).size).toBe(41);
   });
 
   it("counts ui-round's six: 5 sheet keys, 19 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round)", () => {
@@ -486,9 +504,9 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, then notes", () => {
+  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, the interpretation, notes", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
-    expect(Object.keys(KEYS.Proposal).slice(-5)).toEqual(["choice", "task_id", "staged", "staged_at", "notes"]);
+    expect(Object.keys(KEYS.Proposal).slice(-6)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "notes"]);
   });
 
   it("gives an inbox entry the stage's time alone, after record_id: the stage itself is the review document's", () => {
@@ -499,6 +517,12 @@ describe("the daemon's document types (AC-09)", () => {
   it("types a queue event as the stream sends it: {seq, type, payload}", () => {
     const event = { seq: 12, type: "proposal.created", payload: { id: "PR-0005" } } satisfies QueueEvent;
     expect(Object.keys(event)).toEqual(["seq", "type", "payload"]);
+  });
+
+  it.each(["Proposal", "Interpretation"])('%s cites `docs/features/kind-interpretation.md` "Data"', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/kind-interpretation.md` "Data"');
   });
 
   it.each(["Project", "InboxEntry", "Proposal", "QueueEvent"])("%s cites docs/features/daemon-read.md \"Data\"", (type) => {
@@ -544,11 +568,16 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the forty types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six", () => {
+  it("names exactly the forty-one types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
   });
 
   it.each(NAMES)("%s: the daemon's keys are the type's", (name) => {
     expect([...(sets[name] ?? [])].sort()).toEqual(served(name).sort());
+  });
+
+  it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {
+    expect(sets.Proposal?.slice(-3)).toEqual(["staged_at", "interpretation", "notes"]);
+    expect(sets.Interpretation).toEqual(["decision", "how", "why"]);
   });
 });

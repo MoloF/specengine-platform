@@ -18,6 +18,9 @@ import { nodeKinds, specStatuses } from "./kinds";
 // (RULE-TIDE-WINDOW `adopts` RULE-HIGH-WATER), an Impact link landing on a nested section
 // (MEC-NIGHT-PASSAGE `depends_on` MEC-TIDES#RULE-TIDE-WINDOW), the archived document's
 // `depends_on` MEC-TIDES.
+//
+// kind-interpretation (docs/features/kind-interpretation.md "Description and interactions", UI):
+// PR-0049 carries the accepted decision DEC-0012 into RULE-HARBOR-CLOCK, with how and why.
 
 const SLUG = "harbor-sim";
 
@@ -32,6 +35,37 @@ export const TIDE_FILE = "docs/spec/tides/tide-cycle.md";
 /** The ID-less document: the tree names it by its path. */
 export const DRAFT_FILE = "docs/spec/berths/draft-limits.md";
 const PILOT_FILE = "docs/spec/pilotage/boarding.md";
+const HARBOR_FILE = "docs/spec/harbor.md";
+
+/** The accepted decision PR-0049 interprets: a document of its own, its `id:` the decision's ID. */
+export const WEATHER_DECISION = "DEC-0012";
+const WEATHER_DECISION_FILE = "docs/spec/records/DEC-0012-simulated-weather.md";
+
+const CLOCK_TEXT = [
+  // A section named by a heading attribute (docs/features/ui-markdown.md "Data").
+  "## One simulated clock {#RULE-HARBOR-CLOCK}",
+  "",
+  "One tick is one simulated minute. Systems run in a fixed order each tick:",
+  "tides, arrivals, pilotage, berthing, cargo.",
+].join("\n");
+
+const CLOCK_NEW_TEXT = CLOCK_TEXT.replace("tides, arrivals,", "tides, weather, arrivals,");
+
+/** The section's hunk: its first three lines kept, the last replaced. */
+const CLOCK_DIFF = [
+  `--- base ${HARBOR_FILE}`,
+  `+++ proposed ${HARBOR_FILE}`,
+  "@@ -1,4 +1,4 @@",
+  ...CLOCK_TEXT.split("\n").map((line, at) => (at < 3 ? ` ${line}` : `-${line}`)),
+  `+${CLOCK_NEW_TEXT.split("\n")[3] ?? ""}`,
+].join("\n");
+
+/** PR-0049's interpretation: the decision's ID, then the agent's two texts (how on two lines). */
+export const CLOCK_INTERPRETATION = {
+  decision: WEATHER_DECISION,
+  how: "Weather runs right after the tides in each tick,\nso arrivals and pilotage read this tick's wind and visibility.",
+  why: `${WEATHER_DECISION} makes weather a simulated system; it does not say where weather runs in the tick order RULE-HARBOR-CLOCK fixes.`,
+};
 
 const DRAFT_TEXT = [
   "## RULE-BERTH-DRAFT: Draft limit at a berth",
@@ -131,7 +165,7 @@ function harborCorpus(): MockCorpus {
       lines: [...frontMatter({ class: "generated" }), "", "# Spec index", "", "Written by the index export; never edited."],
     }),
     specFile({
-      path: "docs/spec/harbor.md",
+      path: HARBOR_FILE,
       id: "DOM-HARBOR",
       kind: "domain",
       title: "Harbor simulation",
@@ -152,11 +186,7 @@ function harborCorpus(): MockCorpus {
         "The simulation models one harbour: ships arrive, wait for water and a berth, moor, unload and leave.",
         "Every system reads the same clock; nothing advances on its own.",
         "",
-        // A section named by a heading attribute (docs/features/ui-markdown.md "Data").
-        "## One simulated clock {#RULE-HARBOR-CLOCK}",
-        "",
-        "One tick is one simulated minute. Systems run in a fixed order each tick:",
-        "tides, arrivals, pilotage, berthing, cargo.",
+        ...CLOCK_TEXT.split("\n"),
       ],
       sections: [{ id: "RULE-HARBOR-CLOCK", kind: "rule", title: "One simulated clock" }],
     }),
@@ -363,6 +393,22 @@ function harborCorpus(): MockCorpus {
         ...PILOT_TEXT.split("\n"),
       ],
       sections: [{ id: "RULE-PILOT-REQ", kind: "rule", title: "Pilot required above 120 m" }],
+    }),
+    specFile({
+      path: WEATHER_DECISION_FILE,
+      id: WEATHER_DECISION,
+      // No kind: harbor-sim's `[ids]` names no prefix for decisions; the core finds one by `class:` and `status:`.
+      kind: null,
+      title: "Weather is simulated",
+      status: "accepted",
+      lines: [
+        ...frontMatter({ id: WEATHER_DECISION, class: "decision", status: "accepted", date: "2026-09-28" }),
+        "",
+        `# ${WEATHER_DECISION}: Weather is simulated`,
+        "",
+        "Wind and visibility come from the scenario's weather file and change every simulated hour.",
+        "Ships and pilot boats react to them.",
+      ],
     }),
     specFile({
       path: "docs/spec/tides/spring-window.md",
@@ -852,6 +898,27 @@ export function harborSim(now: number): MockProject {
         price_of_other: "Two shifts need a crew roster for the cranes.",
         author: agent("requirement-analyst", "R-2244"),
         created_at: at(150),
+      }),
+      // A change carrying an accepted decision (kind-interpretation): applied as an update, its
+      // decision and texts in `interpretation`; on no round sheet, counted among the change proposals.
+      proposal({
+        id: "PR-0049",
+        project: SLUG,
+        kind: "interpretation",
+        target_id: "RULE-HARBOR-CLOCK",
+        target_path: HARBOR_FILE,
+        target_ids: ["RULE-HARBOR-CLOCK"],
+        worktree: "/work/harbor-sim",
+        base_commit: "9a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f3a5b",
+        base_hash: "b3:7c1e5a9d3b0f2468ace13579bdf02468ace13579bdf02468ace13579bdf0246",
+        base_text: CLOCK_TEXT,
+        new_text: CLOCK_NEW_TEXT,
+        rationale: `Weather joins the tick order the harbour clock fixes.\n${WEATHER_DECISION} makes weather a system of its own.`,
+        diff: CLOCK_DIFF,
+        preview: "applies",
+        interpretation: { ...CLOCK_INTERPRETATION },
+        author: agent("spec-writer", "R-2251"),
+        created_at: at(30),
       }),
     ],
   };

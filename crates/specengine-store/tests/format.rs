@@ -491,6 +491,7 @@ fn the_queue_tables_survive_a_stamp_change_and_a_rebuild() {
                     author: Author::human(),
                     diagnostics: Vec::new(),
                     new_ids: Vec::new(),
+                    interpretation: None,
                 },
                 "2026-10-05T21:14:03Z",
             )
@@ -570,6 +571,7 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
         author: Author::human(),
         diagnostics: Vec::new(),
         new_ids: Vec::new(),
+        interpretation: None,
     };
     for target in ["A-1", "A-2", "A-3"] {
         queue
@@ -583,7 +585,7 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .expect("user_version");
     assert_eq!(version, QUEUE_SCHEMA_VERSION);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 5);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 6);
     conn.execute(
         "UPDATE proposals SET id = 'PR-9999' WHERE id = 'PR-0002'",
         [],
@@ -646,6 +648,7 @@ fn queue_proposal(target: &str) -> specengine_store::NewProposal {
         author: Author::human(),
         diagnostics: Vec::new(),
         new_ids: Vec::new(),
+        interpretation: None,
     }
 }
 

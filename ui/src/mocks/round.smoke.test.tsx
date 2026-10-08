@@ -35,7 +35,7 @@ describe("the Questions screen over the mock", () => {
       "PR-0044",
     ]);
     expect(within(screen.getByRole("list", { name: "Notes from the daemon" })).getByRole("listitem").textContent).toBe(
-      "1 open change proposal(s) not on this sheet: PR-0042; spec inbox lists them",
+      "2 open change proposal(s) not on this sheet: PR-0042 and PR-0049; spec inbox lists them",
     );
     fireEvent.click(within(card("PR-0048")).getByRole("radio", { name: "Take the working answer" }));
     fireEvent.click(within(card("PR-0041")).getByRole("radio", { name: /^\[0\] Code to spec/ }));

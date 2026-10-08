@@ -14,13 +14,19 @@
 //! previewed by its own steps 2–6 ([`crate::create`]): `applies` or
 //! `unavailable`; its diff is from an empty base.
 //! `--brief` ([`review_brief`], MCP `get_proposal`): the same document,
-//! brief. A staged approve whose `span_hash` is not the target's now gets
-//! the staleness note (canon `decision-staging`, "Staleness").
+//! brief. An open or approved update whose target is, encloses or lies in
+//! a live accepted decision's `canon:` section is noted, naming `spec
+//! propose interpretation` (task spec `kind-interpretation`, W7): judged in
+//! the recorded root's index as the preview's step 4 refreshed it, its own
+//! refresh only when the preview stopped before. A staged approve whose
+//! `span_hash` is not the target's now gets the staleness note (canon
+//! `decision-staging`, "Staleness").
 
 use specengine_store::{GitEnv, Proposal, ProposalStatus, Stage};
 
 use crate::create::prepare_file;
-use crate::preflight::{completing, prepare_spanned, trailer_lookup};
+use crate::interpret::{canon_note, recorded_canon_note};
+use crate::preflight::{RecordedCorpus, StepRead, completing, prepare_spanned, trailer_lookup};
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed,
     escaped_error, find, no_proposal, open_context, with_diff, written_id,
@@ -85,8 +91,39 @@ fn run_review(
         }
     };
     let mut messages = Vec::new();
-    let document = previewed(env, &request.git, &context, &proposal, &mut messages);
+    let run = preview_run(env, &request.git, &context, &proposal, &mut messages);
+    // An open or approved update in an accepted decision's `canon:`
+    // section: a note (task spec `kind-interpretation`, W7), judged in the
+    // recorded root's index step 4 refreshed; refreshed here only when the
+    // preview stopped before it.
+    let note = (plain_update(&proposal)
+        && matches!(
+            proposal.status,
+            ProposalStatus::Open | ProposalStatus::Approved
+        ))
+    .then(|| match &run.corpus {
+        Some(corpus) => canon_note(
+            &corpus.recorded,
+            &corpus.input,
+            &proposal.target_id,
+            &proposal.target_path,
+        ),
+        None => recorded_canon_note(env, &context, &proposal, &mut messages),
+    })
+    .flatten();
+    let mut document = document_with(&request.git, &context, &proposal, run);
+    document.notes.extend(note);
     Ok(ProposalOutcome::done(COMMAND, document, messages))
+}
+
+/// An update by its row's shape, never by a list of kinds: it applies to
+/// one node's span (no new file, no new ID) and carries no decision (task
+/// spec `kind-interpretation`, W7's subject).
+fn plain_update(proposal: &Proposal) -> bool {
+    proposal.kind.applies()
+        && !proposal.new_file()
+        && proposal.new_ids.is_empty()
+        && proposal.interpretation.is_none()
 }
 
 /// The proposal's document with its diff and, open or approved, its
@@ -103,8 +140,9 @@ pub(crate) fn previewed(
 }
 
 /// What steps 2–6, read-only, gave for a proposal: its preview, a
-/// conflict's text, the notes, and the target's span hash as step 5 read
-/// it (an `update`'s or a section-form `create`'s, once resolved).
+/// conflict's text, the notes, the target's span hash as step 5 read it
+/// (an `update`'s or a section-form `create`'s, once resolved) and the
+/// recorded root's index as step 4 refreshed it.
 #[derive(Debug, Default)]
 pub(crate) struct PreviewRun {
     preview: Option<Preview>,
@@ -112,6 +150,9 @@ pub(crate) struct PreviewRun {
     notes: Vec<String>,
     /// The target's span hash now; `None` unread.
     pub span: Option<String>,
+    /// The recorded root and its index from step 4; `None` when the
+    /// preview stopped before it or was not run.
+    pub corpus: Option<RecordedCorpus>,
 }
 
 /// Steps 2–6 for an open or approved `update` or `create`, read-only
@@ -157,8 +198,12 @@ pub(crate) fn preview_run(
     let prepared = if proposal.new_file() {
         prepare_file(env, git_env, context, proposal, messages).map(|_| Preview::Applies)
     } else {
-        prepare_spanned(env, git_env, context, proposal, messages, &mut run.span)
-            .map(|prepared| prepared.preview)
+        let mut read = StepRead::default();
+        let prepared = prepare_spanned(env, git_env, context, proposal, messages, &mut read)
+            .map(|prepared| prepared.preview);
+        run.span = read.span;
+        run.corpus = read.corpus;
+        prepared
     };
     match prepared {
         Ok(preview) => run.preview = Some(preview),

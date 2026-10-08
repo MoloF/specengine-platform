@@ -70,6 +70,7 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     task_id: null,
     staged: null,
     staged_at: null,
+    interpretation: null,
     notes: [],
     ...fields,
   };
@@ -141,6 +142,7 @@ export function noReview(id: string): Proposal {
     task_id: null,
     staged: null,
     staged_at: null,
+    interpretation: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

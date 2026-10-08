@@ -45,8 +45,8 @@ Reads:
 - get_context_bundle(node_ids, budget?) = spec bundle: nodes' context within a budget.
 - get_proposal(proposal_id) = spec review --brief.
 Queue (writes only the proposal queue; the owner decides on a terminal):
-- propose_change = spec propose update|create: a node's new text against its span_hash; \
-create: new ID sections in it, or a new file (base null).
+- propose_change = spec propose update|create|interpretation: a node's new text against its \
+span_hash; create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy = spec propose question|discrepancy: what is decided \
 or asked comes back as hits, nothing stored unless distinct_from names each; keep \
 working on your working answer.
@@ -56,7 +56,7 @@ working on your working answer.
 
 REF: an ID, an alias, slug/ID, ID#SECTION or a root-relative .md path. Hints use the \
 command's flags: --kind is kinds, ROOT is root, --links is with [\"links\"]. Answers are \
-cut at 40000 characters, with a tail on how to narrow them. A REF naming nothing, or \
+cut at 40000 characters, with a tail on narrowing them. A REF naming nothing, or \
 a call that cannot run (no specengine.toml: run `spec init`), is an error result with \
 the reason. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.
 

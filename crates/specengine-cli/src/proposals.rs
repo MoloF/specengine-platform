@@ -29,7 +29,10 @@
 //!   `record_text`, `choice` (an object); then `task_id`, the task it was
 //!   raised for (canon `tasks`, "Task-bound proposals"). A create (task spec
 //!   `proposal-kinds`) is an update's document, `target_ids` as stored; a
-//!   new file's base `null`, its diff from an empty base.
+//!   new file's base `null`, its diff from an empty base. An interpretation
+//!   (task spec `kind-interpretation`) is an update's document, its
+//!   `interpretation` (after `staged_at`) the object `{decision, how, why}`;
+//!   `null` on any other kind.
 //! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts
 //!   (`record_text` too), `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
 //!   (the rest counted in a note), the text cut at [`OUTPUT_CAP_CHARS`].
@@ -46,7 +49,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity};
+use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity, Interpretation};
 use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
@@ -163,6 +166,9 @@ pub struct ProposalDocument {
     pub staged: Option<Stage>,
     /// When it was staged, UTC; `null` with it.
     pub staged_at: Option<String>,
+    /// An interpretation's `{decision, how, why}`; `null` on any other
+    /// kind. Kept by a brief answer.
+    pub interpretation: Option<Interpretation>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -230,6 +236,7 @@ impl ProposalDocument {
             task_id: proposal.task_id.clone(),
             staged: proposal.staged.as_ref().map(|staged| staged.stage.clone()),
             staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
+            interpretation: proposal.interpretation.clone(),
             notes: Vec::new(),
         }
     }
@@ -806,8 +813,38 @@ fn review_text(document: &ProposalDocument) -> String {
     let staged = document.staged.as_ref().map(Stage::to_json);
     line(&mut out, "staged", staged.as_deref());
     line(&mut out, "staged_at", document.staged_at.as_deref());
+    interpretation_text(&mut out, document.interpretation.as_ref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
+}
+
+/// The review text's `interpretation` (task spec `kind-interpretation`,
+/// "Data"): `interpretation:`, then indented `decision: <ID>` and the
+/// blocks `how the decision was applied:` and `why interpretation was
+/// needed:`, their text indented two more; `interpretation: -` when null.
+fn interpretation_text(out: &mut String, interpretation: Option<&Interpretation>) {
+    let Some(interpretation) = interpretation else {
+        out.push_str("interpretation: -\n");
+        return;
+    };
+    out.push_str("interpretation:\n");
+    out.push_str(&format!(
+        "  decision: {}\n",
+        one_line(&interpretation.decision)
+    ));
+    for (label, text) in [
+        ("how the decision was applied", &interpretation.how),
+        ("why interpretation was needed", &interpretation.why),
+    ] {
+        out.push_str(&format!("  {label}:\n"));
+        for text_line in text.split_terminator('\n') {
+            if text_line.is_empty() {
+                out.push('\n');
+            } else {
+                out.push_str(&format!("    {text_line}\n"));
+            }
+        }
+    }
 }
 
 /// One evidence item: `<file>[:<lines>][ <qpath>] | <observed> |

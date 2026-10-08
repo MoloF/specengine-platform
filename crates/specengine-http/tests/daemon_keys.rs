@@ -52,6 +52,14 @@
 //! replaced, reason}`) from a `POST round/answers` on A staging one answer
 //! (replacing a stage) and refusing another. M: an item key dropped from
 //! the fixture.
+//!
+//! AC-T4 of docs/features/kind-interpretation.md, its Rust half ("Data",
+//! "Daemon keys"): `Proposal` holds `interpretation` between `staged_at`
+//! and `notes` (46 keys, the update's, question's and discrepancy's
+//! reviews alike: `null` there); one set more, 41 in all, last:
+//! `Interpretation` (`{decision, how, why}`) from the review of an
+//! interpretation of `RULE-STAM-REGEN` carrying `DEC-0023`, raised through
+//! `spec propose interpretation`. M: a key renamed in Rust.
 
 mod common;
 mod task_state;
@@ -59,7 +67,9 @@ mod task_state;
 use std::fmt;
 use std::fs;
 
-use common::{Scratch, Server, ask, propose_update, repository_root, run_product, spec_bin};
+use common::{
+    Scratch, Server, ask, propose_update, repository_root, run_product, spec_bin, spec_json,
+};
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 
 /// A JSON object's keys, in the order written.
@@ -262,6 +272,9 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     );
     run.code(0);
     let report = run.stdout.lines().next().unwrap().to_owned();
+    // kind-interpretation: an interpretation of RULE-STAM-REGEN carrying
+    // DEC-0023 (its review's `interpretation` an object).
+    let interpretation = interpret(&home, &cwd, &a);
 
     // The check corpora (ui-live): A observed, with debt and a stale
     // entry; A that cannot be checked.
@@ -340,6 +353,13 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
+    let interpretations = vec![
+        server
+            .get(&format!("{p}/proposals/{interpretation}"))
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
     let nodes: Vec<String> = ["MEC-STAMINA", "NOPE-1"]
         .iter()
         .map(|reference| {
@@ -480,7 +500,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "InboxEntry",
             one_key_set("InboxEntry", &raw_items(&inbox, "proposals"), keys_of),
         ),
-        ("Proposal", one_key_set("Proposal", &reviews, keys_of)),
+        (
+            "Proposal",
+            one_key_set(
+                "Proposal",
+                &[reviews.clone(), interpretations.clone()].concat(),
+                keys_of,
+            ),
+        ),
         ("NodeView", one_key_set("NodeView", &nodes, keys_of)),
         (
             "SearchHit",
@@ -620,7 +647,60 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "RoundAnswerEntry",
             one_key_set("RoundAnswerEntry", &items(&answers, "answers"), keys_of),
         ),
+        (
+            "Interpretation",
+            one_key_set(
+                "Interpretation",
+                &objects(&interpretations, "interpretation"),
+                keys_of,
+            ),
+        ),
     ]
+}
+
+/// `spec --root <root> propose interpretation RULE-STAM-REGEN --decision
+/// DEC-0023 …` against its current span hash, stored (exit 0): its ID.
+fn interpret(home: &std::path::Path, cwd: &std::path::Path, root: &std::path::Path) -> String {
+    let shown = spec_json(home, cwd, root, &["show", "RULE-STAM-REGEN"]).json();
+    let node = &shown["nodes"][0];
+    let base = node["span_hash"].as_str().expect("span_hash").to_owned();
+    let text = node["text"].as_str().expect("text").replacen(
+        "Base rate 10 units/s,",
+        "Base rate 10 units/s at rest,",
+        1,
+    );
+    let root = root.to_str().expect("UTF-8 root");
+    let run = run_product(
+        &spec_bin(),
+        home,
+        cwd,
+        &[
+            "--root",
+            root,
+            "propose",
+            "interpretation",
+            "RULE-STAM-REGEN",
+            "--base",
+            &base,
+            "--decision",
+            "DEC-0023",
+            "--how",
+            "Rest is any speed under 40 % of walking.",
+            "--why",
+            "DEC-0023 says rest; the rule names no speed.",
+            "--text-file",
+            "-",
+            "--rationale",
+            "Carry DEC-0023 into the rule.",
+            "--author-role",
+            "spec-author",
+        ],
+        text.as_bytes(),
+    );
+    run.code(0);
+    let id = run.stdout.lines().next().unwrap_or_default().to_owned();
+    assert!(id.starts_with("PR-"), "not stored: {}", run.show());
+    id
 }
 
 /// A section ID with a Cyrillic capital A (U+0410) among Latin letters.
@@ -679,17 +759,25 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[1].1[10..], ["record_id", "staged_at"]);
     // docs/features/task-package.md "Data", AC-10: the review document
     // gains `task_id` after `choice`; decision-staging `staged`,
-    // `staged_at` after it, before `notes`: 45 keys.
+    // `staged_at` after it, before `notes`; docs/features/kind-interpretation.md
+    // `interpretation` after `staged_at`: 46 keys.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 45, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 46, "{:?}", sets[2].1);
     assert_eq!(
         sets[2].1[40..],
-        ["choice", "task_id", "staged", "staged_at", "notes"]
+        [
+            "choice",
+            "task_id",
+            "staged",
+            "staged_at",
+            "interpretation",
+            "notes"
+        ]
     );
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
-    assert_eq!(names.len(), 40, "{names:?}");
+    assert_eq!(names.len(), 41, "{names:?}");
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -771,7 +859,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // ui-round's six, last (docs/features/ui-round.md "Data", T-04): the
     // sheet and its parts as `docs/canon/round.md` "JSON" sends them, the
     // answers document and its entry.
-    let round: Vec<&str> = sets[34..].iter().map(|(name, _)| *name).collect();
+    let round: Vec<&str> = sets[34..40].iter().map(|(name, _)| *name).collect();
     assert_eq!(
         round,
         [
@@ -790,6 +878,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         sets[39].1,
         ["id", "outcome", "stage", "staged_at", "replaced", "reason"]
     );
+    // kind-interpretation's one, last ("Data", "Daemon keys").
+    assert_eq!(sets[40].0, "Interpretation");
+    assert_eq!(sets[40].1, ["decision", "how", "why"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");

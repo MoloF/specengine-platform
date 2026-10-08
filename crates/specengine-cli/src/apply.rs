@@ -57,10 +57,16 @@
 //! enclosing or inside it whose pre-apply hash is its snapshot hash take
 //! the applied text and hash ([`task_refresh`]).
 //!
+//! An interpretation (task spec `kind-interpretation`) applies as an
+//! update: its decision checked again at step 4, named on stderr before the
+//! question (`interprets <ID> (<path>)`), its commit's body the rationale
+//! and the two labelled texts, `Interprets: <ID>` its last trailer; a
+//! completion matches `Proposal:` only, the decision not checked again.
+//!
 //! A question or a discrepancy (canon `decision-record`, "Flags", "Steps")
 //! is approved into a decision record, one new file and one commit where it
 //! was raised ([`crate::decide`]); `--option N`, `--answer T`, `--canon REF`
-//! are its flags only (on an update or a create: exit 2). A create's new
+//! are its flags only (on a kind that applies: exit 2). A create's new
 //! file (task spec `proposal-kinds`) is one new file and one commit too
 //! ([`crate::create`]); its new sections apply as an update. Reject settles
 //! a question or a discrepancy with the answer as
@@ -73,18 +79,20 @@
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
-use specengine_core::proposal::{CommitFacts, PROPOSAL_TRAILER, commit_message};
+use specengine_core::proposal::{
+    CommitFacts, Interprets, PROPOSAL_TRAILER, commit_message_interpreting,
+};
 use specengine_model::IdScheme;
 use specengine_store::{
-    ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalKind, ProposalQueue as _,
-    ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, TaskRefresh, WorkingTree,
-    WorktreeGit, replace_file, same_repository, span_hash,
+    ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalQueue as _, ProposalStatus,
+    QueueError, RefreshEntry, Seen, Source as _, TaskRefresh, WorkingTree, WorktreeGit,
+    replace_file, same_repository, span_hash,
 };
 
 use crate::location::open_index;
 use crate::package::position;
 use crate::preflight::{
-    History, LookupError, Missing, Prepared, StepFailure, TrailerCommit, completes_when,
+    History, LookupError, Missing, Prepared, StepFailure, StepRead, TrailerCommit, completes_when,
     completing, history, place_unchanged, prepare_spanned, recorded_project, recorded_root,
     trailer_lookup, trailer_lookup_here,
 };
@@ -305,14 +313,14 @@ fn run_approve(
 
     // Until step 7 writes `approved`, this run holds nothing: a refusal
     // only logs, whatever state another run left.
-    let mut span = None;
+    let mut steps = StepRead::default();
     let prepared = match prepare_spanned(
         env,
         &request.git,
         &context,
         &proposal,
         &mut messages,
-        &mut span,
+        &mut steps,
     ) {
         Ok(prepared) => prepared,
         Err(mut failure) => {
@@ -374,12 +382,24 @@ fn run_approve(
     // A staged approve's staleness: a note at the prompt, never a refusal.
     let stale = staging
         .shown()
-        .and_then(|_| stale_note(&proposal, span.as_deref()));
+        .and_then(|_| stale_note(&proposal, steps.span.as_deref()));
     if let Some(note) = &stale {
         messages.push(Message::Note(note.clone()));
     }
+    // An interpretation names its decision before the question (task spec
+    // `kind-interpretation`, W14): the stored one, as its trailer will, at
+    // the path step 4 found it.
+    let interprets = match (&proposal.interpretation, &prepared.interprets) {
+        (Some(interpretation), Some(decided)) => {
+            format!(
+                "interprets {} ({})\n",
+                interpretation.decision, decided.path
+            )
+        }
+        _ => String::new(),
+    };
     let question = format!(
-        "{}apply {id} to {} on {} in {} ({}{})? [y/N]",
+        "{interprets}{}apply {id} to {} on {} in {} ({}{})? [y/N]",
         staging.preface(stale.as_deref()),
         prepared.top_path,
         proposal.place.branch,
@@ -473,14 +493,26 @@ fn run_approve(
         );
     }
 
-    // Step 9.
-    let message = commit_message(&CommitFacts {
-        id: &id,
-        rationale: &proposal.rationale,
-        decided_by: &decided_by,
-        author: &proposal.author,
-        base_commit: &proposal.place.base_commit,
-    });
+    // Step 9: an interpretation's commit carries its two texts and its
+    // decision (task spec `kind-interpretation`, "Data").
+    let interprets = proposal
+        .interpretation
+        .as_ref()
+        .map(|interpretation| Interprets {
+            decision: &interpretation.decision,
+            how: &interpretation.how,
+            why: &interpretation.why,
+        });
+    let message = commit_message_interpreting(
+        &CommitFacts {
+            id: &id,
+            rationale: &proposal.rationale,
+            decided_by: &decided_by,
+            author: &proposal.author,
+            base_commit: &proposal.place.base_commit,
+        },
+        interprets.as_ref(),
+    );
     if let Err(error) = prepared
         .git
         .commit_only(&context.data_dir, &message, &prepared.top_path)
@@ -618,9 +650,9 @@ fn run_approve(
     }
 }
 
-/// Why `flags` do not go with an `update` or a `create` (a decision flag
-/// decides a question or a discrepancy): exit 2's reason; `None` when none
-/// is given.
+/// Why `flags` do not go with a kind that applies (a decision flag decides
+/// a question or a discrepancy): exit 2's reason; `None` when none is
+/// given.
 pub(crate) fn flag_on_apply(proposal: &Proposal, flags: &ApproveFlags) -> Option<String> {
     if !flags.any() {
         return None;
@@ -631,15 +663,10 @@ pub(crate) fn flag_on_apply(proposal: &Proposal, flags: &ApproveFlags) -> Option
         (None, Some(_)) => "--answer",
         (None, None) => "--canon",
     };
-    let article = if proposal.kind == ProposalKind::Update {
-        "an"
-    } else {
-        "a"
-    };
     Some(format!(
-        "`{flag}` decides a question or a discrepancy; `{id}` is {article} {}: `spec approve {id}` \
+        "`{flag}` decides a question or a discrepancy; `{id}` is {}: `spec approve {id}` \
          applies it as proposed; nothing changed",
-        proposal.kind.as_str()
+        proposal.kind.with_article()
     ))
 }
 

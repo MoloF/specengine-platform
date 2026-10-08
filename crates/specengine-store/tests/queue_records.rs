@@ -99,6 +99,7 @@ fn update() -> NewProposal {
         author: author(),
         diagnostics: Vec::new(),
         new_ids: Vec::new(),
+        interpretation: None,
     }
 }
 
@@ -439,7 +440,10 @@ fn a_corrupt_record_row_names_its_column() {
             "choice"
         ]
     );
-    assert_eq!(&PROPOSAL_COLUMNS[40..], ["task_id", "staged", "staged_at"]);
+    assert_eq!(
+        &PROPOSAL_COLUMNS[40..],
+        ["task_id", "staged", "staged_at", "interpretation"]
+    );
     let cases: Vec<CorruptCase<'_>> = vec![
         (
             "an update with a record",

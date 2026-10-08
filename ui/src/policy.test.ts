@@ -249,6 +249,9 @@ describe("source policy", () => {
       "const go = task.profile && run();",
       "const tone = TONES[proposal.kind];",
       "if (KNOWN.includes(claim.role)) {",
+      // AC-U2 of docs/features/kind-interpretation.md: the Interpretation section follows the key, never the kind.
+      '{review.kind === "interpretation" && <InterpretationSection project={project} interpretation={review.interpretation} />}',
+      'const carries = review.kind === "interpretation";',
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }
@@ -259,6 +262,7 @@ describe("source policy", () => {
       "{node.kind ?? \"-\"}",
       "author.role === null ? null : `role ${author.role}`",
       "{task.profile === null ? <p>No profile</p> : <p>{task.profile}</p>}",
+      "{review.interpretation !== null && <InterpretationSection project={project} interpretation={review.interpretation} />}",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }
