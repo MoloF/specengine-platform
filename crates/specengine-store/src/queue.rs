@@ -85,9 +85,14 @@
 //!   compare-and-set op compares it too. Every op leaving `open` clears
 //!   both columns; `.approved` and `.rejected` carry `staged_at` when the
 //!   decision confirms the stage ([`Decision::staged_at`]).
+//! - **Gate** (`docs/canon/gate.md` "Verdict", "Event", `queue/gate.rs`):
+//!   a read-only open for one verdict ([`open_for_gate`]), the tasks of a
+//!   repository as the gate reads them ([`GateQueue::tasks`]), and its one
+//!   record, `gate.observed` ([`record_gate_observed`]); no schema step.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
+mod gate;
 mod stage;
 mod state;
 mod tasks;
@@ -118,6 +123,7 @@ use crate::error::{Db, StoreError};
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
+pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
     EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredEvent,

@@ -27,6 +27,11 @@
 //! - AC-11: each skill backticks the names AC-11 lists for it and holds
 //!   the precedence sentence. M: `distinct_from` out of `ask-owner`; the
 //!   sentence dropped from one.
+//! - docs/features/plugin-gate.md AC-15: five skills (`analyze`,
+//!   `implement` join the three) under the same rules; `implement`
+//!   backticks `claim_task`, `report_run`, `complete_task` and the table's
+//!   arguments, `analyze` `submit_plan` and its arguments. M: `claim_task`
+//!   dropped; `submit_plan` dropped.
 //!
 //! Compiles to nothing with `--features probes` (the ACs name the default
 //! build). The repository is only read.
@@ -52,7 +57,7 @@ use serde_json::Value;
 const PRECEDENCE: &str = "The project's CLAUDE.md and its roles take precedence over this skill.";
 
 /// AC-11's list: what each skill backticks.
-const NAMES: [(&str, &[&str]); 3] = [
+const NAMES: [(&str, &[&str]); 5] = [
     (
         "read-spec",
         &["get_context_bundle", "get_node", "search", "get_tree"],
@@ -70,6 +75,37 @@ const NAMES: [(&str, &[&str]); 3] = [
         ],
     ),
     ("propose-spec-change", &["propose_change", "span_hash"]),
+    // docs/features/plugin-gate.md "Data", "Skills", AC-15.
+    (
+        "analyze",
+        &[
+            "get_task",
+            "get_context_bundle",
+            "ask_question",
+            "report_discrepancy",
+            "task_id",
+            "working_answer",
+            "submit_plan",
+            "plan_md",
+            "criteria",
+            "affected_nodes",
+        ],
+    ),
+    (
+        "implement",
+        &[
+            "get_task",
+            "claim_task",
+            "role",
+            "worktree",
+            "task_id",
+            "report_run",
+            "outcome",
+            "summary",
+            "changed_files",
+            "complete_task",
+        ],
+    ),
 ];
 
 /// The words no file under `plugin/` holds besides P2-3's (AC-08; the root
@@ -99,7 +135,13 @@ fn committed() -> Skills {
     }
     assert_eq!(
         skills.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["ask-owner", "propose-spec-change", "read-spec"]
+        [
+            "analyze",
+            "ask-owner",
+            "implement",
+            "propose-spec-change",
+            "read-spec"
+        ]
     );
     skills
 }
@@ -579,7 +621,7 @@ fn plugin_files() -> BTreeMap<String, String> {
     }
     let mut out = BTreeMap::new();
     walk(&plugin_dir(), &plugin_dir(), &mut out);
-    assert_eq!(out.len(), 6, "{:?}", out.keys());
+    assert_eq!(out.len(), 10, "{:?}", out.keys());
     out
 }
 
@@ -817,6 +859,35 @@ fn ac11_each_skill_names_its_names_and_yields_to_the_project() {
         "propose-spec-change: no precedence sentence",
         "reworded",
     );
+
+    // plugin-gate AC-15, M: `claim_task` dropped from `implement` (the
+    // tool stays backticked in `analyze`, so only this check sees it).
+    let unclaimed = edited(&skills, "implement", "`claim_task`", "the claim tool");
+    assert_names(
+        &ac11_problems(&unclaimed),
+        "implement: `claim_task` not backticked",
+        "claim_task dropped",
+    );
+    let listed = listed();
+    assert_eq!(ac06_problems(&unclaimed, &listed), Vec::<String>::new());
+    // M: `submit_plan` dropped from `analyze`.
+    let unplanned = edited(&skills, "analyze", "`submit_plan`", "the plan tool");
+    assert_names(
+        &ac11_problems(&unplanned),
+        "analyze: `submit_plan` not backticked",
+        "submit_plan dropped",
+    );
+    // `report_run` and `complete_task` out of `implement`.
+    for name in ["report_run", "complete_task"] {
+        let mut out = skills.clone();
+        let text = out.get_mut("implement").unwrap();
+        *text = text.replace(&format!("`{name}`"), "the tool");
+        assert_names(
+            &ac11_problems(&out),
+            &format!("implement: `{name}` not backticked"),
+            name,
+        );
+    }
 }
 
 // ------------------------------------------- decision-apply AC-16 (skill)

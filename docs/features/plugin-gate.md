@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [plugin, crates/specengine-cli]
 ref: plugin-gate analysis 2026-10-08 (HEAD b3da10c), working answers Q1-Q8 for the owner's review; 08 s2 Phase 2, Plugin
+shipped: 2026-10-08
 adrs: [ADR-0037]
 ---
 
@@ -10,124 +11,86 @@ adrs: [ADR-0037]
 
 ## Why
 
-The owner's one control point is task approval (ADR-0012), yet nothing stops an agent writing code before it: 08 s3 AC-4 is unmet, the skills only mention the task tools, and `#control` closed the hook "when the daemon is unavailable" while no daemon exists: read literally, the gate never opens. ADR-0037 (the owner's review open) supplements ADR-0006 until `spec serve`: `spec gate` in a `command` `PreToolUse` hook, reading the config, git and the queue itself; no verdict is closed. This slice builds it (`docs/canon/gate.md`, normative: read it first) and two skills walking an agent through a task, `analyze` and `implement`.
-
-**Order** (08 s2): next after `decision-staging`; `plugin-roles` (stack-neutral roles, a plugin `/feature`) after it (Q8). `rust-developer`: core, store, CLI, `plugin/`; `test-engineer`: tests, `PINS`. No http, UI, CI, crate or dependency.
-
-**Assumptions**: A1 plan before approval, claim after; A2 the binary stays `spec`, reading SQLite itself until `spec serve`; A3 a cooperative agent; A4 neither this repository's nor a pilot's `specengine.toml` has `[zones]` or `[gate]`; A5 the owner enables the plugin in user settings (not local scope, as the root README says): the hook runs in every project; A6 an implementer edits where it claimed (an MCP claim's `worktree` is relative to the server's directory, the session's).
+The owner's one control point is task approval (ADR-0012), yet nothing stopped an agent writing code before it (08 s3 AC-4), and ADR-0006 closed the hook "when the daemon is unavailable" while no daemon exists: read literally, the gate never opened. ADR-0037 supplements ADR-0006 until `spec serve`: `spec gate` in a `command` `PreToolUse` hook reads the config, git and the queue itself; no verdict is closed. This slice built it and two skills walking an agent through a task, `analyze` and `implement`. Next: `plugin-roles` (stack-neutral roles, a plugin `/feature`; Q8).
 
 ## Description and interactions
 
-The owner adds `[zones]` and `[gate]`, `observe` first (findings as events), then `selective`, and approves on a terminal as now. An `implement` agent runs `get_task`, `claim_task` (its role as the project names it, this worktree), writes, `report_run`, `complete_task`; at `done` the gate closes again. Without a claim a gated write is refused; the model reads why and the next step, reports it, never works around it. An `analyze` agent reads, asks, `submit_plan`s and claims nothing: its code writes are refused by design. Without a config or `[gate]`: exit 0 before git or the queue. `spec approve`, the owner's editor, git and the shell are never gated.
+The owner adds `[zones]` and `[gate]`, `observe` first (findings as `gate.observed`), then `selective`, and approves on a terminal as before. An `implement` agent runs `get_task`, `claim_task` (its role, the top of the git worktree it edits), writes, `report_run`, `complete_task`; at `done` the gate closes again. An unclaimed gated write is refused: the model reads why and the next step, tells the owner, never works around it. An `analyze` agent reads, asks, `submit_plan`s and claims nothing. Without a config or `[gate]`: exit 0 before git or the queue. `spec task approve`, the owner's editor, git and the shell are never gated.
 
 ## Data
 
-**Config**: `[zones] <name> = [<glob>...]`, `[gate] mode = "off|observe|selective"`, `zones = [<name>...]` (canon "Config", normative: rules, errors), parsed apart from the reads by core `gate.rs`; `ProjectConfig::from_toml` keeps name-checking both, so a bad `[gate]` fails no read.
+Canon: `docs/canon/gate.md` ("Config", "Controlled paths", "Verdict", "CLI", "Hook", "Event", "Recovery", "Known limits"). The built signatures (deviation 2):
 
-**CLI** `spec gate` (07 s2):
-
-```
-spec gate --worktree DIR --path FILE [--json]   # DIR the session's directory; a relative FILE joins it
-spec gate --stdin                                # the hook: Claude Code's PreToolUse JSON on stdin
-```
-
-- Exits: 0 pass; 2 refuse, no verdict, usage (clap's). Never 1 or another code: Claude Code proceeds on any code but 2. `--root`, `--config`, and `--json` with `--stdin`: usage.
-- `--path`: stdout `pass: <reason>` on 0; on 2 stdout empty, the message on stderr. `--stdin`: stdout always empty; stderr the message on 2, on 0 only an `observe` record's failure `note:`.
-- `--json` (with `--path`): one compact document on 0 and on 2, an exception to the CLI's "none on 2" (a refusal is a verdict); a crash prints none. Every key present, absent `null`:
-
-```json
-{"verdict":"refuse","reason":"no-claim","mode":"selective","path":"src/a.rs","root":"<root>","zone":"code","worktree":"<top>","branch":"feat-x","task":null,"tasks":[{"id":"T-0003","status":"ready","worktree":null,"branch":null}],"cause":null}
-```
-
-`verdict` `pass|refuse|unavailable`; `reason` `no-config|off|not-controlled|claimed|observed`, `no-claim`, `input|config|home|git|queue|deadline`; `path` root-relative once a root is found, else folded absolute; `zone` `null` for the config file or an uncontrolled path; `task` the lowest-numbered opening task; `tasks` on a refusal only (else `[]`): the repository's `ready` and `in_progress` tasks by number, at most 8, a claim's `worktree`, `branch`; `cause` the no-verdict message.
-
-**Messages**, stderr, one line. Refuse: ``specengine gate (selective): src/a.rs is in the zone `code` and no in_progress task is claimed in <top> on `feat-x`. Tasks here: T-0003 ready; T-0004 in_progress, claimed in <w> on `main`. Claim a ready task in this worktree with claim_task, or ask the owner to approve one (`spec task approve T` on a terminal). Nothing was written.`` (the config file: `is the gate's config`; none: `Tasks here: none ready or in_progress.`). No verdict: ``specengine gate: no verdict (<cause>): the write is refused. <hint>``, hints `reinstall spec and the plugin from one commit` (a newer schema, an unknown subcommand), `fix specengine.toml:<line>`, `spec task show <T>` (a corrupt row, its column named).
-
-**Library**: CLI `gate.rs` `gate(&Env, &GateRequest {input: GateInput::{Path {dir, path}, Hook(bytes)}, now, deadline}) -> GateOutcome` (the JSON's keys, `exit_code()`), never `CliError`. Core `gate.rs`: `GateConfig::from_toml(text) -> Result<Option<GateConfig>, ProjectError>`, `GateMode`, `controlled(rel) -> Option<Control {zone}>`, `fold(path)`, `opens(&[GateTask], &Place) -> Option<TaskId>`, all pure. Store `queue/gate.rs`: `open_for_gate(db, project, deadline) -> Result<Option<GateQueue>, QueueError>` (no file `None`; never creates or steps a schema; newer `SchemaTooNew`), `GateQueue::tasks(git_common_dir) -> (Vec<GateTask {id, status, claim}>, Vec<Corrupt>)`, `record_gate_observed(db, project, &GateObserved, now, deadline) -> Result<bool, QueueError>`, `EVENT_GATE_OBSERVED`. Git through `WorktreeGit`, reads only. `GATE_DEADLINE` 3 s from the start: each git call killed and SQLite's busy handler cut at what remains.
-
-**Hook stdin** (Claude Code; AC-16 confirms): `{session_id, transcript_path, cwd, permission_mode, hook_event_name, tool_name, tool_input}`; read only `cwd` and `tool_input.file_path` (`NotebookEdit`: `.notebook_path`); not JSON, over 1 MiB, a relative `cwd`, no path -> `input`. It rests on: exit 2 refuses the call and hands stderr to the model; any other non-zero code and a timeout let it proceed; exit 0's stdout is read as hook JSON, where `"permissionDecision": "allow"` skips the permission prompt; `SessionStart`, `UserPromptSubmit` cannot refuse a tool call.
-
-**Plugin** `plugin/specengine/` 0.1.6 -> **0.2.0** (MINOR), one `PINS` entry appended. `hooks/hooks.json`:
-
-```json
-{"hooks": {"PreToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit",
-  "hooks": [{"type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh\"", "timeout": 10}]}]}}
-```
-
-`hooks/gate.sh`, POSIX `sh`, reading no stdin itself:
+- core `gate.rs`, pure: `GateConfig::from_toml(&str) -> Result<Option<GateConfig {mode, zones, slug}>, ProjectError>`; `controlled(&self, rel, config_name) -> Option<Control {zone: Option<String>}>`; `GateMode {Off, Observe, Selective}`; `fold(&Path) -> PathBuf`; `opens(&[GateTask {id, status, claim}], branch: Option<&str>, here: impl Fn(&str) -> bool) -> Option<&GateTask>`; `mentions_gate(&str) -> bool`.
+- store `queue/gate.rs`: `open_for_gate(db, project, deadline) -> Result<Option<GateQueue>, QueueError>`; `GateQueue::tasks(git_common_dir) -> Result<(Vec<GateTask>, Vec<UnreadableTask>), QueueError>`; `record_gate_observed(db, project, &GateObserved {path, zone, worktree, branch}, now, deadline) -> Result<bool, QueueError>`; `EVENT_GATE_OBSERVED`. `same_dir` public; `WorktreeGit::new_until(dir, &GitEnv, deadline)`, `top_and_common_dir()`, `GitError::Deadline`.
+- CLI `gate.rs`: `gate(&Env, &GateRequest {input, session, git: GitEnv, now, deadline, progress}) -> GateOutcome` (never `CliError`); `GateInput::{Path {dir, path}, Hook(HookInput {cwd, file}), Unread {cause, deadline}}`; `read_hook_input(reader, deadline) -> GateInput`; `gate_session(session, cause, &GateProgress) -> GateOutcome`; `GateProgress`, `GateStage {Unknown, Open, Observe, Closed}`; `GATE_DEADLINE` 3 s, `GATE_TASKS_MAX` 8, `LINK_HOPS` 16.
+- plugin 0.1.6 -> 0.2.0, `PINS` `6b6fa534...`: `hooks/hooks.json` (canon "Hook"); skills `analyze`, `implement` (root README); descriptions of the five 1 149 B, bodies 2 090 and 2 280 B. `hooks/gate.sh` as built, in outline:
 
 ```sh
-if ! command -v spec >/dev/null 2>&1; then
-  d=${CLAUDE_PROJECT_DIR:-$PWD}
-  while :; do
-    if [ -f "$d/specengine.toml" ]; then
-      grep -q '^[[:space:]]*\[gate\]' "$d/specengine.toml" || exit 0
-      echo "specengine gate: no verdict (spec is not on PATH): the write is refused. Put the directory of spec on the PATH Claude Code starts with." >&2
-      exit 2
-    fi
-    case $d in /|.|'') exit 0 ;; esac
-    d=$(dirname "$d")
-  done
-fi
-spec gate --stdin >/dev/null && exit 0
-exit 2
+limit=7; gate_line='<mentions_gate as an ERE>'
+exec 4>&2 2>/dev/null; trap '' PIPE               # the wrapper's messages on fd 4
+trap 'stop "spec gave no answer within $limit s" watchdog' USR1
+trap 'stop "the hook was stopped"' HUP INT TERM   # stop: KILL spec, end the watchdog, rm the temp file, exit 2
+command -v spec || by_project "spec is not on PATH" "<PATH hint>"  # [gate] at/above CLAUDE_PROJECT_DIR: 2, else 0
+err=$(mktemp "${TMPDIR:-/tmp}/specengine-gate.XXXXXX")
+spec gate --stdin <&3 >/dev/null 2>"$err" &      # stdin through fd 3
+sh -c '<limit times: sleep 1, the wrapper still its parent?>; kill -USR1 <wrapper>' &
+wait "$pid"  # 0: 0; 2 + "unrecognized subcommand": by_project "this spec has no gate" "<reinstall>";
+             # 2: 2, spec's stderr replayed; else 2 "spec ended with status N"
 ```
-
-**Skills** `skills/{analyze,implement}/SKILL.md` under the root README's rules (descriptions of the five <= 1 200 B together, a body <= 4 096 B, no enum value or digit, the precedence sentence, all thirteen tools named across the five). Reserved names left: `prepare-task`, `round`.
-
-| Skill | Use when | Teaches |
-|---|---|---|
-| `analyze` | asked to analyse or plan a task | `get_task` (package, staleness), `get_context_bundle` on its targets; a gap: `ask_question` or `report_discrepancy` with `task_id` and a working answer, keep going; `submit_plan` (`plan_md`, `criteria`, `affected_nodes`; replaces the last; before approval only); the owner approves on a terminal; never claim or edit code |
-| `implement` | asked to implement a task | `get_task` (approved, or claimed here); `claim_task` once, `role` as the project names yours, `worktree` the one you edit; work only there, on its branch; a refused write: tell the owner the refusal and its next step, never work around it (no shell write, other worktree or config edit); `task_id` on questions; `report_run` (`outcome`, `summary`, `changed_files`), then `complete_task`; a subagent elsewhere is refused |
-
-**Event** `gate.observed` (canon "Event"): payload keys `path, zone, worktree, branch` in this order; one `Immediate` transaction, `project` the slug; no schema step.
 
 ## Rules and edge cases
 
-The canon's ("Rule", "Config", "Verdict", "Hook"), and:
-
-- WHEN the path names a new file in new directories THEN the existing ancestor is canonicalised, the rest appended: `src/new/dir/b.rs` matches `src/**`.
-- WHEN the volume is case-insensitive THEN the existing prefix takes its on-disk case (`SRC/a.rs` is `src/a.rs`); globs compare case-sensitively.
-- WHEN a symlink leads out of the root THEN the canonical path decides, under its own config if any.
-- WHEN `HEAD` is detached THEN nothing opens (`branch` `null`).
-- WHEN a claim is compared THEN `same_dir`, `same_repository`, never strings: another clone of the slug opens nothing.
-- WHEN any step passes the deadline THEN `deadline`: exit 2 (`observe` 0) within the deadline + 0.5 s.
-- WHEN `--stdin` THEN stdout carries zero bytes whatever the outcome; no output names `permissionDecision`.
-- WHEN the path is the config file and the mode is not `off` THEN it is controlled whatever the zones (Q7).
-- WHEN `observe` cannot record THEN exit 0, one stderr `note:`.
-- Risks: a hook timeout still opens (the deadline keeps below it); lockout (canon "Recovery"); one process per write in every project; an older `spec` closes (usage exit 2).
+The canon's. Hook stdin as relied on (AC-16 confirms): `{session_id, transcript_path, cwd, permission_mode, hook_event_name, tool_name, tool_input}`; exit 2 refuses and hands stderr to the model; any other code and a timeout proceed; exit 0's stdout is hook JSON (`allow` skips the permission prompt).
 
 ## Acceptance criteria
 
-Scratch repositories (`git init`, `git worktree add`), a scratch `HOME`; CLI `gate.rs`, store `queue_gate.rs`, MCP `plugin_files.rs`, `plugin_skills.rs`; the wrapper run as `sh hooks/gate.sh` with a scratch `PATH`.
+Scratch repositories and `HOME`. New tests: CLI `gate.rs` 20, `gate_wrapper.rs` 8 (sh, dash, bash, zsh); core `gate.rs` 14; store `queue_gate.rs` 10, `worktree_git.rs` +3; mcp `mcp_gate.rs` 1. Updated: mcp `plugin_files.rs`, `plugin_skills.rs`, `mcp_tasks.rs` (the P2-3 scan), `mcp_stage.rs` (version >= 0.1.6); core `check_parity.rs` (five skill files). 47 named mutations red.
 
-- [ ] AC-01 -- no `[gate]`: exit 0, `off`; an unknown `[gate]` key, `mode = "strict"`, `mode = "on"`, `min_files = 3`, an undeclared zone, a glob `src/[`, a zone `Code` -> exit 2 naming `specengine.toml:<line>`, while `spec show <ID>` and MCP `get_node` answer (M: absent read as `selective`; a bad `[gate]` fails `spec show`).
-- [ ] AC-02 -- `selective`, a controlled path, the task `draft`, `review`, `changes_requested`, `ready`, `done`, `cancelled` -> 2 `no-claim`; claimed, run open -> 0 `claimed`; after `report` -> 0 (M: `ready` opens; an open run required).
-- [ ] AC-03 -- claimed in W1: W2 of the repository closed; W1 after `git switch -c other` closed; a second clone, same slug and branch, closed (M: the repository alone compared; the branch ignored; matched by slug).
-- [ ] AC-04 -- outside every zone, under no `specengine.toml`, a project without `[gate]` -> 0 with the data directory `chmod 000` (M: the queue opened before the zone match).
-- [ ] AC-05 -- `code = ["src/**"]`, no claim: `src/../src/a.rs`, the absolute path, `link/a.rs` (`link -> src`), absent `src/new/dir/b.rs`, `SRC/a.rs` on a case-insensitive volume (else skipped, noted), `specengine.toml` -> each 2 (M: the raw `file_path` matched).
-- [ ] AC-06 -- a bad `[gate]`, `HOME` unset, a schema-6 queue, a corrupt `claim`, the root outside git, bad stdin, the queue under an exclusive lock -> 2 in under 4 s, stderr `specengine gate: no verdict (` and the cause, never `no in_progress task` (M: one exits 0; an unbounded busy wait).
-- [ ] AC-07 -- wrapper: a fake `spec` exiting 1, 101 or killed by `SIGKILL` -> 2; one printing on stdout -> stdout empty; no `spec`: 2 with the `PATH` hint under a `[gate]` line at or above `CLAUDE_PROJECT_DIR`, else 0 (M: the code passed through).
-- [ ] AC-08 -- `--stdin` on pass, refuse, no verdict: zero stdout bytes; no output of `spec gate` carries `permissionDecision` (M: the JSON printed in hook mode; `allow` on a pass).
-- [ ] AC-09 -- a claimed task passes with an open question, a discrepancy, a staged decision, `stale` true, a red `spec check` (M: `stale` read).
-- [ ] AC-10 -- `observe`: an unclaimed controlled write -> 0 and one `gate.observed` with the four keys; claimed -> 0, none; `observe`, `off` pass with the data directory unreadable (M: `observe` exits 2; no event).
-- [ ] AC-11 -- verdicts identical with every `.md` unreadable; the index database untouched (absent stays absent, else its mtime kept); the median per call over 50 calls on pilot A recorded at shipping (M: the reads' `update` called).
-- [ ] AC-12 -- a refusal's stderr and JSON name the root-relative path, zone, mode, `claim_task`, `spec task approve`, task IDs with status; a unique title and goal appear nowhere (M: a title echoed).
-- [ ] AC-13 -- `hooks.json`: one event `PreToolUse`, one entry, `type` `command`, the matcher fully matching `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `timeout` above 3, `sh` on `${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh` (M: `"type": "http"`; `Write` dropped).
-- [ ] AC-14 -- a scratch `fixtures/spec-a` under `selective`, hook JSON through the wrapper: closed in `draft`, `ready`; open after `claim`, after `report`; closed after `complete` (M: open after `complete`).
-- [ ] AC-15 -- five skills keep the README's rules; `implement` names `claim_task`, `report_run`, `complete_task`; `analyze` `submit_plan`; files = the README's list; 0.2.0; `PINS` appended; `claude plugin validate --strict` (owner); the P2-3 scan (07 s1.2) covers the gate sources and `plugin/**` (M: `claim_task` dropped; `PINS` unchanged; a `"code"` zone in core).
-- [ ] AC-16 -- owner, Claude Code version noted: in a `selective` scratch project an unclaimed Edit is refused and its stderr reaches the model, also in a subagent and auto mode; an unrelated project passes; noted: the timeout, `MultiEdit`, `NotebookEdit`, `CLAUDE_PROJECT_DIR`, `/specengine:analyze`, `/specengine:implement` (M: a bare `spec gate --stdin` with `spec` off `PATH` lets the Edit through).
+- [x] AC-01 -- no `[gate]`: 0 `off`; an unknown key, `mode = "strict"`, `"on"`, `min_files`, an undeclared zone, `src/[`, a zone `Code`, `../x`, a zone not an array -> 2 naming `<root>/specengine.toml:<line>`, while `spec show` answers; not TOML: 2 under a line naming `gate` (`[ gate ]`, `gate.mode =`), else off (CLI; core `mentions_gate`).
+- [x] AC-02 -- `selective`: `draft`, `review`, `changes_requested`, `ready`, `done`, `cancelled` -> 2 `no-claim`; claimed -> 0 `claimed`, after `report` too.
+- [x] AC-03 -- claimed in W1: W2 closed, also switched onto `main`; W1 on another branch closed, back open; a same-slug clone closed; detached closed, `branch` null.
+- [x] AC-04 -- uncontrolled, no config, no `[gate]` -> 0 with the data directory `chmod 000`.
+- [x] AC-05 -- `src/../src/a.rs`, absolute, `link/a.rs`, `./src/./a.rs`, absent `src/new/dir/b.rs`, `SRC/a.rs` (case-insensitive volume) -> `src/...`, 2; any `specengine.toml` in any case and depth (`src/x/SpecEngine.toml`, `crates/foo/specengine.toml` with zone `crates/*/src/**`) -> 2, zone null, "would be a project config"; symlinks: dangling into a zone 2, a zone file linking out 2, claimed 0, a dangling loop 2 gated, 0 ungated, 0 + note `observe`; `~/` against `HOME` (M: the raw path matched; only the canonical candidate judged; `rel == "specengine.toml"`).
+- [x] AC-06 -- a bad `[gate]`, `HOME` unset, schema 6 (reinstall hint), a corrupt claim (`spec task show T` hint), outside git, the queue locked -> 2 under 4 s, `specengine gate: no verdict (`, never `no in_progress task`. Bad, absent or held-open stdin decided by the session's project (deviation 13): none, no `[gate]`, `off` 0; `observe` 0 + note; `selective`, broken 2; a 1.1 MB `Write` ungated 0; 30 MB gated claimed 0 in 1.28 s (M: a capped reader).
+- [x] AC-07 -- wrapper (`gate_wrapper.rs`; sh, dash, bash, zsh): a fake `spec` exiting 1, 101, killed -> 2; printing `allow` -> stdout empty; slow -> 2 within 7 s + 0.5 s; HUP, INT, TERM -> 2, no temp file, no process after 1.1 s; a `SIGKILL`ed wrapper -> no `USR1` sent, watchdog gone in 1.2 s; 60 fast runs leave no `sleep`; no `spec` or one without `gate`: 2 under a `gate` line at or above `CLAUDE_PROJECT_DIR`, `[gateway]` 0, no `[gate]` 0.
+- [x] AC-08 -- `--stdin`: zero stdout bytes on every outcome; no output names `permissionDecision`; usage errors exit 2, one line.
+- [x] AC-09 -- a claimed task passes with an open question, a discrepancy bound, `stale`, a red `spec check` (a staged decision: no proposal row is read).
+- [x] AC-10 -- `observe`: unclaimed -> 0 + one `gate.observed` with the four keys in order; a config: zone null; detached: branch null; claimed: none; data directory unreadable: 0 + note; export keeps the events.
+- [x] AC-11 -- verdicts identical with every `.md` unreadable; the `.db` mtime and size kept over 10 calls, a fresh slug's `.db` absent; fixture medians (debug) claimed 31.0 ms, refused 31.4, not controlled 6.2, no config 6.2; the wrapper about +7 ms. Not met: the pilot-A median (Open 3).
+- [x] AC-12 -- a refusal's stderr and JSON: root-relative path, zone, mode, `claim_task`, `spec task approve T`, IDs, status, claim place; title and goal never; nine `ready` -> 8 + `and 1 more`.
+- [x] AC-13 -- `hooks.json` as canon "Hook" (`plugin_files.rs`; M: `"type": "http"`, `Write` dropped).
+- [x] AC-14 -- `fixtures/spec-a` copy, `selective`, through the wrapper: `draft` 2, `ready` 2, claimed 0, reported 0, completed 2.
+- [x] AC-15 -- five skills under the README's rules; `implement` names `claim_task`, `report_run`, `complete_task`, `analyze` `submit_plan`; the ten files; 0.2.0, `PINS` appended; the P2-3 scan over the gate sources and `plugin/**`, no `"code"` in core (`plugin_files.rs` `ac03_the_plugin_tree_is_data_s_ten_files`, `plugin_skills.rs`; M: `claim_task` dropped). `claude plugin validate --strict`: the owner's.
+- [ ] AC-16 -- owner: see "Owner's manual check".
 
 ## Out of scope
 
-`spec serve`, the `spec mcp` bridge, auto-start; the other 07 s4 hooks; Bash and other servers' writes (07 s4's limit); `strict`, `min_files`, `contours`; a write checked against the plan; stack-neutral roles, a plugin `/feature` (`plugin-roles`, after the owner checks name resolution, 06 s8); profiles; a UI view of `gate.observed`.
+`spec serve`, the `spec mcp` bridge; the other 07 s4 hooks; Bash and other servers' writes; `strict`, `min_files`, `contours`; a write checked against the plan; `plugin-roles`; profiles; a UI view of `gate.observed`.
 
 ## Open
 
-1. **ADR-0037** rests on working answers Q1-Q3, Q7: the owner reviews it explicitly; another decision supersedes it before shipping.
+1. **ADR-0037 stays accepted; the owner's explicit review is still open.** It rests on working answers Q1 (a new ADR supplementing ADR-0006, `#control` reworded), Q2 (only an `in_progress` task claimed in that worktree and branch opens), Q3 (no `[gate]` is off), Q7 (the config gated while on). Another answer is a new ADR superseding it.
 2. AC-16, the owner's manual check.
-3. Working answers: Q1 a new ADR supplementing ADR-0006, `#control` reworded; Q2 only an `in_progress` task claimed in that worktree and branch opens; Q3 no `[gate]` is off; Q4 `spec` missing: the wrapper's 2 with a `PATH` hint under a `[gate]` line at or above `CLAUDE_PROJECT_DIR`, else 0; Q5 an `observe` finding is `gate.observed`, best-effort; Q6 the task prompts are the skills `analyze`, `implement`; Q7 the config file is gated while the gate is on; Q8 roles and `/feature` next.
+3. AC-11's pilot-A median: not measured in this slice.
+
+## Owner's manual check
+
+Record the Claude Code version. In a `selective` scratch project with `spec` on `PATH`: an unclaimed Edit refused, its stderr reaching the model, also in a subagent and auto mode; an unrelated project passes; note the timeout, `MultiEdit`, `NotebookEdit`, `CLAUDE_PROJECT_DIR`, `/specengine:analyze`, `/specengine:implement`; `spec` off `PATH` -> the wrapper refuses; `claude plugin validate --strict` on `plugin`, `plugin/specengine`.
 
 ## Implementation
 
-Not built. Docs at shipping, within caps (crate READMEs pay by moving detail into `gate.md`): `gate.md` drops "Not built yet", takes the CLI contract; 07 s1.4 (two skills; reserved `prepare-task`, `round`), s2 (`spec gate ... | --stdin`, exit 0 or 2), s4 (the built entry, the wrapper; other hooks later), s5 (three modes; `strict`, `min_files`, `contours` later); 06 s3.5 items 2-3; 08 s2, s3 AC-4; root README "Claude Code plugin" (hook, wrapper, two skill rows, "Files" + `hooks/hooks.json`, `hooks/gate.sh`, two `SKILL.md`, "No hooks" dropped, reserved names, 0.2.0, runs wherever enabled); core README (`GateConfig`), CLI README (`spec gate`, JSON on 2), store README (`open_for_gate`, `record_gate_observed`); `tasks.md` "Store", `proposal-queue.md` "States and events" (+ `gate.observed`); http README "Types" (streamed); `ui/README.md` "Contract seam": `QUEUE_EVENT_TYPES` stays 16, no screen shows a finding yet; `CLAUDE.md` State.
+Canon: `gate.md` (built), `architecture.md#control`, `tasks.md` "Store", `proposal-queue.md` "States and events"; core, CLI, store, http READMEs, `ui/README.md`, root README "Claude Code plugin", `CLAUDE.md` State; 06 s3.5, 07 s1.4, s2, s4, s5, 08 s2, s3 AC-4. Iterations: Rust 3; review 1 changes needed (two majors: input failures refused every project; a nested config bypassed the gate), all taken in iteration 2; iteration 3: CLI comments cite canon `gate` without its path or ADR number (`genre.rs`). Workspace 2 012 passed, 20 skipped; fmt, clippy (+ probes) clean; UI 66 files green. A store `#[cfg(test)]` oracle (`rows.rs`) now covers every fixture corpus, `spec-c` included.
+
+| Module | What it does |
+|---|---|
+| core `gate.rs` (new), `lib.rs`, `project_toml.rs` | config, modes, globs, `controlled`, `fold`, `opens`, `mentions_gate` |
+| store `queue/gate.rs` (new), `queue.rs`, `lib.rs`, `git.rs`, `worktree.rs` | read-only open, tasks, `gate.observed`; `same_dir`; `new_until` kills git at the deadline |
+| CLI `gate.rs` (new), `lib.rs`, `main.rs` | input, candidates, verdict, messages, JSON; `gate` runs apart; usage, panic, backstop |
+| `plugin/` | `hooks/hooks.json`, `hooks/gate.sh`, two skills, 0.2.0, descriptions |
+
+Deviations, accepted: (1) the wrapper as Data, not the draft's; (2) the signatures above; (3) `[ ] { } \` and control characters refused in globs; (4) `off` reads no zone; (5) `[project] slug` checked unless `off`; (6) corrupt rows as canon step 6, only when nothing opens; (7) config causes name the absolute path, hint `Fix <path>:<line>.`; (8) JSON `mode` `off` with no table; `observe` no verdict: pass `observed`, `cause` set, a note; (9) the detached wording; (10) `file_path`, else `notebook_path`; `tool_name` unread; `cwd` only for a relative path; (11) usage errors print the no-verdict line, a panic exits 2; (12) manifest descriptions name tasks and the gate; (13) iteration 2: no input cap, input failures by the session's project (none: pass), every `specengine.toml` controlled, two candidates, dangling links (16 hops), `~`, wrapper limit 7 s (draft: none), per-second watchdog, HUP/INT/TERM traps, version skew by the project, backstop by stage.
+
+Residual risks: canon "Known limits" (timeout fail-open; the first-run macOS scan; `-wal`, `-shm`; cost) and "Recovery" (lockout; a `SIGKILL`ed wrapper's temp file); Claude Code behaviour unverified until AC-16.
+
+Incident: during iteration 2's watchdog debugging the developer ran `pkill -x sleep` once, ending every `sleep` process of the user, possibly the owner's or other agents' waits. Owner's text, if wanted, for `.claude/agents/rust-developer.md` and `test-engineer.md`: "Never signal processes by name (`pkill`, `killall`): only PIDs your run started."

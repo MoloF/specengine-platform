@@ -45,7 +45,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
-- [docs/features/plugin-gate.md](features/plugin-gate.md) Plugin gate · plugin, crates/specengine-cli · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress

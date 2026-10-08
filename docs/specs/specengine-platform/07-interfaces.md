@@ -57,7 +57,7 @@ The MCP server remembers nothing between calls; a `cancel` stages nothing (the a
 
 ### 1.4. Prompts (= slash commands in Claude Code)
 
-Plugin skills carry them (`plugin-skills`: `read-spec`, `ask-owner`, `propose-spec-change`). Reserved for tasks: `/specengine:analyze <task>` (analyst, 06 §2), `implement <task>` (markers, `report_discrepancy`), `prepare-task <node…>` (a task draft), `round` (the owner's question sheet, 06 §5).
+Plugin skills carry them: `read-spec`, `ask-owner`, `propose-spec-change` (`plugin-skills`); `/specengine:analyze <task>` (the plan, 06 §2), `implement <task>` (claim, run, completion; `plugin-gate`). Reserved: `prepare-task <node…>` (a task draft), `round` (the owner's question sheet, 06 §5).
 
 ### 1.5. Notifications
 
@@ -103,7 +103,7 @@ spec symbols [--file F] [--unbound]
 spec verify [--task T] [--tests] [--changed PATH]   # exit 0 ok · 1 Fix-level findings · 2 run cannot be trusted
 spec bump [--editorial ID]                           # bump rev of changed nodes (pre-commit fails without it)
 spec lock accept ID [--editorial]                   # accept code changes / an editorial edit
-spec gate --worktree DIR --path FILE                 # for the PreToolUse hook; exit 2 = block
+spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/gate.md
 
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
@@ -150,8 +150,8 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
   "hooks": {
     "SessionStart": [{ "hooks": [{ "type": "command",
       "command": "specengine hook session-start" }] }],          // short summary: active task, open proposals (≤ 300 tok.)
-    "PreToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command",
-      "command": "specengine gate --stdin" }] }],                 // exit 2 = block; daemon down → exit 2
+    "PreToolUse": [{ "matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command",
+      "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh\"", "timeout": 10 }] }],  // built
     "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command",
       "command": "specengine hook touched --stdin" }] }],         // fast reindex of the file, code_ahead warning
     "SubagentStop": [{ "hooks": [{ "type": "command",
@@ -160,7 +160,7 @@ UI in **English** (ADR-0014); spec content is shown as is (the project's languag
 }
 ```
 
-`gate` reads the hook JSON from stdin (file path, cwd), determines the worktree and the active task, and checks the path against `zones` from the config. For `Bash` there is a separate matcher with `if:` on write commands; writes via the shell cannot be fully closed by hooks, and this limitation must be stated openly.
+Built (`plugin-gate`): only `PreToolUse`, its wrapper running `spec gate --stdin` (`docs/canon/gate.md`); the other three later. `Bash` is not gated: writes via the shell cannot be fully closed by hooks, a limitation stated openly.
 
 ## 5. `specengine.toml` (at the project repository root)
 
@@ -192,10 +192,9 @@ data  = ["data/**"]
 tests = ["tests/**"]
 docs  = ["docs/**", "CLAUDE.md"]
 
-[gate]
-mode = "selective"          # off | observe | selective | strict — checks ONLY that an approved task exists (ADR-0012); observe: stops nothing
-min_files = 3
-contours = ["feature", "feature→content"]
+[gate]                      # built: docs/canon/gate.md "Config"
+mode = "selective"          # off | observe | selective (strict later): ONLY that an approved task covers the write (ADR-0012)
+zones = ["code"]            # min_files, contours: later
 
 [code]
 languages = ["rust", "ron"]

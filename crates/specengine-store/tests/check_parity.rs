@@ -10,8 +10,8 @@
 //! mutations are run in the test on the config text or a scratch copy:
 //! `crates` out of `roots`, no `**/_*.md`, a new top-level directory with a
 //! README; docs/features/plugin-skills.md AC-12: `plugin` in `roots`,
-//! the skill exclude dropped → exactly the three skill bodies join (and
-//! three `class-missing`), `plugin` out of `roots` → none. AC-02:
+//! the skill exclude dropped → exactly the five skill bodies join (and
+//! five `class-missing`), `plugin` out of `roots` → none. AC-02:
 //! `enforce` → `clean`, 0 errors, debt, expired and stale;
 //! every finding pinned by (code, path, subject): none, the repository has
 //! no finding; mutations in the test: `mode = "observe"`, an `[ids]` prefix
@@ -193,11 +193,13 @@ fn under(files: &BTreeSet<String>, dir: &str) -> BTreeSet<String> {
 
 // ------------------------------------------------------------------ AC-03
 
-/// The plugin's three skill bodies (the root `README.md` "Claude Code plugin",
-/// its Files bullet):
+/// The plugin's five skill bodies (the root `README.md` "Claude Code plugin",
+/// its Files bullet; `analyze` and `implement` since docs/features/plugin-gate.md):
 /// under `roots` through `plugin`, kept out of the walk by `exclude` alone.
-const SKILL_FILES: [&str; 3] = [
+const SKILL_FILES: [&str; 5] = [
+    "plugin/specengine/skills/analyze/SKILL.md",
     "plugin/specengine/skills/ask-owner/SKILL.md",
+    "plugin/specengine/skills/implement/SKILL.md",
     "plugin/specengine/skills/propose-spec-change/SKILL.md",
     "plugin/specengine/skills/read-spec/SKILL.md",
 ];
@@ -251,7 +253,7 @@ fn the_walk_is_the_std_walk_of_this_repository() {
 
     // docs/features/plugin-skills.md AC-12: `plugin` is a root; the
     // skill bodies stay out by `exclude` (the std walk's frozen
-    // `SKIP_FILES`), and dropping that exclude makes exactly the three join.
+    // `SKIP_FILES`), and dropping that exclude makes exactly the five join.
     // Mutation: `plugin` out of `roots` — the first assertion fails, and
     // without the exclude nothing joins.
     assert!(
@@ -431,7 +433,7 @@ fn this_repository_is_clean_under_the_root_config() {
     assert_ne!(pin_of(&noisy), PIN, "{:#?}", noisy.lines(true));
 
     // Mutation (docs/features/plugin-skills.md AC-12): the skill exclude
-    // dropped — exactly three `class-missing`, one per skill body (their
+    // dropped — exactly one `class-missing` per skill body (their
     // front-matter is Claude Code's); every other finding is on a skill
     // body (its `name`, `description` keys) or an index one.
     let unexcluded = write_config(

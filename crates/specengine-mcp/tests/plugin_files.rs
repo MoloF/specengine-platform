@@ -17,9 +17,11 @@
 //!   `spec-engine`.
 //! - AC-02: `plugin.json` — `name` `specengine`, `version` `N.N.N`, keys
 //!   within the README's. M: a `hooks` key.
-//! - AC-03: exactly the README's six files (scratch copy, the real walk).
-//!   M: `specengine/hooks/hooks.json`; `specengine/agents/x.md`;
-//!   `README.md`.
+//! - AC-03: exactly the README's ten files (scratch copy, the real walk;
+//!   docs/features/plugin-gate.md "Data", "Plugin": `hooks/hooks.json`,
+//!   `hooks/gate.sh` and the skills `analyze`, `implement` join the six).
+//!   M: `specengine/hooks/x.sh`; `specengine/agents/x.md`; `README.md`;
+//!   `hooks/gate.sh` missing.
 //! - AC-04: `.mcp.json` is the README's value, `"type": "stdio"` the one
 //!   admitted addition. M: `env.HOME`; `args` `["--root", "."]`; `command`
 //!   `cargo`.
@@ -28,12 +30,20 @@
 //!   scalar of 1 to 1 024 characters; descriptions at most 1 200 B
 //!   together, each body at most 4 096 B. M: `name` other than the
 //!   directory; a 1 025-character description; `description: Use when:
-//!   …`; a 4 097 B body; a skill `round`.
+//!   …`; a 4 097 B body; a skill `round`, `prepare-task` (the two reserved
+//!   names left: plugin-gate "Skills").
 //! - AC-10: the BLAKE3 (`common/blake3.rs`) of `path \0 length \0 bytes`
 //!   per file under `plugin/specengine/` in byte order of its relative
 //!   path, and `version`, are the last of [`PINS`]; versions strictly
 //!   increasing. M: a `SKILL.md` edited, `PINS` unchanged; an entry
 //!   repeating the version.
+//! - plugin-gate AC-13: `hooks/hooks.json` is one `PreToolUse` event with
+//!   one entry: `type` `command`, the matcher fully matching `Edit`,
+//!   `Write`, `MultiEdit`, `NotebookEdit` (a plain alternation of tool
+//!   names, nothing else), `timeout` above the gate's 3 s deadline and
+//!   above the wrapper's `limit`, the command `sh` on
+//!   `${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh`, which exists. M: `"type":
+//!   "http"`; `Write` dropped.
 //!
 //! The repository is only read.
 
@@ -88,14 +98,25 @@ const PINS: &[(&str, &str)] = &[
         "0.1.6",
         "2c09c7549d1c78ed452af4e3e78d842bc8fc7a2d6b6a1bd2d38cc2b72b49d5e6",
     ),
+    // docs/features/plugin-gate.md "Data", "Plugin" (0.1.6 -> 0.2.0,
+    // MINOR): the task gate's hook and wrapper, the skills `analyze` and
+    // `implement`.
+    (
+        "0.2.0",
+        "6b6fa534635ed35a5d0de35206efcf462a98df677553a584eaf6a2c9979ef028",
+    ),
 ];
 
 /// The README's closed file set (its Files bullet), relative to `plugin/`.
-const FILES: [&str; 6] = [
+const FILES: [&str; 10] = [
     ".claude-plugin/marketplace.json",
     "specengine/.claude-plugin/plugin.json",
     "specengine/.mcp.json",
+    "specengine/hooks/gate.sh",
+    "specengine/hooks/hooks.json",
+    "specengine/skills/analyze/SKILL.md",
     "specengine/skills/ask-owner/SKILL.md",
+    "specengine/skills/implement/SKILL.md",
     "specengine/skills/propose-spec-change/SKILL.md",
     "specengine/skills/read-spec/SKILL.md",
 ];
@@ -116,8 +137,9 @@ const PLUGIN_KEYS: [&str; 8] = [
     "keywords",
 ];
 
-/// Skill names the task prompts own (07 §1.4).
-const RESERVED: [&str; 4] = ["analyze", "implement", "prepare-task", "round"];
+/// Skill names the task prompts own (07 §1.4); `analyze` and `implement`
+/// shipped with plugin-gate, so these two are left.
+const RESERVED: [&str; 2] = ["prepare-task", "round"];
 
 /// A tree read from disk: regular files with their bytes, and every other
 /// non-directory entry (a symlink, a socket) by path.
@@ -431,7 +453,7 @@ fn ac03_problems(tree: &Tree) -> Vec<String> {
     let wanted = BTreeSet::from(FILES);
     let mut problems: Vec<String> = found
         .difference(&wanted)
-        .map(|path| format!("plugin/{path}: outside Data's six files"))
+        .map(|path| format!("plugin/{path}: outside Data's ten files"))
         .collect();
     problems.extend(
         wanted
@@ -447,7 +469,7 @@ fn ac03_problems(tree: &Tree) -> Vec<String> {
 }
 
 #[test]
-fn ac03_the_plugin_tree_is_data_s_six_files() {
+fn ac03_the_plugin_tree_is_data_s_ten_files() {
     assert_eq!(ac03_problems(&committed()), Vec::<String>::new());
 
     // On a scratch copy, through the walk: `.DS_Store` anywhere is ignored,
@@ -462,6 +484,7 @@ fn ac03_the_plugin_tree_is_data_s_six_files() {
         "specengine/.DS_Store",
         "specengine/skills/.DS_Store",
         "specengine/skills/read-spec/.DS_Store",
+        "specengine/hooks/.DS_Store",
     ] {
         write(&copy, ds_store, b"\0\0\0\x01Bud1");
     }
@@ -472,7 +495,8 @@ fn ac03_the_plugin_tree_is_data_s_six_files() {
         FILES
     );
     for extra in [
-        "specengine/hooks/hooks.json",
+        "specengine/hooks/x.sh",
+        "specengine/hooks/hooks.json.bak",
         "specengine/agents/x.md",
         "README.md",
         "specengine/skills/read-spec/notes.md",
@@ -481,7 +505,7 @@ fn ac03_the_plugin_tree_is_data_s_six_files() {
         write(&copy, extra, b"{}\n");
         assert_names(
             &ac03_problems(&read_tree(&copy)),
-            &format!("plugin/{extra}: outside Data's six files"),
+            &format!("plugin/{extra}: outside Data's ten files"),
             extra,
         );
         fs::remove_file(copy.join(extra)).unwrap();
@@ -499,6 +523,12 @@ fn ac03_the_plugin_tree_is_data_s_six_files() {
         &ac03_problems(&read_tree(&copy)),
         "plugin/specengine/.mcp.json: missing",
         "no .mcp.json",
+    );
+    fs::remove_file(copy.join("specengine/hooks/gate.sh")).unwrap();
+    assert_names(
+        &ac03_problems(&read_tree(&copy)),
+        "plugin/specengine/hooks/gate.sh: missing",
+        "no gate.sh",
     );
 }
 
@@ -708,7 +738,7 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
         .keys()
         .filter(|path| path.ends_with("/SKILL.md"))
         .collect();
-    assert_eq!(skills.len(), 3, "{skills:?}");
+    assert_eq!(skills.len(), 5, "{skills:?}");
 
     // M: `name` other than the directory.
     let renamed = edited(&tree, READ_SPEC, "name: read-spec\n", "name: read-specs\n");
@@ -764,6 +794,25 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
     let problems = ac05_problems(&round);
     assert_names(&problems, "name \"round\" is reserved", "round");
     assert!(!names(&problems, "is not its directory"), "{problems:#?}");
+    let mut prepare = edited(
+        &tree,
+        READ_SPEC,
+        "name: read-spec\n",
+        "name: prepare-task\n",
+    );
+    let bytes = prepare.files.remove(READ_SPEC).unwrap();
+    prepare
+        .files
+        .insert("specengine/skills/prepare-task/SKILL.md".to_owned(), bytes);
+    assert_names(
+        &ac05_problems(&prepare),
+        "name \"prepare-task\" is reserved",
+        "prepare-task",
+    );
+    // The two shipped task skills are no longer reserved.
+    for shipped in ["analyze", "implement"] {
+        assert!(!RESERVED.contains(&shipped), "{shipped}");
+    }
 
     // Grammar and the two keys.
     for (from, to, needle) in [
@@ -925,5 +974,230 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     assert!(
         version_key("0.10.0") > version_key("0.9.9"),
         "numeric, not textual, order"
+    );
+}
+
+// ------------------------------------------------------- plugin-gate AC-13
+
+/// The one hook command of the one `PreToolUse` entry.
+fn hook(value: &mut Value) -> &mut Value {
+    &mut value["hooks"]["PreToolUse"][0]["hooks"][0]
+}
+
+const HOOKS_JSON: &str = "specengine/hooks/hooks.json";
+const GATE_SH: &str = "specengine/hooks/gate.sh";
+
+/// The tools whose writes the gate sees (plugin-gate "Data", "Plugin").
+const GATED_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
+
+/// The gate's own deadline in seconds (`docs/canon/gate.md` "Verdict").
+const GATE_DEADLINE_SECONDS: u64 = 3;
+
+/// The wrapper's `limit=N` line, the seconds it gives `spec`.
+fn wrapper_limit(tree: &Tree) -> Option<u64> {
+    let text = std::str::from_utf8(tree.files.get(GATE_SH)?).ok()?;
+    text.lines()
+        .find_map(|line| line.strip_prefix("limit="))
+        .and_then(|value| value.trim().parse().ok())
+}
+
+fn ac13_problems(tree: &Tree) -> Vec<String> {
+    let hooks = match json_at(tree, HOOKS_JSON) {
+        Ok(value) => value,
+        Err(problem) => return vec![problem],
+    };
+    let at = format!("plugin/{HOOKS_JSON}");
+    let mut problems = Vec::new();
+    if keys(&hooks) != BTreeSet::from(["hooks"]) {
+        problems.push(format!("{at}: top keys {:?}, not [hooks]", keys(&hooks)));
+    }
+    let events = keys(&hooks["hooks"]);
+    if events != BTreeSet::from(["PreToolUse"]) {
+        problems.push(format!("{at}: events {events:?}, not one PreToolUse"));
+    }
+    let Some(entries) = hooks["hooks"]["PreToolUse"].as_array() else {
+        problems.push(format!("{at}: PreToolUse is not an array"));
+        return problems;
+    };
+    if entries.len() != 1 {
+        problems.push(format!(
+            "{at}: {} PreToolUse entries, not one",
+            entries.len()
+        ));
+    }
+    for entry in entries {
+        if keys(entry) != BTreeSet::from(["matcher", "hooks"]) {
+            problems.push(format!("{at}: entry keys {:?}", keys(entry)));
+        }
+        let matcher = entry["matcher"].as_str().unwrap_or_default();
+        let alternatives: Vec<&str> = matcher.split('|').collect();
+        if alternatives
+            .iter()
+            .any(|name| name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphabetic()))
+        {
+            problems.push(format!(
+                "{at}: matcher {matcher:?} is not a plain alternation of tool names"
+            ));
+        }
+        for tool in GATED_TOOLS {
+            if !alternatives.contains(&tool) {
+                problems.push(format!(
+                    "{at}: matcher {matcher:?} does not fully match `{tool}`"
+                ));
+            }
+        }
+        for name in &alternatives {
+            if !GATED_TOOLS.contains(name) {
+                problems.push(format!("{at}: matcher names `{name}` beyond Data's four"));
+            }
+        }
+        let Some(commands) = entry["hooks"].as_array() else {
+            problems.push(format!("{at}: the entry's hooks is not an array"));
+            continue;
+        };
+        if commands.len() != 1 {
+            problems.push(format!(
+                "{at}: {} hooks in the entry, not one",
+                commands.len()
+            ));
+        }
+        for command in commands {
+            for key in keys(command) {
+                if !["type", "command", "timeout"].contains(&key) {
+                    problems.push(format!("{at}: hook key `{key}` outside Data's"));
+                }
+            }
+            if command["type"] != json!("command") {
+                problems.push(format!("{at}: type {} is not `command`", command["type"]));
+            }
+            if command["command"] != json!("sh \"${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh\"") {
+                problems.push(format!(
+                    "{at}: command {} is not sh on ${{CLAUDE_PLUGIN_ROOT}}/hooks/gate.sh",
+                    command["command"]
+                ));
+            }
+            match command["timeout"].as_u64() {
+                Some(timeout) if timeout > GATE_DEADLINE_SECONDS => {
+                    if wrapper_limit(tree).is_none_or(|limit| limit >= timeout) {
+                        problems.push(format!(
+                            "{at}: timeout {timeout} is not above the wrapper's limit {:?}",
+                            wrapper_limit(tree)
+                        ));
+                    }
+                }
+                _ => problems.push(format!(
+                    "{at}: timeout {} is not above {GATE_DEADLINE_SECONDS}",
+                    command["timeout"]
+                )),
+            }
+        }
+    }
+    if !tree.files.contains_key(GATE_SH) {
+        problems.push(format!("plugin/{GATE_SH}: missing"));
+    }
+    problems
+}
+
+#[test]
+fn plugin_gate_ac13_the_hook_is_one_pre_tool_use_command_on_the_wrapper() {
+    let tree = committed();
+    assert_eq!(ac13_problems(&tree), Vec::<String>::new());
+    assert_eq!(
+        wrapper_limit(&tree),
+        Some(7),
+        "the wrapper's limit as built"
+    );
+    let parsed = json_at(&tree, HOOKS_JSON).unwrap();
+
+    // M: `"type": "http"`.
+    let mut http = parsed.clone();
+    hook(&mut http)["type"] = json!("http");
+    assert_names(
+        &ac13_problems(&with_json(&tree, HOOKS_JSON, &http)),
+        "is not `command`",
+        "type http",
+    );
+    // M: `Write` dropped.
+    let mut dropped = parsed.clone();
+    dropped["hooks"]["PreToolUse"][0]["matcher"] = json!("Edit|MultiEdit|NotebookEdit");
+    assert_names(
+        &ac13_problems(&with_json(&tree, HOOKS_JSON, &dropped)),
+        "does not fully match `Write`",
+        "Write dropped",
+    );
+    // A regex that matches more than the names, or a prefix only.
+    for (matcher, needle) in [
+        ("Edit|Write|MultiEdit|Notebook.*", "not a plain alternation"),
+        (".*", "not a plain alternation"),
+        (
+            "Edit|Write|MultiEdit|NotebookEdit|Bash",
+            "names `Bash` beyond",
+        ),
+        (
+            "Edit|Writ|MultiEdit|NotebookEdit",
+            "does not fully match `Write`",
+        ),
+    ] {
+        let mut mutated = parsed.clone();
+        mutated["hooks"]["PreToolUse"][0]["matcher"] = json!(matcher);
+        assert_names(
+            &ac13_problems(&with_json(&tree, HOOKS_JSON, &mutated)),
+            needle,
+            matcher,
+        );
+    }
+    // The timeout above the deadline and the wrapper's limit.
+    for timeout in [json!(3), json!(7), json!("10"), Value::Null] {
+        let mut mutated = parsed.clone();
+        hook(&mut mutated)["timeout"] = timeout.clone();
+        assert_names(
+            &ac13_problems(&with_json(&tree, HOOKS_JSON, &mutated)),
+            "timeout",
+            &format!("timeout {timeout}"),
+        );
+    }
+    // The command: `sh` on the plugin's wrapper.
+    for command in [
+        "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh\"",
+        "spec gate --stdin",
+        "sh \"${CLAUDE_PROJECT_DIR}/hooks/gate.sh\"",
+    ] {
+        let mutated_value = {
+            let mut mutated = parsed.clone();
+            hook(&mut mutated)["command"] = json!(command);
+            mutated
+        };
+        assert_names(
+            &ac13_problems(&with_json(&tree, HOOKS_JSON, &mutated_value)),
+            "is not sh on",
+            command,
+        );
+    }
+    // A second event, a second entry.
+    let mut second_event = parsed.clone();
+    second_event["hooks"]["PostToolUse"] = parsed["hooks"]["PreToolUse"].clone();
+    assert_names(
+        &ac13_problems(&with_json(&tree, HOOKS_JSON, &second_event)),
+        "not one PreToolUse",
+        "PostToolUse",
+    );
+    let mut second_entry = parsed.clone();
+    let entry = parsed["hooks"]["PreToolUse"][0].clone();
+    second_entry["hooks"]["PreToolUse"]
+        .as_array_mut()
+        .unwrap()
+        .push(entry);
+    assert_names(
+        &ac13_problems(&with_json(&tree, HOOKS_JSON, &second_entry)),
+        "2 PreToolUse entries",
+        "two entries",
+    );
+    // The wrapper gone.
+    let mut no_wrapper = tree.clone();
+    no_wrapper.files.remove(GATE_SH);
+    assert_names(
+        &ac13_problems(&no_wrapper),
+        "hooks/gate.sh: missing",
+        "no gate.sh",
     );
 }

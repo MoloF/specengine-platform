@@ -51,14 +51,20 @@
 //!   [`WorktreeGit`] is the
 //!   write side of one recorded worktree's git (its place, the dirty check,
 //!   `merge-file`, `commit --only`, the trailer lookup), every `GIT_*`
-//!   local variable dropped; [`replace_file`] the atomic write;
+//!   local variable dropped, each command killed past a deadline when made
+//!   with [`WorktreeGit::new_until`] (the task gate's); [`same_dir`] compares
+//!   two places as directories; [`replace_file`] the atomic write;
 //!   [`update_file`], [`span_hash`], [`introduced_findings`] the update of
 //!   one span over core's pure half; a question's or a discrepancy's
 //!   decision record (`docs/canon/decision-record.md` "ID", "Steps"): its ID
 //!   issued under the queue's write lock ([`RecordSeries`],
 //!   [`RecordApproval`]), the new file [`create_file`] makes without ever
 //!   replacing one (a create's new file too); a create's new IDs held while
-//!   it is live ([`Reservation`], [`QueueError::Reserved`]).
+//!   it is live ([`Reservation`], [`QueueError::Reserved`]);
+//! - the task gate's side of the queue (`docs/canon/gate.md`):
+//!   [`open_for_gate`] (read-only, nothing created, no schema step),
+//!   [`GateQueue::tasks`] (a repository's tasks, only `id`, `status`,
+//!   `claim`), [`record_gate_observed`] (`gate.observed`, best-effort).
 //!
 //! No `rusqlite` type appears in a public signature
 //! (`docs/canon/architecture.md#distribution`); the Phase 2 daemon can take
@@ -92,21 +98,23 @@ pub use check::{
     check_tree, check_worktree, default_baseline, load_check, load_config, today_utc,
 };
 pub use error::StoreError;
-pub use git::GitEnv;
+pub use git::{GitEnv, same_dir};
 pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, EVENT_APPLIED,
-    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_REJECTED, EVENT_STAGED,
-    EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED, EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED,
-    EVENT_TASK_COMPLETED, EVENT_TASK_CREATED, EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED,
-    EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event, EventsAfter, Intake, IntakeResult, NewIntake,
-    NewProposal, NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding,
-    ProposalKind, ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts,
-    QueueError, QueueMatch, RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation,
-    Restore, Run, Seen, SnapshotEntry, SqliteQueue, Stage, StagedChoice, StoredEvent, StoredNote,
-    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange,
-    TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableRow, UnreadableTask, binding_problem,
-    claimed_elsewhere, patch_hash, proposal_columns, task_event,
+    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_GATE_OBSERVED,
+    EVENT_REJECTED, EVENT_STAGED, EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED,
+    EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED, EVENT_TASK_COMPLETED, EVENT_TASK_CREATED,
+    EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED, EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event,
+    EventsAfter, GateObserved, GateQueue, Intake, IntakeResult, NewIntake, NewProposal, NewTask,
+    PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind, ProposalList,
+    ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch,
+    RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen,
+    SnapshotEntry, SqliteQueue, Stage, StagedChoice, StoredEvent, StoredNote, StoredProposal,
+    StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList,
+    TaskRefresh, TaskSeen, TaskSnapshot, UnreadableRow, UnreadableTask, binding_problem,
+    claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
+    task_event,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};

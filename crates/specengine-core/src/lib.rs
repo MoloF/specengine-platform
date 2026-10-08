@@ -39,13 +39,17 @@
 //!   normalised text (`docs/canon/agent-intake.md` "Rules", "Dedup");
 //! - [`create`] — the pure half of a proposal's `create`: a text's ID
 //!   sites as written, what one written ID is, and new `{#ID}` sections
-//!   spliced into a node's span (task spec `proposal-kinds`).
+//!   spliced into a node's span (task spec `proposal-kinds`);
+//! - [`gate`] — the pure half of the task gate: `[gate]` and `[zones]`
+//!   read apart from the reads ([`GateConfig`]), the controlled paths, the
+//!   lexical fold and the opening rule (`docs/canon/gate.md`, ADR-0037).
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod check;
 pub mod create;
 mod front_matter;
+pub mod gate;
 mod glob;
 pub mod intake;
 mod lines;
@@ -71,6 +75,7 @@ use specengine_model::{
 };
 
 pub use front_matter::{KeyType, TYPED_KEYS};
+pub use gate::{GateConfig, GateMode};
 pub use own_text::own_spans;
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
 pub use project_toml::{

@@ -22,8 +22,11 @@
 //!   `content` within 48 000 characters with the brief's tail.
 //! - AC-09 (07 P2-9): two projects in one `HOME` never see each other's
 //!   tasks.
-//! - 07 s1.2 P2-3: the package, brief and task sources and `plugin/**`
-//!   name no stack word or role of this repository.
+//! - 07 s1.2 P2-3: the package, brief and task sources, the task gate's
+//!   sources (docs/features/plugin-gate.md AC-15) and `plugin/**` (its
+//!   hook and wrapper included) name no stack word or role of this
+//!   repository; the gate's sources hold no zone name as a literal (M: a
+//!   `"code"` zone in core).
 //! - 07 s1.2 P2-5: on `fixtures/spec-c` (a web service whose code is
 //!   Python) an agent's whole run names no P2-3 or Rust word in any reply;
 //!   `profile` passes verbatim.
@@ -910,6 +913,17 @@ const TASK_SOURCES: [&str; 6] = [
     "crates/specengine-mcp/src/tasks.rs",
 ];
 
+/// The task gate's sources (docs/features/plugin-gate.md AC-15).
+const GATE_SOURCES: [&str; 3] = [
+    "crates/specengine-core/src/gate.rs",
+    "crates/specengine-store/src/queue/gate.rs",
+    "crates/specengine-cli/src/gate.rs",
+];
+
+/// Zone names a project's config writes (`docs/canon/gate.md` "Config"): the
+/// core knows none of them (ADR-0008).
+const ZONE_LITERALS: [&str; 3] = ["\"code\"", "\"tests\"", "\"src/**\""];
+
 /// Every file under `dir`, recursively.
 fn files_under(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).expect("a directory") {
@@ -928,11 +942,26 @@ fn files_under(dir: &Path, out: &mut Vec<PathBuf>) {
 #[test]
 fn p2_3_the_task_sources_and_the_plugin_name_no_stack_word() {
     let root = repository_root();
-    let mut files: Vec<PathBuf> = TASK_SOURCES.iter().map(|path| root.join(path)).collect();
+    let mut files: Vec<PathBuf> = TASK_SOURCES
+        .iter()
+        .chain(&GATE_SOURCES)
+        .map(|path| root.join(path))
+        .collect();
     files_under(&root.join("plugin"), &mut files);
+    for wanted in [
+        "plugin/specengine/hooks/hooks.json",
+        "plugin/specengine/hooks/gate.sh",
+        "plugin/specengine/skills/analyze/SKILL.md",
+        "plugin/specengine/skills/implement/SKILL.md",
+    ] {
+        assert!(files.contains(&root.join(wanted)), "{wanted} scanned");
+    }
     // Finder's own files are no plugin content.
     files.retain(|path| path.file_name().is_none_or(|name| name != ".DS_Store"));
-    assert!(files.len() > TASK_SOURCES.len(), "{files:?}");
+    assert!(
+        files.len() > TASK_SOURCES.len() + GATE_SOURCES.len(),
+        "{files:?}"
+    );
     let mut offenders = Vec::new();
     for path in &files {
         let text = fs::read_to_string(path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
@@ -949,6 +978,48 @@ fn p2_3_the_task_sources_and_the_plugin_name_no_stack_word() {
     // The scan sees what it must refuse.
     assert!(has_word("let brief = \"run cargo test\";", "cargo"));
     assert!(!has_word("a nested span", "nest"));
+}
+
+/// The gate's sources hold no zone name as a string literal: zones come
+/// from the project's config only (ADR-0008; plugin-gate AC-15).
+fn zone_literal_offenders(path: &str, text: &str) -> Vec<String> {
+    let mut offenders = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        for literal in ZONE_LITERALS {
+            if line.contains(literal) {
+                offenders.push(format!("{path}:{}: {literal}", number + 1));
+            }
+        }
+    }
+    offenders
+}
+
+/// plugin-gate AC-15 (M: a `"code"` zone in core): no gate source names a
+/// zone; the mutation, applied to an in-memory copy of core's `gate.rs`,
+/// is seen.
+#[test]
+fn p2_3_the_gate_sources_name_no_zone() {
+    let root = repository_root();
+    let mut offenders = Vec::new();
+    for path in GATE_SOURCES {
+        let text = fs::read_to_string(root.join(path)).unwrap_or_else(|e| panic!("{path}: {e}"));
+        assert!(!text.is_empty(), "{path}");
+        offenders.extend(zone_literal_offenders(path, &text));
+    }
+    assert!(offenders.is_empty(), "{offenders:#?}");
+    let core = fs::read_to_string(root.join(GATE_SOURCES[0])).unwrap();
+    let anchor = "pub const ZONE_NAME_MAX: usize = 64;";
+    assert_eq!(core.matches(anchor).count(), 1);
+    let mutated = core.replacen(
+        anchor,
+        &format!("{anchor}\nconst DEFAULT_ZONE: &str = \"code\";"),
+        1,
+    );
+    assert_eq!(
+        zone_literal_offenders(GATE_SOURCES[0], &mutated).len(),
+        1,
+        "the mutation is seen"
+    );
 }
 
 // ----------------------------------------------------------------- P2-5

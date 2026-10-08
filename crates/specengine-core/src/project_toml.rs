@@ -20,9 +20,10 @@
 //!   a discrepancy needs it.
 //! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
 //!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
-//!   which are only name-checked here (their readers are the check's and
-//!   later increments'); any other key is an error at its line, so a
-//!   `[path]` typo cannot silently fall back to the default walk.
+//!   which are only name-checked here (their readers are the check's,
+//!   [`crate::gate`]'s for `zones` and `gate`, and later increments'): a
+//!   bad `[gate]` fails no read; any other key is an error at its line, so
+//!   a `[path]` typo cannot silently fall back to the default walk.
 //!
 //! Every error is `file:line: message` through [`ProjectError::at`].
 

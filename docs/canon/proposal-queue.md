@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-07
+reviewed: 2026-10-08
 ---
 
 # Proposal queue: commands, states, store
@@ -12,7 +12,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 ## Commands
 
-`--root`, `--json` as everywhere (CLI README); `--config` other than the root's own `specengine.toml` -> exit 2. Outputs are not cut by `OUTPUT_CAP_CHARS` but `--brief`'s.
+`--root`, `--json` as everywhere (CLI README); `--config` other than the root's own `specengine.toml` -> exit 2. Outputs are uncut by `OUTPUT_CAP_CHARS` but `--brief`'s.
 
 - `spec propose update ID --base HASH --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID]` -> `PR-0001`, `introduced: <n>`, one `<severity>  <path>:<line>: <code>: <message>` per introduced finding. `HASH`: `spec show`'s `span_hash`. Role, model, run: `author_problem`'s grammar, else exit 2; any given -> author `agent`, none -> `human`. Text: UTF-8, <= 1 MiB (`TEXT_MAX_BYTES`), `-` = stdin; `--rationale` <= 4 096 bytes.
 - `spec inbox [--all]` -> the current repository's `open` and `approved` (`--all`: every state) by ID number, `<id> | <kind> | <status> | <target_id> | <branch> | <created_at> | <rationale's first line>` (over 80 characters: 79 + `…`); JSON `{proposals: [{id, kind, status, target_id, target_ids, branch, created_at, rationale, severity, summary, record_id, staged_at}], notes}`, `target_ids` every target (an update: `[target_id]`). Notes (`note:`, JSON `notes`), exit 0: ``<n> proposal(s) of another repository of the project `<slug>` not listed: `spec inbox` lists the current repository's``; ``<n> proposal(s) of a repository that no longer exists not listed: <IDs>; `spec reject <ID> --reason …` takes …`` (10 IDs, then ` … and <k> more`); a corrupt row: ``proposal PR-0003: the stored `<column>` cannot be read: <why>; not listed``.
@@ -41,7 +41,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after a crash in it. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. A closed set, `task.*` too (`tasks.md`); `specengine-http` streams it (SSE).
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `gate.observed`; `specengine-http` streams it.
 
 ## Store
 

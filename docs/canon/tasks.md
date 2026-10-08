@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-07
+reviewed: 2026-10-08
 ---
 
 # Tasks: commands, transitions, place, store
@@ -75,7 +75,7 @@ proposals: + task_id   -- column 41 of 43
 
 `TASK_COLUMNS` 17, `RUN_COLUMNS` 11, pinned to `PRAGMA table_info`. JSON columns: `targets`, `affected_nodes` canonical IDs or paths; `criteria` `{ref, text}` (a reference's text `null`); `owner_notes` `{at, note, by}`; `snapshot` `{at, by, place, nodes: [{id, path, span_hash, text}]}`; `claim` `{at, role, worktree, branch}`; a task's and a run's `author` as a proposal's. IDs `T-` and 4 or more digits, highest + 1, never deleted; runs numbered from 1 per task.
 
-Each op one `Immediate` transaction with its event, a compare-and-set on `TaskSeen.revision`: `revision` decimal text from `1`, raised by every change and refresh (two changes within one second never overwrite each other); lost -> exit 1 `` `T-0001` changed since this run read it: it is <status> since <updated_at>; nothing changed ``. Events `task.created`, `.planned`, `.approved`, `.changes_requested`, `.claimed`, `.run_reported`, `.completed`, `.cancelled`, payload `{id}` (+ `run` for claim and report), `.refreshed` `{id, proposal, node}`. Corrupt (bad JSON, an unknown state or outcome, a non-decimal `revision`, a bad ID): named (`show` exit 2 naming the column), skipped by `list` with a note.
+Each op one `Immediate` transaction with its event, a compare-and-set on `TaskSeen.revision`: `revision` decimal text from `1`, raised by every change and refresh (two changes within one second never overwrite each other); lost -> exit 1 `` `T-0001` changed since this run read it: it is <status> since <updated_at>; nothing changed ``. Events `task.created`, `.planned`, `.approved`, `.changes_requested`, `.claimed`, `.run_reported`, `.completed`, `.cancelled`, payload `{id}` (+ `run` for claim and report), `.refreshed` `{id, proposal, node}`. The same `events` hold the gate's `gate.observed` (`gate.md` "Event"), naming no task. Corrupt (bad JSON, an unknown state or outcome, a non-decimal `revision`, a bad ID): named (`show` exit 2 naming the column), skipped by `list` with a note.
 
 API: `create_task`, `get_task`, `list_tasks`, `change_task(id, &TaskSeen, &TaskChange, now)`, `binding_problem`, `claimed_elsewhere`; `ProposalQueue::create_with_task`, `create_intake_with_task` (debt: fold into the request types). A schema-4 database refuses older builds (`SchemaTooNew`): restart the daemon and reinstall `specengine-mcp` from one commit.
 

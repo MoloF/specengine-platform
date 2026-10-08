@@ -403,7 +403,8 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
 
 /// AC-15, the plugin's half: `ask-owner` "Whose words count" says a staged
 /// choice is no answer (any local process can stage one); the plugin is
-/// 0.1.6 (`PINS` in `plugin_files.rs` pins its bytes).
+/// 0.1.6 or later (`PINS` in `plugin_files.rs` pins its bytes; 0.2.0 since
+/// docs/features/plugin-gate.md).
 #[test]
 fn ac15_ask_owner_names_a_staged_choice_no_answer() {
     let skill =
@@ -422,5 +423,11 @@ fn ac15_ask_owner_names_a_staged_choice_no_answer() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], json!("0.1.6"));
+    let version: Vec<u64> = manifest["version"]
+        .as_str()
+        .expect("a version")
+        .split('.')
+        .map(|part| part.parse().expect("N.N.N"))
+        .collect();
+    assert!(version >= vec![0, 1, 6], "{version:?}");
 }

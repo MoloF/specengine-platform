@@ -36,6 +36,8 @@ use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::git::{GitEnv, same_dir};
 use crate::queue::Place;
@@ -101,6 +103,9 @@ pub enum GitError {
     Unreadable { command: &'static str },
     /// A path could not be resolved, or a scratch file written or removed.
     Io { path: PathBuf, source: io::Error },
+    /// The handle's deadline ([`WorktreeGit::new_until`]) passed before
+    /// git answered: the command was killed.
+    Deadline,
 }
 
 impl GitError {
@@ -138,6 +143,9 @@ impl fmt::Display for GitError {
                 write!(f, "`git {command}` gave output that could not be read")
             }
             Self::Io { path, source } => write!(f, "{}: {source}", path.display()),
+            Self::Deadline => {
+                f.write_str("`git` gave no answer before the deadline (it was stopped)")
+            }
         }
     }
 }
@@ -248,6 +256,8 @@ pub enum Merge {
 pub struct WorktreeGit {
     dir: PathBuf,
     vars: BTreeMap<OsString, OsString>,
+    /// Every command killed when it outlives it ([`GitError::Deadline`]).
+    deadline: Option<Instant>,
 }
 
 impl WorktreeGit {
@@ -256,11 +266,30 @@ impl WorktreeGit {
     /// [`LOCAL_ENV_VARS`]), `GIT_TERMINAL_PROMPT=0` set. `env`'s directory
     /// is not used.
     pub fn new(dir: impl Into<PathBuf>, env: &GitEnv) -> Result<Self, GitError> {
+        Self::with_deadline(dir.into(), env, None)
+    }
+
+    /// [`Self::new`], every command (the variables' lookup too) killed
+    /// when it outlives `deadline`: [`GitError::Deadline`] (the task
+    /// gate's bound, `docs/canon/gate.md` "Verdict").
+    pub fn new_until(
+        dir: impl Into<PathBuf>,
+        env: &GitEnv,
+        deadline: Instant,
+    ) -> Result<Self, GitError> {
+        Self::with_deadline(dir.into(), env, Some(deadline))
+    }
+
+    fn with_deadline(
+        dir: PathBuf,
+        env: &GitEnv,
+        deadline: Option<Instant>,
+    ) -> Result<Self, GitError> {
         let mut vars: BTreeMap<OsString, OsString> = env
             .vars()
             .map(|(name, value)| (name.to_owned(), value.to_owned()))
             .collect();
-        for name in local_env_vars(&vars)? {
+        for name in local_env_vars(&vars, deadline)? {
             vars.remove(&name);
         }
         for name in LOCAL_ENV_VARS {
@@ -268,8 +297,9 @@ impl WorktreeGit {
         }
         vars.insert("GIT_TERMINAL_PROMPT".into(), "0".into());
         Ok(Self {
-            dir: dir.into(),
+            dir,
             vars,
+            deadline,
         })
     }
 
@@ -303,20 +333,18 @@ impl WorktreeGit {
     }
 
     fn output(&self, args: &[&OsStr], read_only: bool) -> Result<Output, GitError> {
-        self.command(args, read_only)
-            .output()
-            .map_err(GitError::NotRunnable)
+        run(self.command(args, read_only), self.deadline)
     }
 
     /// A read-only command whose output must not depend on the user's or
     /// the system's git config (`diff`, `merge-file`):
     /// `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`.
     fn output_isolated(&self, args: &[&OsStr]) -> Result<Output, GitError> {
-        self.command(args, true)
+        let mut command = self.command(args, true);
+        command
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .output()
-            .map_err(GitError::NotRunnable)
+            .env("GIT_CONFIG_NOSYSTEM", "1");
+        run(command, self.deadline)
     }
 
     /// Runs a read-only command to success; its stdout.
@@ -343,6 +371,22 @@ impl WorktreeGit {
         self.path_of("rev-parse", &output)
     }
 
+    /// [`Self::top`] and [`Self::common_dir`] from one `rev-parse
+    /// --show-toplevel --git-common-dir` (one process instead of two).
+    pub fn top_and_common_dir(&self) -> Result<(PathBuf, PathBuf), GitError> {
+        const COMMAND: &str = "rev-parse";
+        let output = self.read(
+            COMMAND,
+            &["rev-parse", "--show-toplevel", "--git-common-dir"],
+        )?;
+        let output = output.strip_suffix(b"\n").unwrap_or(&output);
+        let mut lines = output.split(|&byte| byte == b'\n');
+        let (Some(top), Some(common), None) = (lines.next(), lines.next(), lines.next()) else {
+            return Err(GitError::Unreadable { command: COMMAND });
+        };
+        Ok((self.path_of(COMMAND, top)?, self.path_of(COMMAND, common)?))
+    }
+
     /// The repository's canonical git common dir (`rev-parse
     /// --git-common-dir`): one for every linked worktree.
     pub fn common_dir(&self) -> Result<PathBuf, GitError> {
@@ -358,12 +402,9 @@ impl WorktreeGit {
     pub fn top_if_repository(&self) -> Result<Option<PathBuf>, GitError> {
         const COMMAND: &str = "rev-parse";
         let args = [OsStr::new("rev-parse"), OsStr::new("--show-toplevel")];
-        let output = self
-            .command(&args, true)
-            .env("LC_ALL", "C")
-            .env_remove("LANGUAGE")
-            .output()
-            .map_err(GitError::NotRunnable)?;
+        let mut command = self.command(&args, true);
+        command.env("LC_ALL", "C").env_remove("LANGUAGE");
+        let output = run(command, self.deadline)?;
         if output.status.success() {
             return self.path_of(COMMAND, &output.stdout).map(Some);
         }
@@ -1289,8 +1330,12 @@ impl Drop for Scratch {
 
 /// The names `git rev-parse --local-env-vars` prints, run with `vars` minus
 /// every `GIT_*` variable (the list is git's own, never the caller's).
-fn local_env_vars(vars: &BTreeMap<OsString, OsString>) -> Result<BTreeSet<OsString>, GitError> {
-    let output = Command::new("git")
+fn local_env_vars(
+    vars: &BTreeMap<OsString, OsString>,
+    deadline: Option<Instant>,
+) -> Result<BTreeSet<OsString>, GitError> {
+    let mut command = Command::new("git");
+    command
         .env_clear()
         .envs(
             vars.iter()
@@ -1299,9 +1344,8 @@ fn local_env_vars(vars: &BTreeMap<OsString, OsString>) -> Result<BTreeSet<OsStri
         .args(["rev-parse", "--local-env-vars"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(GitError::NotRunnable)?;
+        .stderr(Stdio::piped());
+    let output = run(command, deadline)?;
     let stdout = success("rev-parse", output)?;
     let text = std::str::from_utf8(&stdout).map_err(|_| GitError::Unreadable {
         command: "rev-parse",
@@ -1311,6 +1355,70 @@ fn local_env_vars(vars: &BTreeMap<OsString, OsString>) -> Result<BTreeSet<OsStri
         .filter(|name| !name.is_empty())
         .map(OsString::from)
         .collect())
+}
+
+/// `command`'s output: unbounded without a deadline; with one, polled and
+/// killed (and reaped) once it passes ([`GitError::Deadline`]), its pipes
+/// read on their own threads so a full pipe never stalls it.
+fn run(mut command: Command, deadline: Option<Instant>) -> Result<Output, GitError> {
+    let Some(deadline) = deadline else {
+        return command.output().map_err(GitError::NotRunnable);
+    };
+    if Instant::now() >= deadline {
+        return Err(GitError::Deadline);
+    }
+    let mut child = command.spawn().map_err(GitError::NotRunnable)?;
+    let drain = |pipe: Option<Box<dyn io::Read + Send>>| {
+        pipe.map(|mut pipe| {
+            thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = pipe.read_to_end(&mut bytes);
+                bytes
+            })
+        })
+    };
+    let stdout = drain(
+        child
+            .stdout
+            .take()
+            .map(|pipe| Box::new(pipe) as Box<dyn io::Read + Send>),
+    );
+    let stderr = drain(
+        child
+            .stderr
+            .take()
+            .map(|pipe| Box::new(pipe) as Box<dyn io::Read + Send>),
+    );
+    let mut pause = Duration::from_micros(100);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(GitError::NotRunnable(error));
+            }
+        }
+        let now = Instant::now();
+        if now >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(GitError::Deadline);
+        }
+        thread::sleep(pause.min(deadline - now));
+        pause = (pause * 2).min(Duration::from_millis(1));
+    };
+    let joined = |reader: Option<thread::JoinHandle<Vec<u8>>>| {
+        reader
+            .and_then(|reader| reader.join().ok())
+            .unwrap_or_default()
+    };
+    Ok(Output {
+        status,
+        stdout: joined(stdout),
+        stderr: joined(stderr),
+    })
 }
 
 /// `output`'s stdout when it succeeded, else [`GitError::Failed`].

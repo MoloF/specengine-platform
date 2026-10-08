@@ -62,6 +62,9 @@
 //!   discrepancy stored as a queue record (approved into a decision record,
 //!   or rejected with the answer), unless what is decided or asked already
 //!   answers it ([`IntakeDocument`]);
+//! - [`gate`]: the task gate's verdict on one agent write (canon `gate`,
+//!   "Verdict"): exit 0 pass, 2 refuse or no verdict, never a [`CliError`];
+//!   [`read_hook_input`] reads the hook's stdin within the deadline;
 //! - [`export_state`], [`import_state`]: the queue's dump ([`STATE_FORMAT`])
 //!   written outside the worktree, and restored into an empty queue after
 //!   the owner's [`Consent`];
@@ -101,6 +104,7 @@ mod decide;
 mod documents;
 mod events;
 mod export;
+mod gate;
 mod graph;
 mod inbox;
 mod init;
@@ -143,6 +147,11 @@ pub use create::{
 pub use documents::{DocumentEntry, documents};
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
+pub use gate::{
+    GATE_DEADLINE, GATE_TASKS_MAX, GateInput, GateOutcome, GateProgress, GateReason, GateRequest,
+    GateStage, GateTaskEntry, GateVerdict, HookInput, LINK_HOPS, gate, gate_session,
+    read_hook_input,
+};
 pub use graph::{
     FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
 };

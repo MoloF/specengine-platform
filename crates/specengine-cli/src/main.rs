@@ -11,23 +11,30 @@
 //! library asks its question through a callback, which prints it on stderr
 //! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
 //! (`now`, UTC) and the process's variables for git are passed in as well.
+//!
+//! `spec gate` runs apart (canon `gate`, "Verdict"): its deadline counts from
+//! the start of `main`; it never exits 1 (a usage error, a panic or the
+//! deadline is exit 2, `specengine gate: no verdict (…)` on stderr); with
+//! `--stdin` it prints nothing on stdout, whatever the verdict.
 
+use std::ffi::OsString;
 use std::io::{BufRead as _, IsTerminal as _, Read as _, Write as _};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::{Duration, Instant};
 
 use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use clap::{ColorChoice, CommandFactory as _, Parser, Subcommand};
+use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError,
-    CreateRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest, Globals,
-    GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
-    InitRequest, IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText,
-    QuestionRequest, RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES,
-    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json,
-    render_text,
+    CreateRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
+    GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals, GraphRequest,
+    INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
+    IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText, QuestionRequest,
+    RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -209,6 +216,19 @@ enum Command {
     Task {
         #[command(subcommand)]
         command: TaskCommand,
+    },
+    /// The task gate: may an agent write FILE? Exit 0 pass, 2 refuse or no verdict; only an in_progress task claimed in the file's worktree, on its branch, opens a controlled path.
+    #[command(group(ArgGroup::new("input").required(true).args(["path", "stdin"])))]
+    Gate {
+        /// The session's directory (relative: to the current one); a relative FILE joins it.
+        #[arg(long, value_name = "DIR", requires = "path")]
+        worktree: Option<PathBuf>,
+        /// The file written.
+        #[arg(long, value_name = "FILE", requires = "worktree")]
+        path: Option<PathBuf>,
+        /// Read Claude Code's PreToolUse hook JSON on stdin; nothing is printed on stdout.
+        #[arg(long)]
+        stdin: bool,
     },
 }
 
@@ -449,13 +469,26 @@ enum Export {
 }
 
 fn main() -> ExitCode {
+    let started = Instant::now();
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
+        Err(error) if error.use_stderr() && is_gate(std::env::args_os()) => {
+            return gate_usage(&error);
+        }
         Err(error) if is_stdout_json_conflict(&error) => {
             return usage_error(&stdout_json_conflict());
         }
         Err(error) => return usage_error(&error),
     };
+    if let Command::Gate {
+        worktree,
+        path,
+        stdin,
+    } = cli.command
+    {
+        let globals = cli.root.is_some() || cli.config.is_some();
+        return run_gate(started, globals, cli.json, worktree, path, stdin);
+    }
     // `conflicts_with` sees `--json` only after `index`: clap fills global
     // arguments in after the subcommand's conflict check.
     if cli.json
@@ -822,7 +855,200 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             )?)
         }
         Command::Task { command } => run_task(env, globals, command)?,
+        // Run apart, before the environment is read (`run_gate`).
+        Command::Gate { .. } => {
+            return Err(CliError::cannot(
+                "spec: gate runs apart from the other commands",
+            ));
+        }
     })
+}
+
+/// `spec gate`: the verdict within [`GATE_DEADLINE`] of `started`; a
+/// panic or a stall past it (a blocked file system) is exit 2 too. With
+/// `--stdin`, stdout stays empty.
+fn run_gate(
+    started: Instant,
+    globals: bool,
+    json: bool,
+    worktree: Option<PathBuf>,
+    path: Option<PathBuf>,
+    stdin: bool,
+) -> ExitCode {
+    if globals {
+        return gate_usage_line(
+            "--root and --config are not taken by `gate`: it finds the config from the file",
+        );
+    }
+    if json && stdin {
+        return gate_usage_line("--json is not taken with --stdin: the hook reads no stdout");
+    }
+    let deadline = started + GATE_DEADLINE;
+    let env = Env {
+        cwd: std::env::current_dir().unwrap_or_default(),
+        home: std::env::var_os("HOME"),
+        xdg_data_home: std::env::var_os("XDG_DATA_HOME"),
+    };
+    // The session's project: `CLAUDE_PROJECT_DIR`, else the current
+    // directory.
+    let session = std::env::var_os("CLAUDE_PROJECT_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(|dir| env.cwd.join(dir))
+        .or_else(|| env.cwd.is_absolute().then(|| env.cwd.clone()));
+    let progress = GateProgress::new();
+    // A panic, and a step blocked where no deadline reaches (a hung file
+    // system), still end in a verdict by what the gate knew by then.
+    {
+        let progress = progress.clone();
+        let session = session.clone();
+        std::panic::set_hook(Box::new(move |info| {
+            let what = info.to_string().replace(['\n', '\r'], " ");
+            give_up(
+                &progress,
+                session.as_deref(),
+                format!("spec failed: {what}"),
+            );
+        }));
+    }
+    {
+        let progress = progress.clone();
+        let session = session.clone();
+        let backstop = deadline + Duration::from_millis(400);
+        let _ = std::thread::Builder::new().spawn(move || {
+            std::thread::sleep(backstop.saturating_duration_since(Instant::now()));
+            give_up(
+                &progress,
+                session.as_deref(),
+                format!("no answer within {} s", GATE_DEADLINE.as_secs()),
+            );
+        });
+    }
+    let input = match (stdin, worktree, path) {
+        (true, _, _) => specengine_cli::read_hook_input(std::io::stdin(), deadline),
+        (false, Some(dir), Some(path)) => GateInput::Path { dir, path },
+        // clap's group and `requires` leave no other case.
+        (false, _, _) => {
+            return gate_usage_line("give --stdin, or --worktree DIR with --path FILE");
+        }
+    };
+    let request = GateRequest {
+        input,
+        session,
+        git: process_git(&env),
+        now: now(),
+        deadline,
+        progress,
+    };
+    let outcome = specengine_cli::gate(&env, &request);
+    {
+        let mut stderr = std::io::stderr().lock();
+        for line in outcome.stderr_lines() {
+            let _ = writeln!(stderr, "{line}");
+        }
+    }
+    if !stdin {
+        let text = if json {
+            outcome.to_json()
+        } else {
+            outcome.stdout_text()
+        };
+        let mut stdout = std::io::stdout().lock();
+        let _ = stdout.write_all(text.as_bytes());
+        let _ = stdout.flush();
+    }
+    ExitCode::from(outcome.exit_code())
+}
+
+/// Ends `spec gate` past its deadline or on a panic, by the stage the
+/// verdict reached: open passes, `observe` passes with a note, closed is no
+/// verdict; nothing read yet: the session's project decides
+/// ([`specengine_cli::gate_session`]).
+fn give_up(progress: &GateProgress, session: Option<&std::path::Path>, cause: String) -> ! {
+    let mut stderr = std::io::stderr().lock();
+    let code = match progress.stage() {
+        GateStage::Open => 0,
+        GateStage::Observe => {
+            let _ = writeln!(
+                stderr,
+                "note: specengine gate (observe): no verdict ({cause}); the write goes on, \
+                 nothing recorded"
+            );
+            0
+        }
+        GateStage::Closed => {
+            let _ = writeln!(
+                stderr,
+                "specengine gate: no verdict ({cause}): the write is refused."
+            );
+            Exit::CannotRun.code()
+        }
+        GateStage::Unknown => {
+            let outcome = specengine_cli::gate_session(session, cause, progress);
+            for line in outcome.stderr_lines() {
+                let _ = writeln!(stderr, "{line}");
+            }
+            outcome.exit_code()
+        }
+    };
+    let _ = stderr.flush();
+    std::process::exit(i32::from(code));
+}
+
+/// The arguments name the `gate` subcommand: its name is the first
+/// argument past the global options.
+fn is_gate(args: impl Iterator<Item = OsString>) -> bool {
+    let mut args = args.skip(1);
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("--root" | "--config") => {
+                args.next();
+            }
+            Some(flag)
+                if flag == "--json"
+                    || flag.starts_with("--root=")
+                    || flag.starts_with("--config=") => {}
+            Some(name) => return name == "gate",
+            None => return false,
+        }
+    }
+    false
+}
+
+/// A usage error of `spec gate`: no verdict, exit 2, one line; an unknown
+/// argument hints at a `spec` older or newer than the plugin.
+fn gate_usage(error: &clap::Error) -> ExitCode {
+    let rendered = error.render().to_string();
+    // The message up to its first blank line (clap's usage block follows).
+    let first = rendered
+        .lines()
+        .map(str::trim)
+        .take_while(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_start_matches("error: ")
+        .to_owned();
+    let skew = matches!(
+        error.kind(),
+        ErrorKind::UnknownArgument | ErrorKind::InvalidSubcommand | ErrorKind::InvalidValue
+    );
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "specengine gate: no verdict (usage: {first}): the write is refused.{}",
+        if skew {
+            " Reinstall spec and the plugin from one commit."
+        } else {
+            ""
+        }
+    );
+    ExitCode::from(Exit::CannotRun.code())
+}
+
+fn gate_usage_line(message: &str) -> ExitCode {
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "specengine gate: no verdict (usage: {message}): the write is refused."
+    );
+    ExitCode::from(Exit::CannotRun.code())
 }
 
 /// `spec task …`; the owner's three run only on a terminal.

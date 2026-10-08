@@ -898,3 +898,189 @@ fn has_path_answers_for_files_and_directories_and_refuses_directory_relative_pat
         );
     }
 }
+
+// ---------------------------------------------------------------- plugin-gate
+
+/// docs/features/plugin-gate.md "Data" (Library): the gate's handle
+/// ([`WorktreeGit::new_until`]) kills a git that outlives its deadline
+/// ([`GitError::Deadline`]) and reaps it; past the deadline nothing runs.
+/// The slow git is a stand-in first on `PATH`: the variables' lookup
+/// (`rev-parse --local-env-vars`) goes to the real git unless `slow_lookup`,
+/// every other command records its PID and sleeps 30 s.
+struct SlowGit {
+    dir: PathBuf,
+    pids: PathBuf,
+}
+
+impl SlowGit {
+    fn new(repo: &Repo, name: &str, slow_lookup: bool) -> Self {
+        let dir = repo.scratch.join(name);
+        fs::create_dir_all(&dir).unwrap();
+        let pids = dir.join("pids");
+        let real = repo.git.git_program().to_str().unwrap().to_owned();
+        let lookup = if slow_lookup {
+            String::new()
+        } else {
+            format!("case \"$1 $2\" in 'rev-parse --local-env-vars') exec '{real}' \"$@\";; esac\n")
+        };
+        let script = format!(
+            "#!/bin/sh\n{lookup}echo $$ >> '{}'\nexec /bin/sleep 30\n",
+            pids.display()
+        );
+        let shim = dir.join("git");
+        fs::write(&shim, script).unwrap();
+        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+        Self { dir, pids }
+    }
+
+    fn env(&self, repo: &Repo) -> GitEnv {
+        repo.env().with_var("PATH", repo.git.path_with(&self.dir))
+    }
+
+    /// The PIDs the stand-in recorded.
+    fn recorded(&self) -> Vec<u32> {
+        fs::read_to_string(&self.pids)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| line.trim().parse().expect("a PID"))
+            .collect()
+    }
+}
+
+/// Whether the process `pid` (one this test started) still exists.
+fn alive(pid: u32) -> bool {
+    std::process::Command::new("/bin/kill")
+        .args(["-0", &pid.to_string()])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+impl Drop for SlowGit {
+    /// A failed assertion must not leave a stand-in sleeping: only the
+    /// PIDs it recorded are signalled.
+    fn drop(&mut self) {
+        for pid in self.recorded() {
+            if alive(pid) {
+                let _ = std::process::Command::new("/bin/kill")
+                    .args(["-KILL", &pid.to_string()])
+                    .status();
+            }
+        }
+    }
+}
+
+#[test]
+fn new_until_kills_a_slow_git_at_the_deadline() {
+    use std::time::{Duration, Instant};
+
+    let repo = Repo::new("wt-until");
+    let slow = SlowGit::new(&repo, "slow-git", false);
+    let env = slow.env(&repo);
+    let started = Instant::now();
+    let deadline = started + Duration::from_millis(400);
+    let git = WorktreeGit::new_until(&repo.main, &env, deadline).expect("the lookup is fast");
+    let result = git.top_and_common_dir();
+    let took = started.elapsed();
+    assert!(matches!(result, Err(GitError::Deadline)), "{result:?}");
+    assert!(
+        took >= Duration::from_millis(390),
+        "stopped early: {took:?}"
+    );
+    assert!(took < Duration::from_millis(900), "stopped late: {took:?}");
+    let pids = slow.recorded();
+    assert_eq!(pids.len(), 1, "one git ran: {pids:?}");
+    assert!(
+        !alive(pids[0]),
+        "the slow git {} is killed and reaped",
+        pids[0]
+    );
+    assert!(
+        GitError::Deadline.to_string().contains("deadline"),
+        "{}",
+        GitError::Deadline
+    );
+
+    // Past the deadline nothing more runs.
+    let again = git.branch();
+    assert!(matches!(again, Err(GitError::Deadline)), "{again:?}");
+    assert_eq!(slow.recorded().len(), 1, "no second git started");
+
+    // The variables' lookup is bounded too.
+    let lookup = SlowGit::new(&repo, "slow-lookup", true);
+    let started = Instant::now();
+    let made = WorktreeGit::new_until(
+        &repo.main,
+        &lookup.env(&repo),
+        started + Duration::from_millis(300),
+    );
+    let took = started.elapsed();
+    assert!(matches!(made, Err(GitError::Deadline)), "{:?}", made.err());
+    assert!(took < Duration::from_millis(800), "{took:?}");
+    let pids = lookup.recorded();
+    assert_eq!(pids.len(), 1, "{pids:?}");
+    assert!(!alive(pids[0]), "the lookup's git {} is reaped", pids[0]);
+    // A deadline already past starts no git at all.
+    let gone = SlowGit::new(&repo, "slow-past", true);
+    let made = WorktreeGit::new_until(&repo.main, &gone.env(&repo), Instant::now());
+    assert!(matches!(made, Err(GitError::Deadline)), "{:?}", made.err());
+    assert!(gone.recorded().is_empty());
+}
+
+#[test]
+fn new_until_with_time_left_answers_as_new() {
+    use std::time::{Duration, Instant};
+
+    let repo = Repo::new("wt-until-fast");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let bounded = WorktreeGit::new_until(&repo.linked, &repo.env(), deadline).unwrap();
+    let plain = repo.handle(&repo.linked);
+    assert_eq!(bounded.top().unwrap(), plain.top().unwrap());
+    assert_eq!(bounded.common_dir().unwrap(), plain.common_dir().unwrap());
+    assert_eq!(bounded.branch().unwrap(), plain.branch().unwrap());
+    assert_eq!(
+        bounded.top_if_repository().unwrap(),
+        Some(repo.linked.clone())
+    );
+    // A failing git under a deadline is still a failure, not the deadline.
+    let nowhere = repo.scratch.join("nowhere-until");
+    fs::create_dir_all(&nowhere).unwrap();
+    let outside = WorktreeGit::new_until(&nowhere, &repo.env(), deadline).unwrap();
+    let result = outside.top_and_common_dir();
+    assert!(
+        result.is_err() && !matches!(result, Err(GitError::Deadline)),
+        "{result:?}"
+    );
+    assert_eq!(outside.top_if_repository().unwrap(), None);
+}
+
+#[test]
+fn top_and_common_dir_reads_both_in_one_call_in_a_linked_worktree() {
+    let repo = Repo::new("wt-top-common");
+    let common = fs::canonicalize(repo.main.join(".git")).unwrap();
+    for (dir, top) in [
+        (repo.main.clone(), repo.main.clone()),
+        (repo.main.join("proj"), repo.main.clone()),
+        (repo.linked.clone(), repo.linked.clone()),
+        (repo.linked.join("proj"), repo.linked.clone()),
+        (repo.linked.join("docs"), repo.linked.clone()),
+    ] {
+        let git = repo.handle(&dir);
+        let (got_top, got_common) = git.top_and_common_dir().unwrap();
+        assert_eq!(got_top, top, "{}", dir.display());
+        assert_eq!(got_common, common, "{}", dir.display());
+        // The same as the two calls it replaces.
+        assert_eq!(got_top, git.top().unwrap());
+        assert_eq!(got_common, git.common_dir().unwrap());
+    }
+    // Through a symlinked path: canonical answers.
+    let link = repo.scratch.join("linked-link");
+    symlink(&repo.linked, &link).unwrap();
+    let (top, common_dir) = repo.handle(&link).top_and_common_dir().unwrap();
+    assert_eq!(top, repo.linked);
+    assert_eq!(common_dir, common);
+    // Outside any repository: an error.
+    let nowhere = repo.scratch.join("nowhere");
+    fs::create_dir_all(&nowhere).unwrap();
+    assert!(repo.handle(&nowhere).top_and_common_dir().is_err());
+}

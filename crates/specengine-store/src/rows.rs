@@ -253,8 +253,8 @@ pub(crate) fn rebuild_parsed(
 }
 
 /// AC-13 of docs/features/phase1-cleanup.md (S3): `own_text` gives what the
-/// full scan over every section gave, on every node of the two fixture
-/// corpora and a crafted nested file, and stays linear on one file of
+/// full scan over every section gave, on every node of every fixture
+/// corpus and a crafted nested file, and stays linear on one file of
 /// 50 000 top-level ID sections.
 #[cfg(test)]
 mod own_text_oracle {
@@ -341,8 +341,9 @@ mod own_text_oracle {
         with_nested
     }
 
-    /// The fixture corpora with a scheme and a `docs/` tree (spec-a and
-    /// spec-b), found on disk: `src` names no fixture (`tests/genre.rs`).
+    /// Every fixture corpus with a scheme and a `docs/` tree (spec-a,
+    /// spec-b and the non-Rust spec-c so far), found on disk: `src` names
+    /// no fixture (`tests/genre.rs`).
     fn scheme_corpora() -> Vec<PathBuf> {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
         let mut corpora: Vec<PathBuf> = std::fs::read_dir(&fixtures)
@@ -355,9 +356,11 @@ mod own_text_oracle {
     }
 
     #[test]
-    fn own_text_equals_the_full_scan_on_both_fixture_corpora() {
+    fn own_text_equals_the_full_scan_on_every_fixture_corpus() {
         let corpora = scheme_corpora();
-        assert_eq!(corpora.len(), 2, "{corpora:?}");
+        // At least the three of 07 s1.2 P2-5 (two genres of prose, one
+        // non-Rust project); a new corpus joins without an edit here.
+        assert!(corpora.len() >= 3, "{corpora:?}");
         for root in corpora {
             let corpus = root.display().to_string();
             let toml = std::fs::read_to_string(root.join("specengine.toml")).expect("scheme");
@@ -365,7 +368,8 @@ mod own_text_oracle {
             let mut files = Vec::new();
             md_files(&root.join("docs"), &mut files);
             let count = files.len();
-            assert!(count > 5, "{corpus}: {count} files");
+            // The walk found the corpus (spec-c, the smallest, has five).
+            assert!(count >= 5, "{corpus}: {count} files");
             let mut nodes = 0;
             let mut with_nested = 0;
             for file in files {
