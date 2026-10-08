@@ -159,13 +159,13 @@ For SpecEngine this means: the context bundle is identifiers plus minimal text, 
 
 ## 4. Claude Code: what can be used (v2.1.283)
 
-**MCP client** (docs: code.claude.com/docs/en/mcp): the behaviour verified on 2.1.283 is canon in `crates/specengine-mcp/README.md` "Claude Code client" (eras, `.mcp.json`, the character-counted output cap, 2,048-character truncation, elicitation, `requiresUserInteraction`, background calls, `@`-resources, prompts); the read tools, their resources (`spec://{project}/node/{id}`) and the `maxResultSizeChars` check: `docs/canon/mcp-read.md`. **Do not design a long-blocking "wait for approval"**.
+**MCP client** (docs: code.claude.com/docs/en/mcp): verified on 2.1.283, canon in `crates/specengine-mcp/README.md` "Claude Code client" (eras, `.mcp.json`, the character-counted output cap, 2,048-character truncation, elicitation, `requiresUserInteraction`, background calls, `@`-resources, prompts); the read tools, their resources (`spec://{project}/node/{id}`) and the `maxResultSizeChars` check: `docs/canon/mcp-read.md`. **Do not design a long-blocking "wait for approval"**.
 
 **Hooks** (~33 events): `PreToolUse`, `PostToolUse`, `PermissionRequest`, `UserPromptSubmit`, `Stop`, `SubagentStart/Stop`, `SessionStart`, `WorktreeCreate/Remove`, `FileChanged`, **`Elicitation`/`ElicitationResult`**, `TaskCreated/Completed` and more. Handler types: `command`, **`http`**, `mcp_tool`, `prompt`, `agent`. Exit 2 blocks; priority `deny > defer > ask > allow`; `if: "Edit(src/**)"` narrows the trigger.
 
-⚠ **An HTTP hook cannot block via a response code**: non-2xx, unavailability and timeout count as non-blocking errors, and the edit goes through. If SpecEngine is down, the gate is **open**. Fail-closed needs a `command` hook (curl + `exit 2` on unavailability) and a deny rule in managed settings as a backstop. Cover `Bash` too: an agent can write via `cat > file`.
+⚠ **An HTTP hook cannot block via a response code**: non-2xx, unavailability and timeout are non-blocking errors, the edit goes through: a down SpecEngine leaves the gate **open**. Fail-closed needs a `command` hook (curl + `exit 2` on unavailability) and a managed-settings deny rule as a backstop. Cover `Bash` too: an agent can write via `cat > file`.
 
-**Delivery — a Claude Code plugin** (`.claude-plugin/plugin.json`): MCP server + hooks + skills + sub-agents in one versioned install. Cost: the plugin's skill and agent names are visible in the context of every turn (`/plugin` → Context cost).
+**Delivery — a Claude Code plugin** (`.claude-plugin/plugin.json`): MCP server, hooks, skills, subagents in one versioned install; their skill and agent names cost context every turn (`/plugin` → Context cost).
 
 ## 5. Storage: git vs DB — checked against the Beads experience
 
