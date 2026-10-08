@@ -100,11 +100,25 @@ pub(crate) fn discover_with_text(
     env: &Env,
     globals: &Globals,
 ) -> Result<(ProjectRoot, String), CliError> {
+    read_located(locate(env, globals)?)
+}
+
+/// [`discover`] for `spec serve`, which refuses `--config`: a `--root`
+/// without a config is not told to pass one.
+pub(crate) fn discover_without_config_hint(
+    env: &Env,
+    globals: &Globals,
+) -> Result<ProjectRoot, CliError> {
+    read_located(locate_hinted(env, globals, false)?).map(|(project, _)| project)
+}
+
+/// The located config read and checked, and its text.
+fn read_located(located: Located) -> Result<(ProjectRoot, String), CliError> {
     let Located {
         root,
         config_file,
         config_label,
-    } = locate(env, globals)?;
+    } = located;
     let bytes = fs::read(&config_file)
         .map_err(|error| CliError::spec(format!("cannot read {config_label}: {error}")))?;
     let text = String::from_utf8(bytes)
@@ -125,6 +139,12 @@ pub(crate) fn discover_with_text(
 /// read: a discovery failure is an unusable current directory or `--root`,
 /// or no `specengine.toml` by the walk or in `--root`.
 pub fn locate(env: &Env, globals: &Globals) -> Result<Located, CliError> {
+    locate_hinted(env, globals, true)
+}
+
+/// [`locate`]; `config_hint`: a `--root` without a config suggests
+/// `--config` (`false` for a command that refuses it).
+fn locate_hinted(env: &Env, globals: &Globals, config_hint: bool) -> Result<Located, CliError> {
     let cwd = canonical_dir(&env.cwd, "the current directory")?;
     let (root, config_file, config_label) = match (&globals.root, &globals.config) {
         (None, None) => {
@@ -141,9 +161,13 @@ pub fn locate(env: &Env, globals: &Globals) -> Result<Located, CliError> {
             let root = canonical_dir(&cwd.join(root), &format!("--root {}", root.display()))?;
             let file = root.join(CONFIG_FILE);
             if !is_regular_file(&file) {
+                let hint = if config_hint {
+                    ", or pass --config"
+                } else {
+                    ""
+                };
                 return Err(CliError::spec(format!(
-                    "no {CONFIG_FILE} in the --root directory; run `spec init` there, \
-                     or pass --config"
+                    "no {CONFIG_FILE} in the --root directory; run `spec init` there{hint}"
                 )));
             }
             (root, file, CONFIG_FILE.to_owned())

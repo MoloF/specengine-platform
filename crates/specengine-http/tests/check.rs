@@ -239,9 +239,9 @@ fn ac05_check_takes_no_query_needs_no_git_and_writes_nothing() {
     }
     assert_eq!(run.json()["verdict"], Value::from("blocked"));
     assert!(
-        snapshot(&fresh).is_empty(),
+        common::beyond_daemon(&fresh).is_empty(),
         "a check opens no data directory: the fresh HOME holds {:?}",
-        snapshot(&fresh).keys().collect::<Vec<_>>()
+        common::beyond_daemon(&fresh)
     );
     // The control: this daemon has no git indeed (the inbox lists the
     // repository's worktrees with it).

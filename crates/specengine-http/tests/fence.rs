@@ -10,7 +10,7 @@ mod common;
 use std::ffi::OsStr;
 use std::process::Command;
 
-use common::{Reply, Scratch, Server, root_args, snapshot};
+use common::{Reply, Scratch, Server, beyond_daemon, root_args};
 
 /// The daemon's listening sockets as `lsof` names them (`127.0.0.1:N`,
 /// `*:N`, `[::1]:N`).
@@ -139,9 +139,9 @@ fn ac01_a_foreign_host_origin_or_fetch_site_is_refused_before_anything_is_read()
         }
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a refused request read nothing: the fresh HOME holds {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
 
     // The own origin passes: either host name, its Origin, same-origin

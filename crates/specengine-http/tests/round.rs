@@ -560,9 +560,9 @@ fn r02_a_bad_limit_or_another_name_is_a_400_and_runs_nothing() {
         assert!(reply.cors_headers().is_empty(), "{query}");
     }
     assert!(
-        snapshot(&home).is_empty(),
+        common::beyond_daemon(&home).is_empty(),
         "a refused `limit` runs nothing: the fresh HOME holds {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        common::beyond_daemon(&home)
     );
     // The bounds are taken (the control): 1 and 200.
     for query in ["limit=1", "limit=200"] {

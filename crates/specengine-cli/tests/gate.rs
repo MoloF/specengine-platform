@@ -29,6 +29,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use common::proposal::{Pair, sqlite3};
+use common::serve::Daemon;
 use common::{SPEC, data_dir, repository_root};
 use serde_json::{Value, json};
 use specengine_cli::{
@@ -2044,4 +2045,94 @@ fn a_non_rust_project_takes_the_same_gate() {
         );
     }
     let _ = Exit::Answered;
+}
+
+// ------------------------------------------------- spec-serve AC-D9
+
+/// Every verdict of the AC-D9 cases: label, exit code, stdout, stderr —
+/// through the library, the binary (text and `--json`) and the wrapper,
+/// a pass (`main`, claimed) and a refusal (`t1`, unclaimed) each.
+fn verdicts(pair: &Pair) -> Vec<(String, i32, String, String)> {
+    let mut out = Vec::new();
+    for (label, dir) in [("pass", &pair.main), ("refusal", &pair.linked)] {
+        let outcome = verdict(pair, dir, "src/a.rs");
+        out.push((
+            format!("{label} library"),
+            i32::from(outcome.exit_code()),
+            outcome.to_json(),
+            outcome.stderr_lines().join("\n"),
+        ));
+        for json in [false, true] {
+            let ran = spec_path(pair, dir, "src/a.rs", json);
+            out.push((
+                format!("{label} spec gate json={json}"),
+                ran.code,
+                ran.stdout_text(),
+                ran.stderr,
+            ));
+        }
+        let file = dir.join("src/a.rs");
+        let ran = wrapper(pair, dir, hook_json("Edit", dir, file.to_str().unwrap(), 0));
+        out.push((
+            format!("{label} wrapper"),
+            ran.code,
+            ran.stdout_text(),
+            ran.stderr,
+        ));
+    }
+    out
+}
+
+/// spec-serve AC-D9: a pass and a refusal give identical exit codes,
+/// stdout and stderr with no daemon ever started, with a daemon up under
+/// the same `HOME` (serving this repository) and after it is gone (its
+/// `daemon.json` left). M: refuse when there is no `daemon.json`.
+#[test]
+fn serve_d9_the_gate_decides_alike_with_a_daemon_up_or_none() {
+    let pair = gated("pg-serve-d9", "selective");
+    let main = pair.main.clone();
+    let id = ready_task(&pair, &main);
+    pair.claim_ok(&main, &id, &main);
+    let discovery = data_dir(&pair.home).join("daemon.json");
+
+    assert!(!discovery.exists(), "no daemon ever ran under this HOME");
+    let none = verdicts(&pair);
+    let codes: Vec<(&str, i32)> = none
+        .iter()
+        .map(|(label, code, _, _)| (label.as_str(), *code))
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            ("pass library", 0),
+            ("pass spec gate json=false", 0),
+            ("pass spec gate json=true", 0),
+            ("pass wrapper", 0),
+            ("refusal library", 2),
+            ("refusal spec gate json=false", 2),
+            ("refusal spec gate json=true", 2),
+            ("refusal wrapper", 2),
+        ],
+        "{none:#?}"
+    );
+
+    let daemon = Daemon::start(&vars(&pair, &[], &[]), &main, &[&main]);
+    let published: Value =
+        serde_json::from_slice(&fs::read(&discovery).expect("the daemon's daemon.json"))
+            .expect("JSON");
+    assert_eq!(
+        published["pid"],
+        json!(daemon.pid()),
+        "the daemon up is this one"
+    );
+    let up = verdicts(&pair);
+    assert_eq!(
+        up, none,
+        "a daemon up under the same HOME changes no verdict"
+    );
+
+    drop(daemon);
+    assert!(discovery.exists(), "the stale daemon.json stays");
+    let down = verdicts(&pair);
+    assert_eq!(down, none, "a stale daemon.json changes no verdict");
 }

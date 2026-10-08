@@ -22,7 +22,7 @@
 
 mod common;
 
-use common::{Reply, Scratch, Server, request_bytes, snapshot};
+use common::{Reply, Scratch, Server, beyond_daemon, request_bytes};
 
 /// Every read route of A, with a valid query (`graph`, `check`:
 /// docs/features/ui-live.md "Description and interactions"; `tasks`,
@@ -118,9 +118,9 @@ fn a_read_route_answers_every_other_method_405_allow_get_head_included() {
         }
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a 405 runs no call: the fresh HOME holds {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
     // GET still answers (the control): the route is served.
     let reply = server.get("/api/projects/lantern-keep/tree");
@@ -168,7 +168,7 @@ fn the_decision_route_answers_every_other_method_405_allow_post() {
         }
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a 405 or a refused POST, DELETE runs no call"
     );
 }
@@ -244,9 +244,9 @@ fn the_round_routes_answer_another_method_405_allow_get_on_the_sheet_post_on_the
         );
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a 405 or a refused POST runs no call: {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
 }
 
@@ -286,7 +286,10 @@ fn an_unknown_path_is_a_404_for_every_method() {
     assert_eq!(reply.status, 404, "OPTIONS *: {:?}", reply);
     assert_eq!(reply.header("allow"), None, "OPTIONS *");
     reply.error_message();
-    assert!(snapshot(&home).is_empty(), "a 404 of no route runs no call");
+    assert!(
+        beyond_daemon(&home).is_empty(),
+        "a 404 of no route runs no call"
+    );
 }
 
 #[test]
@@ -328,8 +331,8 @@ fn the_fences_403_carries_no_allow_whatever_the_method() {
         }
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a refused request read nothing: {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
 }

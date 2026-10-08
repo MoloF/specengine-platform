@@ -22,7 +22,7 @@ Rust comes first (including Bevy ECS and RON data); other languages via tree-sit
 
 ## Status
 
-**Phase 0 done** (2026-09-29): architectural decisions made, key claims measured on two pilot corpora. **Phase 1 done** (2026-10-05), the reading core: the spec parser (`specengine-model`, `specengine-core`), the SQLite index (`specengine-store`), `spec check` and the `spec` CLI (`specengine-cli`: `init`, `index`, `search`, `show`, `tree`, `graph`, `bundle`, `check`, `export index`) and the stdio MCP server's read tools and resources (`specengine-mcp`) are shipped; `spec check` gates this repository's documentation. Also built: layer A parsing and hashing (`specengine-code`), a corpus census, importer and layout round trip (`specengine-import`), rust-analyzer loading (`specengine-ra`) and the measurement harness (`specengine-eval`). Task W is measured on both pilots (`pilot-w`); A migrates first, then B. **Phase 2**, queue and tasks, in progress: proposals (edits, new files and ID sections) are raised, reviewed and applied as commits (`spec propose`, `inbox`, `review`, `approve`, `reject`), a question or discrepancy approved as a decision record (several at once: `spec round`), agents raise them over MCP; tasks only the owner approves hand agents a versioned package (`spec task`, `get_task`); the Claude Code plugin brings the server, skills, stack-neutral roles run by `/specengine:feature` and the task gate on agent writes; the web UI (`ui/`) reads over HTTP (`specengine-http`) and stages decisions, each confirmed on a terminal ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
+**Phase 0 done** (2026-09-29): architectural decisions made, key claims measured on two pilot corpora. **Phase 1 done** (2026-10-05), the reading core: the spec parser (`specengine-model`, `specengine-core`), the SQLite index (`specengine-store`), `spec check` and the `spec` CLI (`specengine-cli`: `init`, `index`, `search`, `show`, `tree`, `graph`, `bundle`, `check`, `export index`) and the stdio MCP server's read tools and resources (`specengine-mcp`) are shipped; `spec check` gates this repository's documentation. Also built: layer A parsing and hashing (`specengine-code`), a corpus census, importer and layout round trip (`specengine-import`), rust-analyzer loading (`specengine-ra`) and the measurement harness (`specengine-eval`). Task W is measured on both pilots (`pilot-w`); A migrates first, then B. **Phase 2**, queue and tasks, in progress: proposals (edits, new files and ID sections) are raised, reviewed and applied as commits (`spec propose`, `inbox`, `review`, `approve`, `reject`), a question or discrepancy approved as a decision record (several at once: `spec round`), agents raise them over MCP; tasks only the owner approves hand agents a versioned package (`spec task`, `get_task`); the Claude Code plugin brings the server, skills, stack-neutral roles run by `/specengine:feature` and the task gate on agent writes; the web UI (`ui/`) reads over HTTP (`specengine-http`, run by `spec serve`) and stages decisions, each confirmed on a terminal ([`08-roadmap`](docs/specs/specengine-platform/08-roadmap.md)).
 
 ## Where to start
 
@@ -52,6 +52,16 @@ claude --plugin-dir <clone>/plugin/specengine                # develop; installe
 ```
 
 One route only: a project `.mcp.json` running `specengine-mcp` too duplicates the tools. Launched outside a shell, Claude Code may lack `~/.cargo/bin` on `PATH` (`/mcp`: failed; the gate refuses writes under `[gate]`, a `PATH` hint). An older `spec` without `gate`: the same refusal; reinstall from one commit. Verified on Claude Code 2.1.294: `claude plugin validate --strict` passes on `plugin` and on `plugin/specengine`, skills and agents included; the commands above await the owner's check (`docs/features/plugin-skills.md` AC-13, `plugin-roles.md` "Open").
+
+## Web UI
+
+```bash
+cargo install --locked --force --path crates/specengine-http  # beside spec, same commit
+spec serve                  # in the project: one daemon per data directory
+pnpm --dir <clone>/ui dev   # open http://127.0.0.1:5173/ (ui/README.md)
+```
+
+The gate never needs the daemon (ADR-0039); how it runs: `docs/canon/serve.md`.
 
 ## Development
 

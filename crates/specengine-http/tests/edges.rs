@@ -172,7 +172,7 @@ fn a_malformed_or_doubled_host_is_refused() {
         );
         reply.error_message();
     }
-    assert!(common::snapshot(&home).is_empty(), "nothing read");
+    assert!(common::beyond_daemon(&home).is_empty(), "nothing read");
 }
 
 #[test]

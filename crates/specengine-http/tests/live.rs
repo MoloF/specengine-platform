@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use common::{Frame, Mcp, Scratch, Server, Stream, ask, data_dir, snapshot};
+use common::{Frame, Mcp, Scratch, Server, Stream, ask, beyond_daemon, data_dir};
 use serde_json::{Value, json};
 
 /// Within this of the storing process's exit.
@@ -123,9 +123,9 @@ fn ac07_a_stored_item_reaches_the_tail_within_a_second_of_its_exit() {
     // A subscriber creates nothing: a second of polls, HOME still empty.
     assert!(on_a.frames_within(Duration::from_secs(1)).is_empty());
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a subscriber created {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
 
     // `spec propose question`, a separate process.

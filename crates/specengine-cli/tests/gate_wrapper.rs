@@ -701,3 +701,99 @@ fn sixty_fast_runs_leave_no_sleep() {
         bench.sleeps().len()
     );
 }
+
+// ------------------------------------------------- spec-serve AC-D9
+
+/// The hook's input for an `Edit` of `file` from `cwd`.
+fn edit_of(cwd: &Path, file: &Path) -> Vec<u8> {
+    serde_json::to_vec(&serde_json::json!({
+        "session_id": "s",
+        "transcript_path": "/tmp/t",
+        "cwd": cwd,
+        "permission_mode": "default",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": file, "old_string": "a", "new_string": "b"},
+    }))
+    .unwrap()
+}
+
+/// spec-serve AC-D9 through the wrapper: with no `spec` on `PATH` (a
+/// gated session refused with the hint, an ungated one passed) and with
+/// the built `spec` on it (an ungated write passed, a gated one closed),
+/// every shell's exit code, stdout and stderr are identical with no
+/// daemon ever started, with a daemon up under the same `HOME` serving
+/// both projects, and after it is gone. M: refuse when there is no
+/// `daemon.json`.
+#[test]
+fn serve_d9_the_wrapper_decides_alike_with_a_daemon_up_or_none() {
+    let bench = Bench::new("pg-w-serve-d9");
+    let gated = bench.scratch.copy("spec-a", "gated");
+    let config = gated.join("specengine.toml");
+    let mut text = fs::read_to_string(&config).unwrap();
+    text.push_str(
+        "\n[zones]\ncode = [\"src/**\"]\n\n[gate]\nmode = \"selective\"\nzones = [\"code\"]\n",
+    );
+    fs::write(&config, text).unwrap();
+    let plain = bench.scratch.copy("spec-b", "plain");
+    for root in [&gated, &plain] {
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/a.rs"), "fn a() {}\n").unwrap();
+    }
+    let home = bench.scratch.dir("home");
+    let discovery = common::data_dir(&home).join("daemon.json");
+
+    let observe = || {
+        let mut out = Vec::new();
+        for with_spec in [false, true] {
+            if with_spec {
+                std::os::unix::fs::symlink(common::SPEC, bench.bin.join("spec")).unwrap();
+            } else {
+                bench.no_spec();
+            }
+            for shell in shells() {
+                for (label, root) in [("gated", &gated), ("plain", &plain)] {
+                    let input = edit_of(root, &root.join("src/a.rs"));
+                    let started = Instant::now();
+                    let child = bench.start(shell, root, Some(root), &input);
+                    let ran = finish(child, started);
+                    out.push((
+                        format!("{shell} {label} spec={with_spec}"),
+                        ran.code,
+                        String::from_utf8_lossy(&ran.stdout).into_owned(),
+                        ran.stderr,
+                    ));
+                }
+            }
+            bench.no_spec();
+        }
+        assert_eq!(bench.temp_files(), Vec::<String>::new());
+        out
+    };
+
+    assert!(!discovery.exists(), "no daemon ever ran under this HOME");
+    let none = observe();
+    for (label, code, stdout, stderr) in &none {
+        let expected = if label.contains(" gated ") { 2 } else { 0 };
+        assert_eq!(*code, Some(expected), "{label}: {stderr}");
+        assert!(stdout.is_empty(), "{label}: {stdout}");
+        if label.contains(" gated spec=false") {
+            assert_eq!(stderr.trim_end(), PATH_HINT, "{label}");
+        }
+        if label.contains(" plain ") {
+            assert_eq!(stderr, "", "{label}");
+        }
+    }
+
+    let daemon =
+        common::serve::Daemon::start(&bench.vars(None), bench.scratch.path(), &[&gated, &plain]);
+    let published: serde_json::Value =
+        serde_json::from_slice(&fs::read(&discovery).expect("the daemon's daemon.json"))
+            .expect("JSON");
+    assert_eq!(published["pid"], serde_json::json!(daemon.pid()));
+    let up = observe();
+    assert_eq!(up, none, "a daemon up under the same HOME changes nothing");
+    drop(daemon);
+    let down = observe();
+    assert_eq!(down, none, "a stale daemon.json changes nothing");
+}

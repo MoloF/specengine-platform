@@ -14,6 +14,12 @@
 //! reference-form `canon:` and inline mentions (with the name fallback).
 //! Exempt: `supersedes` items (the key and `links.supersedes`), the
 //! `status:` value, and references in X's own files.
+//!
+//! AC-03 and AC-04 of docs/features/ref-superseded-records.md: a reference
+//! of a live source whose readable front-matter is `class: decision`,
+//! `status: accepted` with a `YYYY-MM-DD` `date:` D is exempt when X's first
+//! holder has such a `date:` strictly later than D (text order); any other
+//! source, a missing or unshaped date, or D on or after X's day still warns.
 
 mod common;
 
@@ -509,6 +515,255 @@ fn superseded_findings_are_independent_of_input_order() {
         "{}",
         show(&forward)
     );
+}
+
+// ------------------------------------------------------- dated decisions
+// AC-03, AC-04 of docs/features/ref-superseded-records.md. X = ADR-0002 is
+// dated `2026-09-10`; MEC-NEW (X of MEC-OLD) stays undated (case (f)). Each
+// new source has `refs: [ADR-0001]`, `links.derived_from: [ADR-0001]` and
+// the body line `Cites ADR-0001 and a MEC-OLD-based rule.`
+
+/// X's path in `SUPERSEDED`.
+const X_PATH: &str = "docs/decisions/ADR-0002.md";
+
+/// `SUPERSEDED` with X's front-matter given `date: {date}` after its
+/// `status:`; every other file unchanged.
+fn superseded_x_dated(date: &str) -> Vec<(&'static str, String)> {
+    SUPERSEDED
+        .iter()
+        .map(|&(path, text)| {
+            if path == X_PATH {
+                let dated = text.replacen(
+                    "status: accepted\n",
+                    &format!("status: accepted\ndate: {date}\n"),
+                    1,
+                );
+                assert_ne!(dated, text, "X's `status: accepted` line moved");
+                (path, dated)
+            } else {
+                (path, text.to_owned())
+            }
+        })
+        .collect()
+}
+
+/// `ref-superseded` over `base` plus `extra`, and the report.
+fn superseded_over(
+    base: Vec<(&'static str, String)>,
+    extra: &[(&str, String)],
+) -> (Vec<(String, usize, String)>, Report) {
+    let mut files: Vec<(&str, &str)> = base.iter().map(|(p, t)| (*p, t.as_str())).collect();
+    files.extend(extra.iter().map(|(p, t)| (*p, t.as_str())));
+    let report = config().check(&files);
+    (found(&report, "ref-superseded"), report)
+}
+
+/// The dated corpus (X `2026-09-10`) plus `extra`.
+fn dated_with(extra: &[(&str, String)]) -> (Vec<(String, usize, String)>, Report) {
+    superseded_over(superseded_x_dated("2026-09-10"), extra)
+}
+
+/// A new source: `front` (whole lines), then `refs: [ADR-0001]` on line
+/// `n + 2`, `derived_from: [ADR-0001]` on line `n + 4`, and the body line on
+/// line `n + 9`, `n` the number of `front` lines.
+fn cites(front: &str) -> String {
+    format!(
+        "---\n{front}refs: [ADR-0001]\nlinks:\n  derived_from: [ADR-0001]\n---\n\n# Source\n\nCites ADR-0001 and a MEC-OLD-based rule.\n"
+    )
+}
+
+/// An accepted decision `ADR-{n}` with `canon: ADR-0001` on line 8 when
+/// `date` is some (line 7 otherwise), `date:` on line 6.
+fn accepted(n: &str, date: Option<&str>) -> String {
+    let date = date.map_or(String::new(), |date| format!("date: {date}\n"));
+    cites(&format!(
+        "id: ADR-{n}\nclass: decision\ntitle: T\nstatus: accepted\n{date}scope: [x]\ncanon: ADR-0001\n"
+    ))
+}
+
+/// The five references of a dated `accepted` decision at `path`
+/// (`canon`, `refs`, `derived_from`, inline ×2), lines shifted by `shift`.
+fn five(path: &str, shift: usize) -> Vec<(String, usize, String)> {
+    vec![
+        at(path, 8 - shift, "ADR-0001"),
+        at(path, 9 - shift, "ADR-0001"),
+        at(path, 11 - shift, "ADR-0001"),
+        at(path, 16 - shift, "ADR-0001"),
+        at(path, 16 - shift, "MEC-OLD-based"),
+    ]
+}
+
+const ADR_3: &str = "docs/decisions/ADR-0003.md";
+const ADR_4: &str = "docs/decisions/ADR-0004.md";
+
+#[test]
+fn an_accepted_decision_dated_before_x_keeps_only_the_undated_successor_s_finding() {
+    // AC-03: D 2026-09-01 < X 2026-09-10: its four ADR-0001 references
+    // (`canon:`, `refs`, `links.derived_from`, inline) are exempt; MEC-NEW
+    // has no date, so `MEC-OLD-based` on the body line warns (case (f)).
+    let (got, report) = dated_with(&[(ADR_3, accepted("0003", Some("2026-09-01")))]);
+    assert_eq!(got, [at(ADR_3, 16, "MEC-OLD-based")], "{}", show(&report));
+    let finding = with_code(&report, "ref-superseded")[0];
+    assert_eq!(finding.severity, Severity::Warning);
+    assert_eq!(finding.message, "`MEC-OLD-based` is superseded by MEC-NEW");
+    // The source is what the rule reads: no other finding in it.
+    let others: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|f| f.path == ADR_3 && f.code != "ref-superseded")
+        .map(|f| f.code.as_str())
+        .collect();
+    assert!(others.is_empty(), "{}", show(&report));
+}
+
+#[test]
+fn a_draft_spec_dated_before_x_still_warns() {
+    // (a): not a decision, whatever its date: 2 declared, 2 inline.
+    let path = "docs/features/draft.md";
+    let spec = cites("class: spec\nstatus: draft\ndate: 2026-09-01\nscope: [x]\n");
+    let (got, report) = dated_with(&[(path, spec)]);
+    assert_eq!(
+        got,
+        [
+            at(path, 6, "ADR-0001"),
+            at(path, 8, "ADR-0001"),
+            at(path, 13, "ADR-0001"),
+            at(path, 13, "MEC-OLD-based"),
+        ],
+        "{}",
+        show(&report)
+    );
+}
+
+#[test]
+fn a_canon_dated_before_x_still_warns() {
+    // (b): a canon document is edited, not superseded: 4.
+    let path = "docs/canon/dated.md";
+    let canon = cites("class: canon\nowner: o\nreviewed: 2026-09-01\ndate: 2026-09-01\n");
+    let (got, report) = dated_with(&[(path, canon)]);
+    assert_eq!(
+        got,
+        [
+            at(path, 6, "ADR-0001"),
+            at(path, 8, "ADR-0001"),
+            at(path, 13, "ADR-0001"),
+            at(path, 13, "MEC-OLD-based"),
+        ],
+        "{}",
+        show(&report)
+    );
+}
+
+#[test]
+fn a_decision_without_status_dated_before_x_still_warns() {
+    // (c): no `status:` (`key-missing`), live, not accepted: 5.
+    let decision = cites(
+        "id: ADR-0003\nclass: decision\ntitle: T\ndate: 2026-09-01\nscope: [x]\ncanon: ADR-0001\n",
+    );
+    let (got, report) = dated_with(&[(ADR_3, decision)]);
+    assert_eq!(got, five(ADR_3, 1), "{}", show(&report));
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.path == ADR_3 && f.code == "key-missing" && f.subject == "status"),
+        "{}",
+        show(&report)
+    );
+}
+
+#[test]
+fn an_accepted_decision_with_a_failed_front_matter_warns_for_its_body() {
+    // (d): no readable front-matter, so no D and no declared reference: 2.
+    let decision = cites(
+        "id: ADR-0003\nclass: decision\ntitle: a: b\nstatus: accepted\ndate: 2026-09-01\nscope: [x]\ncanon: ADR-0001\n",
+    );
+    let (got, report) = dated_with(&[(ADR_3, decision)]);
+    assert_eq!(
+        got,
+        [at(ADR_3, 16, "ADR-0001"), at(ADR_3, 16, "MEC-OLD-based")],
+        "{}",
+        show(&report)
+    );
+}
+
+#[test]
+fn accepted_decisions_dated_on_or_after_x_s_day_still_warn() {
+    // (e): strictly later only; X's own day and a later day: 5 each.
+    let (got, report) = dated_with(&[
+        (ADR_3, accepted("0003", Some("2026-09-10"))),
+        (ADR_4, accepted("0004", Some("2026-09-20"))),
+    ]);
+    let mut expected = five(ADR_3, 0);
+    expected.extend(five(ADR_4, 0));
+    assert_eq!(got, expected, "{}", show(&report));
+}
+
+#[test]
+fn an_undated_x_exempts_no_accepted_decision() {
+    // (f), for ADR-0001 as well: `SUPERSEDED` as is, X with no `date:`.
+    let undated: Vec<(&'static str, String)> = SUPERSEDED
+        .iter()
+        .map(|&(path, text)| (path, text.to_owned()))
+        .collect();
+    let (got, report) = superseded_over(undated, &[(ADR_3, accepted("0003", Some("2026-09-01")))]);
+    assert_eq!(got, five(ADR_3, 0), "{}", show(&report));
+}
+
+#[test]
+fn an_undated_accepted_decision_still_warns() {
+    // (g): no D: 5.
+    let (got, report) = dated_with(&[(ADR_3, accepted("0003", None))]);
+    assert_eq!(got, five(ADR_3, 1), "{}", show(&report));
+}
+
+#[test]
+fn unshaped_dates_exempt_nothing() {
+    // `2026-09-1` sorts before X's `2026-09-10` as text, and X's `2026-9-10`
+    // after D's `2026-09-01`: neither is `YYYY-MM-DD`, so both still warn.
+    let (got, report) = dated_with(&[(ADR_3, accepted("0003", Some("2026-09-1")))]);
+    assert_eq!(got, five(ADR_3, 0), "{}", show(&report));
+    let (got, report) = superseded_over(
+        superseded_x_dated("2026-9-10"),
+        &[(ADR_3, accepted("0003", Some("2026-09-01")))],
+    );
+    assert_eq!(got, five(ADR_3, 0), "{}", show(&report));
+}
+
+#[test]
+fn x_s_date_is_its_first_holder_s_in_path_order() {
+    // A second holder of ADR-0002 dated before D comes later by path:
+    // X's date stays the first holder's `2026-09-10`, so D `2026-09-01` is
+    // exempt, whatever the input order.
+    let second = "---\nid: ADR-0002\nclass: decision\ntitle: Dup\nstatus: accepted\ndate: 2026-08-01\nscope: [x]\ncanon: docs/canon/c.md#c\n---\n\n# Dup\n";
+    let extra = [
+        ("docs/z/dup.md", second.to_owned()),
+        (ADR_3, accepted("0003", Some("2026-09-01"))),
+    ];
+    let (forward, report) = dated_with(&extra);
+    assert_eq!(
+        forward,
+        [at(ADR_3, 16, "MEC-OLD-based")],
+        "{}",
+        show(&report)
+    );
+    let mut base = superseded_x_dated("2026-09-10");
+    base.extend(extra.iter().cloned());
+    base.reverse();
+    let (backward, reversed) = superseded_over(base, &[]);
+    assert_eq!(forward, backward);
+    assert_eq!(report.to_json(), reversed.to_json());
+}
+
+#[test]
+fn the_dated_exemption_is_deterministic() {
+    let extra = [
+        (ADR_3, accepted("0003", Some("2026-09-01"))),
+        (ADR_4, accepted("0004", Some("2026-09-10"))),
+    ];
+    let first = dated_with(&extra).1.to_json();
+    let second = dated_with(&extra).1.to_json();
+    assert_eq!(first, second);
 }
 
 // ------------------------------------------------------------------ scopes

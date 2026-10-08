@@ -15,6 +15,7 @@ pub mod decision;
 pub mod git;
 pub mod graph;
 pub mod proposal;
+pub mod serve;
 pub mod staged;
 
 use std::collections::BTreeMap;

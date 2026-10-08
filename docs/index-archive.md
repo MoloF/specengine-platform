@@ -39,6 +39,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/proposal-kinds.md](features/proposal-kinds.md) shipped
 - [docs/features/queue-export.md](features/queue-export.md) shipped
 - [docs/features/queue-path-targets.md](features/queue-path-targets.md) shipped
+- [docs/features/ref-superseded-records.md](features/ref-superseded-records.md) shipped
 - [docs/features/round.md](features/round.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
@@ -55,6 +56,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped
 - [docs/features/spec-index.md](features/spec-index.md) shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped
+- [docs/features/spec-serve.md](features/spec-serve.md) shipped
 - [docs/features/task-package.md](features/task-package.md) shipped
 - [docs/features/token-calibration.md](features/token-calibration.md) shipped
 - [docs/features/ui-graph.md](features/ui-graph.md) shipped

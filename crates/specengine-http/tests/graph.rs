@@ -29,7 +29,9 @@ mod common;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use common::{Reply, Run, Scratch, Server, encode_component, snapshot, spec, spec_json, write};
+use common::{
+    Reply, Run, Scratch, Server, beyond_daemon, encode_component, spec, spec_json, write,
+};
 use serde_json::Value;
 
 const P: &str = "/api/projects/lantern-keep";
@@ -404,9 +406,9 @@ fn ac03_the_graph_query_404_400_503() {
         assert!(message.contains(name), "{path}: {message}");
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a 400 runs no call: the fresh HOME holds {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
 
     // 404: the CLI's exit-1 document.

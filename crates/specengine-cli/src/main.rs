@@ -17,6 +17,10 @@
 //! the start of `main`; it never exits 1 (a usage error, a panic or the
 //! deadline is exit 2, `specengine gate: no verdict (…)` on stderr); with
 //! `--stdin` it prints nothing on stdout, whatever the verdict.
+//!
+//! `spec serve` runs apart too (task spec `spec-serve`): the library
+//! decides; a running daemon's lines are printed, or this process is
+//! replaced by the daemon (`exec`), never started beside it.
 
 use std::ffi::OsString;
 use std::io::{BufRead as _, IsTerminal as _, Read as _, Write as _};
@@ -34,9 +38,9 @@ use specengine_cli::{
     INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
     IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText, QuestionRequest,
     RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
-    SearchRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest,
-    TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest,
-    TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
+    SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -236,6 +240,15 @@ enum Command {
         /// Read Claude Code's PreToolUse hook JSON on stdin; nothing is printed on stdout.
         #[arg(long)]
         stdin: bool,
+    },
+    /// Run the daemon (specengine-http) in the foreground on 127.0.0.1 for the project, or for each DIR; one per data directory: a daemon already serving them is named instead.
+    Serve {
+        /// A project root to serve, its own specengine.toml read; repeat for more (default: the project found from the current directory, or --root).
+        #[arg(value_name = "DIR")]
+        dirs: Vec<PathBuf>,
+        /// The port on 127.0.0.1; 0 takes a free one.
+        #[arg(long, value_name = "N", default_value_t = specengine_cli::DAEMON_PORT)]
+        port: u16,
     },
 }
 
@@ -515,6 +528,13 @@ fn main() -> ExitCode {
     {
         let globals = cli.root.is_some() || cli.config.is_some();
         return run_gate(started, globals, cli.json, worktree, path, stdin);
+    }
+    if let Command::Serve { dirs, port } = cli.command {
+        let globals = Globals {
+            root: cli.root,
+            config: cli.config,
+        };
+        return run_serve(&globals, cli.json, dirs, port);
     }
     // `conflicts_with` sees `--json` only after `index`: clap fills global
     // arguments in after the subcommand's conflict check.
@@ -916,6 +936,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 "spec: gate runs apart from the other commands",
             ));
         }
+        Command::Serve { .. } => {
+            return Err(CliError::cannot(
+                "spec: serve runs apart from the other commands",
+            ));
+        }
     })
 }
 
@@ -1047,6 +1072,62 @@ fn give_up(progress: &GateProgress, session: Option<&std::path::Path>, cause: St
     };
     let _ = stderr.flush();
     std::process::exit(i32::from(code));
+}
+
+/// `spec serve` (task spec `spec-serve`): the library's decision, then
+/// either the running daemon's lines (stdout, exit 0) or the exec of the
+/// daemon, after which its output and exits are the daemon's. Unix only;
+/// `--json` refused first (the daemon prints lines). No runtime, thread or
+/// socket here.
+fn run_serve(globals: &Globals, json: bool, dirs: Vec<PathBuf>, port: u16) -> ExitCode {
+    if !cfg!(unix) {
+        return serve_error(&CliError::cannot(
+            "spec serve: not supported on this platform",
+        ));
+    }
+    if json {
+        return serve_error(&CliError::cannot(
+            "spec serve: --json is not supported: the daemon prints lines",
+        ));
+    }
+    let request = ServeRequest {
+        dirs,
+        port,
+        spec_path: std::env::current_exe().ok(),
+        path: std::env::var_os("PATH"),
+    };
+    match Env::from_process().and_then(|env| specengine_cli::serve(&env, globals, &request)) {
+        Ok(Serve::Running(lines)) => {
+            let _ = std::io::stdout().lock().write_all(lines.as_bytes());
+            ExitCode::SUCCESS
+        }
+        Ok(Serve::Start { program, args }) => exec(&program, &args),
+        Err(error) => serve_error(&error),
+    }
+}
+
+fn serve_error(error: &CliError) -> ExitCode {
+    let _ = writeln!(std::io::stderr().lock(), "{error}");
+    ExitCode::from(error.exit.code())
+}
+
+/// Replaces this process with `program`; returns only when that fails
+/// (exit 2 naming the path and the OS error).
+#[cfg(unix)]
+fn exec(program: &std::path::Path, args: &[OsString]) -> ExitCode {
+    use std::os::unix::process::CommandExt as _;
+    let error = std::process::Command::new(program).args(args).exec();
+    serve_error(&CliError::cannot(format!(
+        "spec serve: cannot run {}: {error}",
+        program.display()
+    )))
+}
+
+#[cfg(not(unix))]
+fn exec(_program: &std::path::Path, _args: &[OsString]) -> ExitCode {
+    serve_error(&CliError::cannot(
+        "spec serve: not supported on this platform",
+    ))
 }
 
 /// The arguments name the `gate` subcommand: its name is the first

@@ -10,7 +10,7 @@
 
 mod common;
 
-use common::{Scratch, Server, snapshot, spec_json};
+use common::{Scratch, Server, beyond_daemon, spec_json};
 use serde_json::Value;
 
 const P: &str = "/api/projects/lantern-keep";
@@ -117,9 +117,9 @@ fn a_bad_escape_or_non_utf8_in_a_query_value_or_name_is_a_400_naming_it() {
     let message = reply.error_message();
     assert!(message.contains("`%FF`"), "{message:?}");
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a refused query ran no call: the fresh HOME holds {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
 }
 

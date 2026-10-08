@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
-2. `specengine-http --root <project>`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`; projects `harbor-sim`, `ledger-api`, stages kept to a reload.
+2. `spec serve` in the project, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`; projects `harbor-sim`, `ledger-api`, stages kept to a reload.
 3. The slice's checks: its spec's "Owner's manual check".
 
 ## Roles here

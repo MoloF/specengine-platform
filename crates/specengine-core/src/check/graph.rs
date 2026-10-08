@@ -9,8 +9,12 @@
 //!   `links.depends_on` graph between documents (≥ 2 documents, or one with
 //!   an edge to itself).
 //! - `ref-superseded`: a reference to a document whose `status:` is
-//!   `superseded-by X`; `supersedes` items, the `status:` value and
-//!   references from X's own files are exempt.
+//!   `superseded-by X`; `supersedes` items, the `status:` value,
+//!   references from X's own files and from an accepted decision dated
+//!   before X (never edited: it cited Y while Y was live) are exempt. Both
+//!   dates are a readable `date:` of `YYYY-MM-DD` shape, X's from its first
+//!   holder in path order, compared as text; one missing, the reference
+//!   warns.
 //! - `parent-cycle`: one finding per `parent:` cycle `spec tree` breaks
 //!   ([`SpecGraph::cycles`]) with a live member.
 
@@ -21,13 +25,14 @@ use specengine_model::{
     IdScheme, LinkOrigin, LinkTarget, MENTIONS, ParsedFile, Reference, Severity,
 };
 
+use super::config::DocClass;
 use super::engine::Corpus;
 use super::input::CheckInput;
 use super::render::{is_live, readable_fields};
 use super::report::Finding;
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
 use super::spec_graph::{SpecGraph, Standing};
-use super::text::{FileText, front_matter_failed};
+use super::text::{FileText, front_matter_failed, is_date_shaped};
 use crate::Paths;
 
 /// The link type whose items are exempt from `ref-superseded`, as is the
@@ -97,9 +102,18 @@ fn mention_dangling(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
     }
 }
 
-/// Per file: `X` as written in its `status: superseded-by X`, and the files
-/// holding `X` as cited from that file.
-fn supersessions(corpus: &Corpus<'_>, scheme: &IdScheme) -> Vec<Option<(String, Vec<usize>)>> {
+/// The successor X of a superseded file.
+struct Successor<'a> {
+    /// `X` as written in its `status: superseded-by X`.
+    written: String,
+    /// The files holding `X` as cited from the superseded file.
+    holders: Vec<usize>,
+    /// X's date: the [`shaped_date`] of its first holder (path order).
+    date: Option<&'a str>,
+}
+
+/// Per file: its successor when its `status:` is `superseded-by X`.
+fn supersessions<'a>(corpus: &Corpus<'a>, scheme: &IdScheme) -> Vec<Option<Successor<'a>>> {
     corpus
         .parses
         .iter()
@@ -110,9 +124,40 @@ fn supersessions(corpus: &Corpus<'_>, scheme: &IdScheme) -> Vec<Option<(String, 
             let holders = grammar::parse_reference(target, 0, scheme)
                 .and_then(|found| corpus.resolver.holders_of(path, &found.reference, target))
                 .unwrap_or_default();
-            Some((target.to_owned(), holders))
+            // Files are in path order: the least index is the first holder.
+            let date = holders
+                .iter()
+                .min()
+                .and_then(|&holder| corpus.parses[holder])
+                .and_then(shaped_date);
+            Some(Successor {
+                written: target.to_owned(),
+                holders,
+                date,
+            })
         })
         .collect()
+}
+
+/// The readable `date:` when it is `YYYY-MM-DD` by shape, else none.
+fn shaped_date(parsed: &ParsedFile) -> Option<&str> {
+    readable_fields(parsed)?
+        .date
+        .as_deref()
+        .filter(|date| is_date_shaped(date))
+}
+
+/// D of an accepted decision: the [`shaped_date`] of a readable
+/// front-matter with `class: decision` and `status: accepted`, else none.
+fn accepted_decision_date(parsed: &ParsedFile) -> Option<&str> {
+    let fields = readable_fields(parsed)?;
+    let decision = fields.class.as_deref().and_then(DocClass::parse) == Some(DocClass::Decision);
+    let accepted = fields.status.as_deref() == Some("accepted");
+    if decision && accepted {
+        shaped_date(parsed)
+    } else {
+        None
+    }
 }
 
 fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Finding>) {
@@ -123,6 +168,9 @@ fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Fin
     for (index, parsed) in live_sources(corpus) {
         let text = &corpus.texts[index];
         let from = corpus.paths[index];
+        // An accepted decision is never edited: dated before X, it cited
+        // Y while Y was live.
+        let cited_on = accepted_decision_date(parsed);
         // (line, as written, resolution) per reference.
         let mut cited: Vec<(usize, String, Resolution)> = Vec::new();
         let declared = match parsed.document() {
@@ -151,15 +199,22 @@ fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Fin
             let Resolution::Resolved(holders) = resolution else {
                 continue;
             };
-            let Some((by, by_files)) = holders
+            let Some(successor) = holders
                 .iter()
                 .find_map(|&holder| superseded[holder].as_ref())
             else {
                 continue;
             };
-            if by_files.contains(&index) {
+            if successor.holders.contains(&index) {
                 continue;
             }
+            // Text order is the calendar's for `YYYY-MM-DD`; strictly later.
+            if let (Some(cited_on), Some(succeeded_on)) = (cited_on, successor.date)
+                && succeeded_on > cited_on
+            {
+                continue;
+            }
+            let by = &successor.written;
             findings.push(warning(
                 "ref-superseded",
                 corpus.paths[index],

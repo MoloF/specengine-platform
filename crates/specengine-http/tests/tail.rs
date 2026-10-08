@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use common::{Frame, Scratch, Server, Stream, ask, data_dir, snapshot};
+use common::{Frame, Scratch, Server, Stream, ask, beyond_daemon, data_dir};
 use serde_json::{Value, json};
 
 /// Within this of the storing process's exit.
@@ -138,9 +138,9 @@ fn a_last_event_id_above_the_highest_starts_from_the_highest() {
     assert_eq!(opening(&mut stream), 0, "no database: the start is 0");
     quiet(&mut stream, Duration::from_millis(1000), "no database");
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a subscriber creates nothing: {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
     let first = ask(&home, &a, &["EDGE-STAM-ZERO"], "Is the delay 1.5 s?");
     let exited = Instant::now();

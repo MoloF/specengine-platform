@@ -83,6 +83,13 @@
 //!   own JSON), bounded by [`OUTPUT_CAP_CHARS`] (`check`: unbounded;
 //!   `bundle`: its body fitted within it, never cut);
 //!   [`Outcome::stderr_lines`]: its `note:` and `warning:` lines;
+//! - [`serve()`]: `spec serve`'s decision (task spec `spec-serve`): the
+//!   roots, the data directory guarded against each, the daemon's binary
+//!   found, a running daemon probed through `daemon.lock` (nothing
+//!   created): its lines ([`Serve::Running`]) or the daemon to exec
+//!   ([`Serve::Start`], `main` execs it); [`DaemonFile`] is `daemon.json`,
+//!   which only the daemon writes ([`prepared_data_dir`], [`checked_data_dir`]
+//!   its data directory, created and guarded);
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`),
 //!   blocked (`check`) or refused by the proposal or its target (the queue's
 //!   commands), 2 could not run (`check`: could not check).
@@ -101,8 +108,9 @@
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state` and `round new` write only the data
 //! directory (`propose question` and `propose discrepancy` too), `export
-//! state` only its dump (never inside the worktree), `check`
-//! nothing. Nothing found in the corpus is fatal
+//! state` only its dump (never inside the worktree), `check` and `serve`
+//! nothing (the daemon `serve` execs writes its data directory). Nothing
+//! found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
@@ -132,6 +140,7 @@ mod refresh;
 mod review;
 mod round;
 mod search;
+mod serve;
 mod show;
 mod stage;
 mod state;
@@ -177,7 +186,7 @@ pub use intake::{
     read_discrepancy_input,
 };
 pub use links::{ShownLink, ShownLinks};
-pub use location::{OpenIndex, data_dir, db_path, open_index};
+pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
@@ -195,6 +204,11 @@ pub use round::{
     WalkOutcome, round_answer, round_limit, round_new, round_stage, round_stage_answers,
 };
 pub use search::{HitCut, SearchOutcome, SearchRequest, search, search_with_view};
+pub use serve::{
+    DAEMON_BIN, DAEMON_FILE, DAEMON_LOCK, DAEMON_POLL, DAEMON_PORT, DAEMON_PUBLISH_WAIT,
+    DaemonFile, DaemonProject, Serve, ServeRequest, daemon_text, read_daemon_file, serve,
+    unpublished_daemon,
+};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
 pub use specengine_core::ProjectConfig;
 /// The intake's input types, enums and caps (core's), for the bridges;

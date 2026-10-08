@@ -225,6 +225,11 @@ fn ac06_a_start_that_cannot_serve_exits_2_before_listening() {
     args.pop();
     args.push(OsStr::new("99999"));
     refused(&home, cwd, &args, port, &["99999"]);
+    assert!(
+        snapshot(&home).is_empty(),
+        "a start refused before its data directory creates nothing: {:?}",
+        snapshot(&home).keys().collect::<Vec<_>>()
+    );
     let taken = TcpListener::bind(("127.0.0.1", 0)).expect("bind");
     let taken_port = taken.local_addr().unwrap().port().to_string();
     let mut args = root_args(&[&a]);
@@ -243,10 +248,23 @@ fn ac06_a_start_that_cannot_serve_exits_2_before_listening() {
     );
     drop(taken);
 
+    // The taken port is found at the bind, after the data directory and
+    // its lock (docs/features/spec-serve.md "Description and
+    // interactions"): the empty `daemon.lock` stays, nothing is published.
     assert!(
-        snapshot(&home).is_empty(),
+        common::beyond_daemon(&home).is_empty(),
         "a refused start opens nothing in the data directory: {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        common::beyond_daemon(&home)
+    );
+    let data = common::data_dir(&home);
+    assert!(
+        !data.join("daemon.json").exists(),
+        "a start refused at its bind publishes no daemon.json"
+    );
+    assert_eq!(
+        fs::read(data.join("daemon.lock")).expect("the lock file"),
+        b"",
+        "daemon.lock is never written"
     );
     assert!(
         fs::read_dir(&empty).unwrap().next().is_none(),

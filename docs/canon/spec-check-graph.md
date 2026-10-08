@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-08
 ---
 
 # spec check: index render, generators, graph warnings
@@ -38,7 +38,7 @@ Then each non-empty section as `\n## <name>\n\n` plus one `\n`-ended line per do
 
 Line `- [<label>](<link>) <title> · <scope> · <status>`; a Tier 3 line is only `- [<label>](<link>) <status>`, title and scope unread, the status whole (`superseded-by ADR-0026`; ADR-0028). Label = a decision's ID, else the path; link relative to the output's directory (`a/b/index.md` → `../../CLAUDE.md`); title = `title:`, else the first H1's inline text, else `?`; scope items joined by `, `; status = canon `tier N` (`tier ?`), else `status:`, else `?`.
 
-**Tier 3** is decided once, by status, never by folder: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` (neither `class: generated` nor Tier 3) serves the graph rules. Front-matter failing strict YAML lists under `No class — fix`; a key of the wrong type renders absent.
+**Tier 3** is decided once, by status, never by folder: a spec `shipped` or `abandoned`, a decision with a `status:` other than `accepted` (no `status:`: live). One public predicate, `check::is_tier3_file(&ParsedFile)` (over `is_tier3(&Fields)`; false when the front-matter failed or the file is not UTF-8), serves this render, the store's `files.tier3` and `spec search`'s archive filter; `is_live` serves the graph rules. Front-matter failing strict YAML lists under `No class — fix`; a key of the wrong type renders absent.
 
 <a id="index-shards"></a>
 **Shards** (ADR-0030). The index is the root at `[paths] index` plus the `shards` of the `index = true` entry (config order, each in its `writes`); the root is the one entry point. Each walked document but a generated one has one line across the set. Placement: Tier 3 → the archive shard (`tier3 = true`) if any; else the first shard with a `claims` glob (the `exclude` grammar) matching the path; else the root. So a claimed failed front-matter lists under that shard's `No class — fix`; with no archive shard, Tier 3 follows the claims into that file's Archive section. Sections and lines as above. The root ends with `## Shards`: per shard, empty or not, `- [<path>](<link>) <label>`, no count; label `Archive — Tier 3, by id only`, else the claims in backticks joined by `, `. A shard: the header above, H1 `# Documentation index: <label>`, and `A shard of [<root path>](<link>), the index's one entry point.` for the protocol line. Caps: the root and each live shard `index_bytes`, the archive none (read by id, §3). W's index term: the root + the largest live shard. The cap, not §9's "~500 entries", decides when to shard; `scope:` never does. No shard (`shards = []` too): the single file above, byte for byte.
@@ -80,7 +80,7 @@ WHEN the table is present (even empty), each `class: generated` document whose f
 
 **`depends-cycle`**: nodes are documents; an edge A → B for each `links.depends_on` item of a live A that resolves, from A, to an ID B holds (no fallback, `#section` ignored; several holders → an edge to each). `petgraph::algo::tarjan_scc`: one finding per strongly connected component of ≥ 2 documents, or of one with a self-loop. Subject: the member names (ID, else path) sorted by name then path, joined by `, `; placed on the first member's first `depends_on` item into the cycle; message "`depends_on` forms a cycle through <subject>".
 
-**`ref-superseded`**: WHEN a live source references Y — declared (`refs`, `adrs`, `links.*`, `parent`, `working_answer`, a reference-form `canon:`) or inline (with the fallback) — and Y resolves to a document whose `status:` is `superseded-by X`, the check warns once per (line, subject), subject as written: "`Y` is superseded by X". Exempt: `supersedes:` items, `links.supersedes`, the `status:` value, references from X's own files. Several holders of Y: the first superseded one in path order.
+**`ref-superseded`**: WHEN a live source references Y, declared (`refs`, `adrs`, `links.*`, `parent`, `working_answer`, a reference-form `canon:`) or inline (with the fallback), and Y resolves to a document whose `status:` is `superseded-by X`, the check warns once per (line, subject), subject as written: "`Y` is superseded by X". Exempt: `supersedes:` items, `links.supersedes`, the `status:` value, references from X's own files or an accepted decision dated before X (never edited). Several holders of Y: the first superseded one in path order.
 
 **Determinism**: render, findings and cycle subjects do not depend on input order. **Genre** (ADR-0008): no project command (`cargo run -q -p specengine-cli`), `docs/`, `ADR` or `index.md` literal in the sources, no shard name; the ADR-0022 convention text (header, H1, `source:`, protocol line, section names, `Shards`, `Documentation index: `, `A shard of `) and `spec check` are literal.
 
@@ -94,6 +94,6 @@ This repository (root config, `enforce`, no baseline): `clean`, no warning.
 ## Open nits
 
 - `Resolution::Resolved(Vec<usize>)` allocates per resolved reference; linear, left.
-- Eval's `build_graph.rs` greps `File::`, also matching `ParsedFile::`, `CheckFile::` (closures work around it; `\bFile::` would be cleaner).
+- Eval's `build_graph.rs` greps `File::`, also matching `ParsedFile::`, `CheckFile::` (closures work around it; `\bFile::` is cleaner).
 - The plain-scalar rule rejects a leading `-`, `?` or `:` though YAML reads `-x` as a string: conservative, accepted.
 - `NotAString`'s message ("a null, a boolean or a number") is imprecise if serde-saphyr's `properties` is ever enabled.

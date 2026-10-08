@@ -33,7 +33,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use common::{
-    Reply, Run, Scratch, Server, encode_component, root_args, snapshot, spec, spec_json, write,
+    Reply, Run, Scratch, Server, beyond_daemon, encode_component, root_args, spec, spec_json, write,
 };
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 use serde_json::{Value, json};
@@ -493,9 +493,9 @@ fn ac04_a_bad_query_is_a_400_naming_the_parameter_and_reads_nothing() {
         }
     }
     assert!(
-        snapshot(&home).is_empty(),
+        beyond_daemon(&home).is_empty(),
         "a refused query runs no call: the fresh HOME holds {:?}",
-        snapshot(&home).keys().collect::<Vec<_>>()
+        beyond_daemon(&home)
     );
     // The control: a good query reads (and may create the database).
     let reply = server.get("/api/projects/lantern-keep/tasks?status=ready");

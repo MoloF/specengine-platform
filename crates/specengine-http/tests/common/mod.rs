@@ -363,6 +363,34 @@ pub fn data_dir(home: &Path) -> PathBuf {
     }
 }
 
+/// The daemon's own two files in the data directory under `home`
+/// (docs/features/spec-serve.md "Data"): every start writes them, nothing
+/// else.
+pub const DAEMON_FILES: [&str; 2] = ["daemon.lock", "daemon.json"];
+
+/// What `home` holds beyond the daemon's start (docs/features/spec-serve.md
+/// "Data"): the data directory and its parents up to `home`, `daemon.lock`
+/// (empty) and `daemon.json`. Empty: a daemon's requests wrote nothing
+/// under `home`. A `daemon.lock` with any byte is listed too.
+pub fn beyond_daemon(home: &Path) -> Vec<String> {
+    let data = data_dir(home);
+    let mut own: Vec<PathBuf> = DAEMON_FILES.iter().map(|name| data.join(name)).collect();
+    own.extend(
+        data.ancestors()
+            .take_while(|dir| *dir != home)
+            .map(Path::to_path_buf),
+    );
+    snapshot(home)
+        .into_iter()
+        .filter(|(key, bytes)| {
+            let lock_written = home.join(key) == data.join("daemon.lock")
+                && bytes.as_ref().is_some_and(|b| !b.is_empty());
+            lock_written || !own.contains(&home.join(key))
+        })
+        .map(|(key, _)| key)
+        .collect()
+}
+
 /// Every file under `dir` whose name ends `suffix`, relative.
 pub fn files_ending(dir: &Path, suffix: &str) -> Vec<String> {
     snapshot(dir)
@@ -726,13 +754,30 @@ impl Server {
         cwd: &Path,
         args: &[&OsStr],
     ) -> Result<Self, Refused> {
-        let mut child = alarmed(Path::new(HTTP), args, env)
+        Self::try_start_program(Path::new(HTTP), env, cwd, args)
+    }
+
+    /// As [`Server::try_start_env`] with `program` instead of the daemon
+    /// binary: `spec serve`, which execs the daemon in its own process
+    /// (the child's PID stays the daemon's: `perl` execs `spec`, `spec`
+    /// execs `specengine-http`). A `spec serve` that answers a running
+    /// daemon instead prints lines ending in that daemon's `listening`
+    /// line and exits: the handle then holds them in [`Server::lines`]
+    /// (the first `already running: …`), so a caller expecting a start
+    /// checks the lines.
+    pub fn try_start_program(
+        program: &Path,
+        env: &[(OsString, OsString)],
+        cwd: &Path,
+        args: &[&OsStr],
+    ) -> Result<Self, Refused> {
+        let mut child = alarmed(program, args, env)
             .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("spawn specengine-http");
+            .expect("spawn the daemon");
         let stdout = child.stdout.take().expect("stdout");
         let mut stderr_pipe = child.stderr.take().expect("stderr");
         let stderr = Arc::new(Mutex::new(Vec::new()));
@@ -895,6 +940,31 @@ impl Server {
     /// Whether the process is still running.
     pub fn alive(&mut self) -> bool {
         matches!(self.child.try_wait(), Ok(None))
+    }
+
+    /// `kill -s <signal> <this daemon's PID>` (never by name), then the
+    /// process reaped within [`START_TIMEOUT`] (else killed and the test
+    /// fails): its exit status.
+    pub fn signal_and_reap(&mut self, signal: &str) -> std::process::ExitStatus {
+        let pid = self.child.id().to_string();
+        let sent = Command::new("/bin/kill")
+            .env_clear()
+            .args(["-s", signal, &pid])
+            .status()
+            .expect("run /bin/kill");
+        assert!(sent.success(), "kill -s {signal} {pid}: {sent}");
+        let started = Instant::now();
+        loop {
+            if let Some(status) = self.child.try_wait().expect("wait") {
+                return status;
+            }
+            if started.elapsed() > START_TIMEOUT {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+                panic!("the daemon {pid} outlived SIG{signal} for {START_TIMEOUT:?}; killed");
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
     }
 }
 

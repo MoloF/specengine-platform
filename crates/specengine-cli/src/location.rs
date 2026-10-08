@@ -84,9 +84,11 @@ pub fn open_index(env: &Env, project: &ProjectRoot) -> Result<OpenIndex, CliErro
 }
 
 /// The data directory, created when absent, refused when it lies inside
-/// the project root (nothing created then): where the database and the
-/// proposal queue's scratch files go.
-pub(crate) fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
+/// the project root (nothing created then): where the database, the
+/// proposal queue's scratch files and the daemon's `daemon.lock` and
+/// `daemon.json` go (`specengine-http` prepares it at start, after
+/// [`checked_data_dir`] against every root it serves).
+pub fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
     let dir = checked_data_dir(env, project)?;
     fs::create_dir_all(&dir).map_err(|error| {
         CliError::spec(format!(
@@ -99,8 +101,9 @@ pub(crate) fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<Path
 
 /// The data directory, refused as [`prepared_data_dir`] refuses it, but
 /// never created: `spec export state` and `spec import-state` write nothing
-/// before their own writes.
-pub(crate) fn checked_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
+/// before their own writes; `spec serve` and the daemon's start guard
+/// every root with it before anything is created.
+pub fn checked_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, CliError> {
     let dir = data_dir(env)?;
     let resolved = resolve_nonexistent(&dir).map_err(|error| {
         CliError::spec(format!(
