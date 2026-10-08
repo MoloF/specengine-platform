@@ -107,7 +107,7 @@ spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/g
 
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
-spec round new | round answer FILE
+spec round new [--limit N] | round answer FILE | --staged  # shipped: docs/canon/round.md
 spec ship SLUG [--accepted]
 spec compact --dry-run
 spec export                                          # to come: generated/queue.md

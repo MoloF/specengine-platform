@@ -55,10 +55,10 @@ use specengine_core::record::{
 };
 use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
-    CreateFileError, Decision, IndexWriter as _, Intake, NamedBytes, Proposal, ProposalFinding,
-    ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries,
-    SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings,
-    load_check,
+    CreateFileError, Decision, GitEnv, IndexWriter as _, Intake, NamedBytes, Proposal,
+    ProposalFinding, ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RecordApproval,
+    RecordSeries, SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline,
+    introduced_findings, load_check,
 };
 
 use crate::apply::{
@@ -277,12 +277,7 @@ pub(crate) fn approve_record(
         Some(_) => None,
         None => {
             let Some(table) = recorded.config.decision_records.clone() else {
-                let reason = format!(
-                    "{}/{CONFIG_FILE} has no `[decision_records]` (`prefix`, `dir`, \
-                     `template`) for `{id}`'s record: add it, or `spec reject {id} --reason \
-                     <answer>`; nothing changed",
-                    recorded.root.display()
-                );
+                let reason = no_table(&recorded.root, id);
                 return before(context, StepFailure::cannot(3, reason), messages);
             };
             match read_template(&git, &recorded, proposal, &table.template) {
@@ -313,10 +308,7 @@ pub(crate) fn approve_record(
         }
         (None, Some((table, _))) => {
             let Some(spec) = scheme.prefix(&table.prefix) else {
-                let reason = format!(
-                    "`[decision_records] prefix` `{}` is no `[ids]` prefix of {}",
-                    table.prefix, recorded.config_label
-                );
+                let reason = no_prefix(&table.prefix, &recorded);
                 return before(context, StepFailure::cannot(3, reason), messages);
             };
             let input = match index.index.indexed_input() {
@@ -734,6 +726,56 @@ fn refused(
     Ok(ProposalOutcome::refused(
         COMMAND, document, reason, messages,
     ))
+}
+
+/// Apply steps 2 and 3 of an approve of `proposal`, read-only, as a
+/// question round checks an answer before staging it (canon `round`,
+/// "Answers"): the place, the recorded root's `[decision_records]`, its
+/// template and its prefix among `[ids]`; else the step's failure, as the
+/// approve words it. Nothing is logged or written.
+pub(crate) fn record_ready(
+    git_env: &GitEnv,
+    slug: &str,
+    proposal: &Proposal,
+) -> Result<(), StepFailure> {
+    let Placed { git, top, .. } = place_step(git_env, proposal)?;
+    let place = &proposal.place;
+    let root = if place.root_rel.is_empty() {
+        top
+    } else {
+        top.join(&place.root_rel)
+    };
+    let recorded =
+        recorded_project(&root, slug).map_err(|reason| StepFailure::cannot(3, reason))?;
+    WorkingTree::new(&recorded.root, &recorded.config.paths)
+        .map_err(|error| StepFailure::cannot(3, error.to_string()))?;
+    let id = &proposal.id;
+    let Some(table) = recorded.config.decision_records.clone() else {
+        return Err(StepFailure::cannot(3, no_table(&recorded.root, id)));
+    };
+    read_template(&git, &recorded, proposal, &table.template)?;
+    if recorded.config.scheme.prefix(&table.prefix).is_none() {
+        return Err(StepFailure::cannot(3, no_prefix(&table.prefix, &recorded)));
+    }
+    Ok(())
+}
+
+/// Step 3's refusal of a `[decision_records] prefix` that is no `[ids]`
+/// prefix of the recorded root.
+fn no_prefix(prefix: &str, recorded: &ProjectRoot) -> String {
+    format!(
+        "`[decision_records] prefix` `{prefix}` is no `[ids]` prefix of {}",
+        recorded.config_label
+    )
+}
+
+/// Step 3's refusal of a recorded root `root` with no `[decision_records]`.
+fn no_table(root: &Path, id: &str) -> String {
+    format!(
+        "{}/{CONFIG_FILE} has no `[decision_records]` (`prefix`, `dir`, `template`) for `{id}`'s \
+         record: add it, or `spec reject {id} --reason <answer>`; nothing changed",
+        root.display()
+    )
 }
 
 /// The flags of an open question or discrepancy checked (see the module

@@ -58,6 +58,11 @@
 //!   proposal, or cleared (canon `decision-staging`; no command: the
 //!   daemon's decision route calls them), confirmed only by `approve` or
 //!   `reject` on a terminal ([`StageOutcome`]);
+//! - [`round_new`], [`round_answer`], [`round_stage`]: a question round
+//!   (canon `round`): the open questions and discrepancies on
+//!   one read-only sheet ([`RoundSheet`]); the returned answers checked,
+//!   staged and each confirmed by its item's own question through the
+//!   owner's [`RoundTerminal`] ([`RoundRun`]);
 //! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
 //!   discrepancy stored as a queue record (approved into a decision record,
 //!   or rejected with the answer), unless what is decided or asked already
@@ -86,10 +91,12 @@
 //! under the project root but `spec init`, which creates its one file,
 //! `spec export index`, which writes only `[paths] index`, and `spec
 //! approve`, which writes only the proposal's target file (or creates its
-//! new file, or its decision record) and commits it in the recorded worktree; `index`, `search`, `show`, `tree`, `graph`,
-//! `bundle`, `propose`, `inbox`, `review`, `reject` and `import-state` write
-//! only the data directory (`propose question` and `propose discrepancy`
-//! too), `export state` only its dump (never inside the worktree), `check`
+//! new file, or its decision record) and commits it in the recorded worktree
+//! (`round answer` too, one record per item the owner confirms); `index`,
+//! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
+//! `review`, `reject`, `import-state` and `round new` write only the data
+//! directory (`propose question` and `propose discrepancy` too), `export
+//! state` only its dump (never inside the worktree), `check`
 //! nothing. Nothing found in the corpus is fatal
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
@@ -118,6 +125,7 @@ mod proposals;
 mod propose;
 mod refresh;
 mod review;
+mod round;
 mod search;
 mod show;
 mod stage;
@@ -175,6 +183,11 @@ pub use propose::{
 };
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use review::{ReviewRequest, review, review_brief};
+pub use round::{
+    AnswerOutcome, RoundAnswer, RoundAnswerRequest, RoundItem, RoundNewRequest, RoundRun,
+    RoundSheet, RoundStageRequest, RoundStep, RoundTarget, RoundTask, RoundTerminal, WalkOutcome,
+    round_answer, round_new, round_stage,
+};
 pub use search::{HitCut, SearchOutcome, SearchRequest, search, search_with_view};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
 pub use specengine_core::ProjectConfig;
@@ -376,6 +389,10 @@ pub enum Outcome {
     TaskShow(Box<TaskShowOutcome>),
     /// `task list`.
     TaskList(TaskListOutcome),
+    /// `round new`: the sheet.
+    RoundSheet(Box<RoundSheet>),
+    /// `round answer`: the answers, staged, and the walk.
+    Round(Box<RoundRun>),
 }
 
 impl Outcome {
@@ -395,6 +412,7 @@ impl Outcome {
             Self::StateImport(import) => import.exit(),
             Self::Task(task) => task.exit(),
             Self::TaskShow(show) => show.exit(),
+            Self::Round(run) => run.exit(),
             _ => Exit::Answered,
         }
     }
@@ -425,6 +443,8 @@ impl Outcome {
             Self::Task(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::TaskShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::TaskList(outcome) => (&outcome.messages, None),
+            Self::RoundSheet(outcome) => (&outcome.messages, None),
+            Self::Round(outcome) => (&outcome.messages, None),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -442,6 +462,8 @@ impl Outcome {
                 | Self::Task(_)
                 | Self::TaskShow(_)
                 | Self::TaskList(_)
+                | Self::RoundSheet(_)
+                | Self::Round(_)
         ) {
             for line in &mut lines {
                 *line = escape_controls(line);
@@ -472,6 +494,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Task(outcome) => task::render_text(outcome),
         Outcome::TaskShow(outcome) => task::render_show_text(outcome),
         Outcome::TaskList(outcome) => task::render_list_text(outcome),
+        Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
+        Outcome::Round(outcome) => round::render_text(outcome),
     }
 }
 
@@ -498,6 +522,8 @@ impl serde::Serialize for Outcome {
             Self::Task(outcome) => outcome.serialize(serializer),
             Self::TaskShow(outcome) => outcome.serialize(serializer),
             Self::TaskList(outcome) => outcome.serialize(serializer),
+            Self::RoundSheet(outcome) => outcome.serialize(serializer),
+            Self::Round(outcome) => outcome.serialize(serializer),
         }
     }
 }

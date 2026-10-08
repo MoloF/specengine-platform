@@ -2,8 +2,10 @@
 //! `decision-staging`): one replaceable choice per `open` proposal, the
 //! flags `spec approve|reject` would take, kept only in the queue.
 //!
-//! - **Staging** ([`stage`], [`unstage`]; no `spec` command: the daemon's
-//!   decision route calls them). A stage is checked as the terminal checks
+//! - **Staging** ([`stage`], [`unstage`]: the daemon's decision route
+//!   calls them; [`stage_with`]: `spec round answer` stages each answer
+//!   it reads, on a terminal, before that item's own question, canon
+//!   `round`, "Run"). A stage is checked as the terminal checks
 //!   its flags, before anything is stored: the ID and the repository (an
 //!   orphan takes only a reject), the state `open`, the `updated_at` the
 //!   caller read (else refused with the current document), the decision
@@ -229,14 +231,28 @@ fn run_stage(
     globals: &Globals,
     request: &StageRequest,
 ) -> Result<StageOutcome, CliError> {
+    checked_now(&request.now)?;
+    if let Err(error) = written_id(&request.id) {
+        return Ok(StageOutcome::usage(&error));
+    }
+    let mut context = open_context(env, globals, &request.git)?;
+    stage_with(env, &mut context, request)
+}
+
+/// [`stage`] in a queue already open (`spec round answer` stages each
+/// answer through it, canon `round`, "Run").
+pub(crate) fn stage_with(
+    env: &Env,
+    context: &mut QueueContext,
+    request: &StageRequest,
+) -> Result<StageOutcome, CliError> {
     let now = checked_now(&request.now)?;
     let written = match written_id(&request.id) {
         Ok(written) => written,
         Err(error) => return Ok(StageOutcome::usage(&error)),
     };
-    let mut context = open_context(env, globals, &request.git)?;
     let body = &request.body;
-    let proposal = match open_proposal(&context, written, request, body.rejects())? {
+    let proposal = match open_proposal(context, written, request, body.rejects())? {
         Ok(proposal) => proposal,
         Err(outcome) => return Ok(outcome),
     };
@@ -256,7 +272,7 @@ fn run_stage(
             Vec::new(),
         ));
     }
-    let checked = checked(&context, &proposal, body);
+    let checked = checked(context, &proposal, body);
     let mut stage = match checked {
         Ok(stage) => stage,
         Err((cause, reason)) => {
@@ -266,7 +282,7 @@ fn run_stage(
     // Steps 2–6 read-only, as `spec review`: the preview, and the span hash
     // an `update`'s or a section-form `create`'s stage records.
     let mut messages = Vec::new();
-    let run = preview_run(env, &request.git, &context, &proposal, &mut messages);
+    let run = preview_run(env, &request.git, context, &proposal, &mut messages);
     if let Stage::Approve { span_hash, .. } = &mut stage
         && proposal.kind.applies()
         && !proposal.new_file()
@@ -275,10 +291,10 @@ fn run_stage(
     }
     match context.queue.stage_from(&id, &proposal.seen(), &stage, now) {
         Ok(stored) => {
-            let document = document_with(&request.git, &context, &stored, run);
+            let document = document_with(&request.git, context, &stored, run);
             Ok(StageOutcome::done(document, messages))
         }
-        Err(error) => refused_by_queue(&context, request, &proposal, error, messages),
+        Err(error) => refused_by_queue(context, request, &proposal, error, messages),
     }
 }
 
@@ -613,28 +629,9 @@ impl Staging {
     /// The stage `staged` confirmed by this run: shown as its command and
     /// the chosen option's line.
     fn confirming(proposal: &Proposal, staged: &StagedChoice) -> Self {
-        let id = &proposal.id;
-        let mut command = match &staged.stage {
-            Stage::Approve { .. } => format!("spec approve {id}"),
-            Stage::Reject { reason } => format!("spec reject {id} --reason {}", quoted(reason)),
-        };
+        let command = staged_command(&proposal.id, &staged.stage);
         let mut lines = Vec::new();
-        if let Stage::Approve {
-            option,
-            answer,
-            canon,
-            note,
-            ..
-        } = &staged.stage
-        {
-            if let Some(option) = option {
-                command.push_str(&format!(" --option {option}"));
-            }
-            for (flag, value) in [("--answer", answer), ("--canon", canon), ("--note", note)] {
-                if let Some(value) = value {
-                    command.push_str(&format!(" {flag} {}", quoted(value)));
-                }
-            }
+        if let Stage::Approve { option, .. } = &staged.stage {
             let chosen = option.and_then(|option| {
                 let intake = proposal.intake.as_ref()?;
                 let index = usize::try_from(option).ok()?;
@@ -730,6 +727,34 @@ pub(crate) fn changed_since(context: &QueueContext, read: &Proposal) -> Option<S
     Some(format!(
         "{id} changed since the question: {what}; nothing changed"
     ))
+}
+
+/// The command a stage stands for, on one line: `spec approve PR-0003
+/// --option 1 --note "n"`, `spec reject PR-0005 --reason "…"` (values
+/// [`quoted`]); the line `spec approve|reject` shows before its question,
+/// and a round's sheet after `Staged <at>:`.
+pub(crate) fn staged_command(id: &str, stage: &Stage) -> String {
+    match stage {
+        Stage::Reject { reason } => format!("spec reject {id} --reason {}", quoted(reason)),
+        Stage::Approve {
+            option,
+            answer,
+            canon,
+            note,
+            ..
+        } => {
+            let mut command = format!("spec approve {id}");
+            if let Some(option) = option {
+                command.push_str(&format!(" --option {option}"));
+            }
+            for (flag, value) in [("--answer", answer), ("--canon", canon), ("--note", note)] {
+                if let Some(value) = value {
+                    command.push_str(&format!(" {flag} {}", quoted(value)));
+                }
+            }
+            command
+        }
+    }
 }
 
 /// `text` double-quoted, `\` and `"` backslashed, and a line feed, a

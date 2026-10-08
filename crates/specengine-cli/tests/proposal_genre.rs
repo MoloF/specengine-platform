@@ -483,3 +483,84 @@ fn task_package_the_task_sources_name_no_prefix_kind_or_directory() {
         1
     );
 }
+
+/// docs/features/round.md's sources (AC-04): core's pure half and the
+/// CLI's commands.
+const ROUND_SOURCES: [&str; 2] = [
+    "crates/specengine-core/src/round.rs",
+    "crates/specengine-cli/src/round.rs",
+];
+
+/// `file:line: word` for every word of `text` starting `block`, in any
+/// case, comments included.
+fn block_words(source: &str, text: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        for word in line.split(|c: char| !c.is_alphanumeric()) {
+            if word.to_ascii_lowercase().starts_with("block") {
+                found.push(format!("{source}:{}: {word}", number + 1));
+            }
+        }
+    }
+    found
+}
+
+/// docs/features/round.md AC-04, the scan half (the run half:
+/// `round.rs`): both round sources hold no literal naming an `[ids]`
+/// prefix of spec-a, spec-b, the non-Rust spec-c or this repository, none
+/// equal to a kind of theirs but a class name, none holding a fixture's
+/// name, slug or path, `Cost`, `docs/` or `records/`; no word starting
+/// `block` in any case, comments included (canon `round`, "Sheet"); and
+/// the CLI's holds neither `ADR` nor `docs/` anywhere (as `genre.rs`
+/// checks every CLI source). M: a kind or prefix literal; a `block` word.
+#[test]
+fn round_ac04_the_round_sources_name_no_prefix_kind_project_or_block() {
+    let (prefixes, kinds) = record_words();
+    assert!(
+        prefixes.contains("FEE") && prefixes.contains("QST") && prefixes.contains("DEC"),
+        "{prefixes:?}"
+    );
+    assert!(
+        kinds.contains("question") && kinds.contains("mechanic"),
+        "{kinds:?}"
+    );
+    let mut names: Vec<&str> = PROJECT_NAMES.to_vec();
+    names.extend(FIXTURES.iter().map(|(_, slug)| *slug));
+    names.push(NON_RUST.1);
+    let mut found = Vec::new();
+    for source in ROUND_SOURCES {
+        let text = fs::read_to_string(repository_root().join(source))
+            .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert!(text.len() > 1000, "{source} is read whole");
+        found.extend(record_offenders(source, &text, &prefixes, &kinds));
+        found.extend(offenders(source, &text, &prefixes, &names));
+        found.extend(block_words(source, &text));
+        if source.starts_with("crates/specengine-cli/") {
+            for (number, line) in text.lines().enumerate() {
+                for word in ["ADR", "docs/"] {
+                    if line.contains(word) {
+                        found.push(format!("{source}:{}: {word}", number + 1));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "project words in the round sources:\n{}",
+        found.join("\n")
+    );
+    // The scan sees what it must refuse.
+    let sample = "// Blocked until approved\nlet w = \"unblock\";\nlet k = \"BLOCKERS: \";\n";
+    let seen = block_words("sample.rs", sample);
+    assert_eq!(
+        seen,
+        ["sample.rs:1: Blocked", "sample.rs:3: BLOCKERS"],
+        "{seen:?}"
+    );
+    let sample = "let k = \"question\";\nlet p = format!(\"QST-{n}\");\n";
+    assert_eq!(
+        record_offenders("sample.rs", sample, &prefixes, &kinds).len(),
+        2
+    );
+}

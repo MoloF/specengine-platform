@@ -5,9 +5,10 @@
 //! no timing.
 //!
 //! The one check that stays here: `spec approve`, `spec reject`, `spec
-//! import-state` and the owner's `spec task approve|changes|cancel` run only
-//! when stdin is a terminal (else exit 2, nothing read or logged,
-//! `import-state`'s file not opened); the
+//! import-state`, `spec round answer` and the owner's `spec task
+//! approve|changes|cancel` run only when stdin is a terminal (else exit 2,
+//! nothing read or logged, `import-state`'s and `round answer`'s file not
+//! opened); the
 //! library asks its question through a callback, which prints it on stderr
 //! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
 //! (`now`, UTC) and the process's variables for git are passed in as well.
@@ -32,9 +33,10 @@ use specengine_cli::{
     GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals, GraphRequest,
     INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
     IntakeSeverity, IntakeSource, Outcome, ProposeRequest, ProposedText, QuestionRequest,
-    RejectRequest, ReviewRequest, SearchRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
-    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
+    RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
+    SearchRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest,
+    TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest,
+    TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -212,6 +214,11 @@ enum Command {
         #[arg(value_name = "FILE")]
         file: PathBuf,
     },
+    /// A question round: the open questions and discrepancies on one sheet, answered in one sitting; each returned answer is staged, then asked again on the terminal, one at a time.
+    Round {
+        #[command(subcommand)]
+        command: RoundCommand,
+    },
     /// Work on the project's tasks: only the owner moves one to `ready` (approve, on a terminal); an agent reads its package, plans, claims, reports and completes it.
     Task {
         #[command(subcommand)]
@@ -229,6 +236,26 @@ enum Command {
         /// Read Claude Code's PreToolUse hook JSON on stdin; nothing is printed on stdout.
         #[arg(long)]
         stdin: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum RoundCommand {
+    /// Print the current repository's open questions and discrepancies as a Markdown sheet to answer, by severity, waiting tasks and age; writes nothing.
+    New {
+        /// Items at most, 1 to 200 (default 20).
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        limit: Option<i64>,
+    },
+    /// Read a filled sheet or a reply, stage each answer, then ask each item's own approve or reject question on the terminal ([y/N] per answer; any other key keeps it staged).
+    #[command(group(ArgGroup::new("answers").required(true).args(["file", "staged"])))]
+    Answer {
+        /// The filled sheet or a reply, relative to the current directory: `PR-NNNN: <answer>` lines and the `project:` line.
+        #[arg(value_name = "FILE")]
+        file: Option<PathBuf>,
+        /// No file: ask the open questions and discrepancies already staged, in round order.
+        #[arg(long)]
+        staged: bool,
     },
 }
 
@@ -854,6 +881,34 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &mut consent,
             )?)
         }
+        Command::Round {
+            command: RoundCommand::New { limit },
+        } => Outcome::RoundSheet(Box::new(specengine_cli::round_new(
+            env,
+            globals,
+            &RoundNewRequest {
+                limit,
+                git: process_git(env),
+            },
+        )?)),
+        Command::Round {
+            command: RoundCommand::Answer { file, staged: _ },
+        } => {
+            // Before the file is opened: agents never stage through it
+            // (canon `round`, "Run").
+            require_terminal("round answer")?;
+            let mut terminal = Console { json };
+            Outcome::Round(Box::new(specengine_cli::round_answer(
+                env,
+                globals,
+                &RoundAnswerRequest {
+                    file,
+                    now: now(),
+                    git: process_git(env),
+                },
+                &mut terminal,
+            )?))
+        }
         Command::Task { command } => run_task(env, globals, command)?,
         // Run apart, before the environment is read (`run_gate`).
         Command::Gate { .. } => {
@@ -1228,10 +1283,10 @@ fn read_stdin(max: usize, what: &str) -> Result<Vec<u8>, CliError> {
     Ok(bytes)
 }
 
-/// `spec approve`, `spec reject`, `spec import-state` and the owner's `spec
-/// task approve|changes|cancel` decide on a terminal only: a stdin that is
-/// no terminal (a pipe, an agent's shell) exits 2 before anything is read
-/// or logged.
+/// `spec approve`, `spec reject`, `spec import-state`, `spec round answer`
+/// and the owner's `spec task approve|changes|cancel` decide on a terminal
+/// only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
+/// before anything is read or logged.
 fn require_terminal(command: &str) -> Result<(), CliError> {
     if std::io::stdin().is_terminal() {
         return Ok(());
@@ -1253,6 +1308,45 @@ fn ask(question: &str) -> bool {
     match std::io::stdin().lock().read_line(&mut answer) {
         Ok(_) => matches!(answer.trim(), "y" | "yes"),
         Err(_) => false,
+    }
+}
+
+/// `spec round answer`'s terminal: the report on stdout before the first
+/// question (text only; `--json` prints one document after the walk),
+/// each question on stderr with one answer line read from the terminal
+/// (only `y` or `yes` consents; the end of input ends the walk), the
+/// walk's lines on stderr.
+struct Console {
+    json: bool,
+}
+
+impl RoundTerminal for Console {
+    fn report(&mut self, text: &str) {
+        if self.json {
+            return;
+        }
+        let mut stdout = std::io::stdout().lock();
+        let _ = stdout.write_all(text.as_bytes());
+        let _ = stdout.flush();
+    }
+
+    fn ask(&mut self, question: &str) -> Option<bool> {
+        let mut stderr = std::io::stderr().lock();
+        let _ = write!(stderr, "{question} ");
+        let _ = stderr.flush();
+        drop(stderr);
+        let mut answer = String::new();
+        match std::io::stdin().lock().read_line(&mut answer) {
+            Ok(0) | Err(_) => {
+                let _ = writeln!(std::io::stderr().lock());
+                None
+            }
+            Ok(_) => Some(matches!(answer.trim(), "y" | "yes")),
+        }
+    }
+
+    fn tell(&mut self, line: &str) {
+        let _ = writeln!(std::io::stderr().lock(), "{line}");
     }
 }
 

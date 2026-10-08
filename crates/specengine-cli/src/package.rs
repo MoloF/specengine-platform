@@ -35,6 +35,7 @@
 //! tail naming the sections not shown in full. No section, label or note
 //! names a stack, a tool chain or a role.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
@@ -51,8 +52,8 @@ use specengine_model::{
     TaskCriterion, TaskPackage, TaskRun,
 };
 use specengine_store::{
-    GitEnv, ProposalFilter, ProposalKind, ProposalQueue as _, ProposalStatus, SnapshotEntry,
-    Source as _, Task, WorkingTree, WorktreeGit, same_repository, span_hash,
+    GitEnv, Proposal, ProposalFilter, ProposalKind, ProposalQueue as _, ProposalStatus,
+    SnapshotEntry, Source as _, Task, WorkingTree, WorktreeGit, same_repository, span_hash,
 };
 
 use crate::bundle::{BundleRequest, bundle};
@@ -333,6 +334,48 @@ fn compared_root(
     recorded_project(&root, &context.slug).map_err(unknown)
 }
 
+/// The nodes a task's package lists proposals against: what its snapshot
+/// holds, or before approval what approving would freeze (its targets,
+/// criteria references and affected nodes).
+pub(crate) fn wanted_nodes(task: &Task) -> BTreeSet<&str> {
+    match &task.snapshot {
+        Some(snapshot) => snapshot.nodes.iter().map(|node| node.id.as_str()).collect(),
+        None => task
+            .targets
+            .iter()
+            .map(String::as_str)
+            .chain(
+                task.criteria
+                    .iter()
+                    .filter_map(|criterion| criterion.reference.as_deref()),
+            )
+            .chain(task.affected_nodes.iter().map(String::as_str))
+            .collect(),
+    }
+}
+
+/// `task`'s package lists `proposal` among its `open_proposals` (it being
+/// `open` or `approved`): of the task's repository, and bound to the task
+/// or with a target among `wanted` ([`wanted_nodes`]); a question round
+/// reads it the other way (canon `round`, "Order").
+pub(crate) fn lists_proposal<T: Borrow<str> + Ord>(
+    task: &Task,
+    wanted: &BTreeSet<T>,
+    proposal: &Proposal,
+) -> bool {
+    if !same_repository(
+        &proposal.place.git_common_dir,
+        Path::new(&task.git_common_dir),
+    ) {
+        return false;
+    }
+    proposal.task_id.as_deref() == Some(task.id.as_str())
+        || proposal
+            .target_ids()
+            .iter()
+            .any(|id| wanted.contains(id.as_str()))
+}
+
 /// The package of `task` (see the module documentation); `messages` gets
 /// the index's warnings.
 pub(crate) fn assemble(
@@ -398,21 +441,7 @@ pub(crate) fn assemble(
         });
     }
 
-    // What the snapshot holds, or what approving would freeze.
-    let wanted: BTreeSet<&str> = match &task.snapshot {
-        Some(snapshot) => snapshot.nodes.iter().map(|node| node.id.as_str()).collect(),
-        None => task
-            .targets
-            .iter()
-            .map(String::as_str)
-            .chain(
-                task.criteria
-                    .iter()
-                    .filter_map(|criterion| criterion.reference.as_deref()),
-            )
-            .chain(task.affected_nodes.iter().map(String::as_str))
-            .collect(),
-    };
+    let wanted = wanted_nodes(task);
     let listed = context
         .queue
         .list_readable(&ProposalFilter {
@@ -426,17 +455,10 @@ pub(crate) fn assemble(
     let mut open_proposals = Vec::new();
     let mut assumptions = Vec::new();
     for proposal in &listed.proposals {
-        if !same_repository(
-            &proposal.place.git_common_dir,
-            Path::new(&task.git_common_dir),
-        ) {
+        if !lists_proposal(task, &wanted, proposal) {
             continue;
         }
         let target_ids = proposal.target_ids();
-        let bound = proposal.task_id.as_deref() == Some(task.id.as_str());
-        if !bound && !target_ids.iter().any(|id| wanted.contains(id.as_str())) {
-            continue;
-        }
         let intake = proposal.intake.as_ref();
         let summary = match intake {
             Some(intake) => Some(intake.summary.clone()),

@@ -42,7 +42,10 @@
 //!   spliced into a node's span (task spec `proposal-kinds`);
 //! - [`gate`] — the pure half of the task gate: `[gate]` and `[zones]`
 //!   read apart from the reads ([`GateConfig`]), the controlled paths, the
-//!   lexical fold and the opening rule (`docs/canon/gate.md`, ADR-0037).
+//!   lexical fold and the opening rule (`docs/canon/gate.md`, ADR-0037);
+//! - [`round`] — the pure half of a question round: the sheet's bounds,
+//!   its order key, the reading time and the grammar of the returned
+//!   answers (`docs/canon/round.md`, ADR-0038).
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -60,6 +63,7 @@ pub mod paths_toml;
 pub mod project_toml;
 pub mod proposal;
 pub mod record;
+pub mod round;
 pub mod scheme_toml;
 pub mod task;
 pub mod tokens;
