@@ -178,41 +178,17 @@ Result: the split by write frequency and owner (05 §1) is the Beads lesson, not
 
 ## 6. Stack (crates.io versions as of 2026-09-28)
 
-A version with `=` is an exact pin of the root `Cargo.toml` `[workspace.dependencies]`, approved by the owner and in use; the rest are planned and pinned on adoption. A new dependency or a version change is an owner decision. **Toolchain**: edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc ≥ 1.98 (the `ra_ap_*` set); no `rust-toolchain.toml`.
+The toolchain, the pinned crates in use and the ones not taken: `docs/canon/stack.md`. Below, the planned crates (pinned on adoption, an owner decision) and the prior-art crates read for ideas.
 
 | Crate | Version | Role / note |
 |---|---|---|
-| `rmcp` | **=3.5.0** | official SDK: `#[tool]`/`#[tool_router]`/`#[prompt]`, stdio, **Streamable HTTP as a Tower service → mounts in axum**, MRTR, elicitation, `request-state`, Tasks (`TaskManager`), `subscriptions/listen`; supports 2026-07-28 and older revisions. Features in use: `server`, `macros`, `transport-io`, `request-state` — stdio only; the `elicitation` feature is skipped (it pulls `url`), `elicitation/create` goes through `send_request`. ⚠ check the SDK tier |
-| `tokio` / `getrandom` | =1.53.1 (`rt`, `macros`, `io-std`, `time`, `net`, `sync`) / =0.4.3 | MCP and HTTP runtime / per-process `requestState` HMAC key; both via `rmcp` |
-| `futures-util` | =0.3.34 (no default features) | the live tail's stream; in the graph through `rmcp` |
-| `axum` | =0.8.9 (no default features; `http1`, `tokio`) | `specengine-http`: HTTP, SSE (no `query`, `json`, `tower-http`) |
-| `tree-sitter` | =0.27.0 | Rust ≥ 1.90 |
-| `tree-sitter-rust` | =0.24.2 | **compatible with 0.27** (ABI 15); `has_error()` check per item (05 §5.2). In 0.26+ `set_timeout_micros` is removed, cancellation via `ParseOptions { progress_callback }`; in 0.27 `child_count()` → `u32`, `kind()` → `&'tree str` |
-| own RON lexer | — (`specengine-code`) | `.ron` markers, field paths, the Bevy dump reader; replaces `tree-sitter-ron` 0.2.0 (05 §9) |
-| `rusqlite` | **=0.40.2** (`bundled`: SQLite 3.53.2, FTS5) | the index; not `sqlx`. Transitive, pending the owner (Q1, store README): `libsqlite3-sys` 0.38.2, `fallible-iterator` 0.3.0, `fallible-streaming-iterator` 0.1.9; build: `pkg-config` 0.3.34, `vcpkg` 0.2.15 (unused) |
-| `pulldown-cmark` | =0.13.4 (no default features) | heading attributes `{#ID}`, offset iterator for precise patches |
-| `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (why: 05 §9). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86) — pending the owner (Q1, core README) |
-| `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 | serialization; JSON output of tools and `specengine-eval`; `float_roundtrip` in `specengine-store` |
-| `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer) / importer ID patterns; `regex` is already in the graph through tree-sitter |
-| `blake3` | =1.8.7 | node and AST hashes |
 | `notify` + `notify-debouncer-full` | 8.2.0 + 0.7.0 | file watching; **not** 9.0-rc; debouncer-full coalesces atomic saves |
-| `rusqlite_migration` | — | not taken: the queue's `user_version` steps; `refinery`, `sqlx` conflict |
-| `similar` | — | not taken: `git diff`, `merge-file` |
-| `petgraph` | =0.8.3 (no default features) | `depends-cycle` (`tarjan_scc`; owner, Q-C); new to the default members: `fixedbitset` 0.5.7, `hashbrown` 0.15.5, `foldhash` 0.1.5 |
 | `gix` | 0.88.0 | later; system `git` at the start |
 | `rust-embed` | 8.12.0 | UI inside the binary |
-| `schemars` | 1.2.2 | JSON Schema 2020-12 for tools, through the `rmcp::schemars` re-export |
-| `clap` | =4.6.7 (`derive`) | CLI |
-| `ra_ap_*` (nine direct: `load-cargo`, `project_model`, `ide`, `ide_db`, `hir_expand`, `vfs`, `paths`, `syntax`, `proc_macro_api`) | **=0.0.352** (2026-09-14), all together (`ra_ap_edition` is already 0.0.354 — the set is skewed) | `MonikerResult::from_def` for resolved identity (layer C); only in `specengine-ra`, outside `default-members`, so none enters the core graph; API without guarantees |
-| `salsa`, `salsa-macros`, `salsa-macro-rules` / `unicode-ident` | =0.28.2 / =1.0.24 | direct exact pins of `specengine-ra`: the `ra_ap` manifests ask `^`, and newer versions break the 0.0.352 build (salsa 0.28.5 changed `HashEqLike`; unicode-ident 1.0.26 is Unicode 18 against `unicode-properties` 0.1.4's 17). One lock file, so the `unicode-ident` pin governs the core graph too |
-| `libc` | =0.2.189 | `specengine-eval` feature `ra` only: peak RSS and process groups |
 | `scip` | 0.10.0 | symbol format, index reading |
 | `ast-grep-core` | 0.45.3 (pin exactly) | anchor DSL for user binding rules |
 | `bevy_mod_debugdump` | 0.16.0 | schedule fallback: `print_schedule_graph(&mut app, Update)`, needs only a built `App`; not needed on the pilots |
 | (Bevy) `bevy_dev_tools::schedule_data` | in 0.19 | **built-in dump of all schedules in RON** (features `debug` + `schedule_data`); the truth for system registrations (05 §5.1, layer B) |
-| `syn` / `quote` / `proc-macro2` | =3.0.6 (+ `extra-traits`) / =1.0.47 / =1.0.107 | comparison only, behind `specengine-eval`'s `syn` feature: not an identity source (no name resolution) and not the digest (05 §5.2, ADR-0021) |
 | `limpet`, `sem-core`, `mago-fingerprint` | 0.17.0 / 0.25.0 / 1.50.0 | **read the sources**: anchors, rename following, fingerprint rules |
 | `syndiff` | 0.2.0 | structural diff for explaining drift in the UI |
 | `bevy` | 0.19.1; 0.20.0-rc.1 released 2026-09-15 | target of the system detector; ⚠ the 0.20 schedule API may affect it |
-
-CRDTs (`loro` 1.16, `automerge` 0.12, `yrs` 0.28) are **not needed**: one human writer and N proposing agents is a review-queue problem, not collaborative editing. Optimistic locking by `base_hash` + SSE is enough.

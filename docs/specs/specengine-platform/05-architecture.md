@@ -125,55 +125,17 @@ Canon: `docs/canon/spec-check*.md`; pending: 08 Phase 1; queue state → Phase 2
 Layer A details:
 
 - **Items and `qpath`** (Cargo target units, method names, ambiguity): `docs/canon/code-identity.md`; following `mod x;` is layer C. Macro-generated items are invisible, a stated limitation.
-- **Bevy detector** (`specengine-code`; the node layer is inferred, not written by hand):
-  - `#[derive(Component)]`, `#[derive(Resource)]` (in 0.19 also a `Component`), `#[derive(Message)]`, `#[derive(Event)]`/`EntityEvent`, `#[derive(Reflect)]`; `.add_message::<T>()` → message registration;
-  - systems of `.add_systems(Schedule, …)` and of the one-argument `Schedule::add_systems(…)`: tuples nest (explicit stack, cap 256), combinators `.in_set/.before/.after/*_ignore_deferred/.run_if/.distributive_run_if/.ambiguous_with*/.chain*` are peeled, adapters `pipe/map/with_input/with_input_from` recorded; a leaf is a path (`tick`, `a::b`, `f::<T>`), a closure (named by its innermost enclosing `fn`) or a factory call (named by its callee); `.add_observer(…)` → `observer`; `.add_plugins(…)` → plugin uses;
-  - plugins: every `impl Plugin for X` and **every function whose only parameter is `&mut App`** (qualified or generic; not a `self` method, not `-> &mut App`);
-  - the same calls inside `macro_rules!` transcribers and macro arguments are read from tokens: names only, never resolved or matched against a dump; the token reader is approximate (a comma in a type position or closure parameters splits an element; trailing tokens after a path → `expression`), ordinary code is read exactly from the syntax tree;
-  - what it cannot read is `uncertain` with a category (`macro_in_arguments`, `metavariable`, `unknown_method`, `expression`, `arguments`, `nesting_too_deep`, `parse_error`), never a guessed name; texts capped at 128 bytes; cost linear, no recursion over input.
+- **Bevy detector** (`specengine-code`; the node layer is inferred, not written by hand). Shipped (systems, observers, plugins and their uses, macro bodies read from tokens, `uncertain` categories, caps): `crates/specengine-code/README.md` "Modules" (`bevy`), "Rules", "Known limits and open minors". Not built yet: `#[derive(Component)]`, `#[derive(Resource)]` (in 0.19 also a `Component`), `#[derive(Message)]`, `#[derive(Event)]`/`EntityEvent`, `#[derive(Reflect)]`; `.add_message::<T>()` -> message registration.
 - **Signature** — the text before the body (`fn regen_system(q: Query<…>, time: Res<Time>)`) goes into the context bundle instead of the body. It is a targeted "repo map": unlike Aider's, it sees systems that are merely registered.
 - Detector boundaries: registration via `inventory`/`linkme`/`bevy_auto_plugin` and hierarchies inside `bsn!` are invisible (declared limitations); completeness is checked by layer B. The `add_systems` signature is unchanged from 0.16 to 0.19.1; in 0.20-rc observers change again (`On<Add<A>>`), so observer reading goes through a Bevy-version gate.
 - **User anchors** (option): instead of a marker a node may reference an ast-grep rule (`anchor: { rule: "...", inside: "mod player" }`). Needed for code where a marker cannot be placed, e.g. macros.
 
 ### 5.2. Canonical AST hash
 
-Recipe **`specengine-hash/v2`** (`specengine-code`), assembled from limpet (`src/memory/anchor.rs`), mago-fingerprint and the research (04 §1.8), then amended by measurement:
+The shipped recipe **`specengine-hash/v2`** (formula, N1-N4, what is and is not hashed, the traps, measurement) and its limits: `crates/specengine-code/README.md` "Hash recipe" and "Known limits and open minors". On top of it, Phase 3:
 
-```
-hash(item) = BLAKE3( header ‖ walk(attrs(item)) ‖ walk(item, skip = name_node(item)) )
-header     = "specengine-hash/v2" ‖ tree-sitter-rust version ‖ abi_version()
-walk(n) = if n.kind() ∈ {line_comment, block_comment} → ""   // by kind(), never is_extra(): trap 1
-          else if n is anonymous "," → ""                     // rustfmt trailing commas
-          else if n matches N1–N4 → walk(normal form of n)
-          else if n is leaf → len‖kind(n) ‖ len‖text(n)       // len = u32 little-endian
-          else → "(" ‖ len‖kind(n) ‖ concat(walk(c) for c in children) ‖ ")"
-item.has_error() → cannot_verify, no hash
-```
-
-`attrs(item)` is the attached attribute run: tree-sitter-rust exposes attributes as siblings of the item. The walk is iterative (explicit stack). **Normalisations** — exactly the four constructs rustfmt toggles:
-
-- **N1** a `;` after an absent or diverging tail is transparent (edition 2024 adds it after diverging tails);
-- **N2** a label-free single-expression block in a closure body or a match-arm value is unwrapped (`|x| { x + 1 }` = `|x| x + 1`);
-- **N3** `{…}` token trees after `|`, `||` or `=>` inside `(`/`[`-delimited expression macros are transparent;
-- **N4** a run of adjacent `use` items is sorted, each member = its attached attributes ‖ its `use`, so attributes travel with their `use`; the member walk is bounded at `MAX_USE_RUN_NESTING = 64` runs, past it → `cannot_verify` (`nesting_too_deep`), no hash.
-
-**Measured** (`specengine-eval ast-hash`, both pilots, 11 852 + 7 599 items): v2 is 100.0 % stable under default rustfmt, a contrasting rustfmt (`max_width = 60`, rewrites almost every file) and comment stripping including `///`; broken items never share a hash. The v1 formula (no N1–N4) is refuted: 84.9–85.4 % under the contrasting format. **Known limits**: N3 hashes token-level DSL macros the same with and without their significant `| {` / `=> {` braces (rustfmt never formats such macros; remedy — a per-project opt-out list of macro names in `specengine.toml`, not built yet), and a nested brace-delimited macro inside an expression macro inherits N3; `mod x;` and `extern crate` runs reordered by rustfmt are not sorted (v3 candidate).
-
-- **The symbol's own name is not hashed** (limpet technique): a pure rename does not change the body hash, and a renamed symbol can be found by body match. Identifiers inside the body do count.
 - **Fingerprint levels** (lockwire idea): a symbol has four independent hashes: `path` (location), `sig` (name-independent signature: parameters, types, return, modifiers, attributes), `body` (normalized body via the `body` field of `function_item`/`impl_item`/`trait_item`), `deps` (sorted set of outgoing calls). **A binding declares which levels it depends on**: an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`. Marker: `// @implements RULE-X@3 [sig]`, default `[sig, body]`. The main way to keep every refactor from becoming an alarm the owner learns to ignore.
-- Whitespace is not a node in the Rust grammar at all; together with the dropped `,` and N1–N4 this gives formatting insensitivity. Acceptance check: **hashes of all symbols in the project are identical before and after `cargo fmt`** — re-run with `specengine-eval ast-hash` on every grammar bump.
-- **Doc comments** (`line_comment` with the `doc` field) are prose and are not hashed; they are structurally distinguishable. **Attributes** (`#[derive]`, `#[cfg]`, `#[require(..)]`) are real nodes and **are hashed**: they change behaviour.
-- Only `kind()` strings are used, **never `kind_id()`/`grammar_id()`**: these are indices into generated tables and would show drift everywhere after a grammar update. The grammar version is written into the recipe header, so a grammar change is a deliberate rebase, not false drift.
-- `to_sexp()` as hash input **does not work**: it drops anonymous nodes and leaf text (`a+b` = `a-b`). `Node` hashes by pointer; do not use `#[derive(Hash)]`.
 - Option `--deep`: hashes of called functions from the same crate are added, depth 1.
-
-**Five traps that silently break a naive implementation** (trap 1 reproduced, the rest are research measurements):
-
-1. **`is_extra()` returns true for ERROR nodes.** The filter `if node.is_extra() { skip }` drops the whole erroneous subtree, and every unparsed file gets **the same hash**: the detector goes blind for good. Correct: filter comments by `kind()` (or `is_extra() && !is_error()`) and **check `has_error()` at item level**. If an item has a parse error, the state is `cannot_verify` ("hash unreliable").
-2. **tree-sitter-rust 0.24.2 fails on some valid code** (macro punctuation `$`/`~`, multi-line `where`; research estimate ≈ 1 %, 0 items on both pilots). Recovery is local, so the remaining items of the file hash normally.
-3. `to_sexp()` is unusable (above).
-4. `kind_id()` is unstable across grammar versions (above).
-5. Aliases: `kind()` returns the public name, `grammar_name()` the raw one. Use `kind()`.
 
 **Following renames and moves — the anchor-state vocabulary of code-graph-rag (cgr)**, which agents already see via MCP. No need to invent our own:
 
@@ -197,11 +159,9 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 
 **Reply to every write** (cgr "structural delta" contract): `spec verify`/`reindex` return `{symbols: {added, removed, renamed, changed}, bindings: {moved, ambiguous, lost, stale}, affected_nodes, tests_reaching, ms}`. `spec check --base <ref>` returns the same for pre-commit and CI.
 
-**Performance is not a concern** (research measurement on a corpus of several hundred thousand lines, 14 cores): parse + hash runs at ~112 MB/s with rayon and one `Parser` per thread (`thread_local!`); half a million lines hash in a fraction of a second. Caching and incremental parsing are unnecessary for the hash layer; all the complexity goes into correctness.
+**Performance is not a concern** (research, several hundred kLOC, 14 cores): parse + hash ~112 MB/s with rayon and one `Parser` per thread (`thread_local!`); no caching or incremental parsing for the hash layer, the complexity goes into correctness.
 
-**`syn` 3 + `extra-traits` is not the digest** (ADR-0021 stands): structural `Hash` and no span leakage, but no error recovery (whole file or nothing), a trailing comma and `///` → `#[doc]` change the hash, and even after normalisation it reached only 94.5–94.9 % stability on the pilots; its speed (time ratio ≈ 0.55) does not decide. It stays only as the comparison behind `specengine-eval`'s `syn` feature.
-
-- Acceptance test (from the initial spec, kept): editing a comment, whitespace or a neighbouring function in the same file does **not** change the hash.
+**`syn` 3 + `extra-traits` is not the digest** (ADR-0021): no error recovery (whole file or nothing), a trailing comma and `///` -> `#[doc]` change its hash, 94.5-94.9 % stable on the pilots after normalisation, time ratio ~0.55; only the comparison behind `specengine-eval`'s `syn` feature.
 
 ### 5.3. Markers and the sync matrix
 

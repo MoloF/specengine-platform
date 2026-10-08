@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-code]
 owner: owner
-reviewed: 2026-10-03
+reviewed: 2026-10-09
 ---
 
 # specengine-code — layer A: Rust and RON parsing, AST hash, markers, Bevy detector
@@ -15,20 +15,44 @@ Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A defaul
 | Module | What it does |
 |---|---|
 | `grammar` | `TREE_SITTER_VERSION`, `TREE_SITTER_RUST_VERSION` (a test checks them against the built artefact), `grammar_info()` (ABI), `RustParser` |
-| `hash` | recipe `specengine-hash/v2` of 05 §5.2: `RECIPE` header, iterative walk, comments filtered by `kind()` (never `is_extra()`), anonymous `,` skipped, u32-LE length prefixes, the attached attribute run hashed before the item, normalisations N1–N4. `hash_item` → `HashState`: a `Digest`, or `cannot_verify` with an `ErrorCategory` for an item with `has_error()` or a `use` run nested past `MAX_USE_RUN_NESTING = 64` (`nesting_too_deep`) — never hashed. `normalize` returns `false` for an incomplete stream |
+| `hash` | recipe `specengine-hash/v2` ("Hash recipe"): `RECIPE` header, iterative walk. `hash_item` → `HashState`: a `Digest`, or `cannot_verify` with an `ErrorCategory` for an item with `has_error()` or a `use` run nested past `MAX_USE_RUN_NESTING = 64` (`nesting_too_deep`) — never hashed. `normalize` returns `false` for an incomplete stream |
 | `comments` | `comment_ranges`, `strip_comments` (`///` included) — the comment perturbation |
 | `items` | `analyze_file` / `analyze_tree` → `FileAnalysis`: items (`ITEM_KINDS`; members `MEMBER_KINDS`) with their hash state, `mod` declarations, `#[path]` attributes; collected on an explicit stack |
 | `qpath` | `file_role` / `TargetIndex` over a caller's `PackageTargets` (`cargo metadata`, else `layout_targets`): `FileRole` (`CrateRoot`, `Module`, `Unrooted`) with its `Unit` — none for the primary target, `<kind>:<name>`, `shared:<dir>`; `qpath`, `resolve_path_attribute`; one `Ambiguity` per item (`PathAttribute`, `Unrooted`, `Duplicate`), reported, never guessed |
 | `markers` | `markers_in`: `Relation` (`implements`, `verifies`, `configures`, `assumes`) and `Marker` (ID, optional rev, `Levels`: `Default` = `[sig, body]`, `Declared` in canonical order, `Invalid(LevelError)`; note, `id_latin`); several per comment, shared by `.rs` and `.ron`; a non-Latin ID clears `id_latin`, an empty ID is counted apart, nothing is fatal (ADR-0009) |
 | `ron` (`mod`, `lexer`, `structure`) | own RON lexer (`lex`: comments, `#![enable(..)]`, raw strings, `LexError` categories) and a tolerant structure walk. `analyze` → `RonAnalysis`: every marker with an `Anchor` (`Path` such as `root.player.speed`, `Ambiguous` when sibling segments render alike, `Unanchored`, `CannotVerify`), `colliding_groups`, `Rejected` categories, comment byte ranges. Segments, binding rules 1–5, ambiguity, the caps `MAX_SEGMENT_BYTES = 128`, `MAX_DEPTH = 512`: `docs/canon/code-identity.md`; every rule with examples: module doc of `ron/structure.rs` |
-| `bevy` (`mod`, `expr`, `tokens`) | syntactic registration detector (05 §5.1): `detect` / `detect_file` → `BevyAnalysis` — systems of `add_systems` (tuples on an explicit stack to `MAX_NESTING = 256`, `COMBINATORS` peeled, `ADAPTERS` recorded), observers, plugins (`impl Plugin for` and `fn(&mut App)`, `PluginKind`), plugin uses, `Uncertain` with an `UncertainCategory`. `expr` reads ordinary code exactly from the syntax tree; `tokens` reads `macro_rules!` transcribers and macro arguments from flattened tokens, names only. Texts capped at `MAX_TEXT_BYTES = 128` plus `…` |
+| `bevy` (`mod`, `expr`, `tokens`) | syntactic registration detector (05 §5.1): `detect` / `detect_file` → `BevyAnalysis` — systems of `.add_systems(Schedule, ...)` and the one-argument `Schedule::add_systems(...)` (tuples on an explicit stack to `MAX_NESTING = 256`, `COMBINATORS` peeled, `ADAPTERS` recorded; a leaf is a path such as `f::<T>`, a closure named by its innermost enclosing `fn`, or a factory call named by its callee), observers (`.add_observer`), plugins (`impl Plugin for`, and every `fn` whose only parameter is `&mut App`, qualified or generic, not a `self` method, not `-> &mut App`; `PluginKind`), plugin uses (`.add_plugins`), `Uncertain` with an `UncertainCategory` (`macro_in_arguments`, `metavariable`, `unknown_method`, `expression`, `arguments`, `nesting_too_deep`, `parse_error`). `expr` reads ordinary code exactly from the syntax tree; `tokens` reads `macro_rules!` transcribers and macro arguments from flattened tokens, names only. Texts capped at `MAX_TEXT_BYTES = 128` plus `…` |
 
 ## Rules
 
-- What cannot be read is `cannot_verify`, `uncertain` or `unanchored` with a category — never a guessed name and never a shared hash (trap 1, 05 §5.2).
+- What cannot be read is `cannot_verify`, `uncertain` or `unanchored` with a category — never a guessed name and never a shared hash (trap 1, "Hash recipe").
 - Only `kind()` strings, never `kind_id()`. A grammar bump changes the recipe header and is re-measured with `specengine-eval ast-hash` and `ron` before it lands.
 - Cost is linear in the input and nothing recurses over it; the caps above bound crafted input.
 - No subject domain (ADR-0008): RON and Bevy are language and framework support; project specifics, the Cargo target table included, arrive from the caller; `qpath` knows only Cargo's names.
+
+## Hash recipe
+
+`specengine-hash/v2`, from limpet (`src/memory/anchor.rs`), mago-fingerprint and the research (04 s1.8), amended by measurement; the Phase 3 levels, anchor states and rename following on top of it: 05 s5.2.
+
+    hash(item) = BLAKE3( header || walk(attrs(item)) || walk(item, skip = name_node(item)) )
+    header     = "specengine-hash/v2" || tree-sitter-rust version || abi_version()
+    walk(n) = n.kind() in {line_comment, block_comment} -> ""   // by kind(), never is_extra()
+              n is the anonymous ","                    -> ""   // rustfmt trailing commas
+              n matches N1-N4  -> walk(normal form of n)
+              n is a leaf      -> len||kind(n) || len||text(n)  // len = u32 little-endian
+              else             -> "(" || len||kind(n) || walk(c) for each child || ")"
+    item.has_error() -> cannot_verify, no hash
+
+`attrs(item)` is the attached attribute run (tree-sitter-rust keeps attributes as siblings of the item). Normalisations, exactly the constructs rustfmt toggles:
+
+- **N1** a `;` after an absent or diverging tail is transparent (edition 2024 adds it after diverging tails);
+- **N2** a label-free single-expression block in a closure body or a match-arm value is unwrapped (`|x| { x + 1 }` = `|x| x + 1`);
+- **N3** `{...}` token trees after `|`, `||` or `=>` inside `(`/`[`-delimited expression macros are transparent;
+- **N4** a run of adjacent `use` items is sorted, each member its attached attributes || its `use`; the member walk is bounded at `MAX_USE_RUN_NESTING`.
+
+Hashed: identifiers inside the body; attributes (`#[derive]`, `#[cfg]`, `#[require(..)]`: they change behaviour). Not hashed: the item's own name (a pure rename keeps the hash), comments with doc comments, whitespace (not a node), the `,` and N1-N4 forms. Never as input: `to_sexp()` (drops anonymous nodes and leaf text, `a+b` = `a-b`), `kind_id()`/`grammar_id()` (table indices, drift on every grammar update), `grammar_name()` (the raw alias name), a derived `Hash` of `Node` (the pointer). Trap 1: `is_extra()` is true for ERROR nodes, so filtering by it gives every unparsed file one hash. tree-sitter-rust 0.24.2 fails on some valid code (macro `$`/`~`, multi-line `where`; about 1 % by research estimate, 0 items on the pilots); recovery is local.
+
+**Measured** (`specengine-eval ast-hash`, both pilots, 11 852 + 7 599 items): 100.0 % stable under default rustfmt, a contrasting rustfmt (`max_width = 60`) and comment stripping with `///`; broken items never share a hash; v1 (no N1-N4) 84.9-85.4 % under the contrasting format. Editing a comment, whitespace or a neighbouring item does not change an item's hash.
 
 ## Known limits and open minors
 
