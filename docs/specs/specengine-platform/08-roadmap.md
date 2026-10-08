@@ -29,7 +29,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 2. Queue and tasks — in progress since 2026-10-05, ~2 weeks  ⟵ value for the owner
 
-- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `task-package` (7, ADR-0027) shipped 2026-10-07 (UI: Phase 4); `decision-staging` (ADR-0035), `plugin-gate`, `round` (ADR-0038), `ui-round` (Phase 4), `plugin-roles` 2026-10-08; kinds `interpretation`, `amendment`, `decision` later.
+- Slices: `proposal-apply` (1: `apply_proposal` for `update`), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `task-package` (7, ADR-0027) shipped 2026-10-07 (UI: Phase 4); `decision-staging` (ADR-0035), `plugin-gate`, `round` (ADR-0038), `ui-round` (Phase 4), `plugin-roles` 2026-10-08; kinds `interpretation` (draft), `decision`, `amendment` next.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
 - MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
 - Daemon `spec serve` (draft, no UI): `specengine-http`, one per data directory; stdio MCP stays, `spec mcp` on a trigger (05 §1 (6)); no gate needs it (ADR-0039).
@@ -38,7 +38,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 3. Code and drift — ~2-3 weeks
 
-- Symbol index (layer A: tree-sitter; layer B: the Bevy `schedule_data` dump; layer C: `ra_ap_ide` per ADR-0020 — B or C is required for generic system instances, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`, `get_impact`.
+- Symbol index (layer A: tree-sitter; layer B: the Bevy `schedule_data` dump; layer C: `ra_ap_ide` per ADR-0020; B or C is required for generic system instances, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`, `get_impact`.
 - Layer C: items under attribute proc macros (`#[tokio::main]`-style) lose their monikers with the proc-macro server on; the scan must map an item through its expansion (`crates/specengine-ra/README.md`).
 - Markers `@implements/@verifies/@configures/@assumes` (with revision `@N`), `spec.lock` with `file_blob`, drift cascade (blob OID -> normalized text -> AST), `spec verify [--tests] [--changed]` with Fix/Check/Pre-existing verdicts and exit codes 0/1/2, `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
 - Existing ID citations in code automatically become **weak** `mentions` links. Markers appear in new work and when code is touched; they are not added in bulk (ADR-0016).

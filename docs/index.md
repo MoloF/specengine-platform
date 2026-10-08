@@ -48,6 +48,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
+- [docs/features/kind-interpretation.md](features/kind-interpretation.md) Kind interpretation · crates/specengine-store, crates/specengine-cli, ui · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/spec-serve.md](features/spec-serve.md) spec serve · crates/specengine-cli, crates/specengine-http · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
