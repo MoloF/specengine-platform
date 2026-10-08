@@ -1,10 +1,11 @@
 //! The router (docs/features/daemon-read.md "Data"): the fence around the
 //! whole router (it runs before routing, so a route added later is fenced
-//! too), the read endpoints, the stage of a choice, the error bodies of an
-//! unknown route (404) and another method on a route (405, its `Allow`
-//! what the route serves: `GET` on a read, `POST, DELETE` on the stage;
-//! `HEAD` is no read here), `Cache-Control: no-store` on every response
-//! and no `Access-Control-*` header on any.
+//! too), the read endpoints (the round's sheet among them), the stage of a
+//! choice and of the round's answers, the error bodies of an unknown route
+//! (404) and another method on a route (405, its `Allow` what the route
+//! serves: `GET` on a read, `POST, DELETE` on the stage, `POST` on the
+//! round's answers; `HEAD` is no read here), `Cache-Control: no-store` on
+//! every response and no `Access-Control-*` header on any.
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -16,9 +17,11 @@
 //! The one queue write is a proposal's staged choice, through the CLI
 //! library's `stage` and `unstage` (POST and DELETE on the stage route,
 //! past the fence only from a same-origin page: `Sec-Fetch-Site:
-//! same-origin`, which is not authentication, ADR-0034), confirmed only on
-//! a terminal (ADR-0035); the other writes are the reads' own, in the data
-//! directory.
+//! same-origin`, which is not authentication, ADR-0034), and through its
+//! `round_stage_answers` (POST on the round's answers, the same door:
+//! docs/features/ui-round.md "Data"), confirmed only on a terminal
+//! (ADR-0035, ADR-0038): no handler here walks a round or decides an item;
+//! the other writes are the reads' own, in the data directory.
 
 use std::sync::Arc;
 
@@ -32,9 +35,10 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest, SearchRequest,
-    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
-    UnstageRequest, View, process_git, project_entry, utc_now,
+    BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest,
+    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
+    StageRequest, TaskListRequest, TaskShowRequest, TreeRequest, UnstageRequest, View, process_git,
+    project_entry, round_limit, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -107,6 +111,11 @@ pub(crate) fn router(app: Shared) -> Router {
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
             post(stage).delete(unstage).fallback(only_stage),
+        )
+        .route("/api/projects/{p}/round", read(round))
+        .route(
+            "/api/projects/{p}/round/answers",
+            post(round_answers).fallback(only_round_answers),
         )
         .route("/api/projects/{p}/events", read(tail::events))
         .fallback(unknown_route)
@@ -222,6 +231,17 @@ async fn only_stage(method: Method, uri: Uri) -> Response {
     )
 }
 
+/// 405 on the round's answers.
+async fn only_round_answers(method: Method, uri: Uri) -> Response {
+    method_refused(
+        &method,
+        &uri,
+        "this path takes only POST (stage each answer of the round); a staged choice is \
+         confirmed on a terminal",
+        Some("POST"),
+    )
+}
+
 /// 405 on a route without its own.
 async fn method_not_allowed(method: Method, uri: Uri) -> Response {
     method_refused(&method, &uri, "another method is served here", None)
@@ -238,7 +258,7 @@ fn unknown_route_of(uri: &Uri) -> Refusal {
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, graph, check, inbox, proposals/<id>, tasks, \
-             tasks/<id>, events}}",
+             tasks/<id>, round, events}}",
             uri.path()
         ),
     )
@@ -461,15 +481,51 @@ async fn task(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
     .await)
 }
 
+/// `GET …/round`: `spec round new [--limit N] --json`, uncut; `limit`, its
+/// only query name, judged as the CLI judges `--limit` (1 to 200: a 400
+/// with the CLI's line, nothing run), the sheet read in the project's turn
+/// (it refreshes the index).
+async fn round(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("round", &["limit"], &uri)?;
+    let limit = args.integer("limit").map_err(Refusal::bad_request)?;
+    round_limit(limit).map_err(|error| Refusal::bad_request(error.message))?;
+    Ok(run(project, move |env, globals| {
+        let request = RoundNewRequest {
+            limit,
+            git: process_git(env),
+        };
+        specengine_cli::round_new(env, globals, &request)
+            .map(|sheet| Outcome::RoundSheet(Box::new(sheet)))
+    })
+    .await)
+}
+
 /// The most bytes of a stage's body
 /// (`docs/features/decision-staging.md` "Data").
 const STAGE_BODY_MAX: usize = 16_384;
 
+/// The most bytes of the round's answers (docs/features/ui-round.md
+/// "Data", W-6: 200 answers at their caps, escaped, fit).
+const ROUND_BODY_MAX: usize = 4_194_304;
+
+/// Only a same-origin page stages (`Sec-Fetch-Site: same-origin`; absent or
+/// `none`, which the fence lets a read through, is refused: 403). This is
+/// no authentication (ADR-0034): any local process can send the header.
+fn same_origin(headers: &HeaderMap) -> Result<(), Refusal> {
+    let site = headers.get(HeaderName::from_static("sec-fetch-site"));
+    if site.is_none_or(|site| site.as_bytes() != b"same-origin") {
+        return Err(Refusal::new(
+            StatusCode::FORBIDDEN,
+            "staging needs a same-origin page (not authentication: ADR-0034)",
+        ));
+    }
+    Ok(())
+}
+
 /// The project and the proposal ID (percent-decoded once, judged by the
-/// CLI) of the stage route `uri`, and the page's origin: only a same-origin
-/// page stages (`Sec-Fetch-Site: same-origin`; absent or `none`, which the
-/// fence lets a read through, is refused: 403). This is no authentication
-/// (ADR-0034): any local process can send the header.
+/// CLI) of the stage route `uri`, from a same-origin page only
+/// ([`same_origin`]).
 fn stage_target(
     app: &App,
     uri: &Uri,
@@ -478,13 +534,7 @@ fn stage_target(
     // The served slug first (an unknown one is a 404 on every route), then
     // the page's origin, before anything of the proposal is read.
     let (project, rest) = app.project_of(uri)?;
-    let site = headers.get(HeaderName::from_static("sec-fetch-site"));
-    if site.is_none_or(|site| site.as_bytes() != b"same-origin") {
-        return Err(Refusal::new(
-            StatusCode::FORBIDDEN,
-            "staging needs a same-origin page (not authentication: ADR-0034)",
-        ));
-    }
+    same_origin(headers)?;
     let raw = rest
         .strip_prefix("proposals/")
         .and_then(|rest| rest.strip_suffix("/decision"))
@@ -502,7 +552,7 @@ fn stage_target(
 async fn stage(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = stage_target(&app, request.uri(), request.headers())?;
     json_typed(request.headers())?;
-    let bytes = body(request).await?;
+    let bytes = body(request, STAGE_BODY_MAX).await?;
     let body = StageBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
     Ok(run(project, move |env, globals| {
         let request = StageRequest {
@@ -534,6 +584,34 @@ async fn unstage(State(app): State<Shared>, request: Request) -> Result<Response
     .await)
 }
 
+/// `POST …/round/answers`: the Questions screen's answers staged through
+/// the CLI library's `round_stage_answers`, past the stage route's door, in
+/// order, nothing read or stored on a refusal: the served slug (404), a
+/// same-origin page (403), JSON (415), at most [`ROUND_BODY_MAX`] bytes
+/// (413), a body the CLI decodes (`RoundAnswersBody`: for this project, at
+/// most 200 answers; else a 400 with its line). Then one call in the
+/// project's turn, one clock reading: 200 with the answers document
+/// whatever became of each answer (`answer.rs`), 503 cannot run. An answer
+/// only stages; nothing is decided here.
+async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    json_typed(request.headers())?;
+    let bytes = body(request, ROUND_BODY_MAX).await?;
+    let answers = RoundAnswersBody::from_json(&bytes, &project.slug)
+        .map_err(|error| Refusal::bad_request(error.message))?;
+    Ok(run(project, move |env, globals| {
+        let request = RoundAnswersRequest {
+            body: answers,
+            now: utc_now(),
+            git: process_git(env),
+        };
+        specengine_cli::round_stage_answers(env, globals, &request)
+            .map(|outcome| Outcome::RoundAnswers(Box::new(outcome)))
+    })
+    .await)
+}
+
 /// The body is JSON: one `Content-Type` whose media type is
 /// `application/json` (any parameter after it), else 415.
 fn json_typed(headers: &HeaderMap) -> Result<(), Refusal> {
@@ -556,13 +634,13 @@ fn json_typed(headers: &HeaderMap) -> Result<(), Refusal> {
     ))
 }
 
-/// The request's body, at most [`STAGE_BODY_MAX`] bytes (a longer one, or
-/// one declared longer, is a 413 and is not read further).
-async fn body(request: Request) -> Result<Vec<u8>, Refusal> {
+/// The request's body, at most `max` bytes (a longer one, or one declared
+/// longer, is a 413 and is not read further).
+async fn body(request: Request, max: usize) -> Result<Vec<u8>, Refusal> {
     let too_large = || {
         Refusal::new(
             StatusCode::PAYLOAD_TOO_LARGE,
-            format!("the body is over {STAGE_BODY_MAX} bytes"),
+            format!("the body is over {max} bytes"),
         )
     };
     let declared = request
@@ -570,14 +648,14 @@ async fn body(request: Request) -> Result<Vec<u8>, Refusal> {
         .get(CONTENT_LENGTH)
         .and_then(|length| length.to_str().ok())
         .and_then(|length| length.trim().parse::<u64>().ok());
-    if declared.is_some_and(|length| length > STAGE_BODY_MAX as u64) {
+    if declared.is_some_and(|length| length > max as u64) {
         return Err(too_large());
     }
     let mut stream = request.into_body().into_data_stream();
     let mut bytes = Vec::new();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|_| Refusal::bad_request("the body cannot be read"))?;
-        if bytes.len() + chunk.len() > STAGE_BODY_MAX {
+        if bytes.len() + chunk.len() > max {
             return Err(too_large());
         }
         bytes.extend_from_slice(&chunk);

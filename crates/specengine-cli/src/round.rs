@@ -33,28 +33,37 @@
 //!   item, is named in a note, never asked (a gone repository's item kept
 //!   staged names `spec reject <ID>` alone).
 //! - [`round_stage`]: the answers of a text checked and staged, no walk
-//!   (the daemon's later route).
+//!   (kept for a pasted reply).
+//! - [`round_stage_answers`]: the daemon's structured answers
+//!   ([`RoundAnswersBody`]: per item the decision route's [`StageBody`],
+//!   with the `updated_at` the screen showed), no grammar, no walk. Each
+//!   answer is refused alone, by its first refusal: an ID named by two
+//!   entries (each entry, never the last one winning), a look-alike ID, no
+//!   proposal, the queue checks a returned file's answer passes past its
+//!   grammar (shared, not copied), then [`crate::stage::stage_with`]'s;
+//!   the rest is staged in round order at the request's one clock reading
+//!   ([`RoundAnswersOutcome`]). Nothing is decided here.
 //!
 //! The core is domain-free: the round names no node kind and no
 //! ID prefix of a project; texts and titles travel verbatim.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read as _;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specengine_core::check::CheckInput;
 use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity};
-use specengine_core::proposal::Author;
+use specengine_core::proposal::{Author, ProposalIdError, parse_proposal_id};
 use specengine_core::round::{
     AnswerLine, Answers, OrderKey, PROJECT_LINE, ROUND_FILE_MAX_BYTES, ROUND_LIMIT_DEFAULT,
     ROUND_LIMIT_MAX, Refusal, Token, answers_text, order_key, parse_answers, reading_minutes,
 };
 use specengine_store::{
-    GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, Stage, StagedChoice,
-    Task, same_repository,
+    GitEnv, Intake, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, Stage,
+    StagedChoice, Task, same_repository,
 };
 
 use crate::apply::{ApproveRequest, RejectRequest, approve, reject};
@@ -64,10 +73,10 @@ use crate::package::{lists_proposal, position, wanted_nodes};
 use crate::project::ProjectRoot;
 use crate::proposals::{
     ProposalOutcome, QueueContext, checked_now, elsewhere, escaped_error, no_proposal,
-    open_context, queue_cannot, render_text as proposal_text, repository_gone,
+    open_context, queue_cannot, render_text as proposal_text, repository_gone, written_id,
 };
 use crate::propose::{is_path_target, resolved_node};
-use crate::stage::{StageBody, StageRequest, stage_with, staged_command};
+use crate::stage::{StageBody, StageOutcome, StageRequest, stage_with, staged_command};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The most IDs a note names; the rest are counted.
@@ -167,22 +176,30 @@ pub fn round_new(
     run_new(env, globals, request).map_err(escaped_error)
 }
 
+/// `--limit N` judged as `spec round new` judges it: 1 to
+/// [`ROUND_LIMIT_MAX`], `None` [`ROUND_LIMIT_DEFAULT`]; else exit 2
+/// (`--limit N: the limit is 1 to 200`). The daemon judges its `limit` by
+/// it before anything runs.
+pub fn round_limit(limit: Option<i64>) -> Result<usize, CliError> {
+    let Some(limit) = limit else {
+        return Ok(ROUND_LIMIT_DEFAULT);
+    };
+    usize::try_from(limit)
+        .ok()
+        .filter(|limit| (1..=ROUND_LIMIT_MAX).contains(limit))
+        .ok_or_else(|| {
+            CliError::spec(format!(
+                "--limit {limit}: the limit is 1 to {ROUND_LIMIT_MAX}"
+            ))
+        })
+}
+
 fn run_new(
     env: &Env,
     globals: &Globals,
     request: &RoundNewRequest,
 ) -> Result<RoundSheet, CliError> {
-    let limit = match request.limit {
-        None => ROUND_LIMIT_DEFAULT,
-        Some(limit) => usize::try_from(limit)
-            .ok()
-            .filter(|limit| (1..=ROUND_LIMIT_MAX).contains(limit))
-            .ok_or_else(|| {
-                CliError::spec(format!(
-                    "--limit {limit}: the limit is 1 to {ROUND_LIMIT_MAX}"
-                ))
-            })?,
-    };
+    let limit = round_limit(request.limit)?;
     let context = open_context(env, globals, &request.git)?;
     let mut notes = Vec::new();
     let waiting = Waiting::load(&context, &mut notes)?;
@@ -630,6 +647,120 @@ pub struct RoundStageRequest {
     pub git: GitEnv,
 }
 
+/// The most answers [`round_stage_answers`] takes at once: a sheet's most
+/// items.
+const ROUND_ANSWERS_MAX: usize = ROUND_LIMIT_MAX;
+
+/// The daemon's round answers as the Questions screen sends them:
+/// `{"project":"…","answers":[{"id":"…","stage":{…}}]}`, each `stage` the
+/// decision route's body ([`StageBody`]: the choice and the `updated_at`
+/// of the item the screen showed). Any other key, or one missing, is
+/// refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoundAnswersBody {
+    /// The project the answers are for: the one served.
+    pub project: String,
+    /// In the screen's order.
+    pub answers: Vec<RoundAnswerBody>,
+}
+
+/// One answer of a [`RoundAnswersBody`].
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoundAnswerBody {
+    /// The proposal ID as sent.
+    pub id: String,
+    pub stage: StageBody,
+}
+
+impl RoundAnswersBody {
+    /// `bytes` decoded as JSON, the answers for the project `slug`, at most
+    /// 200 of them; else exit 2 naming the defect, nothing read or changed.
+    pub fn from_json(bytes: &[u8], slug: &str) -> Result<Self, CliError> {
+        let body: Self = serde_json::from_slice(bytes).map_err(|error| {
+            escaped_error(CliError::spec(format!(
+                "the answers are not `{{\"project\",\"answers\":[{{\"id\",\"stage\"}}]}}` as \
+                 JSON: {error}; nothing changed"
+            )))
+        })?;
+        body.checked(slug).map_err(escaped_error)?;
+        Ok(body)
+    }
+
+    /// The answers name the project `slug` and number at most
+    /// [`ROUND_ANSWERS_MAX`]; else exit 2.
+    fn checked(&self, slug: &str) -> Result<(), CliError> {
+        if self.project != slug {
+            return Err(CliError::spec(another_project(&self.project, slug)));
+        }
+        if self.answers.len() > ROUND_ANSWERS_MAX {
+            return Err(CliError::spec(format!(
+                "{} answers; at most {ROUND_ANSWERS_MAX} at once, a sheet's most items: send \
+                 the rest after; nothing changed",
+                self.answers.len()
+            )));
+        }
+        Ok(())
+    }
+}
+
+/// [`round_stage_answers`] options.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoundAnswersRequest {
+    pub body: RoundAnswersBody,
+    /// The injected clock, read once for the request: `YYYY-MM-DDTHH:MM:SSZ`,
+    /// every stage's `staged_at`.
+    pub now: String,
+    pub git: GitEnv,
+}
+
+/// What became of one structured answer, in the request's order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RoundAnswerEntry {
+    /// As sent.
+    pub id: String,
+    /// Staged or refused.
+    pub outcome: AnswerOutcome,
+    /// The stage stored, its `span_hash` included; `null` unless staged.
+    pub stage: Option<Stage>,
+    /// The request's clock reading; `null` unless staged.
+    pub staged_at: Option<String>,
+    /// The `staged_at` of the stage this one replaced.
+    pub replaced: Option<String>,
+    /// Why it was refused, without a trailing `; nothing changed` or
+    /// `; nothing staged`.
+    pub reason: Option<String>,
+}
+
+/// What [`round_stage_answers`] did: `{"project", "answers", "notes"}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RoundAnswersOutcome {
+    pub project: String,
+    /// In the request's order.
+    pub answers: Vec<RoundAnswerEntry>,
+    /// A corrupt row, as `spec inbox` words one.
+    pub notes: Vec<String>,
+    /// The notes as `note:` lines (stderr).
+    #[serde(skip)]
+    pub messages: Vec<Message>,
+}
+
+impl RoundAnswersOutcome {
+    /// 0 when no answer was refused; else 1.
+    pub fn exit(&self) -> Exit {
+        if self
+            .answers
+            .iter()
+            .any(|answer| answer.outcome == AnswerOutcome::Refused)
+        {
+            Exit::NotFound
+        } else {
+            Exit::Answered
+        }
+    }
+}
+
 /// What became of one answer line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -763,6 +894,143 @@ fn run_stage(
     run.messages = run.notes.iter().cloned().map(Message::Note).collect();
     run.report = Some(report_text(&run));
     Ok(run)
+}
+
+/// The daemon's structured answers checked against the queue now and
+/// staged, with no walk (see the module documentation): one
+/// `proposal.staged` per answer staged, in round order; nothing else is
+/// written but the data directory. Exit 2 ([`CliError`]) only for the
+/// project, the count of answers, or what keeps it from running here;
+/// every answer refused alone is named in the outcome.
+pub fn round_stage_answers(
+    env: &Env,
+    globals: &Globals,
+    request: &RoundAnswersRequest,
+) -> Result<RoundAnswersOutcome, CliError> {
+    run_stage_answers(env, globals, request).map_err(escaped_error)
+}
+
+fn run_stage_answers(
+    env: &Env,
+    globals: &Globals,
+    request: &RoundAnswersRequest,
+) -> Result<RoundAnswersOutcome, CliError> {
+    let now = checked_now(&request.now)?;
+    let mut context = open_context(env, globals, &request.git)?;
+    request.body.checked(&context.slug)?;
+    let mut notes = Vec::new();
+    let waiting = Waiting::load(&context, &mut notes)?;
+    let answers = &request.body.answers;
+    let mut ready = Ready::default();
+    let mut planned = Vec::new();
+    let mut refusals = Vec::with_capacity(answers.len());
+    for (at, (answer, twice)) in answers.iter().zip(duplicates(answers)).enumerate() {
+        let refusal = match twice {
+            Some(reason) => Some(reason),
+            None => match planned_answer(&context, &request.git, answer, &mut ready) {
+                Ok((proposal, body)) => {
+                    let key = round_key(&proposal, waiting.of(&proposal).len());
+                    planned.push(Planned {
+                        key,
+                        at,
+                        proposal,
+                        body,
+                    });
+                    None
+                }
+                Err(reason) => Some(reason),
+            },
+        };
+        refusals.push(refusal);
+    }
+    let mut entries: Vec<RoundAnswerEntry> = answers
+        .iter()
+        .zip(refusals)
+        .map(|(answer, refusal)| RoundAnswerEntry {
+            id: answer.id.clone(),
+            outcome: AnswerOutcome::Refused,
+            stage: None,
+            staged_at: None,
+            replaced: None,
+            reason: refusal.map(|reason| trimmed(&reason).to_owned()),
+        })
+        .collect();
+    for (at, proposal, stored) in stage_planned(env, &mut context, planned, now, &request.git) {
+        let entry = &mut entries[at];
+        match stored {
+            Ok(choice) => {
+                entry.outcome = AnswerOutcome::Staged;
+                entry.stage = Some(choice.stage);
+                entry.staged_at = Some(choice.at);
+                entry.replaced = proposal.staged.map(|previous| previous.at);
+            }
+            Err(reason) => entry.reason = Some(trimmed(&reason).to_owned()),
+        }
+    }
+    let messages = notes.iter().cloned().map(Message::Note).collect();
+    Ok(RoundAnswersOutcome {
+        project: context.slug.clone(),
+        answers: entries,
+        notes,
+        messages,
+    })
+}
+
+/// The duplicate rule of the structured answers: every entry whose ID (its
+/// Latin form) another entry names too is refused, naming each position
+/// (from 1); the last one never wins. `None` for an ID named once.
+fn duplicates(answers: &[RoundAnswerBody]) -> Vec<Option<String>> {
+    let ids: Vec<String> = answers.iter().map(|answer| latin_id(&answer.id)).collect();
+    let mut positions: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (at, id) in ids.iter().enumerate() {
+        positions.entry(id.as_str()).or_default().push(at + 1);
+    }
+    ids.iter()
+        .map(|id| {
+            positions
+                .get(id.as_str())
+                .filter(|named| named.len() > 1)
+                .map(|named| {
+                    format!(
+                        "answered at positions {}: give one answer per item",
+                        listed(named)
+                    )
+                })
+        })
+        .collect()
+}
+
+/// The proposal ID `written` names, in Latin letters and digits; one that
+/// names none, trimmed.
+fn latin_id(written: &str) -> String {
+    match parse_proposal_id(written) {
+        Ok(id) => id,
+        Err(ProposalIdError::LookAlike { fix }) => fix,
+        Err(ProposalIdError::NotAnId) => written.trim().to_owned(),
+    }
+}
+
+/// One structured answer past the duplicate rule: its ID (a look-alike
+/// refused, naming the Latin one; none, `no proposal`), then the queue
+/// checks a returned file's answer passes past its grammar; the proposal
+/// and the stage to store, or why not. Apply steps 2 and 3 not ready for an
+/// approve: `not applied (step <n>): <reason>; a reject still settles it`.
+fn planned_answer(
+    context: &QueueContext,
+    git: &GitEnv,
+    answer: &RoundAnswerBody,
+    ready: &mut Ready,
+) -> Result<(Proposal, StageBody), String> {
+    let id = match written_id(&answer.id) {
+        Ok(Some(id)) => id,
+        Ok(None) => return Err(no_proposal(&answer.id)),
+        Err(error) => return Err(unprefixed(&error.message).to_owned()),
+    };
+    let rejects = answer.stage.rejects();
+    queue_checked(context, git, &id, rejects, ready, |_, _| {
+        Ok(answer.stage.clone())
+    })
+    .map_err(|unfit| unfit.worded("a reject still settles it"))
 }
 
 fn run_answer(
@@ -955,7 +1223,12 @@ fn staged_answers(
             Ok(None) => None,
             Ok(Some((proposal, body))) => {
                 let key = round_key(&proposal, waiting.of(&proposal).len());
-                planned.push((key, index, proposal, body));
+                planned.push(Planned {
+                    key,
+                    at: index,
+                    proposal,
+                    body,
+                });
                 None
             }
             Err(reason) => Some(reason),
@@ -983,49 +1256,28 @@ fn staged_answers(
             answer
         })
         .collect();
-    planned.sort_by(|a, b| a.0.cmp(&b.0));
     let mut walked = Vec::new();
-    for (_, index, proposal, body) in planned {
-        let request = StageRequest {
-            id: proposal.id.clone(),
-            body,
-            now: now.to_owned(),
-            git: git.clone(),
-        };
-        let outcome = match stage_with(env, context, &request) {
-            Ok(outcome) => outcome,
-            Err(error) => {
-                refuse(&mut answers[index], unprefixed(&error.message));
+    for (index, proposal, stored) in stage_planned(env, context, planned, now, git) {
+        let stored = match stored {
+            Ok(stored) => stored,
+            Err(reason) => {
+                refuse(&mut answers[index], &reason);
                 continue;
             }
         };
-        let document = &outcome.proposal.document;
-        let (Some(stage), Some(at), None) = (&document.staged, &document.staged_at, outcome.cause)
-        else {
-            let reason = outcome
-                .proposal
-                .refusal
-                .as_deref()
-                .unwrap_or("the stage was not stored");
-            refuse(&mut answers[index], reason);
-            continue;
-        };
-        let mut said = staged_what(&proposal, stage);
+        let mut said = staged_what(&proposal, &stored.stage);
         if let Some(previous) = &proposal.staged {
             said.push_str(&format!("; replaces the choice staged {}", previous.at));
         }
         let answer = &mut answers[index];
         answer.outcome = AnswerOutcome::Staged;
-        answer.stage = Some(stage.clone());
+        answer.stage = Some(stored.stage.clone());
         answer.said = said;
         walked.push(Walked {
-            id: proposal.id.clone(),
-            expected: StagedChoice {
-                stage: stage.clone(),
-                at: at.clone(),
-            },
-            replaced: proposal.staged.as_ref().map(|previous| previous.at.clone()),
             orphan: !same_repository(&proposal.place.git_common_dir, &context.common_dir),
+            replaced: proposal.staged.map(|previous| previous.at),
+            id: proposal.id,
+            expected: stored,
         });
     }
     let run = RoundRun {
@@ -1145,9 +1397,9 @@ fn project_checked(parsed: &Answers, slug: &str, label: Option<&str>) -> Result<
         ))),
         [one] if one.slug == slug => Ok(()),
         [one] => Err(CliError::spec(format!(
-            "{}the answers are for `{}`, this is `{slug}`; nothing changed",
+            "{}{}",
             at(Some(one.line)),
-            one.slug
+            another_project(&one.slug, slug)
         ))),
         many => {
             let lines: Vec<usize> = many.iter().map(|project| project.line).collect();
@@ -1159,6 +1411,11 @@ fn project_checked(parsed: &Answers, slug: &str, label: Option<&str>) -> Result<
             )))
         }
     }
+}
+
+/// The answers name the project `project`, not this one, `slug`.
+fn another_project(project: &str, slug: &str) -> String {
+    format!("the answers are for `{project}`, this is `{slug}`; nothing changed")
 }
 
 /// `4 and 7`, `4, 7 and 9`; past [`LINES_NAMED_MAX`] lines, the first of
@@ -1185,14 +1442,19 @@ fn listed(lines: &[usize]) -> String {
     }
 }
 
-/// The answer refused: `reason`, its trailing `; nothing changed` dropped.
+/// The answer refused: `reason`, [`trimmed`].
 fn refuse(answer: &mut RoundAnswer, reason: &str) {
-    let reason = reason.strip_suffix("; nothing changed").unwrap_or(reason);
-    let reason = reason.strip_suffix("; nothing staged").unwrap_or(reason);
     answer.outcome = AnswerOutcome::Refused;
     answer.stage = None;
     answer.said = String::new();
-    answer.reason = Some(reason.to_owned());
+    answer.reason = Some(trimmed(reason).to_owned());
+}
+
+/// A refusal without its trailing `; nothing changed` or `; nothing staged`
+/// (an answer's report says what became of it).
+fn trimmed(reason: &str) -> &str {
+    let reason = reason.strip_suffix("; nothing changed").unwrap_or(reason);
+    reason.strip_suffix("; nothing staged").unwrap_or(reason)
 }
 
 /// A refusal's line without its `spec: `.
@@ -1232,7 +1494,9 @@ struct Ready {
 }
 
 impl Ready {
-    /// Why an approve of `proposal` would stop at step 2 or 3 now.
+    /// Why an approve of `proposal` would stop at step 2 or 3 now: `not
+    /// applied (step <n>): <reason>`, bare (each front end says how a
+    /// reject still settles it).
     fn check(&mut self, git: &GitEnv, slug: &str, proposal: &Proposal) -> Result<(), String> {
         let place = &proposal.place;
         let key = (
@@ -1253,13 +1517,109 @@ impl Ready {
                     .reason
                     .strip_suffix("; nothing changed")
                     .unwrap_or(&failure.reason);
-                Err(format!(
-                    "not applied (step {}): {reason}; `reject: <reason>` still settles it",
-                    failure.step
-                ))
+                Err(format!("not applied (step {}): {reason}", failure.step))
             }
         }
     }
+}
+
+/// Why an answer fails the queue checks (canon `round`, "Answers").
+enum Unfit {
+    /// The check's own words.
+    Refused(String),
+    /// An approve that apply step 2 or 3 would stop now: `not applied (step
+    /// <n>): <reason>`, bare.
+    NotReady(String),
+}
+
+impl Unfit {
+    /// The refusal; a [`Unfit::NotReady`] one ends `; <tail>`, the front
+    /// end's words for how a reject still settles the item.
+    fn worded(self, tail: &str) -> String {
+        match self {
+            Self::Refused(reason) => reason,
+            Self::NotReady(reason) => format!("{reason}; {tail}"),
+        }
+    }
+}
+
+/// The checks of an answer against the queue now, past its grammar (canon
+/// `round`, "Answers"), shared by a returned file's answers and the
+/// daemon's: the proposal `id` of the current repository (a gone
+/// repository's only for a reject: `rejects`), `open`, of a deciding kind
+/// holding its fields; `stage` then names the stage to store (a file's
+/// answer maps its token, refused by its own words); an approve with no
+/// `canon` needs a target ID, and every approve apply steps 2 and 3 ready
+/// (`ready`).
+fn queue_checked(
+    context: &QueueContext,
+    git: &GitEnv,
+    id: &str,
+    rejects: bool,
+    ready: &mut Ready,
+    stage: impl FnOnce(&Proposal, &Intake) -> Result<StageBody, String>,
+) -> Result<(Proposal, StageBody), Unfit> {
+    let proposal = match context.queue.get(id) {
+        Ok(Some(proposal)) => proposal,
+        Ok(None) => {
+            return Err(Unfit::Refused(format!(
+                "no proposal `{id}` in this project's queue"
+            )));
+        }
+        Err(error) => return Err(Unfit::Refused(error.to_string())),
+    };
+    if !same_repository(&proposal.place.git_common_dir, &context.common_dir) {
+        let gone = repository_gone(&proposal);
+        if !(gone && rejects) {
+            return Err(Unfit::Refused(elsewhere(context, &proposal, gone)));
+        }
+    }
+    let status = match proposal.status {
+        ProposalStatus::Open => None,
+        ProposalStatus::Applied => Some(format!(
+            "`{id}` is applied: commit {}",
+            proposal.applied_commit.as_deref().unwrap_or("unknown")
+        )),
+        ProposalStatus::Rejected => Some(format!("`{id}` is rejected")),
+        ProposalStatus::Approved => Some(format!(
+            "`{id}` is held (approved: an apply in progress or stopped): `spec approve {id}` \
+             completes it"
+        )),
+    };
+    if let Some(reason) = status {
+        return Err(Unfit::Refused(reason));
+    }
+    if !proposal.kind.decides() {
+        return Err(Unfit::Refused(format!(
+            "`{id}` is a change proposal ({}): `spec approve {id}` decides it",
+            proposal.kind.as_str()
+        )));
+    }
+    let Some(intake) = proposal.intake.as_ref() else {
+        return Err(Unfit::Refused(format!(
+            "`{id}` holds no fields of a {}",
+            proposal.kind.as_str()
+        )));
+    };
+    let body = stage(&proposal, intake).map_err(Unfit::Refused)?;
+    if !rejects {
+        let canon = matches!(&body, StageBody::Approve { canon: Some(_), .. });
+        if !canon
+            && !intake
+                .target_ids
+                .iter()
+                .any(|target| !is_path_target(target))
+        {
+            return Err(Unfit::Refused(format!(
+                "`{id}` names no ID, only a path: its record needs --canon: `spec approve {id} \
+                 --canon REF`"
+            )));
+        }
+        ready
+            .check(git, &context.slug, &proposal)
+            .map_err(Unfit::NotReady)?;
+    }
+    Ok((proposal, body))
 }
 
 /// What `line` asks of the queue: nothing (left open), or the proposal and
@@ -1275,47 +1635,28 @@ fn plan(
         Ok(token) => token,
         Err(refusal) => return Err(refused_line(line, refusal)),
     };
-    let id = &line.id;
-    let proposal = match context.queue.get(id) {
-        Ok(Some(proposal)) => proposal,
-        Ok(None) => return Err(format!("no proposal `{id}` in this project's queue")),
-        Err(error) => return Err(error.to_string()),
-    };
     let rejects = matches!(token, Token::Reject(_));
-    if !same_repository(&proposal.place.git_common_dir, &context.common_dir) {
-        let gone = repository_gone(&proposal);
-        if !(gone && rejects) {
-            return Err(elsewhere(context, &proposal, gone));
-        }
-    }
-    match proposal.status {
-        ProposalStatus::Open => {}
-        ProposalStatus::Applied => {
-            return Err(format!(
-                "`{id}` is applied: commit {}",
-                proposal.applied_commit.as_deref().unwrap_or("unknown")
-            ));
-        }
-        ProposalStatus::Rejected => return Err(format!("`{id}` is rejected")),
-        ProposalStatus::Approved => {
-            return Err(format!(
-                "`{id}` is held (approved: an apply in progress or stopped): `spec approve {id}` \
-                 completes it"
-            ));
-        }
-    }
-    if !proposal.kind.decides() {
-        return Err(format!(
-            "`{id}` is a change proposal ({}): `spec approve {id}` decides it",
-            proposal.kind.as_str()
-        ));
-    }
-    let Some(intake) = proposal.intake.as_ref() else {
-        return Err(format!(
-            "`{id}` holds no fields of a {}",
-            proposal.kind.as_str()
-        ));
-    };
+    queue_checked(
+        context,
+        git,
+        &line.id,
+        rejects,
+        ready,
+        |proposal, intake| token_stage(&line.id, token, proposal, intake),
+    )
+    .map(Some)
+    .map_err(|unfit| unfit.worded("`reject: <reason>` still settles it"))
+}
+
+/// The stage a returned file's `token` names for the item `id`
+/// (`proposal`, holding `intake`), stamped with the `updated_at` read now;
+/// else why the token does not answer it.
+fn token_stage(
+    id: &str,
+    token: &Token,
+    proposal: &Proposal,
+    intake: &Intake,
+) -> Result<StageBody, String> {
     // An item with options is answered by one of them; one with none by
     // its working answer or the owner's text.
     let count = intake.options.len();
@@ -1328,7 +1669,7 @@ fn plan(
         note: None,
         updated_at: updated_at.clone(),
     };
-    let body = match (token, count) {
+    Ok(match (token, count) {
         (Token::Reject(reason), _) => StageBody::Reject {
             reason: reason.clone(),
             updated_at: updated_at.clone(),
@@ -1351,21 +1692,62 @@ fn plan(
                 "`{id}` takes one of its options by number, {range}, or `reject: <reason>`"
             ));
         }
-    };
-    if !rejects {
-        if !intake
-            .target_ids
-            .iter()
-            .any(|target| !is_path_target(target))
-        {
-            return Err(format!(
-                "`{id}` names no ID, only a path: its record needs --canon: `spec approve {id} \
-                 --canon REF`"
-            ));
-        }
-        ready.check(git, &context.slug, &proposal)?;
+    })
+}
+
+/// An answer that passed the queue checks, to stage.
+struct Planned {
+    /// Its round order key (the waiting tasks read once).
+    key: OrderKey,
+    /// Its position among the answers, from 0.
+    at: usize,
+    /// As the checks read it.
+    proposal: Proposal,
+    body: StageBody,
+}
+
+/// Each of `planned` staged in round order as the decision route stages
+/// ([`stage_with`]: checked again, a compare-and-set on its own read, one
+/// `proposal.staged` each), all at the one clock reading `now`: in round
+/// order, its position, the proposal as checked, and the stage stored or
+/// why not (a lost one is refused).
+fn stage_planned(
+    env: &Env,
+    context: &mut QueueContext,
+    mut planned: Vec<Planned>,
+    now: &str,
+    git: &GitEnv,
+) -> Vec<(usize, Proposal, Result<StagedChoice, String>)> {
+    planned.sort_by(|a, b| a.key.cmp(&b.key));
+    let mut stored = Vec::with_capacity(planned.len());
+    for Planned {
+        at, proposal, body, ..
+    } in planned
+    {
+        let request = StageRequest {
+            id: proposal.id.clone(),
+            body,
+            now: now.to_owned(),
+            git: git.clone(),
+        };
+        let choice = match stage_with(env, context, &request) {
+            Ok(outcome) => stored_choice(outcome),
+            Err(error) => Err(unprefixed(&error.message).to_owned()),
+        };
+        stored.push((at, proposal, choice));
     }
-    Ok(Some((proposal, body)))
+    stored
+}
+
+/// The stage `outcome` stored, or why it stored none.
+fn stored_choice(outcome: StageOutcome) -> Result<StagedChoice, String> {
+    let StageOutcome { proposal, cause } = outcome;
+    match (proposal.document.staged, proposal.document.staged_at, cause) {
+        (Some(stage), Some(at), None) => Ok(StagedChoice { stage, at }),
+        _ => Err(proposal
+            .refusal
+            .unwrap_or_else(|| "the stage was not stored".to_owned())),
+    }
 }
 
 /// `text` with the characters that show nothing written `\u{..}`:
@@ -1666,5 +2048,40 @@ pub(crate) fn render_text(run: &RoundRun) -> String {
             count(WalkOutcome::Refused)
         ));
     }
+    out
+}
+
+/// The structured answers' text, in the request's order: `<ID> answer
+/// <n>: staged <at>` (`; replaces the choice staged <at>`) or `refused:
+/// <reason>; nothing staged`, then `answers: <s> staged, <r> refused`.
+pub(crate) fn answers_outcome_text(outcome: &RoundAnswersOutcome) -> String {
+    let mut out = String::new();
+    let (mut staged, mut refused) = (0, 0);
+    for (at, answer) in outcome.answers.iter().enumerate() {
+        let said = match (&answer.staged_at, &answer.replaced) {
+            (Some(when), Some(previous)) => {
+                staged += 1;
+                format!("staged {when}; replaces the choice staged {previous}")
+            }
+            (Some(when), None) => {
+                staged += 1;
+                format!("staged {when}")
+            }
+            (None, _) => {
+                refused += 1;
+                format!(
+                    "refused: {}; nothing staged",
+                    answer.reason.as_deref().unwrap_or_default()
+                )
+            }
+        };
+        out.push_str(&escape_controls(&one_line(&format!(
+            "{} answer {}: {said}",
+            answer.id,
+            at + 1
+        ))));
+        out.push('\n');
+    }
+    out.push_str(&format!("answers: {staged} staged, {refused} refused\n"));
     out
 }

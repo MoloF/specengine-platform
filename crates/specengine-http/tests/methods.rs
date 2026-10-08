@@ -13,6 +13,12 @@
 //! 405 texts swapped; the fence back as a `layer` on the routes' router
 //! (axum adds its `Allow` to the fence's 403); the routes' fallback dropped
 //! (axum's bare 404).
+//!
+//! R-03 of docs/features/ui-round.md: `round` is a read (HEAD, POST, PUT
+//! and every other method: 405 `Allow: GET`); `round/answers` answers any
+//! method but POST, GET, HEAD, PUT and DELETE among them, with a 405 whose
+//! `Allow` is `POST` and whose message ends `confirmed on a terminal`; its
+//! POST without `Sec-Fetch-Site: same-origin` is the stage route's 403.
 
 mod common;
 
@@ -20,8 +26,9 @@ use common::{Reply, Scratch, Server, request_bytes, snapshot};
 
 /// Every read route of A, with a valid query (`graph`, `check`:
 /// docs/features/ui-live.md "Description and interactions"; `tasks`,
-/// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases").
-const READS: [&str; 12] = [
+/// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases";
+/// `round`: docs/features/ui-round.md "Data").
+const READS: [&str; 13] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
@@ -33,14 +40,18 @@ const READS: [&str; 12] = [
     "/api/projects/lantern-keep/proposals/PR-0001",
     "/api/projects/lantern-keep/tasks",
     "/api/projects/lantern-keep/tasks/T-0001",
+    "/api/projects/lantern-keep/round",
     "/api/projects/lantern-keep/events",
 ];
 
 const DECISION: &str = "/api/projects/lantern-keep/proposals/PR-0001/decision";
 
+/// The round's answers (docs/features/ui-round.md "Data").
+const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
+
 /// Paths no route serves (`tasks/:id/transition`, 07 s3, stays one:
 /// docs/features/ui-live-tasks.md "Rules and edge cases").
-const UNKNOWN: [&str; 12] = [
+const UNKNOWN: [&str; 15] = [
     "/",
     "/api",
     "/no/such/route",
@@ -53,6 +64,9 @@ const UNKNOWN: [&str; 12] = [
     "/api/projects/lantern-keep/graph/MEC-STAMINA",
     "/api/projects/lantern-keep/tasks/",
     "/api/projects/lantern-keep/tasks/T-0001/transition",
+    "/api/projects/lantern-keep/round/",
+    "/api/projects/lantern-keep/round/answers/more",
+    "/api/projects/lantern-keep/round/answers/PR-0001",
 ];
 
 /// Every method but GET and POST.
@@ -160,6 +174,83 @@ fn the_decision_route_answers_every_other_method_405_allow_post() {
 }
 
 #[test]
+fn the_round_routes_answer_another_method_405_allow_get_on_the_sheet_post_on_the_answers() {
+    let scratch = Scratch::new("methods-round");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    // The sheet is a read: HEAD, PUT and POST (a same-origin page's too,
+    // with a JSON body) are 405 `Allow: GET`.
+    let sheet = "/api/projects/lantern-keep/round";
+    let page = [
+        ("Sec-Fetch-Site", "same-origin"),
+        ("Content-Type", "application/json"),
+    ];
+    for headers in [&[][..], &page[..]] {
+        for method in ["HEAD", "POST", "PUT"] {
+            let body: &[u8] = if method == "HEAD" { b"" } else { b"{}" };
+            let reply = server.send(method, sheet, headers, body);
+            let message =
+                format!("method {method} is not served on {sheet}: only GET is served here");
+            assert_405(
+                &reply,
+                method,
+                "GET",
+                &message,
+                &format!("{method} {sheet} {headers:?}"),
+            );
+        }
+    }
+    for headers in [&[][..], &[("Sec-Fetch-Site", "same-origin")][..]] {
+        for method in ["GET", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"] {
+            let reply = server.request(method, ROUND_ANSWERS, headers);
+            let context = format!("{method} {ROUND_ANSWERS} {headers:?}");
+            assert_eq!(reply.status, 405, "{context}: {reply:?}");
+            let allows: Vec<&str> = reply
+                .headers
+                .iter()
+                .filter(|(name, _)| name == "allow")
+                .map(|(_, value)| value.as_str())
+                .collect();
+            assert_eq!(allows, ["POST"], "{context}: the one `Allow`");
+            assert_eq!(reply.header("cache-control"), Some("no-store"), "{context}");
+            assert!(reply.cors_headers().is_empty(), "{context}: {reply:?}");
+            if method == "HEAD" {
+                assert!(reply.body.is_empty(), "{context}");
+                continue;
+            }
+            let message = reply.error_message();
+            assert!(
+                message.starts_with(&format!(
+                    "method {method} is not served on {ROUND_ANSWERS}: this path takes only POST ("
+                )),
+                "{context}: {message}"
+            );
+            assert!(
+                message.ends_with("; a staged choice is confirmed on a terminal"),
+                "{context}: {message}"
+            );
+        }
+    }
+    // POST from no page (or the address bar's `none`): the stage route's
+    // 403, no `Allow`.
+    for headers in [&[][..], &[("Sec-Fetch-Site", "none")][..]] {
+        let reply = server.request("POST", ROUND_ANSWERS, headers);
+        assert_eq!(reply.status, 403, "POST {headers:?}: {}", reply.text());
+        assert_eq!(reply.header("allow"), None, "{reply:?}");
+        assert_eq!(
+            reply.error_message(),
+            "staging needs a same-origin page (not authentication: ADR-0034)"
+        );
+    }
+    assert!(
+        snapshot(&home).is_empty(),
+        "a 405 or a refused POST runs no call: {:?}",
+        snapshot(&home).keys().collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn an_unknown_path_is_a_404_for_every_method() {
     let scratch = Scratch::new("methods-unknown");
     let a = scratch.repo("spec-a", "a", "main");
@@ -213,6 +304,7 @@ fn the_fences_403_carries_no_allow_whatever_the_method() {
     ];
     let mut targets: Vec<&str> = READS.to_vec();
     targets.push(DECISION);
+    targets.push(ROUND_ANSWERS);
     targets.push("/no/such/route");
     for headers in &foreign {
         for target in &targets {

@@ -121,8 +121,8 @@ spec export index [--stdout]                         # [paths] index by its regi
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` (`crates/specengine-http/README.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id` (built); `round` (`ui-round`), `symbols|health` to come
-- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage (built), `/round/answers` (`ui-round`), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols|health` to come
+- `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), **after MVP** and only with GET/SSE (see §1.1)
 - `/` — Web UI (embedded via `rust-embed`)
@@ -140,7 +140,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
 | **Health** | "what is left", drift, budgets, W metrics |
-| **Questions** | the round's sheet, answers staged at once, each confirmed on a terminal (`ui-round`); print, paste later |
+| **Questions** | the round's sheet and its answers, staged at once, each confirmed on a terminal (`docs/canon/round-ui.md`); print, paste later |
 
 ## 4. Claude Code hooks (shipped by the plugin)
 

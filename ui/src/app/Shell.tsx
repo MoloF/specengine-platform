@@ -10,6 +10,8 @@ import { HomeView } from "../overview/HomeView";
 import { InboxView } from "../inbox/InboxView";
 import { OutsideStageAlert } from "../inbox/OutsideStageAlert";
 import { Palette } from "../palette/Palette";
+import { createRoundMemory } from "../round/memory";
+import { QuestionsView } from "../round/QuestionsView";
 import { TasksView } from "../tasks/TasksView";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
@@ -23,9 +25,8 @@ import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { pushHash, replaceHash, useHash } from "./location";
 import { homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
-import { SECTIONS } from "./sections";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
-import { NotBuilt, NotFound, ViewFailure } from "./views";
+import { NotFound, ViewFailure } from "./views";
 
 /** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl. */
 const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "\u2318K" : "Ctrl K";
@@ -169,6 +170,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     }),
     [],
   );
+  /** The Questions screen's drafts, limit and last outcome per project for this page's life; a reload drops them (docs/features/ui-round.md). */
+  const [roundMemory] = useState(createRoundMemory);
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
   const routeProject = projectOf(route);
@@ -347,8 +350,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (route.section === "health") {
     view = <HealthView key={route.project} project={route.project} />;
   } else {
-    const section = SECTIONS.find((candidate) => candidate.id === route.section);
-    view = section !== undefined && section.slice !== null ? <NotBuilt section={section} /> : null;
+    view = <QuestionsView key={route.project} project={route.project} memory={roundMemory} />;
   }
 
   return (

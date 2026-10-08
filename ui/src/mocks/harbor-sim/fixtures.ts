@@ -839,6 +839,20 @@ export function harborSim(now: number): MockProject {
         author: agent("spec-writer", "R-2240"),
         created_at: at(90),
       }),
+      // A question without options (ui-round): the round offers its working answer or your own.
+      proposal({
+        id: "PR-0048",
+        project: SLUG,
+        kind: "question",
+        severity: "normal",
+        target_id: "MEC-CARGO-CRANES",
+        target_ids: ["MEC-CARGO-CRANES"],
+        summary: "How many crane shifts run per simulated day?\nThe crane code assumes one shift; the cargo notes mention two.",
+        working_answer: "One shift of eight simulated hours.",
+        price_of_other: "Two shifts need a crew roster for the cranes.",
+        author: agent("requirement-analyst", "R-2244"),
+        created_at: at(150),
+      }),
     ],
   };
 }

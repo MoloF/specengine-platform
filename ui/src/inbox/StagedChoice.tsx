@@ -1,10 +1,30 @@
 import { useId } from "react";
-import type { Proposal } from "../api/types";
+import type { ProposalOption, Stage } from "../api/types";
+import { shownSlot } from "../round/text";
 import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { confirmCommand, WORDING } from "./decisions";
 
 const COPY_FAILED = "Copy failed: select the command and copy it";
+
+/**
+ * What a staged choice is read from: a review document (the Inbox's card) or a round sheet's item
+ * (the Questions screen), both carrying the stage, its time, the options and the working answer.
+ */
+interface StagedOf {
+  staged: Stage | null;
+  staged_at: string | null;
+  options: readonly ProposalOption[];
+  working_answer: string | null;
+}
+
+/**
+ * The staged option's label: agent text, written as the round sheet writes a slot (controls and
+ * bidirectional marks as `\u{..}`, `docs/canon/round.md` "Sheet") and isolated from its neighbours.
+ */
+function stagedLabel(label: string | undefined) {
+  return label === undefined ? "Not among this proposal's options" : <bdi>{shownSlot(label)}</bdi>;
+}
 
 /**
  * The owner's staged choice (`docs/canon/decision-staging.md` "UI"): when it was staged, the
@@ -19,7 +39,7 @@ export function StagedChoice({
   onUnstage,
 }: {
   id: string;
-  review: Proposal;
+  review: StagedOf;
   /** A stage or an unstage is being sent: Unstage stays focusable but does nothing. */
   busy: boolean;
   /** The daemon's words when it refused the last unstage. */
@@ -53,7 +73,7 @@ export function StagedChoice({
               <>
                 <dt>Option</dt>
                 <dd>
-                  <span className="mono">[{staged.option}]</span> {review.options[staged.option]?.label ?? "Not among this proposal's options"}
+                  <span className="mono">[{staged.option}]</span> {stagedLabel(review.options[staged.option]?.label)}
                 </dd>
               </>
             )}

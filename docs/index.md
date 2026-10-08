@@ -30,6 +30,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/queue-backup.md](canon/queue-backup.md) Queue backup and restore · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
 - [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
@@ -47,7 +48,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/features/ui-round.md](features/ui-round.md) UI round · crates/specengine-http, crates/specengine-cli, ui · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

@@ -1,24 +1,3 @@
-import { SECTIONS } from "./sections";
-
-type BuiltLater = Exclude<(typeof SECTIONS)[number], { slice: null }>;
-
-/** A section a later slice builds: its heading and that slice, no stand-in data. */
-export function NotBuilt({ section }: { section: BuiltLater }) {
-  return (
-    <section className="view" aria-labelledby="view-title">
-      <header className="view-head">
-        <h1 id="view-title" tabIndex={-1}>
-          {section.label}
-        </h1>
-        <p className="view-about">{section.about}</p>
-      </header>
-      <p className="not-built">
-        Not built yet: arrives in slice <code>{section.slice}</code>.
-      </p>
-    </section>
-  );
-}
-
 /** A hash that names nothing: says so and links the Inbox. */
 export function NotFound({ reason, inboxHref }: { reason: string; inboxHref: string }) {
   return (

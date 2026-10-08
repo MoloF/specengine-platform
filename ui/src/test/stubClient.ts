@@ -1,5 +1,14 @@
 import { vi } from "vitest";
-import { ClientError, type BundleOptions, type GraphOptions, type NodeOptions, type SearchOptions, type SpecEngineClient, type TreeOptions } from "../api/client";
+import {
+  ClientError,
+  type BundleOptions,
+  type GraphOptions,
+  type NodeOptions,
+  type RoundOptions,
+  type SearchOptions,
+  type SpecEngineClient,
+  type TreeOptions,
+} from "../api/client";
 import type {
   BundleView,
   CheckReport,
@@ -8,6 +17,9 @@ import type {
   NodeView,
   Project,
   Proposal,
+  RoundAnswerBody,
+  RoundAnswersOutcome,
+  RoundSheet,
   SearchResults,
   Stage,
   StageChoice,
@@ -16,7 +28,7 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { aBundle, aCheckReport, aGraphNode, aGraphView, aNode, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
+import { aBundle, aCheckReport, aGraphNode, aGraphView, aNode, aRoundSheet, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
 
 /** When the stub stores a stage: one fixed time, so a test can name it. */
 export const STAGED_AT = "2026-10-06T09:14:02Z";
@@ -35,12 +47,20 @@ export const STUB_TREE = [
   aTreeNode({ id: "R-1", depth: 1, parent: "DOC-1", path: "docs/spec/doc-1.md", line: 5 }),
 ];
 
+/** The stub's stored stage of a stage body: less `updated_at`, an approve's `span_hash` null. */
+function storedOf(stage: RoundAnswerBody["stage"]): Stage {
+  return stage.decision === "approve"
+    ? { decision: "approve", option: stage.option, answer: stage.answer, canon: stage.canon, note: stage.note, span_hash: null }
+    : { decision: "reject", reason: stage.reason };
+}
+
 /**
  * A hand-made SpecEngineClient for tests: every method a vi.fn counting its calls, reading an
- * editable queue. Override any method with mockImplementation.
+ * editable queue (and an editable round sheet, empty by default). Override any method with
+ * mockImplementation.
  */
 export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
-  const state = { proposals: [...proposals], notes };
+  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet } = { proposals: [...proposals], notes, round: aRoundSheet([]) };
   const client = {
     dataSource: "mock" as const,
     state,
@@ -102,6 +122,27 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       const updated: Proposal = current.staged === null ? current : { ...current, staged: null, staged_at: null, updated_at: "2026-10-06T09:15:00Z" };
       state.proposals = state.proposals.map((proposal) => (proposal.id === id ? updated : proposal));
       return Promise.resolve(structuredClone(updated));
+    }),
+    getRound: vi.fn<(project: string, options?: RoundOptions, signal?: AbortSignal) => Promise<RoundSheet>>(() =>
+      Promise.resolve(structuredClone(state.round)),
+    ),
+    // The daemon's round POST on the stub's sheet: an answer on a listed item at the `updated_at`
+    // read is staged at STAGED_AT, any other refused as changed since read.
+    stageRoundAnswers: vi.fn((project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome> => {
+      const outcomes = answers.map(({ id, stage }) => {
+        const item = state.round.items.find((candidate) => candidate.id === id);
+        if (item === undefined || item.updated_at !== stage.updated_at) {
+          return { id, outcome: "refused", stage: null, staged_at: null, replaced: null, reason: `\`${id}\` changed since it was read` };
+        }
+        const staged = storedOf(stage);
+        const replaced = item.staged_at;
+        state.round = {
+          ...state.round,
+          items: state.round.items.map((candidate) => (candidate.id === id ? { ...candidate, staged, staged_at: STAGED_AT, updated_at: STAGED_AT } : candidate)),
+        };
+        return { id, outcome: "staged", stage: staged, staged_at: STAGED_AT, replaced, reason: null };
+      });
+      return Promise.resolve({ project, answers: outcomes, notes: [] });
     }),
     /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */
     subscribe: noLiveTail,

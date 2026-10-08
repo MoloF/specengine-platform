@@ -42,6 +42,16 @@
 //! from a staged approve of the update, with its span hash, and of the
 //! discrepancy, with an option and a note) and `StagedReject` (2 keys, from
 //! the question's staged reject). M: the reject shape's `reason` dropped.
+//!
+//! T-04 of docs/features/ui-round.md, its Rust half ("Data"): six sets
+//! more, 40 in all, last: `RoundSheet`, `RoundItem`, `RoundTarget`,
+//! `RoundTask` from `GET round` on A (a question with a staged reject, a
+//! discrepancy with a staged option) and on A in state S (a question
+//! waited on by T-0003); `RoundAnswersOutcome` (`{project, answers,
+//! notes}`) and `RoundAnswerEntry` (`{id, outcome, stage, staged_at,
+//! replaced, reason}`) from a `POST round/answers` on A staging one answer
+//! (replacing a stage) and refusing another. M: an item key dropped from
+//! the fixture.
 
 mod common;
 mod task_state;
@@ -371,6 +381,36 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
+    // ui-round: A's sheet, then its answers (after every other read of A).
+    let round_a = server
+        .get(&format!("{p}/round"))
+        .status(200)
+        .text()
+        .to_owned();
+    let shown = serde_json::from_str::<serde_json::Value>(&round_a).expect("the sheet")["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .find(|item| item["id"] == serde_json::json!(question))
+        .expect("the question on the sheet")["updated_at"]
+        .as_str()
+        .expect("updated_at")
+        .to_owned();
+    let answers = vec![
+        server
+            .stage(
+                &format!("{p}/round/answers"),
+                &serde_json::json!({"project": "lantern-keep", "answers": [
+                    {"id": question, "stage": {"decision": "approve", "option": null,
+                        "answer": "Yes.", "canon": null, "note": null, "updated_at": shown}},
+                    {"id": "PR-0099", "stage": {"decision": "reject", "reason": "gone",
+                        "updated_at": shown}}]})
+                .to_string(),
+            )
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
     let items = |texts: &[String], key: &str| -> Vec<String> {
         texts.iter().flat_map(|text| raw_items(text, key)).collect()
     };
@@ -409,7 +449,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
+    let round_s = tasks_server
+        .get(&format!("{p}/round"))
+        .status(200)
+        .text()
+        .to_owned();
     drop(tasks_server);
+    let sheets = vec![round_a, round_s];
+    let round_items = items(&sheets, "items");
     // The packages whose `key` holds an object (or an array): not `null`.
     let holding = |key: &str, open: char| -> Vec<String> {
         packages
@@ -555,6 +602,24 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "StagedReject",
             one_key_set("StagedReject", &objects(&reviews[..1], "staged"), keys_of),
         ),
+        ("RoundSheet", one_key_set("RoundSheet", &sheets, keys_of)),
+        ("RoundItem", one_key_set("RoundItem", &round_items, keys_of)),
+        (
+            "RoundTarget",
+            one_key_set("RoundTarget", &items(&round_items, "targets"), keys_of),
+        ),
+        (
+            "RoundTask",
+            one_key_set("RoundTask", &items(&round_items, "tasks"), keys_of),
+        ),
+        (
+            "RoundAnswersOutcome",
+            one_key_set("RoundAnswersOutcome", &answers, keys_of),
+        ),
+        (
+            "RoundAnswerEntry",
+            one_key_set("RoundAnswerEntry", &items(&answers, "answers"), keys_of),
+        ),
     ]
 }
 
@@ -624,7 +689,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
-    assert_eq!(names.len(), 34, "{names:?}");
+    assert_eq!(names.len(), 40, "{names:?}");
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -703,6 +768,28 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     );
     assert_eq!(sets[33].0, "StagedReject");
     assert_eq!(sets[33].1, ["decision", "reason"]);
+    // ui-round's six, last (docs/features/ui-round.md "Data", T-04): the
+    // sheet and its parts as `docs/canon/round.md` "JSON" sends them, the
+    // answers document and its entry.
+    let round: Vec<&str> = sets[34..].iter().map(|(name, _)| *name).collect();
+    assert_eq!(
+        round,
+        [
+            "RoundSheet",
+            "RoundItem",
+            "RoundTarget",
+            "RoundTask",
+            "RoundAnswersOutcome",
+            "RoundAnswerEntry"
+        ]
+    );
+    assert_eq!(sets[35].1.len(), 19, "{:?}", sets[35].1);
+    assert_eq!(sets[37].1, ["id", "status", "title"]);
+    assert_eq!(sets[38].1, ["project", "answers", "notes"]);
+    assert_eq!(
+        sets[39].1,
+        ["id", "outcome", "stage", "staged_at", "replaced", "reason"]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");

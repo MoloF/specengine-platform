@@ -8,6 +8,9 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  RoundAnswerBody,
+  RoundAnswersOutcome,
+  RoundSheet,
   SearchResults,
   StageChoice,
   TaskList,
@@ -57,6 +60,11 @@ export interface GraphOptions {
   archive?: boolean;
 }
 
+/** `spec round new`: `--limit N`, 1 to 200 (absent: the daemon's default, 20). */
+export interface RoundOptions {
+  limit?: number;
+}
+
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
@@ -68,8 +76,10 @@ export interface GraphOptions {
  * serve yet, none today: `notServed`, 501, nothing requested). A decision is only staged here and
  * confirmed on a terminal by `spec approve|reject PR` (`docs/canon/decision-staging.md` "Daemon",
  * ADR-0035): the stage's two writes answer the review document; a write refused with the review
- * document (409 not open or changed since read, 404 unknown) rejects with its last note. Tasks are
- * read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
+ * document (409 not open or changed since read, 404 unknown) rejects with its last note. The
+ * question round (`docs/features/ui-round.md` "Data") reads the sheet and stages its answers in one
+ * POST, answered 200 whatever each answer became; `spec round answer --staged` confirms them on a
+ * terminal. Tasks are read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
  *
  * `signal`: the query's AbortSignal. A read superseded before it answered (a burst of live events
  * reading the same task again) is aborted, so the daemon, which drops a request whose client left,
@@ -108,6 +118,14 @@ export interface SpecEngineClient {
   stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;
   /** DELETE /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; nothing staged: no event) */
   unstageDecision(project: string, id: string): Promise<Proposal>;
+  /** GET /api/projects/:p/round (docs/features/ui-round.md "Data"; = spec round new [--limit N] --json, uncut) */
+  getRound(project: string, options?: RoundOptions, signal?: AbortSignal): Promise<RoundSheet>;
+  /**
+   * POST /api/projects/:p/round/answers (docs/features/ui-round.md "Data"; stages, nothing applied):
+   * the body `{project, answers}`, each answer the decision route's body; 200 the answers document
+   * whatever each answer became, a refused one in the daemon's words; no AbortSignal.
+   */
+  stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome>;
   /**
    * GET /api/projects/:p/events (SSE): `onEvent` per queue event of the project until the returned
    * function is called. `onGap` when the client opens the stream again after the browser gave up on

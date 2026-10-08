@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # Question rounds
 
-ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end on shipped machinery, no new kind, no new storage. `spec round new` prints the open questions and discrepancies on a sheet; `spec round answer` stages each returned answer, then asks its item's own `[y/N]`. Core `round`: bounds, order key, grammar, reading time; CLI `round.rs`: commands over `stage_with`, `record_ready`, `lists_proposal`, store ops. The UI half, `ui-round`, is planned, not built.
+ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end on shipped machinery, no new kind, no new storage. `spec round new` prints the open questions and discrepancies on a sheet; `spec round answer` stages each returned answer, then asks its item's own `[y/N]`. Core `round`: bounds, order key, grammar, reading time; CLI `round.rs`: commands over `stage_with`, `record_ready`, `lists_proposal`, store ops. Daemon, UI: `round-ui.md`; `round_stage` (text) stays for a later paste.
 
 ## Selection
 
@@ -21,7 +21,7 @@ ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end 
 - ``<n> item(s) of a repository that no longer exists not on this sheet: <IDs>; spec reject <ID> --reason ... takes one out``;
 - a corrupt row as `spec inbox` words it + `; not listed` (a task's: `; not counted among the waiting tasks`).
 
-Settled ones (`rejected`, `applied`) are neither listed nor noted. `--limit` 1..=200, default 20, else exit 2 `--limit N: the limit is 1 to 200`. Nothing is stored; the index is refreshed as by every read.
+Settled ones (`rejected`, `applied`) are neither listed nor noted. `--limit` 1..=200, default 20, else exit 2 `--limit N: the limit is 1 to 200`. Nothing is stored; the index refreshed as by every read.
 
 ## Order
 
@@ -33,7 +33,7 @@ One database and tree state give byte-identical text and JSON: no clock, no rela
 
 ## Sheet
 
-Markdown on stdout (print, mail, the UI's renderer). Fixed English frame words; every text from the queue, the index or a task verbatim through `escape_controls` (`agent-intake.md` "Escaping and size"), U+2028, U+2029 written `\u{2028}`, `\u{2029}`. **Queue, index or task text never starts a line**: a multi-line text is printed one line per LF, each indented two spaces; a one-line slot (title, label, effect, price) follows a frame word, LF and CR written `\n`, `\r`. So a text holding `PR-0009: 1` cannot plant an answer line.
+Markdown on stdout (print, mail). Fixed English frame words; every text from the queue, the index or a task verbatim through `escape_controls` (`agent-intake.md` "Escaping and size"), U+2028, U+2029 written `\u{2028}`, `\u{2029}`. **Queue, index or task text never starts a line**: a multi-line text is printed one line per LF, each indented two spaces; a one-line slot (title, label, effect, price) follows a frame word, LF and CR written `\n`, `\r`. So a text holding `PR-0009: 1` cannot plant an answer line.
 
 ```
 # Open questions: <slug>
@@ -85,7 +85,7 @@ The file: regular (else `<file>: not a regular file: give the filled sheet or a 
 
 - One line per answer; `ok` never takes a recommendation. A blank slot is no answer; two or more other lines for one ID (`?` too; a refused malformed line for the ID its Latin form names) refuse every one: `answered on lines 4 and 9: give one answer per item`, at most 10 lines named (`2, 3, ..., 11 and <k> more`; the project lines' refusal alike).
 - Caps and characters of a stage (`decision-staging.md` "The stage"): `the answer: <n> bytes; at most 2048`, `the reason: <n> bytes; at most 4096`, `holds U+202E: an answer never carries it`; never cut.
-- Then against the queue now, each refused alone: `no proposal`; another repository's, an orphan's (only `reject:` passes) as `spec approve` words them; `` `PR` is applied: commit <sha> ``, `is rejected`, `is held (...)`; ``is a change proposal (update): `spec approve PR` decides it``; for an approve, only path targets (``needs --canon: `spec approve PR --canon REF` ``) and apply steps 2 and 3 read-only (`record_ready`: the place, `[decision_records]`, its template, its prefix among `[ids]`): ``not applied (step 3): <reason>; `reject: <reason>` still settles it``; a corrupt row, its own error.
+- Then against the queue now, each refused alone: `no proposal`; another repository's, an orphan's (only `reject:` passes) as `spec approve` words them; `` `PR` is applied: commit <sha> ``, `is rejected`, `is held (...)`; ``is a change proposal (update): `spec approve PR` decides it``; for an approve, only path targets (``needs --canon: `spec approve PR --canon REF` ``) and apply steps 2 and 3 read-only (`record_ready`: the place, `[decision_records]`, its template, its prefix among `[ids]`): ``not applied (step 3): <reason>; `reject: <reason>` still settles it`` (`queue_checked`'s bare reason + this tail); a corrupt row, its own error.
 
 ## Run
 
@@ -109,5 +109,5 @@ The file: regular (else `<file>: not a regular file: give the filled sheet or a 
 - Type-ahead: a line typed ahead answers the next question (only exact `y`, `yes` consent); flushing needs a new pinned dependency, an ADR.
 - A U+2010, U+2011 hyphen or an invisible character inside an ID: no answer line, ignored.
 - The sheet is not cut at `OUTPUT_CAP_CHARS` (200 items ~2 MB); a returned one over 8 MiB: return the answer lines. A debug build takes ~7 s at the cap.
-- `O_NONBLOCK`: a constant per target, no `libc` (04 s6: only `specengine-eval`'s `ra` feature; the owner may decide); elsewhere 0, the metadata read the only guard.
+- `O_NONBLOCK`: a constant per target, no `libc` (04 s6; the owner's call); elsewhere 0, the metadata read the only guard.
 - Intake takes CR in a question's text, a record refuses it (`holds U+000D`): its approve stages, never applies; `reject:` settles it (a follow-up task).

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import type { Proposal, StageChoice } from "../api/types";
+import { shownSlot } from "../round/text";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -214,7 +215,7 @@ function StageDialog({
                 <span className="option-radio-body">
                   <span className="option-radio-label">
                     {/* The index as `spec approve --option` and the terminal's review line write it. */}
-                    <span className="mono">[{index}]</span> {choice.label}
+                    <span className="mono">[{index}]</span> <bdi>{shownSlot(choice.label)}</bdi>
                     {index === shown.recommendation && (
                       <span className="recommended-mark">
                         <Icon name="recommended" />

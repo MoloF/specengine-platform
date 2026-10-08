@@ -328,6 +328,119 @@ export interface QueueEvent {
   payload: unknown;
 }
 
+// The question round (docs/features/ui-round.md "Data"): the sheet is `spec round new --json`
+// (`docs/canon/round.md` "JSON"), raw strings as stored, absent null, lists []; the answers are the
+// decision route's body per item, and the daemon's document of what each became.
+
+/**
+ * A round item's target, resolved now: `id` null for a path target; `title` null when gone or
+ * untitled. Sources: `docs/canon/round.md` "JSON"; `docs/features/ui-round.md` "Data".
+ */
+export interface RoundTarget {
+  id: string | null;
+  path: string | null;
+  title: string | null;
+}
+
+/** A task waiting on a round item: neither done nor cancelled, its package would list the item. Source: `docs/canon/round.md` "JSON". */
+export interface RoundTask {
+  id: string;
+  status: TaskStatus;
+  title: string | null;
+}
+
+/**
+ * One item of the round sheet, its 19 keys in this order: an open question or discrepancy of the
+ * current repository, `staged` and `staged_at` its staged choice if any. `kind` is plain text,
+ * shown raw; the controls follow its options and its working answer, never the kind.
+ * Sources: `docs/canon/round.md` "JSON"; `docs/features/ui-round.md` "Data".
+ */
+export interface RoundItem {
+  id: string;
+  kind: string;
+  severity: Severity | null;
+  gap_type: GapType | null;
+  summary: string;
+  working_answer: string | null;
+  price_of_other: string | null;
+  options: ProposalOption[];
+  /** Index into `options`; marked on screen, never picked for the owner. */
+  recommendation: number | null;
+  evidence: Evidence[];
+  targets: RoundTarget[];
+  /** Every waiting task, by ID. */
+  tasks: RoundTask[];
+  worktree: string;
+  branch: string;
+  author: Author;
+  staged: Stage | null;
+  staged_at: string | null;
+  created_at: string;
+  /** The version an answer is staged against (`updated_at` of the decision route's body). */
+  updated_at: string;
+}
+
+/**
+ * `spec round new [--limit N] --json`, the daemon's `round`: the items in round order, at most the
+ * limit; `more` the items past it; `minutes` of reading of the items listed; `notes` what is not on
+ * the sheet. Sources: `docs/canon/round.md` "JSON"; `docs/features/ui-round.md` "Data".
+ */
+export interface RoundSheet {
+  project: string;
+  items: RoundItem[];
+  more: number;
+  minutes: number;
+  notes: string[];
+}
+
+/**
+ * The decision route's body: the stage less `span_hash`, then `updated_at` as read
+ * (`StageBody`). Sources: `docs/canon/decision-staging.md` "Daemon"; `docs/features/ui-round.md` "Data".
+ */
+export type StageBody = StageChoice & { updated_at: string };
+
+/** One answer of the round POST: the item and its stage body. Source: `docs/features/ui-round.md` "Data". */
+export interface RoundAnswerBody {
+  id: string;
+  stage: StageBody;
+}
+
+/** The round POST's body: the project it is for and the answers, in sheet order. Source: `docs/features/ui-round.md` "Data". */
+export interface RoundAnswersBody {
+  project: string;
+  answers: RoundAnswerBody[];
+}
+
+/** What an answer became. Source: `docs/features/ui-round.md` "Data". */
+export type KnownRoundOutcome = "staged" | "refused";
+
+/** An answer's outcome as sent; other strings kept, shown raw. Source: `docs/features/ui-round.md` "Data". */
+export type RoundOutcome = KnownRoundOutcome | Unlisted;
+
+/**
+ * One answer's outcome, in request order, `id` as sent: `stage` as stored and `staged_at` the
+ * request's one clock reading when staged; `replaced` the `staged_at` of the choice it replaced;
+ * `reason` the refusal, less its `; nothing staged`. Source: `docs/features/ui-round.md` "Data".
+ */
+export interface RoundAnswerEntry {
+  id: string;
+  outcome: RoundOutcome;
+  stage: Stage | null;
+  staged_at: string | null;
+  replaced: string | null;
+  reason: string | null;
+}
+
+/**
+ * The round POST's 200 document, whatever the outcomes; `notes` a corrupt row as `spec inbox`
+ * words it. Source: `docs/features/ui-round.md` "Data".
+ */
+export interface RoundAnswersOutcome {
+  project: string;
+  answers: RoundAnswerEntry[];
+  notes: string[];
+}
+
 /** Where `show` cut a node at the output cap. Source: `crates/specengine-cli/README.md` "Output and the cap". */
 export interface Omitted {
   lines: [number, number];

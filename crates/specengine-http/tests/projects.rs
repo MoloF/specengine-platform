@@ -274,6 +274,11 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
         ("GET", "/api/projects/nope/tasks/T-0001"),
         ("GET", "/api/projects/nope/events"),
         ("POST", "/api/projects/nope/proposals/PR-0001/decision"),
+        // The round's two routes (docs/features/ui-round.md "Data"): the
+        // served slug first, before the page, the type or the body.
+        ("GET", "/api/projects/nope/round"),
+        ("GET", "/api/projects/nope/round?limit=0"),
+        ("POST", "/api/projects/nope/round/answers"),
     ] {
         let reply = server.request(method, path, &[]);
         assert_eq!(reply.status, 404, "{method} {path}: {}", reply.text());
@@ -285,18 +290,29 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
     }
     // An unknown route: 404, the error body too, listing the routes
     // (`graph` and `check` since docs/features/ui-live.md, `tasks` and
-    // `tasks/<id>` since docs/features/ui-live-tasks.md).
+    // `tasks/<id>` since docs/features/ui-live-tasks.md, `round` since
+    // docs/features/ui-round.md, R-03).
     for path in [
         "/",
         "/api",
         "/api/projects/lantern-keep",
         "/api/projects/lantern-keep/tasks/",
         "/api/projects/lantern-keep/tasks/T-0001/transition",
+        "/api/projects/lantern-keep/round/",
+        "/api/projects/lantern-keep/round/more",
+        "/api/projects/lantern-keep/round/answers/more",
     ] {
         let reply = server.get(path);
         assert_eq!(reply.status, 404, "{path}: {}", reply.text());
         let message = reply.error_message();
-        for route in ["graph", "check", "proposals/<id>", "tasks", "tasks/<id>"] {
+        for route in [
+            "graph",
+            "check",
+            "proposals/<id>",
+            "tasks",
+            "tasks/<id>",
+            "round",
+        ] {
             assert!(
                 message.contains(&format!(" {route},")),
                 "{path}: the routes name `{route}`: {message}"

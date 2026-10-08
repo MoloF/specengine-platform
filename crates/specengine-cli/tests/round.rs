@@ -51,6 +51,18 @@
 //! - `stage_with` (the daemon's `stage` split for the round): its checks
 //!   run before the queue is opened, in the same order; `round_stage`
 //!   stages with no walk.
+//! - docs/features/ui-round.md T-05, the library's half of the daemon's
+//!   answers: `round_stage_answers` stages in round order against the
+//!   `updated_at` each answer carries (the one the screen showed: an item
+//!   restaged since is refused, its newer stage kept), every entry of an
+//!   ID named twice refused (never the last winning; ten positions named,
+//!   the rest counted; a look-alike of another entry's ID is that ID), a
+//!   look-alike alone refused naming its Latin ID; a step-3 refusal ends
+//!   `a reject still settles it` there and `` `reject: <reason>` still
+//!   settles it`` on the text route, one bare reason shared;
+//!   `RoundAnswersBody::from_json` and `round_limit` judge the body and
+//!   the limit before anything runs. M: `updated_at` read at POST time;
+//!   the last duplicate wins; request order.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -73,10 +85,11 @@ use common::{RUN_TIMEOUT, Run, SPEC, read_text};
 use serde_json::{Value, json};
 use specengine_cli::{
     AnswerOutcome, CliError, CreateRequest, DiscrepancyInput, Exit, Globals, IntakeOption,
-    IntakeSeverity, Outcome, ProposedText, QuestionRequest, RoundAnswerRequest, RoundNewRequest,
-    RoundRun, RoundSheet, RoundStageRequest, RoundTerminal, StageBody, StageRequest, WalkOutcome,
-    propose_create, propose_question_with_task, render_json, render_text, round_answer, round_new,
-    round_stage, stage,
+    IntakeSeverity, Outcome, ProposedText, QuestionRequest, RoundAnswerBody, RoundAnswerRequest,
+    RoundAnswersBody, RoundAnswersOutcome, RoundAnswersRequest, RoundNewRequest, RoundRun,
+    RoundSheet, RoundStageRequest, RoundTerminal, StageBody, StageRequest, WalkOutcome,
+    propose_create, propose_question_with_task, render_json, render_text, round_answer,
+    round_limit, round_new, round_stage, round_stage_answers, stage,
 };
 use specengine_store::{ProposalStatus, Stage};
 use task_common::{Ordered, Tasks, done};
@@ -2900,4 +2913,508 @@ fn a_fifo_swapped_in_after_the_size_check_never_holds_the_open() {
         fifos > 0 && regulars > 0,
         "{fifos} FIFO, {regulars} regular, {swaps} swaps"
     );
+}
+
+// ------------------------------------------- ui-round: round_stage_answers
+
+/// The daemon's structured answers for spec-a's project, staged from `cwd`
+/// at `now`.
+fn stage_answers(
+    pair: &Pair,
+    cwd: &Path,
+    answers: Vec<RoundAnswerBody>,
+    now: &str,
+) -> Result<RoundAnswersOutcome, CliError> {
+    round_stage_answers(
+        &pair.env(cwd),
+        &Globals::default(),
+        &RoundAnswersRequest {
+            body: RoundAnswersBody {
+                project: SLUG.to_owned(),
+                answers,
+            },
+            now: now.to_owned(),
+            git: pair.git_env(cwd),
+        },
+    )
+}
+
+fn staged_ok(pair: &Pair, cwd: &Path, answers: Vec<RoundAnswerBody>) -> RoundAnswersOutcome {
+    stage_answers(pair, cwd, answers, ROUND)
+        .unwrap_or_else(|error| panic!("round_stage_answers: {error}"))
+}
+
+/// An approve of `id` with these flags against `updated_at`.
+fn approve_of(
+    id: &str,
+    option: Option<u64>,
+    answer: Option<&str>,
+    updated_at: &str,
+) -> RoundAnswerBody {
+    RoundAnswerBody {
+        id: id.to_owned(),
+        stage: StageBody::Approve {
+            option,
+            answer: answer.map(str::to_owned),
+            canon: None,
+            note: None,
+            updated_at: updated_at.to_owned(),
+        },
+    }
+}
+
+fn reject_of(id: &str, reason: &str, updated_at: &str) -> RoundAnswerBody {
+    RoundAnswerBody {
+        id: id.to_owned(),
+        stage: StageBody::Reject {
+            reason: reason.to_owned(),
+            updated_at: updated_at.to_owned(),
+        },
+    }
+}
+
+/// The `updated_at` the sheet shows for `id`.
+fn shown_at(sheet: &RoundSheet, id: &str) -> String {
+    sheet
+        .items
+        .iter()
+        .find(|item| item.id == id)
+        .unwrap_or_else(|| panic!("{id} not on the sheet"))
+        .updated_at
+        .clone()
+}
+
+/// `(id, outcome, reason)` of each entry, in the request's order.
+fn outcomes(outcome: &RoundAnswersOutcome) -> Vec<(String, AnswerOutcome, Option<String>)> {
+    outcome
+        .answers
+        .iter()
+        .map(|entry| (entry.id.clone(), entry.outcome, entry.reason.clone()))
+        .collect()
+}
+
+#[test]
+fn ui_round_stage_answers_stage_in_round_order_against_the_updated_at_shown() {
+    let pair = Pair::new("rd-ui-order", "spec-a");
+    let main = pair.main.clone();
+    let request = |targets: &[&str], text: &str, severity, now: &str| {
+        question_request(&pair, &main, targets, text, Some(severity), now)
+    };
+    let low = store_question(
+        &pair,
+        &main,
+        request(
+            &["RULE-CORE-LOOP"],
+            "Does the loop end at dawn?",
+            IntakeSeverity::Low,
+            NOW,
+        ),
+        None,
+    );
+    let normal = question(
+        &pair,
+        &main,
+        &["RULE-STAM-REGEN"],
+        "Does regeneration wait for rest?",
+    );
+    let high = store_question(
+        &pair,
+        &main,
+        request(
+            &["RULE-MOVE-SPEEDS"],
+            "Is the walk speed fixed?",
+            IntakeSeverity::High,
+            LATER,
+        ),
+        None,
+    );
+    let d = gap(
+        &pair,
+        &main,
+        &["RULE-SPRINT-COST"],
+        "The sprint cost is charged twice",
+    );
+    let changed = question(
+        &pair,
+        &main,
+        &["EDGE-STAM-ZERO"],
+        "Does an empty bar stop the run?",
+    );
+    let shown = sheet(&pair, &main, None);
+    let order: Vec<String> = shown.items.iter().map(|item| item.id.clone()).collect();
+    assert_eq!(order.first(), Some(&high), "{order:?}");
+    assert_eq!(order.last(), Some(&low), "{order:?}");
+    // `changed` restaged after the sheet was read (on a terminal, in
+    // another tab): its answer carries the `updated_at` shown.
+    let was = shown_at(&shown, &changed);
+    stage_now(&pair, &main, &changed, approve_body(None), AFTER);
+    let events = staged_events(&pair);
+    let own = "Own text.\nTwo lines.";
+    // The request in another order than the round's.
+    let answers = vec![
+        reject_of(&low, "Asked before.", &shown_at(&shown, &low)),
+        approve_of(&changed, None, Some("Yes."), &was),
+        approve_of(&d, Some(2), None, &shown_at(&shown, &d)),
+        approve_of(&normal, None, Some(own), &shown_at(&shown, &normal)),
+        approve_of(&high, None, None, &shown_at(&shown, &high)),
+    ];
+    let outcome = staged_ok(&pair, &main, answers);
+    assert_eq!(outcome.project, SLUG);
+    assert!(outcome.notes.is_empty(), "{:?}", outcome.notes);
+    let stale = format!(
+        "`{changed}` changed since it was read: updated at {AFTER}, the choice was made on the \
+         one of {was}; read it again"
+    );
+    assert_eq!(
+        outcomes(&outcome),
+        [
+            (low.clone(), AnswerOutcome::Staged, None),
+            (changed.clone(), AnswerOutcome::Refused, Some(stale.clone())),
+            (d.clone(), AnswerOutcome::Staged, None),
+            (normal.clone(), AnswerOutcome::Staged, None),
+            (high.clone(), AnswerOutcome::Staged, None),
+        ],
+        "the request's order"
+    );
+    for entry in &outcome.answers {
+        let staged = entry.outcome == AnswerOutcome::Staged;
+        assert_eq!(
+            entry.staged_at.as_deref(),
+            staged.then_some(ROUND),
+            "{entry:?}"
+        );
+        assert_eq!(entry.stage.is_some(), staged, "{entry:?}");
+        assert_eq!(entry.replaced, None, "{entry:?}");
+    }
+    // Staged in round order; the newer stage of `changed` kept.
+    let new = &staged_events(&pair)[events.len()..];
+    let round: Vec<String> = order.into_iter().filter(|id| id != &changed).collect();
+    assert_eq!(new, round, "round order, not the request's");
+    assert_eq!(stored_stage(&pair, &changed), Some(working_answer()));
+    assert_eq!(stored_stage(&pair, &normal), Some(answer_stage(own)));
+    assert_eq!(stored_stage(&pair, &d), Some(option_stage(2)));
+    assert_eq!(stored_stage(&pair, &high), Some(working_answer()));
+    assert_eq!(
+        stored_stage(&pair, &low),
+        Some(specengine_store::Stage::Reject {
+            reason: "Asked before.".to_owned()
+        })
+    );
+    // One refused: exit 1; the text names each in the request's order.
+    assert_eq!(outcome.exit(), Exit::NotFound);
+    let printed = Outcome::RoundAnswers(Box::new(outcome.clone()));
+    assert_eq!(printed.exit(), Exit::NotFound);
+    assert_eq!(
+        render_text(&printed),
+        format!(
+            "{low} answer 1: staged {ROUND}\n{changed} answer 2: refused: {stale}; nothing \
+             staged\n{d} answer 3: staged {ROUND}\n{normal} answer 4: staged {ROUND}\n{high} \
+             answer 5: staged {ROUND}\nanswers: 4 staged, 1 refused\n"
+        )
+    );
+    let json = parsed(&render_json(&printed));
+    assert_eq!(json["answers"][1]["reason"], json!(stale));
+    assert_eq!(
+        json["answers"][3]["stage"],
+        json!({"decision": "approve", "option": null, "answer": own, "canon": null,
+            "note": null, "span_hash": null})
+    );
+
+    // Answered again from a sheet read now: it replaces each, naming when.
+    let again = sheet(&pair, &main, None);
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        vec![approve_of(
+            &changed,
+            None,
+            Some("Yes."),
+            &shown_at(&again, &changed),
+        )],
+    );
+    assert_eq!(outcome.answers[0].outcome, AnswerOutcome::Staged);
+    assert_eq!(outcome.answers[0].replaced.as_deref(), Some(AFTER));
+}
+
+#[test]
+fn ui_round_stage_answers_refuse_every_entry_of_an_id_named_twice_and_a_look_alike_alone() {
+    let pair = Pair::new("rd-ui-twice", "spec-a");
+    let main = pair.main.clone();
+    let q1 = question(
+        &pair,
+        &main,
+        &["RULE-STAM-REGEN"],
+        "Does regeneration wait for rest?",
+    );
+    let q2 = question(
+        &pair,
+        &main,
+        &["RULE-MOVE-SPEEDS"],
+        "Is the walk speed fixed?",
+    );
+    let q3 = question(
+        &pair,
+        &main,
+        &["EDGE-STAM-ZERO"],
+        "Does an empty bar stop the run?",
+    );
+    let shown = sheet(&pair, &main, None);
+    let at = |id: &str| shown_at(&shown, id);
+    let events = staged_events(&pair);
+
+    // q1 at 1 and 3, an approve then a reject: neither wins.
+    let twice = "answered at positions 1 and 3: give one answer per item".to_owned();
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        vec![
+            approve_of(&q1, None, None, &at(&q1)),
+            approve_of(&q2, None, None, &at(&q2)),
+            reject_of(&q1, "Asked before.", &at(&q1)),
+        ],
+    );
+    assert_eq!(
+        outcomes(&outcome),
+        [
+            (q1.clone(), AnswerOutcome::Refused, Some(twice.clone())),
+            (q2.clone(), AnswerOutcome::Staged, None),
+            (q1.clone(), AnswerOutcome::Refused, Some(twice)),
+        ]
+    );
+    assert_eq!(stored_stage(&pair, &q1), None, "the last never wins");
+    assert_eq!(
+        staged_events(&pair)[events.len()..],
+        *std::slice::from_ref(&q2)
+    );
+
+    // A look-alike alone: refused, naming the Latin ID; the rest staged.
+    let look = q3.replacen('P', "\u{0420}", 1);
+    let lookalike = format!(
+        "`{look}` uses look-alike letters or digits; proposal IDs are Latin only: write `{q3}`"
+    );
+    let shown = sheet(&pair, &main, None);
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        vec![
+            approve_of(&look, None, None, &shown_at(&shown, &q3)),
+            reject_of(&q1, "Asked before.", &shown_at(&shown, &q1)),
+        ],
+    );
+    assert_eq!(
+        outcomes(&outcome),
+        [
+            (look.clone(), AnswerOutcome::Refused, Some(lookalike)),
+            (q1.clone(), AnswerOutcome::Staged, None),
+        ]
+    );
+    assert_eq!(stored_stage(&pair, &q3), None);
+    let events = staged_events(&pair);
+
+    // A look-alike of another entry's ID is that ID: both refused.
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        vec![
+            approve_of(&q3, None, None, &shown_at(&shown, &q3)),
+            approve_of(&look, None, None, &shown_at(&shown, &q3)),
+        ],
+    );
+    let pair_of = "answered at positions 1 and 2: give one answer per item".to_owned();
+    assert_eq!(
+        outcomes(&outcome),
+        [
+            (q3.clone(), AnswerOutcome::Refused, Some(pair_of.clone())),
+            (look.clone(), AnswerOutcome::Refused, Some(pair_of)),
+        ]
+    );
+    // Twelve entries of one ID: ten positions named, the rest counted.
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        (0..12)
+            .map(|_| approve_of(&q3, None, None, &shown_at(&shown, &q3)))
+            .collect(),
+    );
+    let many = "answered at positions 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 and 2 more: give one answer \
+                per item";
+    assert_eq!(outcome.answers.len(), 12);
+    for entry in &outcome.answers {
+        assert_eq!(entry.outcome, AnswerOutcome::Refused, "{entry:?}");
+        assert_eq!(entry.reason.as_deref(), Some(many), "{entry:?}");
+    }
+    assert_eq!(stored_stage(&pair, &q3), None);
+    assert_eq!(staged_events(&pair), events, "no stage by a refused entry");
+}
+
+#[test]
+fn ui_round_a_step_3_refusal_ends_in_each_front_end_s_words_over_one_bare_reason() {
+    let pair = Pair::new("rd-ui-step3", "spec-a");
+    let main = pair.main.clone();
+    let q = question(
+        &pair,
+        &main,
+        &["RULE-STAM-REGEN"],
+        "Does regeneration wait for rest?",
+    );
+    pair.drop_records_table(&main);
+    // The text route (a paste): its words unchanged.
+    let run = round_stage(
+        &pair.env(&main),
+        &Globals::default(),
+        &RoundStageRequest {
+            text: format!("project: {SLUG}\n{q}: ok\n"),
+            now: ROUND.to_owned(),
+            git: pair.git_env(&main),
+        },
+    )
+    .expect("round stage");
+    assert_eq!(run.answers[0].outcome, AnswerOutcome::Refused);
+    let text = run.answers[0].reason.clone().expect("a reason");
+    let text_tail = "; `reject: <reason>` still settles it";
+    assert!(
+        text.starts_with("not applied (step 3): ") && text.ends_with(text_tail),
+        "{text}"
+    );
+    assert!(text.contains("has no `[decision_records]`"), "{text}");
+    // The daemon's: the same bare reason, its own tail.
+    let shown = sheet(&pair, &main, None);
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        vec![approve_of(&q, None, None, &shown_at(&shown, &q))],
+    );
+    let structured = outcome.answers[0].reason.clone().expect("a reason");
+    let tail = "; a reject still settles it";
+    assert!(structured.ends_with(tail), "{structured}");
+    assert_eq!(
+        structured.strip_suffix(tail),
+        text.strip_suffix(text_tail),
+        "one bare reason, each front end its tail"
+    );
+    assert!(staged_events(&pair).is_empty());
+    // A reject still settles it.
+    let outcome = staged_ok(
+        &pair,
+        &main,
+        vec![reject_of(&q, "No table.", &shown_at(&shown, &q))],
+    );
+    assert_eq!(outcome.answers[0].outcome, AnswerOutcome::Staged);
+    assert_eq!(outcome.exit(), Exit::Answered);
+    assert_eq!(staged_events(&pair), std::slice::from_ref(&q));
+}
+
+#[test]
+fn ui_round_the_answers_body_the_project_the_clock_and_the_limit_are_judged_first() {
+    // `round_limit`: `spec round new --limit`'s judgement.
+    assert_eq!(round_limit(None).expect("the default"), 20);
+    assert_eq!(round_limit(Some(1)).expect("1"), 1);
+    assert_eq!(round_limit(Some(200)).expect("200"), 200);
+    for limit in [0, 201, -3] {
+        let error = round_limit(Some(limit)).expect_err("out of range");
+        assert_eq!(error.exit, Exit::CannotRun);
+        assert_eq!(
+            error.message,
+            format!("spec: --limit {limit}: the limit is 1 to 200")
+        );
+    }
+    // The body: JSON of the one shape, for this project, at most 200.
+    let entry = |n: usize| {
+        format!(
+            "{{\"id\":\"PR-{n:04}\",\"stage\":{{\"decision\":\"reject\",\"reason\":\"r\",\
+             \"updated_at\":\"{NOW}\"}}}}"
+        )
+    };
+    let body = |project: &str, count: usize| {
+        let entries: Vec<String> = (1..=count).map(entry).collect();
+        format!(
+            "{{\"project\":\"{project}\",\"answers\":[{}]}}",
+            entries.join(",")
+        )
+    };
+    let decoded = RoundAnswersBody::from_json(body(SLUG, 200).as_bytes(), SLUG).expect("200");
+    assert_eq!(decoded.answers.len(), 200);
+    assert_eq!(
+        decoded.answers[0],
+        reject_of("PR-0001", "r", NOW),
+        "the decision route's body"
+    );
+    let refused = |bytes: &str| {
+        let error = RoundAnswersBody::from_json(bytes.as_bytes(), SLUG).expect_err(bytes);
+        assert_eq!(error.exit, Exit::CannotRun, "{bytes}");
+        error.message
+    };
+    assert_eq!(
+        refused(&body(SLUG, 201)),
+        "spec: 201 answers; at most 200 at once, a sheet's most items: send the rest after; \
+         nothing changed"
+    );
+    assert_eq!(
+        refused(&body("zerkalo", 1)),
+        "spec: the answers are for `zerkalo`, this is `lantern-keep`; nothing changed"
+    );
+    for bad in [
+        "{".to_owned(),
+        "{\"answers\":[]}".to_owned(),
+        format!("{{\"project\":\"{SLUG}\",\"answers\":[],\"consent\":true}}"),
+        format!("{{\"project\":\"{SLUG}\",\"answers\":[{{\"id\":\"PR-0001\"}}]}}"),
+        format!(
+            "{{\"project\":\"{SLUG}\",\"answers\":[{{\"id\":\"PR-0001\",\"stage\":{{\"decision\":\
+             \"approve\",\"span_hash\":\"b3:00\",\"updated_at\":\"{NOW}\"}}}}]}}"
+        ),
+    ] {
+        let message = refused(&bad);
+        assert!(
+            message.starts_with(
+                "spec: the answers are not `{\"project\",\"answers\":[{\"id\",\"stage\"}]}` as \
+                 JSON: "
+            ) && message.ends_with("; nothing changed"),
+            "{bad}: {message}"
+        );
+    }
+
+    // The library call judges the project and its clock itself: exit 2,
+    // nothing stored.
+    let pair = Pair::new("rd-ui-body", "spec-a");
+    let main = pair.main.clone();
+    let q = question(
+        &pair,
+        &main,
+        &["RULE-STAM-REGEN"],
+        "Does regeneration wait for rest?",
+    );
+    let shown = sheet(&pair, &main, None);
+    let answer = || vec![approve_of(&q, None, None, &shown_at(&shown, &q))];
+    let other = round_stage_answers(
+        &pair.env(&main),
+        &Globals::default(),
+        &RoundAnswersRequest {
+            body: RoundAnswersBody {
+                project: "zerkalo".to_owned(),
+                answers: answer(),
+            },
+            now: ROUND.to_owned(),
+            git: pair.git_env(&main),
+        },
+    );
+    assert_eq!(
+        common::proposal::cannot(&other, "another project"),
+        "spec: the answers are for `zerkalo`, this is `lantern-keep`; nothing changed"
+    );
+    let clock = stage_answers(&pair, &main, answer(), "yesterday");
+    assert!(
+        common::proposal::cannot(&clock, "a bad clock").contains("`yesterday`"),
+        "{clock:?}"
+    );
+    assert!(staged_events(&pair).is_empty());
+    assert_eq!(stored_stage(&pair, &q), None);
+    // No answer: exit 0, nothing staged.
+    let none = staged_ok(&pair, &main, Vec::new());
+    assert!(none.answers.is_empty());
+    assert_eq!(none.exit(), Exit::Answered);
+    assert_eq!(
+        render_text(&Outcome::RoundAnswers(Box::new(none))),
+        "answers: 0 staged, 0 refused\n"
+    );
+    assert!(staged_events(&pair).is_empty());
 }

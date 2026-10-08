@@ -12,10 +12,14 @@
 //! A word is a run of letters, digits, `_` and `-`, compared without case;
 //! a literal's escapes are decoded first.
 //!
-//! The one exemption, narrow and explicit: `decision` as a whole segment
-//! of a literal that is a route path (`/` first, no whitespace), the
-//! decision route's own name (`/api/projects/{p}/proposals/{id}/decision`);
-//! a verdict or a link type is never exempt, nor `decision` in prose.
+//! The two exemptions, narrow and explicit, each a whole `/`-segment of a
+//! literal that is a route path (`/` first, no whitespace): `decision`, the
+//! kind that is the decision route's own name
+//! (`/api/projects/{p}/proposals/{id}/decision`), and `answers`, the
+//! `LINK_TYPES` name that is the round's answers route's own name
+//! (`/api/projects/{p}/round/answers`, docs/features/ui-round.md "Data");
+//! a verdict, a task state or another link type is never exempt, nor
+//! `decision` or `answers` in prose or in a literal that is no route path.
 //!
 //! AC-04 of docs/features/ui-live-tasks.md: the ten task states join the
 //! words, read from `TaskStatus::ALL` in
@@ -344,7 +348,12 @@ fn domain_words(
         } else if states.contains(&word) {
             hits.push((word, "a task state"));
         } else if links.contains(&word) {
-            hits.push((word, "a LINK_TYPES name"));
+            let segment = route_path(literal) && literal.split('/').any(|part| part == word);
+            if word == "answers" && segment {
+                exempted = true;
+            } else {
+                hits.push((word, "a LINK_TYPES name"));
+            }
         } else if kinds.contains(&word) {
             let segment = route_path(literal) && literal.split('/').any(|part| part == word);
             if word == "decision" && segment {
@@ -426,6 +435,14 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
         configs.len()
     );
     assert!(scanned > 50, "the scan reads the literals: {scanned}");
+    // docs/features/ui-round.md T-05: the round's handlers are scanned (their
+    // route's literal is seen, and exempt).
+    assert!(
+        exempt
+            .iter()
+            .any(|line| line.ends_with(": \"/api/projects/{p}/round/answers\"")),
+        "{exempt:#?}"
+    );
     assert!(
         found.is_empty(),
         "the daemon's literals name the domain: {found:#?}"
@@ -458,6 +475,12 @@ fn f(verdict: &str) -> u16 {
     let _ = "/api/projects/{p}/rule";
     let _ = "/api/blocked";
     let _ = "edge-case";
+    let _ = "/api/projects/{p}/round/answers";
+    let _ = "the answers are for another project";
+    let _ = "see /api/projects/{p}/round/answers";
+    let _ = "api/projects/{p}/round/answers";
+    let _ = "/api/projects/{p}/answers.json";
+    let _ = "/api/projects/{p}/depends_on";
     let _ = 'x';
     0
 }
@@ -485,9 +508,23 @@ fn f(verdict: &str) -> u16 {
             (17, "rule".to_owned()),
             (18, "blocked".to_owned()),
             (19, "edge-case".to_owned()),
+            // `answers` in prose, in a literal that is no route path (a
+            // space, no leading `/`), in a segment it is not the whole of;
+            // another link type as a whole segment: all caught.
+            (21, "answers".to_owned()),
+            (22, "answers".to_owned()),
+            (23, "answers".to_owned()),
+            (24, "answers".to_owned()),
+            (25, "depends_on".to_owned()),
         ]
     );
-    assert_eq!(exempt, ["/api/projects/{p}/proposals/{id}/decision"]);
+    assert_eq!(
+        exempt,
+        [
+            "/api/projects/{p}/proposals/{id}/decision",
+            "/api/projects/{p}/round/answers"
+        ]
+    );
 }
 
 #[test]

@@ -305,13 +305,6 @@ kbd {
   color: var(--text-secondary);
 }
 
-.not-built {
-  padding: var(--space-4);
-  border: 1px dashed var(--border-control);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
-}
-
 /* Fields and buttons. */
 .field {
   width: 100%;
@@ -2512,6 +2505,207 @@ mark {
 
 .notice-outside-stage .notice-title .icon {
   color: var(--attention);
+}
+
+/* Questions (docs/features/ui-round.md): the round sheet, one card per item in round order, the
+   owner's picks and one Stage. Agent text is verbatim and isolated: each line takes its own
+   direction, so Cyrillic or right-to-left text wraps and reads in place; nothing is cut. */
+.round {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.round:focus-visible {
+  outline-offset: 4px;
+}
+
+.round-intro {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  max-width: 72ch;
+}
+
+.round-count {
+  font-weight: 600;
+}
+
+.round-list {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.round-card {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.round-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.round-id {
+  font-size: var(--font-size-l);
+}
+
+.round-open {
+  margin-left: auto;
+  font-size: var(--font-size-s);
+}
+
+.round-text {
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+
+.round-part {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.round-label,
+.round-links dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+.round-links {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.round-links dd {
+  margin: 0;
+}
+
+.round-link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.round-choice {
+  max-width: 72ch;
+}
+
+.round-radio {
+  align-items: center;
+}
+
+.round-field {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 72ch;
+}
+
+.round-field textarea {
+  unicode-bidi: plaintext;
+}
+
+.byte-count {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.byte-count-value {
+  font-family: var(--font-mono);
+}
+
+.byte-count-over {
+  color: var(--text-primary);
+}
+
+.byte-count-over .icon {
+  color: var(--severity-high);
+}
+
+.byte-count-over .byte-count-value {
+  color: var(--severity-high);
+  font-weight: 600;
+}
+
+.round-changed,
+.round-dropped {
+  border-color: var(--attention);
+}
+
+.round-changed .notice-title .icon,
+.round-dropped .notice-title .icon {
+  color: var(--attention);
+}
+
+.round-confirm-line {
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+
+/* Stage stays in reach at the foot of the window while the sheet scrolls: a short bar (the count
+   and the button only, at most 6rem, its own scroll past that), and the page keeps that much
+   scroll padding at its foot while the bar is up, so a control taking the focus is scrolled
+   clear of it, never hidden behind it (WCAG 2.2 2.4.11). What it would say at length (what a
+   Stage replaces or leaves out, the outcome) sits above it, out of the sticky part. */
+:root:has(.round-stage) {
+  scroll-padding-bottom: calc(6rem + var(--space-4));
+}
+
+.round-stage {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-header);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  max-height: 6rem;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+}
+
+.round-stage-count {
+  font-weight: 600;
+}
+
+.round-stage-details {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.round-stage-outcome {
+  font-size: var(--font-size-s);
+}
+
+.round-stage-note {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  max-width: 72ch;
+  overflow-wrap: anywhere;
 }
 
 /* Owner commands: words, the command, Copy. */

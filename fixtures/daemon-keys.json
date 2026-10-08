@@ -32,5 +32,11 @@
   "TaskBundle": ["node_ids", "budget", "bundle_hash"],
   "Author": ["type", "role", "model", "run"],
   "StagedApprove": ["decision", "option", "answer", "canon", "note", "span_hash"],
-  "StagedReject": ["decision", "reason"]
+  "StagedReject": ["decision", "reason"],
+  "RoundSheet": ["project", "items", "more", "minutes", "notes"],
+  "RoundItem": ["id", "kind", "severity", "gap_type", "summary", "working_answer", "price_of_other", "options", "recommendation", "evidence", "targets", "tasks", "worktree", "branch", "author", "staged", "staged_at", "created_at", "updated_at"],
+  "RoundTarget": ["id", "path", "title"],
+  "RoundTask": ["id", "status", "title"],
+  "RoundAnswersOutcome": ["project", "answers", "notes"],
+  "RoundAnswerEntry": ["id", "outcome", "stage", "staged_at", "replaced", "reason"]
 }

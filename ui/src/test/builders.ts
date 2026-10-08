@@ -10,6 +10,8 @@ import type {
   GraphView,
   InboxEntry,
   Proposal,
+  RoundItem,
+  RoundSheet,
   SearchHit,
   SearchResults,
   ShownLink,
@@ -434,4 +436,34 @@ export function aCheckReport(fields: Partial<Omit<CheckReport, "counts">> & { co
     ...rest,
     counts: { documents: 7, errors: 0, warnings: 0, debt: 0, expired: 0, stale: 0, worst_w_bytes: 4321, ...counts },
   };
+}
+
+/** One item of a round sheet for tests: a question without options, nothing staged; omitted keys as the sheet gives them. */
+export function aRoundItem(fields: Partial<RoundItem> & { id: string }): RoundItem {
+  return {
+    kind: "question",
+    severity: "normal",
+    gap_type: null,
+    summary: `Summary of ${fields.id}`,
+    working_answer: null,
+    price_of_other: null,
+    options: [],
+    recommendation: null,
+    evidence: [],
+    targets: [],
+    tasks: [],
+    worktree: "/work/alpha",
+    branch: "main",
+    author: { type: "agent", role: "rust-developer", model: null, run: null },
+    staged: null,
+    staged_at: null,
+    created_at: "2026-10-01T10:00:00Z",
+    updated_at: "2026-10-01T10:00:00Z",
+    ...fields,
+  };
+}
+
+/** A round sheet of `items` as given, in that order: `more`, `minutes`, `notes` as passed or none. */
+export function aRoundSheet(items: RoundItem[], fields: Partial<Omit<RoundSheet, "items">> = {}): RoundSheet {
+  return { project: "alpha", items, more: 0, minutes: items.length === 0 ? 0 : 1, notes: [], ...fields };
 }

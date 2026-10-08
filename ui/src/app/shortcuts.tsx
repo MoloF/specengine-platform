@@ -94,6 +94,7 @@ const INTRO: Partial<Record<SectionId, string>> = {
   graph: `Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One box holds the tab stop; arrows only move it. The List view holds every node and edge as text.`,
   tasks: `Keys act where focus is (the task list, the tabs), outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} Arrows only move; Enter and clicks open, one history entry each. No key changes a task: owner actions are commands you copy to a terminal.`,
   health: `Keys act on the findings' focused row, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One row holds the Tab stop; arrows only move it. Health is read only: nothing here fixes a finding.`,
+  questions: `No key answers or stages here: pick each answer with its controls (arrows move within an item's choices), then Stage. Keys act outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED}`,
 };
 
 /** A section's list; with none (the home, a hash naming nothing) the general one. */

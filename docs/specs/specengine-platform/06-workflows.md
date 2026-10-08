@@ -128,7 +128,7 @@ spec verify (pre-push / CI / daemon on FileChanged)
 
 Shipped as `round` (`docs/canon/round.md`, ADR-0038); R and A records, cancelled assumptions, rephrasing: not built.
 
-1. `spec round new` prints the open questions and discrepancies on **one sheet in the project's language**, by `severity`, waiting tasks, age: text, working answer, price of another answer or options, targets, a reading-time estimate. Markdown; a UI page later (`ui-round`).
+1. `spec round new` prints the open questions and discrepancies on **one sheet in the project's language**, by `severity`, waiting tasks, age: text, working answer, price of another answer or options, targets, a reading-time estimate. Markdown; the UI's Questions screen answers it too (`docs/canon/round-ui.md`).
 2. The owner answers one line per item, `PR-0003: ok`, `PR-0005: 1`, `PR-0006: <own answer>`, `PR-0007: reject: <reason>`; `spec round answer FILE`, on a terminal, checks each against the queue and stages it, a refused one named alone.
 3. Each staged answer is confirmed by its item's own `spec approve|reject` `[y/N]`: one key per answer, never one for a round (ADR-0038); any other key keeps the stage.
 4. **Interpretations**: if a decision became a rule only after interpretation, the proposal gets kind `interpretation` and separately shows "how the decision was applied and why interpretation was needed".

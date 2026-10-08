@@ -5,6 +5,7 @@ import {
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
+  type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
   type TreeOptions,
@@ -17,6 +18,9 @@ import type {
   NodeView,
   Project,
   Proposal,
+  RoundAnswerBody,
+  RoundAnswersOutcome,
+  RoundSheet,
   SearchResults,
   Stage,
   StageChoice,
@@ -50,6 +54,11 @@ const NOTE_MAX_BYTES = 4096;
 /** The `conflict` scenario's stage made elsewhere: a reject another page staged meanwhile. */
 const ELSEWHERE: Stage = { decision: "reject", reason: "Staged in another tab (mock scenario: conflict)" };
 
+/** The mock's question round, in a chunk of its own: only the Questions screen reads it. */
+function loadRound() {
+  return import("./round");
+}
+
 function bytesOf(text: string): number {
   return new TextEncoder().encode(text).length;
 }
@@ -72,6 +81,8 @@ export class MockClient implements SpecEngineClient {
   private readonly now: () => number;
   /** `conflict`: the proposals another page has staged on already, once each. */
   private readonly stagedElsewhere = new Set<string>();
+  /** `conflict`: the projects whose first round POST has met a stage made elsewhere. */
+  private readonly roundConflicted = new Set<string>();
 
   constructor(scenario: Scenario, options: MockOptions = {}) {
     this.scenario = scenario;
@@ -217,6 +228,40 @@ export class MockClient implements SpecEngineClient {
       return structuredClone(stored.review);
     }
     return structuredClone(this.store(entry, index, stored, { ...stored.review, staged: null, staged_at: null, updated_at: this.stamp() }));
+  }
+
+  /**
+   * The round sheet as the daemon serves it (`docs/features/ui-round.md` "Data"): the open
+   * questions and discrepancies in round order, at most `limit` (1 to 200, default 20), the rest
+   * noted; read only.
+   */
+  async getRound(project: string, options: RoundOptions = {}): Promise<RoundSheet> {
+    await this.read();
+    const entry = this.project(project);
+    const { roundSheetOf } = await loadRound();
+    return structuredClone(roundSheetOf(entry, this.taskStore(project), options.limit));
+  }
+
+  /**
+   * Stages the round's answers as the daemon does (`docs/features/ui-round.md` "Data"): each
+   * answer refused alone, the rest staged at one clock reading, nothing applied. The `conflict`
+   * scenario: a project's first POST finds its first answer's proposal staged meanwhile by another
+   * page, so that answer is refused as changed since read; the next POST, on the new sheet, takes it.
+   */
+  async stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome> {
+    await this.wait();
+    const entry = this.project(project);
+    const first = answers[0];
+    if (this.scenario === "conflict" && first !== undefined && !this.roundConflicted.has(project)) {
+      this.roundConflicted.add(project);
+      const index = entry.proposals.findIndex(({ review }) => review.id === first.id);
+      const stored = entry.proposals[index];
+      if (stored !== undefined && stored.review.status === "open") {
+        this.store(entry, index, stored, { ...stored.review, staged: ELSEWHERE, staged_at: this.stamp(), updated_at: this.stamp() });
+      }
+    }
+    const { stageAnswers } = await loadRound();
+    return structuredClone(stageAnswers(entry, answers, this.stamp()));
   }
 
   /** The proposal a stage is for: unknown 404; not open 409 with its document's reason. */

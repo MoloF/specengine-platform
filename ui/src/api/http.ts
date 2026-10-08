@@ -3,6 +3,7 @@ import {
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
+  type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
   type TreeOptions,
@@ -17,6 +18,10 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  RoundAnswerBody,
+  RoundAnswersOutcome,
+  RoundAnswersBody,
+  RoundSheet,
   SearchResults,
   StageChoice,
   TaskList,
@@ -27,7 +32,8 @@ import type {
 
 // SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data", the
 // graph and the check `docs/features/ui-live.md` "Data", the tasks
-// `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon"):
+// `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon",
+// the question round `docs/features/ui-round.md` "Data"):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -102,6 +108,11 @@ function projectPath(project: string): string {
 /** A proposal's decision path: the stage's POST and DELETE. */
 function decisionPath(project: string, id: string): string {
   return `${projectPath(project)}/proposals/${segment(id)}/decision`;
+}
+
+/** The round's sheet; its answers' POST is under it. */
+function roundPath(project: string): string {
+  return `${projectPath(project)}/round`;
 }
 
 const NOT_JSON = Symbol("not JSON");
@@ -336,6 +347,27 @@ export class HttpClient implements SpecEngineClient {
   /** Drops the staged choice: DELETE on the same path, no body, no AbortSignal; 200 the review document. */
   async unstageDecision(project: string, id: string): Promise<Proposal> {
     return (await request("DELETE", decisionPath(project, id))) as Proposal;
+  }
+
+  /**
+   * `spec round new [--limit N] --json`, uncut: `limit` the one query, left out when absent (the
+   * daemon's default, 20). An unknown project or a refused `limit` rejects in the daemon's words.
+   */
+  async getRound(project: string, options: RoundOptions = {}, signal?: AbortSignal): Promise<RoundSheet> {
+    const query = queryOf([["limit", options.limit]]);
+    return (await request("GET", `${roundPath(project)}${query}`, { signal })) as RoundSheet;
+  }
+
+  /**
+   * Stages the round's answers in one POST (`docs/features/ui-round.md` "Data"): the body exactly
+   * the project's slug, then the answers in order, each its ID and stage, the stage the decision
+   * route's body (the choice, then `updated_at` as read); no AbortSignal (a write's answer is always
+   * taken). 200: the answers document, whatever each answer became; an error body (400, 403, 413,
+   * 415, 503): its message.
+   */
+  async stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome> {
+    const sent: RoundAnswersBody = { project, answers };
+    return (await request("POST", `${roundPath(project)}/answers`, { body: JSON.stringify(sent) })) as RoundAnswersOutcome;
   }
 
   /**

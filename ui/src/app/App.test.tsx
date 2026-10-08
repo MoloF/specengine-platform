@@ -10,9 +10,7 @@ import { App } from "./App";
 
 // AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph, Tasks
 // since ui-tasks; the home ("Overview", first in the nav) since ui-home, where `#/` lands; Health
-// since ui-health, the question round left to ui-round (AC-12 of ui-health).
-
-const UNBUILT = [["questions", "Questions", "ui-round"]] as const;
+// since ui-health; the question round since ui-round: no section is left unbuilt.
 
 /** The app's header (several `header` elements count as banners to Testing Library). */
 function appHeader(): HTMLElement {
@@ -49,12 +47,18 @@ describe("the shell (AC-11)", () => {
     expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/tasks");
   });
 
-  it.each(UNBUILT)("names the slice that builds %s", async (section, title, slice) => {
-    renderApp(stubClient(), `#/alpha/${section}`);
-    expect(await screen.findByRole("heading", { level: 1, name: title })).toBeTruthy();
-    expect(screen.getByText(slice).closest("p")?.textContent).toBe(`Not built yet: arrives in slice ${slice}.`);
+  it("builds Questions: its heading and its about without pasted answers, the sheet read, no stand-in (ui-round)", async () => {
+    const client = stubClient();
+    renderApp(client, "#/alpha/questions");
+    expect(await screen.findByRole("heading", { level: 1, name: "Questions" })).toBeTruthy();
+    expect(await screen.findByText("No open questions or discrepancies.")).toBeTruthy();
+    expect(screen.queryByText(/Not built yet/)).toBeNull();
+    const about = screen.getByText(/^The question round:/);
+    expect(about.textContent).toMatch(/^The question round: a sheet in the project's language and the answers\. /);
+    expect(about.textContent).not.toMatch(/paste/i);
+    expect(client.getRound).toHaveBeenCalledTimes(1);
     const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
-    expect(current?.textContent).toBe(title);
+    expect(current?.textContent).toBe("Questions");
   });
 
   it("builds the Graph: its heading and options, no stand-in", async () => {
@@ -259,7 +263,7 @@ describe("Mock data (AC-17)", () => {
     "#/alpha/tasks",
     "#/alpha/tasks/T-0001",
     "#/alpha/health",
-    ...UNBUILT.map(([section]) => `#/alpha/${section}`),
+    "#/alpha/questions",
     "#/alpha/nowhere",
     "#/zeta/inbox",
   ];

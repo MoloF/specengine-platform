@@ -532,6 +532,18 @@ fn round_ac04_the_round_sources_name_no_prefix_kind_project_or_block() {
         let text = fs::read_to_string(repository_root().join(source))
             .unwrap_or_else(|error| panic!("{source}: {error}"));
         assert!(text.len() > 1000, "{source} is read whole");
+        if source == "crates/specengine-cli/src/round.rs" {
+            // docs/features/ui-round.md T-05: the daemon's staging call and
+            // its body are in the scanned source.
+            for name in [
+                "pub fn round_stage_answers",
+                "pub struct RoundAnswersBody",
+                "pub fn round_limit",
+                "fn answers_outcome_text",
+            ] {
+                assert!(text.contains(name), "{source} holds `{name}`");
+            }
+        }
         found.extend(record_offenders(source, &text, &prefixes, &kinds));
         found.extend(offenders(source, &text, &prefixes, &names));
         found.extend(block_words(source, &text));

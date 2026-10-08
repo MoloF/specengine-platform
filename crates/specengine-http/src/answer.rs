@@ -14,7 +14,9 @@
 //! document (its `reason` set: data to the client); exit 2 → 503 with the
 //! error body, `message` the CLI's line(s) verbatim. The check exception:
 //! a check's report is a 200 document whatever its verdict's exit, keyed
-//! on the outcome being a check (a `CliError` is still a 503). A stage's
+//! on the outcome being a check (a `CliError` is still a 503); the round's
+//! answers alike, a 200 document whatever became of each answer, keyed on
+//! the outcome's type (docs/features/ui-round.md "Data"). A stage's
 //! answer (`docs/canon/decision-staging.md` "Daemon") is keyed on its
 //! cause: none 200, a usage defect 400, unknown 404, refused 409 (a
 //! `CliError` is still a 503). A body is
@@ -120,7 +122,8 @@ enum Answered {
 /// The answer of `outcome`: the exit map (0 → 200, 1 → 404, 2 → the CLI's
 /// lines), but a check's report is a 200 document whatever its exit (the
 /// check exception, docs/features/ui-live.md "Data": keyed on the outcome
-/// being a check, never on its verdict), and a stage's answer is keyed on
+/// being a check, never on its verdict), the round's answers too (keyed on
+/// the outcome's type, never on an answer's), and a stage's answer is keyed on
 /// its cause (`docs/canon/decision-staging.md` "Daemon"): none 200, a
 /// usage defect 400 (the error body, the CLI's line), unknown 404, refused
 /// 409 (the refused review document).
@@ -143,7 +146,7 @@ fn answered(outcome: &Outcome) -> Answered {
         };
     }
     let status = match (outcome, outcome.exit()) {
-        (Outcome::Check(_), _) | (_, Exit::Answered) => StatusCode::OK,
+        (Outcome::Check(_) | Outcome::RoundAnswers(_), _) | (_, Exit::Answered) => StatusCode::OK,
         (_, Exit::NotFound) => StatusCode::NOT_FOUND,
         (_, Exit::CannotRun) => return Answered::CannotRun(outcome.stderr_lines().join("\n")),
     };

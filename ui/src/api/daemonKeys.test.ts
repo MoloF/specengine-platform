@@ -18,6 +18,12 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  RoundAnswerEntry,
+  RoundAnswersOutcome,
+  RoundItem,
+  RoundSheet,
+  RoundTarget,
+  RoundTask,
   SearchHit,
   SnapshotDiff,
   SnapshotNode,
@@ -46,8 +52,10 @@ import type {
 // `pnpm build` otherwise) and equals the list the cited headings write; the keys the daemon serves
 // (the record less the base-only keys of a plain check, NEVER_SERVED) equal
 // `fixtures/daemon-keys.json`, which a Rust test regenerates from the daemon on fixture A:
-// daemon-read's six names, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two. While
-// that file is absent the comparison is skipped, saying so; once it exists it names all thirty-four.
+// daemon-read's six names, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, and
+// ui-round's six (T-04 of docs/features/ui-round.md: the sheet, an item, a target, a task, the
+// answers document, an entry). While that file is absent the comparison is skipped, saying so; once
+// it exists it names all forty.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -264,6 +272,41 @@ const KEYS = {
   } satisfies Record<keyof TaskRun, true>,
   TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
   Author: { type: true, role: true, model: true, run: true } satisfies Record<keyof Author, true>,
+  // docs/canon/round.md "JSON": the sheet, an item's 19 keys, a target, a task.
+  RoundSheet: { project: true, items: true, more: true, minutes: true, notes: true } satisfies Record<keyof RoundSheet, true>,
+  RoundItem: {
+    id: true,
+    kind: true,
+    severity: true,
+    gap_type: true,
+    summary: true,
+    working_answer: true,
+    price_of_other: true,
+    options: true,
+    recommendation: true,
+    evidence: true,
+    targets: true,
+    tasks: true,
+    worktree: true,
+    branch: true,
+    author: true,
+    staged: true,
+    staged_at: true,
+    created_at: true,
+    updated_at: true,
+  } satisfies Record<keyof RoundItem, true>,
+  RoundTarget: { id: true, path: true, title: true } satisfies Record<keyof RoundTarget, true>,
+  RoundTask: { id: true, status: true, title: true } satisfies Record<keyof RoundTask, true>,
+  // docs/features/ui-round.md "Data": the answers document and an entry of it.
+  RoundAnswersOutcome: { project: true, answers: true, notes: true } satisfies Record<keyof RoundAnswersOutcome, true>,
+  RoundAnswerEntry: {
+    id: true,
+    outcome: true,
+    stage: true,
+    staged_at: true,
+    replaced: true,
+    reason: true,
+  } satisfies Record<keyof RoundAnswerEntry, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -311,6 +354,13 @@ const CITED: Record<Named, string> = {
   TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
   TaskBundle: "node_ids, budget, bundle_hash",
   Author: "type, role, model, run",
+  RoundSheet: "project, items, more, minutes, notes",
+  RoundItem:
+    "id, kind, severity, gap_type, summary, working_answer, price_of_other, options, recommendation, evidence, targets, tasks, worktree, branch, author, staged, staged_at, created_at, updated_at",
+  RoundTarget: "id, path, title",
+  RoundTask: "id, status, title",
+  RoundAnswersOutcome: "project, answers, notes",
+  RoundAnswerEntry: "id, outcome, stage, staged_at, replaced, reason",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -345,8 +395,14 @@ const UI_LIVE_TASKS: readonly Named[] = [
 /** decision-staging's two: the stage's shapes (docs/features/decision-staging.md "Data", "Documents"). */
 const DECISION_STAGING: readonly Named[] = ["StagedApprove", "StagedReject"];
 
+/** ui-round's six: the sheet, an item, a target, a task, the answers document, an entry (docs/features/ui-round.md T-04). */
+const UI_ROUND: readonly Named[] = ["RoundSheet", "RoundItem", "RoundTarget", "RoundTask", "RoundAnswersOutcome", "RoundAnswerEntry"];
+
+/** The thirty-four types the fixture named before ui-round. */
+const BEFORE_ROUND: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS, ...DECISION_STAGING];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS, ...DECISION_STAGING];
+const ALL: readonly Named[] = [...BEFORE_ROUND, ...UI_ROUND];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -396,8 +452,26 @@ describe("the daemon's document types (AC-09)", () => {
   it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks)", () => {
     expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
-    expect(ALL).toHaveLength(34);
-    expect(new Set(ALL).size).toBe(34);
+    expect(BEFORE_ROUND).toHaveLength(34);
+    expect(ALL).toHaveLength(40);
+    expect(new Set(ALL).size).toBe(40);
+  });
+
+  it("counts ui-round's six: 5 sheet keys, 19 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round)", () => {
+    expect(UI_ROUND.map((name) => served(name).length)).toEqual([5, 19, 3, 3, 3, 6]);
+    expect(Object.keys(KEYS.RoundItem).slice(-4)).toEqual(["staged", "staged_at", "created_at", "updated_at"]);
+  });
+
+  it.each(["RoundSheet", "RoundItem", "RoundTarget", "RoundTask"])('%s cites `docs/canon/round.md` "JSON"', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/round.md` "JSON"');
+  });
+
+  it.each(["RoundAnswersOutcome", "RoundAnswerEntry", "RoundAnswerBody", "RoundAnswersBody"])('%s cites `docs/features/ui-round.md` "Data"', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/ui-round.md` "Data"');
   });
 
   it("lists each base-only key once, a key of its type the citation marks optional", () => {
@@ -470,7 +544,7 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the thirty-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two", () => {
+  it("names exactly the forty types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six", () => {
     expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
   });
 

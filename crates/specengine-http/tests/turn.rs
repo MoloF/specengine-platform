@@ -30,6 +30,15 @@
 //! them, while A's `/tasks/T-0003` and `/tasks` sent at the same time are
 //! answered before the corpus's first read ends. M: the handler outside
 //! `run` (a turn of its own).
+//!
+//! R-08 of docs/features/ui-round.md: the round's sheet and its answers
+//! take their project's turn. The two phases with `/round` (it refreshes
+//! the index: one refresh of the 4000 files is `T`): queued sheets whose
+//! clients left run no refresh. And with the generated corpus and A
+//! served by one daemon, the corpus's `GET /round` and `POST
+//! /round/answers` sent while the corpus's reads hold its turn are
+//! answered after them, while A's two, sent at the same time, are
+//! answered before the corpus's first read ends.
 
 mod common;
 mod task_state;
@@ -52,6 +61,8 @@ const QUEUED: usize = 5;
 const TREE: &str = "/api/projects/big-corpus/tree";
 
 const CHECK: &str = "/api/projects/big-corpus/check";
+
+const ROUND: &str = "/api/projects/big-corpus/round";
 
 /// A project of `FILES` generated mechanic files, committed once.
 fn corpus(scratch: &Scratch) -> std::path::PathBuf {
@@ -369,5 +380,137 @@ fn ac06_a_task_read_waits_for_its_own_projects_reads_not_anothers() {
     assert!(
         own_show_at > second_at && own_list_at > second_at,
         "the corpus's task reads ran beside its project's reads, outside the turn: {report}"
+    );
+}
+
+#[test]
+fn r08_a_queued_round_dropped_by_its_client_never_runs() {
+    let scratch = Scratch::new("turn-round-dropped");
+    let root = corpus(&scratch);
+    let home = scratch.home("h");
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root)]);
+    let reply = server.get(ROUND);
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let started = Instant::now();
+    server.get(ROUND).status(200);
+    let one = started.elapsed();
+    assert!(
+        one >= Duration::from_millis(150),
+        "one sheet takes {one:?}: too fast for queued requests to be dropped while it runs; \
+         the corpus must grow"
+    );
+
+    let dropped = phase(&server, ROUND, one, true);
+    let control = phase(&server, ROUND, one, false);
+    let cpu_ratio = dropped.cpu / control.cpu;
+    let wall_ratio = dropped.last.as_secs_f64() / control.last.as_secs_f64();
+    let report = format!(
+        "one sheet {one:?}; dropped {dropped:?}; control {control:?}; CPU ratio \
+         {cpu_ratio:.2}, wall ratio {wall_ratio:.2} (2 sheets against {} expected: {:.2})",
+        QUEUED + 2,
+        2.0 / (QUEUED + 2) as f64
+    );
+    eprintln!("{report}");
+    assert!(control.cpu > 0.0, "the control phase ran sheets: {report}");
+    assert!(
+        cpu_ratio < 0.6,
+        "the dropped requests' sheets ran (CPU): {report}"
+    );
+    assert!(
+        wall_ratio < 0.7,
+        "the last sheet waited for the dropped requests' sheets: {report}"
+    );
+}
+
+/// A same-origin page's `POST path` of the JSON `body` on `port` in a
+/// thread: its status and when its answer ended, measured from `start`.
+fn timed_post(
+    port: u16,
+    path: &str,
+    body: &str,
+    start: Instant,
+) -> thread::JoinHandle<(u16, Duration)> {
+    let host = format!("127.0.0.1:{port}");
+    let length = body.len().to_string();
+    let mut bytes = request_bytes(
+        "POST",
+        path,
+        &[
+            ("Host", &host),
+            ("Sec-Fetch-Site", "same-origin"),
+            ("Content-Type", "application/json"),
+            ("Content-Length", &length),
+        ],
+    );
+    bytes.extend_from_slice(body.as_bytes());
+    thread::spawn(move || {
+        let reply = http_exchange(port, &bytes, HTTP_TIMEOUT);
+        (reply.status, start.elapsed())
+    })
+}
+
+#[test]
+fn r08_the_round_and_its_answers_wait_for_their_own_projects_turn() {
+    let scratch = Scratch::new("turn-round");
+    let root = corpus(&scratch);
+    let a = scratch.repo("spec-a", "a", "main");
+    // A fresh HOME: the corpus's first read builds its whole index.
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root), &a]);
+    let port = server.port;
+    let start = Instant::now();
+    // The corpus's turn: its first read, then a second one queued.
+    let first = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    let second = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    // Sent while the corpus's reads hold its turn: the corpus's sheet and
+    // answers, then A's.
+    let own_sheet = timed(port, ROUND, start);
+    let own_answers = timed_post(
+        port,
+        "/api/projects/big-corpus/round/answers",
+        "{\"project\":\"big-corpus\",\"answers\":[]}",
+        start,
+    );
+    thread::sleep(Duration::from_millis(50));
+    let other_sheet = timed(port, "/api/projects/lantern-keep/round", start);
+    let other_answers = timed_post(
+        port,
+        "/api/projects/lantern-keep/round/answers",
+        "{\"project\":\"lantern-keep\",\"answers\":[]}",
+        start,
+    );
+
+    let (status, other_sheet_at) = other_sheet.join().expect("A's sheet");
+    assert_eq!(status, 200, "A's sheet");
+    let (status, other_answers_at) = other_answers.join().expect("A's answers");
+    assert_eq!(status, 200, "A's answers");
+    let (status, first_at) = first.join().expect("the corpus's first read");
+    assert_eq!(status, 200, "the first read");
+    let (status, second_at) = second.join().expect("the corpus's second read");
+    assert_eq!(status, 200, "the second read");
+    let (status, own_sheet_at) = own_sheet.join().expect("the corpus's sheet");
+    assert_eq!(status, 200, "the corpus's sheet");
+    let (status, own_answers_at) = own_answers.join().expect("the corpus's answers");
+    assert_eq!(status, 200, "the corpus's answers");
+    let report = format!(
+        "answers after the start: A's sheet {other_sheet_at:?} and answers \
+         {other_answers_at:?}, the corpus's reads {first_at:?} and {second_at:?}, its sheet \
+         {own_sheet_at:?} and answers {own_answers_at:?}"
+    );
+    eprintln!("{report}");
+    assert!(
+        first_at > Duration::from_millis(300),
+        "the first read is too quick to hold the turn while the round's requests arrive: \
+         {report}"
+    );
+    assert!(
+        other_sheet_at < first_at && other_answers_at < first_at,
+        "A's round waited for another project's read: {report}"
+    );
+    assert!(
+        own_sheet_at > second_at && own_answers_at > second_at,
+        "the corpus's round ran beside its project's reads, outside the turn: {report}"
     );
 }

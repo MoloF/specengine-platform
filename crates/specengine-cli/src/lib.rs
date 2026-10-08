@@ -63,6 +63,11 @@
 //!   one read-only sheet ([`RoundSheet`]); the returned answers checked,
 //!   staged and each confirmed by its item's own question through the
 //!   owner's [`RoundTerminal`] ([`RoundRun`]);
+//! - [`round_stage_answers`], [`round_limit`] (no command; the daemon's
+//!   round routes): the Questions screen's structured answers
+//!   ([`RoundAnswersBody`]) checked as a returned file's are and staged,
+//!   each refused alone, nothing decided ([`RoundAnswersOutcome`]); the
+//!   sheet's `--limit` judged before anything runs;
 //! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
 //!   discrepancy stored as a queue record (approved into a decision record,
 //!   or rejected with the answer), unless what is decided or asked already
@@ -184,9 +189,10 @@ pub use propose::{
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use review::{ReviewRequest, review, review_brief};
 pub use round::{
-    AnswerOutcome, RoundAnswer, RoundAnswerRequest, RoundItem, RoundNewRequest, RoundRun,
-    RoundSheet, RoundStageRequest, RoundStep, RoundTarget, RoundTask, RoundTerminal, WalkOutcome,
-    round_answer, round_new, round_stage,
+    AnswerOutcome, RoundAnswer, RoundAnswerBody, RoundAnswerEntry, RoundAnswerRequest,
+    RoundAnswersBody, RoundAnswersOutcome, RoundAnswersRequest, RoundItem, RoundNewRequest,
+    RoundRun, RoundSheet, RoundStageRequest, RoundStep, RoundTarget, RoundTask, RoundTerminal,
+    WalkOutcome, round_answer, round_limit, round_new, round_stage, round_stage_answers,
 };
 pub use search::{HitCut, SearchOutcome, SearchRequest, search, search_with_view};
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
@@ -393,6 +399,9 @@ pub enum Outcome {
     RoundSheet(Box<RoundSheet>),
     /// `round answer`: the answers, staged, and the walk.
     Round(Box<RoundRun>),
+    /// [`round_stage_answers`] (no command; the daemon's): each structured
+    /// answer staged or refused.
+    RoundAnswers(Box<RoundAnswersOutcome>),
 }
 
 impl Outcome {
@@ -413,6 +422,7 @@ impl Outcome {
             Self::Task(task) => task.exit(),
             Self::TaskShow(show) => show.exit(),
             Self::Round(run) => run.exit(),
+            Self::RoundAnswers(answers) => answers.exit(),
             _ => Exit::Answered,
         }
     }
@@ -445,6 +455,7 @@ impl Outcome {
             Self::TaskList(outcome) => (&outcome.messages, None),
             Self::RoundSheet(outcome) => (&outcome.messages, None),
             Self::Round(outcome) => (&outcome.messages, None),
+            Self::RoundAnswers(outcome) => (&outcome.messages, None),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -464,6 +475,7 @@ impl Outcome {
                 | Self::TaskList(_)
                 | Self::RoundSheet(_)
                 | Self::Round(_)
+                | Self::RoundAnswers(_)
         ) {
             for line in &mut lines {
                 *line = escape_controls(line);
@@ -496,6 +508,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::TaskList(outcome) => task::render_list_text(outcome),
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
         Outcome::Round(outcome) => round::render_text(outcome),
+        Outcome::RoundAnswers(outcome) => round::answers_outcome_text(outcome),
     }
 }
 
@@ -524,6 +537,7 @@ impl serde::Serialize for Outcome {
             Self::TaskList(outcome) => outcome.serialize(serializer),
             Self::RoundSheet(outcome) => outcome.serialize(serializer),
             Self::Round(outcome) => outcome.serialize(serializer),
+            Self::RoundAnswers(outcome) => outcome.serialize(serializer),
         }
     }
 }

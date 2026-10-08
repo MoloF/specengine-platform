@@ -4,6 +4,7 @@ import { useNode, type ProposalQuery } from "../api/queries";
 import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Prose } from "../markdown/Prose";
+import { shownSlot } from "../round/text";
 import { DEFAULT_TEXT_MODE, TextModeSwitch, type TextMode } from "../markdown/TextMode";
 import { Badge } from "../ui/Badge";
 import { DiffView } from "../ui/DiffView";
@@ -194,7 +195,10 @@ function ReviewBody({
               return (
                 <li key={`${String(index)}-${choice.label}`} className={recommended ? "option option-recommended" : "option"}>
                   <p className="option-label">
-                    <span>{choice.label}</span>
+                    {/* Agent text, as the round sheet writes a slot: controls as `\u{..}`, isolated. */}
+                    <span>
+                      <bdi>{shownSlot(choice.label)}</bdi>
+                    </span>
                     {recommended && (
                       <span className="recommended-mark">
                         <Icon name="recommended" />

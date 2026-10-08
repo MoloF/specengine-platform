@@ -82,11 +82,13 @@ describe("the tasks' reads (AC-01 of ui-tasks)", () => {
     expect(names.filter((name) => /transition|approve|cancel|claim/i.test(name))).toEqual([]);
   });
 
-  it("write only a stage: stageDecision and unstageDecision, no decide, apply or reject member, neither taking an AbortSignal (AC-14 of decision-staging)", () => {
+  it("write only stages: stageDecision, unstageDecision and the round's stageRoundAnswers, no decide, apply or reject member, none taking an AbortSignal (AC-14 of decision-staging, ui-round)", () => {
     const names = members();
-    expect(names.filter((name) => /stage|decide|decision|apply|reject/i.test(name))).toEqual(["stageDecision", "unstageDecision"]);
+    expect(names.filter((name) => /stage|decide|decision|apply|reject/i.test(name))).toEqual(["stageDecision", "unstageDecision", "stageRoundAnswers"]);
     expect(source).toContain("stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;");
     expect(source).toContain("unstageDecision(project: string, id: string): Promise<Proposal>;");
+    expect(source).toContain("stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome>;");
+    expect(source).toContain("getRound(project: string, options?: RoundOptions, signal?: AbortSignal): Promise<RoundSheet>;");
   });
 
   it("type a package read as the package or the exit-1 document, each read taking its query's AbortSignal", () => {
