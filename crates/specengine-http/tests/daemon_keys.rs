@@ -899,3 +899,127 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          SPECENGINE_WRITE_DAEMON_KEYS=1 only when the documents change on purpose)"
     );
 }
+
+/// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
+/// unchanged, no new key): the fixture still holds 41 sets; a decision
+/// raised through `spec propose decision` (with its patch's linked update,
+/// a staged answer) is served with the fixture's `Proposal` keys in order
+/// (its update's review too), its stage with `StagedApprove`'s, its inbox
+/// entries with `InboxEntry`'s, its round item with `RoundItem`'s and
+/// `RoundTarget`'s. M: a review key added.
+#[test]
+fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
+    let text = fs::read_to_string(repository_root().join("fixtures/daemon-keys.json"))
+        .expect("fixtures/daemon-keys.json");
+    let fixture: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let sets = fixture.as_object().expect("an object of sets");
+    assert_eq!(sets.len(), 41, "41 sets, none added");
+    let set = |name: &str| -> Vec<String> {
+        sets[name]
+            .as_array()
+            .unwrap_or_else(|| panic!("no set {name}"))
+            .iter()
+            .map(|key| key.as_str().expect("a key").to_owned())
+            .collect()
+    };
+    assert_eq!(set("Proposal").len(), 46);
+
+    let scratch = Scratch::new("daemon-keys-kd");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let shown = spec_json(&home, &cwd, &a, &["show", "RULE-STAM-REGEN"]).json();
+    let node = &shown["nodes"][0];
+    let rest = node["text"].as_str().expect("text").replacen(
+        "Base rate 10 units/s,",
+        "Base rate 10 units/s at rest,",
+        1,
+    );
+    let input = serde_json::json!({
+        "node_ids": ["RULE-STAM-REGEN"], "text": "Does regeneration wait for rest?",
+        "working_answer": "Yes: it starts 1.5 s after the last stamina use.",
+        "price_of_other": "Without the wait R-28 is rebalanced.",
+        "proposed_patch": {"target": "RULE-STAM-REGEN", "base": node["span_hash"],
+            "text": rest, "rationale": "Rest only."},
+        "distinct_from": ["DEC-0023"]
+    })
+    .to_string();
+    let run = run_product(
+        &spec_bin(),
+        &home,
+        &a,
+        &[
+            "--root",
+            a.to_str().unwrap(),
+            "propose",
+            "decision",
+            "--input",
+            "-",
+            "--author-role",
+            "developer",
+        ],
+        input.as_bytes(),
+    );
+    run.code(0);
+    assert!(
+        run.stdout.starts_with("PR-0001\nlinked: PR-0002\n"),
+        "{}",
+        run.show()
+    );
+
+    let server = Server::serve(&home, &cwd, &[&a]);
+    let p = "/api/projects/lantern-keep";
+    let read = server
+        .get(&format!("{p}/proposals/PR-0001"))
+        .status(200)
+        .json();
+    let updated_at = read["updated_at"].as_str().expect("updated_at");
+    server
+        .stage(
+            &format!("{p}/proposals/PR-0001/decision"),
+            &format!(
+                "{{\"decision\":\"approve\",\"answer\":\"No.\",\"updated_at\":\"{updated_at}\"}}"
+            ),
+        )
+        .status(200);
+    let decision = server
+        .get(&format!("{p}/proposals/PR-0001"))
+        .status(200)
+        .text()
+        .to_owned();
+    let update = server
+        .get(&format!("{p}/proposals/PR-0002"))
+        .status(200)
+        .text()
+        .to_owned();
+    assert!(decision.contains("\"kind\":\"decision\""), "{decision}");
+    assert_eq!(keys_of(&decision), set("Proposal"), "the decision's review");
+    assert_eq!(keys_of(&update), set("Proposal"), "its update's review");
+    assert_eq!(
+        keys_of(&raw_object(&decision, "staged")),
+        set("StagedApprove")
+    );
+    let inbox = server
+        .get(&format!("{p}/inbox"))
+        .status(200)
+        .text()
+        .to_owned();
+    let entries = raw_items(&inbox, "proposals");
+    assert_eq!(entries.len(), 2, "{inbox}");
+    for entry in &entries {
+        assert_eq!(keys_of(entry), set("InboxEntry"), "{entry}");
+    }
+    let round = server
+        .get(&format!("{p}/round"))
+        .status(200)
+        .text()
+        .to_owned();
+    let items = raw_items(&round, "items");
+    assert_eq!(items.len(), 1, "the decision alone: {round}");
+    assert!(items[0].contains("\"kind\":\"decision\""), "{}", items[0]);
+    assert_eq!(keys_of(&items[0]), set("RoundItem"));
+    for target in raw_items(&items[0], "targets") {
+        assert_eq!(keys_of(&target), set("RoundTarget"), "{target}");
+    }
+    drop(server);
+}

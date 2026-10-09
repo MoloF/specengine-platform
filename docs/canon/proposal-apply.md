@@ -60,7 +60,7 @@ Looked up by approve before step 2 and at step 5, by review, by reject before an
 
 ## Reject
 
-`reject(&Env, &Globals, &RejectRequest {id, reason?, now, git}, consent)`: `open` or `approved` only (a question or discrepancy: `decision-record.md` "Reject"; else exit 1 `` `PR` is applied: only an open or approved proposal is rejected (commit <sha>) ``), never with a `Proposal:` commit on its branch, checked before and after the prompt; refused: nothing written, no event:
+`reject(&Env, &Globals, &RejectRequest {id, reason?, now, git}, consent)`: `open` or `approved` only (a deciding kind: `decision-record.md` "Reject"; else exit 1 `` `PR` is applied: only an open or approved proposal is rejected (commit <sha>) ``), never with a `Proposal:` commit on its branch, checked before and after the prompt; refused: nothing written, no event:
 
 - its completing commit -> exit 1 `` `PR` has its commit <sha> on `<branch>`: a proposal whose commit is in history is never rejected; `spec approve PR` completes it ``;
 - another -> the newest named, ` (<k> older one(s) too)`, why it does not complete, the hint;

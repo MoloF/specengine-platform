@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin]
 owner: owner
-reviewed: 2026-10-07
+reviewed: 2026-10-09
 ---
 
 # Proposal kinds: create
 
-Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kind `create` adds a new spec file (**file form**) or new `{#ID}` sections in one node's span (**section form**), applied by `spec approve` as one commit where it was raised (ADR-0004, ADR-0005, ADR-0032). The proposer names the path and every new ID (ADR-0008); the queue reserves them while the proposal is live. `update` keeps its node set (`proposal-queue.md` "Creation" 3); decision kinds: `agent-intake.md`, `decision-record.md`; `interpretation`: `proposal-interpretation.md`; `decision`, `amendment`: later slices. Code: core `create.rs` (`id_sites`, `written_id` -> `NoId|Alias|LookAlike|Id`, `add_sections`), `record_form`; store `ProposalKind::Create`, `reserved()`; CLI `create.rs` (propose, the new file's apply), `propose.rs` (`SpanRule::Sections`), `preflight.rs` (section steps, `file_commit`); MCP `intake.rs`.
+Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kind `create` adds a new spec file (**file form**) or new `{#ID}` sections in one node's span (**section form**), applied by `spec approve` as one commit where it was raised (ADR-0004, ADR-0005, ADR-0032). The proposer names the path and every new ID (ADR-0008); the queue reserves them while the proposal is live. `update` keeps its node set (`proposal-queue.md` "Creation" 3); deciding kinds: `agent-intake.md`, `decision-record.md`; `interpretation`, `decision`: `proposal-{interpretation,decision}.md`; `amendment`: a later slice. Code: core `create.rs` (`id_sites`, `written_id` -> `NoId|Alias|LookAlike|Id`, `add_sections`), `record_form`; store `ProposalKind::Create`, `reserved()`; CLI `create.rs` (propose, the new file's apply), `propose.rs` (`SpanRule::Sections`), `preflight.rs` (section steps, `file_commit`); MCP `intake.rs`.
 
 ## Forms
 
@@ -28,7 +28,7 @@ In order; the first refusal answers, exit 1 unless named; nothing stored or rese
    - an `aliases_from` prefix -> `` `QST-033` (line N) is written with a legacy `aliases_from` prefix: a new ID is written with its canonical prefix, `Q-033` ``;
    - a look-alike or mixed script -> exit 2 `line N: <the Latin fix>` (core `fix`, ADR-0009);
    - a number not as core `record_id` writes it (`record_form`) -> `` `R-7` (line N): its prefix's numbers are written as `R-07` `` (past `width` passes: `id-width` is a finding);
-   - the `[decision_records]` prefix -> `` `DEC-0024`: these records are made by `spec approve` of a `question` or `discrepancy` ``;
+   - the `[decision_records]` prefix -> `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored `` (`deciding_kinds()`, by `decides()`);
    - twice -> `` `X` is defined twice in the text (lines a and b) ``;
    - taken: defined or aliased in the recorded root's index, refreshed now -> `` `X` is defined in `<path>` (`id: Y` | no `id:`) `` (`is an alias in`); else held by a live create -> `` `X` is reserved by `PR-0001` (open), a live create ``; a number shape adds ``; the next free is `Z` ``.
    An `immutable_text` prefix may be created in a new file; its sections are no section-form target (Creation 1).
@@ -76,10 +76,6 @@ Store: `ProposalKind::Create` (`applies()` true, `decides()` false); `NewProposa
 `propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` required, enum `["update", "create", "interpretation"]` from core `UPDATE_KIND`, `CREATE_KIND`, `INTERPRETATION_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> -32602 `base: ...`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
 
 Plugin (since 0.1.4), `propose-spec-change` "A new section or file": `kind: "create"`; a new file with `base: null`, its ID in `id:`; ID sections against the `span_hash`; the agent names each new ID. Taken by the spec or another's proposal: resend with the named next free ID. **Held by the agent's own earlier proposal** (a corrected create): never the next free ID, which would add the node twice; name that proposal, ask the owner to reject it, resend once `get_proposal` shows it rejected. Removing an ID section stays a question for the owner.
-
-## Interpretation
-
-An `update` naming an accepted decision, how it was applied and why (2026-10-09; MCP fields too): `proposal-interpretation.md`.
 
 ## Genre
 

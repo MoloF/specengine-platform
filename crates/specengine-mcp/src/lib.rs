@@ -11,8 +11,9 @@
 //! Tools: the four reads `get_tree`, `get_node`, `search`,
 //! `get_context_bundle`, each one call into the CLI library (`spec tree`,
 //! `show`, `search`, `bundle`), answering what the CLI answers; the queue
-//! tools `propose_change`, `ask_question`, `report_discrepancy` (writing
-//! only the proposal queue in the data directory, as `spec propose` does)
+//! tools `propose_change`, `ask_question`, `report_discrepancy`,
+//! `report_decision` (writing only the proposal queue in the data
+//! directory, as `spec propose` does; the last: task spec `kind-decision`)
 //! and `get_proposal` (`spec review --brief`;
 //! `docs/canon/agent-intake.md` "Tools"); the task tools `get_task`,
 //! `claim_task`, `submit_plan`, `report_run`, `complete_task` (`spec task

@@ -947,7 +947,8 @@ fn ac_r6_a_decision_flag_on_an_interpretation_is_exit_2() {
         assert_eq!(
             message,
             format!(
-                "spec: `{flag}` decides a question or a discrepancy; `{id}` is an \
+                // The deciding kinds by `decides()` (docs/features/kind-decision.md).
+                "spec: `{flag}` decides a `question`, `discrepancy` or `decision`; `{id}` is an \
                  interpretation: `spec approve {id}` applies it as proposed; nothing changed"
             )
         );

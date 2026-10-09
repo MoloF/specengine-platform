@@ -94,7 +94,7 @@ One queue in three places:
 
 | Decision | Effect |
 |---|---|
-| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): committed `spec: apply PR-0042` where raised (ADR-0005, ADR-0032), rebased if the node changed; a question or discrepancy: one decision record (`decision-apply`); to come: `spec_hash` recomputed, the task's `spec_snapshot` updated |
+| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): committed `spec: apply PR-0042` where raised (ADR-0005, ADR-0032), rebased if the node changed; a question, discrepancy or decision: one decision record (`decision-apply`, `kind-decision`); to come: `spec_hash` recomputed, the task's `spec_snapshot` updated |
 | **Accept "code to spec"** | spec unchanged; the decision record says the code is wrong; to come: an item in the task plan |
 | **Reject** | closed with a reason (`spec reject`); a repeated question or discrepancy gets it back as a hit; to come: the reason indexed, for `update` too |
 | **Needs clarification** | `changes_requested` with the owner's question → the agent sees it in `get_proposal`/`get_task` and extends |
@@ -129,7 +129,7 @@ spec verify (pre-push / CI / daemon on FileChanged)
 
 Shipped as `round` (`docs/canon/round.md`, ADR-0038); R and A records, cancelled assumptions, rephrasing: not built.
 
-1. `spec round new` prints the open questions and discrepancies on **one sheet in the project's language**, by `severity`, waiting tasks, age: text, working answer, price of another answer or options, targets, a reading-time estimate. Markdown; the UI's Questions screen answers it too (`docs/canon/round-ui.md`).
+1. `spec round new` prints the open questions, discrepancies and decisions on **one sheet in the project's language**, by `severity`, waiting tasks, age: text, working answer, price of another answer or options, targets, a reading-time estimate. Markdown; the UI's Questions screen answers it too (`docs/canon/round-ui.md`).
 2. The owner answers one line per item, `PR-0003: ok`, `PR-0005: 1`, `PR-0006: <own answer>`, `PR-0007: reject: <reason>`; `spec round answer FILE`, on a terminal, checks each against the queue and stages it, a refused one named alone.
 3. Each staged answer is confirmed by its item's own `spec approve|reject` `[y/N]`: one key per answer, never one for a round (ADR-0038); any other key keeps the stage.
 4. **Interpretations**: a decision that became a rule only after interpretation goes as kind `interpretation`, showing how it was applied and why interpretation was needed (shipped: `docs/canon/proposal-interpretation.md`).

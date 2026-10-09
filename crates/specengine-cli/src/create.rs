@@ -19,7 +19,8 @@
 //!   `aliases_from` prefix (exit 1 naming the canonical ID), a look-alike
 //!   or mixed script (exit 2 naming the Latin form), a number not as core
 //!   `record_id` writes it (exit 1 naming that form), the `[decision_records]`
-//!   prefix (exit 1: approving a question or a discrepancy makes those), an
+//!   prefix (exit 1: approving a question, a discrepancy or a decision
+//!   makes those; `spec propose decision` raises one), an
 //!   ID twice in the text, an ID defined or aliased in the index this call
 //!   refreshed or held by a live create (exit 1 naming the holder and, for
 //!   a number, the next free ID: one more than the highest of its prefix,
@@ -56,7 +57,7 @@ use specengine_core::check::CheckInput;
 use specengine_core::check::resolve::feature_stem;
 use specengine_core::create::{IdSite, WrittenId, id_sites, written_id};
 use specengine_core::intake::{
-    AuthorInput, DISCREPANCY_KIND, QUESTION_KIND, author_problem, rationale_problem,
+    AuthorInput, DECISION_KIND, author_problem, rationale_problem, with_article,
 };
 use specengine_core::proposal::{
     Author, COMMIT_SUBJECT, CommitFacts, PROPOSAL_TRAILER, commit_message,
@@ -757,8 +758,9 @@ impl NewIds<'_> {
                 && spec.prefix == prefix
             {
                 return Ok(Err(format!(
-                    "`{id}`: these records are made by `spec approve` of a `{QUESTION_KIND}` or \
-                     `{DISCREPANCY_KIND}`; nothing stored"
+                    "`{id}`: these records are made by `spec approve` of {} (`spec propose \
+                     {DECISION_KIND}` raises one); nothing stored",
+                    deciding_kinds()
                 )));
             }
             let canonical = self.canonical(id);
@@ -1011,6 +1013,28 @@ pub(crate) fn prepare_file(
         index,
         tree,
     })
+}
+
+/// The kinds whose approval makes a decision record (by `decides()`), as
+/// the record prefix's refusal and a decision flag on a kind that applies
+/// (`crate::apply::flag_on_apply`) name them: `` a `question`,
+/// `discrepancy` or `decision` ``.
+pub(crate) fn deciding_kinds() -> String {
+    let names: Vec<&str> = ProposalKind::ALL
+        .into_iter()
+        .filter(|kind| kind.decides())
+        .map(ProposalKind::as_str)
+        .collect();
+    let quoted: Vec<String> = names.iter().map(|name| format!("`{name}`")).collect();
+    let listed = match quoted.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        None => return String::new(),
+    };
+    // The first kind's article.
+    let article = with_article(names[0]);
+    let article = article.split_once(' ').map_or("a", |(article, _)| article);
+    format!("{article} {listed}")
 }
 
 /// IDs as a refusal lists them: `` `A`, `B` ``, or `none`.

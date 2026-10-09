@@ -45,9 +45,9 @@ pub enum Stage {
     Approve {
         /// `--option N`: a discrepancy's.
         option: Option<u64>,
-        /// `--answer T`: a question's.
+        /// `--answer T`: a question's or a decision's.
         answer: Option<String>,
-        /// `--canon REF`: a question's or a discrepancy's.
+        /// `--canon REF`: a kind that decides.
         canon: Option<String>,
         /// `--note T`.
         note: Option<String>,
@@ -161,9 +161,10 @@ impl Stage {
 
     /// Why a proposal of `kind` (`new_file`: a create's new file) cannot
     /// hold this stage: a decision flag of a kind that takes none (a kind
-    /// that applies takes none; a question no `--option`; a discrepancy no
-    /// `--answer`), a span hash on a kind that has no span (a deciding
-    /// kind, a create's new file), a blank reason; `None`: it can.
+    /// that applies takes none; a question or a decision no `--option`; a
+    /// discrepancy no `--answer`), a span hash on a kind that has no span
+    /// (a deciding kind, a create's new file), a blank reason; `None`: it
+    /// can.
     pub fn problem(&self, kind: ProposalKind, new_file: bool) -> Option<String> {
         match self {
             Self::Reject { reason } => reason
@@ -192,7 +193,10 @@ impl Stage {
                     }
                 } else {
                     match kind {
-                        ProposalKind::Question => option.is_some().then_some("option"),
+                        // Answered by the working answer or the owner's.
+                        ProposalKind::Question | ProposalKind::Decision => {
+                            option.is_some().then_some("option")
+                        }
                         ProposalKind::Discrepancy => answer.is_some().then_some("answer"),
                         // Judged above: they apply.
                         ProposalKind::Update

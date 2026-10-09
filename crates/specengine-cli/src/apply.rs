@@ -63,13 +63,14 @@
 //! and the two labelled texts, `Interprets: <ID>` its last trailer; a
 //! completion matches `Proposal:` only, the decision not checked again.
 //!
-//! A question or a discrepancy (canon `decision-record`, "Flags", "Steps")
-//! is approved into a decision record, one new file and one commit where it
+//! A kind that decides, a question, a discrepancy or a decision (canon
+//! `decision-record`, "Flags", "Steps"; task spec `kind-decision`), is
+//! approved into a decision record, one new file and one commit where it
 //! was raised ([`crate::decide`]); `--option N`, `--answer T`, `--canon REF`
 //! are its flags only (on a kind that applies: exit 2). A create's new
 //! file (task spec `proposal-kinds`) is one new file and one commit too
 //! ([`crate::create`]); its new sections apply as an update. Reject settles
-//! a question or a discrepancy with the answer as
+//! a kind that decides with the answer as
 //! its reason, refused as an update's when a commit of it is in history
 //! (its record's: none completes one with no record issued); holding no
 //! record, a history git cannot read refuses nothing (a note, before the
@@ -120,8 +121,8 @@ pub struct ApproveRequest {
     pub git: GitEnv,
 }
 
-/// `spec approve`'s flags of a question or a discrepancy (canon
-/// `decision-record`, "Flags"); all `None` for an update or a create.
+/// `spec approve`'s flags of a kind that decides (canon
+/// `decision-record`, "Flags"); all `None` for a kind that applies.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApproveFlags {
     /// `--option N`: a discrepancy's chosen option, from 0.
@@ -170,8 +171,7 @@ pub fn approve(
 }
 
 /// `spec approve PR [--note T] [--option N | --answer T] [--canon REF]`:
-/// [`approve`], a question or a discrepancy decided into its record by
-/// `flags`.
+/// [`approve`], a kind that decides decided into its record by `flags`.
 pub fn approve_with(
     env: &Env,
     globals: &Globals,
@@ -651,8 +651,8 @@ fn run_approve(
 }
 
 /// Why `flags` do not go with a kind that applies (a decision flag decides
-/// a question or a discrepancy): exit 2's reason; `None` when none is
-/// given.
+/// a kind that decides, the kinds named by `decides()`): exit 2's reason;
+/// `None` when none is given.
 pub(crate) fn flag_on_apply(proposal: &Proposal, flags: &ApproveFlags) -> Option<String> {
     if !flags.any() {
         return None;
@@ -664,8 +664,9 @@ pub(crate) fn flag_on_apply(proposal: &Proposal, flags: &ApproveFlags) -> Option
         (None, None) => "--canon",
     };
     Some(format!(
-        "`{flag}` decides a question or a discrepancy; `{id}` is {}: `spec approve {id}` \
-         applies it as proposed; nothing changed",
+        "`{flag}` decides {}; `{id}` is {}: `spec approve {id}` applies it as proposed; nothing \
+         changed",
+        create::deciding_kinds(),
         proposal.kind.with_article()
     ))
 }
@@ -1211,7 +1212,7 @@ fn reindex(env: &Env, context: &QueueContext, proposal: &Proposal, messages: &mu
 /// `Proposal:` trailer, naming it (and why it does not complete it, if
 /// so), or when git cannot tell (naming the way out); an orphan's lookup
 /// is skipped only when neither the branch nor the base commit is in the
-/// current repository. A question or a discrepancy holding no record is
+/// current repository. A kind that decides holding no record is
 /// refused only by such a commit found: its history unread, a note. Decided
 /// by the committer of its [`History`], else of the current repository.
 pub fn reject(
@@ -1302,7 +1303,7 @@ fn run_reject(
     messages.extend(staging.notes());
     // A proposal with a commit in history is never recorded as rejected;
     // nor one whose history git cannot read, when it may have a commit: an
-    // update, or a question or a discrepancy holding a record issued at an
+    // update, or a kind that decides holding a record issued at an
     // earlier step 7. One holding none is refused only by a commit with its
     // trailer found (a queue restored from before step 7 while its
     // record's commit is there: neither approve nor reject takes it); its

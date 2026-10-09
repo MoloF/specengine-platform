@@ -33,15 +33,15 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError,
-    CreateRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
-    GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals, GraphRequest,
-    INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest, InitRequest,
-    IntakeSeverity, IntakeSource, InterpretRequest, Outcome, ProposeRequest, ProposedText,
-    QuestionRequest, RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest,
-    RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES,
-    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json,
-    render_text,
+    CreateRequest, DecisionRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest,
+    ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
+    GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
+    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, Outcome, ProposeRequest,
+    ProposedText, QuestionRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest,
+    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
+    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest,
+    render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -169,7 +169,7 @@ enum Command {
         #[command(subcommand)]
         what: Export,
     },
-    /// Propose a change to one node or a new one, ask the owner a question or report a discrepancy; no file is touched until the owner approves a change.
+    /// Propose a change to one node or a new one, ask the owner a question, report a discrepancy or raise a decision taken during work; no file is touched until the owner approves a change.
     Propose {
         #[command(subcommand)]
         kind: Propose,
@@ -180,7 +180,7 @@ enum Command {
         #[arg(long)]
         all: bool,
     },
-    /// Print one proposal: its target, place, author, rationale, diff, and what approving it now would do (apply it, or complete it by its own commit already on its branch); a question's or a discrepancy's fields.
+    /// Print one proposal: its target, place, author, rationale, diff, and what approving it now would do (apply it, or complete it by its own commit already on its branch); a question's, a discrepancy's or a decision's fields.
     Review {
         #[arg(value_name = "PR")]
         id: String,
@@ -188,7 +188,7 @@ enum Command {
         #[arg(long)]
         brief: bool,
     },
-    /// Apply an open proposal in its worktree as one commit (a question or a discrepancy: write its decision record, from the project's [decision_records] template, as one new file and one commit), or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask). Without flags, an approve staged from the UI is shown and confirmed with its flags.
+    /// Apply an open proposal in its worktree as one commit (a question, a discrepancy or a decision: write its decision record, from the project's [decision_records] template, as one new file and one commit), or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask). Without flags, an approve staged from the UI is shown and confirmed with its flags.
     Approve {
         #[arg(value_name = "PR")]
         id: String,
@@ -198,10 +198,10 @@ enum Command {
         /// A discrepancy: the owner's chosen option, from 0.
         #[arg(long, value_name = "N")]
         option: Option<u64>,
-        /// A question: the owner's answer, instead of its working answer.
+        /// A question or a decision: the owner's answer, instead of its working answer.
         #[arg(long, value_name = "T")]
         answer: Option<String>,
-        /// A question or a discrepancy: the section its record governs (ID, ID#SECTION or path#anchor), instead of its first ID.
+        /// A question, a discrepancy or a decision: the section its record governs (ID, ID#SECTION or path#anchor), instead of its first ID.
         #[arg(long, value_name = "REF")]
         canon: Option<String>,
     },
@@ -219,7 +219,7 @@ enum Command {
         #[arg(value_name = "FILE")]
         file: PathBuf,
     },
-    /// A question round: the open questions and discrepancies on one sheet, answered in one sitting; each returned answer is staged, then asked again on the terminal, one at a time.
+    /// A question round: the open questions, discrepancies and decisions on one sheet, answered in one sitting; each returned answer is staged, then asked again on the terminal, one at a time.
     Round {
         #[command(subcommand)]
         command: RoundCommand,
@@ -255,7 +255,7 @@ enum Command {
 
 #[derive(Subcommand)]
 enum RoundCommand {
-    /// Print the current repository's open questions and discrepancies as a Markdown sheet to answer, by severity, waiting tasks and age; writes nothing.
+    /// Print the current repository's open questions, discrepancies and decisions as a Markdown sheet to answer, by severity, waiting tasks and age; writes nothing.
     New {
         /// Items at most, 1 to 200 (default 20).
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
@@ -267,7 +267,7 @@ enum RoundCommand {
         /// The filled sheet or a reply, relative to the current directory: `PR-NNNN: <answer>` lines and the `project:` line.
         #[arg(value_name = "FILE")]
         file: Option<PathBuf>,
-        /// No file: ask the open questions and discrepancies already staged, in round order.
+        /// No file: ask the open questions, discrepancies and decisions already staged, in round order.
         #[arg(long)]
         staged: bool,
     },
@@ -479,7 +479,7 @@ enum Propose {
         #[arg(long, value_name = "T")]
         task: Option<String>,
     },
-    /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question already answers it.
+    /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question or decision already answers it.
     Question {
         /// The nodes the question is about, each an ID, `slug/ID`, or a root-relative `.md` path (its document): 1 to 16.
         #[arg(value_name = "TARGET")]
@@ -524,6 +524,24 @@ enum Propose {
         #[arg(long = "author-model", value_name = "M")]
         author_model: Option<String>,
         /// The reporting agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
+    },
+    /// Raise a decision taken during work for the owner to confirm and record, with what another answer would cost and, optionally, the rule's new text as a linked update; stored in the queue unless an accepted decision or a queued question or decision already covers it.
+    Decision {
+        /// A JSON document of the decision (`node_ids`, `text`: what had to be decided, `working_answer`: the decision, `price_of_other`, optional `severity`, `proposed_patch`, `distinct_from`), or `-` for stdin; at most 8 MiB.
+        #[arg(long, value_name = "F")]
+        input: PathBuf,
+        /// The deciding agent's role (any of the three: an agent's decision).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The deciding agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The deciding agent's run.
         #[arg(long, value_name = "ID")]
         run: Option<String>,
         /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
@@ -904,6 +922,36 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 env,
                 globals,
                 &DiscrepancyRequest {
+                    input,
+                    author_role,
+                    author_model,
+                    run,
+                    now: now(),
+                    git: process_git(env),
+                },
+                task.as_deref(),
+            )?))
+        }
+        Command::Propose {
+            kind:
+                Propose::Decision {
+                    input,
+                    author_role,
+                    author_model,
+                    run,
+                    task,
+                },
+        } => {
+            let source = if input.as_os_str() == "-" {
+                IntakeSource::Given(read_stdin(INTAKE_INPUT_MAX_BYTES, "the input")?)
+            } else {
+                IntakeSource::File(input)
+            };
+            let input = specengine_cli::read_decision_input(env, &source)?;
+            Outcome::Intake(Box::new(specengine_cli::propose_decision_with_task(
+                env,
+                globals,
+                &DecisionRequest {
                     input,
                     author_role,
                     author_model,

@@ -1055,8 +1055,9 @@ fn ac09_what_only_a_generator_or_spec_approve_writes_is_refused() {
             &record("DEC-0024"),
             "DEC-0024"
         ),
-        "`DEC-0024`: these records are made by `spec approve` of a `question` or \
-         `discrepancy`; nothing stored"
+        // docs/features/kind-decision.md W22: the three deciding kinds.
+        "`DEC-0024`: these records are made by `spec approve` of a `question`, \
+         `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored"
     );
     assert!(pair.proposals().is_empty());
 }
@@ -1318,8 +1319,9 @@ fn ac13_decision_flags_and_a_misplaced_base_are_refused() {
         assert_eq!(
             message,
             format!(
-                "spec: `{name}` decides a question or a discrepancy; `{id}` is a create: `spec \
-                 approve {id}` applies it as proposed; nothing changed"
+                // The deciding kinds by `decides()` (docs/features/kind-decision.md).
+                "spec: `{name}` decides a `question`, `discrepancy` or `decision`; `{id}` is a \
+                 create: `spec approve {id}` applies it as proposed; nothing changed"
             )
         );
         assert!(questions.is_empty());

@@ -10,10 +10,11 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 use specengine_cli::{
-    BundleRequest, CliError, DiscrepancyInput, DiscrepancyRequest, Env, Exit, GitEnv, Globals,
-    IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, ReviewRequest,
-    SearchRequest, ShowRequest, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TreeRequest, render_json, render_text,
+    BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
+    Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest, ProposedText,
+    QuestionRequest, ReviewRequest, SearchRequest, ShowRequest, TaskClaimRequest,
+    TaskCompleteRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest,
+    render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -21,16 +22,23 @@ use super::{Finished, Home, Server, result, stateless_meta, with_meta};
 /// The four read tools, in `tools/list` order.
 pub const READ_TOOLS: [&str; 4] = ["get_context_bundle", "get_node", "get_tree", "search"];
 
-/// The queue tools of task spec `agent-intake`, in `tools/list` order.
-pub const QUEUE_TOOLS: [&str; 4] = [
+/// The queue tools of task spec `agent-intake`, in `tools/list` order, and
+/// docs/features/kind-decision.md's `report_decision`.
+pub const QUEUE_TOOLS: [&str; 5] = [
     "ask_question",
     "get_proposal",
     "propose_change",
+    "report_decision",
     "report_discrepancy",
 ];
 
-/// The three queue tools that write the queue.
-pub const WRITE_TOOLS: [&str; 3] = ["ask_question", "propose_change", "report_discrepancy"];
+/// The four queue tools that write the queue.
+pub const WRITE_TOOLS: [&str; 4] = [
+    "ask_question",
+    "propose_change",
+    "report_decision",
+    "report_discrepancy",
+];
 
 /// The task tools of docs/features/task-package.md ("Description and
 /// interactions"), in `tools/list` order: one reads, four move a task as
@@ -44,8 +52,9 @@ pub const TASK_TOOLS: [&str; 5] = [
 ];
 
 /// Every tool of the default build, in `tools/list` order (by name):
-/// thirteen since docs/features/task-package.md.
-pub const TOOLS: [&str; 13] = [
+/// thirteen since docs/features/task-package.md, fourteen since
+/// docs/features/kind-decision.md (`report_decision`).
+pub const TOOLS: [&str; 14] = [
     "ask_question",
     "claim_task",
     "complete_task",
@@ -55,6 +64,7 @@ pub const TOOLS: [&str; 13] = [
     "get_task",
     "get_tree",
     "propose_change",
+    "report_decision",
     "report_discrepancy",
     "report_run",
     "search",
@@ -329,6 +339,30 @@ pub fn queue_library(
                 env,
                 globals,
                 &DiscrepancyRequest {
+                    input,
+                    author_role: optional_text(args, "author_role"),
+                    author_model: optional_text(args, "author_model"),
+                    run: optional_text(args, "run"),
+                    now: now.to_owned(),
+                    git: git.clone(),
+                },
+                task,
+            )
+            .map(|outcome| Outcome::Intake(Box::new(outcome)))
+        }
+        // docs/features/kind-decision.md: `spec propose decision --input -`.
+        "report_decision" => {
+            let mut input = args.clone();
+            let object = input.as_object_mut().expect("arguments object");
+            for key in ["author_role", "author_model", "run", "task_id"] {
+                object.remove(key);
+            }
+            let input: DecisionInput =
+                serde_json::from_value(input).expect("a decision's --input document");
+            specengine_cli::propose_decision_with_task(
+                env,
+                globals,
+                &DecisionRequest {
                     input,
                     author_role: optional_text(args, "author_role"),
                     author_model: optional_text(args, "author_model"),

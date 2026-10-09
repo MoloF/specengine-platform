@@ -3,52 +3,24 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-10-06
+reviewed: 2026-10-09
 ---
 
-# Decision records: a question or discrepancy approved
+# Decision records: a deciding item approved
 
-Phase 2 slice 5 (`decision-apply`): `spec approve` on a `question` or `discrepancy` (`ProposalKind::decides()`) makes the owner's choice an accepted decision record in the project's own shape: one new file and one `spec: apply PR-...` commit in the recorded worktree (ADR-0004, ADR-0005, ADR-0032), the queue and the data directory; nothing else. `reject --reason` still settles one with an answer and no record ("Reject"). The engine names no prefix, directory or heading (ADR-0008): the project's table and template do. Updates, consent, completion: `proposal-apply.md`; intake: `agent-intake.md`. Code: core `record`; store `queue.rs`, `worktree.rs`; CLI `decide.rs`, `apply.rs` (dispatch, reject), `preflight.rs` (completion).
+Phase 2 slice 5 (`decision-apply`), `kind-decision`: `spec approve` on a `question`, `discrepancy` or `decision` (`ProposalKind::decides()`; a decision: `proposal-decision.md`) makes the owner's choice an accepted decision record in the project's own shape: one new file and one `spec: apply PR-...` commit in the recorded worktree (ADR-0004, ADR-0005, ADR-0032), the queue and the data directory; nothing else. `reject --reason` still settles one with an answer and no record ("Reject"). The engine names no prefix, directory or heading (ADR-0008): the project's table and template do. Config, template, flags: `decision-record-template.md`; updates, consent, completion: `proposal-apply.md`; intake: `agent-intake.md`. Code: core `record`; store `queue.rs`, `worktree.rs`; CLI `decide.rs`, `apply.rs` (dispatch, reject), `preflight.rs` (completion).
 
 ## Config
 
-```toml
-[decision_records]
-prefix   = "DEC"                    # an [ids] prefix
-dir      = "docs/records/DEC"       # root-relative, inside the walk
-template = "templates/decision.md"  # tracked; may lie outside the walk
-```
-
-Optional: only approving a question or discrepancy reads it. Exactly these three strings, checked whenever `specengine.toml` is loaded (any command: exit 2 `specengine.toml:<line>: decision_records.<key>: ...`): `prefix` an `[ids]` entry of shape `number` and scope `project` (an `aliases_from` name: error naming the canonical prefix); `dir`, `template` in `[paths]` grammar. Adding it re-parses nothing (the index fingerprint reads `[ids]`). No built-in shape: no table at step 3 -> exit 2 naming the table, its keys and the way out `spec reject PR --reason <answer>`.
+`[decision_records]` (`prefix`, `dir`, `template`), checked on every load: `decision-record-template.md` "Config".
 
 ## Template
 
-Read at step 3 under the recorded root: no symlink component, a regular file, tracked and clean in the worktree, UTF-8, at most 64 KiB, no character the queue's output escapes (core `is_escaped`; CR too), opening with a front-matter, every `{{` opening a known slot, `{{canon}}` in the front-matter; else exit 2 `<template>:<line>: <problem>` (file-level: line 1).
-
-Slots are replaced in **one left-to-right pass**; a value is never scanned again (a label `{{id}}` stays that text); lists joined by LF. A template holds no literal `{{`.
-
-| Slot | Value |
-|---|---|
-| `id`, `proposal` | the record's ID (`DEC-0024`); `PR-0004` |
-| `date`, `status` | `YYYY-MM-DD` of the run's clock, UTC; `accepted` |
-| `canon` | `--canon`, else the first ID target, canonical, reference form |
-| `targets` | the ID targets, `[Q-031, RULE-STAM-REGEN]`, `[]` if none (a path is no reference) |
-| `title` * | the chosen label, or the answer's first non-blank line: whitespace runs one space, trimmed, at most 128 bytes (cut at a character, ending U+2026) |
-| `choice` * | the label, or the answer |
-| `effect`, `cost` * | the option's effect and price; `--answer`: empty, `price_of_other`; the working answer: both empty |
-| `summary`, `options`, `evidence` * | the item's; `- <label> \| <effect> \| <price>`; `- <file>[:<lines>][ <qpath>] \| <observed> \| <documented>`; a question: empty |
-| `note`, `decided_by` * | `--note`; the committer identity |
-
-\* Free text: body only, else a template error; `title` excepted, which the template writes unquoted (`title: {{title}}`) and the engine writes as `"..."`, `\` and `"` backslashed.
+The project's template, its slots filled in one pass at step 5: `decision-record-template.md` "Template".
 
 ## Flags
 
-`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on an update -> exit 2. First, after the terminal check, no event (a stage too: `decision-staging.md`):
-
-- exit 2: `--option` on a question; `--answer` on a discrepancy; an open discrepancy without `--option` (naming the range, `0-2`); no ID target and no `--canon`; `--canon` not `ID`, `ID#SECTION` or `path#anchor` (core `parse_canon`); a blank `--answer`;
-- exit 1: `--option` past the options (naming `0-2`); `--answer` over 2 048 bytes, `--canon` over 512; an escaped character in any free-text source, named (``options[1].label: holds U+202E: a decision record never carries it; nothing changed``).
-
-The choice: a discrepancy's option; a question's working answer (no flag; never the recommendation by default) or `--answer T`. **Canon only from an ID**: a path target gives no reference-form `canon:`, so a question on a path alone needs `--canon`, which overrides anywhere; the check judges it (findings shown, never refusing). An `approved` item (stopped after step 7) takes only `--note`, any decision flag exit 2, and writes its stored `record_text`, never rendered again.
+`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`, judged by the item's fields: `decision-record-template.md` "Flags".
 
 ## Steps
 

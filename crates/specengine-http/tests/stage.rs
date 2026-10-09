@@ -1293,3 +1293,114 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     drop(server);
     assert_eq!(repository(&s, &s.a), before, "the repository untouched");
 }
+
+/// `spec propose decision --input -` of a decision on `RULE-STAM-REGEN`
+/// (`DEC-0023` named distinct) with its patch's linked update; the
+/// decision's ID.
+fn raise_decision(s: &Setup) -> String {
+    let shown = spec_json(&s.home, &s.cwd, &s.a, &["show", "RULE-STAM-REGEN"]).json();
+    let node = &shown["nodes"][0];
+    let text = node["text"].as_str().expect("text").replacen(
+        "Base rate 10 units/s,",
+        "Base rate 10 units/s at rest,",
+        1,
+    );
+    let input = json!({
+        "node_ids": ["RULE-STAM-REGEN"], "text": "Does regeneration wait for rest?",
+        "working_answer": "Yes: it starts 1.5 s after the last stamina use.",
+        "price_of_other": "Without the wait R-28 is rebalanced.",
+        "proposed_patch": {"target": "RULE-STAM-REGEN", "base": node["span_hash"],
+            "text": text, "rationale": "Rest only."},
+        "distinct_from": ["DEC-0023"]
+    })
+    .to_string();
+    let root = s.a.to_str().expect("UTF-8 root");
+    let run = run_product(
+        &spec_bin(),
+        &s.home,
+        &s.cwd,
+        &[
+            "--root",
+            root,
+            "propose",
+            "decision",
+            "--input",
+            "-",
+            "--author-role",
+            "developer",
+        ],
+        input.as_bytes(),
+    );
+    run.code(0);
+    let id = run.stdout.lines().next().unwrap_or_default().to_owned();
+    assert!(id.starts_with("PR-"), "not stored: {}", run.show());
+    id
+}
+
+/// docs/features/kind-decision.md AC-R6, the daemon's half: a decision
+/// staged through `POST …/decision` as a question is: `option` (alone or
+/// with an `answer`) 400 with the CLI's W19 line naming `a decision`,
+/// nothing stored, no event; no flag 200 (the review document's 46 keys,
+/// kind `decision`, the stage stored); an `answer` 200, replacing it; the
+/// repository untouched. M: `stage.rs`'s arm `None`.
+#[test]
+fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
+    let s = setup("stage-kd-r6");
+    let id = raise_decision(&s);
+    assert_eq!(id, "PR-0004");
+    let before = repository(&s, &s.a);
+    let stored = seqs(&s.home, &s.a);
+    let unstaged = row(&s.home, &id);
+    let server = Server::serve(&s.home, &s.cwd, &[&s.a]);
+    let refusal = format!(
+        "spec: `--option` names a discrepancy's option, and `{id}` is a decision: its working \
+         answer, or `--answer T`, answers it; nothing changed"
+    );
+    for fields in [
+        "\"decision\":\"approve\",\"option\":0",
+        "\"decision\":\"approve\",\"option\":1,\"answer\":\"yes\"",
+    ] {
+        let reply = stage_now(&server, &id, fields);
+        assert_eq!(reply.status, 400, "{fields}: {}", reply.text());
+        assert_eq!(reply.error_message(), refusal, "{fields}");
+        assert!(reply.cors_headers().is_empty(), "{fields}");
+        assert_eq!(row(&s.home, &id), unstaged, "{fields}: nothing stored");
+    }
+    assert_eq!(seqs(&s.home, &s.a), stored, "no event");
+
+    let reply = stage_now(&server, &id, "\"decision\":\"approve\",\"note\":\"keep\"");
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let document = reply.json();
+    assert_eq!(document.as_object().unwrap().len(), 46, "{document}");
+    assert_eq!(document["kind"], json!("decision"));
+    assert_eq!(document["linked"], json!("PR-0005"));
+    assert_eq!(document["options"], json!([]));
+    assert_eq!(
+        document["staged"],
+        json!({"decision": "approve", "option": null, "answer": null, "canon": null,
+            "note": "keep", "span_hash": null})
+    );
+    let reply = stage_now(&server, &id, "\"decision\":\"approve\",\"answer\":\"No.\"");
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let at = reply.json()["staged_at"]
+        .as_str()
+        .expect("staged_at")
+        .to_owned();
+    assert_eq!(
+        row(&s.home, &id),
+        format!(
+            "open|{{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\"canon\":null,\
+             \"note\":null,\"span_hash\":null}}|{at}|{at}"
+        )
+    );
+    assert_eq!(read(&server, &id)["staged"]["answer"], json!("No."));
+    // The linked update stays an update's stage form: no decision flag.
+    let reply = stage_now(
+        &server,
+        "PR-0005",
+        "\"decision\":\"approve\",\"answer\":\"No.\"",
+    );
+    assert_eq!(reply.status, 400, "{}", reply.text());
+    drop(server);
+    assert_eq!(repository(&s, &s.a), before, "the repository untouched");
+}

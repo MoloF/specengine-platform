@@ -597,9 +597,12 @@ function nodesOf(stored: StoredTask): Set<string> {
   return new Set(named);
 }
 
-/** A question's text, else the rationale's first line; null when it has neither. */
+/** The kinds whose text is a question's and whose assumption is their working answer (a decision: `docs/features/kind-decision.md` W21). */
+const ANSWERED = new Set(["question", "decision"]);
+
+/** A question's or a decision's text, else the rationale's first line; null when it has neither. */
 function summaryOf(proposal: StoredReview): string | null {
-  if (proposal.kind === "question") {
+  if (ANSWERED.has(proposal.kind)) {
     return proposal.summary;
   }
   const first = proposal.rationale?.split("\n")[0];
@@ -607,7 +610,7 @@ function summaryOf(proposal: StoredReview): string | null {
 }
 
 function assumptionOf(proposal: StoredReview): TaskAssumption | null {
-  if (proposal.kind === "question" && proposal.working_answer !== null) {
+  if (ANSWERED.has(proposal.kind) && proposal.working_answer !== null) {
     return { proposal: proposal.id, text: proposal.working_answer };
   }
   if (proposal.kind === "discrepancy" && proposal.recommendation !== null) {

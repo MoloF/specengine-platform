@@ -2,7 +2,7 @@
 //! the tools' half; "Description and interactions" 2: agents read a stage,
 //! no tool writes one):
 //!
-//! - `tools/list` is the thirteen of `TOOLS`, none of them a stage tool:
+//! - `tools/list` is the fourteen of `TOOLS`, none of them a stage tool:
 //!   no name, description or input property that stages, approves or
 //!   rejects.
 //! - `get_proposal` of an update staged with its span hash, a question
@@ -308,7 +308,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&repo.linked), Home::At(&repo.home));
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: thirteen tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: fourteen tools");
         for tool in list["tools"].as_array().expect("tools") {
             let name = tool["name"].as_str().unwrap_or_default();
             for word in ["stage", "approve", "reject", "decide"] {

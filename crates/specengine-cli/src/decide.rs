@@ -1,11 +1,14 @@
 //! `spec approve PR [--note T] [--option N | --answer T] [--canon REF]` of
-//! a question or a discrepancy (canon `decision-record`, "Flags", "Steps"):
-//! the owner's choice made an accepted decision record in the
-//! project's own shape, one new file and one `spec: apply PR-…` commit in
-//! the recorded worktree, nothing else.
+//! a question, a discrepancy or a decision (canon `decision-record`,
+//! "Flags", "Steps"; task spec `kind-decision`): the owner's choice made an
+//! accepted decision record in the project's own shape, one new file and
+//! one `spec: apply PR-…` commit in the recorded worktree, nothing else (a
+//! decision's linked update is approved on its own, its own commit).
 //!
-//! - **First** (no event): `--option` off a discrepancy, `--answer` off a
-//!   question, an open discrepancy without `--option`, no ID target and no
+//! - **First** (no event), judged by the item's fields, never its kind's
+//!   name: `--option` on one without options (a question's, a decision's),
+//!   `--answer` on one with options (a discrepancy's), one with options
+//!   without `--option`, no ID target and no
 //!   `--canon`, a `--canon` that is no `canon:` value, a blank `--answer`,
 //!   a choice with no line that is not blank (no title) exit 2; an
 //!   `--option` out of range, an `--answer` over 2 048 bytes, a `--canon`
@@ -56,9 +59,9 @@ use specengine_core::record::{
 use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
     CreateFileError, Decision, GitEnv, IndexWriter as _, Intake, NamedBytes, Proposal,
-    ProposalFinding, ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RecordApproval,
-    RecordSeries, SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline,
-    introduced_findings, load_check,
+    ProposalFinding, ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries,
+    SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings,
+    load_check,
 };
 
 use crate::apply::{
@@ -83,7 +86,7 @@ use crate::{CliError, Env, Exit, Message, escape_controls, one_line};
 
 const COMMAND: QueueCommand = QueueCommand::Approve;
 
-/// `spec approve` of a question or a discrepancy, `open` or `approved`
+/// `spec approve` of a kind that decides, `open` or `approved`
 /// (`run_approve` has refused an applied or rejected one): see the module
 /// documentation. `request` and `flags` are a staged approve's when
 /// `staging` confirms one (`crate::stage`).
@@ -128,7 +131,7 @@ pub(crate) fn approve_record(
                 Ok(choice) => choice,
                 Err(reason) => return refused(context, request, proposal, &reason, messages),
             };
-            let sources = Sources::new(proposal.kind, intake, &choice, request.note.as_deref());
+            let sources = Sources::new(intake, &choice, request.note.as_deref());
             if sources.title().is_empty() {
                 return Err(CliError::spec(format!(
                     "`{id}`'s record would have no title: {} holds no line that is not blank; \
@@ -190,7 +193,7 @@ pub(crate) fn approve_record(
                     }
                     if !given.is_empty() {
                         // A discrepancy names its option again; a question
-                        // takes no flag.
+                        // or a decision takes no flag.
                         let again = match record.choice {
                             Choice::Option(option) => {
                                 format!("spec approve {id} --option {option}")
@@ -789,9 +792,12 @@ fn no_table(root: &Path, id: &str) -> String {
     )
 }
 
-/// The flags of an open question or discrepancy checked (see the module
-/// documentation): its [`Choice`], a refusal (`Ok(Err)`, exit 1), or exit
-/// 2. A stage's flags are checked by it too (`crate::stage`).
+/// The flags of an open item of a deciding kind checked (see the module
+/// documentation), judged by its fields: one with options (a
+/// discrepancy's) takes `--option`, one without (a question's, a
+/// decision's) its working answer or `--answer`. Its [`Choice`], a refusal
+/// (`Ok(Err)`, exit 1), or exit 2. A stage's flags are checked by it too
+/// (`crate::stage`).
 pub(crate) fn first_checks(
     proposal: &Proposal,
     intake: &Intake,
@@ -799,25 +805,27 @@ pub(crate) fn first_checks(
     scheme: &specengine_model::IdScheme,
 ) -> Result<Result<Choice, String>, CliError> {
     let id = &proposal.id;
-    let question = proposal.kind == ProposalKind::Question;
+    let kind = proposal.kind.with_article();
+    // No options: the working answer or the owner's own answers it.
+    let takes_answer = intake.options.is_empty();
     let count = intake.options.len();
     let range = format!("0-{}", count.saturating_sub(1));
-    if question && flags.option.is_some() {
+    if takes_answer && flags.option.is_some() {
         return Err(CliError::spec(format!(
-            "`--option` names a discrepancy's option, and `{id}` is a question: its working \
-             answer, or `--answer T`, answers it; nothing changed"
+            "`--option` names a discrepancy's option, and `{id}` is {kind}: its working answer, \
+             or `--answer T`, answers it; nothing changed"
         )));
     }
-    if !question && flags.answer.is_some() {
+    if !takes_answer && flags.answer.is_some() {
         return Err(CliError::spec(format!(
-            "`--answer` answers a question, and `{id}` is a discrepancy: name the owner's choice \
-             with `--option N` ({range}); nothing changed"
+            "`--answer` answers a question, and `{id}` is {kind}: name the owner's choice with \
+             `--option N` ({range}); nothing changed"
         )));
     }
-    if !question && flags.option.is_none() {
+    if !takes_answer && flags.option.is_none() {
         return Err(CliError::spec(format!(
-            "`{id}` is a discrepancy: name the owner's choice with `--option N` ({range}); \
-             nothing changed"
+            "`{id}` is {kind}: name the owner's choice with `--option N` ({range}); nothing \
+             changed"
         )));
     }
     let names_an_id = intake
@@ -911,7 +919,7 @@ struct Engine<'a> {
 }
 
 impl Sources {
-    fn new(kind: ProposalKind, intake: &Intake, choice: &Choice, note: Option<&str>) -> Self {
+    fn new(intake: &Intake, choice: &Choice, note: Option<&str>) -> Self {
         let mut sources = Self {
             fields: Vec::new(),
             summary: 0,
@@ -924,25 +932,25 @@ impl Sources {
             decided_by: None,
         };
         sources.summary = sources.push("summary", &intake.summary);
-        if kind == ProposalKind::Discrepancy {
-            for (index, item) in intake.evidence.iter().enumerate() {
-                let name = |field: &str| format!("evidence[{index}].{field}");
-                let file = sources.push(&name("file"), &item.file);
-                let qpath = sources.push(&name("qpath"), item.qpath.as_deref().unwrap_or_default());
-                let lines = sources.push(&name("lines"), item.lines.as_deref().unwrap_or_default());
-                let observed = sources.push(&name("observed"), &item.observed);
-                let documented = sources.push(&name("documented"), &item.documented);
-                sources
-                    .evidence
-                    .push([file, qpath, lines, observed, documented]);
-            }
-            for (index, option) in intake.options.iter().enumerate() {
-                let name = |field: &str| format!("options[{index}].{field}");
-                let label = sources.push(&name("label"), &option.label);
-                let effect = sources.push(&name("effect"), &option.effect);
-                let price = sources.push(&name("price"), &option.price);
-                sources.options.push([label, effect, price]);
-            }
+        // A discrepancy's evidence and options; a question and a decision
+        // hold none.
+        for (index, item) in intake.evidence.iter().enumerate() {
+            let name = |field: &str| format!("evidence[{index}].{field}");
+            let file = sources.push(&name("file"), &item.file);
+            let qpath = sources.push(&name("qpath"), item.qpath.as_deref().unwrap_or_default());
+            let lines = sources.push(&name("lines"), item.lines.as_deref().unwrap_or_default());
+            let observed = sources.push(&name("observed"), &item.observed);
+            let documented = sources.push(&name("documented"), &item.documented);
+            sources
+                .evidence
+                .push([file, qpath, lines, observed, documented]);
+        }
+        for (index, option) in intake.options.iter().enumerate() {
+            let name = |field: &str| format!("options[{index}].{field}");
+            let label = sources.push(&name("label"), &option.label);
+            let effect = sources.push(&name("effect"), &option.effect);
+            let price = sources.push(&name("price"), &option.price);
+            sources.options.push([label, effect, price]);
         }
         match choice {
             Choice::Option(index) => sources.chosen = usize::try_from(*index).ok(),

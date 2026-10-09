@@ -619,3 +619,92 @@ fn kind_interpretation_ac_t2_no_interpretation_literal_outside_core() {
     assert_eq!(literals(sample.lines().next().unwrap()), [kind]);
     assert!(literals(sample.lines().nth(1).unwrap()).is_empty());
 }
+
+/// The kind comparisons docs/features/kind-decision.md AC-T2 refuses in
+/// `line` (comments aside): `ProposalKind::Question` (or `Decision`), by
+/// any path (`specengine_store::ProposalKind::Question`), with `==` or
+/// `!=` on either side (a deciding kind is judged by `decides()`, the
+/// row's shape or an exhaustive match).
+fn kind_comparisons(line: &str) -> Vec<String> {
+    let code = line.split("//").next().unwrap_or_default();
+    let mut found = Vec::new();
+    for kind in ["Question", "Decision"] {
+        let name = format!("ProposalKind::{kind}");
+        let mut from = 0;
+        while let Some(at) = code[from..].find(&name) {
+            let start = from + at;
+            let end = start + name.len();
+            from = end;
+            // The next character ends the variant (not `QuestionX`).
+            if code[end..]
+                .chars()
+                .next()
+                .is_some_and(|next| next.is_alphanumeric() || next == '_')
+            {
+                continue;
+            }
+            // Before it: the path's `ident::` segments, then spaces.
+            let mut before = code[..start]
+                .trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == ':');
+            before = before.trim_end();
+            let after = code[end..].trim_start();
+            if ["==", "!="]
+                .iter()
+                .any(|op| before.ends_with(op) || after.starts_with(op))
+            {
+                found.push(format!("{name}: {}", code.trim()));
+            }
+        }
+    }
+    found
+}
+
+/// docs/features/kind-decision.md AC-T2 ("Rules and edge cases", Kind
+/// sites): no `.rs` file of the store, the CLI or the MCP server compares
+/// a kind with `ProposalKind::Question` (or `Decision`) by `==` or `!=`;
+/// the scan sees what it must refuse. M: `decide.rs:802` left (`let
+/// question = proposal.kind == ProposalKind::Question;`).
+#[test]
+fn kind_decision_ac_t2_no_kind_compared_with_a_question() {
+    let mut found = Vec::new();
+    let mut scanned = 0;
+    for dir in OUTSIDE_CORE {
+        for (source, text) in rust_sources(&repository_root().join(dir)) {
+            scanned += 1;
+            for (number, line) in text.lines().enumerate() {
+                for pattern in kind_comparisons(line) {
+                    found.push(format!("{source}:{}: {pattern}", number + 1));
+                }
+            }
+        }
+    }
+    assert!(scanned >= 30, "{scanned} sources scanned");
+    assert!(
+        found.is_empty(),
+        "a kind compared by name, not by `decides()` or its shape:\n{}",
+        found.join("\n")
+    );
+    // The scan sees each form, and not a comment, a match arm or another
+    // kind.
+    for line in [
+        "    let question = proposal.kind == ProposalKind::Question;",
+        "    if kind != ProposalKind::Question {",
+        "    if ProposalKind::Decision==kind {",
+        "        (ProposalKind::Question\n == kind)",
+        "    let q = proposal.kind == specengine_store::ProposalKind::Question;",
+        "    let q = proposal.kind==crate::ProposalKind::Decision;",
+    ] {
+        let joined = line.replace('\n', " ");
+        assert!(!kind_comparisons(&joined).is_empty(), "{line}");
+    }
+    for line in [
+        "    // kind == ProposalKind::Question",
+        "        ProposalKind::Question | ProposalKind::Decision => {",
+        "    let discrepancy = new.kind == ProposalKind::Discrepancy;",
+        "            kind: ProposalKind::Question,",
+        "    let x = kind == ProposalKind::QuestionLike;",
+        "    let y = ProposalKind::Questions;",
+    ] {
+        assert!(kind_comparisons(line).is_empty(), "{line}");
+    }
+}

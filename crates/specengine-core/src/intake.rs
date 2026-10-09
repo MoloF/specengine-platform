@@ -1,9 +1,10 @@
 //! The pure half of the agent intake (`docs/canon/agent-intake.md` "Tools",
-//! "Stored", "Dedup", "Rules" 2): the two queue kinds that never apply, their
-//! closed enums, the caps every caller checks (UTF-8 bytes), the field
-//! checks in input order, and the normalised text the queue's dedup
-//! compares; beside them the names of the three kinds that apply, and an
-//! interpretation's fields ([`Interpretation`]). Nothing is
+//! "Stored", "Dedup", "Rules" 2): the three queue kinds that never apply
+//! (a `decision`: task spec `kind-decision`), their closed enums, the caps
+//! every caller checks (UTF-8 bytes), the field checks in input order, and
+//! the normalised text the queue's dedup compares; beside them the names of
+//! the three kinds that apply, and an interpretation's fields
+//! ([`Interpretation`]). Nothing is
 //! read, written or resolved here, and no project's word appears
 //! (ADR-0008): the kinds and enums are the engine's.
 
@@ -33,9 +34,16 @@ pub const QUESTION_KIND: &str = "question";
 /// observed: a queue record only, never applied.
 pub const DISCREPANCY_KIND: &str = "discrepancy";
 
+/// The kind of a decision taken during work, by an agent or the owner: a
+/// question's fields, its decision the working answer, recorded as a
+/// question's when the owner confirms it; never applied (task spec
+/// `kind-decision`).
+pub const DECISION_KIND: &str = "decision";
+
 /// The most `node_ids` of one item.
 pub const NODE_IDS_MAX: usize = 16;
-/// The most bytes of a question's `text` and a discrepancy's `summary`.
+/// The most bytes of a question's or a decision's `text` and a
+/// discrepancy's `summary`.
 pub const SUMMARY_MAX: usize = 1024;
 /// The most bytes of `working_answer` and `price_of_other`.
 pub const ANSWER_MAX: usize = 2048;
@@ -230,6 +238,29 @@ pub struct DiscrepancyInput {
     pub distinct_from: Option<Vec<String>>,
 }
 
+/// A decision taken during work as given (the MCP arguments but the
+/// author's, the CLI's `--input` document): what had to be decided
+/// (`text`), the decision (`working_answer`), what another answer would
+/// cost, and the rule's new text as an optional linked update. No field is
+/// named `decision`: that name keeps its other meanings.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionInput {
+    pub node_ids: Vec<String>,
+    /// What had to be decided.
+    pub text: String,
+    /// The decision taken, worked on until the owner confirms it.
+    pub working_answer: String,
+    pub price_of_other: String,
+    /// Absent or `null`: `normal`.
+    #[serde(default)]
+    pub severity: Option<IntakeSeverity>,
+    #[serde(default)]
+    pub proposed_patch: Option<ProposedPatch>,
+    #[serde(default)]
+    pub distinct_from: Option<Vec<String>>,
+}
+
 /// A question as given.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuestionInput<'a> {
@@ -305,6 +336,19 @@ pub fn discrepancy_problem(
                 ANSWER_MAX,
             )
         })
+        .or_else(|| input.proposed_patch.as_ref().and_then(patch_problem))
+        .or_else(|| distinct_problem(input.distinct_from.as_deref().unwrap_or_default()))
+        .or_else(|| author_problem(author))
+}
+
+/// The first problem of a decision's fields, in input order: `node_ids`,
+/// `text`, `working_answer`, `price_of_other`, `proposed_patch`,
+/// `distinct_from`, then the author's.
+pub fn decision_problem(input: &DecisionInput, author: AuthorInput<'_>) -> Option<FieldProblem> {
+    node_ids_problem(&input.node_ids)
+        .or_else(|| required("text", &input.text, SUMMARY_MAX))
+        .or_else(|| required("working_answer", &input.working_answer, ANSWER_MAX))
+        .or_else(|| required("price_of_other", &input.price_of_other, ANSWER_MAX))
         .or_else(|| input.proposed_patch.as_ref().and_then(patch_problem))
         .or_else(|| distinct_problem(input.distinct_from.as_deref().unwrap_or_default()))
         .or_else(|| author_problem(author))

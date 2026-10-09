@@ -12,11 +12,12 @@
 //! spec `proposal-apply`, the proposal queue: `spec propose update`, `spec
 //! inbox`, `spec review`, `spec approve` (the one write door: the target
 //! file replaced in the proposal's recorded worktree and committed there;
-//! a question's or a discrepancy's decision record created there, canon
-//! `decision-record`, "Steps") and `spec reject`; the queue's backup (canon
+//! the decision record of a question, a discrepancy or a decision created
+//! there, canon `decision-record`, "Steps") and `spec reject`; the queue's backup (canon
 //! `queue-backup`, "Commands"): `spec export state` and `spec import-state`; the agent
 //! intake (canon `agent-intake`, "Tools"): `spec propose question`, `spec
-//! propose discrepancy` and the `--brief` answers of `spec propose update`
+//! propose discrepancy`, `spec propose decision` (task spec
+//! `kind-decision`) and the `--brief` answers of `spec propose update`
 //! and `spec review` (MCP's intake tools call these); task spec
 //! `proposal-kinds`: `spec propose create`, a new spec file or new `{#ID}`
 //! sections through the queue, applied as one commit.
@@ -59,7 +60,7 @@
 //!   daemon's decision route calls them), confirmed only by `approve` or
 //!   `reject` on a terminal ([`StageOutcome`]);
 //! - [`round_new`], [`round_answer`], [`round_stage`]: a question round
-//!   (canon `round`): the open questions and discrepancies on
+//!   (canon `round`): the open questions, discrepancies and decisions on
 //!   one read-only sheet ([`RoundSheet`]); the returned answers checked,
 //!   staged and each confirmed by its item's own question through the
 //!   owner's [`RoundTerminal`] ([`RoundRun`]);
@@ -68,10 +69,11 @@
 //!   ([`RoundAnswersBody`]) checked as a returned file's are and staged,
 //!   each refused alone, nothing decided ([`RoundAnswersOutcome`]); the
 //!   sheet's `--limit` judged before anything runs;
-//! - [`propose_question`], [`propose_discrepancy`]: an agent's question or
-//!   discrepancy stored as a queue record (approved into a decision record,
-//!   or rejected with the answer), unless what is decided or asked already
-//!   answers it ([`IntakeDocument`]);
+//! - [`propose_question`], [`propose_discrepancy`], [`propose_decision`]:
+//!   an agent's question, discrepancy or decision taken during work stored
+//!   as a queue record (approved into a decision record, or rejected with
+//!   the answer), unless what is decided or asked already answers it
+//!   ([`IntakeDocument`]);
 //! - [`gate`]: the task gate's verdict on one agent write (canon `gate`,
 //!   "Verdict"): exit 0 pass, 2 refuse or no verdict, never a [`CliError`];
 //!   [`read_hook_input`] reads the hook's stdin within the deadline;
@@ -107,7 +109,7 @@
 //! (`round answer` too, one record per item the owner confirms); `index`,
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state` and `round new` write only the data
-//! directory (`propose question` and `propose discrepancy` too), `export
+//! directory (`propose question`, `discrepancy` and `decision` too), `export
 //! state` only its dump (never inside the worktree), `check` and `serve`
 //! nothing (the daemon `serve` execs writes its data directory). Nothing
 //! found in the corpus is fatal
@@ -181,10 +183,11 @@ pub use graph::{
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use intake::{
-    DiscrepancyRequest, INTAKE_INPUT_MAX_BYTES, INTAKE_MATCHES_MAX, IntakeDocument, IntakeMatch,
-    IntakeOutcome, IntakeSource, MatchSource, QuestionRequest, propose_discrepancy,
+    DecisionRequest, DiscrepancyRequest, INTAKE_INPUT_MAX_BYTES, INTAKE_MATCHES_MAX,
+    IntakeDocument, IntakeMatch, IntakeOutcome, IntakeSource, MatchSource, QuestionRequest,
+    propose_decision, propose_decision_with_task, propose_discrepancy,
     propose_discrepancy_with_task, propose_question, propose_question_with_task,
-    read_discrepancy_input,
+    read_decision_input, read_discrepancy_input,
 };
 pub use interpret::{InterpretRequest, propose_interpretation, propose_interpretation_brief};
 pub use links::{ShownLink, ShownLinks};
@@ -214,14 +217,14 @@ pub use serve::{
 pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
 pub use specengine_core::ProjectConfig;
 /// The intake's input types, enums and caps (core's), for the bridges;
-/// the names of the kinds `propose_change` takes, and a kind's name with
-/// its article.
+/// the names of the kinds `propose_change` takes and of a decision, and a
+/// kind's name with its article.
 pub use specengine_core::intake::{
-    ANSWER_MAX, CREATE_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX, DiscrepancyInput, EVIDENCE_MAX,
-    EVIDENCE_TEXT_MAX, Evidence, GapType, INTERPRETATION_FIELDS, INTERPRETATION_KIND,
-    INTERPRETATION_TEXT_MAX, IntakeOption, IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT,
-    LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch,
-    RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND, with_article,
+    ANSWER_MAX, CREATE_KIND, DECISION_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX, DecisionInput,
+    DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTERPRETATION_FIELDS,
+    INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption, IntakeSeverity, Interpretation,
+    LABEL_MAX, LINE_LIMIT, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN,
+    ProposedPatch, RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND, with_article,
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;

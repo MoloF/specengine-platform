@@ -1,4 +1,4 @@
-import { frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
+import { fakeHex, frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
 import { nodeKinds, specStatuses } from "./kinds";
 
 // harbor-sim: an invented harbour-simulation game. English text; non-Latin script only as
@@ -21,6 +21,10 @@ import { nodeKinds, specStatuses } from "./kinds";
 //
 // kind-interpretation (docs/features/kind-interpretation.md "Description and interactions", UI):
 // PR-0049 carries the accepted decision DEC-0012 into RULE-HARBOR-CLOCK, with how and why.
+//
+// kind-decision (docs/features/kind-decision.md "Data", AC-U1): PR-0050 a decision taken during
+// work, stored as a question's columns (its matter the summary, the decision its working answer,
+// no options) with its canon diff as the linked update PR-0051, raised together in one intake.
 
 const SLUG = "harbor-sim";
 
@@ -65,6 +69,44 @@ export const CLOCK_INTERPRETATION = {
   decision: WEATHER_DECISION,
   how: "Weather runs right after the tides in each tick,\nso arrivals and pilotage read this tick's wind and visibility.",
   why: `${WEATHER_DECISION} makes weather a simulated system; it does not say where weather runs in the tick order RULE-HARBOR-CLOCK fixes.`,
+};
+
+/** The cranes page: a document node, its span the whole file; PR-0050 decides on it, PR-0051 edits it. */
+export const CRANES_FILE = "docs/spec/cranes.md";
+
+const CRANES_LINES = [
+  ...frontMatter({ id: "MEC-CARGO-CRANES", kind: "mechanic", status: "draft", parent: "DOM-CARGO", rev: 1 }),
+  "",
+  "# Cargo cranes",
+  "",
+  "Two gantry cranes serve the container quay; each lifts one box per 90 simulated seconds.",
+];
+
+/** The page's span as `spec show` sends it, and its `b3:` hash as the mock's node reads give it. */
+const CRANES_TEXT = `${CRANES_LINES.join("\n")}\n`;
+const CRANES_HASH = `b3:${fakeHex(`${CRANES_FILE}\n${CRANES_TEXT}`, 64)}`;
+
+/** The line PR-0051 adds: the decision written into the page. */
+const CRANES_NEW_LINE = "Both cranes work the moored ship together; neither waits for the other to finish.";
+const CRANES_NEW_TEXT = `${[...CRANES_LINES, CRANES_NEW_LINE].join("\n")}\n`;
+
+/** PR-0051's hunk: the page's last three lines kept, one line added after them. */
+const CRANES_DIFF = [
+  `--- base ${CRANES_FILE}`,
+  `+++ proposed ${CRANES_FILE}`,
+  "@@ -9,3 +9,4 @@",
+  ...CRANES_LINES.slice(8).map((line) => ` ${line}`),
+  `+${CRANES_NEW_LINE}`,
+].join("\n");
+
+/**
+ * PR-0050's three texts as `report_decision` took them: `text` what had to be decided (stored as
+ * the summary), `working_answer` the decision itself, `price_of_other` what another answer costs.
+ */
+export const CRANES_DECISION = {
+  text: "Do both cranes work the same ship at once?",
+  working_answer: "Yes: both cranes work the moored ship together, each lifting one box per 90 simulated seconds.",
+  price_of_other: "One crane per ship doubles the unloading time, and every berth stays taken twice as long.",
 };
 
 const DRAFT_TEXT = [
@@ -142,19 +184,13 @@ const TIDE_TABLE_ROWS = Array.from({ length: 520 }, (_, day) => {
 function harborCorpus(): MockCorpus {
   const documents = [
     specFile({
-      path: "docs/spec/cranes.md",
+      path: CRANES_FILE,
       id: "MEC-CARGO-CRANES",
       kind: "mechanic",
       title: "Cargo cranes",
       status: "draft",
       mark: "dangling-parent",
-      lines: [
-        ...frontMatter({ id: "MEC-CARGO-CRANES", kind: "mechanic", status: "draft", parent: "DOM-CARGO", rev: 1 }),
-        "",
-        "# Cargo cranes",
-        "",
-        "Two gantry cranes serve the container quay; each lifts one box per 90 simulated seconds.",
-      ],
+      lines: [...CRANES_LINES],
     }),
     specFile({
       path: "docs/spec/generated/index.md",
@@ -664,6 +700,9 @@ function harborCorpus(): MockCorpus {
   };
 }
 
+/** The commit PR-0050 and PR-0051 were raised on. */
+const CRANES_COMMIT = "c4e8a2f6b0d4e8a2c6f0b4d8e2a6c0f4b8d2e6a0";
+
 export function harborSim(now: number): MockProject {
   const at = (minutesAgo: number) => stamp(now, minutesAgo);
   const agent = (role: string, run: string) => ({ type: "agent", role, model: "claude-opus-5-5", run });
@@ -919,6 +958,47 @@ export function harborSim(now: number): MockProject {
         interpretation: { ...CLOCK_INTERPRETATION },
         author: agent("spec-writer", "R-2251"),
         created_at: at(30),
+      }),
+      // A decision taken during work (kind-decision): a question's columns, no options, its
+      // decision the working answer; `linked` its canon diff, the update raised with it.
+      proposal({
+        id: "PR-0050",
+        project: SLUG,
+        kind: "decision",
+        severity: "normal",
+        target_id: "MEC-CARGO-CRANES",
+        target_path: CRANES_FILE,
+        target_ids: ["MEC-CARGO-CRANES"],
+        worktree: "/work/harbor-sim",
+        base_commit: CRANES_COMMIT,
+        summary: CRANES_DECISION.text,
+        working_answer: CRANES_DECISION.working_answer,
+        price_of_other: CRANES_DECISION.price_of_other,
+        linked: "PR-0051",
+        author: agent("rust-developer", "R-2262"),
+        created_at: at(20),
+      }),
+      // The decision's `proposed_patch` as its own update, in the same intake: the same place,
+      // author and time, `linked` back to the decision; approved on its own, a second commit.
+      proposal({
+        id: "PR-0051",
+        project: SLUG,
+        kind: "update",
+        target_id: "MEC-CARGO-CRANES",
+        target_path: CRANES_FILE,
+        worktree: "/work/harbor-sim",
+        base_commit: CRANES_COMMIT,
+        base_hash: CRANES_HASH,
+        base_text: CRANES_TEXT,
+        new_text: CRANES_NEW_TEXT,
+        patch_hash: `b3:${fakeHex(`MEC-CARGO-CRANES\n${CRANES_HASH}\n${CRANES_NEW_TEXT}`, 64)}`,
+        // The agent wrote it before either ID existed: it names the decision by its matter.
+        rationale: "The decision taken while wiring crane dispatch, written into the cranes page.\nBoth cranes work one ship together.",
+        diff: CRANES_DIFF,
+        preview: "applies",
+        linked: "PR-0050",
+        author: agent("rust-developer", "R-2262"),
+        created_at: at(20),
       }),
     ],
   };

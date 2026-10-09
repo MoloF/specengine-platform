@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # Proposal queue: commands, states, store
 
-An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`: `proposal-interpretation.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; approved as decision records: `decision-record.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Not yet: re-targeting, `has_open_proposal`.
+An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`: `proposal-{interpretation,decision}.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Not yet: re-targeting, `has_open_proposal`.
 
 ## Commands
 

@@ -1,112 +1,86 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui]
 ref: kinds analysis 2026-10-08 (Q1, Q2, W8, W9, slice B criteria; decided under the owner's pre-approval, review open); kind-interpretation "Out of scope"; 06 s5.4; 08 s2 Phase 2
+shipped: 2026-10-09
 ---
 
 # Kind decision
 
 ## Why
 
-An agent that decides something during work has no route to the decision records: `create` refuses the `[decision_records]` prefix (`proposal-kinds.md` "Propose" 4), records come only from approving a question or discrepancy, so the decision waits as a question the agent has already answered, or stays in chat. 06 s5.4 names the kind `decision`. Slice B of three (W1). Decided (Q1, Q2, W8, W9): a decision taken during work by an agent or the owner, confirmed on a terminal, recorded through `[decision_records]` like a question, the decision its working answer; its canon diff an optional `proposed_patch`, a linked update applied as a second commit; its own MCP intake tool.
+An agent that decided something during work had no route to the decision records: `create` refuses the `[decision_records]` prefix, records came only from approving a question or discrepancy, so the decision waited as a question the agent had already answered, or stayed in chat. 06 s5.4 names the kind `decision`. Slice B of three (W1), after `kind-interpretation`, before `kind-amendment`. Decided (Q1, Q2, W8, W9): a decision taken during work by an agent or the owner, confirmed on a terminal, recorded through `[decision_records]` like a question, the decision its working answer; its canon diff an optional `proposed_patch`, a linked update applied as a second commit; its own MCP intake tool.
 
 ## Description and interactions
 
-- **Raise**: MCP `report_decision` (W15), or `spec propose decision --input F|- A [--task T]`, its exact twin (W16). Intake rules 1-7 as a discrepancy's (`agent-intake.md` "Rules"), dedup W18; the intake document answers, `linked` the patch's update. Only the queue is written.
-- **Review**: inbox, `spec review`, `get_proposal`, the UI card show it as a question, kind `decision`; no new key (46).
-- **Decide**: `spec approve PR [--note T] [--answer T] [--canon REF]` as a question's (`decision-record.md`, W19): one record, one commit `A <path>`, step 10 naming the linked update; `spec approve <linked>` is the second commit `M <path>` (Q2). `reject --reason` settles it unrecorded; the linked update is decided on its own.
-- **Round** (`round.md`), staging (CLI, HTTP `/decision`, UI): as a question (`decides()`, no options). **Task**: W21. **Plugin**: W24. **UI**: W23.
-
-**Canon at shipping**: `docs/canon/proposal-decision.md` on `proposal-interpretation.md`'s pattern; pointers in `agent-intake.md` "Tools", `decision-record.md` (title, "Flags"), `proposal-kinds.md` (later-slices line, "Propose" 4), `round.md`, `task-package.md` "Package", `decision-staging.md` "The stage", `mcp-read.md` "Texts" (fourteen tools, bytes), `plugin.md`, 05 s3.3, 07 s1.2, 08 s2, `CLAUDE.md`, the crates' READMEs. Four pages sit within 25 B of 12 288; split first (one index line, ~120 B of W, each): `decision-record.md` "Config", "Template", "Flags" -> `decision-record-template.md`; `agent-intake.md` "Intake document", "Review document", "Escaping and size" -> `agent-intake-documents.md`; `round.md`'s sheet example -> `round-sheet.md`; `proposal-kinds.md` only if its pointer does not fit. Before each: `canon:` anchors in `docs/decisions`, headings quoted from code (`doc_pointers.rs`).
+Canon: `docs/canon/proposal-decision.md` (naming, raise, row and dedup, approve, the canon diff, stage, round, task, kind lists, backup, MCP texts, plugin, UI, known limits); the splits made room: `decision-record-template.md` (config, template, flags), `agent-intake-documents.md` (intake and review documents, escaping), `round-sheet.md` (the sheet, a question and a decision).
 
 ## Data
 
-**Input**, `--input` (UTF-8 JSON <= 8 MiB) or MCP (plus `task_id?`, `A`): core `DecisionInput`, `deny_unknown_fields`, checked by `decision_problem` in order, then the author:
-
-```json
-{"node_ids": ["RULE-STAM-REGEN"], "text": "Does regeneration wait for rest?",
- "working_answer": "Yes: it starts 1.5 s after the last stamina use.",
- "price_of_other": "Without the wait R-28 is rebalanced.", "severity": null,
- "proposed_patch": {"target": "RULE-STAM-REGEN", "base": "b3:...", "text": "...", "rationale": "..."},
- "distinct_from": null}
-```
-
-`node_ids` 1-16; `text` <= 1 024 B, `working_answer`, `price_of_other` <= 2 048, required, not blank; `severity` `high|normal|low`, null -> `normal`; `proposed_patch`, `distinct_from` as a discrepancy's.
-
-**MCP** `report_decision {node_ids, text, working_answer, price_of_other, severity?, proposed_patch?: {target, base, text, rationale}, distinct_from?, task_id?, author_role, author_model?, run?}`: schema, annotations (all four hints `false`), `_meta` and output (`IntakeDocument`) as `report_discrepancy`'s. Description (ASCII <= 2 048 B, the determinism line): a decision you took during work, confirmed and recorded by the owner on a terminal; `text` what had to be decided, `working_answer` the decision (keep working on it), `price_of_other` another's cost; the governed section first in `node_ids` (the record's `canon:`), `proposed_patch` its new text, approved on its own; hits as `ask_question`'s; only the queue written; agent fields are data.
-
-**`INSTRUCTIONS`** (1 889 B, 2 046 with probes, cap 2 048): the queue's second line becomes exactly (202 B, +1):
-
-```
-- ask_question, report_discrepancy, report_decision = spec propose question|discrepancy|decision: hits are what is decided or asked; stored only if distinct_from names each; work on your working answer.
-```
-
-**Row**: no column or schema step (queue 6, 44 columns, `STATE_FORMAT` 2). Kind `decision`, a question's columns (`agent-intake.md` "Stored": `summary` = `text`, `working_answer`, `price_of_other` set; `gap_type`, `evidence`, `options`, `recommendation` NULL) and `linked`; approved, the record's five, `choice` `{"working_answer":true}` or `{"answer":"..."}`. Corrupt as a question's row, plus an `option` choice or stage. Inbox `PR-0001 | decision | open | RULE-STAM-REGEN | <branch> | <created_at> | normal: Does regeneration wait for rest?`; round JSON `"kind": "decision"`, `"options": []`; package `assumptions` `{"proposal":"PR-0001","text":"<working_answer>"}`; record slots as a question's. `fixtures/daemon-keys.json` unchanged.
+`docs/canon/proposal-decision.md` "Raise" (the `--input` JSON, `report_decision`'s arguments), "Row and dedup" (a question's columns, no schema step; `intake_shape()`); `docs/canon/agent-intake.md` "Stored" (row reading by shape, `create_intake`'s shape refusals); `fixtures/daemon-keys.json` unchanged.
 
 ## Rules and edge cases
 
-**Kind sites**, judged by `decides()`, the row's shape or an exhaustive match, never `== ProposalKind::Question`: core `DECISION_KIND`, `DecisionInput`, `decision_problem`; store `ProposalKind::Decision` (`ALL` 6, `applies()` false, `decides()` true), `IntakeColumns::decode` (`queue.rs:2295`), `choice_fits` (else `approve_record_from` is `Invalid`), `stage.rs`, `queue_matches`; CLI `decide.rs:802` `first_checks`, `package.rs:471`, `create.rs:760`, `intake.rs` (`propose_decision[_with_task]`, `read_decision_input`), `main.rs`; MCP `intake.rs`, `server.rs`. `round.rs`, `apply.rs`'s dispatch, the UI: none.
-
-**Working answers** (owner's review open):
-
-- **W15 Naming.** Kind `decision` (W11), tool `report_decision` (reports what was decided, as `report_discrepancy` what was found). No field named `decision`: the decision is `working_answer`, its matter `text`; so `propose_change.decision` (an interpretation's), the stage key `"decision"`, the `/decision` route, `class: decision` and an `[ids]` kind keep one meaning each. Prose: "a `decision` item", "its record". Decision documents still told by class and status (ADR-0008).
-- **W16** `--input` JSON, no flag form: the patch's four fields have none, and one shape keeps the twin exact.
-- **W17** No column: `insert_intake` already writes by `discrepancy`; decode, choice, stage change.
-- **W18** Dedup families `{question, decision}`, `{discrepancy}` (an exhaustive store match): equal normalised text on a shared target hits across the family, both ways. Corpus dedup unchanged.
-- **W19** Flags by shape: no options -> a question's: no flag the working answer, `--answer` the owner's, `--option` exit 2 `` `--option` names a discrepancy's option, and `PR-0001` is a decision: its working answer, or `--answer T`, answers it; nothing changed `` (`with_article`). Consent, record, step 10, completion, killed run, reject unchanged; record and patch in either order, neither waits (ADR-0012).
-- **W20** `canon:` stays `--canon`, else the first ID target; no default from the patch (it would change a discrepancy's record).
-- **W21** Assumption by shape: options -> the recommended label; none -> the working answer.
-- **W22** `create`'s refusal: `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one) ``, kinds by `decides()`.
-- **W23** No UI product change (kinds are strings, ADR-0031; card, dialog, round card branch on `options`).
-- **W24** Plugin 0.5.0 (MINOR: a tool the skills name): `ask-owner` a third record "A decision, `report_decision`" and its description (body 3 766 of 4 096 B); `spec-author`'s "A decision taken in the work" sends it, the rule's new text its patch.
-- **W25** No intake note without `[decision_records]`: approve exits 2 at step 3, as a question's.
-
-**Edge cases.** Only path targets: approve needs `--canon`. A patch target outside `node_ids`: exit 1 (rule 4). A look-alike subcommand: exit 2; an unknown MCP field: -32602. A held decision completes as recorded. An older build reads the row as corrupt by kind, named (ADR-0017): `spec`, daemon, `specengine-mcp` from one build.
-
-**Risks.** Two commits let a record stand while its patch is rejected or never approved: only step 10's note says so. `--answer` leaves a patch written for the proposed decision. An agent may record what the owner should answer first: `--answer` or reject corrects it. One byte of `INSTRUCTIONS` left with probes.
+**Kind sites**: every deciding-kind judgement by `decides()`, the item's fields or the exhaustive `intake_shape()`, never `== ProposalKind::Question` (AC-T2). Working answers W15-W25, in the canon: W15 naming (`decision` the kind, `report_decision` the tool, no field named `decision`); W16 `--input` JSON, no flag form; W17 no column; W18 dedup families by shape; W19 flags by the item's fields, record and patch in either order; W20 `canon:` never from the patch; W21 assumptions by the item's fields; W22 the prefix refusal names the three kinds; W23 no UI product change; W24 plugin 0.5.0 (MINOR); W25 no intake note without `[decision_records]`.
 
 ## Acceptance criteria
 
-A git copy of `fixtures/spec-a` (`DEC`, next `DEC-0024`). M: the mutation that turns it red.
+A git copy of `fixtures/spec-a` (`DEC`, next `DEC-0024`); spec-b and spec-c where named. Tests: store `queue_decision.rs` (11), CLI `kind_decision.rs` (20), MCP `mcp_report_decision.rs` (4), additions named below. Mutations: 20 Rust (14 + 6), 10 UI, all red. Workspace 2194/2194, UI 1636.
 
 rust-developer
-- [ ] AC-R1 -- store: `Decision` `applies()` false, `decides()` true; `create` -> `Invalid`; `create_intake` stores it with its linked update, `get` reads it back equal. M: `decides()` false; decode by `== Question`.
-- [ ] AC-R2 -- `spec propose decision --input F`: `PR-0001`, `linked: PR-0002`, `introduced: <n>`; `--json` the intake document. Nothing stored: an `options` key or no `working_answer` exit 2; blank exit 1 `working_answer: ...`; a patch target outside `node_ids` exit 1. M: no `deny_unknown_fields`.
-- [ ] AC-R3 -- a decision equal to an open question on a shared target: a hit, not stored; in `distinct_from`: stored; a question after a decision hits; a discrepancy does not. M: `queue_matches` by kind.
-- [ ] AC-R4 -- `spec approve PR-0001`, `y`: one commit, exactly `A docs/records/DEC/DEC-0024.md`, `choice` `{"working_answer":true}`, consent `(the working answer)`, `PR-0002` named; `--answer T`: `{"answer":"T"}`; `--option 0`: exit 2 naming `a decision`, no event. M: `decide.rs:802` left.
-- [ ] AC-R5 -- `spec approve PR-0002`: a second commit, exactly `M <the rule's path>`. M: the patch in the record's commit.
-- [ ] AC-R6 -- CLI and HTTP stages: no flag or `answer` stored; `option` refused (HTTP 400); an `option` stage or choice on the row: corrupt, named. M: `stage.rs`'s arm `None`.
-- [ ] AC-R7 -- `round new`: `## PR-0001 - decision, normal`, `Working answer:`, `Another answer costs:`; `ok` and text staged, `1` refused; the walk's `y` writes the record. M: selection by `Question | Discrepancy`.
-- [ ] AC-R8 -- with `--task T`: `open_proposals` lists it, `assumptions` its working answer. M: `package.rs:471` left.
-- [ ] AC-R9 -- `propose create` of `id: DEC-0024`: exit 1, W22's text. M: the old text.
-- [ ] AC-R10 -- MCP: 14 tools; `report_decision` as "Data", byte-identical to its twin, `task_id` binds; texts within 2 048 B, asserted; `INSTRUCTIONS` holds the line. M: `readOnlyHint` true.
-- [ ] AC-R11 -- `plugin_skills.rs` finds `report_decision` in `ask-owner`, `spec-author`; 0.5.0 in `PINS`. M: text without version.
-- [ ] AC-R12 -- a decision, its update and record export and restore byte-identical. M: decode refusing the kind.
+- [x] AC-R1 -- store `ac_r1_a_decision_decides_and_never_applies`, `ac_r1_create_refuses_a_decision_unwritten`, `ac_r1_a_decision_is_stored_with_its_linked_update_and_reads_back_equal`, `a_decision_row_holds_a_question_columns`.
+- [x] AC-R2 -- `ac_r2_the_binary_stores_a_decision_and_its_linked_update`, `ac_r2_refusals_store_nothing`, `propose_decision_is_the_unbound_twin`.
+- [x] AC-R3 -- store `ac_r3_a_question_and_a_decision_are_one_family_a_discrepancy_another`; `ac_r3_a_question_and_a_decision_hit_each_other_a_discrepancy_neither`.
+- [x] AC-R4 -- `ac_r4_option_on_a_decision_is_exit_2_nothing_changed`, `ac_r4_the_binary_asks_on_the_terminal`, `ac_r4_spec_b_records_adr_0003_and_the_patch_apart`, `spec_c_without_records_approve_exits_2_and_reject_settles`, `edge_a_held_decision_completes_as_recorded`, `edge_a_path_only_decision_needs_canon`.
+- [x] AC-R5 -- `ac_r4_r5_the_record_then_the_patch_two_commits`, `ac_r4_r5_the_patch_first_then_the_given_answer`.
+- [x] AC-R6 -- store `ac_r6_a_decision_stage_takes_an_answer_never_an_option`, `ac_r6_a_decision_record_takes_its_working_answer_or_an_answer`, `ac_r6_a_corrupt_decision_row_is_named`; `ac_r6_a_staged_decision_takes_an_answer_never_an_option`, `ac_r6_a_corrupt_decision_row_is_named_by_review_and_inbox`; http `stage.rs` `kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option`.
+- [x] AC-R7 -- `ac_r7_the_round_asks_a_decision_as_a_question`.
+- [x] AC-R8 -- `ac_r8_the_task_package_assumes_the_working_answer`.
+- [x] AC-R9 -- `ac_r9_create_refuses_the_record_prefix_naming_the_three_kinds`; `iteration2_a_decision_flag_on_an_update_names_the_deciding_kinds`.
+- [x] AC-R10 -- `ac_r10_report_decision_is_listed_as_data_says`, `ac_r10_t3_report_decision_answers_as_its_twin_and_writes_only_the_queue`, `ac_r10_a_patch_outside_node_ids_is_an_error_result`, `iteration2_ask_question_names_decisions_among_hits_and_related`; the `INSTRUCTIONS` pins (1 890 B, 2 047 with probes).
+- [x] AC-R11 -- `plugin_skills.rs` `kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision`, `kind_decision_iteration2_ask_owner_tells_an_accepted_decision_from_a_decision_record`; `plugin_files.rs` `PINS` 0.5.0.
+- [x] AC-R12 -- store `ac_r12_a_decision_its_update_and_record_round_trip_byte_identical`; `ac_r12_a_backup_with_a_decision_round_trips_byte_identical`.
 
 test-engineer
-- [ ] AC-T1 -- tests of R1-R12 (store `queue_decision.rs`, CLI `kind_decision.rs`, MCP `mcp_decision.rs`, http `stage.rs`, `round.rs`), `git show --name-status` exact.
-- [ ] AC-T2 -- `proposal_genre.rs`: no `[!=]= ProposalKind::Question` in store, CLI, MCP `src`. M: `decide.rs:802` left.
-- [ ] AC-T3 -- `mcp_door.rs`: `report_decision` with a patch leaves `git status` empty; http `door.rs` green. M: a write in propose.
-- [ ] AC-T4 -- `daemon_keys.rs` green, its fixture unchanged. M: a review key added.
+- [x] AC-T1 -- the tests above; store `a_row_holding_a_column_its_shape_lacks_is_named_corrupt`, `create_intake_refuses_an_item_of_another_shape_unwritten`; `iteration2_a_row_holding_a_column_its_shape_lacks_is_named_by_review_and_inbox`.
+- [x] AC-T2 -- `proposal_genre.rs` `kind_decision_ac_t2_no_kind_compared_with_a_question` (`Question` and `Decision`).
+- [x] AC-T3 -- `ac_r10_t3_report_decision_answers_as_its_twin_and_writes_only_the_queue`; http `door.rs` green.
+- [x] AC-T4 -- http `daemon_keys.rs` `kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets` (41 names, the fixture unchanged).
 
 ui-developer
-- [ ] AC-U1 -- harbor-sim `PR-0050` a `decision`, `linked` `PR-0051`; nothing changed under `ui/src` but `mocks/`, `*.test.*`.
-- [ ] AC-U2 -- tests: the card shows text, working answer, price, link; the dialog stages `option`, `answer` null, or an own `answer`; the Questions screen lists it, `ok` and text valid, a number not. M: a branch on `kind === "question"`.
+- [x] AC-U1 -- harbor-sim `PR-0050`, `PR-0051` (`mocks/harbor-sim/fixtures.ts`); `mocks/round.ts`, `mocks/tasks.ts`; no product file changed.
+- [x] AC-U2 -- `mocks/decision.smoke.test.tsx` (12): the card, the inbox dialog (the working answer), the Questions screen (an own answer, a number refused), both clients.
 
 spec-writer
-- [ ] AC-S1 -- this spec.
-- [ ] AC-S2 -- at shipping "Canon at shipping", each page <= 12 288 B; check 0 warnings, worst W <= 108 468 B. M: a page still saying records come only from a question or discrepancy.
+- [x] AC-S1 -- this spec.
+- [x] AC-S2 -- `proposal-decision.md` (new), the three split pages, `decision-record.md`, `agent-intake.md`, `round.md`, `proposal-{kinds,queue,apply,interpretation}.md`, `task-package.md`, `tasks.md`, `mcp-read.md`, `plugin{,-files}.md`, the root, store, CLI, MCP READMEs, 05-08, `CLAUDE.md`.
+
+## Owner's manual check
+
+Reinstall `specengine-mcp`, restart the daemon, update the plugin to 0.5.0. `spec serve`, `pnpm --dir ui dev`, `?scenario=normal#/harbor-sim/inbox/PR-0050`: Accept stages the working answer; `#/harbor-sim/questions` lists it. In a project: `report_decision` from a session with a patch, `spec round new`, then `spec approve` of the decision and of its patch: two commits.
 
 ## Out of scope
 
-`kind-amendment`, the next slice (Q3, Q4, W10). Here: one commit for record and diff (Q2); `canon:` from the patch (W20); superseding an accepted decision (no `supersedes:` slot); a flag form; the W25 note; a note on `--answer` over a patch; a "decision without its canon diff" row; states `changes_requested|deferred|superseded`; follow-up tasks; edit-and-accept; MCP staging forms; a UI product change.
+`kind-amendment` (Q3, Q4, W10), next. Not here: one commit for record and diff (Q2); `canon:` from the patch; a record superseding an accepted decision; a flag form; an intake note without `[decision_records]`; a note on `--answer` over a patch; a "decision without its canon diff" row; states `changes_requested|deferred|superseded`; follow-up tasks; edit-and-accept; MCP staging forms.
 
 ## Open
 
-1. The owner reviews Q1, Q2, W8, W9, W15-W25.
-2. At shipping, the owner's check: reinstall `specengine-mcp`, restart the daemon, plugin 0.5.0; `report_decision` from a session, `spec round new`, `spec approve` of the decision and its patch.
+1. The owner reviews Q1, Q2, W8, W9 and W15-W25.
+2. The owner's manual check.
 
 ## Implementation
 
-Filled in after implementation.
+Rust two iterations, UI one (mocks and tests only); reviews accepted each.
+
+| Module | What it does |
+|---|---|
+| core `intake.rs` | `DECISION_KIND`, `DecisionInput`, `decision_problem` |
+| store `queue.rs`, `queue/stage.rs` | `ProposalKind::Decision`; `intake_shape()`, `IntakeShape` (`null_columns`, `problem`): row decode, `choice_fits`, the dedup family, `create_intake`'s shape check; the stage arm |
+| CLI `intake.rs` | `DecisionRequest`, `propose_decision[_with_task]`, `read_decision_input` |
+| CLI `decide.rs`, `package.rs`, `create.rs`, `apply.rs`, `main.rs` | flags and record sources by the item's fields; assumptions by shape; `deciding_kinds()` for the prefix refusal and `flag_on_apply`; `Propose::Decision`, help texts |
+| MCP `intake.rs`, `server.rs`, `lib.rs` | `report_decision` (own argument type, 1 744 B), `ask_question` 2 041 B, the `INSTRUCTIONS` line, the tool list |
+| plugin | `ask-owner` (third record, "An accepted decision" hit, body 4 059 of 4 096), `spec-author`, 0.5.0 |
+| UI `mocks/` | harbor-sim `PR-0050`, `PR-0051`, round and task mocks, `decision.smoke.test.tsx` |
+
+Deviations, all accepted: 1 W22's text ends `; nothing stored`; 2 `report_decision` has its own argument type; 3 round help texts name decisions; 4 `flag_on_apply` lists the deciding kinds by `decides()` (iteration 2); 5 stricter row reading: a column the shape holds none of is corrupt, named, and `create_intake` refuses an item not of its kind's shape (a gap the tests found, iteration 2); 6 an unknown MCP field is an error result, not -32602; 7 the inbox dialog stages no own answer (the Questions screen does); 8 the MCP test file is `mcp_report_decision.rs` (`mcp_decision.rs` was taken). Draft figures corrected: `INSTRUCTIONS` 1 890 B (2 047 with probes), `ask-owner` body 4 059 B. Left (nits): doc comments in `review.rs`, `preflight.rs`, `round.rs`, `inbox.rs`, `mirror.rs`, model `task.rs`, store `lib.rs` still name two deciding kinds; `ask_question`'s description line on decisions is terse; the empty round sheet keeps `No open questions or discrepancies.`

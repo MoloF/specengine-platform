@@ -15,10 +15,12 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [CLAUDE.md](../CLAUDE.md) SpecEngine · root · tier 0
 - [README.md](../README.md) SpecEngine · root · tier 2
 - [docs/README.md](README.md) Documentation: how the convention is applied · docs · tier 1
-- [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
+- [docs/canon/agent-intake-documents.md](canon/agent-intake-documents.md) Agent intake: the documents it answers with · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store · tier 2
+- [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies, decisions · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
-- [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a question or discrepancy approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
+- [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2
+- [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a deciding item approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
 - [docs/canon/gate.md](canon/gate.md) Task gate: the write hook · crates/specengine-cli, plugin · tier 2
@@ -29,10 +31,12 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/plugin-files.md](canon/plugin-files.md) Plugin: files, contract, version, install · plugin · tier 2
 - [docs/canon/plugin.md](canon/plugin.md) Plugin: skills and roles · plugin · tier 2
 - [docs/canon/proposal-apply.md](canon/proposal-apply.md) Proposal apply: consent, steps, completion, reject · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/proposal-decision.md](canon/proposal-decision.md) Proposal kind: decision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · tier 2
 - [docs/canon/proposal-interpretation.md](canon/proposal-interpretation.md) Proposal kind: interpretation · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/queue-backup.md](canon/queue-backup.md) Queue backup and restore · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/round-sheet.md](canon/round-sheet.md) Question rounds: the sheet · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
@@ -52,7 +56,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
-- [docs/features/kind-decision.md](features/kind-decision.md) Kind decision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress

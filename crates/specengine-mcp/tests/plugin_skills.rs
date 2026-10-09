@@ -8,8 +8,9 @@
 //!
 //! - AC-06: every backticked `^[a-z][a-z0-9]*(_[a-z0-9]+)+$` in a skill is
 //!   a tool or a property name anywhere in an input or output schema; all
-//!   thirteen tools (eight, and docs/features/task-package.md's five)
-//!   backticked in some skill; no `mcp__`. M: `get_bundle`;
+//!   fourteen tools (eight, docs/features/task-package.md's five and
+//!   docs/features/kind-decision.md's `report_decision`) backticked in
+//!   some skill; no `mcp__`. M: `get_bundle`;
 //!   `node_id`; `get_proposal` gone everywhere;
 //!   `mcp__plugin_specengine_specengine__search`.
 //! - AC-07: each `json` block is an object; as `tools/call` arguments of
@@ -326,7 +327,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's thirteen tools"
+        "the default build's fourteen tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1070,10 +1071,12 @@ fn decision_apply_ac16_ask_owner_teaches_a_decided_item() {
             "- A queue record with no `answer`: it is asked already.",
         ),
         (
+            // "on a rejected record" since docs/features/kind-decision.md
+            // (a decision is a third deciding kind).
             "- Later, `get_proposal` with the item's `id` as `proposal_id` gives its `status` and \
-             the owner's `decision_note`; on a rejected question or discrepancy the note is the \
-             owner's answer; on an applied one, `record_id` and `record_title` name the owner's \
-             decision record, and its `choice` answers too.",
+             the owner's `decision_note`; on a rejected record the note is the owner's answer; on \
+             an applied one, `record_id` and `record_title` name the owner's decision record, and \
+             its `choice` answers too.",
             "- Later, `get_proposal` with the record's `id` as `proposal_id` gives its `status` \
              and the owner's `decision_note`; on a rejected question or discrepancy the note is \
              the owner's answer.",
@@ -1106,8 +1109,9 @@ fn decision_apply_ac16_ask_owner_teaches_a_decided_item() {
 /// a section "Carrying an accepted decision into a rule") and its three
 /// fields `decision`, `how`, `why` by their names, a superseded decision
 /// resent with its successor; the `spec-author` role names the kind; the
-/// plugin is 0.4.0 (`plugin_files.rs` pins its hash: a text changed with
-/// the version kept turns that test red). The names are the server's:
+/// plugin is 0.4.0 or later (0.5.0 since docs/features/kind-decision.md;
+/// `plugin_files.rs` pins its hash: a text changed with the version kept
+/// turns that test red). The names are the server's:
 /// each a property of `propose_change`. M: the field names dropped.
 #[test]
 fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
@@ -1136,7 +1140,7 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.4.0");
+    assert_eq!(manifest["version"], "0.5.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1145,4 +1149,131 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
         assert!(properties.get(field).is_some(), "{field}: {properties}");
     }
     drop(session.finish());
+}
+
+/// docs/features/kind-decision.md AC-R11, W24 ("Plugin"): `ask-owner`
+/// teaches a third record, "A decision", by `report_decision`, naming its
+/// fields (`text`, `working_answer`, `price_of_other`, `node_ids`,
+/// `proposed_patch`), never a `decision` argument; its description names
+/// decisions; `spec-author` sends a decision taken in the work through
+/// `report_decision`, the rule's new text its `proposed_patch`; the plugin
+/// and the marketplace are 0.5.0 (`plugin_files.rs` pins the 0.5.0 hash).
+/// Each name is the server's: the tool and its input properties. M: the
+/// text changed without the version (`plugin_files.rs`); the bullet
+/// dropped.
+#[test]
+fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
+    let skills = committed();
+    let skill = &skills["ask-owner"];
+    let bullet = skill
+        .lines()
+        .find(|line| line.starts_with("- **A decision**, `report_decision`: "))
+        .unwrap_or_else(|| panic!("no decision record in ask-owner:\n{skill}"));
+    let fields = [
+        "text",
+        "working_answer",
+        "price_of_other",
+        "node_ids",
+        "proposed_patch",
+    ];
+    for field in fields {
+        assert!(bullet.contains(&format!("`{field}`")), "{field}: {bullet}");
+    }
+    assert!(
+        !skill.contains("`decision`"),
+        "no `decision` argument taught"
+    );
+    let (front, _) = skill
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split_once("\n---\n"))
+        .expect("front-matter");
+    assert!(
+        front.contains("a question, a discrepancy or a decision"),
+        "{front}"
+    );
+    assert!(
+        skill.contains("\nEach takes the nodes"),
+        "three records, not two"
+    );
+    let role = fs::read_to_string(plugin_dir().join("specengine/agents/spec-author.md"))
+        .expect("spec-author.md");
+    let line = role
+        .lines()
+        .find(|line| line.contains("A decision taken in the work"))
+        .expect("spec-author's decision line");
+    assert!(
+        line.contains("`report_decision`") && line.contains("`proposed_patch`"),
+        "{line}"
+    );
+    for manifest in [
+        "specengine/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+    ] {
+        let text = fs::read_to_string(plugin_dir().join(manifest)).expect("manifest");
+        assert!(
+            text.contains("raise questions, discrepancies and decisions"),
+            "{manifest}"
+        );
+    }
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(plugin_dir().join("specengine/.claude-plugin/plugin.json"))
+            .expect("plugin.json"),
+    )
+    .expect("JSON");
+    assert_eq!(manifest["version"], "0.5.0");
+    // The names are the server's.
+    let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
+    let list = session.tools();
+    let properties = &tool(&list, "report_decision")["inputSchema"]["properties"];
+    for field in fields {
+        assert!(properties.get(field).is_some(), "{field}: {properties}");
+    }
+    assert!(properties.get("decision").is_none(), "{properties}");
+    drop(session.finish());
+}
+
+/// docs/features/kind-decision.md, iteration 2 (W24): `ask-owner` tells an
+/// accepted decision hit ("- An accepted decision: its `answer` is only
+/// the decision's title.", under "Reading the reply") from the record it
+/// teaches ("- **A decision**, `report_decision`:"), one bullet each; a
+/// rejected item is "a rejected record", never "a rejected question or
+/// discrepancy". M: two "A decision" bullets.
+#[test]
+fn kind_decision_iteration2_ask_owner_tells_an_accepted_decision_from_a_decision_record() {
+    let skills = committed();
+    let skill = &skills["ask-owner"];
+    let bullets: Vec<&str> = skill
+        .lines()
+        .filter(|line| line.starts_with("- A decision") || line.starts_with("- **A decision**"))
+        .collect();
+    assert_eq!(bullets.len(), 1, "{bullets:?}");
+    assert!(
+        bullets[0].starts_with("- **A decision**, `report_decision`: "),
+        "{bullets:?}"
+    );
+    let reading = skill
+        .split_once("\n## Reading the reply\n")
+        .map(|(_, rest)| rest)
+        .expect("a section \"Reading the reply\"");
+    let reading = reading.split("\n## ").next().unwrap_or_default();
+    let accepted: Vec<&str> = reading
+        .lines()
+        .filter(|line| line.starts_with("- An accepted decision: "))
+        .collect();
+    assert_eq!(
+        accepted,
+        [
+            "- An accepted decision: its `answer` is only the decision's title. Read the decision \
+          with `get_node` (its `id`, else its `path`) and follow it where it settles your \
+          question; where it does not, yours is a different question (below)."
+        ]
+    );
+    assert!(
+        skill.contains("on a rejected record the note is the owner's answer"),
+        "{skill}"
+    );
+    assert!(
+        !skill.contains("rejected question or discrepancy"),
+        "{skill}"
+    );
 }

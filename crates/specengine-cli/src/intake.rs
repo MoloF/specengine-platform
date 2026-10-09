@@ -1,8 +1,11 @@
 //! `spec propose question ID… --text T --working-answer W --price-of-other
-//! P [--severity S] [--distinct-from X]…` and `spec propose discrepancy
-//! --input F|-` (canon `agent-intake`, "Tools", "Rules"): an agent's
-//! question or reported discrepancy stored as a queue record that never
-//! applies, checked first against what is already decided and asked. Only
+//! P [--severity S] [--distinct-from X]…`, `spec propose discrepancy
+//! --input F|-` and `spec propose decision --input F|-` (canon
+//! `agent-intake`, "Tools", "Rules"; task spec `kind-decision`): an agent's
+//! question, reported discrepancy or decision taken during work stored as a
+//! queue record that never applies, checked first against what is already
+//! decided and asked (a decision holds a question's fields, its decision
+//! the working answer, and is checked as a discrepancy is). Only
 //! the queue is written: nothing under the root, no commit, no state change
 //! of another proposal. In order, the first refusal answering (exit 1
 //! `<field>: <problem>`, nothing stored, no ID taken):
@@ -13,9 +16,10 @@
 //!    (a `.md` path: its file's document, by its `id:`, else by its path),
 //!    generated and `immutable_text` holders allowed, each node once
 //!    canonical; stored canonical, in the order given;
-//! 4. a discrepancy's `proposed_patch`: its target among them, then
-//!    `propose update` steps 1–4 (refusals prefixed `proposed_patch: `;
-//!    the findings it introduces stored with it, never refusing);
+//! 4. a discrepancy's or a decision's `proposed_patch`: its target among
+//!    them, then `propose update` steps 1–4 (refusals prefixed
+//!    `proposed_patch: `; the findings it introduces stored with it, never
+//!    refusing);
 //! 5. the place, as `propose update` step 5 (exit 2); with `--task T`, the
 //!    task of this repository taking a proposal raised there (canon
 //!    `tasks`, "Task-bound proposals"; exit 1), checked again in step 7;
@@ -27,9 +31,10 @@
 //!    include its sections'. Node kinds are never consulted: the engine
 //!    knows no subject domain;
 //! 7. the queue's hits and the insert in one `Immediate` transaction
-//!    ([`specengine_store::ProposalQueue::create_intake`]): stored only when
-//!    every hit is named in `distinct_from`; a patch becomes a linked
-//!    `update`, decided on its own, bound to the item's task.
+//!    ([`specengine_store::ProposalQueue::create_intake`]; a question and
+//!    a decision one family): stored only when every hit is named in
+//!    `distinct_from`; a patch becomes a linked `update`, decided on its
+//!    own, bound to the item's task.
 //!
 //! The answer is the intake document (exit 0 whether stored or not):
 //! `{id, created, hits, related, linked, diagnostics, notes}`; past 10 hits
@@ -42,10 +47,12 @@ use std::io::Read as _;
 use std::path::PathBuf;
 
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use specengine_core::check::{DocClass, Endpoint, NodeAt, SpecGraph, Standing};
 use specengine_core::intake::{
-    AuthorInput, DISTINCT_MAX, DiscrepancyInput, Evidence, FieldProblem, GapType, IntakeOption,
-    IntakeSeverity, ProposedPatch, QuestionInput, discrepancy_problem, question_problem,
+    AuthorInput, DISTINCT_MAX, DecisionInput, DiscrepancyInput, Evidence, FieldProblem, GapType,
+    IntakeOption, IntakeSeverity, ProposedPatch, QuestionInput, decision_problem,
+    discrepancy_problem, question_problem,
 };
 use specengine_core::proposal::Author;
 use specengine_model::{Direction, is_weak_link};
@@ -63,7 +70,8 @@ use crate::propose::{checked_update, is_path_target, resolved_node, written_refe
 use crate::task::bound_task;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
-/// The most bytes of a discrepancy's `--input` document: 8 MiB.
+/// The most bytes of a discrepancy's or a decision's `--input` document:
+/// 8 MiB.
 pub const INTAKE_INPUT_MAX_BYTES: usize = 8 << 20;
 
 /// The most hits, and the most related items, an intake answer lists in
@@ -111,6 +119,20 @@ pub struct QuestionRequest {
 pub struct DiscrepancyRequest {
     /// The `--input` document ([`read_discrepancy_input`]).
     pub input: DiscrepancyInput,
+    pub author_role: Option<String>,
+    pub author_model: Option<String>,
+    pub run: Option<String>,
+    /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`; its date is a patch's
+    /// validation's today.
+    pub now: String,
+    pub git: GitEnv,
+}
+
+/// `spec propose decision` options (task spec `kind-decision`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionRequest {
+    /// The `--input` document ([`read_decision_input`]).
+    pub input: DecisionInput,
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
@@ -190,7 +212,8 @@ pub struct IntakeDocument {
     pub hits: Vec<IntakeMatch>,
     /// As `hits`, their answers `null`.
     pub related: Vec<IntakeMatch>,
-    /// The linked update of a discrepancy's proposed patch.
+    /// The linked update of a discrepancy's or a decision's proposed
+    /// patch.
     pub linked: Option<String>,
     /// The findings that update introduces, at most `SHOW_TAIL_NAMES`.
     pub diagnostics: Vec<ProposalFinding>,
@@ -199,7 +222,7 @@ pub struct IntakeDocument {
     pub notes: Vec<String>,
 }
 
-/// What `spec propose question` or `spec propose discrepancy` answered.
+/// What `spec propose question`, `discrepancy` or `decision` answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntakeOutcome {
     pub document: IntakeDocument,
@@ -289,6 +312,28 @@ pub fn propose_discrepancy_with_task(
     run_discrepancy(env, globals, request, task).map_err(escaped_error)
 }
 
+/// `spec propose decision`: one decision taken during work (and its
+/// proposed patch as a linked update), checked and stored unless it is
+/// already decided or asked.
+pub fn propose_decision(
+    env: &Env,
+    globals: &Globals,
+    request: &DecisionRequest,
+) -> Result<IntakeOutcome, CliError> {
+    propose_decision_with_task(env, globals, request, None)
+}
+
+/// [`propose_decision`] with `--task T`: the item and its linked update
+/// bound to that task, in one transaction.
+pub fn propose_decision_with_task(
+    env: &Env,
+    globals: &Globals,
+    request: &DecisionRequest,
+    task: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_decision(env, globals, request, task).map_err(escaped_error)
+}
+
 /// `--input F|-`: UTF-8 JSON of a discrepancy's arguments (the author's
 /// aside), at most [`INTAKE_INPUT_MAX_BYTES`]; anything else exits 2, its
 /// message's control characters escaped (the path and the parser's quote
@@ -297,10 +342,37 @@ pub fn read_discrepancy_input(
     env: &Env,
     source: &IntakeSource,
 ) -> Result<DiscrepancyInput, CliError> {
-    read_input(env, source).map_err(escaped_error)
+    read_input(
+        env,
+        source,
+        "a discrepancy's arguments (`node_ids`, `summary`, `gap_type`, `severity`, `evidence`, \
+         `options`, `recommendation`, optional `working_answer`, `proposed_patch`, \
+         `distinct_from`)",
+    )
+    .map_err(escaped_error)
 }
 
-fn read_input(env: &Env, source: &IntakeSource) -> Result<DiscrepancyInput, CliError> {
+/// `--input F|-` of `spec propose decision`: UTF-8 JSON of a decision's
+/// arguments (the author's aside), as [`read_discrepancy_input`] reads a
+/// discrepancy's: an unknown key (an `options`), a required one missing,
+/// anything else exits 2.
+pub fn read_decision_input(env: &Env, source: &IntakeSource) -> Result<DecisionInput, CliError> {
+    read_input(
+        env,
+        source,
+        "a decision's arguments (`node_ids`, `text`, `working_answer`, `price_of_other`, \
+         optional `severity`, `proposed_patch`, `distinct_from`)",
+    )
+    .map_err(escaped_error)
+}
+
+/// The `--input` document as `T`; `shape` names its arguments in a
+/// refusal.
+fn read_input<T: DeserializeOwned>(
+    env: &Env,
+    source: &IntakeSource,
+    shape: &str,
+) -> Result<T, CliError> {
     let read: Vec<u8>;
     let (label, bytes) = match source {
         IntakeSource::Given(bytes) => ("-".to_owned(), bytes.as_slice()),
@@ -328,13 +400,8 @@ fn read_input(env: &Env, source: &IntakeSource) -> Result<DiscrepancyInput, CliE
             error.valid_up_to()
         ))
     })?;
-    serde_json::from_str(text).map_err(|error| {
-        CliError::spec(format!(
-            "--input {label}: not a discrepancy's arguments (`node_ids`, `summary`, \
-             `gap_type`, `severity`, `evidence`, `options`, `recommendation`, optional \
-             `working_answer`, `proposed_patch`, `distinct_from`): {error}"
-        ))
-    })
+    serde_json::from_str(text)
+        .map_err(|error| CliError::spec(format!("--input {label}: not {shape}: {error}")))
 }
 
 fn run_question(
@@ -421,7 +488,47 @@ fn run_discrepancy(
     )
 }
 
-/// One item as given, either kind.
+/// A decision: a question's fields (its decision the working answer) and a
+/// discrepancy's optional patch.
+fn run_decision(
+    env: &Env,
+    globals: &Globals,
+    request: &DecisionRequest,
+    task: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    let input = &request.input;
+    let author = AuthorInput {
+        role: request.author_role.as_deref(),
+        model: request.author_model.as_deref(),
+        run: request.run.as_deref(),
+    };
+    let problem = decision_problem(input, author);
+    run_intake(
+        env,
+        globals,
+        &Item {
+            kind: ProposalKind::Decision,
+            node_ids: &input.node_ids,
+            severity: input.severity.unwrap_or(IntakeSeverity::Normal),
+            gap_type: None,
+            summary: &input.text,
+            working_answer: Some(&input.working_answer),
+            price_of_other: Some(&input.price_of_other),
+            evidence: &[],
+            options: &[],
+            recommendation: None,
+            patch: input.proposed_patch.as_ref(),
+            distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
+            author: (&request.author_role, &request.author_model, &request.run),
+            now: &request.now,
+            git: &request.git,
+            task,
+        },
+        problem,
+    )
+}
+
+/// One item as given, any deciding kind.
 struct Item<'a> {
     kind: ProposalKind,
     node_ids: &'a [String],

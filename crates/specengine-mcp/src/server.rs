@@ -47,9 +47,9 @@ Reads:
 Queue (writes only the proposal queue; the owner decides on a terminal):
 - propose_change = spec propose update|create|interpretation: a node's new text against its \
 span_hash; create: new ID sections in it, or a new file (base null).
-- ask_question, report_discrepancy = spec propose question|discrepancy: what is decided \
-or asked comes back as hits, nothing stored unless distinct_from names each; keep \
-working on your working answer.
+- ask_question, report_discrepancy, report_decision = spec propose \
+question|discrepancy|decision: hits are what is decided or asked; stored only if \
+distinct_from names each; work on your working answer.
 ",
     tasks_line!(),
     "

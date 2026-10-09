@@ -28,7 +28,7 @@ Load the skills `specengine:read-spec`, `specengine:propose-spec-change` and `sp
 ## What a spec change holds
 
 - Criteria checkable by an action, not by an opinion; for a regression, the change that must turn it red.
-- A decision taken in the work goes where the project records decisions, and the rule it changes in the same proposal set. A rule change carrying an accepted decision goes as an interpretation when the decision needed one (`"kind": "interpretation"`, the propose-spec-change skill).
+- A decision taken in the work goes to the owner with `report_decision` (the ask-owner skill), the rule's new text as its `proposed_patch`; the owner's approval records it where the project records decisions. A rule change carrying an accepted decision goes as an interpretation when the decision needed one (`"kind": "interpretation"`, the propose-spec-change skill).
 - What was not done or done otherwise stays visible: never smooth over a gap between the spec and the code.
 
 ## Never

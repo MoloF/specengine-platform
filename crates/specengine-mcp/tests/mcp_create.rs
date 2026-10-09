@@ -372,15 +372,16 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
 
 /// AC-17: `INSTRUCTIONS` hold "Data"'s `propose_change` line (161 bytes
 /// with its LF since docs/features/kind-interpretation.md names
-/// `interpretation`) and are 1 889 bytes (1 751 and
-/// docs/features/task-package.md's 138-byte tasks line); the default build
-/// sends them as is.
+/// `interpretation`) and are 1 890 bytes (1 752 and
+/// docs/features/task-package.md's 138-byte tasks line; +1 since
+/// docs/features/kind-decision.md names `report_decision`); the default
+/// build sends them as is.
 #[test]
 #[cfg(not(feature = "probes"))]
 fn ac17_the_instructions_name_create_within_their_budget() {
     assert_eq!(CHANGE_LINE.len(), 161);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1889);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1890);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -394,7 +395,8 @@ fn ac17_the_instructions_name_create_within_their_budget() {
 /// `INSTRUCTIONS` and the probe paragraph of "Data" (a blank line, 157
 /// bytes), 1 897 bytes as of this slice; 2 035 of 2 048 since
 /// docs/features/task-package.md ("Description and interactions") adds
-/// its 138-byte tasks line; 2 046 since docs/features/kind-interpretation.md.
+/// its 138-byte tasks line; 2 046 since docs/features/kind-interpretation.md;
+/// 2 047 since docs/features/kind-decision.md.
 #[test]
 #[cfg(feature = "probes")]
 fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
@@ -406,7 +408,7 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     let discover = result(&session.request("server/discover", json!({}))).clone();
     let sent = discover["instructions"].as_str().expect("instructions");
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
-    assert_eq!(sent.len(), 2046);
+    assert_eq!(sent.len(), 2047);
     assert!(sent.len() <= 2048);
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());

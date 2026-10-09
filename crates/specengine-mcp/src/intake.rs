@@ -1,10 +1,12 @@
 //! The queue tools (`docs/canon/agent-intake.md` "Tools"): `propose_change`,
-//! `ask_question`, `report_discrepancy` and `get_proposal`, each one call
-//! into the CLI library with a `spec` twin (`propose
-//! update|create|interpretation … --brief`, `propose question`, `propose
-//! discrepancy`, `review --brief`; the kind `create` and a nullable `base`:
-//! task spec `proposal-kinds`; the kind `interpretation` and its nullable
-//! `decision`, `how`, `why`: task spec `kind-interpretation`), answering
+//! `ask_question`, `report_discrepancy`, `report_decision` and
+//! `get_proposal`, each one call into the CLI library with a `spec` twin
+//! (`propose update|create|interpretation … --brief`, `propose question`,
+//! `propose discrepancy`, `propose decision`, `review --brief`; the kind
+//! `create` and a nullable `base`: task spec `proposal-kinds`; the kind
+//! `interpretation` and its nullable `decision`, `how`, `why`: task spec
+//! `kind-interpretation`; `report_decision`: task spec `kind-decision`, no
+//! field of it named `decision`), answering
 //! what the CLI answers (`read.rs`'s mapping). They write only the proposal
 //! queue in SpecEngine's data directory, as the CLI does: nothing under the
 //! project root, no commit, no state change (no approve, reject, import or
@@ -22,13 +24,14 @@ use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use specengine_cli::{
-    ANSWER_MAX, AUTHOR_FIELD_MAX, CREATE_KIND, CreateRequest, DISTINCT_MAX, DiscrepancyInput,
-    DiscrepancyRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTAKE_MATCHES_MAX,
-    INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
-    IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX,
-    OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome, ProposeRequest, ProposedPatch,
-    ProposedText, QuestionRequest, RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX,
-    TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now, with_article,
+    ANSWER_MAX, AUTHOR_FIELD_MAX, CREATE_KIND, CreateRequest, DISTINCT_MAX, DecisionInput,
+    DecisionRequest, DiscrepancyInput, DiscrepancyRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX,
+    Evidence, GapType, INTAKE_MATCHES_MAX, INTERPRETATION_FIELDS, INTERPRETATION_KIND,
+    INTERPRETATION_TEXT_MAX, IntakeOption, IntakeSeverity, InterpretRequest, LABEL_MAX,
+    LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS,
+    Outcome, ProposeRequest, ProposedPatch, ProposedText, QuestionRequest, RATIONALE_MAX,
+    ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now,
+    with_article,
 };
 
 use crate::mirror::{self, IntakeDocument, ReviewDocument, input_schema, output_schema};
@@ -78,27 +81,28 @@ document. A call that cannot run: an error result, one line. ",
 const QUESTION_DESCRIPTION: &str = concat!(
     "Asks the owner a question about nodes: the same as `spec propose question ID... --text T \
 --working-answer W --price-of-other P [--severity S] [--distinct-from X]... --author-role \
-ROLE`. It is first checked against what is already decided and asked, and stored as an open \
-item only when nothing answers it. content is the command's output, structuredContent its \
---json document {id, created, hits, related, linked, diagnostics, notes}.
+ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
+answers it. content is the command's output, structuredContent its --json document {id, \
+created, hits, related, linked, diagnostics, notes}.
 
 node_ids: 1 to 16 IDs (or slug/ID) it is about, or root-relative .md paths naming their \
-files' documents (stored as the document's id, else the path), each node once; an alias is \
-refused naming the ID, a look-alike with its Latin fix.
+files' documents (stored by its id, else its path), each node once; an alias is refused \
+naming the ID, a look-alike with its Latin fix.
 text: the question, at most 1024 bytes.
-working_answer: the answer worked on until the owner answers, at most 2048 bytes: keep \
-working on it.
+working_answer: the answer worked on until the owner's, at most 2048 bytes: keep working \
+on it.
 price_of_other: what another answer would cost, at most 2048 bytes.
 severity: high, normal (absent) or low; it only orders the queue.
 distinct_from: at most 64 hits (an id, else a path) it is declared distinct from.
 author_role (required), author_model, run: who asks.
 task_id: as propose_change.
 
-A hit: an accepted decision document linked to a node (its id, path, and title as the \
-answer), or a question queued on a shared node with the same text, whitespace and case aside \
-(a rejected one's reason is the owner's answer). With a hit nothing is stored: id null, \
-created false; read the answer, or name every hit in distinct_from to store it anyway. Past \
-10 hits, a note names the rest; over 64 it cannot be stored. Related: decisions only mentioning a node, questions with other text. The owner decides \
+A hit: an accepted decision document linked to a node (its id, path and title as the \
+answer), or a question or decision queued on a shared node with the same text, whitespace and \
+case aside (a rejected one's reason is the owner's answer). With a hit nothing is stored: id \
+null, created false; read the answer, or name every hit in distinct_from to store it anyway. \
+Past 10 hits, a note names the rest; over 64 it cannot be stored. Related: decision documents \
+only mentioning a node, queued questions or decisions with other text. The owner decides \
 with `spec approve PR` (a decision record: a queue hit's record, path, title as the answer) \
 or answers with `spec reject PR --reason <answer>`. A refusal names the field. ",
     queue_tail!()
@@ -130,14 +134,40 @@ with `spec reject PR --reason <answer>`. A refusal names the field (evidence[2].
     queue_tail!()
 );
 
+const DECISION_DESCRIPTION: &str = concat!(
+    "Raises a decision you took during work, for the owner to confirm and record on a terminal: \
+the same as `spec propose decision --input F --author-role ROLE` (F: these arguments but the \
+author's, as JSON). Checked and stored as ask_question is (hits, distinct_from; a question or \
+decision queued on a shared node with the same text is a hit); content is the command's \
+output, structuredContent its --json document {id, created, hits, related, linked, \
+diagnostics, notes}.
+
+node_ids: 1 to 16 IDs (or slug/ID, or .md paths) it is about, as ask_question takes them; the \
+section the decision governs first (its record's canon).
+text: what had to be decided, at most 1024 bytes.
+working_answer: the decision you took, at most 2048 bytes: keep working on it.
+price_of_other: what another answer would cost, at most 2048 bytes.
+severity: high, normal (absent) or low; it only orders the queue.
+proposed_patch: {target, base, text, rationale} as propose_change takes them, the target one \
+of node_ids: the rule's new text, stored as a linked update (linked, its findings in \
+diagnostics), approved on its own.
+distinct_from, author_role (required), author_model, run: as ask_question.
+task_id: as propose_change takes it; the linked update takes it too.
+
+The owner records it with `spec approve PR` (a decision record: its working answer, or \
+another with --answer) and approves the linked update apart, its own commit; or settles it \
+with `spec reject PR --reason <answer>`. A refusal names the field. ",
+    queue_tail!()
+);
+
 const PROPOSAL_DESCRIPTION: &str = concat!(
     "One proposal of the current repository's queue: the same as `spec review PR --brief`. \
 content is the command's output (key: value lines), structuredContent its --json document: \
 kind, status, targets, place, author, rationale, the findings an update introduces (at most \
-20, the rest counted in a note), a question's or discrepancy's fields, the owner's decision \
-and note (a rejected question's reason is its answer; one decided by `spec approve` names its \
-record: record_id, record_path, record_title, choice), and for an open update what approving \
-it now would do. The texts, diff and conflict are left out (`spec review PR` prints them); the \
+20, the rest counted in a note), a question's, discrepancy's or decision's fields, the \
+owner's decision and note (a rejected one's reason is its answer; one decided by `spec \
+approve` names its record: record_id, record_path, record_title, choice), and for an open \
+update what approving it now would do. The texts, diff and conflict are left out (`spec review PR` prints them); the \
 text is cut at 40000 characters.
 
 proposal_id: PR- and 4 or more digits, as the queue writes it.
@@ -153,14 +183,17 @@ that cannot run: an error result with its one line. ",
 const _: () = assert!(CHANGE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(QUESTION_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(DISCREPANCY_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(DECISION_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(PROPOSAL_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(CHANGE_DESCRIPTION.is_ascii());
 const _: () = assert!(QUESTION_DESCRIPTION.is_ascii());
 const _: () = assert!(DISCREPANCY_DESCRIPTION.is_ascii());
+const _: () = assert!(DECISION_DESCRIPTION.is_ascii());
 const _: () = assert!(PROPOSAL_DESCRIPTION.is_ascii());
 const _: () = assert!(holds(CHANGE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(QUESTION_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(DISCREPANCY_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds(DECISION_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(PROPOSAL_DESCRIPTION, DETERMINISM));
 // The numbers the descriptions state are the CLI's.
 const _: () = assert!(holds_number(
@@ -291,6 +324,24 @@ const _: () = assert!(holds_number(
 ));
 const _: () = assert!(holds_number(
     DISCREPANCY_DESCRIPTION,
+    "at most ",
+    ANSWER_MAX,
+    " bytes"
+));
+const _: () = assert!(holds_number(
+    DECISION_DESCRIPTION,
+    "1 to ",
+    NODE_IDS_MAX,
+    " IDs"
+));
+const _: () = assert!(holds_number(
+    DECISION_DESCRIPTION,
+    "at most ",
+    SUMMARY_MAX,
+    " bytes"
+));
+const _: () = assert!(holds_number(
+    DECISION_DESCRIPTION,
     "at most ",
     ANSWER_MAX,
     " bytes"
@@ -464,6 +515,40 @@ pub(crate) struct DiscrepancyArgs {
     /// The reporting agent's model.
     pub author_model: Option<String>,
     /// The reporting agent's run.
+    pub run: Option<String>,
+    /// The task it and its linked update are raised for.
+    pub task_id: Option<String>,
+}
+
+/// `report_decision` arguments (task spec `kind-decision`): a question's
+/// and a discrepancy's patch; no field is named `decision`, which keeps
+/// its other meanings: the decision is `working_answer`, what had to be
+/// decided `text`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DecisionArgs {
+    /// The IDs (or `slug/ID`, or root-relative `.md` paths) it is about,
+    /// the section the decision governs first.
+    pub node_ids: Vec<String>,
+    /// What had to be decided.
+    pub text: String,
+    /// The decision taken, worked on until the owner confirms it.
+    pub working_answer: String,
+    /// What another answer would cost.
+    pub price_of_other: String,
+    /// Absent: `normal`.
+    #[schemars(with = "Option<mirror::IntakeSeverity>")]
+    pub severity: Option<IntakeSeverity>,
+    /// The rule's new text for one of the nodes: a linked update.
+    #[schemars(with = "Option<mirror::ProposedPatch>")]
+    pub proposed_patch: Option<ProposedPatch>,
+    /// Hits (an id, else a path) it is declared distinct from.
+    pub distinct_from: Option<Vec<String>>,
+    /// The deciding agent's role.
+    pub author_role: String,
+    /// The deciding agent's model.
+    pub author_model: Option<String>,
+    /// The deciding agent's run.
     pub run: Option<String>,
     /// The task it and its linked update are raised for.
     pub task_id: Option<String>,
@@ -708,6 +793,53 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("report_discrepancy"))
+    }
+
+    /// `spec propose decision`.
+    #[tool(
+        description = DECISION_DESCRIPTION,
+        input_schema = input_schema::<DecisionArgs>(),
+        output_schema = output_schema::<IntakeDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn report_decision(
+        &self,
+        Parameters(args): Parameters<DecisionArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self
+            .call(move |env, globals| {
+                let request = DecisionRequest {
+                    input: DecisionInput {
+                        node_ids: args.node_ids,
+                        text: args.text,
+                        working_answer: args.working_answer,
+                        price_of_other: args.price_of_other,
+                        severity: args.severity,
+                        proposed_patch: args.proposed_patch,
+                        distinct_from: args.distinct_from,
+                    },
+                    author_role: Some(args.author_role),
+                    author_model: args.author_model,
+                    run: args.run,
+                    now: utc_now(),
+                    git: process_git(env),
+                };
+                specengine_cli::propose_decision_with_task(
+                    env,
+                    globals,
+                    &request,
+                    args.task_id.as_deref(),
+                )
+                .map(|outcome| Outcome::Intake(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("report_decision"))
     }
 
     /// `spec review PR --brief`.

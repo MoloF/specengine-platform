@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-09
 ---
 
 # specengine-cli -- the spec binary
@@ -22,7 +22,7 @@ The CLI: the agent read loop (search, read by ID) over an index refreshed on eve
 - `spec index [--full]`: store `update` (`--full`: `rebuild`); `indexed <slug>: walked 13, parsed 13, unchanged 0, removed 0, unreadable 0` (+ `, reparsed all`), `db <path>`; JSON `project`, `db`, `UpdateReport`'s fields.
 - `spec search QUERY… [--kind K]… [--limit N] [--archive]`: the store's FTS5 search in its order. Terms under 3 characters dropped (a `note:`); none left -> exit 2 suggesting `spec show`; `--kind` free, repeatable; `--limit` 1..=200, default 20.
 - `spec show REF`: `REF` is an ID, an `aliases:` entry, an `aliases_from` legacy ID, `slug/ID`, `ID#SECTION` (`@rev` ignored with a `note:`) or a root-relative `.md` path.
-- In `docs/canon/`: `check`, `export index`: `spec-check-{cli,git}.md`; `tree`, `graph`, `show --links`: `spec-cli-graph.md`; `bundle`: `spec-cli-bundle.md`; `propose update|create|interpretation`, `inbox`, `review`, `approve`, `reject`: `proposal-{queue,apply,kinds,interpretation}.md`; `approve`'s decision flags: `decision-record.md`; `propose question|discrepancy`, `--brief`: `agent-intake.md`; `export state`, `import-state`: `queue-backup.md`; `task …`, `--task`: `tasks.md`, `task-package.md`; `round`: `round{,-ui}.md`; `serve`: `serve.md`.
+- In `docs/canon/`: `check`, `export index`: `spec-check-{cli,git}.md`; `tree`, `graph`, `show --links`: `spec-cli-graph.md`; `bundle`: `spec-cli-bundle.md`; `propose update|create|interpretation|decision`, `inbox`, `review`, `approve`, `reject`: `proposal-{queue,apply,kinds,interpretation,decision}.md`; `approve`'s flags: `decision-record.md`; `propose question|discrepancy`, `--brief`: `agent-intake.md`; `export state`, `import-state`: `queue-backup.md`; `task …`, `--task`: `task{s,-package}.md`; `round`: `round{,-ui}.md`; `serve`: `serve.md`.
 
 **Discovery.** Without `--root` and `--config`, walk up from the canonical current directory to the first with `specengine.toml`; none -> exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the current directory. Config errors: `<config as given>:<line>: message`.
 

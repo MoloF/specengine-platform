@@ -49,6 +49,11 @@ fn valid_args(tool: &str) -> Value {
             "node_ids": ["EDGE-STAM-ZERO"], "text": "Why?", "working_answer": "Yes.",
             "price_of_other": "None.", "author_role": "writer"
         }),
+        // docs/features/kind-decision.md.
+        "report_decision" => json!({
+            "node_ids": ["EDGE-STAM-ZERO"], "text": "Why?", "working_answer": "Yes.",
+            "price_of_other": "None.", "author_role": "writer"
+        }),
         "report_discrepancy" => json!({
             "node_ids": ["EDGE-STAM-ZERO"], "summary": "It departs.", "gap_type": "partial",
             "severity": "low",

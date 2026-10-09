@@ -185,6 +185,50 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                     "price_of_other": "P", "author_role": "writer", "severity": "urgent"}),
             ],
         ),
+        // docs/features/kind-decision.md AC-T3: a decision with its patch
+        // (a linked update), one without, one whose patch names a node
+        // outside `node_ids`.
+        "report_decision" => {
+            let decision = |patch: Option<Value>| {
+                let mut args = json!({
+                    "node_ids": ["RULE-STAM-REGEN"],
+                    "text": "Does regeneration wait for rest?",
+                    "working_answer": "Yes: only at rest.",
+                    "price_of_other": "A rebalance.",
+                    "distinct_from": ["DEC-0023"], "author_role": "writer"
+                });
+                if let Some(patch) = patch {
+                    args["proposed_patch"] = patch;
+                }
+                args
+            };
+            (
+                vec![
+                    decision(Some(json!({"target": "RULE-STAM-REGEN", "base": base,
+                        "text": regen, "rationale": "Rest only."}))),
+                    decision(None),
+                    decision(Some(json!({"target": "EDGE-STAM-ZERO", "base": base,
+                        "text": regen, "rationale": "Outside."}))),
+                ],
+                vec![
+                    {
+                        let mut args = decision(None);
+                        args["options"] = json!([]);
+                        args
+                    },
+                    {
+                        let mut args = decision(None);
+                        args["decision"] = json!("Yes.");
+                        args
+                    },
+                    {
+                        let mut args = decision(None);
+                        args.as_object_mut().unwrap().remove("working_answer");
+                        args
+                    },
+                ],
+            )
+        }
         "report_discrepancy" => {
             let discrepancy = |patch: Option<Value>| {
                 let mut args = json!({
@@ -428,11 +472,12 @@ fn ac08_reads_write_nothing_under_the_project_root() {
     assert_eq!(called.into_iter().collect::<Vec<_>>(), TOOLS);
 
     // The queue holds what the valid calls proposed, in call order: the
-    // first era's question (its repeat a hit), change, and discrepancy with
-    // its linked update (its repeat a hit); the second era's change only.
+    // first era's question (its repeat a hit), change, decision and
+    // discrepancy each with its linked update (their repeats hits); the
+    // second era's change only.
     let mut session = Session::open(Era::Legacy, &[], Some(&cwd), Home::At(&home));
     let mut stored = Vec::new();
-    for number in 1..=8 {
+    for number in 1..=10 {
         let id = format!("PR-{number:04}");
         let reply = session.call("get_proposal", json!({"proposal_id": id}));
         let result = result(&reply);
@@ -457,7 +502,7 @@ fn ac08_reads_write_nothing_under_the_project_root() {
             ("update".to_owned(), "open".to_owned(), None),
             ("interpretation".to_owned(), "open".to_owned(), None),
             (
-                "discrepancy".to_owned(),
+                "decision".to_owned(),
                 "open".to_owned(),
                 Some("PR-0005".to_owned())
             ),
@@ -465,6 +510,16 @@ fn ac08_reads_write_nothing_under_the_project_root() {
                 "update".to_owned(),
                 "open".to_owned(),
                 Some("PR-0004".to_owned())
+            ),
+            (
+                "discrepancy".to_owned(),
+                "open".to_owned(),
+                Some("PR-0007".to_owned())
+            ),
+            (
+                "update".to_owned(),
+                "open".to_owned(),
+                Some("PR-0006".to_owned())
             ),
             ("update".to_owned(), "open".to_owned(), None),
             ("interpretation".to_owned(), "open".to_owned(), None),

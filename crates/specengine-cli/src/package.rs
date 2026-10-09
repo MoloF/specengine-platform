@@ -19,8 +19,9 @@
 //!   gone), at most [`CRITERION_TEXT_MAX`] bytes cut at a line end (a
 //!   note); **open proposals** `open` and `approved` of the task's
 //!   repository whose targets meet the snapshot (before approval: what it
-//!   would freeze) or bound to it; **assumptions** their questions'
-//!   working answers and discrepancies' recommended options; the
+//!   would freeze) or bound to it; **assumptions** by their fields: the
+//!   working answers of those without options (questions, decisions) and
+//!   the recommended options of those with (discrepancies); the
 //!   **bundle** by reference: the targets, `[budgets] bundle_task` else
 //!   [`DEFAULT_TASK_BUDGET`], `spec bundle`'s hash now.
 //! - **Size**: the JSON and its `note:` lines within [`PACKAGE_BUDGET`]
@@ -52,8 +53,8 @@ use specengine_model::{
     TaskCriterion, TaskPackage, TaskRun,
 };
 use specengine_store::{
-    GitEnv, Proposal, ProposalFilter, ProposalKind, ProposalQueue as _, ProposalStatus,
-    SnapshotEntry, Source as _, Task, WorkingTree, WorktreeGit, same_repository, span_hash,
+    GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
+    Source as _, Task, WorkingTree, WorktreeGit, same_repository, span_hash,
 };
 
 use crate::bundle::{BundleRequest, bundle};
@@ -465,15 +466,17 @@ pub(crate) fn assemble(
             None => proposal.rationale.lines().next().map(str::to_owned),
         };
         if let Some(intake) = intake {
-            // A question's working answer; a discrepancy's recommended
-            // option.
-            let assumed = match proposal.kind {
-                ProposalKind::Question => intake.working_answer.clone(),
-                _ => intake
+            // By its fields: with options (a discrepancy's) the recommended
+            // one's label; without (a question's, a decision's) the working
+            // answer.
+            let assumed = if intake.options.is_empty() {
+                intake.working_answer.clone()
+            } else {
+                intake
                     .recommendation
                     .and_then(|at| usize::try_from(at).ok())
                     .and_then(|at| intake.options.get(at))
-                    .map(|option| option.label.clone()),
+                    .map(|option| option.label.clone())
             };
             if let Some(text) = assumed {
                 assumptions.push(PackageAssumption {

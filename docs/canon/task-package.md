@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-07
+reviewed: 2026-10-09
 ---
 
 # Task package: what an agent is given
@@ -28,7 +28,7 @@ ADR-0027: one versioned, stack-neutral document of the approved spec an agent wo
 
 - `targets`: resolved now in the compared place; a node gone keeps its stored `id` (`null` for a path target) and `path` (else the snapshot's), `kind`, `title` `null`.
 - `criteria`: free text, or `ref` and its text now in the compared place (`null` gone; cut: "Caps").
-- `open_proposals`: `open` and `approved` proposals, any kind (an interpretation too), of the task's repository whose `target_ids` meet the snapshot (before approval: what it would freeze) or bound to the task; `summary` a question's or discrepancy's summary, else the rationale's first line, `null` for an empty rationale. `assumptions`: their questions' `working_answer`, discrepancies' recommended option label; none from another kind.
+- `open_proposals`: `open` and `approved` proposals, any kind (an interpretation too), of the task's repository whose `target_ids` meet the snapshot (before approval: what it would freeze) or bound to the task; `summary` a deciding item's summary (a question's, a decision's text), else the rationale's first line, `null` for an empty rationale. `assumptions`, by the item's fields: one without options (a question, a decision) its `working_answer`, one with options (a discrepancy) its recommended option's label; none from an applying kind.
 - `owner_notes` `{at, note}` per `changes --note`, oldest first; `bindings` `[]` until Phase 3; `runs` by number.
 - `spec_snapshot`: place and nodes, no texts (they stay stored); a node's `id` is never `null`: an ID, `slug/ID`, or an id-less document's path.
 - `bundle`: by reference (`get_context_bundle` with `node_ids` and `budget` gives the text): the targets, `[budgets] bundle_task` else 10 000 (`DEFAULT_TASK_BUDGET`), `spec bundle`'s `bundle_hash` now, `null` with a note `bundle: <why>` when it cannot be made.
@@ -76,7 +76,7 @@ Five tools in the default build (`tasks.rs`), one CLI library call each, answeri
 | `report_run {task_id, outcome, summary, changed_files[]}` | `report T --outcome O --summary S [--changed FILE]...` |
 | `complete_task {task_id}` | `complete T` |
 
-`get_task`: the read tools' annotations; `task_id`, `next` both nullable, no root `oneOf`; not exactly one of `task_id`, `next: true` -> error result `` spec: get_task takes exactly one of `task_id` and `next: true` ``; no such task: an error result with the reason, no `structuredContent` (`{id, reason}` is not the package's schema). The four movers: every annotation `false`; `structuredContent` `{id, status, run, notes}`, a refusal too; the lists required. No owner tool: approve, changes, cancel only on a terminal (`architecture.md#control`). `propose_change`, `ask_question`, `report_discrepancy` take an optional `task_id` (descriptions 2 040, 2 045 of 2 048 B).
+`get_task`: the read tools' annotations; `task_id`, `next` both nullable, no root `oneOf`; not exactly one of `task_id`, `next: true` -> error result `` spec: get_task takes exactly one of `task_id` and `next: true` ``; no such task: an error result with the reason, no `structuredContent` (`{id, reason}` is not the package's schema). The four movers: every annotation `false`; `structuredContent` `{id, status, run, notes}`, a refusal too; the lists required. No owner tool: approve, changes, cancel only on a terminal (`architecture.md#control`). `propose_change`, `ask_question`, `report_discrepancy`, `report_decision` take an optional `task_id` (descriptions 2 042, 2 041, 1 727, 1 744 of 2 048 B).
 
 `INSTRUCTIONS` adds one line under "Queue" (138 B, compile-time asserted under 140), whose header still says the proposal queue: `- get_task, claim_task, submit_plan, report_run, complete_task = spec task show|claim|plan|report|complete; the three above take task_id.` Plugin 0.1.5: `propose-spec-change` (on a task: `get_task` reads it, the four movers move it, each proposal passes its `task_id`), `ask-owner` (pass the task's `task_id`; `get_proposal`'s `task_id` names it).
 

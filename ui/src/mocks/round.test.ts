@@ -39,14 +39,14 @@ afterEach(() => {
 });
 
 describe("the normal scenario", () => {
-  it("lists harbor-sim's open questions and discrepancies in round order, notes the change proposals (an interpretation among them), lists no deferred one", async () => {
+  it("lists harbor-sim's open questions, discrepancies and decisions in round order, notes the change proposals (an interpretation and a decision's update among them), lists no deferred one", async () => {
     const sheet = await new MockClient("normal", { now: clock }).getRound("harbor-sim");
     expect(sheet.project).toBe("harbor-sim");
-    expect(sheet.items.map((item) => item.id)).toEqual(["PR-0041", "PR-0048", "PR-0043", "PR-0047", "PR-0044"]);
-    expect(sheet.items.map((item) => item.tasks.map((task) => task.id))).toEqual([["T-0107"], [], ["T-0112"], [], ["T-0107", "T-0112"]]);
+    expect(sheet.items.map((item) => item.id)).toEqual(["PR-0041", "PR-0048", "PR-0050", "PR-0043", "PR-0047", "PR-0044"]);
+    expect(sheet.items.map((item) => item.tasks.map((task) => task.id))).toEqual([["T-0107"], [], [], ["T-0112"], [], ["T-0107", "T-0112"]]);
     expect(sheet.more).toBe(0);
     expect(sheet.minutes).toBeGreaterThan(0);
-    expect(sheet.notes).toEqual(["2 open change proposal(s) not on this sheet: PR-0042 and PR-0049; spec inbox lists them"]);
+    expect(sheet.notes).toEqual(["3 open change proposal(s) not on this sheet: PR-0042, PR-0049 and PR-0051; spec inbox lists them"]);
     expect(Object.keys(sheet.items[0] ?? {})).toEqual([
       "id",
       "kind",
@@ -84,8 +84,8 @@ describe("the normal scenario", () => {
     const two = await client.getRound("harbor-sim", { limit: 2 });
     expect([two.items.map((item) => item.id), two.more, two.notes[0]]).toEqual([
       ["PR-0041", "PR-0048"],
-      3,
-      "3 more item(s) not on this sheet: spec round new --limit 5",
+      4,
+      "4 more item(s) not on this sheet: spec round new --limit 6",
     ]);
     for (const limit of [0, 201, 1.5]) {
       const error = await rejection(client.getRound("harbor-sim", { limit }));

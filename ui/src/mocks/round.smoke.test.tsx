@@ -30,12 +30,13 @@ describe("the Questions screen over the mock", () => {
     expect(screen.getAllByRole("article").map((article) => article.querySelector("h2")?.textContent)).toEqual([
       "PR-0041",
       "PR-0048",
+      "PR-0050",
       "PR-0043",
       "PR-0047",
       "PR-0044",
     ]);
     expect(within(screen.getByRole("list", { name: "Notes from the daemon" })).getByRole("listitem").textContent).toBe(
-      "2 open change proposal(s) not on this sheet: PR-0042 and PR-0049; spec inbox lists them",
+      "3 open change proposal(s) not on this sheet: PR-0042, PR-0049 and PR-0051; spec inbox lists them",
     );
     fireEvent.click(within(card("PR-0048")).getByRole("radio", { name: "Take the working answer" }));
     fireEvent.click(within(card("PR-0041")).getByRole("radio", { name: /^\[0\] Code to spec/ }));

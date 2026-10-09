@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `tasks.md`; a question or discrepancy approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`: `docs/canon/proposal-{kinds,interpretation}.md`; `decision`, `amendment` later.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`: `docs/canon/proposal-{kinds,interpretation,decision}.md`; `amendment` later.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|

@@ -8,7 +8,8 @@
 //! leaves `user_version` alone).
 //!
 //! - **Kinds** (`docs/canon/agent-intake.md` "Stored"): `update` applies; a
-//!   `question` and a `discrepancy` decide: their fields live in the eleven
+//!   `question` and a `discrepancy` decide (a `decision` too, below): their
+//!   fields live in the eleven
 //!   columns step 2 adds ([`Intake`]), the update's five text columns NULL.
 //!   They are stored by [`ProposalQueue::create_intake`], whose dedup reads
 //!   the queue inside the inserting transaction. A `create` (task spec
@@ -22,7 +23,10 @@
 //!   An `interpretation` (task spec `kind-interpretation`) is an update
 //!   carrying an accepted decision: its `{decision, how, why}` live in the
 //!   JSON column step 6 adds ([`Interpretation`]), set on that kind only
-//!   (else the row is corrupt, named).
+//!   (else the row is corrupt, named). A `decision` (task spec
+//!   `kind-decision`) decides: a question's columns, its decision the
+//!   working answer, a proposed patch its linked update (no new column, no
+//!   schema step); the dedup takes a question and a decision as one family.
 //! - **Records** (`docs/canon/decision-record.md` "Queue and documents"): a deciding kind is
 //!   approved only with its decision record ([`DecisionRecord`], the five
 //!   columns step 3 adds), by [`ProposalQueue::approve_record_from`], which
@@ -113,8 +117,8 @@ use serde_json::{Value, json};
 use specengine_core::check::Finding;
 pub use specengine_core::intake::Interpretation;
 use specengine_core::intake::{
-    CREATE_KIND, DISCREPANCY_KIND, Evidence, GapType, INTERPRETATION_KIND, IntakeOption,
-    IntakeSeverity, QUESTION_KIND, UPDATE_KIND, normalized_summary, with_article,
+    CREATE_KIND, DECISION_KIND, DISCREPANCY_KIND, Evidence, GapType, INTERPRETATION_KIND,
+    IntakeOption, IntakeSeverity, QUESTION_KIND, UPDATE_KIND, normalized_summary, with_article,
 };
 use specengine_core::is_clean_relative;
 use specengine_core::proposal::{
@@ -258,9 +262,9 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
 /// What a proposal does: `update`, `create` and `interpretation` apply (a
-/// file written and committed); the intake kinds decide (an approval writes
-/// a decision record), or are settled by a rejection whose reason is the
-/// answer.
+/// file written and committed); the intake kinds `question`, `discrepancy`
+/// and `decision` decide (an approval writes a decision record), or are
+/// settled by a rejection whose reason is the answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
@@ -276,15 +280,20 @@ pub enum ProposalKind {
     /// Replace one node's span carrying an accepted decision into it, with
     /// how it was applied and why interpretation was needed.
     Interpretation,
+    /// A decision taken during work: a question's fields, its decision the
+    /// working answer; its canon diff a linked update (task spec
+    /// `kind-decision`).
+    Decision,
 }
 
 impl ProposalKind {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Update,
         Self::Question,
         Self::Discrepancy,
         Self::Create,
         Self::Interpretation,
+        Self::Decision,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -294,6 +303,7 @@ impl ProposalKind {
             Self::Discrepancy => DISCREPANCY_KIND,
             Self::Create => CREATE_KIND,
             Self::Interpretation => INTERPRETATION_KIND,
+            Self::Decision => DECISION_KIND,
         }
     }
 
@@ -314,9 +324,92 @@ impl ProposalKind {
         matches!(self, Self::Update | Self::Create | Self::Interpretation)
     }
 
-    /// A question or a discrepancy: its approval writes a decision record.
+    /// A question, a discrepancy or a decision: its approval writes a
+    /// decision record.
     pub const fn decides(self) -> bool {
-        matches!(self, Self::Question | Self::Discrepancy)
+        matches!(self, Self::Question | Self::Discrepancy | Self::Decision)
+    }
+
+    /// The fields a deciding kind's row holds, every kind listed (so a new
+    /// one must be judged here): a question's (a `question`, a `decision`)
+    /// or a discrepancy's; `None` for a kind that applies. It is also the
+    /// queue's dedup family.
+    pub(crate) const fn intake_shape(self) -> Option<IntakeShape> {
+        match self {
+            Self::Question | Self::Decision => Some(IntakeShape::Question),
+            Self::Discrepancy => Some(IntakeShape::Discrepancy),
+            Self::Update | Self::Create | Self::Interpretation => None,
+        }
+    }
+}
+
+/// What a deciding kind's row holds (`docs/canon/agent-intake.md`
+/// "Stored"), and so how it is answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IntakeShape {
+    /// `summary` (its text), `working_answer` and `price_of_other`; no
+    /// `gap_type`, evidence, options or recommendation: answered by the
+    /// working answer or the owner's own.
+    Question,
+    /// `gap_type`, `summary`, evidence, priced options and a
+    /// recommendation, an optional `working_answer`: answered by one of
+    /// its options.
+    Discrepancy,
+}
+
+impl IntakeShape {
+    /// The intake columns a row of this shape holds none of: `NULL`, else
+    /// the row is corrupt, named (and [`ProposalQueue::create_intake`]
+    /// refuses an item holding one).
+    const fn null_columns(self) -> &'static [&'static str] {
+        match self {
+            Self::Question => &["gap_type", "evidence", "options", "recommendation"],
+            Self::Discrepancy => &["price_of_other"],
+        }
+    }
+
+    /// Why `intake` is no item of this shape (`kind` as a refusal names
+    /// it): a field the shape holds none of given (an empty list is none),
+    /// one it requires absent, a recommendation out of range of the
+    /// options; `None`: it is. The columns as [`IntakeColumns::decode`]
+    /// reads them.
+    fn problem(self, kind: ProposalKind, intake: &Intake) -> Option<String> {
+        let given = [
+            ("gap_type", intake.gap_type.is_some()),
+            ("price_of_other", intake.price_of_other.is_some()),
+            ("evidence", !intake.evidence.is_empty()),
+            ("options", !intake.options.is_empty()),
+            ("recommendation", intake.recommendation.is_some()),
+        ];
+        if let Some((field, _)) = given
+            .iter()
+            .find(|(field, given)| *given && self.null_columns().contains(field))
+        {
+            return Some(format!("{} holds no `{field}`", kind.with_article()));
+        }
+        let required: &[(&str, bool)] = match self {
+            Self::Question => &[
+                ("working_answer", intake.working_answer.is_some()),
+                ("price_of_other", intake.price_of_other.is_some()),
+            ],
+            Self::Discrepancy => &[
+                ("gap_type", intake.gap_type.is_some()),
+                ("recommendation", intake.recommendation.is_some()),
+            ],
+        };
+        if let Some((field, _)) = required.iter().find(|(_, given)| !given) {
+            return Some(format!("{} lacks its `{field}`", kind.with_article()));
+        }
+        intake
+            .recommendation
+            .filter(|&at| usize::try_from(at).map_or(true, |at| at >= intake.options.len()))
+            .map(|at| {
+                format!(
+                    "the recommendation {at} of {} is no index into its {} options",
+                    kind.with_article(),
+                    intake.options.len()
+                )
+            })
     }
 }
 
@@ -431,8 +524,8 @@ pub struct NewProposal {
     pub interpretation: Option<Interpretation>,
 }
 
-/// The fields of a `question` or a `discrepancy`
-/// (`docs/canon/agent-intake.md` "Stored").
+/// The fields of a `question`, a `discrepancy` or a `decision`
+/// (`docs/canon/agent-intake.md` "Stored"; a decision holds a question's).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Intake {
     /// The canonical IDs, in the order given; `target_id` is the first and
@@ -441,15 +534,16 @@ pub struct Intake {
     pub severity: IntakeSeverity,
     /// A discrepancy's.
     pub gap_type: Option<GapType>,
-    /// A question's text, a discrepancy's summary.
+    /// A question's or a decision's text, a discrepancy's summary.
     pub summary: String,
-    /// A question's; a discrepancy's when given.
+    /// A question's; a decision's (its decision); a discrepancy's when
+    /// given.
     pub working_answer: Option<String>,
-    /// A question's.
+    /// A question's or a decision's.
     pub price_of_other: Option<String>,
-    /// A discrepancy's; `[]` for a question.
+    /// A discrepancy's; `[]` for a question or a decision.
     pub evidence: Vec<Evidence>,
-    /// A discrepancy's; `[]` for a question.
+    /// A discrepancy's; `[]` for a question or a decision.
     pub options: Vec<IntakeOption>,
     /// A discrepancy's: an index into `options`.
     pub recommendation: Option<u64>,
@@ -461,7 +555,8 @@ pub struct Intake {
 /// the ID, project, status and times.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewIntake {
-    /// [`ProposalKind::Question`] or [`ProposalKind::Discrepancy`].
+    /// A kind that decides: [`ProposalKind::Question`],
+    /// [`ProposalKind::Discrepancy`] or [`ProposalKind::Decision`].
     pub kind: ProposalKind,
     /// Root-relative: the first target's holder.
     pub target_path: String,
@@ -470,8 +565,8 @@ pub struct NewIntake {
     pub intake: Intake,
 }
 
-/// A stored item the dedup found: of the same kind and project, sharing a
-/// target.
+/// A stored item the dedup found: of the same family (a question and a
+/// decision are one) and project, sharing a target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueMatch {
     pub id: String,
@@ -484,7 +579,7 @@ pub struct QueueMatch {
     pub record_title: Option<String>,
 }
 
-/// A decision record of a question or a discrepancy, set at apply step 7.
+/// A decision record of a kind that decides, set at apply step 7.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecisionRecord {
     /// The record's ID, issued by the queue.
@@ -508,7 +603,7 @@ pub struct RecordSeries {
     pub corpus_max: u64,
 }
 
-/// Apply step 7 of a question or a discrepancy: its record.
+/// Apply step 7 of a kind that decides: its record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordApproval {
     pub series: RecordSeries,
@@ -525,10 +620,12 @@ pub struct RecordApproval {
 /// What [`ProposalQueue::create_intake`] found and did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntakeResult {
-    /// Same kind and project (any repository, any state), sharing a target,
-    /// the normalised summary equal: by ID number.
+    /// Same family (a question and a decision are one) and project (any
+    /// repository, any state), sharing a target, the normalised summary
+    /// equal: by ID number.
     pub hits: Vec<QueueMatch>,
-    /// Same kind and project, sharing a target, other text: by ID number.
+    /// Same family and project, sharing a target, other text: by ID
+    /// number.
     pub related: Vec<QueueMatch>,
     /// The stored item; `None` when a hit was not named in
     /// `distinct_from` (nothing stored, no ID taken).
@@ -565,13 +662,13 @@ pub struct Proposal {
     pub applied_commit: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    /// A `question`'s or a `discrepancy`'s fields; `None` for an `update`.
+    /// The fields of a kind that decides; `None` for one that applies.
     pub intake: Option<Intake>,
-    /// The other proposal of a discrepancy and its proposed patch (an
-    /// `update`), both ways.
+    /// The other proposal of a discrepancy or a decision and its proposed
+    /// patch (an `update`), both ways.
     pub linked: Option<String>,
-    /// A question's or a discrepancy's decision record, from its step 7
-    /// on; `None` for an update.
+    /// The decision record of a kind that decides, from its step 7 on;
+    /// `None` for one that applies.
     pub record: Option<DecisionRecord>,
     /// A create's new IDs, canonical, in text order (its `target_ids` but
     /// the first, and the first too for a new file declaring an `id:`);
@@ -892,7 +989,11 @@ pub trait ProposalQueue {
     /// `intake` stored `open` under the next ID, then `patch` (an
     /// `update`) under the one after, `linked` both ways, a
     /// `proposal.created` each, committed; else nothing written. A kind
-    /// that applies is [`QueueError::Invalid`].
+    /// that applies, or an item not of its kind's fields (a question's or a
+    /// decision's with a gap type, evidence, options or a recommendation, or
+    /// without its working answer or price; a discrepancy's with a price,
+    /// or without its gap type or an in-range recommendation), is
+    /// [`QueueError::Invalid`].
     fn create_intake(
         &mut self,
         intake: &NewIntake,
@@ -947,7 +1048,7 @@ pub trait ProposalQueue {
     /// project's stored `record_id`s of its prefix, zero-padded to its
     /// width.
     fn next_record(&self, series: &RecordSeries) -> Result<String, QueueError>;
-    /// Apply step 7 of a question or a discrepancy: [`Self::approve_from`]'s
+    /// Apply step 7 of a kind that decides: [`Self::approve_from`]'s
     /// compare-and-set on `seen`, and its record set (replacing an earlier
     /// one). The record's ID is the one the proposal holds from an earlier
     /// step 7, else [`Self::next_record`] read again under the write lock;
@@ -1893,10 +1994,9 @@ impl RawRow {
         } else {
             Vec::new()
         };
-        let intake = if kind.applies() {
-            None
-        } else {
-            Some(columns.decode(&id, kind, &target_id)?)
+        let intake = match kind.intake_shape() {
+            None => None,
+            Some(shape) => Some(columns.decode(&id, kind, shape, &target_id)?),
         };
         let record = decode_record(&id, kind, status, intake.as_ref(), record_columns)?;
         if let Some(linked) = &linked
@@ -1987,8 +2087,8 @@ fn decode_interpretation(
     Ok(Some(value))
 }
 
-/// The record columns of a row ([`RECORD_COLUMNS`]): none on an update;
-/// all or none on a question or a discrepancy, all on an approved or
+/// The record columns of a row ([`RECORD_COLUMNS`]): none on a kind that
+/// applies; all or none on one that decides, all on an approved or
 /// applied one; `record_id` an ID, `record_path` clean, `choice` of the
 /// row's kind and in range. Else the row is corrupt, named.
 fn decode_record(
@@ -2114,12 +2214,13 @@ fn is_record_id(text: &str) -> bool {
     })
 }
 
-/// Why `choice` is not one `kind` takes: an option of a discrepancy, in
-/// range of its options; the working answer or another answer of a
-/// question. `None`: it is.
+/// Why `choice` is not one `kind` takes, by the fields its row holds
+/// ([`ProposalKind::intake_shape`]): an option of a discrepancy, in range
+/// of its options; the working answer or another answer of a question or
+/// a decision. `None`: it is.
 fn choice_fits(choice: &Choice, kind: ProposalKind, intake: &Intake) -> Option<String> {
-    match (kind, choice) {
-        (ProposalKind::Discrepancy, Choice::Option(index)) => {
+    match (kind.intake_shape(), choice) {
+        (Some(IntakeShape::Discrepancy), Choice::Option(index)) => {
             let fits = usize::try_from(*index).is_ok_and(|index| index < intake.options.len());
             (!fits).then(|| {
                 format!(
@@ -2128,11 +2229,11 @@ fn choice_fits(choice: &Choice, kind: ProposalKind, intake: &Intake) -> Option<S
                 )
             })
         }
-        (ProposalKind::Question, Choice::WorkingAnswer | Choice::Answer(_)) => None,
+        (Some(IntakeShape::Question), Choice::WorkingAnswer | Choice::Answer(_)) => None,
         _ => Some(format!(
-            "{} is no choice of a {}",
+            "{} is no choice of {}",
             choice.described(),
-            kind.as_str()
+            kind.with_article()
         )),
     }
 }
@@ -2283,16 +2384,39 @@ impl IntakeColumns {
         Ok(new_ids_of(&targets, new_file))
     }
 
-    /// The fields of a `question` or `discrepancy` row: a column its kind
-    /// requires NULL, JSON not of its shape, an enum or `recommendation`
-    /// out of range make the row corrupt, named.
+    /// The fields of a deciding kind's row, of its `shape` (a `question`'s
+    /// and a `decision`'s, or a `discrepancy`'s): a column its kind
+    /// holds none of set ([`IntakeShape::null_columns`]) or a required one
+    /// NULL, JSON not of its shape, an enum or `recommendation` out of
+    /// range make the row corrupt, named.
     fn decode(
         self,
         id: &str,
         kind: ProposalKind,
+        shape: IntakeShape,
         target_id: &str,
     ) -> Result<Intake, UnreadableRow> {
-        let question = kind == ProposalKind::Question;
+        let question = match shape {
+            IntakeShape::Question => true,
+            IntakeShape::Discrepancy => false,
+        };
+        let held = [
+            ("gap_type", &self.gap_type),
+            ("price_of_other", &self.price_of_other),
+            ("evidence", &self.evidence),
+            ("options", &self.options),
+            ("recommendation", &self.recommendation),
+        ];
+        if let Some((column, _)) = held
+            .iter()
+            .find(|(column, value)| value.is_some() && shape.null_columns().contains(column))
+        {
+            return Err(corrupt(
+                id,
+                column,
+                format!("it is set on {}, which holds none", kind.with_article()),
+            ));
+        }
         let required = |value: Option<String>, column: &str| {
             value.ok_or_else(|| corrupt(id, column, "it is NULL"))
         };
@@ -2663,7 +2787,8 @@ fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation
     Ok(held)
 }
 
-/// Inserts a question or a discrepancy as `open` under the next ID: the
+/// Inserts a kind that decides as `open` under the next ID (a decision
+/// writes a question's columns, as given): the
 /// update's five text columns NULL, `diagnostics` `[]`, JSON lists as
 /// given (an evidence item's absent keys `null`); its ID.
 fn insert_intake(
@@ -2723,24 +2848,37 @@ fn insert_intake(
     Ok(id)
 }
 
-/// The project's rows of the intake's kind (any repository, any state)
-/// that share a target with it, by ID number: hits when the normalised
-/// summary is equal, else related. A row whose targets or state do not
-/// read shares nothing.
+/// The project's rows of the intake's family (any repository, any state):
+/// the kinds of its [`ProposalKind::intake_shape`], a question and a
+/// decision one family, a discrepancy another; those that share a target
+/// with it, by ID number: hits when the normalised summary is equal, else
+/// related. A row whose targets or state do not read shares nothing.
 fn queue_matches(
     tx: &Transaction<'_>,
     project: &str,
     intake: &NewIntake,
 ) -> Result<(Vec<QueueMatch>, Vec<QueueMatch>), QueueError> {
     let wanted = normalized_summary(&intake.intake.summary);
+    let shape = intake.kind.intake_shape();
+    let family: Vec<&str> = ProposalKind::ALL
+        .into_iter()
+        .filter(|kind| shape.is_some() && kind.intake_shape() == shape)
+        .map(ProposalKind::as_str)
+        .collect();
+    let slots = (0..family.len())
+        .map(|at| format!("?{}", at + 2))
+        .collect::<Vec<_>>()
+        .join(", ");
     let mut statement = tx
         .prepare(&format!(
             "SELECT id, status, target_ids, summary, decision_note, record_id, record_path, \
-             record_title FROM main.proposals WHERE project = ?1 AND kind = ?2 {ID_ORDER}"
+             record_title FROM main.proposals WHERE project = ?1 AND kind IN ({slots}) \
+             {ID_ORDER}"
         ))
         .db()?;
+    let params = std::iter::once(project).chain(family.iter().copied());
     let rows: Vec<MatchRow> = statement
-        .query_map([project, intake.kind.as_str()], |row| {
+        .query_map(rusqlite::params_from_iter(params), |row| {
             Ok(MatchRow {
                 id: row.get(0)?,
                 status: row.get(1)?,
@@ -2881,14 +3019,28 @@ impl ProposalQueue for SqliteQueue {
         now: &str,
     ) -> Result<IntakeResult, QueueError> {
         check_time(now)?;
-        if intake.kind.applies() {
+        if !intake.kind.decides() {
+            let deciding: Vec<&str> = ProposalKind::ALL
+                .into_iter()
+                .filter(|kind| kind.decides())
+                .map(ProposalKind::as_str)
+                .collect();
             return Err(QueueError::Invalid(format!(
-                "an intake stores a question or a discrepancy, not {}",
+                "an intake stores a kind that decides ({}), not {}",
+                deciding.join(", "),
                 intake.kind.with_article()
             )));
         }
         if intake.intake.target_ids.is_empty() {
             return Err(QueueError::Invalid("an intake names no target".to_owned()));
+        }
+        // A row its decode would refuse is never written.
+        if let Some(problem) = intake
+            .kind
+            .intake_shape()
+            .and_then(|shape| shape.problem(intake.kind, &intake.intake))
+        {
+            return Err(QueueError::Invalid(problem));
         }
         if patch.is_some_and(|patch| {
             patch.kind != ProposalKind::Update || new_proposal_problem(patch).is_some()

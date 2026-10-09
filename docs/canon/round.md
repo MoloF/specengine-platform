@@ -3,16 +3,16 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-09
 ---
 
 # Question rounds
 
-ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end on shipped machinery, no new kind, no new storage. `spec round new` prints the open questions and discrepancies on a sheet; `spec round answer` stages each returned answer, then asks its item's own `[y/N]`. Core `round`: bounds, order key, grammar, reading time; CLI `round.rs`: commands over `stage_with`, `record_ready`, `lists_proposal`, store ops. Daemon, UI: `round-ui.md`; `round_stage` (text) stays for a later paste.
+ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end on shipped machinery, no new kind, no new storage. `spec round new` prints the open questions, discrepancies and decisions on a sheet; `spec round answer` stages each returned answer, then asks its item's own `[y/N]`. Core `round`: bounds, order key, grammar, reading time; CLI `round.rs`: commands over `stage_with`, `record_ready`, `lists_proposal`, store ops. Daemon, UI: `round-ui.md`; `round_stage` (text) stays for a later paste.
 
 ## Selection
 
-`spec round new [--limit N] [--json]`, read-only. Items: `open` proposals whose kind `decides()` (question, discrepancy) of the current repository (`spec inbox`'s scope, `proposal-queue.md` "Place, IDs, repositories"); a staged one is listed with its stage. The rest are `notes` (text: closing `note:` lines), IDs named up to 10, then ` and <k> more`:
+`spec round new [--limit N] [--json]`, read-only. Items: `open` proposals whose kind `decides()` (question, discrepancy, decision) of the current repository (`spec inbox`'s scope, `proposal-queue.md` "Place, IDs, repositories"); a staged one is listed with its stage. The rest are `notes` (text: closing `note:` lines), IDs named up to 10, then ` and <k> more`:
 
 - ``<n> more item(s) not on this sheet: spec round new --limit <m>`` (`m` the total, at most 200), first;
 - ``<n> held item(s) not on this sheet (approved: an apply in progress or stopped): <IDs>; spec approve <ID> completes each``;
@@ -33,33 +33,14 @@ One database and tree state give byte-identical text and JSON: no clock, no rela
 
 ## Sheet
 
-Markdown on stdout (print, mail). Fixed English frame words; every text from the queue, the index or a task verbatim through `escape_controls` (`agent-intake.md` "Escaping and size"), U+2028, U+2029 written `\u{2028}`, `\u{2029}`. **Queue, index or task text never starts a line**: a multi-line text is printed one line per LF, each indented two spaces; a one-line slot (title, label, effect, price) follows a frame word, LF and CR written `\n`, `\r`. So a text holding `PR-0009: 1` cannot plant an answer line.
+Markdown on stdout (print, mail). Fixed English frame words; every text from the queue, the index or a task verbatim through `escape_controls` (`agent-intake-documents.md` "Escaping and size"), U+2028, U+2029 written `\u{2028}`, `\u{2029}`. **Queue, index or task text never starts a line**: a multi-line text is printed one line per LF, each indented two spaces; a one-line slot (title, label, effect, price) follows a frame word, LF and CR written `\n`, `\r`. So a text holding `PR-0009: 1` cannot plant an answer line.
 
-```
-# Open questions: <slug>
+The sheet, a question and a decision: `round-sheet.md`.
 
-project: <slug>
-
-1 item, about 1 min of reading. Answer each on a line of its own, at the start of the line: `PR-0003: ok`. ok takes the working answer, a number takes that option, `reject: <reason>` rejects, ? or nothing leaves it open, other text is your own answer to a question. Keep the project line. Then, in a terminal: spec round answer <file>; each answer is asked again there, one at a time.
-
-## PR-0003 - question, high
-
-  Does regeneration wait for rest?
-
-Working answer:
-  yes, 1.5 s
-
-Concerns: Stamina (MEC-STAMINA); Regeneration (RULE-STAM-REGEN)
-Waiting: Tune stamina (T-0004)
-Staged 2026-10-07T17:49:50Z: spec approve PR-0003 --answer "no"
-
-PR-0003:
-```
-
-- `## <ID> - <kind>[, <severity>]`. A question: its text, `Working answer:`, `Another answer costs:`. A discrepancy: its summary, `Working answer:` when given, `Options:` as `spec review` prints them (`  - [i] label | effect | price`, ` (recommended)`).
+- `## <ID> - <kind>[, <severity>]`. A question or decision (no options): its text, `Working answer:`, `Another answer costs:`. A discrepancy: its summary, `Working answer:` when given, `Options:` as `spec review` prints them (`  - [i] label | effect | price`, ` (recommended)`).
 - `Concerns:` each target `<title> (<ID or path>)`, `; `-joined, resolved now; gone: `<ID or path> (not found now)`. `Waiting:` order 2's tasks by ID, `<title> (<task ID>)`, 10, then `; <k> more`; absent with none. `Staged <at>: <the staged line>` (`decision-staging.md` "Terminal").
 - The blank slot `<ID>:` at column 0 ends each item; the unedited sheet answers nothing.
-- Reading time `ceil(c / 1000)` minutes, `c` the characters of the item blocks; `1 item`, `<n> items`. None: `No open questions or discrepancies.`, the notes, exit 0.
+- Reading time `ceil(c / 1000)` minutes, `c` the characters of the item blocks; `1 item`, `<n> items`. None: `No open questions or discrepancies.` (kept with decisions), the notes, exit 0.
 - No worktree, branch, hash, `gap_type`, author, evidence in the text; no word starting `block`.
 
 ## JSON
@@ -73,7 +54,7 @@ The file: regular (else `<file>: not a regular file: give the filled sheet or a 
 - **project line**: column 0 `project:`, the slug trimmed. Exactly one, naming this project; else exit 2, nothing staged, no event: ``the answers name no project: keep the line `project: <slug>` ``, ``the answers are for `<x>`, this is `<slug>` ``, ``the answers name a project on lines <lines>: keep one line `project: <slug>` ``.
 - **answer line**: column 0 `PR-<digits>:`, then the answer trimmed. A column-0 line reading `PR-<digit>` once leading invisible characters are skipped, case and look-alikes made Latin, but not exactly `PR-<digits>:`, is refused, never ignored: ``` `<written>` uses look-alike letters or digits; proposal IDs are Latin only: write `<Latin ID>:` at the start of the line ``` (none: `` `<written>` is no answer line: write ... ``; invisible characters written `\u{..}`). `PR-1:` -> `no proposal`.
 
-| Answer | Question | Discrepancy |
+| Answer | Question, decision | Discrepancy |
 |---|---|---|
 | blank, `?` | left open | left open |
 | `ok` (ASCII, any case) | approve, the working answer | refused, naming `0-2` |

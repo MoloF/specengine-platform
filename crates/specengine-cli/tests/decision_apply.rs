@@ -1595,16 +1595,17 @@ fn ac14_the_flags_are_checked_before_anything() {
             &update,
             flags(Some(0), None, None),
             format!(
-                "spec: `--option` decides a question or a discrepancy; `{update}` is an update: \
-                 `spec approve {update}` applies it as proposed; nothing changed"
+                // The deciding kinds by `decides()` (docs/features/kind-decision.md).
+                "spec: `--option` decides a `question`, `discrepancy` or `decision`; `{update}` \
+                 is an update: `spec approve {update}` applies it as proposed; nothing changed"
             ),
         ),
         (
             &update,
             flags(None, None, Some("RULE-STAM-REGEN")),
             format!(
-                "spec: `--canon` decides a question or a discrepancy; `{update}` is an update: \
-                 `spec approve {update}` applies it as proposed; nothing changed"
+                "spec: `--canon` decides a `question`, `discrepancy` or `decision`; `{update}` \
+                 is an update: `spec approve {update}` applies it as proposed; nothing changed"
             ),
         ),
         (
