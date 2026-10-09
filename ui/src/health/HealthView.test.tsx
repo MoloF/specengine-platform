@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import { KNOWN_CHECK_VERDICTS, type CheckReport, type Proposal } from "../api/types";
+import { KNOWN_CHECK_VERDICTS, type CheckReport, type HealthReport, type Proposal } from "../api/types";
 import { App } from "../app/App";
 import { sectionHash } from "../app/routes";
 import { queueOrder } from "../inbox/order";
-import { aCheckFinding, aCheckReport, aProposal, entryOf } from "../test/builders";
+import { aCheckFinding, aCheckReport, aHealthReport, aLink, anAmendment, aProposal, entryOf } from "../test/builders";
 import { callsOf } from "../test/homeStub";
 import { renderApp } from "../test/render";
 import { argsOf, stubClient } from "../test/stubClient";
@@ -13,7 +13,9 @@ import { argsOf, stubClient } from "../test/stubClient";
 // docs/features/ui-health.md on a stub client: AC-01 (what the route reads), AC-02 (absent keys
 // show nothing), AC-03 (verdicts), AC-04 (nothing measured is never 0), AC-05 (the queue's first
 // five), AC-06 (groups, text verbatim, hostile text), AC-07 (links), AC-08 (debt, stale,
-// budgets), AC-09 (reads and states per region), AC-10 (keyboard).
+// budgets), AC-09 (reads and states per region), AC-10 (keyboard). docs/features/health-left.md:
+// AC-U3 and AC-U4 (row 3, the unapplied amendments, its three states), AC-U5 (what entering and
+// Check again read), AC-U7 (rows 4 to 6; kind-amendment's AC-U2 tests replaced).
 
 const LF = String.fromCharCode(10);
 
@@ -114,16 +116,18 @@ async function settle() {
   });
 }
 
-describe("what the route reads (AC-01)", () => {
-  it("#/alpha/health: one getCheck and one getInbox, nothing else but the shell's projects", async () => {
+describe("what the route reads (AC-01; its counting stub adds getHealth, AC-U5 and AC-U7 of health-left)", () => {
+  it("#/alpha/health: one getCheck, one getInbox and one getHealth, nothing else but the shell's projects", async () => {
     const client = await openHealth();
     await settle();
-    expect(callsOf(client)).toEqual({ getProjects: 1, getCheck: 1, getInbox: 1 });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getCheck: 1, getInbox: 1, getHealth: 1 });
     expect(client.getCheck).toHaveBeenCalledWith("alpha");
     expect(argsOf(client.getInbox)).toContainEqual(["alpha"]);
+    // A walk, as the check: no AbortSignal is handed over.
+    expect(client.getHealth.mock.calls).toEqual([["alpha"]]);
   });
 
-  it("#/alpha, the home: no getCheck", async () => {
+  it("#/alpha, the home: no getCheck, no getHealth", async () => {
     const client = healthClient();
     renderApp(client, "#/alpha");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
@@ -132,6 +136,7 @@ describe("what the route reads (AC-01)", () => {
     });
     await settle();
     expect(client.getCheck).not.toHaveBeenCalled();
+    expect(client.getHealth).not.toHaveBeenCalled();
   });
 
   it("an HttpClient-like refusal (not served) says Not built yet, no Retry, no alert", async () => {
@@ -231,10 +236,16 @@ describe("nothing measured is never 0 (AC-04)", () => {
     expect(Array.from(region("Check").querySelectorAll(".check-count"), (item) => item.textContent)).toContain("New debt0");
   });
 
-  it("holds no digit in the value of rows 3 to 6 and of task W", async () => {
+  it("holds no digit in the value of rows 4 to 6 and of task W (narrowed from rows 3 to 6 by AC-U7 of health-left)", async () => {
     await openHealth();
     const values = Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.textContent);
-    expect(values).toEqual(["Not measured yet", "Not measured yet", "Not measured yet", "Not measured yet"]);
+    expect(values).toEqual(["Not measured yet", "Not measured yet", "Not measured yet"]);
+    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-source"), (cell) => cell.textContent)).toEqual([
+      "Phase 3",
+      "Phase 3",
+      "Phase 3",
+    ]);
+    expect(region("What is left").querySelector('.health-unmeasured [data-row="amendments"]')).toBeNull();
     expect(region("Check").querySelector(".check-task-w")?.textContent).toBe("Not measured yet (the bundles log)");
     for (const text of [...values, region("Check").querySelector(".check-task-w")?.textContent ?? "0"]) {
       expect(text).not.toMatch(/\d/);
@@ -245,7 +256,11 @@ describe("nothing measured is never 0 (AC-04)", () => {
 describe("what is left (AC-05)", () => {
   it("heads the queue as the queue, whatever its proposals' states", async () => {
     await openHealth();
-    expect(Array.from(region("What is left").querySelectorAll("h3"), (heading) => heading.textContent)).toEqual(["Proposals in the queue", "Not measured yet"]);
+    expect(Array.from(region("What is left").querySelectorAll("h3"), (heading) => heading.textContent)).toEqual([
+      "Proposals in the queue",
+      "Unapplied amendments",
+      "Not measured yet",
+    ]);
   });
 
   it("lists the queue's first five in the Inbox's order, linked, times as stored; severity counts sum to the queue", async () => {
@@ -266,9 +281,9 @@ describe("what is left (AC-05)", () => {
   });
 });
 
-describe("unapplied amendments (AC-U2 of kind-amendment)", () => {
-  /** Two open amendments in the queue, as the daemon lists them: new files, no base, severity none. */
-  const AMENDMENTS = ["docs/features/surge.md", "docs/features/swell.md"].map((path, at) =>
+describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC-U2 of kind-amendment)", () => {
+  /** Two open amendments in the queue, as the daemon lists them: proposals, row 1's, never row 3's. */
+  const QUEUED = ["docs/features/surge.md", "docs/features/swell.md"].map((path, at) =>
     aProposal({
       id: `PR-${String(8 + at)}`,
       kind: "amendment",
@@ -283,36 +298,247 @@ describe("unapplied amendments (AC-U2 of kind-amendment)", () => {
     }),
   );
 
-  function amendmentsRow(): HTMLElement {
-    const found = region("What is left").querySelector<HTMLElement>('.health-unmeasured [data-row="amendments"]');
+  /** Two live amendments as the daemon sends them; listed out of byte order, so a sort here would show. */
+  const LISTED = [
+    anAmendment({
+      path: "docs/spec/zz-last.md",
+      id: "DEC-0014",
+      title: "Quay lights stay amber",
+      class: "decision",
+      status: "accepted",
+      links: [
+        aLink({
+          type: "amends",
+          written: "RULE-QUAY-LIGHTS",
+          name: null,
+          state: "dangling",
+          path: "docs/spec/zz-last.md",
+          line: 8,
+          reason: "`RULE-QUAY-LIGHTS` resolves to no ID and no alias",
+        }),
+      ],
+    }),
+    anAmendment({
+      path: "docs/features/aa-first.md",
+      id: null,
+      title: null,
+      class: null,
+      status: "in-flight",
+      links: [
+        aLink({ type: "amends", written: "rule-alias", name: "R-1", path: "docs/features/aa-first.md", line: 5 }),
+        aLink({ type: "amends", written: "other:R-9", name: null, state: "parked", path: "docs/features/aa-first.md", line: 6, reason: `  kept${LF}  verbatim  ` }),
+      ],
+    }),
+  ];
+
+  function healthOf(report: HealthReport, proposals: Proposal[] = QUEUE) {
+    const client = healthClient(REPORT, proposals);
+    client.getHealth.mockImplementation(() => Promise.resolve(structuredClone(report)));
+    return client;
+  }
+
+  /** Row 3's part of What is left. */
+  function part(): HTMLElement {
+    const found = region("What is left").querySelector<HTMLElement>('[data-row="amendments"]');
     if (found === null) {
-      throw new Error("no Unapplied amendments row");
+      throw new Error("no Unapplied amendments part");
     }
     return found;
   }
 
-  it("stays Not measured yet, its source the producer to come, never the kind; no digit, though the queue holds two", async () => {
-    await openHealth(healthClient(REPORT, [...QUEUE, ...AMENDMENTS]));
-    // The queue counts them as proposals; the row measures nothing from it.
-    expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("9 proposals in the queue");
-    const row = amendmentsRow();
-    expect(row.querySelector("dt")?.textContent).toBe("Unapplied amendments");
-    expect(row.querySelector(".health-value")?.textContent).toBe("Not measured yet");
-    expect(row.querySelector(".health-source")?.textContent).toBe("a read of live amends links (slice health-left)");
-    expect(Array.from(row.querySelectorAll(".health-source code"), (code) => code.textContent)).toEqual(["amends", "health-left"]);
-    expect(row.querySelector("dd")?.textContent).toBe("Not measured yet: a read of live amends links (slice health-left)");
-    // Not the kind: the producer reads links over the corpus, not the queue.
-    expect(row.textContent).not.toMatch(/\bamendment\b|proposal-kinds/);
-    expect(row.textContent).not.toMatch(/\d/);
+  function amendmentRows(): HTMLElement[] {
+    return Array.from(part().querySelectorAll<HTMLElement>("[data-amendment]"));
+  }
+
+  function only<T>(items: readonly T[], at: number): T {
+    const item = items[at];
+    if (item === undefined) {
+      throw new Error(`no item ${String(at)}`);
+    }
+    return item;
+  }
+
+  it("measured: the row count in .health-value, over the documents; rows in the daemon's order, never sorted here", async () => {
+    await openHealth(healthOf(aHealthReport(LISTED, { documents: 41 })));
+    expect(part().querySelector(".health-value")?.textContent).toBe("2");
+    expect(part().querySelector(".health-value")?.classList.contains("health-measured")).toBe(true);
+    expect(part().querySelector(".health-left-total")?.textContent).toBe("2 unapplied amendments over 41 documents");
+    expect(amendmentRows().map((row) => row.dataset.amendment)).toEqual(["docs/spec/zz-last.md", "docs/features/aa-first.md"]);
   });
 
-  it("reads the same with no amendment in the queue, and with none at all", async () => {
-    await openHealth(healthClient(REPORT, QUEUE));
-    const withQueue = amendmentsRow().textContent;
+  it("links each path to its node in the tree; title, ID, class and status raw, an absent one not shown", async () => {
+    await openHealth(healthOf(aHealthReport(LISTED)));
+    const [decision, draft] = [only(amendmentRows(), 0), only(amendmentRows(), 1)];
+    const path = decision.querySelector(".health-amendment-path");
+    expect([path?.textContent, path?.getAttribute("href")]).toEqual(["docs/spec/zz-last.md", sectionHash("alpha", "tree", "docs/spec/zz-last.md")]);
+    expect(decision.querySelector(".health-amendment-title")?.textContent).toBe("Quay lights stay amber");
+    const facts = (row: HTMLElement) => Array.from(row.querySelectorAll(".health-amendment-facts .fact"), (fact) => [fact.querySelector("dt")?.textContent, fact.querySelector("dd")?.textContent]);
+    expect(facts(decision)).toEqual([
+      ["ID", "DEC-0014"],
+      ["Class", "decision"],
+      ["Status", "accepted"],
+    ]);
+    expect(draft.querySelector(".health-amendment-path")?.getAttribute("href")).toBe(sectionHash("alpha", "tree", "docs/features/aa-first.md"));
+    expect(draft.querySelector(".health-amendment-title")).toBeNull();
+    expect(facts(draft)).toEqual([["Status", "in-flight"]]);
+    expect(part().textContent).not.toMatch(/null|undefined/);
+  });
+
+  it("per link: a resolved name linked in the tree, else the written form as text; the state's label and icon; the reason verbatim", async () => {
+    await openHealth(healthOf(aHealthReport(LISTED)));
+    const links = (row: HTMLElement) => Array.from(row.querySelectorAll<HTMLElement>(".health-amendment-link"));
+    const [dangling] = links(only(amendmentRows(), 0));
+    expect(dangling?.querySelector("a")).toBeNull();
+    expect(dangling?.querySelector(".kind-tag")?.textContent).toBe("amends");
+    expect(dangling?.querySelector(".link-name")?.textContent).toBe("RULE-QUAY-LIGHTS");
+    expect(dangling?.querySelector(".badge")?.getAttribute("data-tone")).toBe("link-dangling");
+    expect(dangling?.querySelector(".badge-label")?.textContent).toBe("Dangling");
+    expect(dangling?.querySelector(".badge svg")).not.toBeNull();
+    expect(dangling?.querySelector(".link-row-meta")?.textContent).toBe("docs/spec/zz-last.md:8");
+    expect(dangling?.querySelector(".link-reason")?.textContent).toBe("`RULE-QUAY-LIGHTS` resolves to no ID and no alias");
+    const [resolved, unknown] = links(only(amendmentRows(), 1));
+    const name = resolved?.querySelector("a.link-name");
+    expect([name?.textContent, name?.getAttribute("href")]).toEqual(["R-1", sectionHash("alpha", "tree", "R-1")]);
+    expect(resolved?.querySelector(".badge-label")?.textContent).toBe("Resolved");
+    expect(resolved?.querySelector(".link-row-meta")?.textContent).toBe("docs/features/aa-first.md:5as rule-alias");
+    expect(resolved?.querySelector(".link-reason")).toBeNull();
+    expect(unknown?.querySelector("a")).toBeNull();
+    expect(unknown?.querySelector(".link-name")?.textContent).toBe("other:R-9");
+    expect([unknown?.querySelector(".badge")?.getAttribute("data-tone"), unknown?.querySelector(".badge-label")?.textContent]).toEqual(["link-unknown", "parked"]);
+    expect(unknown?.querySelector(".link-reason")?.textContent).toBe(`  kept${LF}  verbatim  `);
+  });
+
+  it("lists the daemon's notes on the read verbatim", async () => {
+    const note = "docs/spec/locks/lock-c.md:4: frontmatter-yaml: mapping values are not allowed here; not judged";
+    await openHealth(healthOf(aHealthReport([], { notes: [note] })));
+    expect(within(part()).getByRole("list", { name: "Notes from the daemon on the unapplied amendments" }).textContent).toBe(note);
+  });
+
+  it("zero: its own text, naming the rule, over the documents; never nothing left, never a 0", async () => {
+    await openHealth(healthOf(aHealthReport([], { documents: 41 })));
+    expect(part().querySelector(".health-amendments-none")?.textContent).toBe("None: no live document of this tree declares an amends link.");
+    expect(part().querySelector(".health-amendments-none code")?.textContent).toBe("amends");
+    expect(part().querySelector(".health-amendments-scope")?.textContent).toBe("Measured over 41 documents.");
+    expect(part().querySelector(".health-value")?.textContent).toBe("None");
+    // Measured, so drawn as a measured value, never as rows 4 to 6's "Not measured yet".
+    expect(part().querySelector(".health-value")?.classList.contains("health-measured")).toBe(true);
+    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.classList.contains("health-measured"))).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect(part().textContent).not.toMatch(/nothing left|\b0\b/i);
+    expect(amendmentRows()).toHaveLength(0);
+  });
+
+  it("counts from the health read alone: amendments waiting in the queue are proposals, row 1's, never row 3's", async () => {
+    await openHealth(healthOf(aHealthReport([], { documents: 1 }), [...QUEUE, ...QUEUED]));
+    expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("9 proposals in the queue");
+    expect(part().querySelector(".health-amendments-none")).not.toBeNull();
+    expect(part().querySelector(".health-amendments-scope")?.textContent).toBe("Measured over 1 document.");
     cleanup();
-    await openHealth(healthClient(REPORT, []));
-    expect(amendmentsRow().textContent).toBe(withQueue);
-    expect(withQueue).toBe("Unapplied amendmentsNot measured yet: a read of live amends links (slice health-left)");
+    await openHealth(healthOf(aHealthReport(LISTED.slice(0, 1), { documents: 1 }), [...QUEUE, ...QUEUED]));
+    expect(part().querySelector(".health-left-total")?.textContent).toBe("1 unapplied amendment over 1 document");
+  });
+
+  it("over ten: the first ten rendered, the rest not until Show all <n>, which hands the focus to the eleventh; nothing read", async () => {
+    const many = Array.from({ length: 12 }, (_, index) => anAmendment({ path: `docs/features/a${String(index).padStart(2, "0")}.md` }));
+    const client = await openHealth(healthOf(aHealthReport(many)));
+    expect(amendmentRows()).toHaveLength(10);
+    expect(amendmentRows().map((row) => row.dataset.amendment)).toEqual(many.slice(0, 10).map((amendment) => amendment.path));
+    expect(part().querySelector(".health-amendments-scope")?.textContent).toBe("The first 10 of 12, by path.");
+    fireEvent.click(within(part()).getByRole("button", { name: "Show all 12" }));
+    expect(amendmentRows().map((row) => row.dataset.amendment)).toEqual(many.map((amendment) => amendment.path));
+    await focused(only(amendmentRows(), 10).querySelector<HTMLElement>(".health-amendment-path") as HTMLElement);
+    expect(within(part()).queryByRole("button", { name: /^Show all/ })).toBeNull();
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("ten exactly: all ten, no Show all", async () => {
+    const ten = Array.from({ length: 10 }, (_, index) => anAmendment({ path: `docs/features/b${String(index)}.md` }));
+    await openHealth(healthOf(aHealthReport(ten)));
+    expect(amendmentRows()).toHaveLength(10);
+    expect(within(part()).queryByRole("button", { name: /^Show all/ })).toBeNull();
+  });
+
+  it("loading: a busy skeleton and no digit, the queue part answered beside it", async () => {
+    const client = healthClient();
+    client.getHealth.mockImplementation(() => new Promise(() => undefined));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    await waitFor(() => {
+      expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
+    });
+    expect(part().getAttribute("aria-busy")).toBe("true");
+    expect(region("What is left").getAttribute("aria-busy")).toBe("true");
+    expect(within(part()).getByRole("status").getAttribute("aria-busy")).toBe("true");
+    expect(part().querySelector(".health-value")).toBeNull();
+    expect(part().textContent).not.toMatch(/\d/);
+  });
+
+  it.each([
+    ["a 503 (the walk incomplete)", 503, "spec: the walk is incomplete: the directory `docs/spec/locks` cannot be listed: unapplied amendments not measured"],
+    ["an older daemon's 404", 404, "no route GET /api/projects/alpha/health: this daemon serves projects, inbox, proposals, tree, nodes, search, bundle, graph, check"],
+    ["no response (status 0)", 0, "GET /api/projects/alpha/health: no response from the daemon (Failed to fetch)"],
+  ])("%s: the message verbatim, no digit in a value; Retry reads getHealth alone, once; the queue and the other regions stand", async (_name, status, message) => {
+    const client = healthClient();
+    client.getHealth.mockRejectedValueOnce(new ClientError({ status, message }));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    const alert = await within(part()).findByRole("alert");
+    expect(alert.textContent).toBe(`The unapplied amendments could not be read${message}`);
+    expect(part().getAttribute("aria-busy")).toBe("false");
+    expect(part().querySelector(".health-value")).toBeNull();
+    for (const value of Array.from(region("What is left").querySelectorAll(".health-value"), (cell) => cell.textContent)) {
+      expect(value).not.toMatch(/\d/);
+    }
+    await waitFor(() => {
+      expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
+    });
+    expect(region("Check").querySelector(".check-verdict")).not.toBeNull();
+    expect(rows().length).toBeGreaterThan(0);
+    const retry = within(part()).getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(part().querySelector(".health-amendments-none")).not.toBeNull();
+    });
+    await focused(within(part()).getByRole("heading", { level: 3, name: "Unapplied amendments" }));
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(client.getInbox).toHaveBeenCalledTimes(1);
+    expect(client.getCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failing queue leaves the amendments standing, its Retry reading the inbox alone", async () => {
+    const client = healthOf(aHealthReport(LISTED));
+    client.getInbox.mockRejectedValueOnce(new ClientError({ status: 503, message: "inbox locked" }));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    await within(region("What is left")).findByText("inbox locked");
+    await waitFor(() => {
+      expect(amendmentRows()).toHaveLength(2);
+    });
+    fireEvent.click(within(region("What is left")).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
+    });
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("a part that fails to render leaves the queue standing: each read its own boundary", async () => {
+    const client = healthOf({ documents: 3, amendments: null, notes: [] } as unknown as HealthReport);
+    const caught = vi.fn();
+    window.history.replaceState(null, "", "/#/alpha/health");
+    render(<App client={client} scenario={null} />, { onCaughtError: caught });
+    await regionsShown();
+    expect(await within(part()).findByText(/The unapplied amendments could not be shown/)).toBeTruthy();
+    await waitFor(() => {
+      expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
+    });
+    expect(region("What is left").querySelectorAll(".health-unmeasured-row")).toHaveLength(3);
+    expect(caught).toHaveBeenCalled();
   });
 });
 
@@ -497,6 +723,8 @@ describe("reads and states (AC-09)", () => {
     expect(within(region("Check")).getByRole("button", { name: "Check again" }).getAttribute("aria-disabled")).toBe("false");
     expect(client.getCheck).toHaveBeenCalledTimes(2);
     expect(client.getInbox).toHaveBeenCalledTimes(1);
+    // AC-U5 of health-left: Check again reads the unapplied amendments once more too; focus read none.
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
   });
 
   it("slow: a busy skeleton in Check, Findings and Debt and budgets", async () => {

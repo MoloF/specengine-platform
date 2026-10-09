@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { aBundle, aCheckReport, aGraphView, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
+import { aBundle, aCheckReport, aGraphView, aHealthReport, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, NO_SUCH_PROPOSAL, STAGE_REFUSED } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
@@ -12,6 +12,7 @@ import {
   useCachedTasks,
   useCheck,
   useGraph,
+  useHealth,
   useInbox,
   useNode,
   useProjects,
@@ -49,6 +50,8 @@ describe("query keys", () => {
     expect(queryKeys.task("p", "T-0001")).toEqual(["task", "p", "T-0001"]);
     // AC-01 of ui-health.
     expect(queryKeys.check("p")).toEqual(["check", "p"]);
+    // docs/features/health-left.md "Data".
+    expect(queryKeys.health("p")).toEqual(["health", "p"]);
     // AC-03 of docs/features/ui-graph.md.
     expect(queryKeys.graph("p", { ref: "R" })).toEqual(["graph", "p", { ref: "R", impact: false, types: [], depth: null, archive: false }]);
     expect(queryKeys.graph("p", { ref: "R", impact: true, types: ["t2", "t1"], depth: 3, archive: true })).toEqual([
@@ -129,11 +132,12 @@ function EveryRead() {
   useCachedTasks("beta");
   useTask("alpha", "T-0001");
   useCheck("alpha");
+  useHealth("alpha");
   return null;
 }
 
 describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
-  it("hand every read its query's AbortSignal last, the check none: a walk in flight is never aborted", async () => {
+  it("hand every read its query's AbortSignal last, the check and the health read none: a walk in flight is never aborted (AC-U1 of health-left)", async () => {
     const client = stubClient();
     render(
       <ApiProvider client={client}>
@@ -142,6 +146,7 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
     );
     await waitFor(() => {
       expect(client.getCheck).toHaveBeenCalledTimes(1);
+      expect(client.getHealth).toHaveBeenCalledTimes(1);
       expect(client.getTask).toHaveBeenCalledTimes(1);
     });
     const reads = {
@@ -161,6 +166,7 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
       expect([name, calls.length > 0 && calls.every((call) => call.at(-1) instanceof AbortSignal)]).toEqual([name, true]);
     }
     expect(client.getCheck.mock.calls).toEqual([["alpha"]]);
+    expect(client.getHealth.mock.calls).toEqual([["alpha"]]);
   });
 });
 
@@ -190,6 +196,7 @@ function seeded(): QueryClient {
   queryClient.setQueryData(queryKeys.task("beta", "T-0001"), aTaskPackage({ id: "T-0001" }));
   queryClient.setQueryData(queryKeys.graph("beta", { ref: "R-1" }), aGraphView([], []));
   queryClient.setQueryData(queryKeys.check("alpha"), aCheckReport());
+  queryClient.setQueryData(queryKeys.health("alpha"), aHealthReport());
   return queryClient;
 }
 
@@ -208,6 +215,7 @@ const UNTOUCHED = [
   queryKeys.tasks("alpha"),
   queryKeys.task("alpha", "T-0001"),
   queryKeys.check("alpha"),
+  queryKeys.health("alpha"),
   queryKeys.proposal("beta", "PR-2"),
   queryKeys.tree("beta"),
   queryKeys.task("beta", "T-0001"),

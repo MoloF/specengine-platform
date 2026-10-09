@@ -1,5 +1,5 @@
 import { lazy, Suspense, type KeyboardEvent } from "react";
-import { useCheck } from "../api/queries";
+import { useCheck, useHealth } from "../api/queries";
 import { SECTIONS } from "../app/sections";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -12,13 +12,16 @@ const ABOUT = SECTIONS.find((section) => section.id === "health")?.about ?? "";
 /**
  * Health (`#/<project>/health`, docs/features/ui-health.md): `spec check`'s answer and what is left
  * to decide, read only. One `getCheck` on entering, shared by Check, Findings and Debt and budgets;
- * one `getInbox` for What is left. Each region loads, fails and retries on its own; no clock is
- * read: the report carries no time, and "Check again" reads it once more. The heading stays put
- * while the regions' chunk loads, so focus on it is never lost.
+ * one `getInbox` and one `getHealth` (the unapplied amendments, `docs/features/health-left.md`
+ * "Description and interactions") for What is left. Each region, and each read of What is left,
+ * loads, fails and retries on its own; no clock is read: the reports carry no time, and "Check
+ * again" reads the check and the amendments once more. The heading stays put while the regions'
+ * chunk loads, so focus on it is never lost.
  */
 export function HealthView({ project }: { project: string }) {
   const openShortcuts = useOpenShortcuts();
   const check = useCheck(project);
+  const health = useHealth(project);
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || hasModifier(event) || isTextField(event.target)) {
@@ -41,7 +44,7 @@ export function HealthView({ project }: { project: string }) {
         </p>
       </header>
       <Suspense fallback={<Skeleton label={`Loading the Health of ${project}`} lines={6} />}>
-        <HealthRegions project={project} check={check} />
+        <HealthRegions project={project} check={check} health={health} />
       </Suspense>
     </section>
   );

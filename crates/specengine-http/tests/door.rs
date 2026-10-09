@@ -45,6 +45,10 @@
 //! endpoints are called leaves `git status` empty and the files as
 //! committed; it is served (`proposals/PR-0002`, its `interpretation`) and
 //! no endpoint changes it. M: a file write in propose.
+//!
+//! AC-R6 and AC-R7 of docs/features/health-left.md, the door's half: `GET
+//! health` joins the endpoints that change nothing (no event, no index,
+//! no file).
 
 mod common;
 
@@ -201,6 +205,7 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         format!("{p}/graph?ref=MEC-STAMINA"),
         format!("{p}/graph?ref=EDGE-STAM-ZERO&impact=true&types=depends_on&depth=1&archive=true"),
         format!("{p}/check"),
+        format!("{p}/health"),
         format!("{p}/inbox"),
         format!("{p}/proposals/PR-0001"),
         format!("{p}/proposals/PR-0002"),

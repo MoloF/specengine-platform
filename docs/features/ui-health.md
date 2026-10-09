@@ -13,7 +13,7 @@ adrs: []
 
 Whether the corpus passes `spec check`, and what is left to decide, the owner learned only on a terminal. Health (07 s3) renders `spec check --json` and the Inbox read, read-only, on the mock (ADR-0033); verdicts, findings, debt, budgets and W are core's, the UI computes none (`architecture.md#ui`; ADR-0012, ADR-0031). What has no producer yet (drift, task W, rows 3-6 of 06 s7) reads "Not measured yet", never 0. No ADR, no package. Round waits for `ui-round` (no `spec round --json` producer; choosing questions is core logic; the paste is a write, ADR-0035).
 
-Working answers, 2026-10-06 (orchestrator, for the owner's review): the endpoint is `check` (`health` stays for Phase 3's composite); `blocked` spelled only on the `KnownCheckVerdict` line, in mocks and tests, labelled "Fails the check"; no W target (`docs/canon/spec-check.md` "Findings, debt, verdict": "not a check, no cap").
+Working answers, 2026-10-06 (orchestrator, for the owner's review): the endpoint is `check` (`health` stays for Phase 3's composite; amendment, health-left 2026-10-09: `health` opened with one key, growing by keys in Phase 3, `docs/canon/health.md`); `blocked` spelled only on the `KnownCheckVerdict` line, in mocks and tests, labelled "Fails the check"; no W target (`docs/canon/spec-check.md` "Findings, debt, verdict": "not a check, no cap").
 
 ## Description and interactions
 
@@ -21,6 +21,7 @@ Route `#/<p>/health`: one `h1`, four `h2` regions, each with its own boundary, s
 
 1. **Check**: verdict label + icon: `clean` "Clean", `observed` "Passes with findings", `blocked` "Fails the check", `cannot-check` "Could not check" (`cannot-verify` token); any other a neutral raw badge. `mode` raw; only the counts present; "Worst W: <n> B", on `cannot-check` "Not measured" and each cause `<path>: <message>` (`.` for no path, as the CLI); "Task W: Not measured yet (the `bundles` log)". No W target, bar or colour.
 2. **What is left** (06 s7): "Proposals in the queue" from `getInbox` in `queueOrder` (`ui/src/inbox/order.ts`): counts by severity, the first five linked `sectionHash(p, "inbox", id)`, times as stored; rows 3-6 "Not measured yet: <source>"; row 7 is Budgets.
+   Amendment (health-left, 2026-10-09): row 3, "Unapplied amendments", is measured from its own read `getHealth` (`docs/canon/health.md` "UI"); rows 4-6 "Not measured yet: Phase 3".
 3. **Findings**: by `code` (`role="group"`), errors first, a count each, over 10 rows collapsed (rows not rendered). A row: severity; `path:line`, an `.md` path linked `sectionHash(p, "tree", path)`, `""` "No file"; `subject`; `message` verbatim; "In debt until <expires>: <reason>" or "Debt expired <expires>: <reason>"; `fix.text` as text, no apply. Severity and code chips and a text filter make no call.
 4. **Debt and budgets**: findings with `debt`, expired first, then by `expires`; each stale entry "`.spec-debt.toml` line <line>: <code> on <path> matches nothing"; Budgets: exactly the `budget` findings, slot and `message` verbatim.
 
@@ -74,9 +75,11 @@ Vitest (`ui/src/health/`, `mocks/check.test.ts`, `health.smoke`, else named), `u
 
 - [x] AC-01 - `client.ts?raw` holds the `/check` `MISSING ENDPOINT` comment; `HttpClient.getCheck` 501 `notServed`, no `fetch` (`http.test.ts`); counting stub: Health one `getCheck`, one `getInbox`, nothing else; the home no `getCheck` (M: the home calls it; `getCheck` fetching).
   Amendment (ui-live, 2026-10-07): the comment names `GET /api/projects/:p/check`, every verdict a 200 document; `HttpClient.getCheck` fetches it, no 501 (`client.test.ts`, `http.test.ts`).
+  Amendment (health-left, 2026-10-09): the counting stub adds `getHealth`: Health one `getCheck`, one `getInbox`, one `getHealth`; the home none of them.
 - [x] AC-02 - the types cite existing headings (`doc_pointers`); key records (`provisional.test.ts`) 7, 9, 9, 6, 2; no `debt`, `fix`: neither shown (M: `debt !== null`; a key dropped).
 - [x] AC-03 - four verdicts, distinct labels and icons; `cannot-check` in `cannot-verify` (`tokens.test.ts`); `triage` neutral, raw, last; no `/block/i` in the view (M: the raw verdict; `cannot-check` toned clean).
 - [x] AC-04 - `cannot-check`: no "0 B", causes verbatim; no introduced count; the `health-value` span of rows 3-6 and task W holds no digit (M: `?? 0`; "0 B" on `cannot-check`).
+  Amendment (health-left, 2026-10-09): rows 4-6 only; row 3's `health-value` holds the measured count ("None" for zero), no digit while measuring or on a failure (`docs/canon/health.md` "UI").
 - [x] AC-05 - the five rows = the Inbox view's first five, in order; severity counts sum to its total; no `Date.now(`, `new Date(` in `src/health/` (M: an own sort; a clock read).
 - [x] AC-06 - group counts sum to `findings.length`, errors first; `textContent` of `message`, `subject`, `fix.text` equals the JSON string; `<img onerror>` as text (M: `trim()`; `dangerouslySetInnerHTML`).
 - [x] AC-07 - an `.md` path links the tree; `""`, `specengine.toml`, `subject` never; a stale entry never `<path>:<line>` (M: a `subject` link; a stale `path:line`).

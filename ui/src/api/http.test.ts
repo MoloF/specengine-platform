@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
-import { aCheckFinding, aCheckReport, aGraphEdge, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage } from "../test/builders";
+import {
+  aCheckFinding,
+  aCheckReport,
+  aGraphEdge,
+  aGraphNode,
+  aGraphView,
+  aHealthReport,
+  aLink,
+  anAmendment,
+  aProposal,
+  aTaskEntry,
+  aTaskPackage,
+} from "../test/builders";
 import { apiErrorOf, ClientError, isNotServed } from "./client";
 import { errorBodyOf, HttpClient, QUEUE_EVENT_TYPES, refusedReasonOf, REOPEN_FIRST_MS, REOPEN_MAX_MS } from "./http";
 import httpSource from "./http.ts?raw";
@@ -16,7 +28,9 @@ import type { QueueEvent } from "./types";
 // AC-14 of docs/features/decision-staging.md: the stage is a POST of exactly the stage plus
 // `updated_at`, the unstage a DELETE, neither with an AbortSignal; a refusal carrying the review
 // document rejects with its last note; the tail listens to the seven `proposal.*` types, the
-// stage's two after `apply_failed`, sixteen in all.
+// stage's two after `apply_failed`, sixteen in all. AC-U1 and AC-U4 of docs/features/health-left.md:
+// the health read GETs its one URL with no AbortSignal; zero amendments is a 200 resolved as data;
+// a 503, an older daemon's 404 and no response reject, never read as none.
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -117,6 +131,9 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/alpha/graph?ref=%D0%97%D0%B5%2523X",
     ],
     ["getCheck: no query", (client) => client.getCheck("harbor-sim"), "/api/projects/harbor-sim/check"],
+    // AC-U1 of docs/features/health-left.md: the slug one path segment, no query.
+    ["getHealth: no query", (client) => client.getHealth("harbor-sim"), "/api/projects/harbor-sim/health"],
+    ["getHealth: the slug encoded once", (client) => client.getHealth("a b/c"), "/api/projects/a%20b%2Fc/health"],
     // AC-08 of docs/features/ui-live-tasks.md: exactly these two URLs; no `status` is sent.
     ["getTasks: no query", (client) => client.getTasks("harbor-sim"), "/api/projects/harbor-sim/tasks"],
     ["getTask: the ID one path segment", (client) => client.getTask("harbor-sim", "T-0107"), "/api/projects/harbor-sim/tasks/T-0107"],
@@ -192,13 +209,14 @@ describe("each method hits its URL (AC-09)", () => {
     expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
   });
 
-  it("sends the check, a stage and an unstage with no AbortSignal: a walk in flight is never aborted, a write's answer always taken", async () => {
+  it("sends the check, the health read, a stage and an unstage with no AbortSignal: a walk in flight is never aborted, a write's answer always taken", async () => {
     const client = new HttpClient();
     await client.getCheck("alpha");
+    await client.getHealth("alpha");
     await client.stageDecision("alpha", "PR-0004", { decision: "reject", reason: "No" }, "2026-10-06T09:14:02Z");
     await client.unstageDecision("alpha", "PR-0004");
     await client.getTasks("alpha");
-    expect(fetchStub.mock.calls.map((call) => call[1] !== undefined && "signal" in call[1])).toEqual([false, false, false, false]);
+    expect(fetchStub.mock.calls.map((call) => call[1] !== undefined && "signal" in call[1])).toEqual([false, false, false, false, false]);
   });
 
   it("rejects an aborted read with the abort error as fetch gave it, never a ClientError of the daemon", async () => {
@@ -348,6 +366,49 @@ describe("answers (AC-09)", () => {
     const error = await rejection(call(new HttpClient()));
     expect(error).toBeInstanceOf(ClientError);
     expect([error.status, error.message, error.notServed]).toEqual([status, message, false]);
+  });
+
+  it.each([
+    ["none", aHealthReport([], { documents: 41 })],
+    [
+      "two, a dangling link among them",
+      aHealthReport(
+        [
+          anAmendment({
+            path: "docs/decisions/DEC-0014.md",
+            id: "DEC-0014",
+            title: "Quay lights stay amber",
+            class: "decision",
+            status: "accepted",
+            links: [aLink({ type: "amends", written: "RULE-QUAY-LIGHTS", name: null, state: "dangling", path: "docs/decisions/DEC-0014.md", line: 8, reason: "..." })],
+          }),
+          anAmendment({ path: "docs/features/deep-berth.md", class: null }),
+        ],
+        { documents: 41, notes: ["docs/spec/locks/lock-c.md:4: frontmatter-yaml: bad; not judged"] },
+      ),
+    ],
+  ])("resolves the health read's 200 (%s) as data, as sent (AC-U4 of health-left)", async (_name, report) => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, report));
+    expect(await new HttpClient().getHealth("harbor-sim")).toEqual(report);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/harbor-sim/health"]);
+  });
+
+  it.each([
+    [503, "spec: the walk is incomplete: `docs/spec/a.md` cannot be read (Permission denied (os error 13)): unapplied amendments not measured"],
+    // An older daemon has no such route: its 404 is a failure, never zero amendments.
+    [404, "no route GET /api/projects/alpha/health: this daemon serves projects, inbox, proposals, tree, nodes, search, bundle, graph, check"],
+  ])("rejects the health read's %i with the daemon's message verbatim, never as none (AC-U4 of health-left)", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    const error = await rejection(new HttpClient().getHealth("alpha"));
+    expect([error.status, error.message, error.notServed]).toEqual([status, message, false]);
+  });
+
+  it("rejects the health read with status 0 when no response came (AC-U4 of health-left)", async () => {
+    stubFetch(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    const error = await rejection(new HttpClient().getHealth("alpha"));
+    expect([error.status, error.message]).toEqual([0, "GET /api/projects/alpha/health: no response from the daemon (Failed to fetch)"]);
   });
 
   it("rejects a 404 carrying the error body (an unknown project or route) with its message", async () => {

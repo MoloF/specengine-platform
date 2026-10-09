@@ -22,7 +22,9 @@
 //! `proposal-kinds`: `spec propose create`, a new spec file or new `{#ID}`
 //! sections through the queue, applied as one commit; task spec
 //! `kind-amendment`: `spec propose amendment`, a new spec or decision
-//! document amending live nodes, applied as a create's new file.
+//! document amending live nodes, applied as a create's new file; task spec
+//! `health-left`: `spec health`, the unapplied amendments of the working
+//! tree.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -38,6 +40,8 @@
 //! - [`init`], [`index`], [`search`], [`show`], [`tree`], [`graph`],
 //!   [`bundle`], [`check`], [`export_index`]: one function per command,
 //!   each giving its outcome or a [`CliError`];
+//! - [`health`]: the working tree's unapplied amendments (live documents
+//!   that name a node they amend) over the walk `check` reads, no index;
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
 //! - [`tree_with_view`], [`show_with_view`], [`search_with_view`],
@@ -112,11 +116,13 @@
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state` and `round new` write only the data
 //! directory (`propose question`, `discrepancy` and `decision` too), `export
-//! state` only its dump (never inside the worktree), `check` and `serve`
-//! nothing (the daemon `serve` execs writes its data directory). Nothing
-//! found in the corpus is fatal
-//! to the read commands: broken or unreadable files are indexed with their
-//! diagnostics and never change an exit code.
+//! state` only its dump (never inside the worktree), `check`, `health` and
+//! `serve` nothing (the daemon `serve` execs writes its data directory).
+//! Nothing found in the corpus is fatal to the indexed reads (`search`,
+//! `show`, `tree`, `graph`, `bundle`): broken or unreadable files are
+//! indexed with their diagnostics and never change their exit code. The
+//! walked reads differ: `check` cannot check, and `health` cannot run
+//! (exit 2), when a file cannot be read.
 
 mod amend;
 mod apply;
@@ -131,6 +137,7 @@ mod events;
 mod export;
 mod gate;
 mod graph;
+mod health;
 mod inbox;
 mod init;
 mod intake;
@@ -184,6 +191,7 @@ pub use gate::{
 pub use graph::{
     FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
 };
+pub use health::{HealthOutcome, UnappliedAmendment, health};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use intake::{
@@ -402,6 +410,8 @@ pub enum Outcome {
     Graph(GraphOutcome),
     Bundle(BundleOutcome),
     Check(CheckOutcome),
+    /// `health`: the unapplied amendments of the working tree.
+    Health(HealthOutcome),
     Export(ExportOutcome),
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
@@ -466,6 +476,7 @@ impl Outcome {
             Self::Graph(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Bundle(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Check(outcome) => (&outcome.messages, None),
+            Self::Health(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -522,6 +533,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Graph(outcome) => graph::render_text(outcome),
         Outcome::Bundle(outcome) => bundle::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
+        Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
@@ -551,6 +563,7 @@ impl serde::Serialize for Outcome {
             Self::Graph(outcome) => outcome.serialize(serializer),
             Self::Bundle(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
+            Self::Health(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),

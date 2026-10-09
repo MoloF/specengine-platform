@@ -13,6 +13,7 @@ import type {
   BundleView,
   CheckReport,
   GraphView,
+  HealthReport,
   Inbox,
   NodeView,
   Project,
@@ -28,7 +29,7 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { aBundle, aCheckReport, aGraphNode, aGraphView, aNode, aRoundSheet, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
+import { aBundle, aCheckReport, aGraphNode, aGraphView, aHealthReport, aNode, aRoundSheet, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
 
 /** When the stub stores a stage: one fixed time, so a test can name it. */
 export const STAGED_AT = "2026-10-06T09:14:02Z";
@@ -99,6 +100,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       Promise.resolve({ id, reason: `no task ${id} in this repository` }),
     ),
     getCheck: vi.fn<(project: string) => Promise<CheckReport>>(() => Promise.resolve(aCheckReport())),
+    // The unapplied amendments: none over aCheckReport's 7 documents (docs/features/health-left.md "Data").
+    getHealth: vi.fn<(project: string) => Promise<HealthReport>>(() => Promise.resolve(aHealthReport())),
     // The daemon's stage on the stub's queue: an open proposal at the `updated_at` read, else 409;
     // stored with STAGED_AT, the proposal kept in the queue.
     stageDecision: vi.fn((_project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> => {

@@ -1,0 +1,64 @@
+---
+class: canon
+tier: 2
+scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
+owner: owner
+reviewed: 2026-10-09
+---
+
+# Health: what is left, measured
+
+The corpus-wide read behind Health's "What is left" (06 s7). It has one key now, `amendments` (row 3: the unapplied amendments of `proposal-amendment.md` "Unapplied"). The document **grows by keys** in Phase 3, one key per row 4-6 producer (`@assumes` against a decision, unbound accepted nodes, drift), never a `null` placeholder. Rows 1-2 are the queue (`spec inbox`, the Inbox's order: severity, `created_at` oldest first, ID; no age threshold, no clock); row 7 is the check's `budget` findings. Read-only and informational: it never blocks, raises no check finding, rule or gate (ADR-0012); the core names no class, status, kind or link type (ADR-0008). No MCP tool or resource, no plugin skill.
+
+## Rule
+
+Core `check::unapplied_amendments(&CheckInput) -> Unapplied {amendments: Vec<&CheckFile>, not_judged: Vec<(&CheckFile, &Diagnostic)>}` (`check/unapplied.rs`): every walked file that is live (`is_live`: neither Tier 3 by status nor `class: generated`) and whose `amended_refs` is non-empty, whatever raised it (by hand too), its class or how its links fare. A file whose front-matter does not read (`front_matter_failure`: not UTF-8, unclosed, bad YAML, no mapping) is **not judged**: listed in `not_judged` with that finding, never taken for none. Both lists by path, byte order, blind to input order. A file that could not be read is the walk's gap, which the caller stops on first.
+
+Listed: a spec `draft` or `in-progress`, a decision `accepted` or without `status:`, a canon. Not listed: a spec `shipped` or `abandoned`, a decision no longer `accepted`, a generated file, a document with other link types only, an amendment still a queue proposal (its file is not in the tree).
+
+## spec health
+
+`spec health [--json]`, global flags only (CLI `health(&Env, &Globals) -> HealthOutcome`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). No database, index refresh, queue, git, clock or baseline; the data directory is never resolved; nothing is written. Links: `SpecGraph::new` over the same input, built only when a document is listed; each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
+
+**Text**, each line one-lined: per amendment `<path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]` (absent parts omitted), then each link as `show --links` prints an out line, two spaces in; last, always: `spec health: <d> documents, <n> unapplied amendments`.
+
+```text
+docs/decisions/DEC-0014.md | id DEC-0014 | class decision | status accepted | Quay lights stay amber
+  out amends RULE-QUAY-LIGHTS | docs/decisions/DEC-0014.md:8 | dangling: `RULE-QUAY-LIGHTS` resolves to no ID and no alias
+spec health: 41 documents, 1 unapplied amendments
+```
+
+**JSON**: `{documents, amendments, notes}`; an amendment `{path, id, title, class, status, links}`: `id` the document's Latin ID, `title` `title:` else the first H1, `class` and `status` raw, each `null` when absent; `links` the `ShownLink` of `show --links` (`spec-cli-graph.md` "spec show --links"), never empty. `documents` = the walked files = `spec check --json`'s `counts.documents`. Every key present, absent `null`, empty `[]`.
+
+**Notes**: one per file not judged, by path: `<path>:<line>: <code>: <message>; not judged` (the parser's code and message), on stderr as `note: ` in both modes and in JSON `notes`; exit 0.
+
+**Exit**: 0 answered, whatever is listed, zero too. 2 could not run, stdout empty, never a partial list: usage; discovery (no `specengine.toml`: `spec init`); a config error, `<config>:<line>: message` per cause; `spec: the root cannot be read: <error>: unapplied amendments not measured`; a walk gap (`walk_gap`, the first by path) `spec: the walk is incomplete: <gap>: unapplied amendments not measured`, `<gap>` as `spec export index` words it: `` `<path>` cannot be read (<error>) ``, `` the directory `<path>` cannot be listed ``, `` the `[paths] roots` entry `<path>` names no directory and no `.md` file ``. Never 1.
+
+**Determinism**: one tree and config give byte-identical stdout, stderr and JSON, whatever the absolute root, walk order or starting directory.
+
+## Route
+
+`GET /api/projects/:p/health` (`specengine-http`, `crates/specengine-http/README.md` "Endpoints"): 200 `spec --root R health --json`'s stdout less its final LF. Error bodies `{"status", "message"}`: 400 any query name (it takes none) or a bad `%`, naming it; 403 the fence; 404 an unknown slug or route (the route list names `health` after `check`); 405 any other method, HEAD too, `Allow: GET`; 500 a caught panic; 503 exit 2 (a config `discover` refuses, a changed slug, a walk gap), `message` the CLI's line(s) verbatim. `Cache-Control: no-store`, no `Access-Control-*`. It runs in the project's turn (`serve.md` "Concurrency"), writes nothing, emits no event.
+
+## UI
+
+Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2), "Unapplied amendments" (row 3, `AmendmentsPart.tsx`), "Not measured yet" (rows 4-6, "Phase 3", no digit); row 7 is Budgets. The queue and row 3 each have their own read and boundary: one failing leaves the other. Row 3 keeps three states apart:
+
+- **being measured**: a skeleton, `aria-busy`, no digit;
+- **could not be measured** (a 503, an older daemon's 404, status 0): "The unapplied amendments could not be read", the daemon's message verbatim, a Retry reading `getHealth` alone; no `.health-value`, never 0;
+- **measured**: "<n> unapplied amendment(s) over <d> document(s)"; rows in the daemon's order: the path linked to the tree, the title, ID, class and status raw; per link its type, `name` linked to the tree else `written` as text, `linkStateLook(state)`'s label and icon, `path:line`, `at`, `as`, the reason verbatim; over 10 rows (`SHOWN_OPEN`) the first 10 and "Show all <n>", which focuses the first added row. Zero: "None: no live document of this tree declares an `amends` link." then "Measured over <d> documents.", never "nothing left". Notes: "Notes from the daemon on the unapplied amendments".
+
+`getHealth(project)` (`HealthReport`, `UnappliedAmendment`, the existing `ShownLink`; provisional, citing `docs/features/health-left.md` "Data"), key `["health", p]` (`useHealth`), read as the check is: on entering Health, on "Check again", and while Health is on screen after `proposal.applied` or a stream gap; never on focus, reconnect, an interval, a stage or `task.*`; no `AbortSignal` (a walk in flight is kept). The home reads none. Mocks: harbor-sim's two (a decision with a dangling link, a draft spec resolved, both in its mock corpus), ledger-api none; `empty`, `large` (3 000), `cannot-check` (a walk-gap 503), `error`, `slow`.
+
+## Known limits
+
+- A lower bound: a file whose front-matter does not read is only noted; a mistyped `links:` (a scalar `amends:`) reads as none (`proposal-amendment.md` "Known limits"); a file or directory whose name is not UTF-8 is skipped by the walk (`name-skipped` in `spec check`), no gap and no note here.
+- A document in a class that never reaches Tier 3 (a canon) declaring `amends` stays listed until edited.
+- The served root's working tree only, no other worktree. A project writing amendments in its own vocabulary reads none until its importer maps them (ADR-0008).
+- A hand edit fires no event: "Check again" or re-entering Health re-reads.
+- Entering Health runs two whole-tree walks (check, health) and the inbox, serialized by the turn: 0.11 to 0.32 s per health walk at 150 to 1 540 documents (release).
+- Untested: the 500; the unreadable-root line (the config read fails first); no event through an SSE probe (`door.rs` covers it indirectly).
+
+## Tests
+
+CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (44 key sets); UI `health.smoke`, `health.live`, `HealthView`, `mocks/health`, `daemonKeys`, `policy` tests.

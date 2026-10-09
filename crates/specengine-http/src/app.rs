@@ -104,6 +104,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/bundle", read(bundle))
         .route("/api/projects/{p}/graph", read(graph))
         .route("/api/projects/{p}/check", read(check))
+        .route("/api/projects/{p}/health", read(health))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
         .route("/api/projects/{p}/tasks", read(tasks))
@@ -257,7 +258,7 @@ fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, graph, check, inbox, proposals/<id>, tasks, \
+             nodes/<REF>, search, bundle, graph, check, health, inbox, proposals/<id>, tasks, \
              tasks/<id>, round, events}}",
             uri.path()
         ),
@@ -403,6 +404,19 @@ async fn check(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
     args("check", &[], &uri)?;
     Ok(run(project, |env, globals| {
         specengine_cli::check(env, globals, &CheckRequest::default()).map(Outcome::Check)
+    })
+    .await)
+}
+
+/// `GET …/health`: `spec health --json` (task spec `health-left`), the
+/// working tree on disk walked as the plain check walks it, no index
+/// refreshed, in the project's turn; no query name. A walk that is
+/// incomplete is the CLI's exit 2: a 503, never a document.
+async fn health(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    args("health", &[], &uri)?;
+    Ok(run(project, |env, globals| {
+        specengine_cli::health(env, globals).map(Outcome::Health)
     })
     .await)
 }

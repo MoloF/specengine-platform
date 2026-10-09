@@ -14,6 +14,7 @@ import type {
   BundleView,
   CheckReport,
   GraphView,
+  HealthReport,
   Inbox,
   NodeView,
   Project,
@@ -33,6 +34,7 @@ import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, typ
 import { checkReportOf } from "./check";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
+import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { SLOW_MS, type Scenario } from "./scenario";
@@ -188,6 +190,20 @@ export class MockClient implements SpecEngineClient {
     await this.read();
     this.project(project);
     return structuredClone(checkReportOf(project, this.scenario));
+  }
+
+  /**
+   * The project's unapplied amendments for the scenario (src/mocks/health.ts), read only; a
+   * decision changes nothing in them. `cannot-check`: the walk is incomplete, a 503 in the CLI's
+   * words, never none. The daemon serves its own (`docs/features/health-left.md` "Data").
+   */
+  async getHealth(project: string): Promise<HealthReport> {
+    await this.read();
+    this.project(project);
+    if (this.scenario === "cannot-check") {
+      throw new ClientError({ status: 503, message: walkGapMessage(project) });
+    }
+    return structuredClone(healthReportOf(project, this.scenario));
   }
 
   /**

@@ -56,10 +56,20 @@
 //! AC-T4 of docs/features/kind-interpretation.md, its Rust half ("Data",
 //! "Daemon keys"): `Proposal` holds `interpretation` between `staged_at`
 //! and `notes` (46 keys, the update's, question's and discrepancy's
-//! reviews alike: `null` there); one set more, 41 in all, last:
+//! reviews alike: `null` there); one set more, 41 in all, then last:
 //! `Interpretation` (`{decision, how, why}`) from the review of an
 //! interpretation of `RULE-STAM-REGEN` carrying `DEC-0023`, raised through
 //! `spec propose interpretation`. M: a key renamed in Rust.
+//!
+//! AC-T2 of docs/features/health-left.md, its Rust half ("Data"): three
+//! sets more, 44 in all, last: `HealthReport` (`{documents, amendments,
+//! notes}`, the CLI's `HealthOutcome` as `spec health --json` sends it),
+//! `UnappliedAmendment` (`{path, id, title, class, status, links}`) and
+//! `ShownLink` (the nine keys of a `spec show --links` link) from `GET
+//! health` on A and on a copy of A holding amendments written in (a spec
+//! draft amending `RULE-STAM-REGEN`, an accepted decision whose links are
+//! resolved, an alias, dangling and in a Tier 3 file). M: a key dropped
+//! from the CLI struct.
 
 mod common;
 mod task_state;
@@ -309,8 +319,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let cannot = check_copy(&scratch, "cannot", "lk-cannot", |root| {
         fs::write(root.join(".spec-debt.toml"), "this is [ not toml\n").expect("baseline");
     });
+    // health-left: A holding amendments written in.
+    let amended = check_copy(&scratch, "amended", "lk-amended", |root| {
+        for (path, text) in AMENDMENTS {
+            fs::write(root.join(path), text).expect("an amendment");
+        }
+    });
 
-    let server = Server::serve(&home, &cwd, &[&a, &observed, &cannot]);
+    let server = Server::serve(&home, &cwd, &[&a, &observed, &cannot, &amended]);
     let p = "/api/projects/lantern-keep";
     // decision-staging: each proposal staged, as a same-origin page stages,
     // before the inbox and the reviews are read.
@@ -401,6 +417,17 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
+    // health-left: the amended copy's unapplied amendments, and A's none.
+    let healths: Vec<String> = ["lk-amended", "lantern-keep"]
+        .iter()
+        .map(|slug| {
+            server
+                .get(&format!("/api/projects/{slug}/health"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .collect();
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -486,6 +513,8 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .collect()
     };
     let snapshots = objects(&holding("spec_snapshot", '{'), "spec_snapshot");
+    let amendments = items(&healths, "amendments");
+    assert_eq!(amendments.len(), 2, "the amended copy's two: {healths:?}");
 
     vec![
         (
@@ -655,8 +684,38 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 keys_of,
             ),
         ),
+        (
+            "HealthReport",
+            one_key_set("HealthReport", &healths, keys_of),
+        ),
+        (
+            "UnappliedAmendment",
+            one_key_set("UnappliedAmendment", &amendments, keys_of),
+        ),
+        (
+            "ShownLink",
+            one_key_set("ShownLink", &items(&amendments, "links"), keys_of),
+        ),
     ]
 }
+
+/// health-left's amendments, written into a copy of A: a spec draft and
+/// an accepted decision whose links are resolved, an alias written raw,
+/// dangling and a node in a Tier 3 file.
+const AMENDMENTS: [(&str, &str); 2] = [
+    (
+        "docs/features/regen-delay.md",
+        "---\nclass: spec\nstatus: draft\nscope: [movement]\nlinks:\n  amends: \
+         [RULE-STAM-REGEN]\n---\n\n# Regeneration waits after a sprint\n\n## Delay \
+         {#AC-01}\n\nRegeneration starts 1.5 s after the last sprint.\n",
+    ),
+    (
+        "docs/records/DEC/DEC-0031.md",
+        "---\nid: DEC-0031\nclass: decision\nstatus: accepted\ndate: 2026-10-01\n\
+         links:\n  amends: [EDGE-STAM-ZERO, QST-031, RULE-NOPE, DEC-0007]\n---\n\n\
+         # Amber light at zero stamina\n",
+    ),
+];
 
 /// `spec --root <root> propose interpretation RULE-STAM-REGEN --decision
 /// DEC-0023 …` against its current span hash, stored (exit 0): its ID.
@@ -777,7 +836,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
-    assert_eq!(names.len(), 41, "{names:?}");
+    assert_eq!(names.len(), 44, "{names:?} (health-left: 41 -> 44)");
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -878,9 +937,24 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         sets[39].1,
         ["id", "outcome", "stage", "staged_at", "replaced", "reason"]
     );
-    // kind-interpretation's one, last ("Data", "Daemon keys").
+    // kind-interpretation's one ("Data", "Daemon keys").
     assert_eq!(sets[40].0, "Interpretation");
     assert_eq!(sets[40].1, ["decision", "how", "why"]);
+    // health-left's three, last (docs/features/health-left.md "Data").
+    assert_eq!(sets[41].0, "HealthReport");
+    assert_eq!(sets[41].1, ["documents", "amendments", "notes"]);
+    assert_eq!(sets[42].0, "UnappliedAmendment");
+    assert_eq!(
+        sets[42].1,
+        ["path", "id", "title", "class", "status", "links"]
+    );
+    assert_eq!(sets[43].0, "ShownLink");
+    assert_eq!(
+        sets[43].1,
+        [
+            "type", "origin", "at", "name", "written", "path", "line", "state", "reason"
+        ]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -901,7 +975,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture still holds 41 sets; a decision
+/// unchanged, no new key): the fixture holds 44 sets (41 until
+/// docs/features/health-left.md added its three, AC-T2); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -913,7 +988,11 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
         .expect("fixtures/daemon-keys.json");
     let fixture: serde_json::Value = serde_json::from_str(&text).expect("JSON");
     let sets = fixture.as_object().expect("an object of sets");
-    assert_eq!(sets.len(), 41, "41 sets, none added");
+    assert_eq!(
+        sets.len(),
+        44,
+        "44 sets: 41, and health-left's three (docs/features/health-left.md AC-T2)"
+    );
     let set = |name: &str| -> Vec<String> {
         sets[name]
             .as_array()
@@ -1025,8 +1104,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture still holds 41
-/// sets; "Data"'s amendment raised through `spec propose amendment` is
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 44 sets
+/// (41 until docs/features/health-left.md added its three, AC-T2); "Data"'s
+/// amendment raised through `spec propose amendment` is
 /// served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
 /// ID), its inbox entry with `InboxEntry`'s; a same-origin `POST
@@ -1040,7 +1120,11 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
         .expect("fixtures/daemon-keys.json");
     let fixture: serde_json::Value = serde_json::from_str(&text).expect("JSON");
     let sets = fixture.as_object().expect("an object of sets");
-    assert_eq!(sets.len(), 41, "41 sets, none added");
+    assert_eq!(
+        sets.len(),
+        44,
+        "44 sets: 41, and health-left's three (docs/features/health-left.md AC-T2)"
+    );
     let set = |name: &str| -> Vec<String> {
         sets[name]
             .as_array()

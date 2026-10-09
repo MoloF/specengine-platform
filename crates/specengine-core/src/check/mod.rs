@@ -38,6 +38,9 @@
 //!   [`is_tier3`] / [`is_tier3_file`] — the one Tier 3 predicate (the
 //!   index's archive, the store's `tier3` column, `spec search`), and
 //!   [`is_live`], the graph rules' live source;
+//! - [`unapplied_amendments`] — the live documents that amend a node (task
+//!   spec `health-left`), and the files whose front-matter does not read,
+//!   not judged: a read, never a finding;
 //! - [`worst_w`] — the worst-case working set W (§3), reported in the
 //!   summary and `counts.worst_w_bytes`, never a finding;
 //! - the rules: parser diagnostics through [`PARSER_SEVERITY`], class
@@ -68,6 +71,7 @@ mod rules;
 mod rules_toml;
 mod spec_graph;
 mod text;
+mod unapplied;
 mod working_set;
 
 pub use base::{Base, judge};
@@ -88,6 +92,7 @@ pub use spec_graph::{
     CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
 };
 pub use text::{date_from_unix_days, front_matter_failure, is_calendar_date, is_date_shaped};
+pub use unapplied::{Unapplied, unapplied_amendments};
 pub use working_set::worst_w;
 
 /// The codes of the findings the check itself emits (parser codes come

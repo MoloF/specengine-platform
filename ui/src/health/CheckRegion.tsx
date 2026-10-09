@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { apiErrorOf } from "../api/client";
-import type { CheckQuery } from "../api/queries";
+import type { CheckQuery, HealthQuery } from "../api/queries";
 import type { CheckCounts, CheckReport } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { useAnnounce } from "../ui/announcer";
@@ -96,10 +96,12 @@ function CheckAnswer({ project, report }: { project: string; report: CheckReport
 
 /**
  * Region 1, Check (docs/features/ui-health.md "Description and interactions"): the report's
- * verdict, mode, counts and W as the core gave them; "Check again" reads it once more. Nothing is
- * derived: an omitted count is not shown, W is "Not measured" when the check could not vouch.
+ * verdict, mode, counts and W as the core gave them; "Check again" reads it once more, and the
+ * unapplied amendments with it (`docs/features/health-left.md` "Description and interactions"), a
+ * read of either already in flight kept, never a second walk. Nothing is derived: an omitted count
+ * is not shown, W is "Not measured" when the check could not vouch.
  */
-export function CheckRegion({ project, check }: { project: string; check: CheckQuery }) {
+export function CheckRegion({ project, check, health }: { project: string; check: CheckQuery; health: HealthQuery }) {
   const failure = useRetainedFailure(check.error, check.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(check.data, () => heading.current);
@@ -109,6 +111,7 @@ export function CheckRegion({ project, check }: { project: string; check: CheckQ
     if (check.isFetching) {
       return;
     }
+    void health.refetch({ cancelRefetch: false });
     void check.refetch({ cancelRefetch: false }).then((result) => {
       if (result.data !== undefined && result.error === null) {
         announce(`Checked again: ${verdictLook(result.data.verdict).label}.`);

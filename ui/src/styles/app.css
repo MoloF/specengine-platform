@@ -3655,7 +3655,8 @@ mark {
   background: var(--surface-panel);
 }
 
-.health-left-link {
+.health-left-link,
+.health-amendment-path {
   display: inline-block;
   min-height: var(--target-min);
   color: var(--text-primary);
@@ -3663,7 +3664,8 @@ mark {
   text-decoration-color: var(--accent);
 }
 
-.health-left-link .mono {
+.health-left-link .mono,
+.health-amendment-path .mono {
   color: var(--accent);
   font-weight: 600;
 }
@@ -3692,6 +3694,62 @@ mark {
   font-style: normal;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+}
+
+/* Row 3, the unapplied amendments (docs/features/health-left.md): a measured count reads as a
+   number, unlike "Not measured yet"; each document's amends links indented under it, as a node's
+   Links tab draws them. */
+.health-measured {
+  color: var(--text-primary);
+  font-style: normal;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.health-amendment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.health-amendment-facts {
+  gap: var(--space-1) var(--space-4);
+}
+
+.health-amendment-links {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health-amendment-link {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border-subtle);
+}
+
+.health-amendment-link .link-name {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+}
+
+.health-amendments-scope {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.health-amendments-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
 }
 
 .health-pointer {

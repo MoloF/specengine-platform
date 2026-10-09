@@ -3,10 +3,11 @@
 //! docs/features/ui-live.md "Data").
 //!
 //! A call runs on the blocking pool, one at a time per project (each read
-//! refreshes the project's index; a check, which refreshes nothing, takes
-//! the turn too): the request waits for the project's
-//! turn in its own task, so a request whose client is gone before its
-//! turn is dropped unrun; the turn then goes with the call to the pool.
+//! refreshes the project's index; a check and the unapplied amendments,
+//! which refresh nothing, take the turn too): the request waits for the
+//! project's turn in its own task, so a request whose client is gone
+//! before its turn is dropped unrun; the turn then goes with the call to
+//! the pool.
 //! The call: the process's `Env`, the project's root as the globals, the
 //! config read again (a slug changed since the start, or a config the
 //! discovery refuses, is a 503), one library function, its `--json`

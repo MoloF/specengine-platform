@@ -9,6 +9,7 @@ import {
   aGraphEdge,
   aGraphNode,
   aGraphView,
+  aHealthReport,
   aProposal,
   aTaskEntry,
   aTaskPackage,
@@ -31,7 +32,10 @@ const NOT_BUILT = "Not built yet: the daemon has no endpoint for this read";
 /** How the stubbed daemon answers the read under test (the check or the graph). */
 type Answer = { status: number; body: CheckReport | GraphView } | { status: number; message: string };
 
-/** The daemon: one project with an empty inbox, `read` answering `answer`; anything else its 404. */
+/**
+ * The daemon: one project with an empty inbox and no unapplied amendment (Health's third read,
+ * docs/features/health-left.md), `read` answering `answer`; anything else its 404.
+ */
 function daemon(read: "check" | "graph", answer: Answer) {
   return stubFetch((url) => {
     if (url === "/api/projects") {
@@ -39,6 +43,9 @@ function daemon(read: "check" | "graph", answer: Answer) {
     }
     if (url === "/api/projects/alpha/inbox") {
       return jsonAnswer(200, { proposals: [], notes: [] });
+    }
+    if (url === "/api/projects/alpha/health") {
+      return jsonAnswer(200, aHealthReport());
     }
     if (url.startsWith(`/api/projects/alpha/${read}`)) {
       return "message" in answer ? errorAnswer(answer.status, answer.message) : jsonAnswer(answer.status, answer.body);
@@ -123,6 +130,53 @@ describe("Health over the daemon (AC-13 of ui-live)", () => {
     expect(alert.textContent).toBe(`The check could not be read${message}`);
     expect(within(region("Check")).getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(screen.queryByText(NOT_BUILT)).toBeNull();
+  });
+});
+
+describe("Health's unapplied amendments over the daemon (AC-U4 of health-left)", () => {
+  /** A daemon answering the projects, the inbox and the check, and `/health` with `health`. */
+  function healthDaemon(health: () => Response) {
+    return stubFetch((url) => {
+      if (url === "/api/projects") {
+        return jsonAnswer(200, [{ slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" }]);
+      }
+      if (url === "/api/projects/alpha/inbox") {
+        return jsonAnswer(200, { proposals: [], notes: [] });
+      }
+      if (url === "/api/projects/alpha/check") {
+        return jsonAnswer(200, aCheckReport());
+      }
+      if (url === "/api/projects/alpha/health") {
+        return health();
+      }
+      return errorAnswer(404, `no route ${url}`);
+    });
+  }
+
+  function amendments(): HTMLElement {
+    const found = region("What is left").querySelector<HTMLElement>('[data-row="amendments"]');
+    if (found === null) {
+      throw new Error("no Unapplied amendments part");
+    }
+    return found;
+  }
+
+  it("an older daemon's 404: a failure in its words with Retry, never None, never Not built yet", async () => {
+    const message = "no route /api/projects/alpha/health; routes: projects, inbox, proposals, tree, nodes, search, bundle, graph, check, tasks, round";
+    const fetchStub = healthDaemon(() => errorAnswer(404, message));
+    await openHealth();
+    expect(within(amendments()).getByRole("alert").textContent).toBe(`The unapplied amendments could not be read${message}`);
+    expect(within(amendments()).getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(amendments().querySelector(".health-amendments-none")).toBeNull();
+    expect(screen.queryByText(NOT_BUILT)).toBeNull();
+    expect(urlsOf(fetchStub).filter((url) => url.endsWith("/health"))).toEqual(["/api/projects/alpha/health"]);
+  });
+
+  it("a 200 with none: the rule's text over the daemon's document count", async () => {
+    healthDaemon(() => jsonAnswer(200, aHealthReport([], { documents: 9 })));
+    await openHealth();
+    expect(amendments().querySelector(".health-amendments-none")?.textContent).toBe("None: no live document of this tree declares an amends link.");
+    expect(amendments().querySelector(".health-amendments-scope")?.textContent).toBe("Measured over 9 documents.");
   });
 });
 

@@ -8,6 +8,7 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  HealthReport,
   InboxEntry,
   Proposal,
   RoundItem,
@@ -22,6 +23,7 @@ import type {
   TaskRun,
   TreeNode,
   TreeView,
+  UnappliedAmendment,
 } from "../api/types";
 
 /** A whole review document for tests; omitted keys null or empty as the review JSON gives them. */
@@ -438,6 +440,28 @@ export function aCheckReport(fields: Partial<Omit<CheckReport, "counts">> & { co
     ...rest,
     counts: { documents: 7, errors: 0, warnings: 0, debt: 0, expired: 0, stale: 0, worst_w_bytes: 4321, ...counts },
   };
+}
+
+/**
+ * One unapplied amendment for tests, keys in `spec health --json`'s order: a draft spec with no ID
+ * amending R-1, resolved, from its front matter's line 6 (docs/features/health-left.md "Data").
+ */
+export function anAmendment(fields: Partial<UnappliedAmendment> & Pick<UnappliedAmendment, "path">): UnappliedAmendment {
+  const { path, ...rest } = fields;
+  return {
+    path,
+    id: null,
+    title: `Amending R-1 from ${path}`,
+    class: "spec",
+    status: "draft",
+    links: [aLink({ type: "amends", written: "R-1", path, line: 6 })],
+    ...rest,
+  };
+}
+
+/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note. */
+export function aHealthReport(amendments: UnappliedAmendment[] = [], fields: Partial<Omit<HealthReport, "amendments">> = {}): HealthReport {
+  return { documents: 7, amendments, notes: [], ...fields };
 }
 
 /** One item of a round sheet for tests: a question without options, nothing staged; omitted keys as the sheet gives them. */

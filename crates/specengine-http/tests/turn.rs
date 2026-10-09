@@ -39,6 +39,13 @@
 //! /round/answers` sent while the corpus's reads hold its turn are
 //! answered after them, while A's two, sent at the same time, are
 //! answered before the corpus's first read ends.
+//!
+//! AC-T3 of docs/features/health-left.md: `GET health`, which refreshes
+//! nothing (one walk of the working tree), takes its project's turn. With
+//! the generated corpus and A served by one daemon, the corpus's `/health`
+//! sent while the corpus's reads hold its turn is answered after them,
+//! while A's `/health`, sent at the same time, is answered before the
+//! corpus's first read ends. M: the handler outside the turn.
 
 mod common;
 mod task_state;
@@ -63,6 +70,8 @@ const TREE: &str = "/api/projects/big-corpus/tree";
 const CHECK: &str = "/api/projects/big-corpus/check";
 
 const ROUND: &str = "/api/projects/big-corpus/round";
+
+const HEALTH: &str = "/api/projects/big-corpus/health";
 
 /// A project of `FILES` generated mechanic files, committed once.
 fn corpus(scratch: &Scratch) -> std::path::PathBuf {
@@ -512,5 +521,53 @@ fn r08_the_round_and_its_answers_wait_for_their_own_projects_turn() {
     assert!(
         own_sheet_at > second_at && own_answers_at > second_at,
         "the corpus's round ran beside its project's reads, outside the turn: {report}"
+    );
+}
+
+#[test]
+fn health_left_t3_a_health_waits_for_its_own_projects_reads_not_anothers() {
+    let scratch = Scratch::new("turn-health");
+    let root = corpus(&scratch);
+    let a = scratch.repo("spec-a", "a", "main");
+    // A fresh HOME: the corpus's first read builds its whole index.
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root), &a]);
+    let port = server.port;
+    let start = Instant::now();
+    // The corpus's turn: its first read, then a second one queued.
+    let first = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    let second = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    // Sent while the corpus's reads hold its turn: the corpus's health,
+    // then A's.
+    let own = timed(port, HEALTH, start);
+    thread::sleep(Duration::from_millis(50));
+    let other = timed(port, "/api/projects/lantern-keep/health", start);
+
+    let (status, other_at) = other.join().expect("A's health");
+    assert_eq!(status, 200, "A's health");
+    let (status, first_at) = first.join().expect("the corpus's first read");
+    assert_eq!(status, 200, "the first read");
+    let (status, second_at) = second.join().expect("the corpus's second read");
+    assert_eq!(status, 200, "the second read");
+    let (status, own_at) = own.join().expect("the corpus's health");
+    assert_eq!(status, 200, "the corpus's health");
+    let report = format!(
+        "answers after the start: A's health {other_at:?}, the corpus's reads {first_at:?} and \
+         {second_at:?}, its health {own_at:?}"
+    );
+    eprintln!("{report}");
+    assert!(
+        first_at > Duration::from_millis(300),
+        "the first read is too quick to hold the turn while the healths arrive: {report}"
+    );
+    assert!(
+        other_at < first_at,
+        "A's health waited for another project's read: {report}"
+    );
+    assert!(
+        own_at > second_at,
+        "the corpus's health ran beside its project's reads, outside the turn: {report}"
     );
 }

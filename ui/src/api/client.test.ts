@@ -5,7 +5,8 @@ import source from "./client.ts?raw";
 // one the daemon does not serve yet would be flagged MISSING ENDPOINT (named for rust-developer):
 // none since ui-live-tasks. The graph's, the check's and the tasks' name the daemon's README (AC-10
 // of docs/features/ui-live.md, AC-08 of docs/features/ui-live-tasks.md, amending AC-01 of
-// ui-graph, ui-health and ui-tasks).
+// ui-graph, ui-health and ui-tasks); the health read's, its slice's "Data" (AC-U1 of
+// docs/features/health-left.md).
 
 function commentAbove(method: string): string {
   const lines = source.split("\n");
@@ -39,6 +40,8 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ],
     // AC-10 of docs/features/ui-live.md (AC-01 of ui-health, amended).
     ["getCheck", '/** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */'],
+    // AC-U1 of docs/features/health-left.md: the comment of its "Data".
+    ["getHealth", "/** GET /api/projects/:p/health (= spec health --json); no AbortSignal, as getCheck */"],
   ])("%s says %s", (method, comment) => {
     expect(commentAbove(method)).toBe(comment);
   });
@@ -103,5 +106,13 @@ describe("the check's read (AC-01 of ui-health)", () => {
     const block = /export interface SpecEngineClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? "";
     const names = [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");
     expect(names.filter((name) => /fix|apply|check/i.test(name))).toEqual(["getCheck"]);
+  });
+});
+
+describe("the health read (AC-U1 of health-left)", () => {
+  it("is one read typed as the health report, taking no AbortSignal (a walk in flight is never aborted), never flagged missing", () => {
+    expect(source).toContain("getHealth(project: string): Promise<HealthReport>;");
+    expect(source).not.toMatch(/getHealth\([^)]*signal/);
+    expect(source).not.toContain("MISSING ENDPOINT");
   });
 });

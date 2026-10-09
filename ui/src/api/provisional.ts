@@ -529,6 +529,35 @@ export interface NodeView {
   nodes: ShownNode[];
 }
 
+// `spec health --json` (docs/features/health-left.md "Data"): the live documents that declare an
+// amends link, by path; `class` and `status` raw (ADR-0031), never compared; absent null, empty [].
+
+/**
+ * One live document declaring an amends link, not yet absorbed into the node it amends: `path`
+ * root-relative; `id` the document node's ID, `title` its `title:` else first H1, `class` and
+ * `status` raw, each null when absent; `links` its amends out links exactly as `spec show --links`
+ * lists them, every state, never empty. Source: `docs/features/health-left.md` "Data".
+ */
+export interface UnappliedAmendment {
+  path: string;
+  id: string | null;
+  title: string | null;
+  class: string | null;
+  status: string | null;
+  links: ShownLink[];
+}
+
+/**
+ * `spec health --json`, the daemon's `health`: `documents` the walked tree's documents (`spec check`'s
+ * `counts.documents` on the same tree), the unapplied amendments by path, then the notes (a
+ * front-matter that could not be judged), each without `note: `. Source: `docs/features/health-left.md` "Data".
+ */
+export interface HealthReport {
+  documents: number;
+  amendments: UnappliedAmendment[];
+  notes: string[];
+}
+
 /** Why a tree row is a root although its document declares a parent. Source: `docs/canon/spec-cli-graph.md` "spec tree". */
 export type TreeMark = "dangling-parent" | "parent-cycle" | Unlisted;
 

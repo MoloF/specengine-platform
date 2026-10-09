@@ -1805,7 +1805,8 @@ fn ac_r9_tasks_list_it_bound_or_by_the_nodes_it_amends() {
 /// `Proposal` set in order, `diff` `@@ -0,0 +1,13 @@`, `preview`
 /// `applies`; `--brief` keeps the keys (texts and diff dropped); the
 /// inbox entry the fixture's `InboxEntry` keys; `fixtures/daemon-keys.json`
-/// holds 41 sets. M: a key added.
+/// holds 44 sets (41 until docs/features/health-left.md added its three,
+/// AC-T2; the amendment adds none). M: a key added.
 #[test]
 fn ac_r10_the_review_is_a_new_files_46_keys() {
     let pair = Pair::new("ka-r10", "spec-a");
@@ -1819,7 +1820,11 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     ))
     .expect("daemon-keys.json");
     let sets = fixture.as_object().expect("sets");
-    assert_eq!(sets.len(), 41, "no set added");
+    assert_eq!(
+        sets.len(),
+        44,
+        "no set added by the amendment: 41, and health-left's three"
+    );
     let set = |name: &str| -> Vec<String> {
         sets[name]
             .as_array()

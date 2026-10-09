@@ -13,6 +13,7 @@ import type {
   BundleView,
   CheckReport,
   GraphView,
+  HealthReport,
   Inbox,
   NodeView,
   Project,
@@ -33,7 +34,8 @@ import type {
 // SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data", the
 // graph and the check `docs/features/ui-live.md` "Data", the tasks
 // `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon",
-// the question round `docs/features/ui-round.md` "Data"):
+// the question round `docs/features/ui-round.md` "Data", the unapplied amendments
+// `docs/features/health-left.md` "Data"):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -330,6 +332,16 @@ export class HttpClient implements SpecEngineClient {
    */
   async getCheck(project: string): Promise<CheckReport> {
     return (await request("GET", `${projectPath(project)}/check`)) as CheckReport;
+  }
+
+  /**
+   * `spec health --json` for the project, no query (`docs/features/health-left.md` "Data"): the
+   * unapplied amendments, none a 200 too; a 503 (the walk incomplete, a config refused) and an
+   * older daemon's 404 reject in the daemon's words, never read as none. No AbortSignal: a walk in
+   * flight is never aborted, as the check's.
+   */
+  async getHealth(project: string): Promise<HealthReport> {
+    return (await request("GET", `${projectPath(project)}/health`)) as HealthReport;
   }
 
   /**

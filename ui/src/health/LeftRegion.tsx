@@ -1,7 +1,8 @@
 import { useRef, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import { useInbox } from "../api/queries";
+import { useInbox, type HealthQuery } from "../api/queries";
 import type { Inbox } from "../api/types";
+import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { severityLook } from "../inbox/labels";
 import { queueOrder } from "../inbox/order";
@@ -12,6 +13,7 @@ import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
+import { UnappliedAmendments } from "./AmendmentsPart";
 import { severityCountsOf } from "./findings";
 import { HealthRegion } from "./parts";
 
@@ -19,20 +21,11 @@ import { HealthRegion } from "./parts";
 export const LEFT_ROWS = 5;
 
 /**
- * Rows 3 to 6 of "what is left" (06 §7), which nothing measures yet: each says so and names its
- * source; never a number (docs/features/ui-health.md "Description and interactions"). Unapplied
- * amendments wait for their producer, a read of the live documents' links over the corpus (slice
- * `health-left`), not for the kind: the queue's amendments are proposals, already in row 1
- * (docs/features/kind-amendment.md "Why", the cut).
+ * Rows 4 to 6 of "what is left" (06 §7), which need Phase 3's markers: each says so and names its
+ * source; never a number (`docs/features/health-left.md` "Description and interactions"). Row 3,
+ * the unapplied amendments, is measured by its own read (UnappliedAmendments).
  */
 const UNMEASURED: readonly (readonly [key: string, what: ReactNode, source: ReactNode])[] = [
-  [
-    "amendments",
-    "Unapplied amendments",
-    <>
-      a read of live <code>amends</code> links (slice <code>health-left</code>)
-    </>,
-  ],
   [
     "assumes",
     <>
@@ -95,14 +88,21 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
 }
 
 /**
- * Region 2, What is left (06 §7): the high-severity and the oldest proposals from the Inbox's read,
- * the rows nothing measures yet, and a pointer to Budgets. One `getInbox`; its Retry reads it alone.
+ * Region 2, What is left (06 §7): the high-severity and the oldest proposals from the Inbox's read
+ * (rows 1 and 2), the unapplied amendments from the health read (row 3), the rows nothing measures
+ * yet (4 to 6), and a pointer to Budgets (row 7). One `getInbox` and the view's `getHealth`, each
+ * part with its own states, boundary and Retry, which reads its read alone: a failing one leaves
+ * the other standing.
  */
-export function LeftRegion({ project }: { project: string }) {
+export function LeftRegion({ project, health }: { project: string; health: HealthQuery }) {
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
+  const healthFailure = useRetainedFailure(health.error, health.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(inbox.data, () => heading.current);
+  const queueBusy = inbox.data === undefined ? failure === null : inbox.isFetching;
+  // Row 3's busy flag, computed here once: the part shows it, the region adds it to the queue's.
+  const amendmentsBusy = health.data === undefined ? healthFailure === null : health.isFetching;
 
   let queue;
   if (inbox.data === undefined) {
@@ -139,7 +139,7 @@ export function LeftRegion({ project }: { project: string }) {
       title="What is left"
       boundary="list of what is left"
       headingRef={heading}
-      busy={inbox.data === undefined ? failure === null : inbox.isFetching}
+      busy={queueBusy || amendmentsBusy}
       className="health-left"
       action={
         <a className="health-open" href={sectionHash(project, "inbox")}>
@@ -148,10 +148,11 @@ export function LeftRegion({ project }: { project: string }) {
         </a>
       }
     >
-      <div className="health-part">
+      <div className="health-part" aria-busy={queueBusy}>
         <h3 className="health-part-title">Proposals in the queue</h3>
-        {queue}
+        <RegionBoundary name="queue">{queue}</RegionBoundary>
       </div>
+      <UnappliedAmendments project={project} health={health} failure={healthFailure} busy={amendmentsBusy} />
       <div className="health-part">
         <h3 className="health-part-title">Not measured yet</h3>
         <dl className="health-unmeasured">

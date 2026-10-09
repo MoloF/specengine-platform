@@ -39,5 +39,8 @@
   "RoundTask": ["id", "status", "title"],
   "RoundAnswersOutcome": ["project", "answers", "notes"],
   "RoundAnswerEntry": ["id", "outcome", "stage", "staged_at", "replaced", "reason"],
-  "Interpretation": ["decision", "how", "why"]
+  "Interpretation": ["decision", "how", "why"],
+  "HealthReport": ["documents", "amendments", "notes"],
+  "UnappliedAmendment": ["path", "id", "title", "class", "status", "links"],
+  "ShownLink": ["type", "origin", "at", "name", "written", "path", "line", "state", "reason"]
 }

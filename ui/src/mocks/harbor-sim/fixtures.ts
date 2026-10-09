@@ -29,6 +29,11 @@ import { nodeKinds, specStatuses } from "./kinds";
 // kind-amendment (docs/features/kind-amendment.md "Data", AC-U1): PR-0052 an open amendment, a
 // file-form create's row (no base, the whole new file its text, `target_ids` its path and its one
 // new ID) whose text declares `links: {amends: [RULE-HIGH-WATER]}`; the amended ID only there.
+//
+// health-left (docs/features/health-left.md "Data", Mocks): two live documents that amend a node,
+// roots of the tree, their amends links among the corpus's: the accepted decision DEC-0014, whose
+// RULE-QUAY-LIGHTS names nothing any more, and a draft feature spec with no ID amending
+// RULE-BERTH-DRAFT, resolved. src/mocks/health.ts lists them as `spec health` does.
 
 const SLUG = "harbor-sim";
 
@@ -44,6 +49,12 @@ export const TIDE_FILE = "docs/spec/tides/tide-cycle.md";
 export const DRAFT_FILE = "docs/spec/berths/draft-limits.md";
 const PILOT_FILE = "docs/spec/pilotage/boarding.md";
 const HARBOR_FILE = "docs/spec/harbor.md";
+
+/** health-left's decision: accepted, amending an ID the corpus no longer holds (line 8 of its front matter). */
+export const QUAY_DECISION_FILE = "docs/decisions/DEC-0014.md";
+
+/** health-left's draft feature spec, no `id:`, amending RULE-BERTH-DRAFT (line 6 of its front matter). */
+export const DEEP_BERTH_FILE = "docs/features/deep-berth.md";
 
 /** The accepted decision PR-0049 interprets: a document of its own, its `id:` the decision's ID. */
 export const WEATHER_DECISION = "DEC-0012";
@@ -603,6 +614,49 @@ function harborCorpus(): MockCorpus {
         "High water is the highest level of one tide cycle, read from the tide table.",
       ],
     }),
+    specFile({
+      path: QUAY_DECISION_FILE,
+      id: "DEC-0014",
+      // No kind: harbor-sim's `[ids]` names no prefix for decisions (as DEC-0012).
+      kind: null,
+      title: "Quay lights stay amber",
+      status: "accepted",
+      lines: [
+        "---",
+        "id: DEC-0014",
+        "class: decision",
+        "status: accepted",
+        "date: 2026-10-02",
+        "title: Quay lights stay amber",
+        "links:",
+        "  amends: [RULE-QUAY-LIGHTS]",
+        "---",
+        "",
+        "# DEC-0014: Quay lights stay amber",
+        "",
+        "The quay lights stay amber through the night shift: pilots read amber as a berth being worked.",
+      ],
+    }),
+    specFile({
+      path: DEEP_BERTH_FILE,
+      id: null,
+      kind: null,
+      title: "Berth 4 takes 13.0 m draft after the dredging",
+      status: "draft",
+      lines: [
+        "---",
+        "class: spec",
+        "status: draft",
+        "scope: [berths]",
+        "links:",
+        "  amends: [RULE-BERTH-DRAFT]",
+        "---",
+        "",
+        "# Berth 4 takes 13.0 m draft after the dredging",
+        "",
+        "After the 2026 dredging, berth 4 takes ships of up to 13.0 m draft at any tide.",
+      ],
+    }),
   ];
   const linkAt = (path: string, needle: string): number => {
     const file = documents.find((candidate) => candidate.path === path);
@@ -732,6 +786,15 @@ function harborCorpus(): MockCorpus {
         to: "MEC-TIDES",
         reason: "`#slack` names no anchor in docs/spec/tides/tide-cycle.md; lands on the document",
       }),
+      link({
+        type: "amends",
+        origin: frontmatter,
+        written: "RULE-QUAY-LIGHTS",
+        path: QUAY_DECISION_FILE,
+        line: linkAt(QUAY_DECISION_FILE, "amends:"),
+        reason: "`RULE-QUAY-LIGHTS` resolves to no ID and no alias",
+      }),
+      link({ type: "amends", origin: frontmatter, written: "RULE-BERTH-DRAFT", path: DEEP_BERTH_FILE, line: linkAt(DEEP_BERTH_FILE, "amends:"), to: "RULE-BERTH-DRAFT" }),
       link({
         type: "depends_on",
         origin: inline,

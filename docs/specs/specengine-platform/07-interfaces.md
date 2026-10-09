@@ -108,6 +108,7 @@ spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/g
 
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
+spec health                                          # shipped: docs/canon/health.md
 spec round new [--limit N] | round answer FILE | --staged  # shipped: docs/canon/round.md
 spec ship SLUG [--accepted]
 spec compact --dry-run
@@ -122,7 +123,7 @@ spec export index [--stdout]                         # [paths] index by its regi
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` by `spec serve` (`docs/canon/serve.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols|health` to come
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|health|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)

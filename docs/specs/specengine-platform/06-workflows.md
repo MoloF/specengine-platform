@@ -143,7 +143,7 @@ Shipped as `round` (`docs/canon/round.md`, ADR-0038); R and A records, cancelled
 
 ## 7. Corpus health and compaction
 
-- **"What is left" panel**: `severity: high` proposals → old open ones → unapplied amendments (live documents declaring `amends`: `docs/canon/proposal-amendment.md`; producer `health-left`) → `@assumes` with a decision different from the working answer → `unbound` accepted nodes → drift → documents over budget.
+- **"What is left" panel**: `severity: high` proposals → old open ones → unapplied amendments (live documents declaring `amends`, measured by `spec health`: `docs/canon/health.md`) → `@assumes` with a decision different from the working answer → `unbound` accepted nodes → drift → documents over budget.
 - **Metrics**: open proposals by `severity`, age of open ones, share of decisions diverging from the working answer, decisions without a price, **task W — median and p90 from bundle logs**, number of "third steps" of further reading.
 - **Compaction**: `spec compact --dry-run` proposes absorbing settled decisions into canon, closing superseded ones, compressing shipped specs. The result is a batch of proposals for agreement, not an auto-edit.
 

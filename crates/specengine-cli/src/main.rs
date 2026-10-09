@@ -164,6 +164,8 @@ enum Command {
         #[arg(long)]
         debt: bool,
     },
+    /// List the unapplied amendments: the working tree's live documents that name a node they amend (`links: {amends: [ID]}`), each with those links; read-only, exit 0 whatever is listed, 2 when it cannot run (no project, a config error, an incomplete walk).
+    Health,
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
         #[command(subcommand)]
@@ -761,6 +763,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 },
             )?)
         }
+        Command::Health => Outcome::Health(specengine_cli::health(env, globals)?),
         Command::Export {
             what: Export::Index { stdout },
         } => Outcome::Export(specengine_cli::export_index(

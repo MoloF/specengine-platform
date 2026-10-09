@@ -63,6 +63,8 @@ export const queryKeys = {
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
+  /** The unapplied amendments, `spec health --json` (`docs/features/health-left.md` "Data"). */
+  health: (project: string) => ["health", project] as const,
   /** The round's sheet; `limit` null: the daemon's default (`docs/features/ui-round.md` "Data"). */
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
 };
@@ -80,8 +82,8 @@ function roundAnswersKey(project: string) {
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
 // false `archive` too; then the query's AbortSignal. A read invalidated while in flight is aborted
 // and read once more (TanStack's `cancelRefetch`), so a burst of live events costs the daemon one
-// answered read per query, not one per event (`docs/features/ui-live-tasks.md` "Data"); the check
-// alone never takes its signal (useCheck).
+// answered read per query, not one per event (`docs/features/ui-live-tasks.md` "Data"); the two
+// walks, the check and the health read, never take their signal (useCheck, useHealth).
 
 function treeRequest(options: TreeOptions): TreeOptions | undefined {
   const sent: TreeOptions = {};
@@ -186,13 +188,14 @@ function eventId(payload: unknown): string | null {
 
 /**
  * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
- * spec (every tree, node, search, bundle and graph of it, and its check, each `[read, project, …]`;
- * `docs/features/ui-live.md` "Rules and edge cases").
+ * spec (every tree, node, search, bundle and graph of it, its check and its unapplied amendments,
+ * each `[read, project, …]`; `docs/features/ui-live.md` "Rules and edge cases",
+ * `docs/features/health-left.md` "Description and interactions").
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health"] as const;
 
-/** The spec read that walks the whole corpus (`READS_OF_THE_SPEC`'s check). */
-const WALK = "check";
+/** The spec reads that walk the whole corpus (`READS_OF_THE_SPEC`'s check and health read). */
+const WALKS: ReadonlySet<string> = new Set(["check", "health"]);
 
 /** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
 const APPLIED = "proposal.applied";
@@ -239,8 +242,8 @@ const TASK_EVENT = "task.";
  * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
  * every task of it (a task's open proposals and assumptions are the queue's); `proposal.applied`
- * also that project's trees, nodes, searches, bundles, graphs and check (a spec file changed;
- * `docs/features/ui-live.md` "Data"). A stage event, `proposal.staged` or `.unstaged`, reads only
+ * also that project's trees, nodes, searches, bundles, graphs, check and unapplied amendments (a
+ * spec file changed; `docs/features/ui-live.md` "Data"). A stage event, `proposal.staged` or `.unstaged`, reads only
  * that project's inbox and that proposal again: a stage touches no task and no spec file
  * (`docs/canon/decision-staging.md` "Queue"); one no write of this tab accounts for is returned as
  * the outside change to show, until `dismiss` or the next one. A `task.*` event reads that
@@ -251,7 +254,8 @@ const TASK_EVENT = "task.";
  * other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads and the round sheets of the project again. Only the reads on screen are fetched, once each
- * (the check only while Health shows it); the rest are marked stale.
+ * (the check and the unapplied amendments only while Health shows them:
+ * `docs/features/health-left.md` "Description and interactions"); the rest are marked stale.
  */
 export function useLiveQueue(project: string | null): { outside: OutsideStage | null; dismiss: () => void } {
   const client = useClient();
@@ -266,10 +270,11 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     }
     const readSpecAgain = () => {
       // `[read, project]` matches that project's entries of the read whatever their options.
-      // The check is a full walk: one already running (Health entered, Check again) is kept and its
-      // answer taken, never cancelled for a second walk; any other read is read again at once.
+      // The check and the health read are full walks: one already running (Health entered, Check
+      // again) is kept and its answer taken, never cancelled for a second walk; any other read is
+      // read again at once.
       for (const read of READS_OF_THE_SPEC) {
-        void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: read !== WALK });
+        void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: !WALKS.has(read) });
       }
     };
     /** The task list and every task of the project, whatever task is open. */
@@ -468,6 +473,29 @@ export function useCheck(project: string) {
 
 /** The check's read as Health shares it among its regions. */
 export type CheckQuery = ReturnType<typeof useCheck>;
+
+/**
+ * The project's unapplied amendments, `spec health`, read as the check is
+ * (`docs/features/health-left.md` "Description and interactions"): on entering Health, on "Check
+ * again" (`refetch`) and,
+ * while Health is on screen, after the live tail's apply or gap (useLiveQueue); never on window
+ * focus, a reconnect, an interval, a stage or a `task.*` event. A walk of the whole tree: its
+ * query's AbortSignal is never taken, a walk in flight is kept and its answer used. The home reads
+ * none.
+ */
+export function useHealth(project: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.health(project),
+    queryFn: () => client.getHealth(project),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+  });
+}
+
+/** The health read as Health shares it: What is left shows it, Check again reads it again. */
+export type HealthQuery = ReturnType<typeof useHealth>;
 
 /**
  * The stage a screen shows for a proposal, as its read gave it: whether one was staged, and when

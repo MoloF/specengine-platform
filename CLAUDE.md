@@ -10,7 +10,7 @@ reviewed: 2026-10-08
 
 A local specification engine for projects built with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: Phases 0-1 done (parser, index, CLI/MCP reads, graph, bundle, check 1-4, shards, layer A, pilot W); **Phase 2**: slices 1-7, `daemon-read`, `decision-staging`, `plugin-{gate,roles}`, `{ui-,}round`, `spec-serve`, `kind-*` shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: Phases 0-1 done (parser, index, reads, graph, bundle, check, shards, layer A, pilot W); **Phase 2**: slices 1-7, `daemon-read`, `decision-staging`, `plugin-{gate,roles}`, `{ui-,}round`, `spec-serve`, `kind-*`, `health-left` shipped. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
@@ -61,7 +61,7 @@ The pre-commit hook and CI reject a red check (`docs/README.md` "Enforcement").
 
 - `docs/` -- `canon/`, `decisions/`, specs (`features/`, `specs/`), index, archive.
 - `crates/specengine-{model,core,store,cli,code,eval,import,mcp,http,ra}` -- the corpus model and reference grammar, the parser and check, the index (SQLite + FTS5), the `spec` binary, layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, the daemon, layer C (outside `default-members`); each has a Tier 1 `README.md`.
-- `fixtures/` -- test corpora with `expected.json`; `bevy-mini` and `ra-mini` are workspace-excluded.
+- `fixtures/` -- test corpora with `expected.json`; `bevy-mini`, `ra-mini` workspace-excluded.
 - `.claude/` -- pipeline roles and commands.
 - `plugin/` -- the Claude Code plugin (root `README.md`); `ui/` -- the web UI.
 

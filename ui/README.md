@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-09
 ---
 
 # ui -- the web UI
@@ -16,7 +16,7 @@ A standalone pnpm project on strict TypeScript: no root `package.json`, no works
 
 ## Contract seam
 
-- One interface, `src/api/client.ts` `SpecEngineClient`, its methods named after the daemon's endpoints (07 s3); reads take the query's `AbortSignal` (superseded: aborted; not the check), writes none; the round's `getRound`, `stageRoundAnswers` alike. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily (a loading line; failed: why, reload).
+- One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints (07 s3); reads take the query's `AbortSignal` (superseded: aborted; never the check or health read), writes none; `getRound`, `stageRoundAnswers` alike. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily (a loading line; failed: why, reload).
 - App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
 - An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent (none now), `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
 - The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`docs/canon/decision-staging.md`).

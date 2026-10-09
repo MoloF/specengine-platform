@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-09
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -35,6 +35,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
 | GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json`, browser view |
 | GET `.../check` | -- | `spec check --json`, the plain run |
+| GET `.../health` | -- | `spec health --json` (`docs/canon/health.md`) |
 | GET `.../inbox` | -- | `spec inbox --json` |
 | GET `.../proposals/:id` | -- | `spec review PR --json` (not `--brief`) |
 | GET `.../tasks` | `status` | `spec task list --json` |
@@ -43,7 +44,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../events` | header `Last-Event-ID` | the live tail (SSE) |
 | POST, DELETE `.../proposals/:id/decision` | -- | stage, unstage |
 
-**Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space, a literal plus `%2B`), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` only `links`, `status` by `TaskStatus::parse` (a refusal lists `TaskStatus::ALL`). 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `tasks/:id` take none), a scalar repeated, a bad value, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent` (`#` -> `%23`, `/` -> `%2F`), `%2523` reaches the CLI as `%23`, an empty REF is an unknown route.
+**Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space, a literal plus `%2B`), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` only `links`, `status` by `TaskStatus::parse` (a refusal lists `TaskStatus::ALL`). 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent` (`#` -> `%23`, `/` -> `%2F`), `%2523` reaches the CLI as `%23`, an empty REF is an unknown route.
 
 **Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`): no `OUTPUT_CAP_CHARS` cut, `graph` too (`truncated` false, `omitted` null, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty (the store's `SNIPPET_*` marks: a corpus `**` is text).
 
@@ -53,7 +54,7 @@ One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {ro
 
 **One door.** The write routes only stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps. No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and `Staged`, `Changed`, `baseline`, `RoundTerminal`, `WalkOutcome`, `AnswerOutcome`. No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, all in the data directory: stages in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`docs/canon/architecture.md#storage`); nothing under a root changes.
 
-**Worktrees**: `tree`, `nodes`, `search`, `bundle`, `graph`, `check` read the root's files on disk (uncommitted edits too, never `HEAD`; `check` untracked and ignored ones, no git or database); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
+**Worktrees**: `tree`, `nodes`, `search`, `bundle`, `graph`, `check`, `health` read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, no git or database); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
 ## Live tail
 
@@ -72,8 +73,8 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 - One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's per-host connections.
 - A database replaced under a live stream: its events with `seq` <= the stream's cursor are never sent.
 - An uncut graph is big: 701 nodes, 700 edges ~220 KB.
-- In the project's turn, other reads wait: `check` walks the tree (27 ms at 700 sections); a package read runs `git diff --no-index` per changed node (128: 1 to 1.5 s).
+- In the project's turn, other reads wait: `check`, `health` walk the tree (27 ms at 700 sections); a package read runs `git diff --no-index` per changed node (128: 1 to 1.5 s).
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 40 key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests").
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 44 key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests").

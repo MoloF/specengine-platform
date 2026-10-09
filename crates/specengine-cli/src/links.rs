@@ -182,7 +182,8 @@ pub(crate) fn block_lines(links: &ShownLinks) -> Vec<String> {
     lines
 }
 
-fn link_line(link: &ShownLink) -> String {
+/// One link's line, two spaces in (`spec health` prints its out lines so).
+pub(crate) fn link_line(link: &ShownLink) -> String {
     let shown = link.name.as_deref().unwrap_or(&link.written);
     let mut line = format!(
         "  {} {} {} | {}:{}",
@@ -226,8 +227,9 @@ pub(crate) struct LinksJson<'a> {
     omitted: usize,
 }
 
+/// One link as JSON: `spec show --links`'s, and `spec health`'s.
 #[derive(Serialize)]
-struct LinkJson<'a> {
+pub(crate) struct LinkJson<'a> {
     #[serde(rename = "type")]
     link_type: &'a str,
     origin: LinkOrigin,
@@ -253,7 +255,7 @@ pub(crate) fn links_json(links: &ShownLinks, kept: usize, omitted: usize) -> Lin
     }
 }
 
-fn link_json(link: &ShownLink) -> LinkJson<'_> {
+pub(crate) fn link_json(link: &ShownLink) -> LinkJson<'_> {
     LinkJson {
         link_type: &link.link_type,
         origin: link.origin,

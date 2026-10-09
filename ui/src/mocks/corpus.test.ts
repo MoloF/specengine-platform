@@ -29,7 +29,10 @@ describe("getTree", () => {
   it("walks pre-order: roots by path, sections before child documents, depth from the roots", async () => {
     const view = await mock().getTree("harbor-sim");
     const names = view.nodes.map((node) => `${"  ".repeat(node.depth)}${node.id ?? node.path}`);
-    expect(names.slice(0, 6)).toEqual([
+    expect(names.slice(0, 8)).toEqual([
+      // health-left's two amendments, roots by path before docs/spec/ (docs/features/health-left.md "Data", Mocks).
+      "DEC-0014",
+      "docs/features/deep-berth.md",
       "MEC-CARGO-CRANES",
       "DOM-HARBOR",
       "  RULE-HARBOR-CLOCK",

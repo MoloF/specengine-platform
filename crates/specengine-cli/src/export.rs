@@ -208,8 +208,8 @@ fn write_outputs(root: &Path, outputs: &[IndexOutput]) -> Result<Vec<bool>, CliE
 }
 
 /// One stderr line per cause of a config error: `<config>:<line>: message`,
-/// else `spec: <config>: message`.
-fn config_errors(label: &str, report: &Report) -> CliError {
+/// else `spec: <config>: message` (`spec health` too).
+pub(crate) fn config_errors(label: &str, report: &Report) -> CliError {
     let lines: Vec<String> = report
         .cannot_check
         .iter()
@@ -229,8 +229,8 @@ fn config_errors(label: &str, report: &Report) -> CliError {
 
 /// The first path (in byte order) the render could not account for, and
 /// why: core's [`walk_gap`], the §11.5 stop conditions of the index
-/// comparison.
-fn incomplete(input: &CheckInput, paths: &Paths) -> Option<String> {
+/// comparison (`spec health` words a gap alike).
+pub(crate) fn incomplete(input: &CheckInput, paths: &Paths) -> Option<String> {
     let gap = walk_gap(input, paths)?;
     let path = gap.path();
     let shown = if path.is_empty() { "." } else { path };
@@ -496,7 +496,7 @@ fn create(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 /// A store error without the absolute path it may carry.
-fn io_message(error: &StoreError) -> String {
+pub(crate) fn io_message(error: &StoreError) -> String {
     match error {
         StoreError::Io { source, .. } => source.to_string(),
         other => other.to_string(),

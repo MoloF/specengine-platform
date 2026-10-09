@@ -3,6 +3,7 @@ import type {
   BundleView,
   CheckReport,
   GraphView,
+  HealthReport,
   Inbox,
   NodeView,
   Project,
@@ -68,10 +69,11 @@ export interface RoundOptions {
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
- * `docs/features/ui-live-tasks.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx, picks the
- * implementation. A read answered with exit 1 (404 for tree, nodes, bundle, a proposal, graph,
- * task) resolves to its document, `reason` (a proposal: the last of `notes`) set; the check answers
- * every verdict as a 200 report, data too; every other failure rejects with a ClientError carrying
+ * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data"; 07 §3). Only the
+ * bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for tree,
+ * nodes, bundle, a proposal, graph, task) resolves to its document, `reason` (a proposal: the last
+ * of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
+ * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
  * the daemon's status and message verbatim (exit 2: 503; no response: 0; a read the daemon does not
  * serve yet, none today: `notServed`, 501, nothing requested). A decision is only staged here and
  * confirmed on a terminal by `spec approve|reject PR` (`docs/canon/decision-staging.md` "Daemon",
@@ -84,8 +86,9 @@ export interface RoundOptions {
  * `signal`: the query's AbortSignal. A read superseded before it answered (a burst of live events
  * reading the same task again) is aborted, so the daemon, which drops a request whose client left,
  * never runs it; the mock ignores it. The check takes none: a walk in flight is kept and its
- * answer taken, never aborted for a second one (`docs/features/ui-live.md` "Data"); nor do the
- * stage's writes: a write's answer is always taken.
+ * answer taken, never aborted for a second one (`docs/features/ui-live.md` "Data"); nor does the
+ * health read, a walk too (`docs/features/health-left.md` "Data"), nor the stage's writes: a
+ * write's answer is always taken.
  */
 export interface SpecEngineClient {
   /** Drives the permanent "Mock data" indicator. */
@@ -112,6 +115,8 @@ export interface SpecEngineClient {
   getTask(project: string, id: string, signal?: AbortSignal): Promise<TaskPackage | TaskNotFound>;
   /** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */
   getCheck(project: string): Promise<CheckReport>;
+  /** GET /api/projects/:p/health (= spec health --json); no AbortSignal, as getCheck */
+  getHealth(project: string): Promise<HealthReport>;
   // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus
   // `updated_at` as this page read it (changed since: 409); both answer the review document.
   /** POST /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; stages, nothing applied) */

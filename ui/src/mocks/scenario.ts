@@ -1,5 +1,9 @@
 /** The mock's scenarios, picked by `?scenario=` at bootstrap (`ui/README.md` "Owner's manual steps"). */
-/** `cannot-check`: every read as `normal` but the check, which cannot vouch for the corpus (docs/features/ui-health.md "Data"). */
+/**
+ * `cannot-check`: every read as `normal` but the check, which cannot vouch for the corpus
+ * (`docs/features/ui-health.md` "Data"), and the unapplied amendments, refused 503 for the same
+ * incomplete walk (`docs/features/health-left.md` "Data").
+ */
 export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

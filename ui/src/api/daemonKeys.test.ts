@@ -12,6 +12,7 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  HealthReport,
   InboxEntry,
   Interpretation,
   NodeView,
@@ -26,6 +27,7 @@ import type {
   RoundTarget,
   RoundTask,
   SearchHit,
+  ShownLink,
   SnapshotDiff,
   SnapshotNode,
   SnapshotPlace,
@@ -43,6 +45,7 @@ import type {
   TaskProposal,
   TaskRun,
   TaskTarget,
+  UnappliedAmendment,
 } from "./types";
 
 // AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-07 of
@@ -57,8 +60,9 @@ import type {
 // ui-round's six (T-04 of docs/features/ui-round.md: the sheet, an item, a target, a task, the
 // answers document, an entry) and kind-interpretation's one (AC-U1, AC-T4 of
 // docs/features/kind-interpretation.md: the review document's `interpretation`, the
-// `Interpretation` set). While that file is absent the comparison is skipped, saying so; once it
-// exists it names all forty-one.
+// `Interpretation` set), and health-left's three (AC-U2, AC-T2 of docs/features/health-left.md: the
+// health document, an amendment, and the link `spec show --links` already sent). While that file is
+// absent the comparison is skipped, saying so; once it exists it names all forty-four.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -314,6 +318,21 @@ const KEYS = {
     replaced: true,
     reason: true,
   } satisfies Record<keyof RoundAnswerEntry, true>,
+  // docs/features/health-left.md "Data": the document, an amendment; a link as
+  // docs/canon/spec-cli-graph.md "spec show --links" lists one.
+  HealthReport: { documents: true, amendments: true, notes: true } satisfies Record<keyof HealthReport, true>,
+  UnappliedAmendment: { path: true, id: true, title: true, class: true, status: true, links: true } satisfies Record<keyof UnappliedAmendment, true>,
+  ShownLink: {
+    type: true,
+    origin: true,
+    at: true,
+    name: true,
+    written: true,
+    path: true,
+    line: true,
+    state: true,
+    reason: true,
+  } satisfies Record<keyof ShownLink, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -370,6 +389,9 @@ const CITED: Record<Named, string> = {
   RoundTask: "id, status, title",
   RoundAnswersOutcome: "project, answers, notes",
   RoundAnswerEntry: "id, outcome, stage, staged_at, replaced, reason",
+  HealthReport: "documents, amendments, notes",
+  UnappliedAmendment: "path, id, title, class, status, links",
+  ShownLink: "type, origin, at, name, written, path, line, state, reason",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -410,11 +432,17 @@ const UI_ROUND: readonly Named[] = ["RoundSheet", "RoundItem", "RoundTarget", "R
 /** kind-interpretation's one: an interpretation's decision and texts (docs/features/kind-interpretation.md "Data", AC-T4). */
 const KIND_INTERPRETATION: readonly Named[] = ["Interpretation"];
 
+/** health-left's three: the health document, an amendment, a shown link (docs/features/health-left.md "Data", AC-T2). */
+const HEALTH_LEFT: readonly Named[] = ["HealthReport", "UnappliedAmendment", "ShownLink"];
+
 /** The thirty-four types the fixture named before ui-round. */
 const BEFORE_ROUND: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_TASKS, ...DECISION_STAGING];
 
+/** The forty-one types the fixture named before health-left. */
+const BEFORE_HEALTH_LEFT: readonly Named[] = [...BEFORE_ROUND, ...UI_ROUND, ...KIND_INTERPRETATION];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_ROUND, ...UI_ROUND, ...KIND_INTERPRETATION];
+const ALL: readonly Named[] = [...BEFORE_HEALTH_LEFT, ...HEALTH_LEFT];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -471,8 +499,26 @@ describe("the daemon's document types (AC-09)", () => {
     expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
-    expect(ALL).toHaveLength(41);
-    expect(new Set(ALL).size).toBe(41);
+    expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
+    expect(ALL).toHaveLength(44);
+    expect(new Set(ALL).size).toBe(44);
+  });
+
+  it("counts health-left's three: 3 document keys, 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
+    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([3, 6, 9]);
+    expect(served("UnappliedAmendment")).toEqual(["path", "id", "title", "class", "status", "links"]);
+  });
+
+  it.each(["HealthReport", "UnappliedAmendment"])('%s cites `docs/features/health-left.md` "Data" (AC-U2 of health-left)', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/health-left.md` "Data"');
+  });
+
+  it('ShownLink cites `docs/canon/spec-cli-graph.md` "spec show --links"', () => {
+    const at = source.indexOf("export interface ShownLink ");
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/spec-cli-graph.md` "spec show --links"');
   });
 
   it("counts ui-round's six: 5 sheet keys, 19 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round)", () => {
@@ -568,12 +614,17 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the forty-one types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one", () => {
+  it("names exactly the forty-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three", () => {
     expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
   });
 
   it.each(NAMES)("%s: the daemon's keys are the type's", (name) => {
     expect([...(sets[name] ?? [])].sort()).toEqual(served(name).sort());
+  });
+
+  it("names health-left's keys in the document's order: the health document's three, an amendment's six (AC-T2)", () => {
+    expect(sets.HealthReport).toEqual(["documents", "amendments", "notes"]);
+    expect(sets.UnappliedAmendment).toEqual(["path", "id", "title", "class", "status", "links"]);
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

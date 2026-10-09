@@ -271,6 +271,44 @@ describe("source policy", () => {
     }
   });
 
+  it("compares no kind, class, status, state or link type in Health: the amendments are shown raw, never branched on (AC-U6 of health-left)", () => {
+    const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter((path) => !outside(path))).toContain("/src/health/AmendmentsPart.tsx");
+    const field = "\\.(kind|class|status|state|type)\\b";
+    const equality = "([!=]==?)(?!=)";
+    const absent = "(null|undefined)\\b";
+    const compared = new RegExp(
+      [
+        `${field}\\s*${equality}(?!\\s*${absent})`,
+        `(?<!${absent}\\s*)${equality}\\s*[\\w.?]*${field}`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `${field}\\s*(&&|\\|\\|)`,
+        `\\[[^\\]]*${field}\\s*\\]`,
+        `\\.(includes|has|indexOf|startsWith|endsWith|test|filter|find|some|every)\\([^)]*${field}`,
+      ].join("|"),
+    );
+    expect(offending(compared, outside)).toEqual([]);
+    // The detector itself: the slice's mutation and its kin are caught; showing a value or a presence check is not.
+    for (const line of [
+      'const amends = link.type === "amends";',
+      'amendment.links.filter((link) => link.state === "resolved")',
+      '{amendment.class !== "decision" && <p />}',
+      "const tone = TONES[amendment.status];",
+      'if (amendment.kind === "amendment") {',
+    ]) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of [
+      '<span className="kind-tag">{link.type}</span>',
+      "<Badge name=\"State\" look={linkStateLook(link.state)} />",
+      "{amendment.status !== null && <span>{amendment.status}</span>}",
+      "<dd className=\"mono\">{amendment.class}</dd>",
+    ]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
   it("holds no raw Cyrillic letter: non-Latin test text is escaped (ADR-0024)", () => {
     const cyrillic = new RegExp(`[${String.fromCodePoint(0x400)}-${String.fromCodePoint(0x4ff)}]`);
     expect(offending(cyrillic)).toEqual([]);
