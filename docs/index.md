@@ -60,6 +60,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/code-refs.md](features/code-refs.md) code-refs: markers bound to code, spec refs · crates/specengine-code, crates/specengine-core, crates/specengine-cli, crates/specengine-eval, fixtures · draft
+- [docs/features/norm-hash.md](features/norm-hash.md) norm-hash: a node's meaning hash and revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/ui-embed.md](features/ui-embed.md) ui-embed: the web UI inside the daemon · crates/specengine-http, crates/specengine-eval, ui · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress

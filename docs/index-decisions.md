@@ -48,3 +48,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0036](decisions/ADR-0036.md) UI markdown through react-markdown and remark-gfm · ui · accepted
 - [ADR-0038](decisions/ADR-0038.md) One key per round answer · architecture · accepted
 - [ADR-0039](decisions/ADR-0039.md) The task gate needs no daemon · process · accepted
+- [ADR-0040](decisions/ADR-0040.md) A node's revision is its own; none written is 1 · storage · accepted

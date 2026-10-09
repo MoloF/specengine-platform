@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-10
 ---
 
 # SpecEngine architecture rules
@@ -20,6 +20,8 @@ The rules all code is written by. Each rule was introduced by a decision (ADR) a
 ## Spec layout in a project
 
 A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file. A node document (mechanic, feature) is one file; its rules are sections with `{#ID}`. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is defined only as a `{#ID}` section of a feature document: a file `<slug>.md` directly under `[paths] features`, slug = the file stem, `[a-z][a-z0-9-]*`. It is unique within that file, has no record file, and is cited `<slug>/ID` from other files, bare inside its own. ADR-0026.
+
+A node's revision: a document's front-matter `rev:`, a section's own `rev=N` in its `{#ID ...}` heading (never its document's), 1 to 999 999 999; none written = 1; unreadable (`0`, given twice, not 1-9 digits, failed front-matter) = unknown, never 1, reported as `bad-rev` or the front-matter finding. Neither a revision nor a heading line enters a node's `norm_hash`. ADR-0040.
 
 Granularity: a record file gives atomic diffs, conflict-free merges and cheap agent writes; a mechanic or feature reads best whole, and its sections are hashed one by one, so editing a neighbour gives no false drift. Directories come from `specengine.toml` `[paths]`, so a consumer's existing `docs/` stays intact; the defaults (`crates/specengine-core/README.md` "`[paths]`"):
 

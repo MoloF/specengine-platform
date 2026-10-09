@@ -38,7 +38,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 3. Code and drift — ~2-3 weeks
 
-- Slices in order: `code-refs` (draft), `norm-hash`, `spec-lock`, `spec-verify`, `hash-levels`, `symbol-index`, `impact-bundle`, `verify-tests`, `health-code`, `bevy-dump`, `layer-c`, `machine-bindings`.
+- Slices in order: `code-refs` (draft), `norm-hash` (draft, ADR-0040), `spec-lock`, `spec-verify`, `hash-levels`, `symbol-index`, `impact-bundle`, `verify-tests`, `health-code`, `bevy-dump`, `layer-c`, `machine-bindings`.
 - Symbol index (layers A tree-sitter, B the Bevy `schedule_data` dump, C `ra_ap_ide`, ADR-0020; generic instances need B or C, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`.
 - Layer C: items under attribute proc macros lose monikers with the proc-macro server on; map them through the expansion (`crates/specengine-ra/README.md`).
 - Markers `@implements/@verifies/@configures/@assumes` (revision `@N`), `spec.lock` (`file_blob`), drift cascade (blob OID -> normalized text -> AST), `spec verify [--tests] [--changed]` (Fix/Check/Pre-existing, exits 0/1/2), `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
