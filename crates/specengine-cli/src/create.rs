@@ -9,8 +9,9 @@
 //!   (live or archive, as the root's `[[generators]]` entry with `index =
 //!   true` names them), no symlink or non-directory on its way, nothing
 //!   there (a dangling symlink too) nor in git's index; the text not
-//!   `class: generated`. Stored with no base; `target_id` its `id:`,
-//!   canonical, else its path.
+//!   `class: generated`, nor declaring `links: {amends: [...]}` (that is
+//!   `spec propose amendment`, [`crate::amend`]). Stored with no base;
+//!   `target_id` its `id:`, canonical, else its path.
 //! - **Section form**: `TARGET` resolving as an update's (no `--base`:
 //!   `` `<target>` exists ``), `--base` its span's hash, the span's text
 //!   adding `{#ID}` sections below the target, every (ID, level) pair of
@@ -30,7 +31,10 @@
 //! - What `spec check` judges is a finding, stored, never a refusal:
 //!   nothing is blocked by a discrepancy.
 //!
-//! **Apply of a new file** ([`approve_file`]), in the recorded worktree:
+//! **Apply of a new file** ([`approve_file`]; a create's, an amendment's,
+//! which also checks the nodes it amends again at step 4, its text's own
+//! rules at step 6, and names those nodes at its consent), in the recorded
+//! worktree:
 //! its own commit completes it; another commit with its `Proposal:` trailer
 //! refuses (step 4); 2 the place; 3 the path in the walk, not generated,
 //! no file of the index;
@@ -55,16 +59,16 @@ use std::path::Path;
 
 use specengine_core::check::CheckInput;
 use specengine_core::check::resolve::feature_stem;
-use specengine_core::create::{IdSite, WrittenId, id_sites, written_id};
+use specengine_core::create::{IdSite, WrittenId, amended_refs, id_sites, written_id};
 use specengine_core::intake::{
-    AuthorInput, DECISION_KIND, author_problem, rationale_problem, with_article,
+    AMENDMENT_KIND, AuthorInput, DECISION_KIND, author_problem, rationale_problem, with_article,
 };
 use specengine_core::proposal::{
     Author, COMMIT_SUBJECT, CommitFacts, PROPOSAL_TRAILER, commit_message,
 };
 use specengine_core::record::{record_form, record_id, record_number};
 use specengine_core::{Paths, is_clean_relative, is_under};
-use specengine_model::{IdScheme, IdScope, ParsedFile, Shape};
+use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape};
 use specengine_store::{
     CreateFileError, Decision, GitEnv, IndexWriter as _, NamedBytes, NewProposal, Proposal,
     ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation, SpecIndex as _,
@@ -72,6 +76,7 @@ use specengine_store::{
     load_config, patch_hash,
 };
 
+use crate::amend::{Amended, amended_step, text_problem};
 use crate::apply::{
     ApproveRequest, Consent, Made, complete, failed, made_anyway, noted, recorded_already, verify,
 };
@@ -165,19 +170,22 @@ pub fn propose_create_brief_with_task(
 }
 
 /// What steps 2–3 make of a target and a text.
-struct Checked {
+pub(crate) struct Checked {
     /// The section form's checked span; `None` for a new file.
-    span: Option<CheckedUpdate>,
+    pub span: Option<CheckedUpdate>,
     /// Root-relative.
-    path: String,
+    pub path: String,
     /// The stored text: the new file byte for byte, or the span as spliced.
-    new_text: String,
+    pub new_text: String,
     /// The file as it would be: what is validated.
-    patched: Vec<u8>,
+    pub patched: Vec<u8>,
     /// The new ID sites, in text order, each with what it is.
-    sites: Vec<(IdSite, WrittenId)>,
+    pub sites: Vec<(IdSite, WrittenId)>,
     /// The file's feature slug (its feature-scoped IDs are `slug/ID`).
-    slug: Option<String>,
+    pub slug: Option<String>,
+    /// A new file's text parsed (the form's front-matter read from it);
+    /// `None` for the section form.
+    pub parsed: Option<ParsedFile>,
 }
 
 fn run_create(
@@ -244,6 +252,8 @@ fn run_create(
             written,
             request.base.as_deref(),
             &text,
+            CREATE,
+            "to add ID sections to it, name its span_hash with --base",
         )?
     } else {
         checked_sections(
@@ -260,6 +270,20 @@ fn run_create(
         Ok(checked) => checked,
         Err(reason) => return refuse(reason, messages),
     };
+    // A new file declaring the nodes it amends is an amendment (task spec
+    // `kind-amendment`, W29); the section form does not judge it.
+    if let Some(parsed) = &checked.parsed
+        && !amended_refs(parsed).is_empty()
+    {
+        let path = &checked.path;
+        return refuse(
+            format!(
+                "`{path}` declares `{AMENDS}`: raise it as `spec propose {AMENDMENT_KIND} \
+                 {path}`; nothing stored"
+            ),
+            messages,
+        );
+    }
 
     // 4. The new IDs.
     let scheme = &project.config.scheme;
@@ -309,15 +333,7 @@ fn run_create(
             interpretation: None,
         },
         None => {
-            // A new file is named by its `id:`, else by its path.
-            let declares = checked
-                .sites
-                .first()
-                .is_some_and(|(site, form)| site.level.is_none() && *form != WrittenId::NoId);
-            let target_id = match (declares, new_ids.first()) {
-                (true, Some(id)) => id.clone(),
-                _ => checked.path.clone(),
-            };
+            let target_id = file_target(&checked, &new_ids);
             NewProposal {
                 kind: ProposalKind::Create,
                 patch_hash: patch_hash(&target_id, "", &checked.new_text),
@@ -340,17 +356,8 @@ fn run_create(
         Err(QueueError::TaskRefused { reason, .. }) => {
             return refuse(format!("--task: {reason}"), messages);
         }
-        Err(QueueError::Reserved { id, by }) => {
-            // Step 4's refusal, its holder's state read again.
-            let reserved = context.queue.reserved().map_err(queue_cannot)?;
-            let mut reason = match reserved.iter().find(|held| held.id == id && held.by == by) {
-                Some(held) => reserved_by(held),
-                None => format!("`{id}` is reserved by `{by}`, a live create"),
-            };
-            if let Some(next) = named.next_free(&id, &corpus, &reserved, &new_ids) {
-                reason.push_str(&format!("; the next free is `{next}`"));
-            }
-            reason.push_str("; nothing stored");
+        Err(QueueError::Reserved { id, by, kind }) => {
+            let reason = reserved_refusal(&context, &named, &corpus, &new_ids, &id, &by, kind)?;
             return refuse(reason, messages);
         }
         Err(error) => return Err(queue_cannot(error)),
@@ -365,13 +372,16 @@ fn run_create(
 
 /// Steps 2–3 of the file form: `path` (a `.md` path no indexed file has),
 /// no `base`, the path free for a new file of the walk, the text not
-/// generated; `Ok(Err)`: the refusal.
-fn checked_file(
+/// generated; `Ok(Err)`: the refusal, `what` naming the writer (`a
+/// create`, `an amendment`) and `exists_tail` ending its `exists`.
+pub(crate) fn checked_file(
     project: &ProjectRoot,
     git: &WorktreeGit,
     path: &str,
     base: Option<&str>,
     text: &str,
+    what: &str,
+    exists_tail: &str,
 ) -> Result<Result<Checked, String>, CliError> {
     if base.is_some() {
         return Ok(Err(format!(
@@ -387,8 +397,8 @@ fn checked_file(
         &project.root,
         path,
         path,
-        CREATE,
-        "to add ID sections to it, name its span_hash with --base",
+        what,
+        exists_tail,
         "nothing stored",
     ) {
         return Ok(Err(reason));
@@ -409,7 +419,45 @@ fn checked_file(
         patched: text.as_bytes().to_vec(),
         sites: classified(id_sites(text, scheme), scheme),
         slug: feature_stem(&paths.features, path).map(str::to_owned),
+        parsed: Some(parsed),
     }))
+}
+
+/// A new file's `target_id`: its `id:` (its first new ID) when it declares
+/// one, else its path.
+pub(crate) fn file_target(checked: &Checked, new_ids: &[String]) -> String {
+    let declares = checked
+        .sites
+        .first()
+        .is_some_and(|(site, form)| site.level.is_none() && *form != WrittenId::NoId);
+    match (declares, new_ids.first()) {
+        (true, Some(id)) => id.clone(),
+        _ => checked.path.clone(),
+    }
+}
+
+/// Step 4's refusal of a new ID a live proposal of `kind` took meanwhile
+/// ([`QueueError::Reserved`] at the insert): its holder's state read again,
+/// and for a number the next free ID.
+pub(crate) fn reserved_refusal(
+    context: &QueueContext,
+    named: &NewIds<'_>,
+    corpus: &Corpus,
+    new_ids: &[String],
+    id: &str,
+    by: &str,
+    kind: ProposalKind,
+) -> Result<String, CliError> {
+    let reserved = context.queue.reserved().map_err(queue_cannot)?;
+    let mut reason = match reserved.iter().find(|held| held.id == id && held.by == by) {
+        Some(held) => reserved_by(held),
+        None => format!("`{id}` is reserved by `{by}`, a live {}", kind.as_str()),
+    };
+    if let Some(next) = named.next_free(id, corpus, &reserved, new_ids) {
+        reason.push_str(&format!("; the next free is `{next}`"));
+    }
+    reason.push_str("; nothing stored");
+    Ok(reason)
 }
 
 /// Step 2's path rules of a new file: clean, `.md`, in the walk, not under
@@ -486,6 +534,7 @@ fn checked_sections(
         sites,
         slug,
         span: Some(span),
+        parsed: None,
     }))
 }
 
@@ -556,7 +605,7 @@ fn classified(sites: Vec<IdSite>, scheme: &IdScheme) -> Vec<(IdSite, WrittenId)>
 }
 
 /// `text` parsed as the file `path`; `None` when the parser panics.
-fn parsed_text(path: &str, text: &str, scheme: &IdScheme) -> Option<ParsedFile> {
+pub(crate) fn parsed_text(path: &str, text: &str, scheme: &IdScheme) -> Option<ParsedFile> {
     panic::catch_unwind(AssertUnwindSafe(|| {
         specengine_core::parse(path, text.as_bytes(), scheme)
     }))
@@ -582,7 +631,7 @@ fn generated_refusal(path: &str) -> String {
 
 /// The findings the new file or span introduces in the project's check,
 /// the tree checked as is and with it; never a refusal.
-fn validated(
+pub(crate) fn validated(
     project: &ProjectRoot,
     tree: &WorkingTree,
     today: &str,
@@ -702,16 +751,16 @@ impl Corpus {
 
 /// Step 4's rules: the scheme, the `[decision_records]` prefix and the
 /// file's feature slug.
-struct NewIds<'a> {
-    scheme: &'a IdScheme,
-    decision_prefix: Option<&'a str>,
-    slug: Option<&'a str>,
+pub(crate) struct NewIds<'a> {
+    pub scheme: &'a IdScheme,
+    pub decision_prefix: Option<&'a str>,
+    pub slug: Option<&'a str>,
 }
 
 impl NewIds<'_> {
     /// The canonical new IDs of `sites`, in text order, or the first
     /// refusal (`Ok(Err)`); a look-alike exits 2.
-    fn checked(
+    pub(crate) fn checked(
         &self,
         sites: &[(IdSite, WrittenId)],
         corpus: &Corpus,
@@ -834,12 +883,16 @@ impl NewIds<'_> {
     }
 }
 
-/// `` `<id>` is reserved by `PR-…` (<status>), a live create ``: step 4's
-/// refusal of an ID a live create holds, its holder and state named.
+/// `` `<id>` is reserved by `PR-…` (<status>), a live create `` (`a live
+/// amendment`): step 4's refusal of an ID a live proposal adding nodes
+/// holds, its holder, state and kind named.
 fn reserved_by(held: &Reservation) -> String {
     format!(
-        "`{}` is reserved by `{}` ({}), a live create",
-        held.id, held.by, held.status
+        "`{}` is reserved by `{}` ({}), a live {}",
+        held.id,
+        held.by,
+        held.status,
+        held.kind.as_str()
     )
 }
 
@@ -875,7 +928,7 @@ fn split_scope(id: &str) -> (Option<&str>, &str) {
     }
 }
 
-/// A create's new file passed apply steps 2–6: what steps 7–10 act on.
+/// A new file passed apply steps 2–6: what steps 7–10 act on.
 pub(crate) struct PreparedFile {
     pub git: WorktreeGit,
     /// The branch's commit when checked.
@@ -886,11 +939,16 @@ pub(crate) struct PreparedFile {
     pub recorded: ProjectRoot,
     pub index: OpenIndex,
     pub tree: WorkingTree,
+    /// The nodes an amendment amends, as step 4 found them again, in its
+    /// text's order; none for a create.
+    pub amended: Vec<Amended>,
 }
 
-/// Apply steps 2–6 of a create's new file, writing nothing but the data
-/// directory: `spec approve`'s checks and `spec review`'s preview
-/// (`applies`).
+/// Apply steps 2–6 of a new file (a create's file form, an amendment),
+/// writing nothing but the data directory: `spec approve`'s checks and
+/// `spec review`'s preview (`applies`). An amendment's step 4 checks the
+/// nodes it amends again, its step 6 its text's own rules (task spec
+/// `kind-amendment`).
 pub(crate) fn prepare_file(
     env: &Env,
     git_env: &GitEnv,
@@ -899,6 +957,7 @@ pub(crate) fn prepare_file(
     messages: &mut Vec<Message>,
 ) -> Result<PreparedFile, StepFailure> {
     let path = proposal.target_path.as_str();
+    let writer = proposal.kind.with_article();
     let Placed { git, top, head } = place_step(git_env, proposal)?;
 
     // Step 3: the recorded root, the path.
@@ -929,7 +988,7 @@ pub(crate) fn prepare_file(
         &recorded.root,
         path,
         &top_path,
-        CREATE,
+        &writer,
         "nothing changed",
         "nothing changed",
     )
@@ -951,9 +1010,17 @@ pub(crate) fn prepare_file(
             ));
         }
     }
+    // An amendment's nodes, checked again: live, canonical, held.
+    let parsed = parsed_text(path, &proposal.new_text, scheme);
+    let amended = match &parsed {
+        Some(parsed) if proposal.kind.amends() => {
+            amended_step(&recorded, &input, proposal, parsed)?
+        }
+        _ => Vec::new(),
+    };
 
     // Steps 5–6: the text, its new IDs as proposed (no live create's).
-    let Some(parsed) = parsed_text(path, &proposal.new_text, scheme) else {
+    let Some(parsed) = parsed else {
         return Err(StepFailure::refused(
             5,
             format!("the spec parser failed on the text of `{path}`"),
@@ -963,6 +1030,14 @@ pub(crate) fn prepare_file(
         return Err(StepFailure::refused(
             5,
             generated_refusal(path).replace("nothing stored", "nothing changed"),
+        ));
+    }
+    if proposal.kind.amends()
+        && let Some(problem) = text_problem(path, &parsed)
+    {
+        return Err(StepFailure::refused(
+            6,
+            format!("{problem}; nothing changed"),
         ));
     }
     let named = NewIds {
@@ -1012,6 +1087,7 @@ pub(crate) fn prepare_file(
         recorded,
         index,
         tree,
+        amended,
     })
 }
 
@@ -1076,7 +1152,7 @@ fn left_behind(
     let id = &proposal.id;
     Some(exists(
         path,
-        CREATE,
+        &proposal.kind.with_article(),
         &format!(
             "it holds `{id}`'s text as an interrupted apply left it, with an intent-to-add entry \
              in git's index; two ways out in {}: commit it by hand (`git commit --only --trailer \
@@ -1088,9 +1164,9 @@ fn left_behind(
     ))
 }
 
-/// `spec approve` of a create's new file, `open` or `approved`
-/// (`run_approve` has refused an applied or rejected one and a decision
-/// flag): see the module documentation.
+/// `spec approve` of a new file (a create's, an amendment's), `open` or
+/// `approved` (`run_approve` has refused an applied or rejected one and a
+/// decision flag): see the module documentation.
 pub(crate) fn approve_file(
     env: &Env,
     request: &ApproveRequest,
@@ -1175,6 +1251,7 @@ pub(crate) fn approve_file(
         recorded,
         mut index,
         tree,
+        amended,
     } = prepared;
     let place = &proposal.place;
     let decided_by = match git.committer_ident() {
@@ -1199,9 +1276,14 @@ pub(crate) fn approve_file(
         }
     };
 
-    // Step 1: the owner's consent.
+    // Step 1: the owner's consent; an amendment names each node it amends
+    // and its holder first (task spec `kind-amendment`), none written.
+    let amends: String = amended
+        .iter()
+        .map(|node| format!("{AMENDS} {} ({})\n", node.id, node.path))
+        .collect();
     let question = format!(
-        "{}apply {id} to {top_path} on {} in {} (new file{})? [y/N]",
+        "{amends}{}apply {id} to {top_path} on {} in {} (new file{})? [y/N]",
         staging.preface(None),
         place.branch,
         place.worktree,
@@ -1267,6 +1349,7 @@ pub(crate) fn approve_file(
 
     // Step 8: the place and the path as checked, then the new file.
     let path = proposal.target_path.as_str();
+    let writer = proposal.kind.with_article();
     if let Err(failure) = place_unchanged(&git, &head, place) {
         return after(context, failure, messages);
     }
@@ -1275,7 +1358,7 @@ pub(crate) fn approve_file(
         &recorded.root,
         path,
         &top_path,
-        CREATE,
+        &writer,
         "nothing written",
         "nothing written",
     ) {
@@ -1286,7 +1369,7 @@ pub(crate) fn approve_file(
         Err(CreateFileError::Exists) => {
             return after(
                 context,
-                StepFailure::refused(8, exists(path, CREATE, "nothing written")),
+                StepFailure::refused(8, exists(path, &writer, "nothing written")),
                 messages,
             );
         }

@@ -88,7 +88,7 @@ This repository, root config, no baseline: `enforce` → `clean`, 0 debt (`check
 
 ## Not checked yet
 
-- Queue state (`@assumes`, an unapplied amendment) → Phase 2. Code (marker → node, `impl_status` bound, glossary term in code, `spec.lock` drift) and 08 AC-13 → Phase 3.
+- Queue state (`@assumes`) → Phase 2; an unapplied amendment is no finding: a Health row (`proposal-amendment.md` "Unapplied"). Code (marker → node, `impl_status` bound, glossary term in code, `spec.lock` drift) and 08 AC-13 → Phase 3.
 
 ## Open owner questions
 

@@ -87,7 +87,7 @@ pub use resolve::{Resolution, Resolver};
 pub use spec_graph::{
     CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
 };
-pub use text::{date_from_unix_days, is_calendar_date, is_date_shaped};
+pub use text::{date_from_unix_days, front_matter_failure, is_calendar_date, is_date_shaped};
 pub use working_set::worst_w;
 
 /// The codes of the findings the check itself emits (parser codes come

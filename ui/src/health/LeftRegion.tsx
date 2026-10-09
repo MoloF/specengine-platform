@@ -20,14 +20,17 @@ export const LEFT_ROWS = 5;
 
 /**
  * Rows 3 to 6 of "what is left" (06 §7), which nothing measures yet: each says so and names its
- * source; never a number (docs/features/ui-health.md "Description and interactions").
+ * source; never a number (docs/features/ui-health.md "Description and interactions"). Unapplied
+ * amendments wait for their producer, a read of the live documents' links over the corpus (slice
+ * `health-left`), not for the kind: the queue's amendments are proposals, already in row 1
+ * (docs/features/kind-amendment.md "Why", the cut).
  */
 const UNMEASURED: readonly (readonly [key: string, what: ReactNode, source: ReactNode])[] = [
   [
     "amendments",
     "Unapplied amendments",
     <>
-      the <code>amendment</code> kind of <code>proposal-kinds</code>
+      a read of live <code>amends</code> links (slice <code>health-left</code>)
     </>,
   ],
   [

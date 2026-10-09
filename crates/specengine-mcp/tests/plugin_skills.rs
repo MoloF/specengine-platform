@@ -1140,7 +1140,7 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.5.0");
+    assert_eq!(manifest["version"], "0.6.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1220,7 +1220,7 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.5.0");
+    assert_eq!(manifest["version"], "0.6.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1276,4 +1276,62 @@ fn kind_decision_iteration2_ask_owner_tells_an_accepted_decision_from_a_decision
         !skill.contains("rejected question or discrepancy"),
         "{skill}"
     );
+}
+
+/// docs/features/kind-amendment.md AC-R12, W36 ("Plugin"):
+/// `propose-spec-change` teaches the kind in one bullet of "A new section
+/// or file": `"kind": "amendment"`, `"base": null`, a new spec or decision
+/// file whose front-matter declares `links: {amends: [ID]}`, approval
+/// adding only that file (the node unwritten), applied once the document
+/// is shipped, abandoned or superseded; its body within 4 096 bytes (the
+/// descriptions' 1 200: `plugin_files.rs` AC-05); the plugin 0.6.0, a
+/// MINOR step (`plugin_files.rs` pins the 0.6.0 hash: a text changed with
+/// the version kept turns that test red). The names are the server's: the
+/// kind one of `propose_change`'s `kind` enum, `base` its property. M: the
+/// bullet dropped; the text changed, not the version.
+#[test]
+fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
+    let skills = committed();
+    let skill = &skills["propose-spec-change"];
+    let section = skill
+        .split("\n## A new section or file\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n## ").next())
+        .expect("the section \"A new section or file\"");
+    let bullet = bullets(section)
+        .into_iter()
+        .find(|bullet| bullet.contains("`\"kind\": \"amendment\"`"))
+        .unwrap_or_else(|| panic!("no amendment bullet: {section}"));
+    for phrase in [
+        "a new spec or decision file",
+        "`\"base\": null`",
+        "`links: {amends: [ID]}`",
+        "Approval adds only your file, the node unwritten",
+        "shipped, abandoned or superseded",
+    ] {
+        assert!(bullet.contains(phrase), "{phrase:?} in {bullet:?}");
+    }
+    assert_eq!(skill.matches("\"kind\": \"amendment\"").count(), 1);
+    let body = skill
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(plugin_dir().join("specengine/.claude-plugin/plugin.json"))
+            .expect("plugin.json"),
+    )
+    .expect("JSON");
+    assert_eq!(manifest["version"], "0.6.0", "W36: 0.5.0 -> 0.6.0");
+    let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
+    let list = session.tools();
+    let schema = &tool(&list, "propose_change")["inputSchema"];
+    assert!(
+        schema["properties"]["kind"]["enum"]
+            .as_array()
+            .is_some_and(|kinds| kinds.contains(&Value::from("amendment"))),
+        "{schema}"
+    );
+    assert!(schema["properties"].get("base").is_some(), "{schema}");
+    drop(session.finish());
 }

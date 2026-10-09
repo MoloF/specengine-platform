@@ -8,7 +8,7 @@ reviewed: 2026-10-09
 
 # Proposal kind: decision
 
-Phase 2 (2026-10-09, 06 s5.4): a decision taken during work, by an agent or the owner, raised for the owner to confirm on a terminal and recorded through `[decision_records]` as a question's answer is. The decision is its working answer; its canon diff an optional `proposed_patch`, a linked `update` the owner approves on its own, a second commit. Kind `amendment`: a later slice. Code: core `intake.rs` (`DECISION_KIND`, `DecisionInput`, `decision_problem`); store `ProposalKind::Decision`, `intake_shape()`, `IntakeShape` (`null_columns`, `problem`); CLI `intake.rs` (`DecisionRequest`, `propose_decision[_with_task]`, `read_decision_input`), `decide.rs` (`first_checks`), `create.rs` (`deciding_kinds`), `package.rs`; MCP `intake.rs` (`report_decision`).
+Phase 2 (2026-10-09, 06 s5.4): a decision taken during work, by an agent or the owner, raised for the owner to confirm on a terminal and recorded through `[decision_records]` as a question's answer is. The decision is its working answer; its canon diff an optional `proposed_patch`, a linked `update` the owner approves on its own, a second commit. Kind `amendment`: `proposal-amendment.md`. Code: core `intake.rs` (`DECISION_KIND`, `DecisionInput`, `decision_problem`); store `ProposalKind::Decision`, `intake_shape()`, `IntakeShape` (`null_columns`, `problem`); CLI `intake.rs` (`DecisionRequest`, `propose_decision[_with_task]`, `read_decision_input`), `decide.rs` (`first_checks`), `create.rs` (`deciding_kinds`), `package.rs`; MCP `intake.rs` (`report_decision`).
 
 ## Naming
 

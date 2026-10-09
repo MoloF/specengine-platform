@@ -222,7 +222,8 @@ fn row<'a>(state: &'a StoredQueue, id: &str) -> &'a [Option<String>] {
 #[test]
 fn ac_r1_a_decision_decides_and_never_applies() {
     assert_eq!(DECISION_KIND, "decision");
-    assert_eq!(ProposalKind::ALL.len(), 6);
+    // Seven since docs/features/kind-amendment.md appends `amendment`.
+    assert_eq!(ProposalKind::ALL.len(), 7);
     assert_eq!(ProposalKind::ALL[5], ProposalKind::Decision);
     let kind = ProposalKind::Decision;
     assert_eq!(kind.as_str(), DECISION_KIND);

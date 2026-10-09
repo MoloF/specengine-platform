@@ -12,7 +12,7 @@ pub const LINK_TYPES: [&str; 12] = [
     "constrains",
     "supersedes",
     "revises",
-    "amends",
+    AMENDS,
     "answers",
     "working_answer",
     "uses_term",
@@ -20,6 +20,11 @@ pub const LINK_TYPES: [&str; 12] = [
     "verifies",
     "adopts",
 ];
+
+/// The link of a document that amends a live node until it is absorbed
+/// (06 §7; task spec `kind-amendment`): a member of [`LINK_TYPES`], the
+/// one spelling every crate names it by.
+pub const AMENDS: &str = "amends";
 
 /// The weak link of an inline citation, of a local Markdown file link and
 /// of `refs:` / `adrs:`.

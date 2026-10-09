@@ -35,8 +35,8 @@ use common::*;
 use git::Sandbox;
 use serde_json::{Value, json};
 use specengine_cli::{
-    CREATE_KIND, GitEnv, Globals, INTERPRETATION_KIND, InboxRequest, InterpretRequest, Outcome,
-    ProposedText, ReviewRequest, ShowRequest, UPDATE_KIND, inbox, show,
+    AMENDMENT_KIND, CREATE_KIND, GitEnv, Globals, INTERPRETATION_KIND, InboxRequest,
+    InterpretRequest, Outcome, ProposedText, ReviewRequest, ShowRequest, UPDATE_KIND, inbox, show,
 };
 
 const HOW: &str = "Rest is any speed under 40 % of walking.";
@@ -197,7 +197,12 @@ fn ac_r11_the_kind_enum_and_the_three_fields_are_listed() {
     let schema = &change["inputSchema"];
     assert_eq!(
         schema["properties"]["kind"]["enum"],
-        json!([UPDATE_KIND, CREATE_KIND, INTERPRETATION_KIND])
+        json!([
+            UPDATE_KIND,
+            CREATE_KIND,
+            INTERPRETATION_KIND,
+            AMENDMENT_KIND
+        ])
     );
     for field in ["decision", "how", "why"] {
         let property = &schema["properties"][field];

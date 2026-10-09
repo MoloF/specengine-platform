@@ -239,8 +239,9 @@ fn ac14_the_task_tools_and_their_schemas() {
     assert_eq!(TASKS_LINE.len(), 138);
     assert!(TASKS_LINE.len() < 140);
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(TASKS_LINE).count(), 1);
-    // 1 890 since docs/features/kind-decision.md names `report_decision`.
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1890);
+    // 1 890 since docs/features/kind-decision.md names `report_decision`;
+    // 1 885 since docs/features/kind-amendment.md (+10 `amendment`, -15).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1885);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();

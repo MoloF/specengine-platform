@@ -350,14 +350,17 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     assert_eq!(tasks_line.len(), 138);
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(tasks_line).count(), 1);
     let before = specengine_mcp::INSTRUCTIONS.replacen(tasks_line, "", 1);
-    assert_eq!(before.len(), 1752);
+    // 1 747 since docs/features/kind-amendment.md names `amendment` in the
+    // `propose_change` line (+10) and drops get_tree's ": the node tree"
+    // (-15).
+    assert_eq!(before.len(), 1747);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "264e2212e5480b64db3435a909dbe2dc8b9fc5e6c68a3f92b37e22325b8d576c"
+        "15142f63116f4e78aa5164f82ae48c7ac42be626293a507189f4d54902dc6568"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1890);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1885);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "f29b24e7ed1705e9671d24c0bea9743f97225b9c74105a7777102c64f4c15d9a"
+        "2e89ff1208d7e6227c2e547004a5daf0dd474f9f62601a5d9466b3f463766bf0"
     );
 }

@@ -18,13 +18,13 @@ import { packageOf, type MockTasks } from "./tasks";
 // The question round over a mock project (`docs/features/ui-round.md` "Data", `docs/canon/round.md`
 // "Selection", "Order", "JSON"): the sheet as `spec round new --json` gives it, and the answers'
 // POST as the daemon stages them, each answer refused alone in words like the CLI's. The mock's
-// own vocabulary: the three deciding kinds and the three change kinds are named here, in src/mocks/ only.
+// own vocabulary: the three deciding kinds and the four change kinds are named here, in src/mocks/ only.
 
 /** The kinds a round lists (their kind `decides()`); a decision as a question (`docs/features/kind-decision.md`). */
 const DECIDING = new Set(["question", "discrepancy", "decision"]);
 
-/** The change proposals a round notes, never lists. */
-const CHANGES = new Set(["update", "create", "interpretation"]);
+/** The change proposals a round notes, never lists; an amendment among them (`docs/features/kind-amendment.md` "Rules and edge cases", Round). */
+const CHANGES = new Set(["update", "create", "interpretation", "amendment"]);
 
 /** A task state that no longer waits on anything. */
 const SETTLED_TASK = new Set(["done", "cancelled"]);

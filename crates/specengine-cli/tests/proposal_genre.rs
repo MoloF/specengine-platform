@@ -708,3 +708,169 @@ fn kind_decision_ac_t2_no_kind_compared_with_a_question() {
         assert!(kind_comparisons(line).is_empty(), "{line}");
     }
 }
+
+/// docs/features/kind-amendment.md AC-T2 ("Genre"): no `.rs` file of the
+/// store, the CLI or the MCP server holds the literal `"amendment"` or
+/// `"amends"`: core's `AMENDMENT_KIND` and the model's `AMENDS` are their
+/// only spellings, each written once (core `intake.rs`, model `link.rs`),
+/// and no other core or model source writes them. The scan sees a
+/// literal.
+#[test]
+fn kind_amendment_ac_t2_no_amendment_or_amends_literal_outside_core() {
+    let kind = specengine_core::intake::AMENDMENT_KIND;
+    let link = specengine_model::AMENDS;
+    assert_eq!((kind, link), ("amendment", "amends"));
+    let mut found = Vec::new();
+    let mut scanned = 0;
+    for dir in OUTSIDE_CORE {
+        for (source, text) in rust_sources(&repository_root().join(dir)) {
+            scanned += 1;
+            for (number, line) in text.lines().enumerate() {
+                let written = literals(line);
+                if written.contains(&kind) || written.contains(&link) {
+                    found.push(format!("{source}:{}: {}", number + 1, line.trim()));
+                }
+            }
+        }
+    }
+    assert!(scanned >= 30, "{scanned} sources scanned");
+    assert!(
+        found.is_empty(),
+        "`{kind}` or `{link}` written as a literal outside core and model:\n{}",
+        found.join("\n")
+    );
+    // Core and the model spell each once, as its constant.
+    let mut spelled = Vec::new();
+    for dir in ["crates/specengine-core/src", "crates/specengine-model/src"] {
+        for (source, text) in rust_sources(&repository_root().join(dir)) {
+            for (number, line) in text.lines().enumerate() {
+                for literal in literals(line) {
+                    if literal == kind || literal == link {
+                        let short = source
+                            .rsplit_once("/crates/")
+                            .map_or(source.as_str(), |(_, tail)| tail)
+                            .to_owned();
+                        spelled.push((short, number + 1, literal.to_owned()));
+                    }
+                }
+            }
+        }
+    }
+    let names: Vec<(&str, &str)> = spelled
+        .iter()
+        .map(|(source, _, literal)| (source.as_str(), literal.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("specengine-core/src/intake.rs", "amendment"),
+            ("specengine-model/src/link.rs", "amends"),
+        ],
+        "{spelled:?}"
+    );
+    let sample = "    kind: \"amendment\",\n    // \"amends\"\n";
+    assert_eq!(literals(sample.lines().next().unwrap()), [kind]);
+    assert!(literals(sample.lines().nth(1).unwrap()).is_empty());
+}
+
+/// The comparisons docs/features/kind-amendment.md AC-T2 refuses in `line`
+/// (comments aside): `ProposalKind::<variant>` of `variants`, by any path,
+/// with `==` or `!=` on either side.
+fn variant_comparisons(line: &str, variants: &[&str]) -> Vec<String> {
+    let code = line.split("//").next().unwrap_or_default();
+    let mut found = Vec::new();
+    for kind in variants {
+        let name = format!("ProposalKind::{kind}");
+        let mut from = 0;
+        while let Some(at) = code[from..].find(&name) {
+            let start = from + at;
+            let end = start + name.len();
+            from = end;
+            if code[end..]
+                .chars()
+                .next()
+                .is_some_and(|next| next.is_alphanumeric() || next == '_')
+            {
+                continue;
+            }
+            let before = code[..start]
+                .trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == ':')
+                .trim_end();
+            let after = code[end..].trim_start();
+            if ["==", "!="]
+                .iter()
+                .any(|op| before.ends_with(op) || after.starts_with(op))
+            {
+                found.push(format!("{name}: {}", code.trim()));
+            }
+        }
+    }
+    found
+}
+
+/// docs/features/kind-amendment.md AC-T2 ("Kind sites", W34): no `.rs`
+/// file of the store, the CLI or the MCP server compares a kind with
+/// `ProposalKind::Create` or `ProposalKind::Amendment` by `==` or `!=`
+/// (each site keyed on `adds_nodes()` or `new_file()`); outside the enum's
+/// `impl` (`Self::Amendment`), `ProposalKind::Amendment` is written only in
+/// `stage.rs`'s exhaustive match and the CLI constructor (`amend.rs`). The
+/// scan sees each form. M: `|| proposal.kind == ProposalKind::Amendment`
+/// in `preflight.rs`.
+#[test]
+fn kind_amendment_ac_t2_no_kind_compared_with_create_or_amendment() {
+    let variants = ["Create", "Amendment"];
+    let mut found = Vec::new();
+    let mut naming = BTreeSet::new();
+    let mut scanned = 0;
+    for dir in OUTSIDE_CORE {
+        for (source, text) in rust_sources(&repository_root().join(dir)) {
+            scanned += 1;
+            for (number, line) in text.lines().enumerate() {
+                for pattern in variant_comparisons(line, &variants) {
+                    found.push(format!("{source}:{}: {pattern}", number + 1));
+                }
+                let code = line.split("//").next().unwrap_or_default();
+                if code.contains("ProposalKind::Amendment") {
+                    let short = source
+                        .rsplit_once("/crates/")
+                        .map_or(source.as_str(), |(_, tail)| tail)
+                        .to_owned();
+                    naming.insert(short);
+                }
+            }
+        }
+    }
+    assert!(scanned >= 30, "{scanned} sources scanned");
+    assert!(
+        found.is_empty(),
+        "a kind compared with `Create` or `Amendment` by name, not by \
+         `adds_nodes()` or `new_file()`:\n{}",
+        found.join("\n")
+    );
+    assert_eq!(
+        naming.into_iter().collect::<Vec<_>>(),
+        [
+            "specengine-cli/src/amend.rs",
+            "specengine-store/src/queue/stage.rs"
+        ],
+        "`ProposalKind::Amendment` outside the enum's impl"
+    );
+    for line in [
+        "    let create = proposal.kind == ProposalKind::Create;",
+        "    if kind != ProposalKind::Amendment {",
+        "        || proposal.kind == ProposalKind::Amendment",
+        "    if ProposalKind::Create==kind {",
+        "    let a = kind == specengine_store::ProposalKind::Amendment;",
+    ] {
+        assert!(!variant_comparisons(line, &variants).is_empty(), "{line}");
+    }
+    for line in [
+        "    // kind == ProposalKind::Create",
+        "        | ProposalKind::Amendment => None,",
+        "        kind: ProposalKind::Amendment,",
+        "    let x = kind == ProposalKind::CreateLike;",
+        "    let d = kind == ProposalKind::Decision;",
+    ] {
+        assert!(variant_comparisons(line, &variants).is_empty(), "{line}");
+    }
+}

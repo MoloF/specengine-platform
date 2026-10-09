@@ -117,8 +117,9 @@ use serde_json::{Value, json};
 use specengine_core::check::Finding;
 pub use specengine_core::intake::Interpretation;
 use specengine_core::intake::{
-    CREATE_KIND, DECISION_KIND, DISCREPANCY_KIND, Evidence, GapType, INTERPRETATION_KIND,
-    IntakeOption, IntakeSeverity, QUESTION_KIND, UPDATE_KIND, normalized_summary, with_article,
+    AMENDMENT_KIND, CREATE_KIND, DECISION_KIND, DISCREPANCY_KIND, Evidence, GapType,
+    INTERPRETATION_KIND, IntakeOption, IntakeSeverity, QUESTION_KIND, UPDATE_KIND,
+    normalized_summary, with_article,
 };
 use specengine_core::is_clean_relative;
 use specengine_core::proposal::{
@@ -261,10 +262,11 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
-/// What a proposal does: `update`, `create` and `interpretation` apply (a
-/// file written and committed); the intake kinds `question`, `discrepancy`
-/// and `decision` decide (an approval writes a decision record), or are
-/// settled by a rejection whose reason is the answer.
+/// What a proposal does: `update`, `create`, `interpretation` and
+/// `amendment` apply (a file written and committed); the intake kinds
+/// `question`, `discrepancy` and `decision` decide (an approval writes a
+/// decision record), or are settled by a rejection whose reason is the
+/// answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
@@ -284,16 +286,21 @@ pub enum ProposalKind {
     /// working answer; its canon diff a linked update (task spec
     /// `kind-decision`).
     Decision,
+    /// Add a new spec or decision document declaring `links: {amends:
+    /// [ID, ...]}` to live nodes, never writing them: applied as a create's
+    /// new file (task spec `kind-amendment`).
+    Amendment,
 }
 
 impl ProposalKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Update,
         Self::Question,
         Self::Discrepancy,
         Self::Create,
         Self::Interpretation,
         Self::Decision,
+        Self::Amendment,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -304,6 +311,7 @@ impl ProposalKind {
             Self::Create => CREATE_KIND,
             Self::Interpretation => INTERPRETATION_KIND,
             Self::Decision => DECISION_KIND,
+            Self::Amendment => AMENDMENT_KIND,
         }
     }
 
@@ -318,10 +326,46 @@ impl ProposalKind {
     }
 
     /// An `update` and an `interpretation` replace a node's span; a
-    /// `create` writes a new file or a span with new sections: each is
-    /// applied as one commit.
+    /// `create` writes a new file or a span with new sections; an
+    /// `amendment` writes its new file: each is applied as one commit.
     pub const fn applies(self) -> bool {
-        matches!(self, Self::Update | Self::Create | Self::Interpretation)
+        matches!(
+            self,
+            Self::Update | Self::Create | Self::Interpretation | Self::Amendment
+        )
+    }
+
+    /// A kind that adds nodes, every kind listed (so a new one must be
+    /// judged here): a `create` (a new file, or new sections in a span) and
+    /// an `amendment` (a new file); its new IDs are reserved while it is
+    /// live, its `target_ids` its target and new IDs. A new file is one of
+    /// these without a base ([`Proposal::new_file`]).
+    pub const fn adds_nodes(self) -> bool {
+        match self {
+            Self::Create | Self::Amendment => true,
+            Self::Update
+            | Self::Question
+            | Self::Discrepancy
+            | Self::Interpretation
+            | Self::Decision => false,
+        }
+    }
+
+    /// A kind whose text declares the live nodes it amends (`links:
+    /// {amends: [...]}`, read from its stored text, never a column) and
+    /// whose only form is a new file, every kind listed: an `amendment`.
+    /// Its row holds no base; its apply checks the amended nodes again and
+    /// writes none of them.
+    pub const fn amends(self) -> bool {
+        match self {
+            Self::Amendment => true,
+            Self::Update
+            | Self::Question
+            | Self::Discrepancy
+            | Self::Create
+            | Self::Interpretation
+            | Self::Decision => false,
+        }
     }
 
     /// A question, a discrepancy or a decision: its approval writes a
@@ -338,7 +382,7 @@ impl ProposalKind {
         match self {
             Self::Question | Self::Decision => Some(IntakeShape::Question),
             Self::Discrepancy => Some(IntakeShape::Discrepancy),
-            Self::Update | Self::Create | Self::Interpretation => None,
+            Self::Update | Self::Create | Self::Interpretation | Self::Amendment => None,
         }
     }
 }
@@ -492,20 +536,22 @@ impl From<&Finding> for ProposalFinding {
 /// times.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewProposal {
-    /// [`ProposalKind::Update`], [`ProposalKind::Create`] or
-    /// [`ProposalKind::Interpretation`].
+    /// A kind that applies: [`ProposalKind::Update`],
+    /// [`ProposalKind::Create`], [`ProposalKind::Interpretation`] or
+    /// [`ProposalKind::Amendment`].
     pub kind: ProposalKind,
     /// `ID`, or `slug/ID` for a feature-scoped one; a document without an
-    /// `id:` by its path. A create's new file: its `id:`, else its path.
+    /// `id:` by its path. A new file: its `id:`, else its path.
     pub target_id: String,
     /// Root-relative.
     pub target_path: String,
     pub place: Place,
-    /// `b3:` of the span's bytes at creation; `None` only for a create's
-    /// new file (with `base_text`).
+    /// `b3:` of the span's bytes at creation; `None` only for a new file
+    /// (with `base_text`), always for a kind that
+    /// [`amends`](ProposalKind::amends).
     pub base_hash: Option<String>,
     /// The span at creation (the merge base of a later apply); `None` only
-    /// for a create's new file.
+    /// for a new file.
     pub base_text: Option<String>,
     /// Its replacement, as spliced; a new file's bytes.
     pub new_text: String,
@@ -515,9 +561,10 @@ pub struct NewProposal {
     pub author: Author,
     /// The findings the edit introduces.
     pub diagnostics: Vec<ProposalFinding>,
-    /// A create's new IDs, canonical (`slug/ID` for a feature-scoped one),
-    /// in text order: a new file's `id:` first when it declares one; empty
-    /// for an update.
+    /// The new IDs of a kind that [adds nodes](ProposalKind::adds_nodes),
+    /// canonical (`slug/ID` for a feature-scoped one), in text order: a new
+    /// file's `id:` first when it declares one; empty for an update. An
+    /// amendment's amended IDs are none of them: its text holds them.
     pub new_ids: Vec<String>,
     /// An interpretation's decision, `how` and `why`; set iff the kind is
     /// [`ProposalKind::Interpretation`].
@@ -670,9 +717,10 @@ pub struct Proposal {
     /// The decision record of a kind that decides, from its step 7 on;
     /// `None` for one that applies.
     pub record: Option<DecisionRecord>,
-    /// A create's new IDs, canonical, in text order (its `target_ids` but
-    /// the first, and the first too for a new file declaring an `id:`);
-    /// empty for any other kind.
+    /// The new IDs of a kind that [adds nodes](ProposalKind::adds_nodes),
+    /// canonical, in text order (its `target_ids` but the first, and the
+    /// first too for a new file declaring an `id:`); empty for any other
+    /// kind.
     pub new_ids: Vec<String>,
     /// The task it was raised for (`T-NNNN`); never changes.
     pub task_id: Option<String>,
@@ -685,14 +733,16 @@ pub struct Proposal {
 }
 
 impl Proposal {
-    /// A create of a new file: no base (`base_hash` stored `NULL`, read as
-    /// `""`).
+    /// A new file: a kind that [adds nodes](ProposalKind::adds_nodes)
+    /// without a base (`base_hash` stored `NULL`, read as `""`): a create's
+    /// file form, an amendment.
     pub fn new_file(&self) -> bool {
-        self.kind == ProposalKind::Create && self.base_hash.is_empty()
+        self.kind.adds_nodes() && self.base_hash.is_empty()
     }
 
-    /// Every target, canonical: an intake's, as given; a create's
-    /// `target_id` then its other new IDs; an update's `[target_id]`.
+    /// Every target, canonical: an intake's, as given; a create's or an
+    /// amendment's `target_id` then its other new IDs (never an amended
+    /// ID); an update's `[target_id]`.
     pub fn target_ids(&self) -> Vec<String> {
         if let Some(intake) = &self.intake {
             return intake.target_ids.clone();
@@ -862,9 +912,14 @@ pub enum QueueError {
     /// longer the next (another run took it meanwhile); `next` is. Nothing
     /// written.
     Issued { next: String },
-    /// A create's new ID `id` is held by the live create `by` (`open` or
-    /// `approved`, any repository of the project). Nothing written.
-    Reserved { id: String, by: String },
+    /// A new ID `id` is held by the live proposal `by` (`open` or
+    /// `approved`, any repository of the project) of the kind `kind` that
+    /// adds nodes (a create, an amendment). Nothing written.
+    Reserved {
+        id: String,
+        by: String,
+        kind: ProposalKind,
+    },
     /// A task change refused (`docs/canon/tasks.md` "Transitions",
     /// "Task-bound proposals"): no such task, a state or run that does not
     /// allow it, a lost compare-and-set, a proposal the task does not take.
@@ -908,8 +963,8 @@ impl fmt::Display for QueueError {
                 f,
                 "the record ID previewed was issued meanwhile; the next is `{next}`"
             ),
-            Self::Reserved { id, by } => {
-                write!(f, "`{id}` is reserved by `{by}`, a live create")
+            Self::Reserved { id, by, kind } => {
+                write!(f, "`{id}` is reserved by `{by}`, a live {}", kind.as_str())
             }
             Self::TaskRefused { reason, .. } => f.write_str(reason),
         }
@@ -931,19 +986,24 @@ pub fn patch_hash(target_id: &str, base_hash: &str, new_text: &str) -> String {
     b3_hash(&patch_hash_input(target_id, base_hash, new_text))
 }
 
-/// A new ID a live create holds ([`ProposalQueue::reserved`]).
+/// A new ID a live create or amendment holds
+/// ([`ProposalQueue::reserved`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reservation {
     /// Canonical (`slug/ID` for a feature-scoped one).
     pub id: String,
-    /// The create holding it.
+    /// The create or amendment holding it.
     pub by: String,
+    /// Its kind, one that [adds nodes](ProposalKind::adds_nodes): a refusal
+    /// names the holder by it (`a live create`, `a live amendment`).
+    pub kind: ProposalKind,
     /// `open` or `approved`.
     pub status: ProposalStatus,
 }
 
-/// A create's `target_ids`: `new_ids` alone for a new file whose first new
-/// ID is its `target_id` (its `id:`), else `target_id` then `new_ids`.
+/// The `target_ids` of a kind that adds nodes: `new_ids` alone for a new
+/// file whose first new ID is its `target_id` (its `id:`), else
+/// `target_id` then `new_ids`.
 fn create_targets(target_id: &str, new_file: bool, new_ids: &[String]) -> Vec<String> {
     if new_file && new_ids.first().map(String::as_str) == Some(target_id) {
         return new_ids.to_vec();
@@ -962,9 +1022,10 @@ pub trait ProposalQueue {
     /// logs `proposal.created`. A kind that never applies is
     /// [`QueueError::Invalid`] ([`Self::create_intake`] stores it); so is
     /// an update without its base or with new IDs, a create's base given in
-    /// part, or its new IDs repeated. A create whose new ID a live create of
-    /// the project holds (any repository, read inside this transaction):
-    /// [`QueueError::Reserved`], nothing written.
+    /// part, an amendment's given at all, or their new IDs repeated. A
+    /// proposal whose new ID a live one of a kind that adds nodes (a
+    /// create, an amendment) of the project holds (any repository, read
+    /// inside this transaction): [`QueueError::Reserved`], nothing written.
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError>;
     /// [`Self::create`] bound to the task `task` (`T-NNNN`), when given:
     /// read inside the inserting transaction, it must be the project's,
@@ -978,9 +1039,10 @@ pub trait ProposalQueue {
         task: Option<&str>,
         now: &str,
     ) -> Result<Proposal, QueueError>;
-    /// The new IDs the project's live creates (`open`, `approved`, any
-    /// repository) hold, by proposal ID number then in text order; read
-    /// only. A row whose targets do not read holds none.
+    /// The new IDs the project's live creates and amendments (`open`,
+    /// `approved`, any repository; never an amended ID) hold, by proposal
+    /// ID number then in text order; read only. A row whose targets do not
+    /// read holds none.
     fn reserved(&self) -> Result<Vec<Reservation>, QueueError>;
     /// The intake's step 7, one `Immediate` transaction: the queue's hits
     /// and related items read under the write lock ([`IntakeResult`]);
@@ -1911,8 +1973,8 @@ impl RawRow {
                 format!("{:?} is no object ID", place.base_commit),
             ));
         }
-        // An update's texts; the intake kinds store them NULL, a create's
-        // new file its base.
+        // An update's texts; the intake kinds store them NULL, a new file
+        // its base.
         let base_columns = [take(), take()];
         let mut update_text = |column: &str| {
             let value = take();
@@ -1925,13 +1987,31 @@ impl RawRow {
         let new_text = update_text("new_text")?;
         let patch_hash = update_text("patch_hash")?;
         let rationale = update_text("rationale")?;
-        let [base_hash, base_text] = match (kind, base_columns) {
-            (ProposalKind::Create, [None, None]) => [String::new(), String::new()],
-            (ProposalKind::Create, [Some(hash), _]) if hash.is_empty() => {
-                return Err(corrupt(&id, "base_hash", "it is empty on a create"));
+        // A kind adding nodes: a new file has no base; one that amends is
+        // only a new file.
+        let [base_hash, base_text] = match base_columns {
+            [None, None] if kind.adds_nodes() => [String::new(), String::new()],
+            [hash, _] if kind.amends() => {
+                let column = if hash.is_some() {
+                    "base_hash"
+                } else {
+                    "base_text"
+                };
+                return Err(corrupt(
+                    &id,
+                    column,
+                    format!("{} is a new file: it holds no base", kind.with_article()),
+                ));
             }
-            (ProposalKind::Create, [Some(hash), Some(text)]) => [hash, text],
-            (ProposalKind::Create, [hash, _]) => {
+            [Some(hash), _] if kind.adds_nodes() && hash.is_empty() => {
+                return Err(corrupt(
+                    &id,
+                    "base_hash",
+                    format!("it is empty on {}", kind.with_article()),
+                ));
+            }
+            [Some(hash), Some(text)] if kind.adds_nodes() => [hash, text],
+            [hash, _] if kind.adds_nodes() => {
                 let column = if hash.is_none() {
                     "base_hash"
                 } else {
@@ -1943,7 +2023,7 @@ impl RawRow {
                     "it is NULL while the base's other column is set",
                 ));
             }
-            (_, [hash, text]) if kind.applies() => {
+            [hash, text] if kind.applies() => {
                 [required(hash, "base_hash")?, required(text, "base_text")?]
             }
             _ => [String::new(), String::new()],
@@ -1987,10 +2067,10 @@ impl RawRow {
         {
             return Err(corrupt(&id, "task_id", format!("{task:?} is no task ID")));
         }
-        let new_file = kind == ProposalKind::Create && base_hash.is_empty();
+        let new_file = kind.adds_nodes() && base_hash.is_empty();
         let staged = stage::decode(&id, kind, status, new_file, staged_columns)?;
-        let new_ids = if kind == ProposalKind::Create {
-            columns.decode_create(&id, &target_id, base_hash.is_empty(), linked.as_deref())?
+        let new_ids = if kind.adds_nodes() {
+            columns.decode_create(&id, kind, &target_id, new_file, linked.as_deref())?
         } else {
             Vec::new()
         };
@@ -2328,13 +2408,15 @@ struct IntakeColumns {
 }
 
 impl IntakeColumns {
-    /// The new IDs of a `create` row (`new_file`: its base `NULL`):
-    /// `target_ids` a JSON list of canonical IDs headed by `target_id`
-    /// (a new file without an `id:`: its path), each once, every other
-    /// intake column and `linked` `NULL`; else the row is corrupt, named.
+    /// The new IDs of a row of a `kind` that adds nodes (a `create`, an
+    /// `amendment`; `new_file`: its base `NULL`): `target_ids` a JSON list
+    /// of canonical IDs headed by `target_id` (a new file without an `id:`:
+    /// its path), each once, every other intake column and `linked` `NULL`;
+    /// else the row is corrupt, named.
     fn decode_create(
         &self,
         id: &str,
+        kind: ProposalKind,
         target_id: &str,
         new_file: bool,
         linked: Option<&str>,
@@ -2350,16 +2432,25 @@ impl IntakeColumns {
             ("recommendation", &self.recommendation),
             ("distinct_from", &self.distinct_from),
         ];
+        let article = kind.with_article();
         if let Some((column, _)) = others.iter().find(|(_, value)| value.is_some()) {
-            return Err(corrupt(id, column, "a create holds no intake field"));
+            return Err(corrupt(
+                id,
+                column,
+                format!("{article} holds no intake field"),
+            ));
         }
         if linked.is_some() {
-            return Err(corrupt(id, "linked", "a create is linked to nothing"));
+            return Err(corrupt(
+                id,
+                "linked",
+                format!("{article} is linked to nothing"),
+            ));
         }
         let text = self
             .target_ids
             .as_deref()
-            .ok_or_else(|| corrupt(id, "target_ids", "it is NULL on a create"))?;
+            .ok_or_else(|| corrupt(id, "target_ids", format!("it is NULL on {article}")))?;
         let targets: Vec<String> =
             serde_json::from_str(text).map_err(|error| corrupt(id, "target_ids", error))?;
         if targets.first().map(String::as_str) != Some(target_id) {
@@ -2594,10 +2685,10 @@ fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
     Ok(proposal_id(next))
 }
 
-/// Inserts `proposal` (an `update`, a `create` or an `interpretation`) as
-/// `open` under the next ID, `linked` to the given proposal, bound to
-/// `task`; a create's `target_ids` set ([`create_targets`]), an update's
-/// `NULL`; an interpretation's `interpretation`; its ID.
+/// Inserts `proposal` (a kind that applies) as `open` under the next ID,
+/// `linked` to the given proposal, bound to `task`; the `target_ids` of a
+/// kind that adds nodes set ([`create_targets`]), an update's `NULL`; an
+/// interpretation's `interpretation`; its ID.
 fn insert_update(
     tx: &Transaction<'_>,
     project: &str,
@@ -2608,7 +2699,9 @@ fn insert_update(
 ) -> Result<String, QueueError> {
     let author = to_json(&proposal.author)?;
     let diagnostics = to_json(&proposal.diagnostics)?;
-    let target_ids = (proposal.kind == ProposalKind::Create)
+    let target_ids = proposal
+        .kind
+        .adds_nodes()
         .then(|| {
             to_json(&create_targets(
                 &proposal.target_id,
@@ -2660,8 +2753,10 @@ fn insert_update(
 /// Why `proposal` is no proposal [`ProposalQueue::create`] stores: a kind
 /// that never applies, an update or an interpretation without its base or
 /// with new IDs, an interpretation's fields absent or unfit, or given on
-/// another kind, a create's base given in part, a new file whose `id:` is
-/// not its first new ID, a new ID empty or repeated.
+/// another kind; of a kind that adds nodes, its base given in part, or
+/// given at all for one that [amends](ProposalKind::amends) (a new file
+/// only), a new file whose `id:` is not its first new ID, a new ID empty
+/// or repeated.
 fn new_proposal_problem(proposal: &NewProposal) -> Option<String> {
     let kind = proposal.kind;
     if !kind.applies() {
@@ -2692,7 +2787,7 @@ fn new_proposal_problem(proposal: &NewProposal) -> Option<String> {
     if based != proposal.base_text.is_some() {
         return Some("a proposal's base is its hash and its text, both or neither".to_owned());
     }
-    if kind != ProposalKind::Create {
+    if !kind.adds_nodes() {
         if !based {
             return Some(format!(
                 "{} is written against its base",
@@ -2704,13 +2799,19 @@ fn new_proposal_problem(proposal: &NewProposal) -> Option<String> {
         }
         return None;
     }
+    let article = kind.with_article();
+    if based && kind.amends() {
+        return Some(format!(
+            "{article} is a new file: it is written against no base"
+        ));
+    }
     if proposal.base_hash.as_deref() == Some("") {
-        return Some("a create's base hash is empty".to_owned());
+        return Some(format!("{article}'s base hash is empty"));
     }
     let mut seen = std::collections::BTreeSet::new();
     for id in &proposal.new_ids {
         if id.is_empty() || !seen.insert(id.as_str()) {
-            return Some(format!("a create's new ID {id:?} is empty or repeated"));
+            return Some(format!("{article}'s new ID {id:?} is empty or repeated"));
         }
     }
     if !based
@@ -2742,32 +2843,52 @@ fn new_ids_of(target_ids: &[String], new_file: bool) -> Vec<String> {
     }
 }
 
-/// The live creates' new IDs ([`ProposalQueue::reserved`]), read in `conn`
-/// (a write transaction's, for [`ProposalQueue::create`]).
+/// The new IDs the live proposals of the kinds that
+/// [add nodes](ProposalKind::adds_nodes) hold ([`ProposalQueue::reserved`]),
+/// read in `conn` (a write transaction's, for [`ProposalQueue::create`]).
 fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation>, QueueError> {
+    let adding: Vec<&str> = ProposalKind::ALL
+        .into_iter()
+        .filter(|kind| kind.adds_nodes())
+        .map(ProposalKind::as_str)
+        .collect();
+    let slots = (0..adding.len())
+        .map(|at| format!("?{}", at + 4))
+        .collect::<Vec<_>>()
+        .join(", ");
     let mut statement = conn
         .prepare(&format!(
-            "SELECT id, status, base_hash, target_ids FROM main.proposals \
-             WHERE project = ?1 AND kind = ?2 AND status IN (?3, ?4) {ID_ORDER}"
+            "SELECT id, status, base_hash, target_ids, kind FROM main.proposals \
+             WHERE project = ?1 AND status IN (?2, ?3) AND kind IN ({slots}) {ID_ORDER}"
         ))
         .db()?;
-    let rows: Vec<[Option<String>; 4]> = statement
-        .query_map(
-            [
-                project,
-                CREATE_KIND,
-                ProposalStatus::Open.as_str(),
-                ProposalStatus::Approved.as_str(),
-            ],
-            |row| Ok([row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?]),
-        )
+    let params = [
+        project,
+        ProposalStatus::Open.as_str(),
+        ProposalStatus::Approved.as_str(),
+    ]
+    .into_iter()
+    .chain(adding.iter().copied());
+    let rows: Vec<[Option<String>; 5]> = statement
+        .query_map(rusqlite::params_from_iter(params), |row| {
+            Ok([
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ])
+        })
         .db()?
         .collect::<rusqlite::Result<_>>()
         .db()?;
     let mut held = Vec::new();
-    for [id, status, base_hash, target_ids] in rows {
-        let (Some(id), Some(status)) = (id, status.as_deref().and_then(ProposalStatus::parse))
-        else {
+    for [id, status, base_hash, target_ids, kind] in rows {
+        let (Some(id), Some(status), Some(kind)) = (
+            id,
+            status.as_deref().and_then(ProposalStatus::parse),
+            kind.as_deref().and_then(ProposalKind::parse),
+        ) else {
             continue;
         };
         let Some(targets) = target_ids
@@ -2781,6 +2902,7 @@ fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation
                 id: new_id,
                 by: id.clone(),
                 status,
+                kind,
             });
         }
     }
@@ -2989,6 +3111,7 @@ impl ProposalQueue for SqliteQueue {
                     return Err(QueueError::Reserved {
                         id: new_id.clone(),
                         by: holder.by.clone(),
+                        kind: holder.kind,
                     });
                 }
             }

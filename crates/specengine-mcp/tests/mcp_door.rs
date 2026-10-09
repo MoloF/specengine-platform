@@ -32,6 +32,15 @@
 //! repository stays byte-identical, `git status` empty, and the queue
 //! holds both interpretations. M: a file write in propose.
 //!
+//! AC-T3 of docs/features/kind-amendment.md: `propose_change` of kind
+//! `amendment` joins the door: "Data"'s new file amending
+//! `RULE-STAM-REGEN` (`base` null; stored in the first era, its new ID's
+//! reservation refusing it in the second) and one amending the superseded
+//! `DEC-0007` (refused, nothing stored); the repository stays
+//! byte-identical (no `docs/features/regen-delay.md` appears), `git status`
+//! empty, and the queue holds the one amendment. M: a file write in
+//! propose.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -96,6 +105,14 @@ fn git(dir: &Path, home: &Path, args: &[&str]) -> String {
 /// claimed); a tool missing here fails the test when it is listed.
 fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value>)> {
     let regen = "## Regeneration {#RULE-STAM-REGEN}\n\nStamina regenerates only at rest.\n";
+    // docs/features/kind-amendment.md "Data": a new spec amending `node`.
+    let amendment = |node: &str| {
+        format!(
+            "---\nclass: spec\nstatus: draft\nscope: [movement]\nlinks:\n  amends: [{node}]\n---\n\n\
+             # Regeneration waits after a sprint\n\n## Delay {{#AC-01}}\n\nRegeneration starts \
+             1.5 s after the last sprint.\n"
+        )
+    };
     let calls = match tool {
         "get_tree" => (
             vec![
@@ -149,6 +166,13 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"kind": "interpretation", "target": "RULE-STAM-REGEN", "base": base,
                     "decision": "DEC-0007", "how": "Walking.", "why": "Superseded.",
                     "text": regen, "rationale": "Old.", "author_role": "writer"}),
+                // docs/features/kind-amendment.md AC-T3.
+                json!({"kind": "amendment", "target": "docs/features/regen-delay.md",
+                    "base": null, "text": amendment("RULE-STAM-REGEN"),
+                    "rationale": "Waits after a sprint.", "author_role": "writer"}),
+                json!({"kind": "amendment", "target": "docs/features/walk-regen.md",
+                    "text": amendment("DEC-0007"), "rationale": "Superseded.",
+                    "author_role": "writer"}),
             ],
             vec![
                 json!({"kind": "update", "target": "RULE-STAM-REGEN", "base": base,
@@ -477,7 +501,7 @@ fn ac08_reads_write_nothing_under_the_project_root() {
     // second era's change only.
     let mut session = Session::open(Era::Legacy, &[], Some(&cwd), Home::At(&home));
     let mut stored = Vec::new();
-    for number in 1..=10 {
+    for number in 1..=12 {
         let id = format!("PR-{number:04}");
         let reply = session.call("get_proposal", json!({"proposal_id": id}));
         let result = result(&reply);
@@ -501,25 +525,27 @@ fn ac08_reads_write_nothing_under_the_project_root() {
             ("question".to_owned(), "open".to_owned(), None),
             ("update".to_owned(), "open".to_owned(), None),
             ("interpretation".to_owned(), "open".to_owned(), None),
+            // docs/features/kind-amendment.md AC-T3: the first era's.
+            ("amendment".to_owned(), "open".to_owned(), None),
             (
                 "decision".to_owned(),
+                "open".to_owned(),
+                Some("PR-0006".to_owned())
+            ),
+            (
+                "update".to_owned(),
                 "open".to_owned(),
                 Some("PR-0005".to_owned())
             ),
             (
-                "update".to_owned(),
-                "open".to_owned(),
-                Some("PR-0004".to_owned())
-            ),
-            (
                 "discrepancy".to_owned(),
                 "open".to_owned(),
-                Some("PR-0007".to_owned())
+                Some("PR-0008".to_owned())
             ),
             (
                 "update".to_owned(),
                 "open".to_owned(),
-                Some("PR-0006".to_owned())
+                Some("PR-0007".to_owned())
             ),
             ("update".to_owned(), "open".to_owned(), None),
             ("interpretation".to_owned(), "open".to_owned(), None),

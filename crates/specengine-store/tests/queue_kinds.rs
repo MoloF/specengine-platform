@@ -108,7 +108,7 @@ fn held(queue: &SqliteQueue) -> Vec<(String, String, ProposalStatus)> {
         .reserved()
         .expect("reserved")
         .into_iter()
-        .map(|Reservation { id, by, status }| (id, by, status))
+        .map(|Reservation { id, by, status, .. }| (id, by, status))
         .collect()
 }
 
@@ -328,7 +328,7 @@ fn ac05_a_live_create_holds_its_new_ids_against_every_handle() {
             sections("RULE-STAM-REGEN", &["EDGE-STAM-REST", "R-13"]),
         ] {
             match second.create(&proposal, T1) {
-                Err(QueueError::Reserved { id, by }) => {
+                Err(QueueError::Reserved { id, by, .. }) => {
                     assert_eq!((id.as_str(), by.as_str()), ("R-13", "PR-0001"), "{status}");
                 }
                 other => panic!("{status}: expected Reserved, got {other:?}"),
@@ -424,7 +424,7 @@ fn ac05_parallel_creates_of_one_new_id_store_one() {
         for result in &results {
             match result {
                 Ok(_) => {}
-                Err(QueueError::Reserved { id, by }) => {
+                Err(QueueError::Reserved { id, by, .. }) => {
                     assert_eq!((id, by), (&new_id, winner), "round {round}");
                 }
                 Err(other) => panic!("round {round}: {other}"),

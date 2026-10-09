@@ -32,8 +32,8 @@ use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree, CliError,
-    CreateRequest, DecisionRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest,
+    AmendmentRequest, ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree,
+    CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest,
     ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
     GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, Outcome, ProposeRequest,
@@ -479,6 +479,33 @@ enum Propose {
         #[arg(long, value_name = "T")]
         task: Option<String>,
     },
+    /// Add a new spec or decision document at a free `.md` path PATH whose front-matter declares `links: {amends: [ID, ...]}` to live nodes: applied as a new file, the amended nodes' files never written; it stays an unapplied amendment until its document goes to Tier 3 by status.
+    Amendment {
+        /// A root-relative `.md` path naming nothing yet.
+        #[arg(value_name = "PATH")]
+        target: String,
+        /// The whole new file, its front-matter `class: spec` or `class: decision` naming each amended ID (canonical, live) under `links: {amends: [...]}`; a file, or `-` for stdin (UTF-8, at most 1 MiB).
+        #[arg(long = "text-file", value_name = "F")]
+        text_file: PathBuf,
+        /// Why; the commit's body when applied.
+        #[arg(long, value_name = "T")]
+        rationale: String,
+        /// The proposing agent's role (any of the three: an agent's proposal).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The proposing agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The proposing agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
+        #[arg(long)]
+        brief: bool,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
+    },
     /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question or decision already answers it.
     Question {
         /// The nodes the question is about, each an ID, `slug/ID`, or a root-relative `.md` path (its document): 1 to 16.
@@ -867,6 +894,41 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 specengine_cli::propose_interpretation_brief(env, globals, &request, task)?
             } else {
                 specengine_cli::propose_interpretation(env, globals, &request, task)?
+            }))
+        }
+        Command::Propose {
+            kind:
+                Propose::Amendment {
+                    target,
+                    text_file,
+                    rationale,
+                    author_role,
+                    author_model,
+                    run,
+                    brief,
+                    task,
+                },
+        } => {
+            let text = if text_file.as_os_str() == "-" {
+                ProposedText::Given(read_stdin(TEXT_MAX_BYTES, "the text")?)
+            } else {
+                ProposedText::File(text_file)
+            };
+            let request = AmendmentRequest {
+                target,
+                text,
+                rationale,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            };
+            let task = task.as_deref();
+            Outcome::Proposal(Box::new(if brief {
+                specengine_cli::propose_amendment_brief(env, globals, &request, task)?
+            } else {
+                specengine_cli::propose_amendment(env, globals, &request, task)?
             }))
         }
         Command::Propose {

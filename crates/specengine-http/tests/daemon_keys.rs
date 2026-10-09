@@ -1023,3 +1023,144 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     }
     drop(server);
 }
+
+/// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture still holds 41
+/// sets; "Data"'s amendment raised through `spec propose amendment` is
+/// served with the fixture's `Proposal` keys in order (`kind`
+/// `amendment`, `base_hash` null, `target_ids` the file and its own new
+/// ID), its inbox entry with `InboxEntry`'s; a same-origin `POST
+/// .../decision` with `option`, `answer` or `canon` is 400 naming the
+/// amendment, nothing staged; an approve stages with `StagedApprove`'s
+/// keys, `span_hash` null; the round lists no item. M: a key renamed in
+/// Rust.
+#[test]
+fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
+    let text = fs::read_to_string(repository_root().join("fixtures/daemon-keys.json"))
+        .expect("fixtures/daemon-keys.json");
+    let fixture: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let sets = fixture.as_object().expect("an object of sets");
+    assert_eq!(sets.len(), 41, "41 sets, none added");
+    let set = |name: &str| -> Vec<String> {
+        sets[name]
+            .as_array()
+            .unwrap_or_else(|| panic!("no set {name}"))
+            .iter()
+            .map(|key| key.as_str().expect("a key").to_owned())
+            .collect()
+    };
+    assert_eq!(set("Proposal").len(), 46);
+
+    let scratch = Scratch::new("daemon-keys-ka");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let path = "docs/features/regen-delay.md";
+    let amendment = "---\nclass: spec\nstatus: draft\nscope: [movement]\nlinks:\n  amends: \
+                     [RULE-STAM-REGEN]\n---\n\n# Regeneration waits after a sprint\n\n## Delay \
+                     {#AC-01}\n\nRegeneration starts 1.5 s after the last sprint, not after any \
+                     stamina use.\n";
+    let run = run_product(
+        &spec_bin(),
+        &home,
+        &a,
+        &[
+            "--root",
+            a.to_str().unwrap(),
+            "propose",
+            "amendment",
+            path,
+            "--text-file",
+            "-",
+            "--rationale",
+            "Regeneration waits after a sprint.",
+            "--author-role",
+            "spec-author",
+        ],
+        amendment.as_bytes(),
+    );
+    run.code(0);
+    assert_eq!(run.stdout, "PR-0001\nintroduced: 0\n", "{}", run.show());
+
+    let server = Server::serve(&home, &cwd, &[&a]);
+    let p = "/api/projects/lantern-keep";
+    let review = server
+        .get(&format!("{p}/proposals/PR-0001"))
+        .status(200)
+        .text()
+        .to_owned();
+    assert_eq!(keys_of(&review), set("Proposal"), "the amendment's review");
+    let document: serde_json::Value = serde_json::from_str(&review).expect("JSON");
+    assert_eq!(document["kind"], serde_json::json!("amendment"));
+    assert_eq!(document["base_hash"], serde_json::Value::Null);
+    assert_eq!(
+        document["target_ids"],
+        serde_json::json!([path, "regen-delay/AC-01"])
+    );
+    let updated_at = document["updated_at"].as_str().expect("updated_at");
+    let inbox = server
+        .get(&format!("{p}/inbox"))
+        .status(200)
+        .text()
+        .to_owned();
+    let entries = raw_items(&inbox, "proposals");
+    assert_eq!(entries.len(), 1, "{inbox}");
+    assert_eq!(keys_of(&entries[0]), set("InboxEntry"));
+    assert!(
+        entries[0].contains("\"kind\":\"amendment\""),
+        "{}",
+        entries[0]
+    );
+
+    for field in [
+        "\"option\":0",
+        "\"answer\":\"yes\"",
+        "\"canon\":\"MEC-STAMINA\"",
+    ] {
+        let reply = server.stage(
+            &format!("{p}/proposals/PR-0001/decision"),
+            &format!("{{\"decision\":\"approve\",{field},\"updated_at\":\"{updated_at}\"}}"),
+        );
+        assert_eq!(reply.status, 400, "{field}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(
+            message.contains("`PR-0001` is an amendment"),
+            "{field}: {message}"
+        );
+    }
+    let unstaged = server
+        .get(&format!("{p}/proposals/PR-0001"))
+        .status(200)
+        .json();
+    assert_eq!(
+        unstaged["staged"],
+        serde_json::Value::Null,
+        "nothing staged"
+    );
+    server
+        .stage(
+            &format!("{p}/proposals/PR-0001/decision"),
+            &format!("{{\"decision\":\"approve\",\"updated_at\":\"{updated_at}\"}}"),
+        )
+        .status(200);
+    let staged = server
+        .get(&format!("{p}/proposals/PR-0001"))
+        .status(200)
+        .text()
+        .to_owned();
+    assert_eq!(keys_of(&staged), set("Proposal"));
+    let stage = raw_object(&staged, "staged");
+    assert_eq!(keys_of(&stage), set("StagedApprove"));
+    let stage: serde_json::Value = serde_json::from_str(&stage).expect("JSON");
+    assert_eq!(stage["span_hash"], serde_json::Value::Null, "a new file");
+    let round = server
+        .get(&format!("{p}/round"))
+        .status(200)
+        .text()
+        .to_owned();
+    assert!(
+        raw_items(&round, "items").is_empty(),
+        "never on the sheet: {round}"
+    );
+    drop(server);
+}

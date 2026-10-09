@@ -139,6 +139,15 @@ const PINS: &[(&str, &str)] = &[
         "0.5.0",
         "fdbb89d6ebc31cec8337d5d5ccccff30e469e32dc401855674e2d47865349b11",
     ),
+    // docs/features/kind-amendment.md W36 (0.5.0 -> 0.6.0, MINOR):
+    // `propose-spec-change` teaches the kind `amendment` (a new spec or
+    // decision file, `base` null, `links: {amends: [ID]}`, the node
+    // unwritten, applied once shipped, abandoned or superseded); its task
+    // bullet keeps `task_id` only.
+    (
+        "0.6.0",
+        "e741c8fd7383af6ff0f68d3f778fdfecb72443122ee2c87015211970aa33b30e",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
@@ -1219,9 +1228,9 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of kind-decision: 0.5.0, after kind-interpretation's 0.4.0.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.5.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.4.0");
+    // The pin of kind-amendment: 0.6.0, after kind-decision's 0.5.0.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.6.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.5.0");
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

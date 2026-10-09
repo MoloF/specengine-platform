@@ -252,6 +252,9 @@ describe("source policy", () => {
       // AC-U2 of docs/features/kind-interpretation.md: the Interpretation section follows the key, never the kind.
       '{review.kind === "interpretation" && <InterpretationSection project={project} interpretation={review.interpretation} />}',
       'const carries = review.kind === "interpretation";',
+      // AC-U1 of docs/features/kind-amendment.md: the card and the stage dialog take an amendment as a new file, never by its kind.
+      'const amends = review.kind === "amendment";',
+      '{shown.kind !== "amendment" && <p className="dialog-text">This proposal has no options to choose from.</p>}',
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }

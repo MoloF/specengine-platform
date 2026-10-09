@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # Proposal apply: consent, steps, completion, reject
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `docs/canon/architecture.md#apply`). Commands, states, store ops, escaping, git safety: `docs/canon/proposal-queue.md`. An apply writes the target file (or a new file: a decision record, `decision-record.md`; a create's, `proposal-kinds.md`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only`, git reads), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `docs/canon/architecture.md#apply`). Commands, states, store ops, escaping, git safety: `docs/canon/proposal-queue.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only`, git reads), `replace_file`, `update_file`.
 
 ## Consent
 

@@ -251,7 +251,7 @@ describe("harbor-sim's decision (AC-U1 of kind-decision)", () => {
       staged: null,
     });
     expect(sheet.items.map((item) => item.id)).not.toContain(UPDATE);
-    expect(sheet.notes.join("\n")).toMatch(/open change proposal\(s\) not on this sheet: [^;]*PR-0051; spec inbox lists them/);
+    expect(sheet.notes.join("\n")).toMatch(/open change proposal\(s\) not on this sheet: [^;]*PR-0051[^;]*; spec inbox lists them/);
   });
 
   it("lists both in a task package whose nodes hold the page: the decision by its text, assumed as its working answer (W21)", () => {

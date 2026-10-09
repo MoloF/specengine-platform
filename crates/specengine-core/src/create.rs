@@ -4,14 +4,15 @@
 //! section rule ([`add_sections`]): new `{#ID}` sections spliced into one
 //! node's span, deeper than the node, every (ID, heading level) pair of the
 //! file kept in order. The number form of a new ID is
-//! [`crate::record::record_form`]. Nothing is read, written or hashed here,
-//! and no project's prefix, kind or directory appears (ADR-0008): the
-//! proposer names the path and the IDs.
+//! [`crate::record::record_form`]. Beside them, the nodes an amendment's
+//! document amends ([`amended_refs`], task spec `kind-amendment`). Nothing
+//! is read, written or hashed here, and no project's prefix, kind or
+//! directory appears (ADR-0008): the proposer names the path and the IDs.
 
 use std::fmt;
 
 use specengine_model::grammar::{self, Homoglyph};
-use specengine_model::{IdScheme, IdScript, ParsedFile, RefForm, Span};
+use specengine_model::{AMENDS, IdScheme, IdScript, ParsedFile, RefForm, Reference, Span};
 
 use crate::lines::LineIndex;
 use crate::patch::{StructureEntry, is_section, splice, structure, update_text};
@@ -109,6 +110,21 @@ pub fn written_id(written: &str, scheme: &IdScheme) -> WrittenId {
         };
     }
     WrittenId::Id(reference.id.clone())
+}
+
+/// The nodes a document amends (task spec `kind-amendment`): its
+/// front-matter `links:` entry [`AMENDS`], each value as written (the
+/// parser's reference, its `span` the text's when verbatim; a value that is
+/// no reference is dropped by the parser, `unparsed-reference`), in order;
+/// empty when the document declares none. A document with one is an
+/// unapplied amendment while [`crate::check::is_live`].
+pub fn amended_refs(parsed: &ParsedFile) -> &[Reference] {
+    parsed
+        .document()
+        .and_then(|document| document.fields.as_ref())
+        .and_then(|fields| fields.links.as_ref())
+        .and_then(|links| links.get(AMENDS))
+        .map_or(&[], Vec::as_slice)
 }
 
 /// New sections spliced into one node's span, checked.

@@ -620,12 +620,45 @@ function assumptionOf(proposal: StoredReview): TaskAssumption | null {
   return null;
 }
 
+/** A front-matter line listing the IDs a document amends, in the flow form the mock's texts write (`  amends: [A, B]`). */
+const AMENDS_LINE = /^\s+amends:\s*\[([^\]]*)\]\s*$/;
+
+/**
+ * The IDs a new file's text declares it amends, as written and in order: its front matter's
+ * `links: {amends: [...]}`, their one copy (W33 of
+ * `docs/features/kind-amendment.md` "Rules and edge cases", Task). A row with a base, or with no
+ * text, amends nothing.
+ */
+function amendedOf(review: StoredReview): string[] {
+  if (review.base_hash !== null || review.new_text === null) {
+    return [];
+  }
+  const lines = review.new_text.split("\n");
+  const end = lines.indexOf("---", 1);
+  if (lines[0] !== "---" || end < 0) {
+    return [];
+  }
+  const listed = lines
+    .slice(1, end)
+    .map((line) => AMENDS_LINE.exec(line)?.[1])
+    .find((values) => values !== undefined);
+  return (listed ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+}
+
+/** `lists_proposal`: bound to the task, or its targets or amended IDs meet the task's nodes. */
+function listsProposal(stored: StoredTask, nodes: ReadonlySet<string>, review: StoredReview): boolean {
+  return review.task_id === stored.id || [...review.target_ids, ...amendedOf(review)].some((id) => nodes.has(id));
+}
+
 /** `spec task show T --json`: the stored task with its proposals and assumptions read from the queue now. */
 export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]): TaskPackage {
   const nodes = nodesOf(stored);
   const listed = proposals
     .filter(({ review }) => LISTED_PROPOSAL.has(review.status))
-    .filter(({ review }) => review.task_id === stored.id || review.target_ids.some((id) => nodes.has(id)))
+    .filter(({ review }) => listsProposal(stored, nodes, review))
     .sort((a, b) => a.review.id.localeCompare(b.review.id));
   const open: TaskProposal[] = listed.map(({ review }) => ({
     id: review.id,

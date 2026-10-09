@@ -3,7 +3,7 @@
 //! their values ([`Written`], for the process rules), the text under a
 //! span; and the `YYYY-MM-DD` dates.
 
-use specengine_model::{FmValue, ParsedFile, Span};
+use specengine_model::{Diagnostic, FmValue, ParsedFile, Span};
 
 use crate::front_matter;
 use crate::lines::LineIndex;
@@ -316,8 +316,17 @@ fn find_key_colon(content: &str) -> Option<usize> {
 /// The parse failed to read the front-matter (or the file): not UTF-8, an
 /// unclosed block, YAML that does not parse or is no mapping.
 pub(crate) fn front_matter_failed(parsed: &ParsedFile) -> bool {
+    front_matter_failure(parsed).is_some()
+}
+
+/// The parser's first finding that failed to read the front-matter (or the
+/// file), as [`front_matter_failed`] tells them: its code, line and
+/// message, which the check reports as is; `None` when it reads. A caller
+/// that needs the front-matter (an amendment's `links:`, task spec
+/// `kind-amendment`) refuses naming it.
+pub fn front_matter_failure(parsed: &ParsedFile) -> Option<&Diagnostic> {
     use specengine_model::DiagnosticCode as Code;
-    parsed.diagnostics.iter().any(|diagnostic| {
+    parsed.diagnostics.iter().find(|diagnostic| {
         matches!(
             diagnostic.code,
             Code::NotUtf8

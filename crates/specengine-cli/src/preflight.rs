@@ -78,8 +78,8 @@ use specengine_core::proposal::PROPOSAL_TRAILER;
 use specengine_model::node::Node;
 use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
-    GitEnv, GitError, Merge, Place, Proposal, ProposalKind, Source as _, SpecIndex as _,
-    WorkingTree, WorktreeGit, same_repository, span_hash, update_file,
+    GitEnv, GitError, Merge, Place, Proposal, Source as _, SpecIndex as _, WorkingTree,
+    WorktreeGit, same_repository, span_hash, update_file,
 };
 
 use crate::create::{Corpus, canonical_in};
@@ -276,8 +276,10 @@ pub(crate) fn prepare_spanned(
     }
     // A create's new IDs are checked free at step 4 once step 5's text is
     // known not to be in place already (below): a text in place defines
-    // them in this very file, which step 5 explains.
-    let create = proposal.kind == ProposalKind::Create;
+    // them in this very file, which step 5 explains. Keyed on what the kind
+    // does: one adding nodes with a base is a create's section form (an
+    // amendment is a new file, never here).
+    let create = proposal.kind.adds_nodes();
 
     // Step 5: the text.
     let node = &parsed.nodes[ord];

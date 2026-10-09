@@ -39,14 +39,14 @@ Each tool is a spec command: content is what `spec <command> 2>&1` prints, \
 structuredContent its --json document.
 
 Reads:
-- get_tree(root?, depth?, kinds?, archive?) = spec tree: the node tree.
+- get_tree(root?, depth?, kinds?, archive?) = spec tree.
 - get_node(id, with?, archive?) = spec show: a node's text; with [\"links\"] its links.
 - search(query, kinds?, limit?, archive?) = spec search.
 - get_context_bundle(node_ids, budget?) = spec bundle: nodes' context within a budget.
 - get_proposal(proposal_id) = spec review --brief.
 Queue (writes only the proposal queue; the owner decides on a terminal):
-- propose_change = spec propose update|create|interpretation: a node's new text against its \
-span_hash; create: new ID sections in it, or a new file (base null).
+- propose_change = spec propose update|create|interpretation|amendment: a node's new text \
+against its span_hash; create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each; work on your working answer.

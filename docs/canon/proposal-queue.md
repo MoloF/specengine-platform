@@ -8,7 +8,7 @@ reviewed: 2026-10-08
 
 # Proposal queue: commands, states, store
 
-An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`: `proposal-{interpretation,decision}.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Not yet: re-targeting, `has_open_proposal`.
+An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Not yet: re-targeting, `has_open_proposal`.
 
 ## Commands
 
@@ -64,7 +64,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 | Op | Does |
 |---|---|
-| `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a never-applying kind -> `Invalid`; a live create's new ID -> `Reserved` |
+| `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a never-applying kind -> `Invalid`; a reserved new ID -> `Reserved` |
 | `get`, `list(&ProposalFilter {git_common_dir, statuses})` | by ID number; a corrupt row fails, named |
 | `list_readable` | `list` skipping a corrupt row into `ProposalList.unreadable` (`UnreadableRow {id, column, reason}`) |
 | `approve_from(id, seen, decision, now)` | step 7: `open -> approved` (event), or `approved` kept with the decision replaced, no event, when `now` is later than `seen.updated_at` (else `Invalid`); state not `seen` -> `Changed`, nothing written |

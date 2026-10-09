@@ -61,6 +61,7 @@ use specengine_core::round::{
     AnswerLine, Answers, OrderKey, PROJECT_LINE, ROUND_FILE_MAX_BYTES, ROUND_LIMIT_DEFAULT,
     ROUND_LIMIT_MAX, Refusal, Token, answers_text, order_key, parse_answers, reading_minutes,
 };
+use specengine_model::IdScheme;
 use specengine_store::{
     GitEnv, Intake, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, Stage,
     StagedChoice, Task, same_repository,
@@ -69,7 +70,7 @@ use specengine_store::{
 use crate::apply::{ApproveRequest, RejectRequest, approve, reject};
 use crate::corpus::indexed;
 use crate::decide::record_ready;
-use crate::package::{lists_proposal, position, wanted_nodes};
+use crate::package::{Listing, lists_proposal, position, wanted_nodes};
 use crate::project::ProjectRoot;
 use crate::proposals::{
     ProposalOutcome, QueueContext, checked_now, elsewhere, escaped_error, no_proposal,
@@ -316,6 +317,8 @@ fn run_new(
 /// ([`wanted_nodes`]), read once.
 struct Waiting {
     tasks: Vec<(Task, BTreeSet<String>)>,
+    /// The scheme a proposal's text is read under ([`lists_proposal`]).
+    scheme: IdScheme,
 }
 
 impl Waiting {
@@ -340,15 +343,20 @@ impl Waiting {
                 (task, wanted)
             })
             .collect();
-        Ok(Self { tasks })
+        Ok(Self {
+            tasks,
+            scheme: context.project.config.scheme.clone(),
+        })
     }
 
     /// The tasks whose package would list `proposal` (canon `task-package`,
-    /// "Package", read the other way).
+    /// "Package", read the other way); the IDs its new file amends read
+    /// once for all of them.
     fn of(&self, proposal: &Proposal) -> Vec<&Task> {
+        let listing = Listing::new(proposal, &self.scheme);
         self.tasks
             .iter()
-            .filter(|(task, wanted)| lists_proposal(task, wanted, proposal))
+            .filter(|(task, wanted)| lists_proposal(task, wanted, &listing))
             .map(|(task, _)| task)
             .collect()
     }

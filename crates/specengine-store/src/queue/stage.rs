@@ -159,12 +159,12 @@ impl Stage {
         matches!(self, Self::Reject { .. })
     }
 
-    /// Why a proposal of `kind` (`new_file`: a create's new file) cannot
-    /// hold this stage: a decision flag of a kind that takes none (a kind
-    /// that applies takes none; a question or a decision no `--option`; a
-    /// discrepancy no `--answer`), a span hash on a kind that has no span
-    /// (a deciding kind, a create's new file), a blank reason; `None`: it
-    /// can.
+    /// Why a proposal of `kind` (`new_file`: a new file, a create's or an
+    /// amendment's) cannot hold this stage: a decision flag of a kind that
+    /// takes none (a kind that applies takes none; a question or a decision
+    /// no `--option`; a discrepancy no `--answer`), a span hash on a kind
+    /// that has no span (a deciding kind, a new file), a blank reason;
+    /// `None`: it can.
     pub fn problem(&self, kind: ProposalKind, new_file: bool) -> Option<String> {
         match self {
             Self::Reject { reason } => reason
@@ -201,7 +201,8 @@ impl Stage {
                         // Judged above: they apply.
                         ProposalKind::Update
                         | ProposalKind::Create
-                        | ProposalKind::Interpretation => None,
+                        | ProposalKind::Interpretation
+                        | ProposalKind::Amendment => None,
                     }
                 };
                 if let Some(flag) = flag {

@@ -40,13 +40,13 @@ use common::*;
 use git::Sandbox;
 use serde_json::{Value, json};
 use specengine_cli::{
-    CREATE_KIND, CreateRequest, GitEnv, Globals, INTERPRETATION_KIND, InboxRequest, Outcome,
-    ProposedText, ShowRequest, UPDATE_KIND, inbox, show,
+    AMENDMENT_KIND, CREATE_KIND, CreateRequest, GitEnv, Globals, INTERPRETATION_KIND, InboxRequest,
+    Outcome, ProposedText, ShowRequest, UPDATE_KIND, inbox, show,
 };
 
 /// "Data"'s `propose_change` line of the instructions, with its LF.
-const CHANGE_LINE: &str = "- propose_change = spec propose update|create|interpretation: a node's \
-new text against its span_hash; create: new ID sections in it, or a new file (base null).\n";
+const CHANGE_LINE: &str = "- propose_change = spec propose update|create|interpretation|amendment: a \
+node's new text against its span_hash; create: new ID sections in it, or a new file (base null).\n";
 
 /// "Data"'s new file.
 const R13: &str = "docs/records/R/R-13.md";
@@ -342,9 +342,15 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
     let change = tool(&list, "propose_change");
     let schema = &change["inputSchema"];
     let kind = &schema["properties"]["kind"];
+    // Four since docs/features/kind-amendment.md.
     assert_eq!(
         kind["enum"],
-        json!([UPDATE_KIND, CREATE_KIND, INTERPRETATION_KIND]),
+        json!([
+            UPDATE_KIND,
+            CREATE_KIND,
+            INTERPRETATION_KIND,
+            AMENDMENT_KIND
+        ]),
         "{kind}"
     );
     let base = &schema["properties"]["base"];
@@ -379,9 +385,11 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
 #[test]
 #[cfg(not(feature = "probes"))]
 fn ac17_the_instructions_name_create_within_their_budget() {
-    assert_eq!(CHANGE_LINE.len(), 161);
+    // 171 and 1 885 since docs/features/kind-amendment.md names
+    // `amendment` (+10) and drops get_tree's ": the node tree" (-15).
+    assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1890);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1885);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -408,7 +416,8 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     let discover = result(&session.request("server/discover", json!({}))).clone();
     let sent = discover["instructions"].as_str().expect("instructions");
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
-    assert_eq!(sent.len(), 2047);
+    // 2 042 since docs/features/kind-amendment.md.
+    assert_eq!(sent.len(), 2042);
     assert!(sent.len() <= 2048);
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());

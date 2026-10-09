@@ -8,7 +8,7 @@ reviewed: 2026-10-09
 
 # Proposal kind: interpretation
 
-Phase 2 (2026-10-09): an `update` carrying an accepted decision into a rule (06 s5.4), naming the decision and saying how it was applied and why interpretation was needed. Applied as an update (`proposal-apply.md`): one commit `M <path>`, the decision in a trailer; no record, no link written. Kind `decision`: `proposal-decision.md`; `amendment`: a later slice. Code: core `intake.rs` (`INTERPRETATION_KIND`, `INTERPRETATION_TEXT_MAX` 2 048, `INTERPRETATION_FIELDS`, `Interpretation`, `with_article`), `proposal.rs` (`commit_message_interpreting`, `INTERPRETS_TRAILER`, `HOW_LABEL`, `WHY_LABEL`), `check::CANON_LINK`; store `ProposalKind::Interpretation`, step 6; CLI `interpret.rs` (`decision_named`, `decision_step`, `canon_note`, `canon_target`), `preflight.rs` (`StepRead`), `review.rs`; MCP `intake.rs`.
+Phase 2 (2026-10-09): an `update` carrying an accepted decision into a rule (06 s5.4), naming the decision and saying how it was applied and why interpretation was needed. Applied as an update (`proposal-apply.md`): one commit `M <path>`, the decision in a trailer; no record, no link written. Kind `decision`: `proposal-decision.md`; `amendment`: `proposal-amendment.md`. Code: core `intake.rs` (`INTERPRETATION_KIND`, `INTERPRETATION_TEXT_MAX` 2 048, `INTERPRETATION_FIELDS`, `Interpretation`, `with_article`), `proposal.rs` (`commit_message_interpreting`, `INTERPRETS_TRAILER`, `HOW_LABEL`, `WHY_LABEL`), `check::CANON_LINK`; store `ProposalKind::Interpretation`, step 6; CLI `interpret.rs` (`decision_named`, `decision_step`, `canon_note`, `canon_target`), `preflight.rs` (`StepRead`), `review.rs`; MCP `intake.rs`.
 
 ## Propose
 

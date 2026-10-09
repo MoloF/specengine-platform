@@ -867,7 +867,12 @@ fn ac12_the_queue_tools_are_described_as_data_says() {
         };
         assert_eq!(
             enum_of(&property("propose_change", "kind")),
-            [json!("update"), json!("create"), json!("interpretation")]
+            [
+                json!("update"),
+                json!("create"),
+                json!("interpretation"),
+                json!("amendment")
+            ]
         );
         assert_eq!(
             enum_of(&property("ask_question", "severity")),

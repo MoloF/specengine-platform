@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import { KNOWN_CHECK_VERDICTS, type CheckReport, type Proposal } from "../api/types";
@@ -263,6 +263,56 @@ describe("what is left (AC-05)", () => {
   it("says when the queue is clear", async () => {
     await openHealth(healthClient(REPORT, []));
     expect(within(region("What is left")).getByText("No proposal waits for your decision.")).toBeTruthy();
+  });
+});
+
+describe("unapplied amendments (AC-U2 of kind-amendment)", () => {
+  /** Two open amendments in the queue, as the daemon lists them: new files, no base, severity none. */
+  const AMENDMENTS = ["docs/features/surge.md", "docs/features/swell.md"].map((path, at) =>
+    aProposal({
+      id: `PR-${String(8 + at)}`,
+      kind: "amendment",
+      severity: null,
+      summary: null,
+      rationale: `Amends the high-water rule: ${path}`,
+      target_id: path,
+      target_path: path,
+      target_ids: [path],
+      new_text: ["---", "class: spec", "links:", "  amends: [RULE-HIGH-WATER]", "---", ""].join(LF),
+      created_at: `2026-10-0${String(5 + at)}T10:00:00Z`,
+    }),
+  );
+
+  function amendmentsRow(): HTMLElement {
+    const found = region("What is left").querySelector<HTMLElement>('.health-unmeasured [data-row="amendments"]');
+    if (found === null) {
+      throw new Error("no Unapplied amendments row");
+    }
+    return found;
+  }
+
+  it("stays Not measured yet, its source the producer to come, never the kind; no digit, though the queue holds two", async () => {
+    await openHealth(healthClient(REPORT, [...QUEUE, ...AMENDMENTS]));
+    // The queue counts them as proposals; the row measures nothing from it.
+    expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("9 proposals in the queue");
+    const row = amendmentsRow();
+    expect(row.querySelector("dt")?.textContent).toBe("Unapplied amendments");
+    expect(row.querySelector(".health-value")?.textContent).toBe("Not measured yet");
+    expect(row.querySelector(".health-source")?.textContent).toBe("a read of live amends links (slice health-left)");
+    expect(Array.from(row.querySelectorAll(".health-source code"), (code) => code.textContent)).toEqual(["amends", "health-left"]);
+    expect(row.querySelector("dd")?.textContent).toBe("Not measured yet: a read of live amends links (slice health-left)");
+    // Not the kind: the producer reads links over the corpus, not the queue.
+    expect(row.textContent).not.toMatch(/\bamendment\b|proposal-kinds/);
+    expect(row.textContent).not.toMatch(/\d/);
+  });
+
+  it("reads the same with no amendment in the queue, and with none at all", async () => {
+    await openHealth(healthClient(REPORT, QUEUE));
+    const withQueue = amendmentsRow().textContent;
+    cleanup();
+    await openHealth(healthClient(REPORT, []));
+    expect(amendmentsRow().textContent).toBe(withQueue);
+    expect(withQueue).toBe("Unapplied amendmentsNot measured yet: a read of live amends links (slice health-left)");
   });
 });
 

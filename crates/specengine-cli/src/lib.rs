@@ -20,7 +20,9 @@
 //! `kind-decision`) and the `--brief` answers of `spec propose update`
 //! and `spec review` (MCP's intake tools call these); task spec
 //! `proposal-kinds`: `spec propose create`, a new spec file or new `{#ID}`
-//! sections through the queue, applied as one commit.
+//! sections through the queue, applied as one commit; task spec
+//! `kind-amendment`: `spec propose amendment`, a new spec or decision
+//! document amending live nodes, applied as a create's new file.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -116,6 +118,7 @@
 //! to the read commands: broken or unreadable files are indexed with their
 //! diagnostics and never change an exit code.
 
+mod amend;
 mod apply;
 mod bundle;
 mod cap;
@@ -155,6 +158,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
 
+pub use amend::{AmendmentRequest, propose_amendment, propose_amendment_brief};
 pub use apply::{
     ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_with, reject,
 };
@@ -220,11 +224,12 @@ pub use specengine_core::ProjectConfig;
 /// the names of the kinds `propose_change` takes and of a decision, and a
 /// kind's name with its article.
 pub use specengine_core::intake::{
-    ANSWER_MAX, CREATE_KIND, DECISION_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX, DecisionInput,
-    DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTERPRETATION_FIELDS,
-    INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption, IntakeSeverity, Interpretation,
-    LABEL_MAX, LINE_LIMIT, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN,
-    ProposedPatch, RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND, with_article,
+    AMENDMENT_KIND, ANSWER_MAX, CREATE_KIND, DECISION_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX,
+    DecisionInput, DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType,
+    INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
+    IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT, LOCATION_MAX, NODE_IDS_MAX,
+    OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, RATIONALE_MAX, SUMMARY_MAX,
+    UPDATE_KIND, with_article,
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;

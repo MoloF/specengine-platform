@@ -58,13 +58,18 @@ describe("node kinds and spec statuses", () => {
     expect(new Set(generated.map((node) => node.kind))).toEqual(new Set(harborKinds));
   });
 
-  it("name every target of the queues: an ID, else an ID-less document's path", () => {
+  it("name every target of the queues: an ID, else an ID-less document's path; a new file's, none yet (kind-amendment)", () => {
     for (const project of [harborSim(0), ledgerApi(0)]) {
       const names = new Set(nodesOf(project).map((node) => node.id ?? node.path));
-      for (const target of project.proposals.flatMap(({ review }) => review.target_ids)) {
-        expect([project.project.slug, target, names.has(target)]).toEqual([project.project.slug, target, true]);
+      for (const { review } of project.proposals) {
+        // A new file (no base, its whole text): its path and new IDs are what the apply adds.
+        const adds = review.base_hash === null && review.new_text !== null;
+        for (const target of review.target_ids) {
+          expect([project.project.slug, target, names.has(target)]).toEqual([project.project.slug, target, !adds]);
+        }
       }
     }
+    expect(harborSim(0).proposals.filter(({ review }) => review.base_hash === null && review.new_text !== null).map(({ review }) => review.id)).toEqual(["PR-0052"]);
   });
 
   it("are never quoted in app code", () => {

@@ -142,8 +142,9 @@ fn ac_r1_an_interpretation_applies_decides_nothing_and_is_stored_by_create() {
     assert_eq!(INTERPRETATION_KIND, "interpretation");
     assert_eq!(INTERPRETATION_FIELDS, ["decision", "how", "why"]);
     assert_eq!(INTERPRETATION_TEXT_MAX, 2048);
-    // Six since docs/features/kind-decision.md appends `decision`.
-    assert_eq!(ProposalKind::ALL.len(), 6);
+    // Six since docs/features/kind-decision.md appends `decision`; seven
+    // since docs/features/kind-amendment.md appends `amendment`.
+    assert_eq!(ProposalKind::ALL.len(), 7);
     assert_eq!(ProposalKind::ALL[4], ProposalKind::Interpretation);
     let kind = ProposalKind::Interpretation;
     assert_eq!(kind.as_str(), INTERPRETATION_KIND);

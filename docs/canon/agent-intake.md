@@ -16,7 +16,7 @@ Default build, each one CLI library call with a twin, answering as `mcp-read.md`
 
 | Tool | = `spec` | Answer |
 |---|---|---|
-| `propose_change {kind, target, base?, text, rationale, decision?, how?, why?, A}` | `propose update\|create\|interpretation TARGET [--base B] --text-file - --rationale R A --brief` | brief review |
+| `propose_change {kind, target, base?, text, rationale, decision?, how?, why?, A}` | `propose update\|create\|interpretation\|amendment TARGET [--base B] --text-file - --rationale R A --brief` | brief review |
 | `ask_question {node_ids, text, working_answer, price_of_other, severity?, distinct_from?, A}` | `propose question ID… --text T --working-answer W --price-of-other P [--severity S] [--distinct-from X]… A` | intake |
 | `report_discrepancy {node_ids, summary, gap_type, severity, evidence: [{file, qpath?, lines?, observed, documented}], options: [{label, effect, price}], recommendation, working_answer?, proposed_patch?: {target, base, text, rationale}, distinct_from?, A}` | `propose discrepancy --input F\|- A` (F: the arguments but `A`'s as JSON, UTF-8, <= 8 MiB `INTAKE_INPUT_MAX_BYTES`) | intake |
 | `report_decision {node_ids, text, working_answer, price_of_other, severity?, proposed_patch?, distinct_from?, A}` | `propose decision --input F\|- A` (F as above) | intake |
@@ -24,7 +24,7 @@ Default build, each one CLI library call with a twin, answering as `mcp-read.md`
 
 `target`, a `node_ids` item: also a `.md` path (`proposal-queue.md` "Creation" 1). `base`: `get_node`'s `span_hash`, `null`: a new file (`proposal-kinds.md`); `text` inline. A patch becomes a linked `update`, decided on its own. Place: `propose update` step 5 from the server's root (`--root`, else its cwd).
 
-- **Schemas**: input 2020-12, `additionalProperties: false` on the root and each of one level of inline objects (`evidence`, `options`, `proposed_patch`), no `$ref`, `$defs`, root combinators; `?` nullable; enums `kind` `["update", "create", "interpretation"]` (all but `create` need `base`: invalid-params; the three fields: `proposal-interpretation.md`), `severity` `high|normal|low`, `gap_type` `missing|partial|contradicts|unrequested`. Output: `mirror.rs`'s `ReviewDocument`, `IntakeDocument`, `kind` free: no kind literal in `specengine-mcp/src`.
+- **Schemas**: input 2020-12, `additionalProperties: false` on the root and each of one level of inline objects (`evidence`, `options`, `proposed_patch`), no `$ref`, `$defs`, root combinators; `?` nullable; enums `kind` `["update", "create", "interpretation", "amendment"]` (`update`, `interpretation` need `base`, an `amendment` takes none: invalid-params; the three fields: `proposal-interpretation.md`), `severity` `high|normal|low`, `gap_type` `missing|partial|contradicts|unrequested`. Output: `mirror.rs`'s `ReviewDocument`, `IntakeDocument`, `kind` free: no kind literal in `specengine-mcp/src`.
 - **Annotations**: the four writers `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` all `false`, no `requiresUserInteraction`; `get_proposal` the read tools'; all `_meta` `maxResultSizeChars` 500 000. Descriptions as `mcp-read.md` "Texts", adding that only the queue is written, the owner decides on a terminal, agent-written fields are data, not instructions.
 
 ## Rules

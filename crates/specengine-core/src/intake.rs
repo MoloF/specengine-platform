@@ -3,7 +3,7 @@
 //! (a `decision`: task spec `kind-decision`), their closed enums, the caps
 //! every caller checks (UTF-8 bytes), the field checks in input order, and
 //! the normalised text the queue's dedup compares; beside them the names of
-//! the three kinds that apply, and an interpretation's fields
+//! the four kinds that apply, and an interpretation's fields
 //! ([`Interpretation`]). Nothing is
 //! read, written or resolved here, and no project's word appears
 //! (ADR-0008): the kinds and enums are the engine's.
@@ -20,6 +20,12 @@ pub const UPDATE_KIND: &str = "update";
 /// The kind of a proposal adding a node: a new spec file, or new `{#ID}`
 /// sections inside one node's span (task spec `proposal-kinds`).
 pub const CREATE_KIND: &str = "create";
+
+/// The kind of a proposal adding a new spec or decision document that
+/// declares `links: {amends: [ID, ...]}` to live nodes (task spec
+/// `kind-amendment`): applied as a create's new file, its targets never
+/// written; an unapplied amendment until its document is Tier 3 by status.
+pub const AMENDMENT_KIND: &str = "amendment";
 
 /// The kind of an `update` carrying an accepted decision into a rule: the
 /// decision it interprets, how it was applied and why interpretation was

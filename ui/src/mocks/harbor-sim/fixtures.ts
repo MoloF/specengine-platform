@@ -25,6 +25,10 @@ import { nodeKinds, specStatuses } from "./kinds";
 // kind-decision (docs/features/kind-decision.md "Data", AC-U1): PR-0050 a decision taken during
 // work, stored as a question's columns (its matter the summary, the decision its working answer,
 // no options) with its canon diff as the linked update PR-0051, raised together in one intake.
+//
+// kind-amendment (docs/features/kind-amendment.md "Data", AC-U1): PR-0052 an open amendment, a
+// file-form create's row (no base, the whole new file its text, `target_ids` its path and its one
+// new ID) whose text declares `links: {amends: [RULE-HIGH-WATER]}`; the amended ID only there.
 
 const SLUG = "harbor-sim";
 
@@ -108,6 +112,46 @@ export const CRANES_DECISION = {
   working_answer: "Yes: both cranes work the moored ship together, each lifting one box per 90 simulated seconds.",
   price_of_other: "One crane per ship doubles the unloading time, and every berth stays taken twice as long.",
 };
+
+/** PR-0052's new file: a feature document with no `id:`, so the queue names it by its path. */
+export const SURGE_FILE = "docs/features/storm-surge.md";
+
+/** The node PR-0052 amends: a live rule of the corpus, named only in the text's front matter. */
+export const SURGE_AMENDED = "RULE-HIGH-WATER";
+
+/** The one new ID the text defines, feature-scoped as a feature document writes it (ADR-0026). */
+export const SURGE_NEW_ID = "storm-surge/AC-01";
+
+/** The new file as `spec propose amendment` took it, line for line (the shape of "Data"'s 13 lines). */
+const SURGE_LINES = [
+  "---",
+  "class: spec",
+  "status: draft",
+  "scope: [water]",
+  "links:",
+  `  amends: [${SURGE_AMENDED}]`,
+  "---",
+  "",
+  "# Storm surge lifts high water",
+  "",
+  "## Surge {#AC-01}",
+  "",
+  "In a storm, high water is the tide table's level plus the surge the weather system reports.",
+];
+
+/** The whole file, byte for byte: the row's `new_text`. */
+export const SURGE_TEXT = `${SURGE_LINES.join("\n")}\n`;
+
+/**
+ * PR-0052's `diff` as the review document gives a new file's: against an empty base, every line
+ * added, ending as git's hunks end, in a newline (`docs/canon/proposal-kinds.md` "Queue row").
+ */
+const SURGE_DIFF = `${[
+  `--- base ${SURGE_FILE}`,
+  `+++ proposed ${SURGE_FILE}`,
+  `@@ -0,0 +1,${String(SURGE_LINES.length)} @@`,
+  ...SURGE_LINES.map((line) => `+${line}`),
+].join("\n")}\n`;
 
 const DRAFT_TEXT = [
   "## RULE-BERTH-DRAFT: Draft limit at a berth",
@@ -703,6 +747,9 @@ function harborCorpus(): MockCorpus {
 /** The commit PR-0050 and PR-0051 were raised on. */
 const CRANES_COMMIT = "c4e8a2f6b0d4e8a2c6f0b4d8e2a6c0f4b8d2e6a0";
 
+/** The commit PR-0052 was raised on. */
+const SURGE_COMMIT = "e7a1c3b5d9f2e4a6c8b0d2f4a6e8c0b2d4f6a8c0";
+
 export function harborSim(now: number): MockProject {
   const at = (minutesAgo: number) => stamp(now, minutesAgo);
   const agent = (role: string, run: string) => ({ type: "agent", role, model: "claude-opus-5-5", run });
@@ -999,6 +1046,27 @@ export function harborSim(now: number): MockProject {
         linked: "PR-0050",
         author: agent("rust-developer", "R-2262"),
         created_at: at(20),
+      }),
+      // An amendment (kind-amendment): a file-form create's columns, the kind aside. No base; the
+      // text the whole new file; `target_id` its path (no `id:`), `target_ids` the path and the new
+      // ID, never the amended one, which only the text's `links` names; the intake columns null.
+      proposal({
+        id: "PR-0052",
+        project: SLUG,
+        kind: "amendment",
+        target_id: SURGE_FILE,
+        target_path: SURGE_FILE,
+        target_ids: [SURGE_FILE, SURGE_NEW_ID],
+        worktree: "/work/harbor-sim",
+        base_commit: SURGE_COMMIT,
+        new_text: SURGE_TEXT,
+        patch_hash: `b3:${fakeHex(`${SURGE_FILE}\n\n${SURGE_TEXT}`, 64)}`,
+        // The agent's words; the amended rule is named by its matter, its ID only in the text.
+        rationale: `A storm surge raises high water above the tide table.\n${WEATHER_DECISION} simulates weather; the high-water rule reads the table alone until this is absorbed.`,
+        diff: SURGE_DIFF,
+        preview: "applies",
+        author: agent("spec-writer", "R-2275"),
+        created_at: at(15),
       }),
     ],
   };
