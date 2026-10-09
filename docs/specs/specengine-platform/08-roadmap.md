@@ -38,11 +38,12 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 3. Code and drift — ~2-3 weeks
 
-- Symbol index (layer A: tree-sitter; layer B: the Bevy `schedule_data` dump; layer C: `ra_ap_ide` per ADR-0020; B or C is required for generic system instances, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`, `get_impact`.
-- Layer C: items under attribute proc macros (`#[tokio::main]`-style) lose their monikers with the proc-macro server on; the scan must map an item through its expansion (`crates/specengine-ra/README.md`).
-- Markers `@implements/@verifies/@configures/@assumes` (with revision `@N`), `spec.lock` with `file_blob`, drift cascade (blob OID -> normalized text -> AST), `spec verify [--tests] [--changed]` with Fix/Check/Pre-existing verdicts and exit codes 0/1/2, `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
-- Existing ID citations in code automatically become **weak** `mentions` links. Markers appear in new work and when code is touched; they are not added in bulk (ADR-0016).
-- Check codes lifted into constants are the first source of machine bindings `check → const → test`.
+- Slices in order: `code-refs` (draft), `norm-hash`, `spec-lock`, `spec-verify`, `hash-levels`, `symbol-index`, `impact-bundle`, `verify-tests`, `health-code`, `bevy-dump`, `layer-c`, `machine-bindings`.
+- Symbol index (layers A tree-sitter, B the Bevy `schedule_data` dump, C `ra_ap_ide`, ADR-0020; generic instances need B or C, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`.
+- Layer C: items under attribute proc macros lose monikers with the proc-macro server on; map them through the expansion (`crates/specengine-ra/README.md`).
+- Markers `@implements/@verifies/@configures/@assumes` (revision `@N`), `spec.lock` (`file_blob`), drift cascade (blob OID -> normalized text -> AST), `spec verify [--tests] [--changed]` (Fix/Check/Pre-existing, exits 0/1/2), `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
+- ID citations in code become **weak** `mentions`; markers only in new or touched code (ADR-0016).
+- Machine bindings `check → const → test` start from check codes lifted into constants.
 
 ### Phase 4. Web UI — ~2-3 weeks
 
