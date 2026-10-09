@@ -65,7 +65,7 @@ apply PR-0001 to docs/features/regen-delay.md on main in /work/lantern-keep (new
 
 ## Unapplied
 
-A document whose front-matter declares >= 1 `amends` (`amended_refs` non-empty) is an **unapplied amendment** while live (`check::is_live`: neither Tier 3 by status nor generated), whatever raised it; applied, or abandoned, once Tier 3 by status: a spec `shipped` or `abandoned`, a decision no longer `accepted`. Absorbing one takes two updates, the amended text, then the amendment's status (a path target), never one commit; no command, note or link of its own; it never blocks (ADR-0012). Nothing counts them yet: the next slice, `health-left`, is a read of live `amends` links served as `GET /api/projects/:p/health` (07 s3) and Health's row measured, never 0 unmeasured. The check reports none (`spec-check.md` "Not checked yet").
+A document whose front-matter declares >= 1 `amends` (`amended_refs` non-empty) is an **unapplied amendment** while live (`check::is_live`: neither Tier 3 by status nor generated), whatever raised it; applied, or abandoned, once Tier 3 by status: a spec `shipped` or `abandoned`, a decision no longer `accepted`. Absorbing one takes two updates, the amended text, then the amendment's status (a path target), never one commit; no command, note or link of its own; it never blocks (ADR-0012). Nothing counts them yet: the next slice, `health-left` (draft: `docs/features/health-left.md`; canon planned at shipping: `docs/canon/health.md`), is a read of live `amends` links served as `GET /api/projects/:p/health` (07 s3) and Health's row measured, never 0 unmeasured. The check reports none (`spec-check.md` "Not checked yet").
 
 ## Known limits
 
