@@ -22,10 +22,11 @@ Rule: `architecture.md#markers`. ADR-0010, ADR-0016, ADR-0018.
 <a id="code-identity"></a>
 ## Symbol identity and digest
 
-Rule: `architecture.md#code-identity`. ADR-0020, ADR-0021.
+Rule: `architecture.md#code-identity`. ADR-0020, ADR-0021, ADR-0048.
 
 - The marker provides a link's identity; a symbol's `qpath` is only its name. The digest is a normalized tree-sitter AST.
-- Layers (05 §5.1): A, tree-sitter and markers, the MVP, built (`code-identity.md`, bindings `code-bindings.md`); C, rust-analyzer as a library, the Phase 3 precision layer (`crates/specengine-ra`, outside `default-members`); B, the Bevy `schedule_data` dump, Phase 3. What A cannot enumerate, a generic system's instances, needs B or C.
+- Layers (05 §5.1): A, tree-sitter and markers, the MVP, built (`code-identity.md`, bindings `code-bindings.md`); B, a build-derived file (Bevy's `schedule_data` dump), Phase 3; C, rust-analyzer as a library, the Phase 3 precision layer (`crates/specengine-ra`, outside `default-members`). What A cannot enumerate, a generic system's instances, needs B or C.
+- Layer B (ADR-0048): the project writes the file and names it in `[[code.dump]]` with a format name (Bevy 0.19's own RON: `bevy-0.19-schedule`); SpecEngine never patches, builds or runs the project for it, and never walks it as code. Its BLAKE3 keys the index. Its entries annotate layer A symbols as role rows tagged `b`, matched by crate, module path and name, else a unique name, else `ambiguous` or a counted miss; never a symbol, binding, `spec.lock` key, verify row or check finding. Missing, unreadable or stale: a state line and two counts (dumped entries with no symbol, detector registrations not dumped), never an exit. On what is registered in which group, B rows come first; A rows stay, flagged where they disagree. Readers live in `specengine-code`; core and store hold a path and an opaque format name. Not built: `docs/features/bevy-dump.md`.
 
 <a id="spec-lock"></a>
 ## `spec.lock` writers

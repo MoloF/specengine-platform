@@ -37,7 +37,7 @@ WA-17, WA-20. **Every MCP tool's argument names are its CLI flag names, a positi
 
 - **Input schemas**, flat (`mcp-read.md` "Schemas"): strings, `limit` as `search`'s, optionals `[T, "null"]`, `additionalProperties: false`, no root `anyOf`/`oneOf`/`allOf`, no `$ref`: `check_binding` `{"node": string, "symbol": [string, null]}`, `required: ["node"]`. `find_symbols`' four forms are four nullable keys; `query` passes as one positional (6a joins positionals with a space).
 - **Form errors**, per surface as `get_task`'s (`task-package.md` "MCP"; SW refinement): not exactly one form -> error result ``spec: find_symbols takes exactly one of `query`, `node`, `file` and `at` ``; `limit` without `query` -> ``spec: find_symbols takes `limit` with `query` only``. The CLI's (6a): usage, exit 2.
-- **Output mirrors** (`mirror.rs`): every key `required`, absent `null`; enums: `relation`, `id_state`, `rev_state`, `levels_state`, binding `kind`, `form`, `tier`, `ambiguity`, `state`, `class`, `verdict`, `compared`, `base`; free strings: `item_kind`, `layer` (B, C later), `category`, `detail` (5a, 5c add), node kinds.
+- **Output mirrors** (`mirror.rs`): every key `required`, absent `null`; enums: `relation`, `id_state`, `rev_state`, `levels_state`, binding `kind`, `form`, `tier`, `ambiguity`, `state`, `class`, `verdict`, `compared`, `base`; free strings: `item_kind`, `layer`, `category`, `detail` (5a, 5c add), node kinds.
 
 ### Results and exits
 
@@ -141,11 +141,11 @@ spec-writer:
 
 ## Risks
 
-`INSTRUCTIONS` keeps 44 B after 6b; 4c's `report_drift` line (~108 B), 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~190: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists first, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity; the description explains). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors; the row keys amend 4a's JSON. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
+`INSTRUCTIONS` keeps 44 B after 6b; 4c's `report_drift` line (~108 B), 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~190: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity, described). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
 
 ## Out of scope
 
-HTTP routes, UI (Q8, Phase 4); `delta.symbols`, `get_impact` (7b, Q6); `with: ["bindings"]`, bindings in reads (7a); `--unbound` (Q4); fuzzy search, references, call graphs (LSP's); spec-side referrers in `refs` (`get_node` with links); `verify --node --changed`, a base; writing markers or binding code (07's former `bind_code_symbol`); the Bevy layer (10); code resources.
+HTTP routes, UI (Q8, Phase 4); `delta.symbols`, `get_impact` (7b, Q6); `with: ["bindings"]`, bindings in reads (7a); `--unbound` (Q4); fuzzy search, references, call graphs (LSP's); spec-side referrers in `refs` (`get_node` with links); `verify --node --changed`, a base; writing markers or binding code (07's former `bind_code_symbol`); the Bevy layer (10a `bevy-roles.md`, 10b `bevy-dump.md`, 2026-10-10: `find_symbols`' mirror gains `roles`, then `instances`, `flags`, `dumps`, free strings; whichever of 6b, 10a/10b ships second carries them); code resources.
 
 ## Open
 
@@ -165,7 +165,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 
 ## Working answers
 
-[P] checked, [A] assumed. WA-16 [P/A] `check_binding` = `verify --node`: 4a's judge, rows restricted, `ast_hash` fresh, the index only picks files. WA-17 [P] the mirror rules (`mcp-read.md` "Parity", "Schemas", "Texts"); `INSTRUCTIONS` 1 885 / 2 042 B. WA-18 [P/A] MCP drops every exit-2 document today; 4a prints its report at exit 2 after discovery. WA-19 [P] skill descriptions 1 170 / 1 200 B; `plugin.json` 0.7.0; a newly named tool: MINOR. WA-20 [P] no HTTP route.
+[P] checked, [A] assumed. WA-16 [P/A] `check_binding` = `verify --node` (4a's judge, rows restricted). WA-17 [P] the mirror rules (`mcp-read.md` "Parity", "Schemas", "Texts"). WA-18 [P/A] MCP drops every exit-2 document; 4a prints its report at exit 2. WA-19 [P] `plugin.json` 0.7.0; a newly named tool: MINOR. WA-20 [P] no HTTP route.
 
 ## Dependencies and ordering
 

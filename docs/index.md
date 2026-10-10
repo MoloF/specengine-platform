@@ -19,6 +19,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
+- [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
+- [docs/features/bevy-roles.md](features/bevy-roles.md) bevy-roles: framework roles of Rust items in the code index, opt-in [code] frameworks · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft
 - [docs/features/code-tools.md](features/code-tools.md) code-tools: MCP find_symbols, refs, unmapped, check_binding; spec verify --node · crates/specengine-mcp, crates/specengine-cli, plugin, fixtures · draft
 - [docs/features/drift-queue.md](features/drift-queue.md) drift-queue: drift reaches the owner's queue; approving it runs the lock accept · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin, fixtures · draft

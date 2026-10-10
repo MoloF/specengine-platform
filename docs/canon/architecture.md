@@ -73,6 +73,8 @@ Code is linked to the spec by a comment `// @implements ID@rev [tiers]` (also `@
 
 The marker is a link's identity; the digest is a normalized tree-sitter AST. MVP: tree-sitter and markers; rust-analyzer as a library is a Phase 3 precision layer. Layers: `docs/canon/architecture-code.md#code-identity`. ADR-0020, ADR-0021.
 
+A layer B fact, one only a build or run of the project knows, is a file the project writes and names in `[code]`; SpecEngine never builds or runs the project for it. Its facts annotate symbols, never bind, lock, judge or block; on what is registered where they outrank the syntactic detector, both shown. How: `docs/canon/architecture-code.md#code-identity`. ADR-0048.
+
 <a id="ui"></a>
 ## Interface
 

@@ -152,7 +152,7 @@ Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `C
 
 ## Out of scope
 
-bundle layers, read `sync` (7a `bundle-bindings`), `delta.symbols`, `get_impact --since` (7b `impact`; Q6); the Bevy layer (10); layers B, C; levels in the index; `verify` on the index; HTTP, UI (Q8); a watcher; fuzzy search, references, call graphs (LSP's); pruning.
+bundle layers, read `sync` (7a `bundle-bindings`), `delta.symbols`, `get_impact --since` (7b `impact`; Q6); the Bevy layer (10; drafted 2026-10-10: 10a `bevy-roles.md` stores per-file role rows in `code_roles`, linked per read through the tiers here, and adds `roles` to `symbols`' JSON; 10b `bevy-dump.md`, ADR-0048, reads the project's dump as annotation, `layer` stays `a`); layers B, C; levels in the index; `verify` on the index; HTTP, UI (Q8); a watcher; fuzzy search, references, call graphs (LSP's); pruning.
 
 - **6b `code-tools`** (after 4a): MCP `find_symbols`, `refs`, `unmapped`, `check_binding` (= `spec verify --node REF [--symbol QPATH]`, 4a's rows restricted), TOOLS 18, skills. Drafted 2026-10-10: `code-tools.md` (MCP form errors, the `INSTRUCTIONS` text).
 - **6c `code-index-speed`** (if AC-10 fails): `rayon =1.12.0`, rows ordered by path before insert.
