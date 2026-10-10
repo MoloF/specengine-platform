@@ -75,6 +75,8 @@ The marker is a link's identity; the digest is a normalized tree-sitter AST. MVP
 
 A layer B fact, one only a build or run of the project knows, is a file the project writes and names in `[code]`; SpecEngine never builds or runs the project for it. Its facts annotate symbols, never bind, lock, judge or block; on what is registered where they outrank the syntactic detector, both shown. How: `docs/canon/architecture-code.md#code-identity`. ADR-0048.
 
+Layer C, rust-analyzer, is linked only into the separate executable `specengine-ra`, spawned only by `spec resolve`, never by a read, MCP, the daemon, a hook, `check` or `verify`; it runs no project build script or proc macro. Its per-item moniker is advisory index data in the data directory, stale after any change: never a binding, `spec.lock` key, verdict or finding. How: `docs/canon/architecture-code.md#code-identity`. ADR-0049.
+
 <a id="ui"></a>
 ## Interface
 

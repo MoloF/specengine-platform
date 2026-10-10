@@ -43,6 +43,8 @@ symbol_suffixes  (counter.rs, n) 1 "impl Tally #2" · 2 "counter::impl Tally #2"
 
 Computed per read: `id_state`, `rev_state`, coverage, ambiguity (`path_attribute` if `declared_by` and the role is not shared, else `unrooted` by role, else `duplicate` if `twin_files` > 0). RON values are not symbols.
 
+`layer` (2026-10-10, `layer-c.md`, ADR-0049): the layer whose rules made the row and its qpath, `a` on every row; B (10b's role rows) and C (11a's `code_monikers`, joined per read) annotate from their own tables and never change it; only a rebinding slice with its own ADR could. `crates` (Q2) stays refused through slice 11: 11a builds no `[code]` key.
+
 ### Cache key and cross-file pass
 
 WA-3, WA-4. A code file is re-derived when its `(path, BLAKE3)` changed, its package's `targets_fp` (BLAKE3 of the target table: a manifest edit or a new `src/bin/x.rs` renames qpaths), or the worktree's `code_fp`: BLAKE3 of `CODE_INDEX_FORMAT` (`specengine-code`, bumped with any rule here or in slice 1), `recipe_header()`, `[code]`, `IdScheme::prefixes()`; not mtime, not the blob OID. Per-file rows are pure functions of (bytes, path, package table, `code_fp`); in the same Immediate transaction one pass rewrites `twin_files` per qpath and `declared_by` per path that a re-derived or removed file held or holds. No `[code]`: the worktree's code rows go. A stamp change or `--full` re-derives all; queue tables stay.

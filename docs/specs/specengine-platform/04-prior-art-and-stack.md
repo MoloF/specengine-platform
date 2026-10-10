@@ -42,7 +42,7 @@ ref: research-2026-09-28
 |---|---|---|
 | **Aider repo-map** | **file** graph + ranking, signatures, 1,000 tokens by default | wrong granularity for bindings, but "signatures instead of bodies" is ours |
 | **Serena MCP** | LSP (rust-analyzer): `find_symbol`, `find_referencing_symbols`, `replace_symbol_body` | a good **complement** for agent navigation; knows nothing of specs or bindings |
-| **`rust-analyzer scip`** | resolved identity: `rust-analyzer cargo <crate> <ver> <mod>/<fn>().` | **enrichment option** for stable paths (limits: nested definitions #18771, inherent-impl ambiguity #18772); ⚠ time on a large project unmeasured. Call the CLI, do not link `ra_ap_*` |
+| **`rust-analyzer scip`** | resolved identity: `rust-analyzer cargo <crate> <ver> <mod>/<fn>().` | **enrichment option** for stable paths (limits: nested definitions #18771, inherent-impl ambiguity #18772); ⚠ time on a large project unmeasured. Not called: `ra_ap_*` is linked into the separate executable `specengine-ra` (2026-10-10, ADR-0049, `docs/features/layer-c.md`) |
 | **code-graph-mcp** (v0.132) | tree-sitter for 19 languages with full Rust, SQLite + FTS5 + sqlite-vec, **BLAKE3 Merkle per file** for incremental reindexing, call graphs, impact analysis, **detail levels L0–L3 and `compact: true`**; ~139 files/s, ~4.2 MB of DB per 1,000 nodes | **read its schema before designing ours**: it is essentially the "code half" of SpecEngine. At hundreds of kLOC expect an index in tens of seconds and tens of MB |
 | **ast-grep** | relational patterns (`inside`/`has`), `ast_grep_core` as a library | handy for `add_systems`/`add_observer` patterns |
 

@@ -105,6 +105,7 @@ spec verify [--task T] [--tests] [--changed PATH]   # exit 0 ok · 1 Fix-level f
 spec bump [--editorial ID]                           # bump rev of changed nodes (pre-commit fails without it)
 spec lock accept ID [--editorial]                   # accept code changes / an editorial edit
 spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/gate.md
+spec resolve [--timeout S] [--json]                 # layer C on request (draft 2026-10-10: docs/features/layer-c.md, ADR-0049)
 
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
@@ -202,5 +203,5 @@ zones = ["code"]            # min_files, contours: later
 languages = ["rust", "ron"]
 crates = "cargo-metadata"
 bevy = true
-scip = false                # enable enrichment via rust-analyzer scip
+scip = false                # retired 2026-10-10 (ADR-0049): no key; layer C is `spec resolve` (docs/features/layer-c.md)
 ```
