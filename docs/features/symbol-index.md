@@ -16,7 +16,7 @@ Slice 6 is split (Q1): **6a** (this) stores slice 1's per-file results beside th
 
 ## Description and interactions
 
-- **Freshness** (WA-6): `refs`, `symbols`, `unmapped`, `index` refresh the md index, then the code index, as 7a's reads printing code data do, in the CLI, MCP and the daemon (bundle, `show --bindings`, tree, `task show`, `impact`: `bundle-bindings.md`, ADR-0046); `show` without `--bindings`, `search`, `graph` never walk code; `verify`, `lock accept` and `spec health` (`health-code.md` WA-4, 2026-10-10) keep their fresh walk.
+- **Freshness** (WA-6): `refs`, `symbols`, `unmapped`, `index` refresh the md index, then the code index, as 7a's reads printing code data do, in the CLI, MCP and the daemon (bundle, `show --bindings`, tree, `task show`, `impact`: `bundle-bindings.md`, ADR-0046); `show` without `--bindings`, `search`, `graph` never walk code; `verify`, `lock accept` and `spec health` (`health-code.md` WA-4, 2026-10-10) keep their fresh walk; `verify --node` refreshes the index only to pick its files, then hashes them afresh (`code-tools.md`, 2026-10-10).
 - **Crates** (WA-5, WA-22): the store owns walk → compare → apply → cross-file pass behind its trait `CodeAnalyzer` (extensions, packages, fingerprint, analyze; plain rows), implemented in the CLI library over `specengine-code`, reused by the eval; no `rusqlite` type public, no new store or core dependency.
 - **Amended** (WA-9): slices 1, 3, 4a name and lock discriminated twins (`code-a` goldens follow); unique qpaths stay byte-identical.
 
@@ -154,7 +154,7 @@ Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `C
 
 bundle layers, read `sync` (7a `bundle-bindings`), `delta.symbols`, `get_impact --since` (7b `impact`; Q6); the Bevy layer (10); layers B, C; levels in the index; `verify` on the index; HTTP, UI (Q8); a watcher; fuzzy search, references, call graphs (LSP's); pruning.
 
-- **6b `code-tools`** (after 4a): MCP `find_symbols`, `refs`, `unmapped`, `check_binding` (= `spec verify --node REF [--symbol QPATH]`, 4a's rows restricted), TOOLS 18, skills.
+- **6b `code-tools`** (after 4a): MCP `find_symbols`, `refs`, `unmapped`, `check_binding` (= `spec verify --node REF [--symbol QPATH]`, 4a's rows restricted), TOOLS 18, skills. Drafted 2026-10-10: `code-tools.md` (MCP form errors, the `INSTRUCTIONS` text).
 - **6c `code-index-speed`** (if AC-10 fails): `rayon =1.12.0`, rows ordered by path before insert.
 
 ## Open
@@ -165,7 +165,7 @@ bundle layers, read `sync` (7a `bundle-bindings`), `delta.symbols`, `get_impact 
 | 2 `crates` | built only if pilot layout and metadata roles differ |
 | 3 equal qpaths | a discriminator in the qpath |
 | 4 `--unbound` | none; `spec unmapped FILE` |
-| 5 `check_binding` | `spec verify --node REF [--symbol QPATH]` (6b) |
+| 5 `check_binding` | `spec verify --node REF [--symbol QPATH]` (6b, `code-tools.md` 2026-10-10) |
 | 6 `delta.symbols` | slice 7b `impact` |
 | 7 coverage | containment; a RON file one unit; mentions apart |
 | 8 HTTP route | Phase 4 |

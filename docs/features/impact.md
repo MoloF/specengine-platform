@@ -22,13 +22,13 @@ Delivered: `spec impact` and MCP `get_impact` over 7a's rows and sync (`bundle-b
 - **Crates**: core the pure seeds and order, the walk reused; store the revision reader (4a's `HEAD` base reader at any commit: `rev-parse`, `ls-tree -r -z`, one `cat-file --batch`, one `hash-object --no-filters --stdin-paths`, under `GitEnv::child_vars`) and tasks by node; CLI `impact`, verify's delta; MCP `get_impact`. No new crate or dependency; MCP's stay exactly 7 (`build_graph.rs`), no git library.
 - **Reused, unchanged**: `spec graph --impact`'s walk, table and JSON (`spec-cli-graph.md`); 6a's lookup (`symbol-index.md` "Lookup") and `unmapped`'s containment; 7a's row, order, sync and refresh.
 - **Unchanged**: `spec check`, gate, hook, CI, `INDEX_FORMAT`, queue schema, every other read. **Writes**: the data directory only; the queue is read, never written.
-- **Overridden lines**, fixed at shipping (SW-2): 05:160 (`delta.symbols`), 07:31, 07:82-83, 08:44, 08:131.
+- **Overridden lines**, fixed at shipping (SW-2): 05:160 (`delta.symbols`), 07:31 (`node_id | qpath` -> `id | symbol`, 2026-10-10), 07:82-83, 08:44, 08:131.
 
 ## Data
 
 ### Command
 
-Q8, WA-10. `spec impact REF | --symbol QPATH | --since REV [--depth N] [--json]` (+ `--root`, `--config`): exactly one input, else exit 2 ``spec: impact takes exactly one of REF, --symbol and --since``. MCP `get_impact {node_id?, qpath?, since?, depth?}`, each nullable, no root `oneOf` (as `get_task`, `task-package.md` "MCP"): not exactly one -> error result ``spec: get_impact takes exactly one of `node_id`, `qpath` and `since` ``; the read tools' annotations; `content` and `structuredContent` as every read (`mcp-read.md` "Parity").
+Q8, WA-10. `spec impact REF | --symbol QPATH | --since REV [--depth N] [--json]` (+ `--root`, `--config`): exactly one input, else exit 2 ``spec: impact takes exactly one of REF, --symbol and --since``. MCP `get_impact {id?, symbol?, since?, depth?}`, each nullable, no root `oneOf` (as `get_task`, `task-package.md` "MCP"): not exactly one -> error result ``spec: get_impact takes exactly one of `id`, `symbol` and `since` ``. Argument names are the CLI's flags, the positional REF `id` as in `get_node`, `refs` (WA-17 mirror rule, `code-tools.md` "Tools"; 2026-10-10: overrides 07 s1.2's `node_id | qpath`, fixed at shipping). The read tools' annotations; `content` and `structuredContent` as every read (`mcp-read.md` "Parity").
 
 ### Seeds and walk
 
@@ -88,7 +88,7 @@ Q13. `spec verify --changed --json`: "Since"'s `{added, removed, changed, rename
 
 ### INSTRUCTIONS
 
-WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included (6 B of room today; 6b spends first): the reads lines reworded, none dropped.
+WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included (6 B of room today; 6b spends first): the reads lines reworded, none dropped. 2026-10-10: 6b leaves 44 B (`code-tools.md` "INSTRUCTIONS"); in its reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B); re-measured after 6b.
 
 ## Rules and edge cases
 
@@ -102,7 +102,7 @@ WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts
 rust-developer, M: mutation -> the test turning red:
 
 - [ ] RD-1 -- M: outgoing `depends_on` followed -> `impact_nodes_equal_graph_impact`.
-- [ ] RD-2 -- M: two inputs accepted -> `impact_takes_exactly_one_input` (CLI exit 2; MCP error result).
+- [ ] RD-2 -- M: two inputs accepted -> `impact_takes_exactly_one_input` (CLI exit 2; MCP error result); `node_id` or `qpath` as argument names -> `get_impact_arguments_are_the_flag_names` (`{id}`, `{symbol}` answer; `{node_id}` refused by `additionalProperties: false`).
 - [ ] RD-3 -- M: `-o…` or a control character passed through -> `option_like_since_is_refused_before_git`.
 - [ ] RD-4 -- since. M: `HEAD` used instead of REV -> `since_compares_the_given_revision`; untracked files ignored -> `since_counts_untracked_code`; an equal-hash edit counted -> `since_ignores_unchanged_hashes`.
 - [ ] RD-5 -- M: the exact item only -> `symbol_impact_reaches_the_enclosing_binding`.
@@ -127,7 +127,7 @@ spec-writer:
 
 ## Risks
 
-`INSTRUCTIONS` has 6 B left in the `probes` build: `get_impact` needs the reads lines reworded after 6b. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
+`INSTRUCTIONS` has 6 B left in the `probes` build, 44 B after 6b: `get_impact`'s 46 B need a further cut, re-measured after 6b. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
 
 ## Out of scope
 
@@ -140,6 +140,7 @@ spec-writer:
 | Q1 split | 7a `bundle-bindings`, then 7b this | 7a's value waits for 7b's git work |
 | Q7 `since` | a git revision vs the working tree, untracked included; the lock not involved | lock state is a second drift judge; `HEAD` only gives no branch radius |
 | Q8 `get_impact` | a new read tool, twin of `spec impact`; graph unchanged | `graph --impact` changes shipped JSON, and MCP has no graph tool |
+| Names (2026-10-10) | `{id, symbol, since, depth}`: the CLI's flags, REF `id` (WA-17, as 6b) | 07's `node_id`, `qpath`: two names for one argument |
 | Q9 ADR | ADR-0046 (shared with 7a) | the rule lives only in feature canon |
 | Q13 `delta.symbols` | `--changed` only, `HEAD` vs disk, all code; plain null | against the lock duplicates `bindings` |
 
@@ -147,7 +148,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 
 ## Working answers
 
-[P] checked, [A] assumed. WA-6 [P/A] the row key is the lock key; 7a's row serves `symbols`, `tests`. WA-10 [P] `get_impact` is `node_id | qpath | since: <commit>` returning nodes, symbols, tests, tasks (07 s1.2, 06 s1); the walk and its directions exist (`spec-cli-graph.md`). WA-11 [P/A] `since` reuses `--changed`'s git calls at a given revision; git runs only as a subprocess (`build_graph.rs`). WA-12 [P] slice 7 owns `delta.symbols` (`spec-verify.md`, `symbol-index.md` Q6). WA-14 [P] `INSTRUCTIONS` is 1 885 B, 2 042 with `probes`, against 2 048, compile-time asserted; 6b adds four tools first. WA-15 [A] the MCP canon is near 12 288 B: detail in a new `impact.md` canon at shipping.
+[P] checked, [A] assumed. WA-6 [P/A] the row key is the lock key; 7a's row serves `symbols`, `tests`. WA-10 [P] `get_impact` is `node_id | qpath | since: <commit>` (named `id`, `symbol`, `since` from 2026-10-10) returning nodes, symbols, tests, tasks (07 s1.2, 06 s1); the walk and its directions exist (`spec-cli-graph.md`). WA-11 [P/A] `since` reuses `--changed`'s git calls at a given revision; git runs only as a subprocess (`build_graph.rs`). WA-12 [P] slice 7 owns `delta.symbols` (`spec-verify.md`, `symbol-index.md` Q6). WA-14 [P] `INSTRUCTIONS` is 1 885 B, 2 042 with `probes`, against 2 048, compile-time asserted; 6b adds four tools first. WA-15 [A] the MCP canon is near 12 288 B: detail in a new `impact.md` canon at shipping.
 
 ## Dependencies and ordering
 

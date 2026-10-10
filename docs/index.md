@@ -20,6 +20,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft
+- [docs/features/code-tools.md](features/code-tools.md) code-tools: MCP find_symbols, refs, unmapped, check_binding; spec verify --node · crates/specengine-mcp, crates/specengine-cli, plugin, fixtures · draft
 - [docs/features/drift-queue.md](features/drift-queue.md) drift-queue: drift reaches the owner's queue; approving it runs the lock accept · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin, fixtures · draft
 - [docs/features/hash-levels.md](features/hash-levels.md) hash-levels: per-level hashes and fingerprints of a bound item · crates/specengine-code, crates/specengine-eval, fixtures · draft
 - [docs/features/health-code.md](features/health-code.md) health-code: Health shows code assuming a decision and nodes no code binds · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
