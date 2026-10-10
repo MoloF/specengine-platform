@@ -17,7 +17,7 @@ Delivered: a canonical, committed `<root>/spec.lock`; `spec lock accept REF [--e
 ## Description and interactions
 
 - **The owner**, on a terminal, after committing: `spec lock accept R-12` (a list, `[y/N]`, a commit); after a merge conflicting in `spec.lock`, `spec lock regen`.
-- **An agent** never writes it: no MCP tool, route, UI stage or queue kind (WA-12); plugin roles say so (WA-16). **Not a spec file** (WA-1): a proposal would let an agent write hashes as its text.
+- **An agent** never writes it: no MCP tool, route or UI stage writes it (WA-12, amended by ADR-0045: a `drift` queue item, raised by `spec propose drift` or MCP `report_drift`, only asks the owner, whose `spec approve` runs this accept: `drift-queue.md`); plugin roles say so (WA-16). **Not a spec file** (WA-1): a proposal would let an agent write hashes as its text.
 - **Crates** (WA-13): core the model (parse, render, both merges; pure, pinned `toml`); store two git reads beside `WorktreeGit` (a blob OID at a commit, a path's unmerged stages); CLI the commands over slices 1-2 (walk, binding, `hash_item`, `norm_input`, `revision`). No new crate or dependency. **Unchanged**: plain `spec check` never reads the lock (4b's rule reads `HEAD`'s and the staged one: `rev-discipline.md`); hook triggers, CI, `INDEX_FORMAT`, MCP, HTTP, UI; no `spec lock show`; no `[code]` here, so no lock (WA-15).
 - **Spelling** `spec lock regen`, not 05's `--regen`: owner-confirmed writes are verb subcommands with their own flags, exits and `require_terminal` name (`--staged` flags `round answer`, never a parent), so a bare `spec lock` stays a usage error.
 - **Overridden live-spec lines**, fixed at shipping (SW-3; the convention binds canon, not planning specs): 05:20 "apply_proposal — one door" over `spec.lock`; 05:95 `owner | ci` (CI writes nothing); 05:99 "Generated", `--regen`; 05:103, 07:105 `spec bump --editorial` (`spec lock accept --editorial`, and 4b's `spec approve --editorial` in its apply commit, ADR-0043; `bump` never writes the lock); 07:106 `ID` -> `REF`, `regen`; 06:121 "lock updated" = the owner's accept (Q3).
@@ -29,7 +29,7 @@ Delivered: a canonical, committed `<root>/spec.lock`; `spec lock accept REF [--e
 WA-4. One per root, `<root>/spec.lock` (`architecture.md#layout`), rendered by SpecEngine, never by `toml`'s serializer:
 
 ```toml
-# spec.lock: written only by SpecEngine (spec lock, spec verify --tests); do not edit
+# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit
 format = 1
 norm_recipe = "specengine-norm/v1"
 code_recipe = "specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15"
@@ -185,7 +185,7 @@ spec-writer:
 
 ## Out of scope
 
-Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline` (ADR-0043): the revision rule, `spec bump`, an editorial apply writing the lock in its commit. 4c `drift-queue`: a drift queue kind (ADR D). 5 (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b format 2 and `spec lock rebase` (a new ADR); 5c anchors. 6/7: lock data in reads. 8a `verify-tests` (ADR-0044): the runner, no lock write; 8b `tested-evidence`: `[[tested]]` in the next `format`, accept keeping, regen merging, an editorial refresh updating it. Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
+Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline` (ADR-0043): the revision rule, `spec bump`, an editorial apply writing the lock in its commit. 4c `drift-queue` (`drift-queue.md`, ADR-0045): a `drift` queue kind whose approve runs this accept; so accept, the editorial refresh and the gone-node drop are one library function taking a consent closure and extra trailers (`Proposal:`), called by both commands. 5 (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b format 2 and `spec lock rebase` (a new ADR); 5c anchors. 6/7: lock data in reads. 8a `verify-tests` (ADR-0044): the runner, no lock write; 8b `tested-evidence`: `[[tested]]` in the next `format`, accept keeping, regen merging, an editorial refresh updating it. Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
 
 ## Open
 
@@ -193,7 +193,7 @@ Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lo
 |---|---|
 | Q1 who commits | accept, the lock alone, hooks run, inputs from a clean HEAD |
 | Q2 RON and modules | by `file_blob` alone until slice 5 |
-| Q3 naming writers | by consent: the owner's `[y/N]`; an editorial approve refreshes in its apply commit (ADR-0043), a drift decision (ADR D) runs the same accept |
+| Q3 naming writers | by consent: the owner's `[y/N]`; an editorial approve refreshes in its apply commit (ADR-0043), a `drift` item's approve (ADR-0045, `drift-queue.md`) runs the same accept |
 | Q4 a gone node's entries (`spec-verify.md` Q3) | `accept <gone ID>` drops them, same `[y/N]` and commit |
 
 Decided under the owner's pre-approval, review open; WA-1..WA-16: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.

@@ -85,7 +85,7 @@ Check rows never block. Run causes (`cannot:` lines): a config error; no `[code]
 
 ### Output
 
-WA-9. **Text**, stdout: each non-`ok` row in key order as `<class> | <state>[ <category>[ <detail>]] | <node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]` (class `fix`, `check`, `cannot`, prefixed `pre-existing `); the `cannot:` lines; per state present one `hint: <state>: <next step>` (commit and `spec lock accept <ID>` on a terminal, `--editorial`, restore, raise or lower the marker, `spec refs <ID>`); the summary:
+WA-9. **Text**, stdout: each non-`ok` row in key order as `<class> | <state>[ <category>[ <detail>]] | <node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]` (class `fix`, `check`, `cannot`, prefixed `pre-existing `); the `cannot:` lines; per state present one `hint: <state>: <next step>` (commit and `spec lock accept <ID>` on a terminal, `--editorial`, restore, raise or lower the marker, `spec refs <ID>`); once, when a row is `code_ahead`, `spec_ahead`, `conflict` or `broken_binding`, after them `hint: drift: spec propose drift queues it for the owner` (4c, `drift-queue.md` WA-14); the summary:
 
 ```
 fix | conflict | R-12 | implements | crates/game/src/stamina.rs | item game::stamina::regen_system function_item
@@ -161,14 +161,14 @@ Noise: RON and modules by blob, `[sig]` hashed whole until slice 5, all `unlocke
 ## Out of scope
 
 - **4b `rev-discipline`** (ADR-0043, AC-13; `rev-discipline.md`): the rule in `check --staged` and `--changed` (ADR-0019), apply raising `rev`, an editorial approve, `spec bump`, `verify --staged`. Decided: an editorial apply commits its text and refreshed `spec_hash` together, amending ADR-0041's "lock alone"; the rule judges only nodes a `HEAD` lock entry vouches for; this repository's hook trigger stays as is.
-- **4c `drift-queue`** (ADR D): a `drift` kind, approve as the same accept, other outcomes as tasks, the backlog.
+- **4c `drift-queue`** (ADR-0045, `drift-queue.md`): a `drift` kind raised by `spec propose drift` (MCP `report_drift`) over `HEAD`'s rows, the rows this command calls Pre-existing, so the queue is the backlog; approve as the same accept; the other outcomes as draft tasks (`spec reject --follow-up`). This command stays read-only (RD-8); it gains one hint line ("Output").
 - Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7: `delta.symbols` (not 6, `symbol-index.md` Q6), `tests_reaching`, sync in bundles and `get_tree`. 8a `verify-tests` (ADR-0044): `--tests`, `--task`; 8b `tested-evidence`: its lock writes, a `tested` section. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
 
 ## Open
 
 | Point | Answer |
 |---|---|
-| Q1 slice 4 | split: 4a this (ADR-0042), 4b `rev-discipline` (ADR-0043), 4c `drift-queue` (ADR D); 4a first |
+| Q1 slice 4 | split: 4a this (ADR-0042), 4b `rev-discipline` (ADR-0043), 4c `drift-queue` (ADR-0045); 4a first |
 | Q2 which `cannot_verify` stops | any row in scope, locked or not, Pre-existing or not: exit 2 (AC-14) |
 | Q3 orphans | `spec lock accept <gone ID>` drops a gone node's entries, same `[y/N]` and commit (`spec-lock.md`) |
 

@@ -53,3 +53,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0042](decisions/ADR-0042.md) spec verify blocks only by a project's choice and never passes what it could not verify · architecture · accepted
 - [ADR-0043](decisions/ADR-0043.md) Approval raises a changed node's revision; an editorial one refreshes the lock in its commit · architecture · accepted
 - [ADR-0044](decisions/ADR-0044.md) Bound tests run by the project's own command, only on the owner's terminal · architecture · accepted
+- [ADR-0045](decisions/ADR-0045.md) Drift reaches the owner as a queue item; approving it runs the lock accept · architecture · accepted

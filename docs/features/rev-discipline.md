@@ -36,7 +36,7 @@ WA-1, WA-2, Q3. Kinds `update`, `interpretation`, section-form `create` (a new f
 ## Range {#R-13}       ->  ## Range {#R-13 rev=2}
 ```
 
-Prompt: `apply PR-0007 to docs/spec/combat.md on main in /w (applies; raises R-12 3 -> 4, R-13 1 -> 2)? [y/N]`; editorial `… (rebases, editorial: R-12 stays 3; spec.lock: 2 entries)? [y/N]`, the `spec.lock` part only when entries change. No `norm_hash` change: today's question; `--editorial` then adds `note: no node's meaning changes; --editorial changes nothing`. `--editorial` on a kind writing no existing node: exit 2.
+Prompt: `apply PR-0007 to docs/spec/combat.md on main in /w (applies; raises R-12 3 -> 4, R-13 1 -> 2)? [y/N]`; editorial `… (rebases, editorial: R-12 stays 3; spec.lock: 2 entries)? [y/N]`, the `spec.lock` part only when entries change. No `norm_hash` change: today's question; `--editorial` then adds `note: no node's meaning changes; --editorial changes nothing`. `--editorial` on a kind writing no existing node: exit 2, but on a `drift` item (4c, ADR-0045), whose approve runs `spec lock accept --editorial` for its node in a lock-only commit and raises no revision (`drift-queue.md` "Approve").
 
 ### Creation
 
@@ -142,14 +142,14 @@ spec-writer:
 
 ## Out of scope
 
-4c `drift-queue`; slice 5 levels, lock format 2; slice 8: 8a `verify-tests` (`spec verify --tests` runs the bound tests, `verify-tests.md`), 8b `tested-evidence` (writes their evidence into `spec.lock`). A staged lock writer (Q5); a commit-msg hook; a CI range check; `spec edit`; a per-node editorial choice in one proposal; `@rev` pins; raising markers; Health rows; a shipped hook script; a lock here.
+4c `drift-queue` (`drift-queue.md`, ADR-0045); slice 5 levels, lock format 2; slice 8: 8a `verify-tests` (`spec verify --tests` runs the bound tests, `verify-tests.md`), 8b `tested-evidence` (writes their evidence into `spec.lock`). A staged lock writer (Q5); a commit-msg hook; a CI range check; `spec edit`; a per-node editorial choice in one proposal; `@rev` pins; raising markers; Health rows; a shipped hook script; a lock here.
 
 ## Open
 
 - Q1 the editorial proof: one commit of text and the lock's `spec_hash` (ADR-0043 amends ADR-0041).
 - Q2 the rule's scope: nodes a `HEAD` lock entry vouches for; none here. Q3 apply raises each node with an ID whose `norm_hash` changes, locked or not.
 - Q4 AC-13 becomes "a locked node's `norm_hash` changed with neither a revision raise nor an editorial refresh of its lock entries" (08, at shipping).
-- Q5 a hand editorial edit of a locked node: the queue (`propose update`, `approve --editorial`) or `--no-verify`, then `spec lock accept --editorial`. Q6 the agent's hint: rationale text only. Q7 an agent's revision change: refused at creation.
+- Q5 a hand editorial edit of a locked node: the queue (`propose update`, `approve --editorial`) or `--no-verify`, then `spec lock accept --editorial`, or, once 4c ships, `spec propose drift <ID>` and `spec approve PR --editorial` on its `spec_ahead` item (ADR-0045). Q6 the agent's hint: rationale text only. Q7 an agent's revision change: refused at creation.
 
 Decided under the owner's pre-approval, review open; WA-n: the analysis (2026-10-10); "SW refinement": the spec-writer's.
 
