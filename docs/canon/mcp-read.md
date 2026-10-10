@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-07
+reviewed: 2026-10-10
 ---
 
 # MCP read tools and resources
@@ -19,11 +19,11 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 | Tool (types as the flags) | ≙ `spec` |
 |---|---|
 | `get_tree {root?, depth?, kinds?, archive?}` | `tree [ROOT] [--depth N] [--kind K]… [--archive]` |
-| `get_node {id, with?: ["links"], archive?}` | `show REF [--links] [--archive]`; `span_hash` names a proposal's base |
+| `get_node {id, with?: ["links"], archive?}` | `show REF [--links] [--archive]`; `span_hash` a proposal's base, `norm_hash` not (`node-revision.md`) |
 | `search {query, kinds?, limit?, archive?}` | `search "QUERY" [--kind K]… [--limit N] [--archive]`, `query` one term |
 | `get_context_bundle {node_ids: [REF…], budget?}` | `bundle REF… [--budget N]` |
 
-**Parity.** `content` = one text block, byte-equal to `spec <…> 2>&1`: `Outcome::stderr_lines` (each + `\n`), then `render_text`. `structuredContent` = the `--json` document (`render_json`, parsed). Exit 0 -> success, zero hits too; exit 1 -> `isError`, the text and the exit-1 document; exit 2 -> `isError`, the `CliError` line(s) + `\n`, no `structuredContent`. An argument the input schema refuses (a wrong type, an unknown name, a value outside `with`'s enum) is rmcp `Parameters`' error result before any call: `isError`, `failed to deserialize parameters: …`, no `structuredContent`, never a JSON-RPC error (SEP-1303: the model corrects itself). A panic in the call -> `isError`, `internal error: <tool> failed` (no `\n`); a `--json` that does not parse (never expected) -> `internal error: <tool> failed: its --json document does not parse: <e>`. No error ends the session. Determinism is the CLI's: no result holds the root, `HOME` or a date.
+**Parity.** `content` = one text block, byte-equal to `spec <…> 2>&1`: `Outcome::stderr_lines` (each + `\n`), then `render_text`. `structuredContent` = the `--json` document (`render_json`, parsed). Exit 0 -> success, zero hits too; exit 1 -> `isError`, the text and the exit-1 document; exit 2 -> `isError`, the `CliError` line(s) + `\n`, no `structuredContent`. An argument the input schema refuses (a wrong type, an unknown name, a value outside `with`'s enum) is rmcp `Parameters`' error result before any call: `isError`, `failed to deserialize parameters: …`, no `structuredContent`, never a JSON-RPC error (SEP-1303: the model corrects itself). A panic in the call -> `isError`, `internal error: <tool> failed` (no `\n`); a `--json` that does not parse -> `internal error: <tool> failed: its --json document does not parse: <e>`. No error ends the session. Determinism is the CLI's: no result holds the root, `HOME` or a date.
 
 **Annotations** of the reads exactly `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false`; `_meta {"anthropic/maxResultSizeChars": 500000}` (Size).
 
@@ -42,7 +42,7 @@ Text only, for `@`-mentions; one inserts content without a tool call, so no hook
 
 ## No project, discovery, state
 
-The server starts in both eras with or without a project. **No project** = CLI `locate` fails: an unusable current directory or `--root`, no `specengine.toml` by the walk or in `--root`. Then each tool returns the CLI's exit-2 line (naming `spec init`, or the `--root`), `resources/list` `[]`, a read -32603; an unusable `HOME` likewise (`[]`). Any failure once a project is found -> `resources/list` -32603 with the CLI's line: the config unreadable, not UTF-8 or invalid, no slug, the database busy, corrupt or not writable. The CLI's order holds, config -> slug -> `HOME`: a broken config or a missing slug with `HOME` unset is -32603. Following the CLI's split, `--root nope` -> `[]`, `--config nope.toml` -> -32603 (`locate` does not read the `--config` path).
+The server starts in both eras with or without a project. **No project** = CLI `locate` fails: an unusable current directory or `--root`, no `specengine.toml` by the walk or in `--root`. Then each tool returns the CLI's exit-2 line (naming `spec init`, or the `--root`), `resources/list` `[]`, a read -32603; an unusable `HOME` likewise (`[]`). Any failure once a project is found -> `resources/list` -32603 with the CLI's line: the config unreadable, not UTF-8 or invalid, no slug, the database busy, corrupt or not writable. The CLI's order holds, config -> slug -> `HOME`: a broken config or a missing slug with `HOME` unset is -32603. Following the CLI's split, `--root nope` -> `[]`, `--config nope.toml` -> -32603 (`locate` reads no `--config`).
 
 Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing (outcome, project, config, DB handle): an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end (its only write: the index), its answer dropped; other requests are answered meanwhile (`ping` in the legacy era only: 2026-07-28 has none). Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). A quiet panic hook (`main.rs`) prints nothing: stdout carries JSON-RPC only.
 
@@ -75,6 +75,6 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 
 - AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
 - Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered so far, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
-- `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a candidate small fix (CLI/core links), not done.
+- `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a small fix to make (CLI/core links).
 - A panic in the async wrapper, outside `spawn_blocking`, gets no response (low).
 - The Size residue. `resources/list` over a busy, corrupt or read-only database is untested.

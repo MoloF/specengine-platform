@@ -293,14 +293,14 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 7, the stamp
-/// of the recalibrated estimator (docs/features/token-calibration.md
-/// AC-06), and the store's format history is its seven lines. M: estimator
-/// weights changed, the stamp kept (the store's `format.rs` turns red on
-/// the dump; this pins the stamp and the file).
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 8, the stamp
+/// of `nodes.norm_hash` (docs/features/norm-hash.md "Index"), and the
+/// store's format history is its eight lines. M: the dump changed, the
+/// stamp kept (the store's `format.rs` turns red on the dump; this pins the
+/// stamp and the file).
 #[test]
-fn ac16_index_format_is_seven() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 7);
+fn ac16_index_format_is_eight() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 8);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -315,6 +315,7 @@ fn ac16_index_format_is_seven() {
 5 df99199e747d5d2f16712fd23737a443457140d4bb6e37d59393c78724809be4
 6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9
 7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b
+8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650
 "
     );
 }

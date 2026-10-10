@@ -256,6 +256,64 @@ function spanText(node: MockNode, file: MockDocument): string {
   return `${file.lines.slice(node.line - 1, node.endLine).join("\n")}\n`;
 }
 
+/** The recipe a norm hash names first (`docs/features/norm-hash.md` "Data"). */
+const NORM_RECIPE = "specengine-norm/v1";
+
+/**
+ * A node's own lines as the norm recipe takes them: a section's after its heading line, a
+ * document's after its front matter less its first H1; nested ID sections cut out either way.
+ */
+function ownLines(node: MockNode, file: MockDocument): string[] {
+  const cut = file.sections.filter((section) => within(section, node));
+  let from = node.line + 1;
+  if (node.isDocument) {
+    const close = file.lines[0] === "---" ? file.lines.indexOf("---", 1) : -1;
+    from = close < 0 ? node.line : close + 2;
+  }
+  let h1 = !node.isDocument;
+  const own: string[] = [];
+  for (let line = from; line <= node.endLine; line += 1) {
+    const text = file.lines[line - 1] ?? "";
+    if (!h1 && text.startsWith("# ")) {
+      h1 = true;
+      continue;
+    }
+    if (!cut.some((section) => section.line <= line && line <= section.endLine)) {
+      own.push(text);
+    }
+  }
+  return own;
+}
+
+/** The recipe's text: trailing white space trimmed per line, empty runs one, none at either end, no final LF. */
+function normText(lines: readonly string[]): string {
+  const kept: string[] = [];
+  for (const line of lines.map((each) => each.replace(/\s+$/u, ""))) {
+    if (line !== "" || (kept.length > 0 && kept[kept.length - 1] !== "")) {
+      kept.push(line);
+    }
+  }
+  while (kept[kept.length - 1] === "") {
+    kept.pop();
+  }
+  return kept.join("\n");
+}
+
+/**
+ * A stable fake norm hash: the recipe over the own text and, for a document, its front-matter
+ * links as `<type> <written>`, sorted, once each; no path, so a moved file keeps it. Null for a
+ * non-UTF-8 file's node, which has none (`docs/features/norm-hash.md` "Data").
+ */
+function normHash(corpus: MockCorpus, node: MockNode, file: MockDocument): string | null {
+  if (!node.utf8) {
+    return null;
+  }
+  const links = node.isDocument
+    ? [...new Set(corpus.links.filter((each) => each.origin === "frontmatter" && each.path === node.path).map((each) => `${each.type} ${each.written}`))].sort()
+    : [];
+  return `b3:${fakeHex([NORM_RECIPE, String(links.length), ...links, normText(ownLines(node, file))].join("\n"), 64)}`;
+}
+
 function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null): ShownNode {
   const file = fileOf(corpus, node);
   const text = spanText(node, file);
@@ -272,6 +330,7 @@ function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null)
     archived: node.archived,
     utf8: node.utf8,
     sections: file.sections.filter((section) => section.id !== null && within(section, node)).map((section) => section.id ?? ""),
+    norm_hash: normHash(corpus, node, file),
     span_hash: `b3:${fakeHex(`${node.path}\n${text}`, 64)}`,
     text,
     truncated: false,

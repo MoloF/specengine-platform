@@ -148,6 +148,13 @@ const PINS: &[(&str, &str)] = &[
         "0.6.0",
         "e741c8fd7383af6ff0f68d3f778fdfecb72443122ee2c87015211970aa33b30e",
     ),
+    // docs/features/norm-hash.md "spec show and mirrors" (0.6.0 -> 0.7.0,
+    // MINOR): `get_node` returns a new key, `norm_hash`; no skill or role
+    // text changed.
+    (
+        "0.7.0",
+        "d93dbf9854171932f155dae6939c9b97e23a09b702b41627d13f13d1bdd11311",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
@@ -1228,9 +1235,9 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of kind-amendment: 0.6.0, after kind-decision's 0.5.0.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.6.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.5.0");
+    // The pin of norm-hash: 0.7.0, after kind-amendment's 0.6.0.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.7.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.6.0");
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

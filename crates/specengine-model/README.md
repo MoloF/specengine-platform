@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-model]
 owner: owner
-reviewed: 2026-09-30
+reviewed: 2026-10-10
 ---
 
 # specengine-model — the corpus model and the reference grammar
@@ -46,7 +46,7 @@ project   = slug ; scope = slug ; slug = [a-z][a-z0-9-]* ; rev = digit{1,9}
 
 Examples: `R-12@3`, `slug/AC-07`, `shared:PAT-PROBES@3`, `MEC-STAMINA#RULE-STAM-REGEN`, `[[R-12|label]]`. One grammar for text, front-matter and markers.
 
-Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph` even for a look-alike body digit; `id` = the written prefix + the normalised body), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0026#layout` → `ADR-0026`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. A `rev` out of `0..=999999999`, a `rev=` attribute that is not 1–9 digits, or `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one.
+Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph` even for a look-alike body digit; `id` = the written prefix + the normalised body), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0026#layout` → `ADR-0026`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one; `@0` is legal. A node's own `rev` (`Node.rev`: a document's front-matter `rev:`, a section's `rev=N` attribute, never inherited) is 1 to 999 999 999 given once: `0`, not 1–9 digits or a repeat → `bad-rev` and `None`, as is none written; core's `revision` tells them apart (ADR-0040, `docs/canon/node-revision.md`).
 
 Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an alias. A reference-carrying front-matter scalar is exactly one reference; `canon:` tries a reference, else `path[#anchor]`. Nothing is resolved here (existence, aliases, `slug/`, `project:`, anchors): that is `spec check` (`docs/canon/spec-check.md`).
 
@@ -64,7 +64,7 @@ Walks (`Direction`; `docs/canon/spec-cli-graph.md`): `graph_direction` follows e
 
 ## Diagnostics
 
-`Diagnostic = {code, severity, line, span?, fix?, message}`, `line` 1-based. Errors (part of the file unread, never fatal): `not-utf8` (no nodes), `frontmatter-unclosed` (all body), `frontmatter-yaml` (syntax: a line, no span; a cap exceeded), `frontmatter-not-mapping`, `frontmatter-type`, `id-not-in-scheme` (no node ID). Warnings: `unknown-key`, `unknown-link-type`, `unparsed-reference`, `homoglyph` (Latin `fix`), `kind-mismatch`, `duplicate-id` (in-file, both kept), `bad-rev`.
+`Diagnostic = {code, severity, line, span?, fix?, message}`, `line` 1-based. Errors (part of the file unread, never fatal): `not-utf8` (no nodes), `frontmatter-unclosed` (all body), `frontmatter-yaml` (syntax: a line, no span; a cap exceeded), `frontmatter-not-mapping`, `frontmatter-type`, `id-not-in-scheme` (no node ID). Warnings: `unknown-key`, `unknown-link-type`, `unparsed-reference`, `homoglyph` (Latin `fix`), `kind-mismatch`, `duplicate-id` (in-file, both kept), `bad-rev` (above).
 
 ## Tests
 

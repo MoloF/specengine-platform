@@ -513,6 +513,13 @@ export interface ShownNode {
   archived: boolean;
   utf8: boolean;
   sections: string[];
+  /**
+   * `b3:` of the node's meaning (`specengine-norm/v1`: its own text less headings and nested ID
+   * sections; a document's front-matter links too), never a proposal's base; `null` for a document
+   * whose front matter or references failed to parse, and for a non-UTF-8 file's whole-file node.
+   * Source: `docs/features/norm-hash.md` "Data".
+   */
+  norm_hash: string | null;
   /** `b3:` of the whole span's bytes read: a proposal's base (`propose --base`). */
   span_hash: string;
   text: string;

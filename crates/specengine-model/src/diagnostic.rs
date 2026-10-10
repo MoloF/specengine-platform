@@ -43,7 +43,8 @@ pub enum DiagnosticCode {
     KindMismatch,
     /// An ID defined twice in the file; both are kept.
     DuplicateId,
-    /// A revision that is not 1–9 digits.
+    /// A revision that is not 1–9 digits; a heading's or front-matter's
+    /// `rev` also when 0 or given twice (a reference's `@0` is legal).
     BadRev,
 }
 

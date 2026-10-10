@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use pulldown_cmark::{Event, LinkType, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, HeadingLevel, LinkType, Options, Parser, Tag, TagEnd};
 use specengine_model::Span;
 
 /// One heading of the body.
@@ -300,6 +300,23 @@ pub(crate) fn scan(text: &str, body: Span) -> Body {
         first_h1,
         summary,
     }
+}
+
+/// The file span of the first level-1 heading (any container) of `body`,
+/// the body's text, which starts at file offset `base`: as [`scan`] reads
+/// it into `Body::first_h1` (the same reader and options), the heading's
+/// line(s) without trailing whitespace and line ending. The reader stops
+/// at it; `None` without one.
+pub(crate) fn first_h1(body: &str, base: usize) -> Option<Span> {
+    Parser::new_ext(body, options())
+        .into_offset_iter()
+        .find_map(|(event, range)| match event {
+            Event::Start(Tag::Heading {
+                level: HeadingLevel::H1,
+                ..
+            }) => Some(trimmed(body, range).shifted(base)),
+            _ => None,
+        })
 }
 
 /// GitHub's heading slugs, repeats included: the first `x` stays `x`, the

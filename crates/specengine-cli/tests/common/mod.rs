@@ -450,22 +450,36 @@ pub fn os(text: &str) -> OsString {
 /// (docs/features/proposal-apply.md, "Data", `spec show`).
 pub const SPAN_SUFFIX: &str = " | span b3:";
 
+/// The ` | norm b3:<64 hex>` a `spec show` text header carries right
+/// before its span suffix when the node's `norm_hash` is not null
+/// (docs/features/norm-hash.md "spec show and mirrors").
+pub const NORM_SUFFIX: &str = " | norm b3:";
+
+/// 64 lower-case hex digits.
+fn is_b3_hex(hex: &str) -> bool {
+    hex.len() == 64
+        && hex
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
 /// `header` (one `spec show` header line) without its span suffix, which
-/// must be there, last, with 64 lower-case hex digits: the header a bundle
-/// target carries (docs/features/spec-cli-bundle.md, as amended by
-/// proposal-apply Q1).
+/// must be there, last, with 64 lower-case hex digits, and without the norm
+/// suffix before it when there is one: the header a bundle target carries
+/// (docs/features/spec-cli-bundle.md, as amended by proposal-apply Q1 and
+/// norm-hash: `header()` carries neither).
 pub fn header_without_span(header: &str) -> &str {
     let (before, hex) = header
         .rsplit_once(SPAN_SUFFIX)
         .unwrap_or_else(|| panic!("no `{SPAN_SUFFIX}` in the header {header:?}"));
     assert!(
-        hex.len() == 64
-            && hex
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+        is_b3_hex(hex),
         "the span hash of {header:?} is not 64 lower-case hex digits"
     );
-    before
+    match before.rsplit_once(NORM_SUFFIX) {
+        Some((rest, norm)) if is_b3_hex(norm) => rest,
+        _ => before,
+    }
 }
 
 /// `stdout` of `spec show` with its first line (the header) stripped of

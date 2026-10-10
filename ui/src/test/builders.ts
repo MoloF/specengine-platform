@@ -168,6 +168,8 @@ export function aNode(fields: Partial<ShownNode> & Pick<ShownNode, "id">): Shown
     archived: false,
     utf8: true,
     sections: [],
+    // A non-UTF-8 file's whole-file node has none (docs/features/norm-hash.md "Data").
+    norm_hash: fields.utf8 === false ? null : "b3:1111111111111111111111111111111111111111111111111111111111111111",
     span_hash: "b3:0000000000000000000000000000000000000000000000000000000000000000",
     text: `## ${fields.id ?? "Node"}\n\nCurrent text.\n`,
     truncated: false,

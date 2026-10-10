@@ -1077,6 +1077,7 @@ fn ac14_both_fixtures_give_one_key_set() {
             "archived",
             "utf8",
             "sections",
+            "norm_hash",
             "span_hash",
             "text",
             "truncated",

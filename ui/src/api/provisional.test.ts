@@ -194,7 +194,8 @@ const KEYS = {
     terms: true,
     tests: true,
   } satisfies Record<keyof BundleLayers, true>,
-  // crates/specengine-cli/README.md "Output and the cap": a shown node, `span_hash` included.
+  // crates/specengine-cli/README.md "Output and the cap": a shown node, `span_hash` included;
+  // docs/features/norm-hash.md "Data": `norm_hash` right before it.
   ShownNode: {
     id: true,
     kind: true,
@@ -208,6 +209,7 @@ const KEYS = {
     archived: true,
     utf8: true,
     sections: true,
+    norm_hash: true,
     span_hash: true,
     text: true,
     truncated: true,
@@ -294,8 +296,19 @@ const CITED: Record<keyof typeof KEYS, string> = {
   WorkingAnswer: "name, written, path, line, state",
   TailEntry: "name, title, path, line, tokens_est, layer",
   BundleLayers: "targets, open_questions, ancestors, criteria, bindings, decisions, neighbours, terms, tests",
-  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, span_hash, text, truncated, omitted, links",
+  // docs/features/norm-hash.md "Data": JSON node {id, ..., sections, norm_hash, span_hash, ...}.
+  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links",
 };
+
+/** An interface's keys in the order `provisional.ts` declares them (its own lines, two-space indented). */
+function declaredKeys(type: string): string[] {
+  const start = source.indexOf(`export interface ${type} {`);
+  const end = source.indexOf("\n}\n", start);
+  if (start < 0 || end < 0) {
+    return [];
+  }
+  return Array.from(source.slice(start, end).matchAll(/^ {2}(\w+)\??:/gm), (match) => match[1] ?? "");
+}
 
 describe("the read types' keys (AC-02 of ui-tree-node)", () => {
   it.each(Object.keys(KEYS) as (keyof typeof KEYS)[])("%s has exactly the cited keys, in order", (name) => {
@@ -304,6 +317,17 @@ describe("the read types' keys (AC-02 of ui-tree-node)", () => {
 
   it("gives a shown node its span hash", () => {
     expect(Object.keys(KEYS.ShownNode)).toContain("span_hash");
+  });
+
+  it("declares a shown node's keys in the cited order: norm_hash, nullable, right before span_hash (UI-1 of norm-hash)", () => {
+    // The type itself, not the record above: a key missing from it or moved after span_hash is red here.
+    expect(declaredKeys("ShownNode").join(", ")).toBe(CITED.ShownNode);
+    const at = source.indexOf("\n  norm_hash: string | null;\n");
+    expect(at).toBeGreaterThan(source.indexOf("export interface ShownNode {"));
+    const comment = source.slice(source.lastIndexOf("/**", at), at);
+    expect(comment).toContain('Source: `docs/features/norm-hash.md` "Data".');
+    const none: Pick<ShownNode, "norm_hash"> = { norm_hash: null };
+    expect(none.norm_hash).toBeNull();
   });
 
   it("cites a source for each new type: the canon, the CLI README or this slice's spec", () => {

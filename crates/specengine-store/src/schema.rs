@@ -53,6 +53,7 @@ CREATE TABLE nodes (
   title TEXT,
   parent_id TEXT,
   own_text TEXT NOT NULL,
+  norm_hash TEXT,
   node TEXT NOT NULL,
   UNIQUE (file_id, ord)
 ) STRICT;

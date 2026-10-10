@@ -401,15 +401,14 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// AC-06 of docs/features/token-calibration.md: the recalibrated weights of
-/// core's `tokens_est` change `nodes.tokens_est` (not the schema), so
-/// `INDEX_FORMAT` is 7 and the history is the six earlier lines, verbatim,
-/// followed by exactly one `7 <hash>` line (no earlier `7`). Replaces
-/// spec-cli's format-6 pin (docs/features/spec-cli.md AC-19), whose line
-/// stays verbatim. M: the stamp kept 6; an earlier line edited.
+/// docs/features/norm-hash.md TE-6 ("Index", WA-10): `nodes.norm_hash` and
+/// the parser's revision rules make `INDEX_FORMAT` 8, and the history is
+/// the seven earlier lines, verbatim, followed by exactly one `8 <hash>`
+/// line (no earlier `8`). Replaces token-calibration's format-7 pin (AC-06),
+/// whose line stays verbatim. M: the stamp kept 7; an earlier line edited.
 #[test]
-fn token_calibration_pins_format_7_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 7);
+fn norm_hash_pins_format_8_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 8);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -425,11 +424,12 @@ fn token_calibration_pins_format_7_with_one_new_history_line() {
         "4 d958fe30af22feb15f1dbd8fafa67ef1113a8c4ba267c4dd71a8968eb30bf5b5",
         "5 df99199e747d5d2f16712fd23737a443457140d4bb6e37d59393c78724809be4",
         "6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9",
+        "7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "spec-cli's history plus exactly one new line:\n{history}"
+        "token-calibration's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -438,15 +438,15 @@ fn token_calibration_pins_format_7_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "7", "the new line is format 7: {last}");
+    assert_eq!(format, "8", "the new line is format 8: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("7 ")).count(),
+        lines.iter().filter(|line| line.starts_with("8 ")).count(),
         1,
-        "no earlier `7` line"
+        "no earlier `8` line"
     );
 }
 
@@ -842,5 +842,112 @@ fn the_id_after_u64_max_is_an_error_not_a_panic() {
     assert_eq!(
         queue.list(&ProposalFilter::default()).expect("list").len(),
         2
+    );
+}
+
+/// docs/features/norm-hash.md TE-6 ("Index"): a database a format-7 build
+/// left (its `nodes` without `norm_hash`, stamped 7) with a proposal queue
+/// in its file: reads are `NotIndexed`, the next update re-parses all,
+/// after which every node row carries `norm_hash` (NULL only where null),
+/// the index equals a fresh one and the queue's dump is byte for byte the
+/// same. M: the stamp kept at 7 (the update writes `norm_hash` into a
+/// format-7 table); a queue table dropped by the recreation.
+#[test]
+fn a_seven_stamped_database_rebuilds_with_its_queue_intact() {
+    use specengine_store::{Decision, ProposalQueue as _, SqliteQueue};
+
+    let scratch = Scratch::new("format-seven");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let db = scratch.db("lantern");
+    let mut index = corpus.open(&db);
+    corpus.update(&mut index);
+    let mut queue = SqliteQueue::open(&db, "lantern-keep").expect("the queue opens");
+    for (target, at) in [
+        ("RULE-SPRINT-COST", "2026-10-10T01:00:00Z"),
+        ("MEC-STAMINA", "2026-10-10T01:01:00Z"),
+    ] {
+        queue.create(&queue_proposal(target), at).expect("create");
+    }
+    queue
+        .approve(
+            "PR-0002",
+            &Decision {
+                decided_by: "Ann <a@example.org>".to_owned(),
+                note: Some("kept".to_owned()),
+                staged_at: None,
+            },
+            "2026-10-10T01:02:00Z",
+        )
+        .expect("approve");
+    let queue_dump = queue.dump().expect("queue dump");
+    assert!(queue_dump.lines().count() >= 4, "{queue_dump}");
+
+    // What a format-7 build left: `nodes` without `norm_hash`, stamp 7.
+    {
+        let conn = rusqlite::Connection::open(&db).expect("raw connection");
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .expect("busy timeout");
+        conn.execute_batch("ALTER TABLE nodes DROP COLUMN norm_hash")
+            .expect("drop the column");
+        let columns: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('nodes') ORDER BY cid")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            columns,
+            [
+                "node_id",
+                "file_id",
+                "ord",
+                "line",
+                "id",
+                "kind",
+                "title",
+                "parent_id",
+                "own_text",
+                "node"
+            ],
+            "the format-7 nodes table"
+        );
+    }
+    rewrite_stamp(&db, "7");
+    assert_not_indexed(index.files(), "files() of a 7-stamped database");
+    assert_not_indexed(index.lookup_id("MEC-STAMINA"), "lookup_id() at 7");
+
+    let report = corpus.update(&mut index);
+    assert!(report.reparsed_all, "the stamp 7 re-parses all: {report:?}");
+    assert_eq!(report.parsed, report.walked, "{report:?}");
+    assert_equals_fresh(&index, &corpus, &scratch, "the format-7 database");
+    assert_eq!(
+        queue.dump().expect("queue dump"),
+        queue_dump,
+        "the queue after the rebuild"
+    );
+    drop(queue);
+    let queue = SqliteQueue::open(&db, "lantern-keep").expect("reopened");
+    assert_eq!(queue.dump().expect("queue dump"), queue_dump, "reopened");
+
+    let conn = rusqlite::Connection::open(&db).expect("raw connection");
+    let stamp: String = conn
+        .query_row(
+            "SELECT value FROM index_meta WHERE key = 'format'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stamp, INDEX_FORMAT.to_string());
+    let (rows, hashed): (i64, i64) = conn
+        .query_row("SELECT count(*), count(norm_hash) FROM nodes", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap();
+    // spec-a: one null document (stamina-tuning.md, frontmatter-type).
+    assert_eq!(
+        (rows, hashed),
+        (20, 19),
+        "every row but the null one hashed"
     );
 }

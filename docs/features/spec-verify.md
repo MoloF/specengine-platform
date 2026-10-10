@@ -48,7 +48,7 @@ WA-4. Per row: R, H the node's revision and `norm_hash` ("Spec side"); E its loc
 |---|---|---|---|
 | `cannot_verify` | `item_error` (the hash's `ErrorCategory`, snake case) | the bound item `has_error()`; RON `nesting_too_deep` | cannot |
 | | `ambiguous_symbol` (`path_attribute`, `unrooted`, `duplicate`); `ambiguous_id` | an ambiguous qpath or RON path; an ID naming several nodes | |
-| | `rev_unknown`, `hash_null` | R unreadable; H null (`norm-hash.md` "Null") | |
+| | `rev_unknown`, `hash_null` | R unreadable; H null (`docs/canon/node-revision.md` "Null") | |
 | | `unreadable` (`unreadable`, `not_utf8`, `outside_code`) | the file unreadable, not UTF-8, or on disk outside `[code]` | |
 | | `hidden_by_error` | E's symbol missing from a file with `orphan_errors > 0` | |
 | `predated` | | a marker N > R | Fix |

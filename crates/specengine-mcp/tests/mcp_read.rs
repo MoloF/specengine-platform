@@ -703,3 +703,125 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
         assert_eq!(answer["name"], json!("ASM-01"));
     }
 }
+
+// ------------------------------------------------- norm-hash TE-8
+
+/// docs/features/norm-hash.md TE-8 ("spec show and mirrors"): `get_node`
+/// answers what `spec show` answers, its node carrying `norm_hash` (a
+/// hashed section, a null document of a broken front-matter, the whole
+/// file of one that is not UTF-8), in both eras, each answer checked for
+/// parity with the CLI library and against the `outputSchema`; the schema
+/// declares `norm_hash` on the node, required, a string or `null`, and
+/// not at the document's top level; the walker refuses a node without it,
+/// a number in it, a top-level copy. M: the key at the document's
+/// (`NodeView`'s) top level; missing from the mirror.
+#[test]
+fn te8_get_node_norm_hash_parity_and_schema() {
+    let project = Project::new("spec-a");
+    write(
+        &project.root,
+        "docs/spec/broken.md",
+        b"---\nid: MEC-BROKEN\n---\n\n# Broken\n\nbad \xff byte\n".as_slice(),
+    );
+    let results = project.parity(&[
+        node("RULE-SPRINT-COST"),
+        node("MEC-STAMINA"),
+        node("docs/features/stamina-tuning.md"),
+        node("docs/spec/broken.md"),
+    ]);
+    for era in &results {
+        let first = |index: usize| era[index]["structuredContent"]["nodes"][0].clone();
+        assert_eq!(
+            first(0)["norm_hash"],
+            "b3:bb97b1d5b795143baa4c6e9b3cfc3d7f7c798239339680cf8ed0f3af1623ca4d"
+        );
+        assert_eq!(
+            first(1)["norm_hash"],
+            "b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06"
+        );
+        assert!(first(2)["norm_hash"].is_null(), "{}", first(2));
+        assert!(first(3)["norm_hash"].is_null(), "{}", first(3));
+        assert_eq!(first(3)["utf8"], json!(false));
+        for reply in era {
+            assert_eq!(
+                key_set(&reply["structuredContent"], "document"),
+                set_of(&["ref", "reason", "notes", "nodes"]),
+                "no norm key at the top level"
+            );
+        }
+        // The text content carries the header's ` | norm` before ` | span`.
+        let header = content_text(&era[0]).lines().next().unwrap().to_owned();
+        assert!(
+            header.ends_with(&format!(
+                " | rev 3 | norm b3:bb97b1d5b795143baa4c6e9b3cfc3d7f7c798239339680cf8ed0f3af1623ca4d | span {}",
+                first(0)["span_hash"].as_str().unwrap()
+            )),
+            "{header}"
+        );
+        assert!(
+            !content_text(&era[2])
+                .lines()
+                .next()
+                .unwrap()
+                .contains(" | norm ")
+        );
+    }
+
+    let (mut session, schemas) = project.open(common::read::Era::Legacy);
+    let schema = &schemas["get_node"];
+    let node_schema = &schema["properties"]["nodes"]["items"];
+    let declared: Vec<&String> = node_schema["properties"]
+        .as_object()
+        .unwrap_or_else(|| panic!("node properties: {node_schema}"))
+        .keys()
+        .collect();
+    assert!(
+        declared.iter().any(|key| *key == "norm_hash"),
+        "{declared:?}"
+    );
+    assert!(
+        node_schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("norm_hash")),
+        "{node_schema}"
+    );
+    assert!(
+        schema["properties"].get("norm_hash").is_none(),
+        "not at the top level: {schema}"
+    );
+    let norm_schema = &node_schema["properties"]["norm_hash"];
+    assert!(
+        conforms(norm_schema, &json!(null), "$").is_ok(),
+        "{norm_schema}"
+    );
+    assert!(
+        conforms(norm_schema, &json!("b3:00"), "$").is_ok(),
+        "{norm_schema}"
+    );
+    assert!(
+        conforms(norm_schema, &json!(7), "$").is_err(),
+        "{norm_schema}"
+    );
+
+    let reply = session.call("get_node", json!({"id": "RULE-SPRINT-COST"}));
+    let document = result(&reply)["structuredContent"].clone();
+    conforms(schema, &document, "$").expect("the real document conforms");
+    let mut without = document.clone();
+    without["nodes"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("norm_hash");
+    assert!(
+        conforms(schema, &without, "$").is_err(),
+        "norm_hash missing"
+    );
+    let mut number = document.clone();
+    number["nodes"][0]["norm_hash"] = json!(1);
+    assert!(conforms(schema, &number, "$").is_err(), "a number");
+    let mut top = document.clone();
+    top["norm_hash"] = document["nodes"][0]["norm_hash"].clone();
+    assert!(conforms(schema, &top, "$").is_err(), "a top-level copy");
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+}

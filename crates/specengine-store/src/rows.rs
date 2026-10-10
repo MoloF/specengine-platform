@@ -43,6 +43,9 @@ pub(crate) struct NodeRow {
     pub title: Option<String>,
     pub parent_id: Option<String>,
     pub own_text: String,
+    /// `b3_hash` of core's `norm_input` over the same parse; `None` when
+    /// null (task spec `norm-hash`).
+    pub norm_hash: Option<String>,
     pub node: String,
     /// Front-matter `aliases:` of the node, in source order.
     pub aliases: Vec<String>,
@@ -112,6 +115,8 @@ impl FileRows {
                     title: node.title.clone(),
                     parent_id: node.parent.as_ref().map(|parent| parent.id.clone()),
                     own_text: own_text(bytes, parsed, index),
+                    norm_hash: specengine_core::norm_input(parsed, bytes, index)
+                        .map(|input| crate::b3_hash(&input)),
                     node: to_json(node, "node")?,
                     aliases: node
                         .fields

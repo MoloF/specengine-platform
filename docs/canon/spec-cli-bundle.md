@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-10-10
 ---
 
 # spec bundle and bundle_hash
@@ -24,7 +24,7 @@ Core `check::bundle_layers(&SpecGraph, &[NodeAt]) -> BundleLayers`, pure, by lin
 
 | # | JSON key, heading | Candidates | Form |
 |---|---|---|---|
-| 1 | `targets`, Targets | the resolved REFs by (path, ord) | `spec show`'s header without ` \| span …`, and text; degrades (Fitting) |
+| 1 | `targets`, Targets | the resolved REFs by (path, ord) | `spec show`'s header without ` \| norm …` and ` \| span …`, and text; degrades (Fitting) |
 | 2 | `open_questions`, Open questions | linked by any type, `mentions` included; holding a `working_answer:` edge (any state); no resolved `answers` written in a live file lands on it or a node within it | header, summary, `working answer: …` |
 | 3 | `ancestors`, Ancestors | `SpecGraph::ancestors` per target, nearest first; a non-live one is dropped and the chain goes on past it; a `parent:` cycle ends at its first member (pass 3) | header, summary |
 | 4 | `criteria`, Criteria | sources of `verifies` linked in; an ID section whose prefix has `scope = "feature"`, linked in by any type | header, text |

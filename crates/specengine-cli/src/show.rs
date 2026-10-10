@@ -18,7 +18,10 @@
 //! read once after the update, never from the index; a file that is not
 //! UTF-8 is printed with U+FFFD and marked. Each node carries its
 //! `span_hash`, the store's `b3_hash` of the exact span bytes read (task
-//! spec `proposal-apply`: what `spec propose --base` takes).
+//! spec `proposal-apply`: what `spec propose --base` takes), and its
+//! `norm_hash`, the `b3_hash` of core's `norm_input` over that same parse
+//! (task spec `norm-hash`; null for the whole file of one that is not
+//! UTF-8).
 //!
 //! `--links` (task spec `spec-cli-graph`): each shown node also carries its
 //! links, one hop both ways, from the index-fed spec graph
@@ -87,6 +90,12 @@ pub struct ShownNode {
     pub utf8: bool,
     /// The ID sections nested in it, in source order.
     pub sections: Vec<NestedSection>,
+    /// `b3:` and the BLAKE3 of core's `norm_input` over the fresh parse of
+    /// the bytes read (task spec `norm-hash`): its own text and, for a
+    /// document, its declared links; `None` when null (a file that is not
+    /// UTF-8, a document whose front-matter may have lost a link), and in
+    /// `spec bundle`'s targets, whose headers carry none.
+    pub norm_hash: Option<String>,
     /// `b3:` and the BLAKE3 of the exact span bytes read (no line end
     /// added, no U+FFFD; the whole span even when the output is cut): the
     /// `--base` of `spec propose`.
@@ -242,6 +251,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         }
         for ord in pick(&parsed, &target, written) {
             let mut node = shown(path, &bytes, &parsed, ord, archived, utf8);
+            node.norm_hash = norm_hash(&parsed, &bytes, ord);
             node.links = links_of(path, ord, node.id.as_deref());
             citations.push(match (resolver.feature_slug(path), &node.id) {
                 (Some(slug), Some(id)) => format!("{slug}/{id}"),
@@ -484,8 +494,14 @@ fn bare_text<'w>(reference: &Reference, written: &'w str) -> &'w str {
         .unwrap_or(text)
 }
 
+/// The `norm_hash` of node `ord` of `parsed`, the parse of `bytes`: the
+/// store's `b3_hash` of core's `norm_input`; `None` when null.
+fn norm_hash(parsed: &ParsedFile, bytes: &[u8], ord: usize) -> Option<String> {
+    specengine_core::norm_input(parsed, bytes, ord).map(|input| b3_hash(&input))
+}
+
 /// Node `ord` of `parsed`, its text from `bytes` (also `spec bundle`'s
-/// targets).
+/// targets); its `norm_hash` is left `None` (only `spec show` prints one).
 pub(crate) fn shown(
     path: &str,
     bytes: &[u8],
@@ -533,6 +549,7 @@ pub(crate) fn shown(
         archived,
         utf8,
         sections,
+        norm_hash: None,
         span_hash: span_hash(bytes, node),
         text,
         links: None,
@@ -555,6 +572,7 @@ fn whole_file(path: &str, bytes: &[u8], archived: bool, utf8: bool) -> ShownNode
         archived,
         utf8,
         sections: Vec::new(),
+        norm_hash: None,
         span_hash: b3_hash(bytes),
         text,
         links: None,

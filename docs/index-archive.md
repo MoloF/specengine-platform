@@ -31,6 +31,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/kind-interpretation.md](features/kind-interpretation.md) shipped
 - [docs/features/layer-a-identity.md](features/layer-a-identity.md) shipped
 - [docs/features/mcp-read.md](features/mcp-read.md) shipped
+- [docs/features/norm-hash.md](features/norm-hash.md) shipped
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) shipped
 - [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) shipped
 - [docs/features/pilot-schemes.md](features/pilot-schemes.md) shipped

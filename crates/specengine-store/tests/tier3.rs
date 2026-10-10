@@ -42,7 +42,9 @@ fn columns(index: &SqliteIndex) -> (BTreeMap<String, i64>, BTreeMap<(String, i64
                 );
             }
             "nodes" => {
-                assert_eq!(row.len(), 11, "nodes: project, root, path, ord, line, …");
+                // Twelve since docs/features/norm-hash.md ("Index"):
+                // `norm_hash` after `own_text`.
+                assert_eq!(row.len(), 12, "nodes: project, root, path, ord, line, …");
                 lines.insert(
                     (
                         row[2].as_str().unwrap().to_owned(),

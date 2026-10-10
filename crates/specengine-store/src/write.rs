@@ -405,8 +405,9 @@ impl<'t> Writer<'t> {
             insert_node: tx
                 .prepare(
                     "INSERT INTO nodes
-                       (file_id, ord, line, id, kind, title, parent_id, own_text, node)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                       (file_id, ord, line, id, kind, title, parent_id, own_text,
+                        norm_hash, node)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 )
                 .db()?,
             insert_alias: tx
@@ -465,6 +466,7 @@ impl<'t> Writer<'t> {
                     node.title.as_deref(),
                     node.parent_id.as_deref(),
                     node.own_text.as_str(),
+                    node.norm_hash.as_deref(),
                     node.node.as_str(),
                 ))
                 .db()?;

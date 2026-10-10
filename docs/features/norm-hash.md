@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin]
-ref: Phase 3 plan 2026-10-10, slice 2 (WA-1..WA-15, RD/TE/UI/SW criteria; review points decided under the owner's pre-approval, review open); 05 s3.3, s3.5; 08 s2 Phase 3
+ref: Phase 3 plan 2026-10-10, slice 2 (WA-1..WA-15, RD/TE/UI/SW criteria; review points decided under the owner's pre-approval, review open); 05 s3.3, s3.5; 08 s2 Phase 3; Rust 2 iterations, UI 1, review accepted
+shipped: 2026-10-10
 adrs: [ADR-0040]
 ---
 
@@ -10,176 +11,96 @@ adrs: [ADR-0040]
 
 ## Why
 
-Slice 3 (`spec-lock`) will write each binding's `spec_hash` = the node's `norm_hash` into `spec.lock` (05 s3.5), slice 4 compares it, and a marker's `@N` (slice 1, `code-refs`) meets the node's revision. Neither contract exists: 05 s3.5 names what goes into the hash, not its bytes; a section's revision is the core README's open Q3, and today the parser accepts `rev=0` / `rev: 0` and takes the first of two `rev=`. Once a lock is committed the recipe cannot change without re-verifying every binding, so both are fixed before anything writes them.
-
-The slice writes no spec, lock or file under a project root and blocks nothing (ADR-0012): one pure core function, one index column, one `spec show` field and its mirrors. ADR-0040 records the revision rule (`docs/canon/architecture.md#layout`).
+Slice 3 (`spec-lock`) writes each binding's `spec_hash` = the node's `norm_hash` into `spec.lock` (05 s3.5), slice 4 compares it, and a marker's `@N` (slice 1, `code-refs`) meets the node's revision. Neither contract existed: 05 s3.5 named what goes into the hash, not its bytes; a section's revision was the core README's open Q3, and the parser accepted `rev=0` / `rev: 0` and took the first of two `rev=`. Once a lock is committed the recipe cannot change without re-verifying every binding, so both were fixed before anything writes them. The slice writes no spec, lock or file under a project root and blocks nothing (ADR-0012); ADR-0040 records the revision rule (`docs/canon/architecture.md#layout`).
 
 ## Description and interactions
 
-- **An agent** sees ` | norm b3:<hex>` in `spec show`'s header and `norm_hash` in `get_node`; a proposal's base stays `span_hash` (WA-11, WA-12).
-- **Slice 3** parses a blob's bytes and calls `norm_input`, then `b3_hash`; `revision`, `NORM_RECIPE` (WA-15).
-- **Crates** (WA-9..WA-12): core the recipe and `revision`, no new dependency (`Cargo.lock`, `build_graph.rs` untouched); store the column; CLI `show`; MCP the mirror field; HTTP passes show's JSON through; UI the provisional type and mocks, no screen; plugin MINOR 0.7.0 (`get_node` returns a new key), no skill or role text change.
-- **Unchanged**: `spec check` (no new code; `bad-rev` also covers `0` and a repeat), `bundle` text and `bundle_hash`, `tree`, `search`, model `Node`, the parse JSON, the reference grammar, `fixtures/daemon-keys.json` (NodeView lists top-level keys only).
+Canon: `docs/canon/node-revision.md` ("Revision", "The recipe", "Null", "Where it appears", "Known limits"); the core, model, store and CLI READMEs; `mcp-read.md` (`get_node`), `plugin-files.md` (0.7.0), `spec-cli-bundle.md` (targets). Unchanged: `spec check` (no new code; `bad-rev` also covers `0` and a repeat), `bundle` text and `bundle_hash`, `tree`, `search`, the parse JSON, the reference grammar, `fixtures/daemon-keys.json`.
 
 ## Data
 
 ### Revision
 
-WA-1..WA-3, ADR-0040. A section's revision is its own `rev=N` attribute, a document's its front-matter `rev:`; never inherited.
-
-| Written | Revision | Finding |
-|---|---|---|
-| nothing | 1 | none |
-| `rev: 3`; `## Cost {#RULE-SPRINT-COST rev=3}` | 3 | none |
-| `rev=007` | 7 (leading zeros read) | none |
-| `rev=0`, `rev: 0` | unknown | `bad-rev` (new: today 0) |
-| `rev=3a`, bare `rev`, 10 digits, `rev: -1` | unknown | `bad-rev` (as today) |
-| `rev=2 rev=3` on one heading | unknown | `bad-rev` (new: today 2) |
-| `rev:` twice in front-matter | unknown | YAML's own finding if it refuses the repeat, else `bad-rev` at the second |
-| `rev: "3"`, `rev: [3]` | unknown | `frontmatter-type` (as today) |
-| front-matter failed (`frontmatter-unclosed`, `frontmatter-yaml`, `frontmatter-not-mapping`) | unknown | that finding |
-| a section without `rev=`, its document `rev: 5` | 1 | none |
-
-`bad-rev` stays a warning (`engine.rs` severity table); no new code. The grammar is unchanged: `R-1@0` parses, and `@0` against any known revision is `spec_ahead` (`code-refs.md` "States").
-
-Core: `revision(parsed: &ParsedFile, ord: usize) -> Revision`, `enum Revision {Written(u32), Unwritten, Unreadable}`, `number() -> Option<u32>` (`Unwritten` -> `Some(1)`, `Unreadable` -> `None`). Unreadable: a section whose `attrs` hold `rev` and whose `Node.rev` is none; a document whose `extra` holds `rev` or whose `front_matter_failure` is some. `show` and `tree` keep printing `rev` as written (` | rev <n>` only when written).
+`docs/canon/node-revision.md` "Revision" (WA-1..WA-3).
 
 ### The recipe
 
-WA-4..WA-7, WA-13. The recipe sees only spans and links: no key, kind or prefix literal.
-
-**Text.**
-
-- A section: `own_spans(parsed, ord)`, its body (the line after its heading to its end) minus nested ID sections; never its heading line(s).
-- A document (ord 0): `own_spans(parsed, 0)`, the file's body minus its ID sections, minus the first H1's line(s) with their line endings when that H1 is not an ID section. The H1 is found by re-scanning the body as the parser does (same `pulldown-cmark` options), never through slug anchors (an H1 of punctuation has none). A document's hash never covers its ID sections.
-
-**Normalization**, in order: pieces joined with LF; CRLF, then a lone CR -> LF; trailing Unicode `White_Space` trimmed per line; runs of empty lines -> one; leading and trailing empty lines dropped; no final LF. Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (the line rules apply inside them), the Unicode form (no NFC). A BOM is never text.
-
-**Links** (documents only; a section's inline references are part of its text): `ParsedFile.links` with origin `frontmatter` and `src` equal to node 0's `id` (both absent included): every `links` item of any type (an unknown type as written), `supersedes`, `working_answer`, `canon`, `refs` and `adrs` as `mentions`. Not the `supersedes` link `status: superseded-by X` gives (its `src` is X). Each rendered from the parsed value, byte-sorted, duplicates dropped:
-
-```
-<type> ref:[<project>:][<scope>/]<id>[#<section>][@<rev>]     a reference: id Latin, an alias prefix as written,
-                                                              rev decimal, wiki label and form dropped
-<type> path:<path>[#<anchor>]                                 a canon: path target
-```
-
-**Never counted**: front-matter `id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, untyped (`extra`) keys; a heading line; a revision.
-
-**Bytes** (framing as `specengine-hash/v2`, `crates/specengine-code/README.md` "Hash recipe"):
-
-```
-frame(x)  = u32le(len x) || x
-input     = frame(NORM_RECIPE) || u32le(link count) || frame(link)... || frame(text)
-NORM_RECIPE = "specengine-norm/v1"
-norm_hash = b3_hash(input) = "b3:" + 64 lowercase hex BLAKE3          # specengine_store::b3_hash
-```
-
-Core: `pub const NORM_RECIPE`, `norm_input(parsed: &ParsedFile, bytes: &[u8], ord: usize) -> Option<Vec<u8>>`, `parsed` the parse of `bytes`; `None` = null (below). Pure: no I/O, no hash crate (WA-9).
-
-Example, `fixtures/spec-a/docs/spec/movement/sprint.md`. RULE-SPRINT-COST (`## Cost {#RULE-SPRINT-COST rev=3}`, a nested `### Empty tank {#EDGE-SPRINT-EMPTY .playtest}` cut out):
-
-```
-12 00 00 00  "specengine-norm/v1"
-00 00 00 00
-3f 00 00 00  "Sprinting costs 12 units/s, set by R-12@2 and bounded by A-101."
-```
-
-MEC-SPRINT (`parent`, `class`, `tier`, `owner`, `reviewed` not counted; `# Sprint` and the Cost section cut; `## Tuning notes` has no ID, so it is text):
-
-```
-12 00 00 00  "specengine-norm/v1"
-02 00 00 00
-1e 00 00 00  "constrains ref:RULE-STAM-REGEN"
-1a 00 00 00  "depends_on ref:MEC-STAMINA"
-frame("Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMINA#RULE-STAM-REGEN|regeneration]]).\n\n## Tuning notes\n\nNumbers come from the feature stamina-tuning/AC-07 and from shared:DEC-0023@1.")
-```
-
-**Null** (WA-8): a document whose file carries `frontmatter-unclosed`, `frontmatter-yaml`, `frontmatter-not-mapping`, `frontmatter-type` or `unparsed-reference` (a declared link may be lost); its sections keep their hashes. A non-UTF-8 file has no nodes; `show`'s whole-file node is null. `id-not-in-scheme`, `homoglyph`, `bad-rev`, `unknown-*`, `duplicate-id` null nothing.
+`docs/canon/node-revision.md` "The recipe", "Null" (WA-4..WA-8, WA-13): `specengine-norm/v1`, frozen; deviations 1 and 2 below are part of it.
 
 ### Index
 
-WA-10. `nodes.norm_hash TEXT` (NULL = null) on every node row, from the parse the row stores. `INDEX_FORMAT` 7 -> 8; `crates/specengine-store/tests/format_history.txt` gains one `8 <hash>` line after the seven; an index stamped 7 is rebuilt by the stamp check, the queue kept (`format.rs`). No read API yet: slice 3 reads it.
+`nodes.norm_hash` after `own_text`, `INDEX_FORMAT` 7 -> 8, `format_history.txt` `8 91ccc1a3…`; a 7-stamped index rebuilds, the queue kept (WA-10; `crates/specengine-store/README.md`).
 
 ### spec show and mirrors
 
-WA-11, WA-12.
-
-```
-RULE-SPRINT-COST | rule | Cost | docs/spec/movement/sprint.md:18 | <n> tokens | rev 3 | norm b3:<64 hex> | span b3:<64 hex>
-```
-
-- ` | norm <hash>` right before ` | span`, omitted when null; computed from a fresh parse of the bytes `show` read and prints (a document: the whole file), never the stored column; only the nodes printed are hashed. Only `shown_header` adds it: `header()`, shared with `bundle`, is unchanged.
-- JSON node `{id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links}`, `norm_hash` a string or `null`.
-- MCP: `mirror.rs` `ShowNode.norm_hash: Option<String>` at that place; `get_node`'s outputSchema follows. HTTP: passed through. UI: `ShownNode.norm_hash: string | null` between `sections` and `span_hash` (provisional types, mocks).
-- Plugin: `plugin.json` 0.7.0, a `PINS` entry (`docs/canon/plugin-files.md` "Version").
+` | norm b3:<hex>` right before ` | span`, JSON `norm_hash` between `sections` and `span_hash`; MCP mirror, HTTP pass-through, UI `ShownNode.norm_hash: string | null`; plugin 0.7.0 (WA-11, WA-12; `docs/canon/node-revision.md` "Where it appears").
 
 ## Rules and edge cases
 
-- WHEN the same bytes are parsed under the same `[ids]`, from any root, cwd or creation order, the system SHALL produce identical input bytes and hash (no path, root or time in the input) (WA-14, TE-9).
-- WHEN text moves from a section into its parent, both hashes SHALL change; WHEN a nested section changes, the parent's SHALL NOT.
-- WHEN an agent sends `norm_hash` as a proposal's `base`, the existing stale-base refusal names the current `span_hash`; nothing new is refused.
-- Cost: linear in a node's own spans and links; the format bump forces one re-parse per worktree (WA-14).
-- A project's own front-matter keys never count in v1; reflow and comment edits count (slice 4's `--editorial` is the escape). See "Open".
+`docs/canon/node-revision.md`: the same bytes under the same `[ids]` give the same hash from any root, cwd or order (WA-14); text moved from a section into its parent changes both, a nested edit leaves the parent; a `norm_hash` sent as a proposal's `base` meets the existing stale-base refusal; linear cost; project keys never counted in v1.
 
 ## Acceptance criteria
 
+Core `tests/norm_recipe.rs` (17), `node_revision.rs` (12); store `norm_index.rs` (3), `format.rs` +2; CLI `norm_show.rs` (7); MCP `mcp_read.rs` +1; http `norm.rs` (1); eval `norm_pilot.rs` (2, `#[ignore]`). Every named mutation red. Workspace 2306 passed, 22 skipped; Vitest 1715; fmt, clippy, `spec check` clean.
+
 rust-developer:
 
-- [ ] RD-1 -- `NORM_RECIPE`, `norm_input` in core per "The recipe"; no Cargo change; `model_and_core_sources_do_no_file_io` (`build_graph.rs`) green. M: a `std::fs` call in the new module -> that test red.
-- [ ] RD-2 -- `revision` and the parser per "Revision". M: `0..=` kept in `front_matter.rs` or `section_rev` -> `rev_zero_is_bad_rev`; first `rev=` wins -> `repeated_rev_is_bad_rev`.
-- [ ] RD-3 -- the column and format 8; `show` text and JSON; the MCP mirror; plugin 0.7.0 + `PINS`.
-- [ ] RD-4 -- nothing written under a root, no new finding code (`DiagnosticCode::ALL` 13, `CHECK_CODES` 35); `spec check` here as clean as before.
+- [x] RD-1 -- core `norm.rs`; no Cargo change; `build_graph.rs` `model_and_core_sources_do_no_file_io` green, red under a `std::fs` call.
+- [x] RD-2 -- `revision.rs`, `section_rev`, front-matter `rev`: `rev_zero_is_bad_rev`, `repeated_rev_is_bad_rev`.
+- [x] RD-3 -- the column and format 8; `show` text and JSON; `mirror.rs`; `plugin.json` 0.7.0 + `PINS`.
+- [x] RD-4 -- `DiagnosticCode::ALL` 13, `CHECK_CODES` 35 (the existing `check_output` table); nothing written under a root; `spec check` 0 warnings.
 
 test-engineer:
 
-- [ ] TE-1 -- golden: `norm_input` bytes (built by hand in the test, escapes for spec-b) and `b3:` hashes of MEC-STAMINA, RULE-STAM-REGEN, RULE-SPRINT-COST (spec-a), FLAG-DRY-RUN (spec-b). M: a final LF; links unsorted; big-endian lengths.
-- [ ] TE-2 -- invariance, a row each, each naming its mutation: CRLF and lone CR; a BOM; trailing spaces; extra blank lines; a section heading renamed; a `rev` bump; the document's H1 renamed, a punctuation-only H1 too; each never-counted key changed; an `[ids]` kind or width change; links reordered, duplicated, `supersedes` moved between `supersedes:` and `links:`; a nested section edited, added, removed, moved (parent unchanged); another root or cwd.
-- [ ] TE-3 -- sensitivity: a word; list nesting by indentation; a link added, removed, retargeted, its type or `@REV` changed; `working_answer` or `canon` changed; a subheading without ID renamed; text moved from a section into its parent changes both.
-- [ ] TE-4 -- null: each of the five codes nulls the document (store NULL, no ` | norm`, JSON `null`), its sections keep theirs; a non-UTF-8 file: null, no ` | norm`. M: hashing the text alone on a broken front-matter.
-- [ ] TE-5 -- every "Revision" row through `revision` and the parse; `R-1@0` parses; `bad-rev` a warning. M: 0 accepted; first `rev` wins; unreadable read as 1; a section inheriting its document's; `@0` made bad.
-- [ ] TE-6 -- store: every node row of spec-a, -b, -c equals `b3_hash(norm_input(..))` of a fresh parse, NULL where null; `assert_equals_fresh` holds; `INDEX_FORMAT == 8` and the history the seven lines + one `8 ...` in both pins. M: the stamp kept at 7. A 7-stamped database rebuilds with its queue intact. M: a queue table dropped.
-- [ ] TE-7 -- show: exact headers, norm before span; JSON keys and order; show = store = core over every ID of spec-a and spec-b; `bundle` text and `bundle_hash` byte-identical to before. M: `norm` added to `header()`.
-- [ ] TE-8 -- mirrors: `mcp_read` parity and the outputSchema walker; HTTP parity; `fixtures/daemon-keys.json` byte-identical; `plugin_files` `PINS` 0.7.0.
-- [ ] TE-9 -- determinism: two roots, another cwd, reverse creation order: identical hashes.
-- [ ] TE-10 -- genre: spec-c hashed; a source scan of the recipe finds no fixture prefix, kind or key literal. M: a `"mechanic"` literal.
-- [ ] TE-11 -- performance: a 50 000-section file within the `own_text` bound (store `rows.rs`). M: a quadratic join.
-- [ ] TE-12 -- pilots, manual (`#[ignore]`, release, foreground): node, null and unreadable-revision counts; trees read-only; no pilot name or path committed.
+- [x] TE-1 -- `te1_golden_inputs_of_spec_a_and_spec_b` (five nodes), CLI `te1_golden_hashes_are_cores_stores_and_shows`, store `the_golden_hashes_are_stored`; M final LF, links unsorted, big-endian.
+- [x] TE-2 -- `te2_invariance_rows_each_with_its_mutation` (65 rows), `te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six`, `te2_a_renamed_h1_of_any_form_keeps_the_input`, `te2_the_h1_cut_joins_the_text_around_it_with_an_empty_line`, `te2_a_lone_cr_inside_text_is_lf` (CRs inside text only), `te2_nested_sections_never_reach_the_parent`, `te2_an_ids_kind_or_width_change_keeps_every_input`.
+- [x] TE-3 -- `te3_sensitivity`.
+- [x] TE-4 -- `te4_the_five_codes_null_the_document_and_only_it`, `te4_other_findings_null_nothing`, `te4_not_utf8_and_foreign_bytes_are_null`, CLI `te4_not_utf8_and_a_broken_front_matter_print_no_norm`; M text alone on a broken front-matter.
+- [x] TE-5 -- `node_revision.rs`, `r1_at_0_parses`, `bad_rev_stays_a_warning`; M 0 accepted (both forms), first `rev` wins, unreadable as 1, a section inheriting, `@0` made bad.
+- [x] TE-6 -- `norm_index.rs`; `norm_hash_pins_format_8_with_one_new_history_line`, `a_seven_stamped_database_rebuilds_with_its_queue_intact`; M stamp kept at 7, a queue table dropped.
+- [x] TE-7 -- `te7_exact_headers_norm_right_before_span`, `te7_json_keys_in_order`, `te7_show_store_and_core_agree_over_every_id`, `te7_bundle_text_and_hash_are_unchanged` (44 bundles of spec-a, -b, -c against the pre-change build); M `norm` in `header()`.
+- [x] TE-8 -- `te8_get_node_norm_hash_parity_and_schema`, http `te8_nodes_carry_norm_hash_as_spec_show_does`; `fixtures/daemon-keys.json` unchanged; `PINS` 0.7.0; M the key at NodeView's top.
+- [x] TE-9 -- `te9_the_path_never_enters_the_input`, CLI `te9_two_roots_another_cwd_reverse_order_one_hash`.
+- [x] TE-10 -- `te10_spec_c_is_hashed_like_any_corpus`, `te10_the_recipe_source_holds_no_domain_literal`, `te10_the_scan_sees_what_it_must`; M a `"mechanic"` literal.
+- [x] TE-11 -- `te11_fifty_thousand_sections_within_the_own_text_bound` (~150 ms), `te11_twice_the_sections_at_most_three_times_the_time` (2.04x); M a quadratic join, whole-file UTF-8 per node.
+- [x] TE-12 -- `norm_pilot.rs`, run in debug, in process (not release, not the binary): figures below.
 
 ui-developer:
 
-- [ ] UI-1 -- `ShownNode.norm_hash: string | null` between `sections` and `span_hash`; `provisional.test.ts` KEYS and CITED; mocks and builders give `b3:` + 64 hex. M: the key missing or after `span_hash`.
+- [x] UI-1 -- `provisional.ts`, `provisional.test.ts` (KEYS, CITED, source order), `mocks/corpus.ts`, `test/builders.ts`, `corpus.test.ts` +4; M the key missing, after `span_hash`.
 
 spec-writer:
 
 - [x] SW-1 -- this spec.
-- [x] SW-2 -- ADR-0040 and its `architecture.md#layout` diff in the same change.
-- [ ] SW-3 -- at shipping: new Tier 2 `docs/canon/node-revision.md` (revision and recipe); core README (API, section `rev`, Q3 removed), model README (`rev`), store README (`INDEX_FORMAT`, `nodes`, Q4), CLI README `show`; `spec-cli-bundle.md` targets row; `mcp-read.md` `get_node`; 05 s3.3 and s3.5 "What goes into" pointers (the `rev` paragraph stays for slice 4); 08 s3 AC-13 note; `plugin-files.md` 0.7.0; `CLAUDE.md` State.
+- [x] SW-2 -- ADR-0040 and its `architecture.md#layout` diff.
+- [x] SW-3 -- `docs/canon/node-revision.md` (new); core, model, store, CLI READMEs; `spec-cli-bundle.md`, `mcp-read.md`, `plugin-files.md`, `spec-check-links.md` (Q-I); 05 s3.3, s3.5; 08 s2, AC-13; `CLAUDE.md`.
 - [x] SW-4 -- `export index`, `check` clean.
-
-## Risks
-
-- The recipe is hard to change once slice 3 writes it (TE-1 pins it; a change is `specengine-norm/v2` and a re-lock).
-- False changes accepted (reflow, comments, bullet style, NFC/NFD, an alias rewrite); false sameness avoided (indentation kept).
-- Scheme coupling: a reference the scheme cannot parse nulls its document; an `[ids]` change re-parses by `scheme_fp`.
-- Slice 1 (`code-refs`): `rev=0` becomes its `rev_unknown`, its `rev_state` calls `revision`; whichever lands second rebases.
-- Test pins rewritten: store `format.rs` (format and history), `bundle_config.rs`, CLI `show.rs` headers and JSON, the MCP mirror, `ui/src/api/provisional.test.ts`; cap boundary tests may shift (~75 characters per shown node).
-- Two hashes side by side; for a document `show` prints the whole file, `norm_hash` covers its own text and links only.
 
 ## Out of scope
 
-`spec.lock`, `spec lock`, `spec bump`, `--editorial`, 08 AC-13's revision check; a finding for a meaning change without a bump; a `specengine.toml` list of counted project keys; section metadata attributes other than `rev`; NFC or reflow-insensitive text; a UI screen; `tree`, `search`, HTTP routes; writing `rev=` (only `apply_proposal`).
+`spec.lock`, `spec lock`, `spec bump`, `--editorial`, 08 AC-13's revision check (`rev-discipline`); a finding for a meaning change without a bump; a `specengine.toml` list of counted keys; section attributes other than `rev`; NFC or reflow-insensitive text; a UI screen; `tree`, `search`, HTTP routes; writing `rev=`.
 
 ## Open
 
-| Point | Answer |
-|---|---|
-| `rev: 0` / `rev=0` | `bad-rev`, unknown; `@0` stays legal, always `spec_ahead` |
-| a project's own front-matter keys | never counted in v1 (later a `specengine.toml` list) |
-| a document's hash and its ID sections | own text only (`architecture.md#layout`: sections are hashed one by one) |
-| reflow, comment edits | counted in v1 |
-
-Decided under the owner's pre-approval; the owner's review is open. WA-1..WA-15: the analysis' working answers (2026-10-10).
+The owner reviews WA-1..WA-15 and the answers taken: `rev: 0` / `rev=0` is `bad-rev` and unknown, `@0` stays legal; a project's own front-matter keys never count in v1; a document's hash covers its own text only; reflow and comment edits count.
 
 ## Implementation
 
-Not started. To record: modules, the rewritten pins, TE-12's figures, deviations with reasons.
+| Module | What it does |
+|---|---|
+| core `norm.rs` (new) | `NORM_RECIPE`, `norm_input`: own pieces, the H1 cut, declared links, normalisation, framing |
+| core `revision.rs` (new) | `Revision`, `number()`, `revision`; `REV_KEY`, `MAX_REVISION` |
+| core `lib.rs`, `front_matter.rs`, `markdown.rs` | `section_rev` once, 1-999 999 999; front-matter `rev` 0, out of range or repeated -> `bad-rev`, kept in `extra`; `first_h1`; exports |
+| model `node.rs`, `diagnostic.rs` | doc comments |
+| store `schema.rs`, `rows.rs`, `write.rs`, `lib.rs` | `nodes.norm_hash`, `INDEX_FORMAT` 8 |
+| CLI `show.rs`, `cap.rs`, `bundle.rs` | `run_show` hashes the printed nodes; `shown_header` alone prints it; bundle leaves it `None` |
+| MCP `mirror.rs`; `plugin.json` | `ShowNode.norm_hash`; 0.7.0 |
+| UI `api/provisional.ts`, `mocks/corpus.ts`, `test/builders.ts` | the type; deterministic fake `b3:` hashes, null for a non-UTF-8 file |
+
+Pins rewritten: store `format.rs`, `format_history.txt`, `tier3.rs` (nodes dump 11 -> 12 columns); CLI `bundle_config.rs`, `common/mod.rs`, `bundle.rs`, `show.rs`, `show_tail.rs` (spec-b's cut moved); MCP `plugin_{files,roles,skills}.rs`; UI `provisional.test.ts`.
+
+Deviations, accepted in review: 1 line endings made LF per piece, then pieces joined with LF (a piece ending in a lone CR stays a line apart); 2 the H1 cut leaves the text before and after it as two pieces (`Intro\n# Title\nBody` = `Intro\n\nBody`); 3 a declared link also needs no `src_span` (drops `status: superseded-by` naming the document itself); 4 extra nulls: a span outside `bytes`, a piece over 4 GiB; `revision` unreadable for no node or a stored rev out of range; 5 `bad-rev` messages reworded. Iteration 2: TE-11 caught `norm_input` re-validating the whole file per node (50 000 sections 1.81 s, quadratic); now only own pieces are read (~0.15 s) and `show` hashes only printed nodes.
+
+TE-12, two consumer corpora read-only: A 1 442 files, 2 474 nodes, all hashed, no revision written, 0.78 s; B 150 files and nodes, 143 hashed, 7 null and 7 revisions unknown (the same `frontmatter-yaml` files), 0 `bad-rev`, 0.51 s.
+
+Known limits (`node-revision.md`): a lone CR ending a heading line or front-matter fence changes the parse; a YAML-escaped self `superseded-by` counts as a link. Untested: a `norm_hash` sent as `base`; TE-12 in release.

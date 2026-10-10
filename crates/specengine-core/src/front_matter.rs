@@ -13,8 +13,8 @@ use specengine_model::{
 
 use crate::yaml::{self, YNode, YValue};
 
-/// Highest revision: `rev = digit{1,9}`.
-const MAX_REV: i64 = 999_999_999;
+/// The revisions: `rev = digit{1,9}`, not 0 (ADR-0040).
+const REVISIONS: std::ops::RangeInclusive<i64> = 1..=crate::revision::MAX_REVISION as i64;
 
 /// The layout of a file: BOM, front-matter block, body.
 pub(crate) struct Layout {
@@ -122,6 +122,7 @@ pub(crate) fn read(text: &str, block: &Block, first_line: usize, scheme: &IdSche
         yaml_start: block.yaml.start,
         first_line,
         scheme,
+        rev_seen: false,
         out: FrontMatter::default(),
     };
     match yaml::parse(yaml_text) {
@@ -160,6 +161,8 @@ struct Reader<'a> {
     /// File line of the YAML text's first line.
     first_line: usize,
     scheme: &'a IdScheme,
+    /// A `rev` entry was read: a second one is `bad-rev`.
+    rev_seen: bool,
     out: FrontMatter,
 }
 
@@ -380,16 +383,29 @@ impl Reader<'_> {
         }
     }
 
+    /// `rev:` 1 to 999 999 999, given once (ADR-0040); a repeat the YAML
+    /// reader lets through is `bad-rev` at the second and leaves the
+    /// revision unknown (`extra` then holds `rev`).
     fn rev(&mut self, name: &str, value: &YNode, line: usize) {
+        if std::mem::replace(&mut self.rev_seen, true) {
+            self.out.rev = None;
+            self.out.diagnostics.push(Diagnostic::new(
+                DiagnosticCode::BadRev,
+                line,
+                "front-matter `rev` is given more than once; the revision is unknown, kept in `extra`",
+            ));
+            self.keep(name.to_owned(), value, line);
+            return;
+        }
         match value.value {
-            YValue::Int(rev) if (0..=MAX_REV).contains(&rev) => {
+            YValue::Int(rev) if REVISIONS.contains(&rev) => {
                 self.out.rev = u32::try_from(rev).ok();
             }
             YValue::Int(_) | YValue::UInt(_) => {
                 self.out.diagnostics.push(Diagnostic::new(
                     DiagnosticCode::BadRev,
                     line,
-                    "front-matter `rev` is not 1-9 digits; kept in `extra`",
+                    "front-matter `rev` is not a revision (1-9 digits, not 0); kept in `extra`",
                 ));
                 self.keep(name.to_owned(), value, line);
             }

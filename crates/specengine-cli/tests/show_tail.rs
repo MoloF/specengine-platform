@@ -153,7 +153,10 @@ fn ac22_eight_thousand_sections_name_twenty_then_count_the_rest() {
     let cyrillic = "\u{0421}\u{043b}\u{043e}\u{0432}\u{043e} \u{0433}\u{043b}\u{043e}\u{0441}\u{0441}\u{0430}\u{0440}\u{0438}\u{044f}";
     for (fixture, prefix, line, body, same_cut) in [
         ("spec-a", "TERM", "Entry explained", 1, false),
-        ("spec-b", "GLS", cyrillic, 6, true),
+        // Thirteen body lines: with the header's ` | norm b3:<hex>`
+        // (docs/features/norm-hash.md) six no longer cut text and JSON at
+        // the same heading.
+        ("spec-b", "GLS", cyrillic, 13, true),
     ] {
         let scratch = Scratch::new("show-tail");
         let home = scratch.home("h");

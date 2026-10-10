@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
+import { specFile, type MockCorpus } from "./build";
+import { nodeViewOf } from "./corpus";
 import { BASIN_NAME_DECOMPOSED, DRAFT_FILE, TIDE_FILE } from "./harbor-sim/fixtures";
 import { EMPTY_TREE_NOTE, MockClient } from "./MockClient";
 
@@ -253,5 +255,98 @@ describe("scenarios and decisions", () => {
     const read = (await client.getProposal("harbor-sim", "PR-0042")).updated_at ?? "";
     await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, note: null }, read);
     expect(await client.getNode("harbor-sim", "RULE-BERTH-DRAFT")).toEqual(before);
+  });
+});
+
+// UI-1 of docs/features/norm-hash.md: the mock's shown nodes carry a norm hash, `b3:` and 64
+// lowercase hex, deterministic, never the span hash; null where the spec gives none.
+
+/** A one-file corpus: front matter, an H1, a section R-1 with a nested R-2. */
+function oneFile(path: string, parts: { title?: string; cost?: string; edge?: string; tail?: string } = {}): MockCorpus {
+  const lines = [
+    "---",
+    "id: DOC-1",
+    "kind: widget",
+    "---",
+    "",
+    "# The document",
+    "",
+    `Intro text.${parts.tail ?? ""}`,
+    "",
+    `## ${parts.title ?? "Cost"} {#R-1}`,
+    "",
+    parts.cost ?? "Costs 12 units.",
+    "",
+    "### Edge {#R-2}",
+    "",
+    parts.edge ?? "Empty tank.",
+  ];
+  const file = specFile({
+    path,
+    id: "DOC-1",
+    kind: "widget",
+    title: "The document",
+    lines,
+    sections: [
+      { id: "R-1", kind: "rule", title: "Cost" },
+      { id: "R-2", kind: "edge", title: "Edge" },
+    ],
+  });
+  return { documents: [file], links: [], treeNotes: [] };
+}
+
+function hashes(corpus: MockCorpus): Record<string, [string | null, string]> {
+  return Object.fromEntries(
+    ["DOC-1", "R-1", "R-2"].map((id) => {
+      const node = nodeViewOf(corpus, id).nodes[0];
+      return [id, [node?.norm_hash ?? null, node?.span_hash ?? ""]];
+    }),
+  );
+}
+
+describe("norm_hash (UI-1 of norm-hash)", () => {
+  it("gives every shown node b3: and 64 lowercase hex, the same on each read, never its span hash", async () => {
+    for (const ref of ["MEC-TIDES", "RULE-TIDE-WINDOW", DRAFT_FILE, "RULE-FAIRWAY-SPEED"]) {
+      const first = (await mock().getNode("harbor-sim", ref)).nodes;
+      const again = (await mock().getNode("harbor-sim", ref)).nodes;
+      for (const [index, node] of first.entries()) {
+        expect([ref, node.norm_hash]).toEqual([ref, expect.stringMatching(/^b3:[0-9a-f]{64}$/)]);
+        expect(node.norm_hash).not.toBe(node.span_hash);
+        expect(node.norm_hash).toBe(again[index]?.norm_hash);
+      }
+    }
+  });
+
+  it("keeps it when the file moves, a heading or a nested section changes, or white space is trimmed", () => {
+    const base = hashes(oneFile("docs/spec/a.md"));
+    const moved = hashes(oneFile("docs/spec/elsewhere/b.md"));
+    expect(Object.values(moved).map(([norm]) => norm)).toEqual(Object.values(base).map(([norm]) => norm));
+    expect(moved["R-1"]?.[1]).not.toBe(base["R-1"]?.[1]);
+    const retitled = hashes(oneFile("docs/spec/a.md", { title: "Price" }));
+    expect(retitled["R-1"]?.[0]).toBe(base["R-1"]?.[0]);
+    const edge = hashes(oneFile("docs/spec/a.md", { edge: "A full tank." }));
+    expect([edge["DOC-1"]?.[0], edge["R-1"]?.[0]]).toEqual([base["DOC-1"]?.[0], base["R-1"]?.[0]]);
+    expect(edge["R-2"]?.[0]).not.toBe(base["R-2"]?.[0]);
+    expect(hashes(oneFile("docs/spec/a.md", { tail: " \t" }))["DOC-1"]?.[0]).toBe(base["DOC-1"]?.[0]);
+  });
+
+  it("changes it when a node's own text changes", () => {
+    const base = hashes(oneFile("docs/spec/a.md"));
+    const cost = hashes(oneFile("docs/spec/a.md", { cost: "Costs 13 units." }));
+    expect([cost["DOC-1"]?.[0], cost["R-2"]?.[0]]).toEqual([base["DOC-1"]?.[0], base["R-2"]?.[0]]);
+    expect(cost["R-1"]?.[0]).not.toBe(base["R-1"]?.[0]);
+    expect(hashes(oneFile("docs/spec/a.md", { tail: " More." }))["DOC-1"]?.[0]).not.toBe(base["DOC-1"]?.[0]);
+  });
+
+  it("is null for a non-UTF-8 file's whole-file node", () => {
+    const corpus = oneFile("docs/spec/a.md");
+    const document = corpus.documents[0];
+    if (document === undefined) {
+      throw new Error("no document");
+    }
+    document.node.utf8 = false;
+    const node = nodeViewOf(corpus, "DOC-1").nodes[0];
+    expect([node?.utf8, node?.norm_hash]).toEqual([false, null]);
+    expect(node?.span_hash).toMatch(/^b3:[0-9a-f]{64}$/);
   });
 });

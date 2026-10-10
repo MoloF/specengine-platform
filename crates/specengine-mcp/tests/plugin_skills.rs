@@ -1140,7 +1140,7 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.6.0");
+    assert_eq!(manifest["version"], "0.7.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1220,7 +1220,7 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.6.0");
+    assert_eq!(manifest["version"], "0.7.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1322,7 +1322,10 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.6.0", "W36: 0.5.0 -> 0.6.0");
+    assert_eq!(
+        manifest["version"], "0.7.0",
+        "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0"
+    );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
     let schema = &tool(&list, "propose_change")["inputSchema"];

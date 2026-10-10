@@ -4,7 +4,9 @@
 //! "Data". Every ID of both fixtures is checked against the parser (AC-17).
 //! Since docs/features/proposal-apply.md ("Data", `spec show`; AC-01) a node
 //! carries `span_hash`, `b3:` and the BLAKE3 of its span's raw bytes, and
-//! the text header ends ` | span b3:<hex>`.
+//! the text header ends ` | span b3:<hex>`; since docs/features/norm-hash.md
+//! ("spec show and mirrors") a ` | norm b3:<hex>` (`norm_hash`, core's
+//! `norm_input` hashed) comes right before it when not null.
 
 #![cfg(unix)]
 
@@ -52,6 +54,20 @@ fn span_hash_of(root: &std::path::Path, path: &str, id: &str) -> String {
     b3(&bytes[node.span.range()])
 }
 
+/// The `norm_hash` of node `id` in `path`: core's `norm_input` over a fresh
+/// parse of the file's bytes, hashed (docs/features/norm-hash.md); never
+/// null here.
+fn norm_hash_of(root: &std::path::Path, path: &str, id: &str) -> String {
+    let bytes = read(root, path);
+    let parsed = parse(root, path);
+    let ord = parsed
+        .nodes
+        .iter()
+        .position(|node| node.id.as_deref() == Some(id))
+        .unwrap_or_else(|| panic!("{id} in the parse"));
+    b3(&specengine_core::norm_input(&parsed, &bytes, ord).expect("a norm input"))
+}
+
 #[test]
 fn a_section_prints_its_header_then_its_lines_byte_for_byte() {
     let scratch = Scratch::new("show-section");
@@ -69,8 +85,9 @@ fn a_section_prints_its_header_then_its_lines_byte_for_byte() {
     let hash = b3(span);
     assert_eq!(hash, span_hash_of(&root, STAMINA, "RULE-STAM-REGEN"));
     assert_ne!(hash, b3(&body), "the printed text differs from the span");
+    let norm = norm_hash_of(&root, STAMINA, "RULE-STAM-REGEN");
     let mut want = format!(
-        "RULE-STAM-REGEN | rule | Regeneration | docs/spec/movement/stamina.md:21 | {tokens} tokens | span {hash}\n"
+        "RULE-STAM-REGEN | rule | Regeneration | docs/spec/movement/stamina.md:21 | {tokens} tokens | norm {norm} | span {hash}\n"
     )
     .into_bytes();
     want.extend(body);
@@ -96,8 +113,9 @@ fn a_document_and_a_path_print_the_whole_file() {
     // A document's span is its whole file.
     let hash = b3(&read(&root, STAMINA));
     assert_eq!(hash, span_hash_of(&root, STAMINA, "MEC-STAMINA"));
+    let norm = norm_hash_of(&root, STAMINA, "MEC-STAMINA");
     let mut want = format!(
-        "MEC-STAMINA | mechanic | Stamina | docs/spec/movement/stamina.md:1 | {tokens} tokens | status accepted | span {hash}\n"
+        "MEC-STAMINA | mechanic | Stamina | docs/spec/movement/stamina.md:1 | {tokens} tokens | status accepted | norm {norm} | span {hash}\n"
     )
     .into_bytes();
     want.extend(read(&root, STAMINA));
@@ -170,6 +188,8 @@ fn show_json_has_exactly_the_data_keys() {
             "archived",
             "utf8",
             "sections",
+            // docs/features/norm-hash.md, "spec show and mirrors".
+            "norm_hash",
             // docs/features/proposal-apply.md, "Data", `spec show`.
             "span_hash",
             "text",
@@ -291,7 +311,9 @@ fn show_json_has_exactly_the_data_keys() {
     assert_eq!(node["text"], read_text(&root, STAMINA));
 }
 
-/// The header's optional fields, in order: status, rev, archived, not UTF-8.
+/// The header's optional fields, in order: status, rev, archived, not
+/// UTF-8, then the norm hash when not null (none for a file that is not
+/// UTF-8).
 #[test]
 fn the_header_flags_come_in_order() {
     let scratch = Scratch::new("show-flags");
@@ -312,9 +334,10 @@ fn the_header_flags_come_in_order() {
     run.code(0);
     let header = run.stdout.lines().next().unwrap();
     let hash = b3(&read(&root, "docs/records/DEC/DEC-0099.md"));
+    let norm = norm_hash_of(&root, "docs/records/DEC/DEC-0099.md", "DEC-0099");
     assert!(
         header.ends_with(&format!(
-            " tokens | status rejected | rev 3 | archived | span {hash}"
+            " tokens | status rejected | rev 3 | archived | norm {norm} | span {hash}"
         )),
         "{header}"
     );

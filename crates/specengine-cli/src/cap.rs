@@ -1,7 +1,8 @@
 //! The output cap of `spec show` and its two renderings.
 //!
 //! Text: per node a header line (ending ` | span b3:<hex>`, the node's
-//! `span_hash`), then its text (a line end added when it has none), an
+//! `span_hash`, after ` | norm b3:<hex>`, its `norm_hash`, when not null),
+//! then its text (a line end added when it has none), an
 //! empty line between nodes. Everything before the tail line
 //! is at most [`OUTPUT_CAP_CHARS`] characters (JSON: the sum of the `text`
 //! values). The node where the cap falls is cut at the last line end within
@@ -140,9 +141,18 @@ pub(crate) fn header(node: &ShownNode) -> String {
 }
 
 /// `spec show`'s header line of a node: [`header`], then
-/// ` | span b3:<hex>` (its `span_hash`).
+/// ` | norm b3:<hex>` (its `norm_hash`, when not null) and
+/// ` | span b3:<hex>` (its `span_hash`). [`header`], shared with
+/// `spec bundle`, carries neither.
 fn shown_header(node: &ShownNode) -> String {
-    format!("{} | span {}", header(node), one_line(&node.span_hash))
+    let mut line = header(node);
+    if let Some(norm) = &node.norm_hash {
+        line.push_str(" | norm ");
+        line.push_str(&one_line(norm));
+    }
+    line.push_str(" | span ");
+    line.push_str(&one_line(&node.span_hash));
+    line
 }
 
 /// The lines of a node's links block (none without `--links`).
@@ -413,6 +423,7 @@ struct NodeJson<'a> {
     archived: bool,
     utf8: bool,
     sections: Vec<&'a str>,
+    norm_hash: Option<&'a str>,
     span_hash: &'a str,
     text: &'a str,
     truncated: bool,
@@ -465,6 +476,7 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                     .filter(|section| this_cut.is_none_or(|cut| section_shown(section, cut)))
                     .map(|section| section.id.as_str())
                     .collect(),
+                norm_hash: node.norm_hash.as_deref(),
                 span_hash: &node.span_hash,
                 text: match this_cut {
                     Some(cut) => &node.text[..cut.shown],

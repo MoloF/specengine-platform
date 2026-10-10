@@ -152,7 +152,12 @@ pub use worktree::{
 /// 7: the token weights of core's `tokens_est` were recalibrated, so
 /// `nodes.tokens_est` changes; no schema change
 /// (docs/features/token-calibration.md).
-pub const INDEX_FORMAT: u32 = 7;
+///
+/// 8: `nodes.norm_hash`, the `b3_hash` of core's `norm_input` over the
+/// row's parse (NULL when null), and the parser's revision rules: `rev=0`,
+/// `rev: 0` and a repeated `rev` are `bad-rev` (docs/features/norm-hash.md,
+/// ADR-0040).
+pub const INDEX_FORMAT: u32 = 8;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

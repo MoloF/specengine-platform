@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-10
 ---
 
 # specengine-cli -- the spec binary
@@ -22,9 +22,9 @@ The CLI: the agent read loop (search, read by ID) over an index refreshed on eve
 - `spec index [--full]`: store `update` (`--full`: `rebuild`); `indexed <slug>: walked 13, parsed 13, unchanged 0, removed 0, unreadable 0` (+ `, reparsed all`), `db <path>`; JSON `project`, `db`, `UpdateReport`'s fields.
 - `spec search QUERY… [--kind K]… [--limit N] [--archive]`: the store's FTS5 search in its order. Terms under 3 characters dropped (a `note:`); none left -> exit 2 suggesting `spec show`; `--kind` free, repeatable; `--limit` 1..=200, default 20.
 - `spec show REF`: `REF` is an ID, an `aliases:` entry, an `aliases_from` legacy ID, `slug/ID`, `ID#SECTION` (`@rev` ignored with a `note:`) or a root-relative `.md` path.
-- In `docs/canon/`: `check`, `export index`: `spec-check-{cli,git}.md`; `health`: `health.md`; `tree`, `graph`, `show --links`: `spec-cli-graph.md`; `bundle`: `spec-cli-bundle.md`; `propose update|create|interpretation|decision|amendment`, `inbox`, `review`, `approve`, `reject`: `proposal-*.md`; `approve`'s flags: `decision-record.md`; `propose question|discrepancy`, `--brief`: `agent-intake.md`; `export state`, `import-state`: `queue-backup.md`; `task …`, `--task`: `task{s,-package}.md`; `round`: `round{,-ui}.md`; `serve`: `serve.md`.
+- In `docs/canon/`: `check`, `export index`: `spec-check-{cli,git}.md`; `health`: `health.md`; `tree`, `graph`, `show --links`: `spec-cli-graph.md`; `bundle`: `spec-cli-bundle.md`; `propose`, `inbox`, `review`, `approve`, `reject`: `proposal-*.md`; `approve`'s flags: `decision-record.md`; `propose question|discrepancy`, `--brief`: `agent-intake.md`; `export state`, `import-state`: `queue-backup.md`; `task …`, `--task`: `task{s,-package}.md`; `round`: `round{,-ui}.md`; `serve`: `serve.md`.
 
-**Discovery.** Without `--root` and `--config`, walk up from the canonical current directory to the first with `specengine.toml`; none -> exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the current directory. Config errors: `<config as given>:<line>: message`.
+**Discovery.** Without `--root` and `--config`, walk up from the canonical cwd to the first with `specengine.toml`; none -> exit 2 naming `spec init`. `--root DIR`: no walk. `--config FILE` replaces `<root>/specengine.toml`; without `--root` the root is the cwd. Config errors: `<config as given>:<line>: message`.
 
 ## Database
 
@@ -47,7 +47,7 @@ stdout: results only; `--json`: one compact document for exit 0 and 1, none for 
 ## Output and the cap
 
 - `search`: per hit `<id or path> | <kind or -> | <title or -> | <path>:<line>` (+ ` | archived`), then the snippet on one line, four spaces in; then `hits 2 (limit 20); archived matches left out: 1 (--archive)` or `…; archive included`. JSON keys `archive, hits, kinds, limit, notes, query, tier3_left_out, truncated`; a hit `{id, kind, title, path, line, ord, archived, snippet}`, the snippet's line breaks raw.
-- `show`: per node the search line's first four fields + ` | <tokens_est> tokens` (+ ` | status <s>` for a document, ` | rev <n>`, ` | archived`, ` | not UTF-8`) + ` | span <span_hash>`, then its bytes (a section's span, a document's file; `\n` added if missing), an empty line between nodes. JSON `{ref, reason, notes, nodes}`, a node `{id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, span_hash, text, truncated, omitted, links}`, `span_hash` `b3:` of the whole span's bytes read (`propose --base`); `omitted` `{lines: [a, b], sections, sections_more, holders, holders_more}` when cut.
+- `show`: per node the search line's first four fields + ` | <tokens_est> tokens` (+ ` | status <s>` for a document, ` | rev <n>`, ` | archived`, ` | not UTF-8`, ` | norm <norm_hash>`) + ` | span <span_hash>`, then its bytes (a section's span, a document's file; `\n` added if missing), an empty line between nodes. JSON `{ref, reason, notes, nodes}`, a node `{id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links}`, `span_hash` `b3:` of the whole span's bytes read (`propose --base`), `norm_hash` null or `node-revision.md`'s; `omitted` `{lines: [a, b], sections, sections_more, holders, holders_more}` when cut.
 
 `OUTPUT_CAP_CHARS` = 40 000 characters before the tail line (`View::Capped`; the daemon's `Browser` is uncut, `graph` too):
 

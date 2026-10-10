@@ -29,6 +29,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2
 - [docs/canon/import.md](canon/import.md) Import: record model and rules · crates/specengine-import · tier 2
 - [docs/canon/mcp-read.md](canon/mcp-read.md) MCP read tools and resources · crates/specengine-mcp, crates/specengine-cli · tier 2
+- [docs/canon/node-revision.md](canon/node-revision.md) Node revision and meaning hash · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
 - [docs/canon/plugin-files.md](canon/plugin-files.md) Plugin: files, contract, version, install · plugin · tier 2
 - [docs/canon/plugin.md](canon/plugin.md) Plugin: skills and roles · plugin · tier 2
 - [docs/canon/proposal-amendment.md](canon/proposal-amendment.md) Proposal kind: amendment · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · tier 2
@@ -61,7 +62,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/code-refs.md](features/code-refs.md) code-refs: markers bound to code, spec refs · crates/specengine-code, crates/specengine-core, crates/specengine-cli, crates/specengine-eval, fixtures · draft
-- [docs/features/norm-hash.md](features/norm-hash.md) norm-hash: a node's meaning hash and revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/spec-lock.md](features/spec-lock.md) spec-lock: what was verified, written on the owner's terminal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
 - [docs/features/spec-verify.md](features/spec-verify.md) spec-verify: drift between spec.lock and the tree · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft

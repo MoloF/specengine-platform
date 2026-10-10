@@ -29,6 +29,10 @@
 //! - `glob` — the `[paths] exclude` matcher behind it;
 //! - [`own_spans`] — a node's own text as spans (its body minus nested ID
 //!   sections): the index's `own_text` and the check's `text` rule;
+//! - [`norm_input`], [`NORM_RECIPE`] — the bytes of a node's meaning hash
+//!   (`specengine-norm/v1`: its own text normalised and, for a document,
+//!   its declared links), hashed by the caller; [`revision`] — a node's
+//!   own revision ([`Revision`], ADR-0040; task spec `norm-hash`);
 //! - [`patch`] — the pure half of a proposal's `update`: a node's span by
 //!   ID, the splice, the structure check, the creation refusals and the
 //!   findings an edit introduces (task spec `proposal-apply`);
@@ -57,12 +61,14 @@ mod glob;
 pub mod intake;
 mod lines;
 mod markdown;
+mod norm;
 mod own_text;
 pub mod patch;
 pub mod paths_toml;
 pub mod project_toml;
 pub mod proposal;
 pub mod record;
+mod revision;
 pub mod round;
 pub mod scheme_toml;
 pub mod task;
@@ -80,11 +86,13 @@ use specengine_model::{
 
 pub use front_matter::{KeyType, TYPED_KEYS};
 pub use gate::{GateConfig, GateMode};
+pub use norm::{NORM_RECIPE, norm_input};
 pub use own_text::own_spans;
 pub use paths_toml::{Paths, PathsError, paths_from_toml};
 pub use project_toml::{
     MAX_SLUG_BYTES, Project, ProjectConfig, ProjectError, project_from_toml, slug_problem,
 };
+pub use revision::{Revision, revision};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};
 pub use tokens::tokens_est;
 pub use walk_scope::{DOCUMENT_EXTENSION, WalkScope, is_clean_relative, is_under};
@@ -93,6 +101,7 @@ pub use yaml::{MAX_ALIAS_EXPANSION, MAX_DEPTH};
 use crate::front_matter::{FrontMatter, PendingLink};
 use crate::lines::LineIndex;
 use crate::markdown::Heading;
+use crate::revision::{MAX_REVISION, REV_KEY};
 
 /// UTF-8 byte-order mark.
 const BOM: &[u8] = b"\xEF\xBB\xBF";
@@ -516,23 +525,32 @@ fn extents(
         .collect()
 }
 
-/// `rev=N` on the heading: 1–9 digits, else `bad-rev`.
+/// `rev=N` on the heading, given once: 1–9 digits (leading zeros read), not
+/// 0 (ADR-0040); anything else is `bad-rev` and no revision.
 fn section_rev(heading: &Heading, line: usize, diagnostics: &mut Vec<Diagnostic>) -> Option<u32> {
-    let (_, value) = heading.attrs.iter().find(|(key, _)| key == "rev")?;
-    match value.as_deref() {
-        Some(digits)
-            if (1..=9).contains(&digits.len())
-                && digits.bytes().all(|byte| byte.is_ascii_digit()) =>
-        {
-            digits.parse().ok()
-        }
-        _ => {
-            diagnostics.push(Diagnostic::new(
-                DiagnosticCode::BadRev,
-                line,
-                "heading attribute `rev` is not 1-9 digits",
-            ));
-            None
-        }
+    let mut written = heading.attrs.iter().filter(|(key, _)| key == REV_KEY);
+    let (_, value) = written.next()?;
+    if written.next().is_some() {
+        diagnostics.push(Diagnostic::new(
+            DiagnosticCode::BadRev,
+            line,
+            "heading attribute `rev` is given more than once; the revision is unknown",
+        ));
+        return None;
     }
+    let rev = value
+        .as_deref()
+        .filter(|digits| {
+            (1..=9).contains(&digits.len()) && digits.bytes().all(|byte| byte.is_ascii_digit())
+        })
+        .and_then(|digits| digits.parse::<u32>().ok())
+        .filter(|rev| (1..=MAX_REVISION).contains(rev));
+    if rev.is_none() {
+        diagnostics.push(Diagnostic::new(
+            DiagnosticCode::BadRev,
+            line,
+            "heading attribute `rev` is not a revision (1-9 digits, not 0)",
+        ));
+    }
+    rev
 }

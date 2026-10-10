@@ -48,7 +48,9 @@ pub struct Node {
     /// Section: `.class` entries of the attribute block.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub classes: Vec<String>,
-    /// Document: front-matter `rev`. Section: the `rev=N` attribute.
+    /// Document: front-matter `rev`. Section: the `rev=N` attribute of its
+    /// own heading, never its document's. 1 to 999 999 999; `None` when not
+    /// written or unreadable (core's `revision` tells them apart, ADR-0040).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rev: Option<u32>,
     /// Document: `parent:` (containment, not a link). Section: the nearest

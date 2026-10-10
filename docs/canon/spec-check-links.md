@@ -125,5 +125,5 @@ Working answer (the code) → what the other answer triggers.
 - Q-E ADR-0026 supersedes the old layout decision, restating its unchanged part → the old one back to `accepted`, ADR-0026 without `supersedes`, only the new rule.
 - Q-F `id-scope` is an error → a warning: the severity where the engine pushes it (`CHECK_CODES` has no severity column); the `id-scope` test of `check_scopes.rs` flips.
 - Q-G `link_base` is a fallback after file-relative resolution → exclusive: pass B's resolution order only.
-- Q-I criteria lose their front-matter for now, `links.verifies` becoming an inline mention in the section body → heading attributes now: a parser change, with core Q3.
+- Q-I criteria lose their front-matter for now, `links.verifies` becoming an inline mention in the section body → heading attributes now: a parser change beyond ADR-0040's `rev=N`.
 - An escaped `parent:` loses its qualifiers and section → `ParentRef` carries `scope` and `project`: a model and `INDEX_FORMAT` change.
