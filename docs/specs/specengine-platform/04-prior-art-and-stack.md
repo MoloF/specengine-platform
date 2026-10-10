@@ -184,7 +184,6 @@ The toolchain, the pinned crates in use and the ones not taken: `docs/canon/stac
 |---|---|---|
 | `notify` + `notify-debouncer-full` | 8.2.0 + 0.7.0 | file watching; **not** 9.0-rc; debouncer-full coalesces atomic saves |
 | `gix` | 0.88.0 | later; system `git` at the start |
-| `rust-embed` | 8.12.0 | UI inside the binary |
 | `scip` | 0.10.0 | symbol format, index reading |
 | `ast-grep-core` | 0.45.3 (pin exactly) | anchor DSL for user binding rules |
 | `bevy_mod_debugdump` | 0.16.0 | schedule fallback: `print_schedule_graph(&mut app, Update)`, needs only a built `App`; not needed on the pilots |

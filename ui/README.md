@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-10
 ---
 
 # ui -- the web UI
 
-The owner's screens: 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: every 07 s3 screen built (`ui-shell` to `ui-round`: 08 s2 Phase 4), the daemon by default.
+The owner's screens: 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: every 07 s3 screen built (08 s2 Phase 4).
 
 ## Stack
 
@@ -58,7 +58,7 @@ The owner's allowlist: the 17 below (2026-10-05; the last two ADR-0036). `packag
 | `react-markdown` | 10.1.0 | markdown, `src/markdown/` only |
 | `remark-gfm` | 4.0.1 | GFM for it |
 
-**Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, the laptop 24.14): for the owner after a Node upgrade.
+**Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, the laptop 24.14): after a Node upgrade.
 
 **Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
 
@@ -70,10 +70,10 @@ Run in `ui/` by the UI roles; none watches:
 |---|---|
 | `pnpm install --frozen-lockfile` | installs exactly the lockfile; no unmet peer |
 | `pnpm lint` | `eslint . --max-warnings=0` |
-| `pnpm build` | `tsc --noEmit` and `vite build` into `ui/dist/` (git-ignored) |
+| `pnpm build` | `tsc --noEmit`, `vite build` into `ui/dist/` (git-ignored) |
 | `pnpm test` | `vitest run`, never watch; a test calling `console.error` or `console.warn` fails |
 
-From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. Neither the pre-commit hook nor CI runs the UI gates.
+From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. The hook and CI run no UI gate.
 
 ## Laptop rules
 
@@ -83,8 +83,8 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 
 ## Owner's manual steps
 
-1. `pnpm --dir ui install --frozen-lockfile` once per lockfile change.
-2. `spec serve` in the project, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`; projects `harbor-sim`, `ledger-api`, stages kept to a reload.
+1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`; projects `harbor-sim`, `ledger-api`, stages kept to a reload.
 3. The slice's checks: its spec's "Owner's manual check".
 
 ## Roles here

@@ -47,6 +47,13 @@
 //! in `ui/src/tree/TextPanel.tsx`; `allowDangerousHtml` in a component; the
 //! `blocked` exemption widened to all of `src`, to all of `provisional.ts` or
 //! to the other hold words.
+//!
+//! - docs/features/ui-embed.md T6 (WA 11, the daemon's page policy
+//!   `default-src 'self'`): `ui/index.html` holds no `<script>` without
+//!   `src`, no `<style>`, no `style=` or `on*=` attribute; nor does the
+//!   built `ui/dist/index.html` when it is there. M: an inline `<script>`
+//!   (run on a scratch copy named by `UI_POLICY_INDEX_HTML`, never by
+//!   editing `ui/index.html`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -1394,4 +1401,186 @@ fn the_ui_is_a_documentation_root_with_its_readme_and_adr_in_budget() {
         );
         assert!(adr.contains("**Cost.**"), "{id} names no cost");
     }
+}
+
+// ---------------------------------------------------------------------------
+// docs/features/ui-embed.md T6: a page the daemon's policy does not break.
+// ---------------------------------------------------------------------------
+
+/// The names of the attributes of a start tag's text after its name,
+/// lowercased, values skipped (quoted or not).
+fn attribute_names(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut names = Vec::new();
+    let mut at = 0;
+    while at < chars.len() {
+        if chars[at].is_whitespace() || chars[at] == '/' {
+            at += 1;
+            continue;
+        }
+        let start = at;
+        while at < chars.len() && !chars[at].is_whitespace() && !"=/".contains(chars[at]) {
+            at += 1;
+        }
+        names.push(
+            chars[start..at]
+                .iter()
+                .collect::<String>()
+                .to_ascii_lowercase(),
+        );
+        while at < chars.len() && chars[at].is_whitespace() {
+            at += 1;
+        }
+        if chars.get(at) != Some(&'=') {
+            continue;
+        }
+        at += 1;
+        while at < chars.len() && chars[at].is_whitespace() {
+            at += 1;
+        }
+        match chars.get(at) {
+            Some(&quote) if quote == '"' || quote == '\'' => {
+                at += 1;
+                while at < chars.len() && chars[at] != quote {
+                    at += 1;
+                }
+                at += 1;
+            }
+            _ => {
+                while at < chars.len() && !chars[at].is_whitespace() {
+                    at += 1;
+                }
+            }
+        }
+    }
+    names
+}
+
+/// The forms of `html` a `default-src 'self'` policy refuses, each as
+/// `line N: form`: a `<script>` without `src`, a `<style>`, a `style=` or
+/// an `on*=` attribute. Comments are skipped; a `>` inside a quoted value
+/// does not end its tag.
+fn inline_forms(html: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(offset) = html[from..].find('<') {
+        let start = from + offset;
+        if html[start..].starts_with("<!--") {
+            from = html[start..]
+                .find("-->")
+                .map_or(html.len(), |end| start + end + 3);
+            continue;
+        }
+        let mut quote = None;
+        let mut end = html.len();
+        for (offset, c) in html[start + 1..].char_indices() {
+            match quote {
+                Some(open) if c == open => quote = None,
+                Some(_) => {}
+                None if c == '"' || c == '\'' => quote = Some(c),
+                None if c == '>' => {
+                    end = start + 1 + offset;
+                    break;
+                }
+                None => {}
+            }
+        }
+        let tag = &html[start + 1..end];
+        from = (end + 1).min(html.len());
+        if tag.starts_with(['/', '!', '?']) {
+            continue;
+        }
+        let split = tag
+            .find(|c: char| c.is_whitespace() || c == '/')
+            .unwrap_or(tag.len());
+        let name = tag[..split].to_ascii_lowercase();
+        let attributes = attribute_names(&tag[split..]);
+        let line = html[..start].matches('\n').count() + 1;
+        if name == "script" && !attributes.iter().any(|a| a == "src") {
+            found.push(format!("line {line}: <script> without src"));
+        }
+        if name == "style" {
+            found.push(format!("line {line}: <style>"));
+        }
+        for attribute in &attributes {
+            if attribute == "style" || attribute.starts_with("on") {
+                found.push(format!("line {line}: {attribute}= on <{name}>"));
+            }
+        }
+    }
+    found
+}
+
+/// `ui/index.html`, or the scratch copy named by `UI_POLICY_INDEX_HTML`
+/// for the named-mutation run.
+fn page_template() -> PathBuf {
+    std::env::var_os("UI_POLICY_INDEX_HTML")
+        .map_or_else(|| ui_dir().join("index.html"), PathBuf::from)
+}
+
+#[test]
+fn ui_embed_t6_the_page_holds_no_inline_script_style_or_handler() {
+    let template = page_template();
+    let text = read(&template);
+    assert!(
+        text.contains("<script") && text.contains("src="),
+        "{}: the page loads its module",
+        template.display()
+    );
+    let found = inline_forms(&text);
+    assert!(
+        found.is_empty(),
+        "{}: forms the daemon's policy refuses (ui-embed T6):\n{}",
+        template.display(),
+        found.join("\n")
+    );
+    let built = repository_root().join("ui/dist/index.html");
+    if built.is_file() {
+        let found = inline_forms(&read(&built));
+        assert!(
+            found.is_empty(),
+            "{}: forms the daemon's policy refuses:\n{}",
+            built.display(),
+            found.join("\n")
+        );
+    }
+}
+
+#[test]
+fn ui_embed_t6_the_scan_sees_each_inline_form_and_passes_the_rest() {
+    for (html, wanted) in [
+        ("<script>window.x = 1</script>", 1),
+        ("<SCRIPT type=\"module\">import \"/a.js\"</SCRIPT>", 1),
+        ("<script\ntype=\"module\"\n>x</script>", 1),
+        ("<script data-src=\"/a.js\"></script>", 1),
+        ("<style>body { margin: 0 }</style>", 1),
+        ("<div style=\"margin: 0\"></div>", 1),
+        ("<div STYLE='margin: 0'></div>", 1),
+        ("<body onload=\"go()\">", 1),
+        ("<img src=\"a.png\" onerror=go()>", 1),
+        ("<a title=\"a > b\" onclick='go()'>", 1),
+        ("<p>\n<style></style>\n<b onmouseover=x>", 2),
+        (
+            "<script type=\"module\" crossorigin src=\"/assets/a.js\"></script>",
+            0,
+        ),
+        ("<script type=\"module\" src=\"/src/main.tsx\"></script>", 0),
+        ("<link rel=\"icon\" href=\"data:,\" />", 0),
+        ("<link rel=\"stylesheet\" href=\"/assets/a.css\">", 0),
+        (
+            "<div data-onload=\"x\" data-style=\"y\" id=\"root\"></div>",
+            0,
+        ),
+        ("<!-- <script>x</script> <style></style> -->", 0),
+        ("<a title=\"<script>\" href=\"/\">", 0),
+        ("<!doctype html>", 0),
+    ] {
+        let found = inline_forms(html);
+        assert_eq!(found.len(), wanted, "{html:?}: {found:?}");
+    }
+    assert_eq!(
+        inline_forms("<p>\n\n<style></style>"),
+        ["line 3: <style>"],
+        "the line of the form"
+    );
 }

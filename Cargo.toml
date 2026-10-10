@@ -80,6 +80,14 @@ getrandom = { version = "=0.4.3", default-features = false }
 # version through `rmcp`. Approved by the owner 2026-10-06.
 axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
 futures-util = { version = "=0.3.34", default-features = false }
+# The web UI inside the daemon (docs/features/ui-embed.md, "Data"; 04 §6): the Vite
+# build `ui/dist` compiled into `specengine-http`. `debug-embed` so debug and test
+# builds embed too (one code path, no file read at run time). Default features off
+# (it has none); no `mime-guess` (the daemon's own type table), `compression`,
+# `include-exclude`, `interpolate-folder-path`, `deterministic-timestamps`. Its
+# `rust-embed-impl` and `rust-embed-utils` are held at 8.12.0 in the lock. Approved
+# by the owner 2026-10-08 (docs/features/spec-serve.md, Q3).
+rust-embed = { version = "=8.12.0", default-features = false, features = ["debug-embed"] }
 # rust-analyzer as a library (spike group 6, layer C of 05 §5.1, ADR-0020): one
 # release of the `ra_ap_*` set, pinned exactly. Used only by `specengine-ra`, which
 # is not a default member, so none of these enters the core build graph (AC-01).

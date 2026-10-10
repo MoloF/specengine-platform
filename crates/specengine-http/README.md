@@ -3,24 +3,24 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-10
 ---
 
 # specengine-http -- SpecEngine over HTTP
 
-An HTTP adapter over the CLI library, 05 s1's fourth: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. No second consent channel: a staged decision is confirmed only on a terminal (ADR-0035); no hook consults it (ADR-0039).
+An HTTP adapter over the CLI library, 05 s1's fourth: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`), serving the web UI compiled in (`serve-ui.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. No second consent channel: a staged decision is confirmed only on a terminal (ADR-0035); no hook consults it (ADR-0039).
 
-Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`; a default member; pins, licences: eval `build_graph.rs`.
+Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`, `rust-embed` (`debug-embed`); a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
 
 ## Binary
 
-`specengine-http --root DIR... [--port N]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). Start: each root canonicalised, its config read, a `[project] slug` required; the data directory guarded against every root, created, its `daemon.lock` taken; the bind, `daemon.json`; stdout `serving <slug> <root>` per root, then `listening http://127.0.0.1:<port>`. Exit 2 before listening, one stderr line `specengine-http: <reason>`: usage, a root (the CLI's line), a slug twice, the data directory, a daemon running, the port taken (`serve.md` "Start", "Lines"). Exit 1: stopped after listening. SIGINT, SIGTERM end it at any point: every write is one SQLite transaction.
+`specengine-http --root DIR... [--port N]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`): `serve.md` "Start", "Lines". Exit 1: stopped after listening. SIGINT, SIGTERM end it at any point: every write is one SQLite transaction.
 
 ## Fence
 
 Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`; any of them sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header on any response, `OPTIONS` included; `Cache-Control: no-store` on every one.
 
-Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 405 `Allow: GET`; the decision route POST and DELETE, else 405 `Allow: POST, DELETE`, `round/answers` POST, else `Allow: POST`, both ending ``confirmed on a terminal``; an unknown path -> 404 listing the routes, whatever the method.
+Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 405 `Allow: GET`; the decision route POST and DELETE, else 405 `Allow: POST, DELETE`, `round/answers` POST, else `Allow: POST`, both ending ``confirmed on a terminal``; an unknown path -> 404 listing the routes (the web UI's last), whatever the method.
 
 ## Endpoints
 
@@ -43,6 +43,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../round`; POST `.../round/answers` | `limit`; -- | `spec round new --json`, uncut; stage answers (`round-ui.md`) |
 | GET `.../events` | header `Last-Event-ID` | the live tail (SSE) |
 | POST, DELETE `.../proposals/:id/decision` | -- | stage, unstage |
+| GET `/`, `/assets/<file>` | ignored | the web UI (`serve-ui.md`) |
 
 **Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space, a literal plus `%2B`), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` only `links`, `status` by `TaskStatus::parse` (a refusal lists `TaskStatus::ALL`). 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent` (`#` -> `%23`, `/` -> `%2F`), `%2523` reaches the CLI as `%23`, an empty REF is an unknown route.
 
@@ -77,4 +78,4 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 44 key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests").
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 44 key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").

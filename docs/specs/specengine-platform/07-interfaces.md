@@ -127,7 +127,7 @@ spec export index [--stdout]                         # [paths] index by its regi
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)
-- `/` — Web UI (`rust-embed` 8.12.0): `ui-embed` next (`docs/features/ui-embed.md`, draft)
+- `/`, `/assets/<file>` -- the Web UI compiled in (built: `docs/canon/serve-ui.md`)
 
 ### Web UI — screens
 

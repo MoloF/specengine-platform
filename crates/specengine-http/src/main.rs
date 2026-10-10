@@ -26,7 +26,9 @@
 //!   serialized per project, and its response (a check's report a 200
 //!   whatever its verdict; a stage's status by its cause);
 //! - [`args`]: the query string and the path's REF;
-//! - [`tail`]: the live tail of the queue's `events` (SSE).
+//! - [`tail`]: the live tail of the queue's `events` (SSE);
+//! - [`ui`]: the web UI compiled in, `/` and `/assets/<file>` (task spec
+//!   `ui-embed`).
 
 mod answer;
 mod app;
@@ -34,6 +36,7 @@ mod args;
 mod daemon;
 mod start;
 mod tail;
+mod ui;
 
 use std::io::Write as _;
 use std::net::{Ipv4Addr, SocketAddr};

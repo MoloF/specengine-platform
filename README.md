@@ -56,12 +56,12 @@ One route only: a project `.mcp.json` running `specengine-mcp` too duplicates th
 ## Web UI
 
 ```bash
+pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build  # first: the daemon embeds ui/dist
 cargo install --locked --force --path crates/specengine-http  # beside spec, same commit
-spec serve                  # in the project: one daemon per data directory
-pnpm --dir <clone>/ui dev   # open http://127.0.0.1:5173/ (ui/README.md)
+spec serve                  # in the project: open the listening URL, http://127.0.0.1:7777/
 ```
 
-The gate never needs the daemon (ADR-0039); how it runs: `docs/canon/serve.md`.
+UI work: `pnpm --dir ui dev` (`ui/README.md`). The gate never needs the daemon (ADR-0039); how it runs: `docs/canon/serve.md`, the UI it serves: `docs/canon/serve-ui.md`.
 
 ## Development
 

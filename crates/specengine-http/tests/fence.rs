@@ -4,6 +4,11 @@
 //! (a fresh `HOME` stays empty); no response, `OPTIONS` included, carries
 //! an `Access-Control-*` header. M: bind `0.0.0.0`; Host check off;
 //! permissive CORS.
+//!
+//! docs/features/ui-embed.md T4: the web UI's `GET /` and
+//! `GET /assets/x.js` stand behind the same fence (403 for a foreign
+//! `Host`, `Origin` or `Sec-Fetch-Site`; `no-store`, no CORS header). M: the
+//! UI routes outside the fence's layer.
 
 mod common;
 
@@ -97,7 +102,23 @@ fn endpoints(port: u16) -> Vec<(&'static str, String)> {
         ),
         ("GET", "/no/such/route".to_owned()),
         ("OPTIONS", "/api/projects".to_owned()),
+        // The web UI (docs/features/ui-embed.md T4).
+        ("GET", "/".to_owned()),
+        ("GET", "/assets/x.js".to_owned()),
     ]
+}
+
+/// What `GET /` answers on this tree's daemon: the page, or the 503 of a
+/// daemon compiled without `ui/dist` (docs/features/ui-embed.md "Routes").
+fn page_status() -> u16 {
+    if common::repository_root()
+        .join("ui/dist/index.html")
+        .is_file()
+    {
+        200
+    } else {
+        503
+    }
 }
 
 fn assert_plain(reply: &Reply, context: &str) {
@@ -224,7 +245,10 @@ fn ac01_no_response_carries_an_access_control_header() {
         let want = match (method, path.as_str()) {
             ("OPTIONS", _) => 405,
             ("POST", _) => 403,
-            (_, "/no/such/route") | (_, "/api/projects/lantern-keep/proposals/PR-0001") => 404,
+            (_, "/no/such/route")
+            | (_, "/api/projects/lantern-keep/proposals/PR-0001")
+            | (_, "/assets/x.js") => 404,
+            (_, "/") => page_status(),
             _ => 200,
         };
         assert_eq!(reply.status, want, "{method} {path}: {}", reply.text());

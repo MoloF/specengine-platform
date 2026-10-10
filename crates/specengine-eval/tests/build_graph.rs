@@ -905,14 +905,15 @@ fn no_workspace_dependency_is_added_against_main() {
     let now = keys(&now_text);
     let added: Vec<&String> = now.iter().filter(|key| !on_main.contains(key)).collect();
     // docs/features/daemon-read.md "Data": `axum` and `futures-util`,
-    // approved by the owner 2026-10-06 (their pins: `daemon_pins_are_the_
-    // approved_ones`).
+    // approved by the owner 2026-10-06; docs/features/ui-embed.md "Data":
+    // `rust-embed`, approved 2026-10-08 (spec-serve Q3) (their pins:
+    // `daemon_pins_are_the_approved_ones`).
     assert!(
-        added
-            .iter()
-            .all(|key| ["petgraph", "axum", "futures-util"].contains(&key.as_str())),
+        added.iter().all(|key| {
+            ["petgraph", "axum", "futures-util", "rust-embed"].contains(&key.as_str())
+        }),
         "[workspace.dependencies] entries added against main beyond petgraph, axum, \
-         futures-util: {added:?}"
+         futures-util, rust-embed: {added:?}"
     );
     assert!(
         now.iter().any(|key| key == "serde_json"),
@@ -1172,7 +1173,7 @@ fn serde_json_float_roundtrip_is_set_on_the_workspace_pin_only() {
 /// proc-macros (as it does the model's and the core's), so the check is on
 /// the linked graph (`-e normal,no-proc-macro`), as
 /// `core_tree_has_no_rust_analyzer_syn3_or_bevy` does.
-const CLI_FORBIDDEN: [&str; 10] = [
+const CLI_FORBIDDEN: [&str; 11] = [
     "specengine-code",
     "specengine-import",
     "specengine-mcp",
@@ -1185,6 +1186,8 @@ const CLI_FORBIDDEN: [&str; 10] = [
     "specengine-http",
     "axum",
     "hyper",
+    // docs/features/ui-embed.md T1: the web UI is the daemon's only.
+    "rust-embed",
 ];
 
 #[test]
@@ -1848,11 +1851,13 @@ fn cli_direct_dependencies_are_unchanged_by_w() {
 // docs/features/daemon-read.md AC-08: the daemon's graph and licences.
 // ---------------------------------------------------------------------------
 
-/// The daemon's `[dependencies]`, exactly.
-const HTTP_DEPENDENCIES: [&str; 7] = [
+/// The daemon's `[dependencies]`, exactly (`rust-embed`:
+/// docs/features/ui-embed.md "Data", plain like every entry but `tokio`).
+const HTTP_DEPENDENCIES: [&str; 8] = [
     "axum",
     "clap",
     "futures-util",
+    "rust-embed",
     "serde",
     "serde_json",
     "specengine-cli",
@@ -1997,8 +2002,14 @@ fn http_direct_dependencies_are_the_cli_library_axum_and_tokio() {
 /// `axum` `=0.8.9`, no default features, exactly `http1` and `tokio` (the
 /// query string is decoded by the daemon's own strict parser, so axum's
 /// `query` is off); `futures-util` `=0.3.34`, no default features, none
-/// added; each resolves once, at its pin; axum's `json` is off and `tower-http`,
-/// `rust-embed`, `notify`, `h2` are not in the daemon's normal graph.
+/// added; `rust-embed` `=8.12.0`, no default features, exactly `debug-embed`
+/// (docs/features/ui-embed.md "Data"; its `-impl` and `-utils` locked at
+/// 8.12.0 too); each resolves once, at its pin; axum's `json` is off and
+/// `tower-http`, `notify`, `h2`, `include-flate`, `shellexpand`, `globset`
+/// are not in the daemon's normal graph; `mime_guess` is not in its linked
+/// graph (`rust-embed-impl` 8.12.0, a proc-macro, depends on it
+/// unconditionally, so it is in the compile-time graph) and `rust-embed`'s
+/// `mime-guess` is off.
 #[test]
 fn daemon_pins_are_the_approved_ones() {
     let text = std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest");
@@ -2009,6 +2020,7 @@ fn daemon_pins_are_the_approved_ones() {
     for (name, version, features) in [
         ("axum", "=0.8.9", &["http1", "tokio"][..]),
         ("futures-util", "=0.3.34", &[][..]),
+        ("rust-embed", "=8.12.0", &["debug-embed"][..]),
     ] {
         let spec = deps
             .get(name)
@@ -2041,12 +2053,51 @@ fn daemon_pins_are_the_approved_ones() {
             "{name} resolves once, at its pin"
         );
     }
+    for name in ["rust-embed-impl", "rust-embed-utils"] {
+        assert_eq!(
+            locked_versions(name),
+            ["8.12.0"],
+            "{name} resolves once, at rust-embed's version"
+        );
+    }
     let graph = http_graph_licences();
-    for absent in ["tower-http", "rust-embed", "notify", "h2"] {
+    for absent in [
+        "tower-http",
+        "notify",
+        "h2",
+        "include-flate",
+        "shellexpand",
+        "globset",
+    ] {
         assert!(
             !graph.iter().any(|(name, _, _)| name == absent),
             "{absent} is in the daemon's normal graph"
         );
+    }
+    let linked = cargo_tree(&["-p", "specengine-http", "-e", "normal,no-proc-macro"]);
+    assert!(
+        tree_crates(&linked)
+            .iter()
+            .any(|(name, _)| name == "rust-embed")
+            && !tree_crates(&linked)
+                .iter()
+                .any(|(name, _)| name == "mime_guess"),
+        "rust-embed linked, mime_guess not:\n{linked}"
+    );
+    for (embed, wanted) in [
+        ("rust-embed", &["debug-embed"][..]),
+        ("rust-embed-utils", &["debug-embed", "default"][..]),
+    ] {
+        let tree = cargo_tree(&["-p", "specengine-http", "-e", "features", "-i", embed]);
+        let prefix = format!("{embed} feature ");
+        let mut on: Vec<&str> = tree
+            .lines()
+            .filter_map(|line| line.split(prefix.as_str()).nth(1))
+            .map(|rest| rest.trim_end_matches(" (*)").trim_matches('"'))
+            .collect();
+        on.sort_unstable();
+        on.dedup();
+        assert_eq!(on, wanted, "{embed}'s features on:\n{tree}");
     }
     let features = cargo_tree(&["-p", "specengine-http", "-e", "features", "-i", "axum"]);
     let mut on: Vec<&str> = features
@@ -2191,6 +2242,9 @@ fn every_package_of_the_daemons_normal_graph_is_licensed_within_the_allowed_set(
         "tokio",
         "specengine-cli",
         "rusqlite",
+        "rust-embed",
+        "rust-embed-impl",
+        "rust-embed-utils",
     ] {
         assert!(
             graph.iter().any(|(name, _, _)| name == wanted),

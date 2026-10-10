@@ -5,7 +5,9 @@
 //! (404) and another method on a route (405, its `Allow` what the route
 //! serves: `GET` on a read, `POST, DELETE` on the stage, `POST` on the
 //! round's answers; `HEAD` is no read here), `Cache-Control: no-store` on
-//! every response and no `Access-Control-*` header on any.
+//! every response and no `Access-Control-*` header on any. The web UI's two
+//! read routes, `/` and `/assets/<file>`, are fenced like the API's
+//! (docs/features/ui-embed.md, [`crate::ui`]).
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -44,7 +46,7 @@ use specengine_cli::{
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
 use crate::args::{Args, percent_decode, project_path};
 use crate::start::Project;
-use crate::tail;
+use crate::{tail, ui};
 
 /// What every handler shares.
 #[derive(Debug)]
@@ -119,6 +121,10 @@ pub(crate) fn router(app: Shared) -> Router {
             post(round_answers).fallback(only_round_answers),
         )
         .route("/api/projects/{p}/events", read(tail::events))
+        // The web UI (docs/features/ui-embed.md "Data"): reads like the
+        // API's, no config, no turn.
+        .route("/", read(ui::page))
+        .route("/assets/{file}", read(ui::asset))
         .fallback(unknown_route)
         // A route without its own 405 (none today): the error body, axum's
         // `Allow`.
@@ -253,13 +259,14 @@ async fn unknown_route(uri: Uri) -> Refusal {
     unknown_route_of(&uri)
 }
 
-fn unknown_route_of(uri: &Uri) -> Refusal {
+/// The 404 of `uri`: the API's routes, then the web UI's.
+pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
     Refusal::new(
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, graph, check, health, inbox, proposals/<id>, tasks, \
-             tasks/<id>, round, events}}",
+             tasks/<id>, round, events}}; the web UI: / and /assets/<file>",
             uri.path()
         ),
     )

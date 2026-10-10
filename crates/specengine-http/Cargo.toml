@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 description = "The daemon's read surface of SpecEngine: the CLI's documents and the queue's live events over HTTP on 127.0.0.1"
+# std only (docs/features/ui-embed.md "Data"): reruns when `ui/dist` changes and
+# warns when it holds no `index.html`; no build dependency, no feature.
+build = "src/build.rs"
 
 [[bin]]
 name = "specengine-http"
@@ -15,7 +18,9 @@ path = "src/main.rs"
 # store or `rusqlite` directly; the reverse edge is forbidden (CLI_FORBIDDEN in
 # crates/specengine-eval/tests/build_graph.rs). `tokio`'s `net` is the listener
 # (`axum`'s `tokio` feature asks for it too); `sync` the per-project turn
-# (`tokio::sync::Mutex`, awaited by the request's own task).
+# (`tokio::sync::Mutex`, awaited by the request's own task). `rust-embed`
+# compiles `ui/dist` in (docs/features/ui-embed.md "Data"), plain: its features
+# are the workspace pin's.
 [dependencies]
 specengine-cli = { path = "../specengine-cli" }
 axum.workspace = true
@@ -24,3 +29,4 @@ futures-util.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rust-embed.workspace = true

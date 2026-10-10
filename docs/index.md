@@ -42,6 +42,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/canon/round-sheet.md](canon/round-sheet.md) Question rounds: the sheet · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
+- [docs/canon/serve-ui.md](canon/serve-ui.md) Daemon: the web UI it serves · crates/specengine-http, ui · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
 - [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
@@ -62,7 +63,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/code-refs.md](features/code-refs.md) code-refs: markers bound to code, spec refs · crates/specengine-code, crates/specengine-core, crates/specengine-cli, crates/specengine-eval, fixtures · draft
 - [docs/features/norm-hash.md](features/norm-hash.md) norm-hash: a node's meaning hash and revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/features/ui-embed.md](features/ui-embed.md) ui-embed: the web UI inside the daemon · crates/specengine-http, crates/specengine-eval, ui · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

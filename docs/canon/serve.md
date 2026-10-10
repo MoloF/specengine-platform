@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-10
 ---
 
 # Daemon: spec serve
 
-`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens; as built by `spec-serve`. The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL` 50 ms, `DAEMON_PUBLISH_WAIT` 2 s), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
+`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens; as built by `spec-serve`; it serves the web UI compiled into it (`docs/canon/serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL` 50 ms, `DAEMON_PUBLISH_WAIT` 2 s), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
 
 ## Launcher
 

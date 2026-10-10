@@ -50,9 +50,12 @@ const DECISION: &str = "/api/projects/lantern-keep/proposals/PR-0001/decision";
 const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
 
 /// Paths no route serves (`tasks/:id/transition`, 07 s3, stays one:
-/// docs/features/ui-live-tasks.md "Rules and edge cases").
-const UNKNOWN: [&str; 15] = [
-    "/",
+/// docs/features/ui-live-tasks.md "Rules and edge cases"). `/` is the web
+/// UI's since docs/features/ui-embed.md; no SPA fallback, no `/index.html`
+/// alias, no `/assets` listing (T5).
+const UNKNOWN: [&str; 16] = [
+    "/index.html",
+    "/assets",
     "/api",
     "/no/such/route",
     "/api/projects/",
@@ -280,6 +283,15 @@ fn an_unknown_path_is_a_404_for_every_method() {
             );
         }
     }
+    // `/assets/` (an empty `<file>`): no route, on GET (docs/features/ui-embed.md T5).
+    let reply = server.request("GET", "/assets/", &[]);
+    assert_eq!(reply.status, 404, "GET /assets/: {reply:?}");
+    assert!(
+        reply
+            .error_message()
+            .starts_with("no route /assets/: the routes are /api/projects "),
+        "GET /assets/: {reply:?}"
+    );
     // The asterisk form: no route either.
     let host = format!("127.0.0.1:{}", server.port);
     let reply = server.raw(&request_bytes("OPTIONS", "*", &[("Host", &host)]));

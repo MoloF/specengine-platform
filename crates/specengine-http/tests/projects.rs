@@ -309,9 +309,10 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
     // An unknown route: 404, the error body too, listing the routes
     // (`graph` and `check` since docs/features/ui-live.md, `tasks` and
     // `tasks/<id>` since docs/features/ui-live-tasks.md, `round` since
-    // docs/features/ui-round.md, R-03).
+    // docs/features/ui-round.md, R-03), then the web UI's (`/` is served:
+    // docs/features/ui-embed.md T5).
     for path in [
-        "/",
+        "/index.html",
         "/api",
         "/api/projects/lantern-keep",
         "/api/projects/lantern-keep/tasks/",
@@ -336,6 +337,10 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
                 "{path}: the routes name `{route}`: {message}"
             );
         }
+        assert!(
+            message.ends_with("; the web UI: / and /assets/<file>"),
+            "{path}: the routes end with the web UI's: {message}"
+        );
     }
     assert!(
         common::files_ending(&home, ".db").is_empty(),

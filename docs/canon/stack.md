@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-10
 ---
 
 # Stack: toolchain and pinned crates
@@ -22,6 +22,7 @@ Edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc >= 1.98 (the `r
 | `tokio` / `getrandom` | =1.53.1 (`rt`, `macros`, `io-std`, `time`; `specengine-http` adds `net`, `sync`) / =0.4.3 | MCP and HTTP runtime / per-process `requestState` HMAC key; both already in the graph via `rmcp` |
 | `futures-util` | =0.3.34 (no default features) | the live tail's stream; in the graph via `rmcp` |
 | `axum` | =0.8.9 (no default features; `http1`, `tokio`) | `specengine-http`: HTTP, SSE (no `query`, `json`, `tower-http`) |
+| `rust-embed` | =8.12.0 (no default features; `debug-embed`) | `specengine-http`: `ui/dist` compiled in (`docs/canon/serve-ui.md`). `rust-embed-impl`, `-utils` held at 8.12.0 in the lock (8.13.0 out). New: `mime_guess` 2.0.5 (MIT), compile time only, through `-impl` (a proc macro), not linked; reused: `walkdir`, `same-file`, `sha2` 0.11, `mime`, `unicase`. Recorded under the owner's approval of new dependencies; `mime_guess` and the hold await the owner's confirmation |
 | `tree-sitter` / `tree-sitter-rust` | =0.27.0 / =0.24.2 | compatible (ABI 15); in 0.26+ cancellation is `ParseOptions { progress_callback }` (no `set_timeout_micros`); in 0.27 `child_count()` is `u32`, `kind()` is `&'tree str`. Use: `crates/specengine-code/README.md` "Hash recipe" |
 | own RON lexer | -- (`specengine-code`) | `.ron` markers, field paths, the Bevy dump reader; replaces `tree-sitter-ron` 0.2.0 (05 s9) |
 | `rusqlite` | =0.40.2 (`bundled`: SQLite 3.53.2, FTS5) | the index; never `sqlx` or `refinery` beside it. Transitive, pending the owner (Q1, store README): `libsqlite3-sys` 0.38.2, `fallible-iterator` 0.3.0, `fallible-streaming-iterator` 0.1.9; build: `pkg-config` 0.3.34, `vcpkg` 0.2.15 (unused) |
