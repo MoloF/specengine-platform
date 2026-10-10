@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-10
 ---
 
 # Documentation: how the convention is applied
@@ -96,7 +96,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here three: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-decisions.md` (`docs/decisions/*.md`, cited and read by id) and `docs/index-crates.md` (`crates/*/README.md`, read by path), so the root keeps the canon and specs a task routes by and a read costs the root plus at most one live shard. All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
+The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here four: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon.md` (`docs/canon/*.md`, Tier 2 canon, cited by path, found by scope), `docs/index-decisions.md` (`docs/decisions/*.md`, cited and read by id) and `docs/index-crates.md` (`crates/*/README.md`, read by path), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. Canon grows with every shipped feature, live specs leave the root when shipped: the canon shard, not the root, nears its cap first, and takes the next split (a narrower `claims` glob before it). All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
 
 ## Enforcement
 

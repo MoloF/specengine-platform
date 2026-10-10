@@ -142,7 +142,7 @@ spec-writer:
 
 ## Out of scope
 
-4c `drift-queue`; slice 5 levels, lock format 2; slice 8 `verify --tests` writes. A staged lock writer (Q5); a commit-msg hook; a CI range check; `spec edit`; a per-node editorial choice in one proposal; `@rev` pins; raising markers; Health rows; a shipped hook script; a lock here.
+4c `drift-queue`; slice 5 levels, lock format 2; slice 8: 8a `verify-tests` (`spec verify --tests` runs the bound tests, `verify-tests.md`), 8b `tested-evidence` (writes their evidence into `spec.lock`). A staged lock writer (Q5); a commit-msg hook; a CI range check; `spec edit`; a per-node editorial choice in one proposal; `@rev` pins; raising markers; Health rows; a shipped hook script; a lock here.
 
 ## Open
 

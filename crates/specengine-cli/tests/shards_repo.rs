@@ -2,14 +2,15 @@
 //! repository's walked documents with the root config's index entry (the
 //! root `specengine.toml` with its `[[generators]]` entry replaced by
 //! [`SHIPPING`], the root config byte for byte: since 2026-10-06 the
-//! archive shard of the spec's "Data" plus two live shards beside it, the
-//! spec's AC-12 and AC-13 holding for that config). `spec export index`
-//! never runs in this repository; every run gets a scratch `HOME`;
-//! `git status` is the same before and after.
+//! archive shard of the spec's "Data" plus live shards beside it, three
+//! since 2026-10-10, the spec's AC-12 and AC-13 holding for that config).
+//! `spec export index` never runs in this repository; every run gets a
+//! scratch `HOME`; `git status` is the same before and after.
 //!
 //! AC-12: export creates the root, `docs/index-archive.md`,
-//! `docs/index-decisions.md` and `docs/index-crates.md` as
-//! `render_index_set` has them; the archive lists exactly the walked Tier 3
+//! `docs/index-canon.md`, `docs/index-decisions.md` and
+//! `docs/index-crates.md` as `render_index_set` has them; the archive
+//! lists exactly the walked Tier 3
 //! documents, each live shard exactly the live documents its claim matches,
 //! the root none of either; all are this repository's committed files byte
 //! for byte; all deleted → recreated byte-identical; a rerun → all
@@ -47,18 +48,19 @@ use specengine_store::{WorkingTree, check_input};
 
 const SHARD: &str = "docs/index-archive.md";
 const ARCHIVE_HEADING: &str = "## Archive \u{2014} Tier 3, by id only";
-const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n";
+const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n";
 
 /// The root config's index entry, verbatim: the spec's shipping entry
-/// (the archive shard) with the two live shards after it.
+/// (the archive shard) with the three live shards after it.
 const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
-writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\"]
+writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\"]
 index   = true
 gate    = \"cargo run -q -p specengine-cli -- check\"
-# Live shards hold what is read by id (decisions) or by path (crate READMEs): docs/README.md \"Generated\".
+# Live shards hold Tier 2 canon (cited by path, found by scope), decisions (read by id) and crate READMEs (by path): docs/README.md \"Generated\".
 shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
+           { path = \"docs/index-canon.md\", claims = [\"docs/canon/*.md\"] },
            { path = \"docs/index-decisions.md\", claims = [\"docs/decisions/*.md\"] },
            { path = \"docs/index-crates.md\", claims = [\"crates/*/README.md\"] }]
 ";

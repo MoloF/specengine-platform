@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-10
 ---
 
 # spec check: index render, generators, graph warnings
@@ -57,18 +57,19 @@ This repository's root `specengine.toml` has:
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"  # a `generator:` value, compared byte for byte
 writes  = ["docs/index.md", "docs/index-archive.md",  # root-relative, the [paths] path rules
-  "docs/index-decisions.md", "docs/index-crates.md"]
+  "docs/index-canon.md", "docs/index-decisions.md", "docs/index-crates.md"]
 index   = true  # optional: SpecEngine renders this output (§11.5)
 gate    = "cargo run -q -p specengine-cli -- check"  # optional, index entry only; default "spec check"
 shards  = [  # optional, index entry only (#index-shards)
   { path = "docs/index-archive.md", tier3 = true },
+  { path = "docs/index-canon.md", claims = ["docs/canon/*.md"] },
   { path = "docs/index-decisions.md", claims = ["docs/decisions/*.md"] },
   { path = "docs/index-crates.md", claims = ["crates/*/README.md"] }]
 ```
 
-`specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; an index entry `writes` path neither `[paths] index` nor a shard; `shards` off the index entry; a shard with an unknown key, no `path`, both or neither of `tier3` and `claims`, `tier3` not `true`, `claims` empty; a shard `path` or claim breaking the `[paths]` or `exclude` rules or holding a control character or a backtick (rendered into Markdown); a shard `path` equal to `[paths] index` or another's, or not in `writes`; `tier3 = true` twice (the first shard error only; claims matching nothing or overlapping: fine); `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as the same string through the crate's own front-matter reader (`read_back`): null, booleans, numbers, and `.inf`, `-.inf`, `.nan`, the texts the reader gives non-finite floats. The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
+`specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; an index entry `writes` path neither `[paths] index` nor a shard; `shards` off the index entry; a shard with an unknown key, no `path`, both or neither of `tier3` and `claims`, `tier3` not `true`, `claims` empty; a shard `path` or claim breaking the `[paths]` or `exclude` rules or holding a control character or a backtick (rendered into Markdown); a shard `path` equal to `[paths] index` or another's, or not in `writes`; `tier3 = true` twice (the first shard error only; claims matching nothing or overlapping: fine); `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as itself through the crate's front-matter reader (`read_back`): null, booleans, numbers, `.inf`, `-.inf`, `.nan` (non-finite floats). The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
 
-WHEN the table is present (even empty), each `class: generated` document whose front-matter was read SHALL name a registered `command` in `generator:`, else `generator-unknown` (subject: the value, `""` if absent), and its path SHALL be in that entry's `writes`, else `generator-path` (the message names `writes`). Both errors sit on the `generator:` line, else line 1. A failed front-matter gives only its parser findings. Project generators are registered, never run.
+WHEN the table is present (even empty), each `class: generated` document whose front-matter was read SHALL name a registered `command` in `generator:`, else `generator-unknown` (subject: the value, `""` if absent), and its path SHALL be in that entry's `writes`, else `generator-path` (the message names `writes`). Both errors sit on the `generator:` line, else line 1. A failed front-matter gives only its parser findings.
 
 ## Graph warnings
 
@@ -84,7 +85,7 @@ WHEN the table is present (even empty), each `class: generated` document whose f
 
 **Determinism**: render, findings and cycle subjects do not depend on input order. **Genre** (ADR-0008): no project command (`cargo run -q -p specengine-cli`), `docs/`, `ADR` or `index.md` literal in the sources, no shard name; the ADR-0022 convention text (header, H1, `source:`, protocol line, section names, `Shards`, `Documentation index: `, `A shard of `) and `spec check` are literal.
 
-This repository (root config, `enforce`, no baseline): `clean`, no warning.
+This repository (`enforce`, no baseline): `clean`, no warning.
 
 ## Next
 

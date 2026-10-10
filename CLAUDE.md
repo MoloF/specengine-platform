@@ -14,7 +14,7 @@ State: shipped: Phases 0-1 (parser, index, reads, graph, bundle, check, shards, 
 
 ## How to read
 
-`CLAUDE.md` -> `docs/index.md` -> at most three documents. A third step is an index or canon defect: fix it. The archive is read by id only. Long files: headings first, then the needed section. Details: `docs/README.md`.
+`CLAUDE.md` -> `docs/index.md` -> at most three documents. The root lists Tier 0-1 canon and live specs; `docs/canon/*`, decisions and crate READMEs are in the live shards it links, one step each. A third step is an index or canon defect: fix it. The archive is read by id only. Long files: headings first, then the needed section. Details: `docs/README.md`.
 
 ## Rules that must not be broken
 

@@ -6,10 +6,11 @@
 //! AC-04 (on a scratch copy of the walked documents and the root config;
 //! the export never runs in this repository; index-shards AC-12): with
 //! `docs/index.md`, its archive shard `docs/index-archive.md` and its live
-//! shards `docs/index-decisions.md` and `docs/index-crates.md` deleted, X
-//! recreates all four byte-identical to the working tree's, one `wrote`
-//! line each in config order; run again it reports all `unchanged` and
-//! keeps the mtimes, the JSON with `shards` (the three, in order);
+//! shards `docs/index-canon.md`, `docs/index-decisions.md` and
+//! `docs/index-crates.md` deleted, X recreates all five byte-identical to
+//! the working tree's, one `wrote` line each in config order; run again it
+//! reports all `unchanged` and keeps the mtimes, the JSON with `shards`
+//! (the four, in order);
 //! `--stdout` prints the same bytes, one `==> <path> <==` block per output;
 //! one byte edited in an output → `spec check` exit 1, one `index-drift`
 //! naming X on that output only.
@@ -246,17 +247,16 @@ fn export_index_recreates_this_repository_s_index() {
     assert!(run.stdout.ends_with(" \u{2014} clean\n"), "{}", run.stdout);
 
     // Mutation (scratch): one byte of an output edited → exit 1, one
-    // `index-drift` naming X on that output, none on the other.
-    for (at, (output, heading)) in outputs
-        .iter()
-        .zip([
-            "# Documentation index",
-            "## Archive \u{2014} Tier 3, by id only",
-            "## Decisions",
-            "## Canon",
-        ])
-        .enumerate()
-    {
+    // `index-drift` naming X on that output, none on the other. One heading
+    // per output, in config order (the type pins the count).
+    let headings: [&str; INDEX_OUTPUTS.len()] = [
+        "# Documentation index",
+        "## Archive \u{2014} Tier 3, by id only",
+        "## Canon",
+        "## Decisions",
+        "## Canon",
+    ];
+    for (at, (output, heading)) in outputs.iter().zip(headings).enumerate() {
         let mut edited = working[at].clone();
         let found = edited
             .windows(heading.len())

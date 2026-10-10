@@ -23,8 +23,10 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 
 /// The live shards of the root config's index entry after the archive, in
 /// config order, each with its one claim (`shards`, `claims`; docs/README.md
-/// "Generated"): what is read by id (decisions) or by path (crate READMEs).
-pub const INDEX_LIVE_SHARDS: [(&str, &str); 2] = [
+/// "Generated"): Tier 2 canon (cited by path, found by scope), what is read
+/// by id (decisions) and by path (crate READMEs).
+pub const INDEX_LIVE_SHARDS: [(&str, &str); 3] = [
+    ("docs/index-canon.md", "docs/canon/*.md"),
     ("docs/index-decisions.md", "docs/decisions/*.md"),
     ("docs/index-crates.md", "crates/*/README.md"),
 ];
@@ -32,11 +34,12 @@ pub const INDEX_LIVE_SHARDS: [(&str, &str); 2] = [
 /// The index set of the root config in config order: the root, then the
 /// shards. The index entry's `writes`, the render's outputs and the export's
 /// lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 4] = [
+pub const INDEX_OUTPUTS: [&str; 5] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
     INDEX_LIVE_SHARDS[1].0,
+    INDEX_LIVE_SHARDS[2].0,
 ];
 
 /// X: the registered export command of the index (`[[generators]] command`).

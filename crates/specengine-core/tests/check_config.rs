@@ -372,7 +372,7 @@ fn the_registry_example_loads() {
     let config = CheckConfig::from_toml(&example)
         .unwrap_or_else(|e| panic!("{}\n{example}", e.at("specengine.toml")));
     // This repository's block (#index-shards): the root, the archive shard
-    // and two live shards. `writes` and `shards` span lines: each shard's
+    // and three live shards. `writes` and `shards` span lines: each shard's
     // `line` is the line of its own inline table, not of the `shards` key
     // (line 10), the header on line 4.
     let want = Generator {
@@ -380,6 +380,7 @@ fn the_registry_example_loads() {
         writes: strings(&[
             "docs/index.md",
             "docs/index-archive.md",
+            "docs/index-canon.md",
             "docs/index-decisions.md",
             "docs/index-crates.md",
         ]),
@@ -393,14 +394,19 @@ fn the_registry_example_loads() {
                 line: 11,
             },
             Shard {
+                path: "docs/index-canon.md".to_owned(),
+                kind: ShardKind::Claims(strings(&["docs/canon/*.md"])),
+                line: 12,
+            },
+            Shard {
                 path: "docs/index-decisions.md".to_owned(),
                 kind: ShardKind::Claims(strings(&["docs/decisions/*.md"])),
-                line: 12,
+                line: 13,
             },
             Shard {
                 path: "docs/index-crates.md".to_owned(),
                 kind: ShardKind::Claims(strings(&["crates/*/README.md"])),
-                line: 13,
+                line: 14,
             },
         ],
     };
