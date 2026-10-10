@@ -12,7 +12,7 @@ adrs: [ADR-0041]
 
 Nothing ties a node's `norm_hash` at revision R to its bound items' AST hashes at a commit: slice 4 cannot tell `ok` from `code_ahead` (05 s5.3), slice 8 has nowhere to write a passing run (06 s6), and "rewrote the meaning, coverage stayed green" (05 s3.5) cannot be ruled out.
 
-Delivered: a canonical, committed `<root>/spec.lock`; `spec lock accept REF [--editorial]` (committed bytes, a commit with provenance each) and `spec lock regen` (a merge resolver, no hashing); ADR-0041 names the writers (`architecture.md#apply`). Needs slices 1 (`code-refs.md`), 2 (`norm-hash.md`).
+Delivered: a canonical, committed `<root>/spec.lock`; `spec lock accept REF [--editorial]` (committed bytes, a commit with provenance each) and `spec lock regen` (a merge resolver, no hashing); ADR-0041 names the writers (`architecture.md#apply`, listed in `architecture-code.md#spec-lock`). Needs slices 1 (`code-refs.md`), 2 (`norm-hash.md`).
 
 ## Description and interactions
 

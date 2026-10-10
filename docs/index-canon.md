@@ -14,6 +14,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 - [docs/canon/agent-intake-documents.md](canon/agent-intake-documents.md) Agent intake: the documents it answers with · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store · tier 2
 - [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies, decisions · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
+- [docs/canon/architecture-code.md](canon/architecture-code.md) SpecEngine architecture rules: the code layer · architecture, crates/specengine-code, crates/specengine-cli · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2

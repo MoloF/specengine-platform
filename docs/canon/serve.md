@@ -78,6 +78,11 @@ Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
 - One daemon per data directory: a scratch `HOME` or `XDG_DATA_HOME` gets its own; two under different ones race for 7777, no fallback (`--port 0` is explicit; the UI dev proxy targets 7777).
 - Foreground only: SIGINT, SIGTERM end it, every write one SQLite transaction; no detach, idle exit or log file.
 
+<a id="trust"></a>
+## Trust
+
+No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. Threat model: any local process of any account can read everything served and stage a decision (loopback is not per-user); none confirms one from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve` today. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy in front), never in-app.
+
 ## Concurrency
 
 Requests of one project run one at a time on the blocking pool (a read refreshes its index; `check`, `health`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.

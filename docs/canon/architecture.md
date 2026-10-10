@@ -8,44 +8,43 @@ reviewed: 2026-10-10
 
 # SpecEngine architecture rules
 
-The rules all code is written by. Each rule was introduced by a decision (ADR) and changes only through a new decision in the same change (promotion rule). Reasons are in the ADRs; the detailed design is in the spec `docs/specs/specengine-platform/`.
+The rules all code is written by, each with the ADRs that introduced it and hold its reasons; a rule changes only through a new decision in the same change (promotion rule). Its detail is one step away, in the document its section names (the code layer's: `docs/canon/architecture-code.md`); the design: `docs/specs/specengine-platform/`.
 
 <a id="storage"></a>
 ## Storage
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
-- The operational database lives outside the repository: `~/Library/Application Support/specengine/`, beside the daemon's files (`docs/canon/serve.md`). Git will receive the generated `docs/generated/queue.md`; the queue's full dump (`spec export state`) never enters the repository, and `spec import-state` restores it into an empty queue (`docs/canon/queue-backup.md`). ADR-0003.
+- The operational database lives outside the repository, in `~/Library/Application Support/specengine/` beside the daemon's files (`docs/canon/serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `docs/canon/queue-backup.md`). ADR-0003.
 
 <a id="layout"></a>
 ## Spec layout in a project
 
-A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file. A node document (mechanic, feature) is one file; its rules are sections with `{#ID}`. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is defined only as a `{#ID}` section of a feature document: a file `<slug>.md` directly under `[paths] features`, slug = the file stem, `[a-z][a-z0-9-]*`. It is unique within that file, has no record file, and is cited `<slug>/ID` from other files, bare inside its own. ADR-0026.
+A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file, for atomic diffs, conflict-free merges and cheap agent writes; a node document (mechanic, feature) is one file, read whole, its rules `{#ID}` sections hashed one by one, so editing a neighbour gives no false drift. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is only a `{#ID}` section of a feature document `<slug>.md` directly under `[paths] features`, cited `<slug>/ID` from other files, bare inside its own (`docs/canon/spec-check-links.md`). ADR-0026.
 
-A node's revision: a document's front-matter `rev:`, a section's own `rev=N` in its `{#ID ...}` heading; none written = 1; unreadable = unknown, never 1. Neither a revision nor a heading line enters a node's `norm_hash`. ADR-0040. Approving a change of a node's `norm_hash` raises its revision, never lowering one; `spec approve --editorial` keeps it and refreshes its lock entries (`#apply`); `spec check --staged` and `--changed` give an error for a locked node changed with neither. How: `docs/canon/node-revision.md`. ADR-0043.
+A node's revision is its own (a document's `rev:`, a section's `rev=N`; none written = 1). ADR-0040. Approving a change of its `norm_hash` raises it, never lowering it; `spec approve --editorial` keeps it (`#apply`); `spec check --staged` and `--changed` flag a locked node changed with neither. How: `docs/canon/node-revision.md`. ADR-0043.
 
-Granularity: a record file gives atomic diffs, conflict-free merges and cheap agent writes; a mechanic or feature reads best whole, and its sections are hashed one by one, so editing a neighbour gives no false drift. Directories come from `specengine.toml` `[paths]`, so a consumer's existing `docs/` stays intact; the defaults (`crates/specengine-core/README.md` "`[paths]`"):
-
-- `specengine.toml` (roots, ID prefixes, classes, budgets, zones); `spec.lock` (verified node ↔ symbol hash pairs, committed; its writers: `#apply`; Phase 3);
-- `docs/spec/`, the business-logic tree (canon): a root document (a game's vision, pillars, core loop), `<domain>/README.md` (Tier 1), `<domain>/<mechanic>.md` with rules, invariants and edge cases as `{#ID}` sections;
-- `docs/records/<PREFIX>/<ID>.md` (`R/R-12.md`, `DEC/DEC-0023.md`); `docs/features/<slug>.md`, change specs (consumable);
-- `docs/generated/` (index, registries, glossary, queue: SpecEngine's output); `docs/archive/` (Tier 3 by front-matter, not by folder).
+Directories come from `specengine.toml` `[paths]`, so a consumer's existing `docs/` stays intact; each defaults to `docs/<role>` (`crates/specengine-core/README.md` "`[paths]`"): `spec/`, the business-logic tree (canon: a root document, `<domain>/README.md` Tier 1, `<domain>/<mechanic>.md`); `records/<PREFIX>/<ID>.md`; `features/<slug>.md`, change specs (consumable); `generated/`, SpecEngine's output; `archive/`, Tier 3 by front-matter, not by folder. Beside `specengine.toml`, the committed `spec.lock`: verified node ↔ symbol hash pairs, Phase 3, its writers in `#apply`.
 
 <a id="apply"></a>
 ## Applying proposals
 
-An approved proposal is applied in the task branch's worktree (the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance: who decided, the author agent's model and run. A proposal is bound at creation to the worktree, branch and base commit it was raised on (a task's proposals: its worktree), and is applied only there; one whose repository is gone can only be rejected. Spec files are written only by `apply_proposal` on the owner's action. A decision is confirmed only on a terminal, one `[y/N]` per decision: `spec approve|reject`, or `spec round answer` per staged answer; the UI, later an MCP form, only stages (`docs/canon/decision-staging.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038. How: `docs/canon/proposal-apply.md`. A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue, a project's generator its output). ADR-0003, ADR-0013, ADR-0022; owner, Q3, 2026-09-30. `spec.lock` is neither: only the owner's terminal `[y/N]` writes it: `spec lock accept` over committed bytes, or `spec approve` of a `drift` item running it; `spec lock regen` for a merge; `spec approve --editorial` in its apply commit; `spec verify --tests`, `[[tested]]` evidence added on a pass, removed on a failure. Each but a merge's and an editorial apply's is its own commit with provenance; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045.
+An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`docs/canon/proposal-apply.md`). Spec files are written only by `apply_proposal` on a decision the owner confirms on a terminal, one `[y/N]` each; the UI, later an MCP form, only stages (`docs/canon/decision-staging.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038.
+
+A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue, a project's generator its output). ADR-0003, ADR-0013, ADR-0022; owner, Q3, 2026-09-30.
+
+`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `docs/canon/architecture-code.md#spec-lock`; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045.
 
 <a id="control"></a>
 ## Control and no blocking
 
-- Discrepancies, questions and proposals block nothing. A node may have several open proposals, rebased on `base_hash` when applied. An agent keeps working on a working answer and marks `// @assumes PR-…`. A decision unlike the working answer makes a follow-up task. ADR-0012.
-- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook (`docs/canon/gate.md`) passes a gated write only on a verdict: an `in_progress` task claimed in its worktree and branch; else exit 2. It never consults the daemon: a verdict is the same with the daemon up or down; only the browser needs it. ADR-0012, ADR-0039.
-- `spec verify` shows drift between `spec.lock` and the tree as Fix, Check or Pre-existing findings; only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix; else only `spec propose drift` reads them, queuing items that stop nothing (ADR-0045). A binding it cannot verify is never `ok`: exit 2 in every mode. ADR-0042.
+- Discrepancies, questions and proposals block nothing: a node may have several open proposals, rebased on `base_hash` when applied; an agent keeps working on a working answer, marked `// @assumes PR-…`, and a decision unlike it makes a follow-up task. ADR-0012.
+- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`docs/canon/gate.md`). ADR-0012, ADR-0039.
+- `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; `spec propose drift` queues items that stop nothing; a binding it cannot verify is never `ok`. How: `docs/canon/architecture-code.md#verify`. ADR-0042, ADR-0045.
 
 <a id="tasks"></a>
 ## Tasks and stack skills
 
-Tasks live per project: in its queue and its exported dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). SpecEngine hands a task out as a stack-neutral package with a schema version a new key keeps and a removed or renamed one raises (`docs/canon/task-package.md`). The engine writes no stack-specific text into the package or brief, its plugin has no stack role names, and the core never branches on the optional `profile` of `specengine.toml`. The code layer stays Rust-first (`#markers`, `#code-identity`). Rendering and execution belong to the project's `.claude/` skills and roles, or to a stack-profile plugin hosted outside SpecEngine's repository; the project's layer comes first. A profile adds no control point (`#control`); a tracker ticket is rendered one way and stores nothing back. ADR-0027. SpecEngine runs a project's tests only through its `[verify] tests` argv template, on the owner's terminal; `verified` is computed from `spec.lock`'s evidence, never from an agent's report. ADR-0044.
+Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`docs/canon/task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`docs/canon/architecture-code.md#tests`). ADR-0044.
 
 <a id="rules-format"></a>
 ## Rule form
@@ -55,7 +54,7 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets and process rules (required keys, allowed values, labelled parts, own text; keyed by kind, class or path: `[[check.rules]]`, the project's own form findings) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one project is never carried into another. ADR-0008, ADR-0031.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets and process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031.
 
 <a id="ids"></a>
 ## Identifiers
@@ -65,20 +64,19 @@ All IDs are Latin; mixing scripts inside an ID is forbidden. Legacy IDs of an im
 <a id="markers"></a>
 ## Code markers
 
-- Code is linked to the spec by a comment `// @implements ID@rev [tiers]` (also `@verifies`, `@configures`, `@assumes`) in `.rs` and `.ron`. The revision in the marker is raised after the code is brought in line with the new text. AST hashes of the verified state live in `spec.lock`. ADR-0010, ADR-0018.
-- Existing ID citations in code automatically become weak `mentions` links. Markers are placed only in new work and when code is touched; there is no mass conversion. ADR-0016.
+Code is linked to the spec by a comment `// @implements ID@rev [tiers]` (also `@verifies`, `@configures`, `@assumes`) in `.rs` and `.ron`; `spec.lock` keeps the AST hashes of the verified state. ADR-0010, ADR-0018. Existing ID citations in code become weak `mentions`, never mass-converted. ADR-0016. How: `docs/canon/architecture-code.md#markers`.
 
 <a id="code-identity"></a>
 ## Symbol identity and digest
 
-MVP: tree-sitter and markers only; the marker provides the identity of a link. The digest is a normalized tree-sitter AST. rust-analyzer as a library is a precision layer in Phase 3. ADR-0020, ADR-0021.
+The marker is a link's identity; the digest is a normalized tree-sitter AST. MVP: tree-sitter and markers; rust-analyzer as a library is a Phase 3 precision layer. Layers: `docs/canon/architecture-code.md#code-identity`. ADR-0020, ADR-0021.
 
 <a id="ui"></a>
 ## Interface
 
 Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. The interface is in English; spec content is shown in the project's language, so search and token estimates must handle non-Latin scripts. ADR-0011, ADR-0014.
 
-The UI reads and stages decisions only through one client interface, implemented twice: by default an HTTP client of `specengine-http`, the daemon's surface (`crates/specengine-http/README.md`; a decision is only staged there, always confirmed on a terminal: `#apply`), and a typed mock (`?scenario=`), flagged "Mock data" on every screen. Its types are provisional hand-written ones; types generated from Rust replace them and win, nothing extends them. Dependencies are the owner's allowlist at exact versions; a new package or a version change is an owner decision. The UI computes no core logic (diffs, rebases, checks): it renders what the daemon returns. Spec prose renders as markdown only through `ui/src/markdown/`: React elements, raw HTML as text, a link an anchor only where the daemon's links read resolved it, the source one toggle away; the rest verbatim. How: `ui/README.md`. ADR-0033, ADR-0036.
+The UI reads and stages decisions only through one client interface, the daemon's HTTP client by default or a typed mock flagged "Mock data" on every screen; a decision is only staged, confirmed on a terminal (`#apply`). It computes no core logic (diffs, rebases, checks) and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036.
 
 <a id="checks-migration"></a>
 ## Documentation checks in projects
@@ -88,7 +86,7 @@ A project's own generators (schemas, registries, references derived from code) s
 <a id="documentation-convention"></a>
 ## Documentation convention — mandatory for every project
 
-The convention `docs/canon/documentation-system.md` is a built-in part of SpecEngine, not an option: four classes, tiers, budgets, the front-matter contract, the promotion rule, a generated index and the six checks of §11 apply to every project under SpecEngine and to this repository. Here they are enforced by `spec check` itself: roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
+The convention `docs/canon/documentation-system.md` is a built-in part of SpecEngine, not an option: it applies to every project under SpecEngine and to this repository, enforced here by `spec check` itself through roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
 
 <a id="language"></a>
 ## Repository language
@@ -100,7 +98,7 @@ All content of this repository — documentation, decisions, role prompts, code 
 
 `cargo install` + a Claude Code plugin (MCP, hooks, stack-neutral roles and prompts in one version; stack roles: `#tasks`). Single-user mode. A multi-user server mode (initial spec §6.1 Model A) is out of plan, but storage access goes through a trait and changes go through the `events` log. ADR-0015, ADR-0017, ADR-0027.
 
-No authentication inside SpecEngine, ever: no token, key, account, session, WebAuthn or Touch ID on any surface. `specengine-http`'s `127.0.0.1` bind, Host, Origin and Sec-Fetch-Site fence and absent CORS stop other sites' pages; they identify no one. Threat model: any local process of any account can read everything served and stage a decision (loopback is not per-user); none confirms one from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve` today. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy in front), never in-app. ADR-0034.
+No authentication inside SpecEngine, ever, on any surface: no token, key, account, session, WebAuthn or Touch ID; hosting or a shared machine needs infrastructure in front, per service. Threat model: `docs/canon/serve.md#trust`. ADR-0034.
 
 <a id="implementation-base"></a>
 ## Own implementation

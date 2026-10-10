@@ -12,7 +12,7 @@ adrs: [ADR-0042]
 
 `spec.lock` (slice 3, `spec-lock.md`) records what was verified at a commit; nothing reads it back, so drift (05 s5.3) stays invisible, slices 5, 7, 8, 9 lack a judge, and AC-14's exit 2 is open.
 
-Delivered: `spec verify [--changed] [--json]`, read-only: a state per lock entry and marker binding, findings Fix, Check or Pre-existing, exit 0/1/2 under `[verify] mode`; ADR-0042 bounds what a finding may stop (`architecture.md#control`). Needs slices 1-3 as drafted (`code-refs.md`, `norm-hash.md`). Slice 4 split (Q1): 4a this, 4b `rev-discipline`, 4c `drift-queue`.
+Delivered: `spec verify [--changed] [--json]`, read-only: a state per lock entry and marker binding, findings Fix, Check or Pre-existing, exit 0/1/2 under `[verify] mode`; ADR-0042 bounds what a finding may stop (`architecture.md#control`, detail `architecture-code.md#verify`). Needs slices 1-3 as drafted (`code-refs.md`, `norm-hash.md`). Slice 4 split (Q1): 4a this, 4b `rev-discipline`, 4c `drift-queue`.
 
 ## Description and interactions
 

@@ -12,7 +12,7 @@ adrs: [ADR-0044]
 
 `verified` is today a tester agent's claim (`plugin.md`: "not a machine verdict"); 08 AC-8 wants SpecEngine to run the `@verifies` tests itself; 05 s5.4 hard-codes one runner against ADR-0008, ADR-0027.
 
-Delivered (8a): `[verify] tests`, the project's runner as an argv template; `spec verify --tests [--task T] [--json]` runs the tests `@verifies` binds to the selected nodes, one invocation each, only on the owner's terminal after one `[y/N]`, over a clean committed tree, each run a `verify.tests` event; `spec verify --task T`. 8b `tested-evidence` ("Out of scope") writes the evidence into `spec.lock` and computes `verified`, closing AC-8. ADR-0044 (`architecture.md#apply`, `#tasks`). Needs slices 1, 3, 4a (`code-refs.md`, `spec-lock.md`, `spec-verify.md`).
+Delivered (8a): `[verify] tests`, the project's runner as an argv template; `spec verify --tests [--task T] [--json]` runs the tests `@verifies` binds to the selected nodes, one invocation each, only on the owner's terminal after one `[y/N]`, over a clean committed tree, each run a `verify.tests` event; `spec verify --task T`. 8b `tested-evidence` ("Out of scope") writes the evidence into `spec.lock` and computes `verified`, closing AC-8. ADR-0044 (`architecture.md#apply`, `#tasks`; detail `architecture-code.md#spec-lock`, `#tests`). Needs slices 1, 3, 4a (`code-refs.md`, `spec-lock.md`, `spec-verify.md`).
 
 ## Description and interactions
 
