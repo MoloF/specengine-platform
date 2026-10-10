@@ -16,7 +16,7 @@ Slice 6 is split (Q1): **6a** (this) stores slice 1's per-file results beside th
 
 ## Description and interactions
 
-- **Freshness** (WA-6): `refs`, `symbols`, `unmapped`, `index` refresh the md index, then the code index, as 7a's reads printing code data do, in the CLI, MCP and the daemon (bundle, `show --bindings`, tree, `task show`, `impact`: `bundle-bindings.md`, ADR-0046); `show` without `--bindings`, `search`, `graph` never walk code; `verify`, `lock accept` keep their fresh walk.
+- **Freshness** (WA-6): `refs`, `symbols`, `unmapped`, `index` refresh the md index, then the code index, as 7a's reads printing code data do, in the CLI, MCP and the daemon (bundle, `show --bindings`, tree, `task show`, `impact`: `bundle-bindings.md`, ADR-0046); `show` without `--bindings`, `search`, `graph` never walk code; `verify`, `lock accept` and `spec health` (`health-code.md` WA-4, 2026-10-10) keep their fresh walk.
 - **Crates** (WA-5, WA-22): the store owns walk → compare → apply → cross-file pass behind its trait `CodeAnalyzer` (extensions, packages, fingerprint, analyze; plain rows), implemented in the CLI library over `specengine-code`, reused by the eval; no `rusqlite` type public, no new store or core dependency.
 - **Amended** (WA-9): slices 1, 3, 4a name and lock discriminated twins (`code-a` goldens follow); unique qpaths stay byte-identical.
 

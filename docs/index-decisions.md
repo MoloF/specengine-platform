@@ -55,3 +55,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0044](decisions/ADR-0044.md) Bound tests run by the project's own command, only on the owner's terminal · architecture · accepted
 - [ADR-0045](decisions/ADR-0045.md) Drift reaches the owner as a queue item; approving it runs the lock accept · architecture · accepted
 - [ADR-0046](decisions/ADR-0046.md) Reads show each binding's sync and never fail on the code layer · architecture · accepted
+- [ADR-0047](decisions/ADR-0047.md) Health lists code assuming a decision, unbound nodes and drift, read-only · architecture · accepted

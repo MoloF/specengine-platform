@@ -41,6 +41,7 @@ A `generated` document is no spec file: only its registered generator writes it 
 - The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`docs/canon/gate.md`). ADR-0012, ADR-0039.
 - `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; `spec propose drift` queues items that stop nothing; a binding it cannot verify is never `ok`. How: `docs/canon/architecture-code.md#verify`. ADR-0042, ADR-0045.
 - Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it; a code-layer failure leaves a read's spec part and exit as they were, `sync` unknown, never `ok`. How: `docs/canon/architecture-code.md#sync-in-reads`. ADR-0046.
+- `spec health` lists, read-only, markers naming a queue item, an archived node or one in question; live nodes the project's `[[health.bound]]` rules select that no marker binds; plain `spec verify`'s non-`ok` findings. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `docs/canon/architecture-code.md#health`. ADR-0047.
 
 <a id="tasks"></a>
 ## Tasks and stack skills
@@ -55,7 +56,7 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets and process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`) and which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047.
 
 <a id="ids"></a>
 ## Identifiers

@@ -8,7 +8,7 @@ reviewed: 2026-10-10
 
 # SpecEngine architecture rules: the code layer
 
-The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`.
+The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads, Health's code rows and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`.
 
 <a id="markers"></a>
 ## Markers
@@ -47,7 +47,7 @@ Each but a merge's and an editorial apply's is its own commit with provenance. N
 Rule: `architecture.md#control`. ADR-0042, ADR-0045.
 
 - `spec verify` shows drift between `spec.lock` and the tree as Fix, Check or Pre-existing findings.
-- Only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix. Otherwise `spec propose drift` queues the findings as items that stop nothing (ADR-0045), and reads show the same states as `sync` (`#sync-in-reads`).
+- Only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix. Otherwise `spec propose drift` queues the findings as items that stop nothing (ADR-0045), reads show the same states as `sync` (`#sync-in-reads`) and Health lists them (`#health`).
 - A binding it cannot verify is never `ok`: exit 2 in every mode.
 
 <a id="sync-in-reads"></a>
@@ -58,7 +58,19 @@ Rule: `architecture.md#control`. ADR-0046.
 - `spec bundle` (layers 5 and 9), `show --bindings`, `tree`'s counters, `task show`'s `bindings` and `impact`, and their MCP and HTTP twins, show each binding of their nodes as one row: the lock key, its place, signature, layer and `sync`.
 - `sync` is `spec verify`'s plain state (no base, no Pre-existing) from the same pure judge, over the code index the read refreshes, `spec.lock` and the read's own parse; never stored, so it may be newer than the last `spec verify`. No exit code, status, claim, approval or gate verdict depends on it.
 - A read of nodes never fails on the code layer: a bad `[code]` or a walk gap shows no rows, an invalid or unmerged lock, no git or a git failure shows rows with `sync` unknown; either way one `note: bindings: <cause>`, the spec part and exit unchanged, never `ok`. Without `[code]` such a read is byte-identical to one without a code layer. `impact --symbol` and `--since` take code as input and exit 2 on it, as `spec symbols`.
-- Of the reads, these and `refs`, `symbols`, `unmapped`, `index`, `verify` walk code; `show` without `--bindings`, `search` and `graph` never do. Git is read only (`rev-parse`, `ls-tree`, `cat-file`, `hash-object` without `-w`), never `status` or `diff`. `impact --since` compares a git revision with the working tree, untracked files included; `spec.lock` plays no part.
+- Of the reads, these and `refs`, `symbols`, `unmapped`, `index`, `verify`, `health` (`#health`) walk code; `show` without `--bindings`, `search` and `graph` never do. Git is read only (`rev-parse`, `ls-tree`, `cat-file`, `hash-object` without `-w`), never `status` or `diff`. `impact --since` compares a git revision with the working tree, untracked files included; `spec.lock` plays no part.
+
+<a id="health"></a>
+## Health's code rows
+
+Rule: `architecture.md#control`, `architecture.md#universal`. ADR-0047.
+
+`spec health` (and its route) lists rows 4-6 of "What is left" (06 s7) beside row 3, each its own key, informational only:
+
+- **Row 4**, code assuming a decision: each marker naming a queue item (`code-bindings.md` "ID state" `queue`), looked up by exact ID in the slug's queue: pending, as assumed (the working answer, or the recommended option), otherwise, applied, rejected or unknown; each `@assumes` naming a node whose document is Tier 3, or which an open or approved item targets. A project's status words are never interpreted.
+- **Row 5**, unbound nodes: the live nodes, documents or `{#ID}` sections, that the project's `[[health.bound]]` rules select (`[[check.rules]]`' selectors: kinds, classes, paths, front-matter values; a section by its ID's prefix kind) and that no marker of the rule's relations binds (an ID resolved, an alias or each ambiguous holder; an item, module, RON path or `cannot_verify`). Mentions, look-alikes, `unanchored` never bind; a revision never matters. No rule: not measured, never "all unbound"; `spec check` never reads the table.
+- **Row 6**, drift: plain `spec verify`'s judgement, run in-process, its rows but `ok`; never its mode or verdict.
+- One fresh code walk per call, never 6a's code index; the queue is opened only if it exists; git only through verify (`hash-object` without `-w`). Only the data directory's index is written. A row it cannot measure shows its causes, never 0, and leaves the other rows and the exit as they are; no exit 1.
 
 <a id="tests"></a>
 ## Tests as evidence
