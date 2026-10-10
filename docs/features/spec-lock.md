@@ -52,7 +52,7 @@ verified_at = "2026-10-10"
 
 - `code_recipe`: `recipe_header()`'s parts (`RECIPE`, `TREE_SITTER_RUST_VERSION`, `abi_version()`) as `<RECIPE> tree-sitter-rust/<version> abi/<n>`; `norm_recipe` = `NORM_RECIPE`.
 - Bytes: keys in the order shown; blocks by key (below); an empty line before each block; LF, a final LF; UTF-8, no BOM; basic strings escaping only `"`, `\` (`\"`, `\\`) and U+0000-U+001F, U+007F (`\b \t \n \f \r`, else `\u00XX`); full OIDs; `verified_at` the command's UTC date.
-- Reader (any TOML layout): exit 2 `spec.lock:<line>: <message>` on another `format`; an unknown, missing or repeated key; a duplicate binding key; a wrong form (`b3:` + 64 lowercase hex; a 40- or 64-hex OID; `rev` 1-999 999 999; a known relation, kind; `item_kind`, `ast_hash` iff `kind = "item"`; a clean relative `file`; `verified_by = "owner"`; a date); another build's recipes (both named).
+- Reader (any TOML layout): exit 2 `spec.lock:<line>: <message>` on another `format`; an unknown, missing or repeated key; a duplicate binding key; a wrong form (`b3:` + 64 lowercase hex; a 40- or 64-hex OID; `rev` 1-999 999 999; a known relation, kind; `item_kind`, `ast_hash` iff `kind = "item"`; a clean relative `file`; `verified_by = "owner"`, never a test run, whose evidence is 8b's `[[tested]]`; a date); another build's recipes (both named).
 
 ### Entry
 
@@ -68,7 +68,7 @@ WA-5. One `[[binding]]` per lockable marker binding; markers giving one key are 
 | `file_blob`, `commit` | the file's blob OID in HEAD's tree; HEAD's full OID |
 | `verified_by`, `verified_at` | `"owner"`; `YYYY-MM-DD` |
 
-Key and order: `node` bytes; `relation` as listed; `file`, `kind`, `symbol`, `item_kind` bytes. Until a later `format`, not recorded: levels and their hashes, fingerprints, anchor state, text hash, positions, `impl_status`.
+Key and order: `node` bytes; `relation` as listed; `file`, `kind`, `symbol`, `item_kind` bytes. Until a later `format`, not recorded: levels and their hashes, fingerprints, anchor state, text hash, positions, test evidence (8b `[[tested]]`, the next `format`); `impl_status` never: `verified` is computed from that evidence (ADR-0044).
 
 ### Lockability
 
@@ -185,7 +185,7 @@ spec-writer:
 
 ## Out of scope
 
-Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline` (ADR-0043): the revision rule, `spec bump`, an editorial apply writing the lock in its commit. 4c `drift-queue`: a drift queue kind (ADR D). 5 (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b format 2 and `spec lock rebase` (a new ADR); 5c anchors. 6/7: lock data in reads. 8: `verify --tests` writing, `impl_status` (ADR F). Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
+Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline` (ADR-0043): the revision rule, `spec bump`, an editorial apply writing the lock in its commit. 4c `drift-queue`: a drift queue kind (ADR D). 5 (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b format 2 and `spec lock rebase` (a new ADR); 5c anchors. 6/7: lock data in reads. 8a `verify-tests` (ADR-0044): the runner, no lock write; 8b `tested-evidence`: `[[tested]]` in the next `format`, accept keeping, regen merging, an editorial refresh updating it. Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
 
 ## Open
 

@@ -32,11 +32,11 @@ WA-1, ADR-0042.
 mode = "enforce-introduced"   # observe (default) | enforce-introduced | enforce
 ```
 
-Closed: another key (`tests` too, until slice 8), a wrong type or value -> `specengine.toml:<line>: message`, exit 2 in `spec verify`; other commands only name-check `verify` (`project_toml.rs` `RawFile`; else a `[verify]` config fails every read). No table: `observe`.
+Closed: another key (`tests`, `timeout` too, until 8a `verify-tests.md`), a wrong type or value -> `specengine.toml:<line>: message`, exit 2 in `spec verify`; other commands only name-check `verify` (`project_toml.rs` `RawFile`; else a `[verify]` config fails every read). No table: `observe`.
 
 ### Command and rows
 
-WA-2, WA-3. `spec verify [--changed] [--json]` (+ `--root`, `--config`). Plain: the disk against `spec.lock`; `--changed`: judged against `HEAD` too ("Base"). No PATH (07:104) or REF; `--staged`: 4b (`rev-discipline.md`); `--task`, `--tests`: slice 8.
+WA-2, WA-3. `spec verify [--changed] [--json]` (+ `--root`, `--config`). Plain: the disk against `spec.lock`; `--changed`: judged against `HEAD` too ("Base"). No PATH (07:104) or REF; `--staged`: 4b (`rev-discipline.md`); `--task`, `--tests`: 8a (`verify-tests.md`, ADR-0044).
 
 One row per lock key (`spec-lock.md` "Entry": `node`, `relation`, `file`, `kind`, `symbol`, `item_kind`) from a lock entry or a marker binding of slice 1's walk; markers sharing a key are one row. An unresolved ID keys on its token; an `unanchored` marker has `kind`, `symbol`, `item_kind` null (SW refinement). Skipped, counted: `queue`, `other_project` IDs; mentions never; nodes without bindings unlisted (slice 9).
 
@@ -162,7 +162,7 @@ Noise: RON and modules by blob, `[sig]` hashed whole until slice 5, all `unlocke
 
 - **4b `rev-discipline`** (ADR-0043, AC-13; `rev-discipline.md`): the rule in `check --staged` and `--changed` (ADR-0019), apply raising `rev`, an editorial approve, `spec bump`, `verify --staged`. Decided: an editorial apply commits its text and refreshed `spec_hash` together, amending ADR-0041's "lock alone"; the rule judges only nodes a `HEAD` lock entry vouches for; this repository's hook trigger stays as is.
 - **4c `drift-queue`** (ADR D): a `drift` kind, approve as the same accept, other outcomes as tasks, the backlog.
-- Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7: `delta.symbols` (not 6, `symbol-index.md` Q6), `tests_reaching`, sync in bundles and `get_tree`. 8: `--tests`, `--task`, lock writes. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
+- Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7: `delta.symbols` (not 6, `symbol-index.md` Q6), `tests_reaching`, sync in bundles and `get_tree`. 8a `verify-tests` (ADR-0044): `--tests`, `--task`; 8b `tested-evidence`: its lock writes, a `tested` section. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
 
 ## Open
 
