@@ -109,7 +109,7 @@ verify: blocked [enforce-introduced]: 1 fix, 1 check (1 pre-existing), 0 cannot,
 ```
 
 - `rows`: every row, `ok` too; `markers` `[]` for a lock-only row, `rev` null if unversioned; `node_rev` null if unknown or gone; `lock` null without E; `class` null for `ok`. `base`: null, `"HEAD"`, `"unborn"`.
-- `delta`: 05:160's keys but `ms`, over rows not Pre-existing (SW refinement): `lost` = `broken_binding`, `stale` = `code_ahead`, `conflict`, `ambiguous` = `ambiguous_*`, each a list of row keys; `affected_nodes` sorted distinct resolved nodes of non-`ok` rows; `symbols`, `bindings.moved`, `tests_reaching` null until slices 6, 5, 7.
+- `delta`: 05:160's keys but `ms`, over rows not Pre-existing (SW refinement): `lost` = `broken_binding`, `stale` = `code_ahead`, `conflict`, `ambiguous` = `ambiguous_*`, each a list of row keys; `affected_nodes` sorted distinct resolved nodes of non-`ok` rows; `bindings.moved` null until 5c, `tests_reaching` until 7a (`bundle-bindings.md`), `symbols` until 7b (`impact.md`; `--changed` only).
 
 ## Rules and edge cases
 
@@ -162,7 +162,7 @@ Noise: RON and modules by blob, `[sig]` hashed whole until slice 5, all `unlocke
 
 - **4b `rev-discipline`** (ADR-0043, AC-13; `rev-discipline.md`): the rule in `check --staged` and `--changed` (ADR-0019), apply raising `rev`, an editorial approve, `spec bump`, `verify --staged`. Decided: an editorial apply commits its text and refreshed `spec_hash` together, amending ADR-0041's "lock alone"; the rule judges only nodes a `HEAD` lock entry vouches for; this repository's hook trigger stays as is.
 - **4c `drift-queue`** (ADR-0045, `drift-queue.md`): a `drift` kind raised by `spec propose drift` (MCP `report_drift`) over `HEAD`'s rows, the rows this command calls Pre-existing, so the queue is the backlog; approve as the same accept; the other outcomes as draft tasks (`spec reject --follow-up`). This command stays read-only (RD-8); it gains one hint line ("Output").
-- Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7: `delta.symbols` (not 6, `symbol-index.md` Q6), `tests_reaching`, sync in bundles and `get_tree`. 8a `verify-tests` (ADR-0044): `--tests`, `--task`; 8b `tested-evidence`: its lock writes, a `tested` section. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
+- Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7 (ADR-0046): 7a `bundle-bindings`, `tests_reaching` and this command's plain state as `sync` in bundles, show, tree and the package; 7b `impact`, `delta.symbols` (not 6, `symbol-index.md` Q6) and `spec impact`. 8a `verify-tests` (ADR-0044): `--tests`, `--task`; 8b `tested-evidence`: its lock writes, a `tested` section. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
 
 ## Open
 

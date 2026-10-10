@@ -16,7 +16,7 @@ Slice 6 is split (Q1): **6a** (this) stores slice 1's per-file results beside th
 
 ## Description and interactions
 
-- **Freshness** (WA-6): `refs`, `symbols`, `unmapped`, `index` refresh the md index, then the code index; no other read, MCP or the daemon walks code; `verify`, `lock accept` keep their fresh walk.
+- **Freshness** (WA-6): `refs`, `symbols`, `unmapped`, `index` refresh the md index, then the code index, as 7a's reads printing code data do, in the CLI, MCP and the daemon (bundle, `show --bindings`, tree, `task show`, `impact`: `bundle-bindings.md`, ADR-0046); `show` without `--bindings`, `search`, `graph` never walk code; `verify`, `lock accept` keep their fresh walk.
 - **Crates** (WA-5, WA-22): the store owns walk → compare → apply → cross-file pass behind its trait `CodeAnalyzer` (extensions, packages, fingerprint, analyze; plain rows), implemented in the CLI library over `specengine-code`, reused by the eval; no `rusqlite` type public, no new store or core dependency.
 - **Amended** (WA-9): slices 1, 3, 4a name and lock discriminated twins (`code-a` goldens follow); unique qpaths stay byte-identical.
 
@@ -124,7 +124,7 @@ rust-developer:
 - [ ] RD-8 -- `symbols`. M: two forms -> `symbols_takes_exactly_one_form`; outermost first -> `at_line_lists_innermost_first`; exit 0 without `[code]` -> `symbols_without_code_table_is_exit_2`; a key dropped -> `symbols_json_every_key_present`.
 - [ ] RD-9 -- `unmapped`. M: no containment -> `module_marker_maps_its_items`; mentions map -> `mentions_never_map`; percents averaged -> `unmapped_counts_items`.
 - [ ] RD-10 -- `refs`. M: unrefreshed rows -> `refs_after_edit_equals_a_fresh_walk`; a partial list -> `code_walk_gap_is_exit_2` stays green.
-- [ ] RD-11 -- M: `show` walks code -> `show_never_walks_code`.
+- [ ] RD-11 -- M: `show` without `--bindings` walks code -> `show_never_walks_code` (`--bindings` refreshes it: `bundle-bindings.md` RD-7).
 - [ ] RD-12 -- M: a cache under the root -> `symbols_leaves_the_worktree_untouched`; rowid order -> `symbols_and_unmapped_are_byte_identical_across_roots_and_order`.
 - [ ] RD-13 -- Q2 refused, M: key accepted -> `code_crates_key_is_refused_until_built`; built, M: layout fallback -> `cargo_failure_is_exit_2`; cwd the project -> `cargo_runs_from_root_dir`.
 - [ ] RD-14 -- harness. M: no edit before the one-file timing -> `one_file_parsed` 1; vacuous timings -> `items` = stored symbols.
@@ -148,11 +148,11 @@ spec-writer:
 
 ## Risks
 
-Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `CODE_INDEX_FORMAT` (TE-2). The stored `ast_hash` is display only (05 s5.2). Each refresh hashes every code file; DB growth unpruned. Pilots hold no marker.
+Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `CODE_INDEX_FORMAT` (TE-2). The stored `ast_hash` feeds 7a's read `sync` (equal bytes, equal hash: `bundle-bindings.md` "Description and interactions"); `verify` and the lock writers still hash afresh (05 s5.2). Each refresh hashes every code file; DB growth unpruned. Pilots hold no marker.
 
 ## Out of scope
 
-`delta.symbols`, bundle layers, `get_impact --since` (slice 7, Q6); the Bevy layer (10); layers B, C; levels in the index; `verify` on the index; HTTP, UI (Q8); a watcher; fuzzy search, references, call graphs (LSP's); pruning.
+bundle layers, read `sync` (7a `bundle-bindings`), `delta.symbols`, `get_impact --since` (7b `impact`; Q6); the Bevy layer (10); layers B, C; levels in the index; `verify` on the index; HTTP, UI (Q8); a watcher; fuzzy search, references, call graphs (LSP's); pruning.
 
 - **6b `code-tools`** (after 4a): MCP `find_symbols`, `refs`, `unmapped`, `check_binding` (= `spec verify --node REF [--symbol QPATH]`, 4a's rows restricted), TOOLS 18, skills.
 - **6c `code-index-speed`** (if AC-10 fails): `rayon =1.12.0`, rows ordered by path before insert.
@@ -166,7 +166,7 @@ Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `C
 | 3 equal qpaths | a discriminator in the qpath |
 | 4 `--unbound` | none; `spec unmapped FILE` |
 | 5 `check_binding` | `spec verify --node REF [--symbol QPATH]` (6b) |
-| 6 `delta.symbols` | slice 7 |
+| 6 `delta.symbols` | slice 7b `impact` |
 | 7 coverage | containment; a RON file one unit; mentions apart |
 | 8 HTTP route | Phase 4 |
 | 9 signature | no attributes, no fields |
