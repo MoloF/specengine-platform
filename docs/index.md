@@ -64,6 +64,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/norm-hash.md](features/norm-hash.md) norm-hash: a node's meaning hash and revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/spec-lock.md](features/spec-lock.md) spec-lock: what was verified, written on the owner's terminal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
+- [docs/features/spec-verify.md](features/spec-verify.md) spec-verify: drift between spec.lock and the tree · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

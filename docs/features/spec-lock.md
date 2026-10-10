@@ -2,7 +2,7 @@
 class: spec
 status: draft
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures]
-ref: Phase 3 plan 2026-10-10, slice 3 (WA-1..WA-16; Q1-Q3 decided under the owner's pre-approval, review open); 05 s3.5, s5.3; 06 s4, s6; 07 s2; 08 s2
+ref: Phase 3 plan 2026-10-10, slice 3 (WA-1..WA-16; Q1-Q3 decided under the owner's pre-approval, review open), Q4 from `spec-verify.md` Q3; 05 s3.5, s5.3; 06 s4, s6; 07 s2; 08 s2
 adrs: [ADR-0041]
 ---
 
@@ -85,7 +85,7 @@ WA-6, Q2. A binding `spec refs` lists under the node (`code-refs.md` "States") i
 WA-2, WA-3, WA-7, WA-9, WA-10, Q1. In order:
 
 1. `require_terminal("lock accept")` before anything is read.
-2. Discovery, config, `[code]` (none: `code-refs.md`'s exact text); REF as `spec show`.
+2. Discovery, config, `[code]` (none: `code-refs.md`'s exact text); REF as `spec show` (a gone node: "A gone node").
 3. Git: a worktree, HEAD born, on a branch, no operation in progress (`place`, `operation_in_progress`); the lock read.
 4. Slice 1's walk finds the node's markers. **Inputs** tracked and clean, else each named with its state (`modified`, `staged`, `untracked`, `deleted`, `not tracked`), `commit them first`: the node's file, its markers' files, `specengine.toml`, `spec.lock`, and a holder deleted or renamed in the worktree whose HEAD blob marks the node (SW refinement: else its entries vanish).
 5. Each input parsed, bound, hashed from its HEAD blob's raw bytes (`blob_at`, no filters); OIDs from HEAD's tree. The node's revision readable, `norm_hash` non-null.
@@ -98,6 +98,10 @@ WA-2, WA-3, WA-7, WA-9, WA-10, Q1. In order:
 ### --editorial
 
 WA-8. Sets `spec_hash` to the current `norm_hash` on the node's entries at R, nothing else (code hashes, `file_blob`, `commit`, `verified_*` kept); `Lock-mode: editorial`. Inputs: the node's file, `specengine.toml`, `spec.lock`; no walk (SW refinement). No entry at R (after a raise): exit 1; all match: exit 0 `nothing to change`. Asks `lock R-12 rev 3 (editorial: spec_hash of 3 entries) at <commit> on <branch> in <worktree>? [y/N]`.
+
+### A gone node
+
+`spec-verify.md` Q3. When the lock holds entries whose `node` is REF's bytes and no node has that canonical ID (deleted, or renamed with the old ID now an alias: SW refinement), accept drops exactly those entries: the exception to exit 1 "REF names nothing", checked once the lock is read (step 3). Steps 1-3, 9, 10 as accept; inputs `specengine.toml`, `spec.lock` only; no walk, no hash: a drop writes no hash, so no false `ok` follows (the bindings read `unlocked`). stdout `dropped | <relation> | <file> | <kind> <symbol>[ <item_kind>]`; asks `lock R-12 (gone: 3 dropped) at <commit> on <branch> in <worktree>? [y/N]`; trailers as accept's.
 
 ### spec lock regen
 
@@ -119,7 +123,7 @@ WA-14; one-line messages (CLI README "Output").
 | Exit | `accept` | `regen` |
 |---|---|---|
 | 0 | committed; nothing to change | written |
-| 1 | REF names nothing or several; no marker names the node; nothing lockable; a dirty input; revision unreadable or `norm_hash` null; text changed at R; `--editorial`, no entry at R; an ignored `spec.lock` (before asking); not `y`; changed while accepting; a failed commit | no conflict; declined; changed while running |
+| 1 | REF names nothing (and no gone node's entries) or several; no marker names the node; nothing lockable; a dirty input; revision unreadable or `norm_hash` null; text changed at R; `--editorial`, no entry at R; an ignored `spec.lock` (before asking); not `y`; changed while accepting; a failed commit | no conflict; declined; changed while running |
 | 2 | not a terminal; usage; discovery, config; no `[code]`; a walk gap; no git worktree; unborn or detached HEAD; an operation in progress; an unreadable lock, other recipes; no committer identity | accept's first four; a stage unreadable; recipes differ |
 
 ## Rules and edge cases
@@ -149,6 +153,7 @@ rust-developer:
 - [ ] RD-14 -- no new crate. M: `sha1` -> the CLI pin in `build_graph.rs`.
 - [ ] RD-15 -- writes per "Rules". M: a queue event -> `lock_accept_writes_no_queue_row`.
 - [ ] RD-16 -- plugin roles and session: "... or writes a spec file" + "or the lock"; a PATCH after 0.7.0, `PINS`. M: version kept -> `plugin_files`.
+- [ ] RD-17 -- "A gone node": a deleted node's and a renamed one's (old ID now an alias) entries dropped after `y`, one commit, other entries byte-identical. M: exit 1 "names nothing" -> `gone_node_entries_are_dropped`; the alias resolved first -> `alias_of_a_gone_id_drops_its_entries`.
 
 test-engineer:
 
@@ -174,13 +179,13 @@ spec-writer:
 ## Risks
 
 - A grammar bump (tree-sitter-rust 0.24.2, ABI 15) re-hashes every item; accept refuses such a lock (exit 2) until slice 5.
-- Commits decay (rebase, squash, gc): slice 4 shows "history unavailable"; renamed IDs leave orphans.
+- Commits decay (rebase, squash, gc): Phase 4's diffs show "history unavailable"; a renamed ID's entries read `node_gone` (slice 4a) until `accept <old ID>` drops them.
 - Friction: commit first; a prompt and commit per node; ~1 % of valid code fails tree-sitter-rust.
 - Cooperative: a faked terminal passes (ADR-0034); the gate skips `spec.lock`; hooks run on the lock commit; stdin signing fails; LFS filters hash pointer bytes.
 
 ## Out of scope
 
-Slice 4: comparing (cascade, matrix, verdicts, history diffs), the revision rule, `spec bump`, editorial apply (ADR C), the hook trigger, lock findings, orphans. 4/9: a drift queue kind (ADR D). 5: levels, fingerprints, anchors, the RON recipe, rebase. 6/7: lock data in reads. 8: `verify --tests` writing, `impl_status` (ADR F). Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
+Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline`: the revision rule, `spec bump`, editorial apply (ADR C), the hook trigger. 4c `drift-queue`: a drift queue kind (ADR D). 5: levels, fingerprints, anchors, the RON recipe, rebase. 6/7: lock data in reads. 8: `verify --tests` writing, `impl_status` (ADR F). Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
 
 ## Open
 
@@ -189,6 +194,7 @@ Slice 4: comparing (cascade, matrix, verdicts, history diffs), the revision rule
 | Q1 who commits | accept, the lock alone, hooks run, inputs from a clean HEAD |
 | Q2 RON and modules | by `file_blob` alone until slice 5 |
 | Q3 naming writers | by consent: the owner's `[y/N]`; a later confirming step (ADR C, D) runs the same accept |
+| Q4 a gone node's entries (`spec-verify.md` Q3) | `accept <gone ID>` drops them, same `[y/N]` and commit |
 
 Decided under the owner's pre-approval, review open; WA-1..WA-16: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.
 

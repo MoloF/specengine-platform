@@ -50,3 +50,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0039](decisions/ADR-0039.md) The task gate needs no daemon · process · accepted
 - [ADR-0040](decisions/ADR-0040.md) A node's revision is its own; none written is 1 · storage · accepted
 - [ADR-0041](decisions/ADR-0041.md) spec.lock is written only on the owner's terminal or by a passing test run · architecture · accepted
+- [ADR-0042](decisions/ADR-0042.md) spec verify blocks only by a project's choice and never passes what it could not verify · architecture · accepted
