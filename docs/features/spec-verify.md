@@ -162,7 +162,7 @@ Noise: RON and modules by blob, `[sig]` hashed whole until slice 5, all `unlocke
 
 - **4b `rev-discipline`** (ADR C, AC-13): the rule in `check --staged` (ADR-0019), apply raising `rev`, an editorial approve, `spec bump`, `verify --staged`, `spec.lock` in the hook trigger. Carried: an editorial apply's commit runs hooks the rule would fail, so its escape must show in the staged tree (text and `spec_hash` in one commit, amending ADR-0041's "lock alone", or a commit-msg judgement); the rule's scope (every ID or bound nodes only).
 - **4c `drift-queue`** (ADR D): a `drift` kind, approve as the same accept, other outcomes as tasks, the backlog.
-- Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6/7: symbols, `tests_reaching`, sync in bundles and `get_tree`. 8: `--tests`, `--task`, lock writes. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH or REF, a debt baseline, a watcher, `spec check --base REF`.
+- Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7: `delta.symbols` (not 6, `symbol-index.md` Q6), `tests_reaching`, sync in bundles and `get_tree`. 8: `--tests`, `--task`, lock writes. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
 
 ## Open
 
