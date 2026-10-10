@@ -29,6 +29,14 @@ Core `revision(parsed, ord) -> Revision {Written(u32), Unwritten, Unreadable}`, 
 
 `bad-rev` stays a warning, no new code. The reference grammar is unchanged: `R-1@0` parses and is no finding.
 
+## Raising
+
+ADR-0043 (`architecture.md#layout`, `#apply`), built by slice 4b (`docs/features/rev-discipline.md`); until it ships nothing raises a revision and no check reads `spec.lock`.
+
+- **Approval**: `apply_proposal` raises the revision of each node with an ID whose `norm_hash` its change alters, from the file as read at apply, never lowering one. `spec approve --editorial`, the owner's choice, keeps it and, in the same commit, sets the new `norm_hash` on that node's `spec.lock` entries that vouched for the old text at that revision. A proposal whose text changes a revision is refused at creation.
+- **The rule**: `spec check --staged` and `--changed`, never plain, give one error per node a `HEAD` lock entry vouches for (at its `HEAD` revision, `spec_hash` = its `HEAD` `norm_hash`) whose `norm_hash` changed with neither a raise nor that refresh in the checked tree; `[check] mode` decides whether it blocks. Unlocked nodes, `@N` pins and commits skipping the hook are not judged.
+- **`spec bump`** only lists nodes changed without a raise, `required` (the rule's) or `suggested`; it writes nothing.
+
 ## The recipe
 
 It sees spans and links only: no key, kind or prefix literal (a source scan in the tests).

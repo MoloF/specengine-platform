@@ -63,6 +63,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/features/code-refs.md](features/code-refs.md) code-refs: markers bound to code, spec refs · crates/specengine-code, crates/specengine-core, crates/specengine-cli, crates/specengine-eval, fixtures · draft
 - [docs/features/hash-levels.md](features/hash-levels.md) hash-levels: per-level hashes and fingerprints of a bound item · crates/specengine-code, crates/specengine-eval, fixtures · draft
+- [docs/features/rev-discipline.md](features/rev-discipline.md) rev-discipline: a changed meaning raises the revision, or the owner calls it editorial · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/spec-lock.md](features/spec-lock.md) spec-lock: what was verified, written on the owner's terminal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
 - [docs/features/spec-verify.md](features/spec-verify.md) spec-verify: drift between spec.lock and the tree · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft

@@ -18,7 +18,7 @@ Delivered: `spec verify [--changed] [--json]`, read-only: a state per lock entry
 
 - **An agent** runs `spec verify --changed` before handing in; **the owner** follows the hints or sends the code back; **a project** opts its own CI or hook into stopping on Fix. No `[code]`, `[verify]` here (WA-12).
 - **Crates** (WA-11): core the pure `[verify]` reader and judge (check's `Mode`); store one git read, `hash-object --no-filters --stdin-paths` under `GitEnv::child_vars` (no `-w`), `HEAD` by slice 3's `blob_at` and check's base batch; CLI the command over slices 1-3 (walk, binding, `hash_item`, `has_error`, `orphan_errors`, `revision`, `norm_input`, lock reader). No tree-sitter in core or store, no new crate or dependency.
-- **Unchanged**: `spec check` (`CHECK_CODES` 35), the hook, CI, `INDEX_FORMAT`, MCP, HTTP, UI, plugin, the gate. **Writes** only the data directory (index refresh): never `spec.lock`, the worktree, a git object, a queue row or event (WA-10, ADR-0041).
+- **Unchanged**: `spec check` (`CHECK_CODES` 35; 36 once 4b ships `rev-not-raised`), the hook, CI, `INDEX_FORMAT`, MCP, HTTP, UI, plugin, the gate. **Writes** only the data directory (index refresh): never `spec.lock`, the worktree, a git object, a queue row or event (WA-10, ADR-0041).
 - **Overridden live-spec lines**, fixed at shipping: 05:160 (`ms`, `spec check --base`), 05:175 (text level), 05:190 (exit 1 "something blocks"; the backlog: 4c), 07:104 (`--changed PATH`, `--task`, `--tests`), `spec-check.md` "Not checked yet".
 
 ## Data
@@ -36,7 +36,7 @@ Closed: another key (`tests` too, until slice 8), a wrong type or value -> `spec
 
 ### Command and rows
 
-WA-2, WA-3. `spec verify [--changed] [--json]` (+ `--root`, `--config`). Plain: the disk against `spec.lock`; `--changed`: judged against `HEAD` too ("Base"). No PATH (07:104) or REF; `--staged`: 4b; `--task`, `--tests`: slice 8.
+WA-2, WA-3. `spec verify [--changed] [--json]` (+ `--root`, `--config`). Plain: the disk against `spec.lock`; `--changed`: judged against `HEAD` too ("Base"). No PATH (07:104) or REF; `--staged`: 4b (`rev-discipline.md`); `--task`, `--tests`: slice 8.
 
 One row per lock key (`spec-lock.md` "Entry": `node`, `relation`, `file`, `kind`, `symbol`, `item_kind`) from a lock entry or a marker binding of slice 1's walk; markers sharing a key are one row. An unresolved ID keys on its token; an `unanchored` marker has `kind`, `symbol`, `item_kind` null (SW refinement). Skipped, counted: `queue`, `other_project` IDs; mentions never; nodes without bindings unlisted (slice 9).
 
@@ -160,7 +160,7 @@ Noise: RON and modules by blob, `[sig]` hashed whole until slice 5, all `unlocke
 
 ## Out of scope
 
-- **4b `rev-discipline`** (ADR C, AC-13): the rule in `check --staged` (ADR-0019), apply raising `rev`, an editorial approve, `spec bump`, `verify --staged`, `spec.lock` in the hook trigger. Carried: an editorial apply's commit runs hooks the rule would fail, so its escape must show in the staged tree (text and `spec_hash` in one commit, amending ADR-0041's "lock alone", or a commit-msg judgement); the rule's scope (every ID or bound nodes only).
+- **4b `rev-discipline`** (ADR-0043, AC-13; `rev-discipline.md`): the rule in `check --staged` and `--changed` (ADR-0019), apply raising `rev`, an editorial approve, `spec bump`, `verify --staged`. Decided: an editorial apply commits its text and refreshed `spec_hash` together, amending ADR-0041's "lock alone"; the rule judges only nodes a `HEAD` lock entry vouches for; this repository's hook trigger stays as is.
 - **4c `drift-queue`** (ADR D): a `drift` kind, approve as the same accept, other outcomes as tasks, the backlog.
 - Slice 5, split (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b lock format 2, level-aware verify; 5c `MOVED`/`AMBIGUOUS`/`LOST`. Level 2 is never built (Q5). 6b `code-tools`: `--node REF [--symbol QPATH]`. 7: `delta.symbols` (not 6, `symbol-index.md` Q6), `tests_reaching`, sync in bundles and `get_tree`. 8: `--tests`, `--task`, lock writes. 9: `unbound`, Health rows, `@assumes`. Phase 4: drift screens, diffs since `lock.commit`. Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
 
@@ -168,7 +168,7 @@ Noise: RON and modules by blob, `[sig]` hashed whole until slice 5, all `unlocke
 
 | Point | Answer |
 |---|---|
-| Q1 slice 4 | split: 4a this (ADR-0042), 4b `rev-discipline` (ADR C), 4c `drift-queue` (ADR D); 4a first |
+| Q1 slice 4 | split: 4a this (ADR-0042), 4b `rev-discipline` (ADR-0043), 4c `drift-queue` (ADR D); 4a first |
 | Q2 which `cannot_verify` stops | any row in scope, locked or not, Pre-existing or not: exit 2 (AC-14) |
 | Q3 orphans | `spec lock accept <gone ID>` drops a gone node's entries, same `[y/N]` and commit (`spec-lock.md`) |
 
