@@ -185,7 +185,7 @@ spec-writer:
 
 ## Out of scope
 
-Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline`: the revision rule, `spec bump`, editorial apply (ADR C), the hook trigger. 4c `drift-queue`: a drift queue kind (ADR D). 5: levels, fingerprints, anchors, the RON recipe, rebase. 6/7: lock data in reads. 8: `verify --tests` writing, `impl_status` (ADR F). Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
+Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline`: the revision rule, `spec bump`, editorial apply (ADR C), the hook trigger. 4c `drift-queue`: a drift queue kind (ADR D). 5 (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b format 2 and `spec lock rebase` (a new ADR); 5c anchors. 6/7: lock data in reads. 8: `verify --tests` writing, `impl_status` (ADR F). Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
 
 ## Open
 

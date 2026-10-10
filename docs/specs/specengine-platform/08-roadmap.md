@@ -38,7 +38,7 @@ Estimates are rough, for one developer with agents. **MVP = Phase 0-2 on CLI + M
 
 ### Phase 3. Code and drift — ~2-3 weeks
 
-- Slices in order: `code-refs` (draft), `norm-hash` (shipped 2026-10-10, ADR-0040), `spec-lock` (draft, ADR-0041), `spec-verify` (4a, draft, ADR-0042), `rev-discipline` (4b), `drift-queue` (4c), `hash-levels`, `symbol-index`, `impact-bundle`, `verify-tests`, `health-code`, `bevy-dump`, `layer-c`, `machine-bindings`.
+- Slices in order: `code-refs` (draft), `norm-hash` (shipped 2026-10-10, ADR-0040), `spec-lock` (draft, ADR-0041), `spec-verify` (4a, draft, ADR-0042), `rev-discipline` (4b), `drift-queue` (4c), `hash-levels` (5a, draft), `lock-levels` (5b), `anchor-states` (5c), `symbol-index`, `impact-bundle`, `verify-tests`, `health-code`, `bevy-dump`, `layer-c`, `machine-bindings`.
 - Symbol index (layers A tree-sitter, B the Bevy `schedule_data` dump, C `ra_ap_ide`, ADR-0020; generic instances need B or C, 05 §5.1), Bevy detector on resolved types, signatures in the bundle, `find_symbols`.
 - Layer C: items under attribute proc macros lose monikers with the proc-macro server on; map them through the expansion (`crates/specengine-ra/README.md`).
 - Markers `@implements/@verifies/@configures/@assumes` (revision `@N`), `spec.lock` (`file_blob`), drift cascade, `spec verify [--tests] [--changed]` (05 s5.3), `spec bump`, `lock accept [--editorial]`, `refs`, `unmapped`, `get_impact --since`.
