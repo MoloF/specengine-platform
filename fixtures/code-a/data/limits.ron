@@ -1,0 +1,9 @@
+// Limits of the count (GOAL-01).
+// @configures PIECE-COUNTER@3
+Limits(
+    cap: 10, // @configures LAW-BOUND@2
+    // see LAW-STEP
+    step: 1, // @configures LAW-STEP
+    step: 2,
+    // @configures GOAL-01
+)

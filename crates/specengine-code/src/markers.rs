@@ -4,10 +4,15 @@
 //! number per comment.
 //!
 //! - **ID**: the first non-blank after the keyword on its line, up to
-//!   whitespace, `@`, `[` or `*/`; Latin = ASCII letters, digits, `-_.:/`
-//!   (ADR-0009, ADR-0026 `<slug>/ID`). An empty ID (the keyword ends the line)
-//!   is its own case, never "not Latin".
-//! - **rev**: `@` and ASCII digits right after the ID.
+//!   whitespace, `@`, `[` or `*/`; Latin = ASCII letters, digits, `-_.:/#`
+//!   (ADR-0009, ADR-0026 `<slug>/ID`, `ID#SECTION`). An empty ID (the
+//!   keyword ends the line) is its own case, never "not Latin".
+//! - **token**: the ID's first byte to the first whitespace, `[`, `*/`, the
+//!   next `@keyword` or line end (`R-12@3`, `slug/AC-07`; task spec
+//!   `code-refs`, "States").
+//! - **rev**: `@` right after the ID and 1 to 9 ASCII digits ending the
+//!   token; anything else after the `@` (`X@`, `X@3a`, ten digits) is a
+//!   malformed revision: no rev, and never note text.
 //! - **levels**: optional spaces/tabs, then `[`…`]` on the marker's line,
 //!   before a `*/` and the next `@keyword`; items `path|sig|body|deps`,
 //!   lowercase, `,`-separated, spaces/tabs around, one trailing `,`
@@ -23,7 +28,9 @@
 //! marker's line, and each line end is looked for once.
 //!
 //! Only the syntax lives here; what a marker attaches to is the business of
-//! the language walker (`items` for Rust, `ron` for RON).
+//! the language walker (`bind` for Rust, `ron` for RON).
+
+use std::ops::Range;
 
 /// The relation a marker declares between code and a spec node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -82,6 +89,10 @@ impl Level {
         Self::ALL.into_iter().find(|level| level.as_str() == word)
     }
 }
+
+/// The most digits of a revision (ADR-0018; the reference grammar's
+/// `rev = digit{1,9}`).
+const MAX_REV_DIGITS: usize = 9;
 
 /// The levels of a marker without a list.
 pub const DEFAULT_LEVELS: [Level; 2] = [Level::Sig, Level::Body];
@@ -154,18 +165,45 @@ pub struct Marker {
     /// The ID verbatim; empty when the keyword ends the line (or is followed
     /// directly by a level list or `*/`).
     pub id: String,
-    /// `@rev` after the ID (ADR-0018); `None` for a weak binding.
+    /// `@rev` after the ID (ADR-0018): 1 to 9 digits ending the token;
+    /// `None` without an `@` (a weak binding) and for a malformed one
+    /// (`X@`, `X@3a`, `X@1234567890`: the token is longer than the ID).
     pub rev: Option<u32>,
     /// The `[levels]` after `ID[@rev]`.
     pub levels: Levels,
     /// Free text after the ID (and the level list) on the same line, if any.
     pub note: Option<String>,
     /// `false` when the ID contains anything outside Latin letters, digits,
-    /// `-`, `_`, `.`, `:` and `/` — a mixed-script ID (ADR-0009), reported,
+    /// `-`, `_`, `.`, `:`, `/` and `#` — a mixed-script ID (ADR-0009), reported,
     /// never fatal. `true` for an empty ID.
     pub id_latin: bool,
     /// Byte offset of the `@` inside the comment text.
     pub offset: usize,
+}
+
+impl Marker {
+    /// The token's byte range in `comment`, the text this marker was found
+    /// in: the ID's first byte to the first whitespace, `[`, `*/`, the next
+    /// `@keyword` or line end (task spec `code-refs`, "States"); empty for
+    /// an empty ID.
+    #[must_use]
+    pub fn token_range(&self, comment: &str) -> Range<usize> {
+        let keyword_end = self.offset + 1 + self.relation.as_str().len();
+        let Some(rest) = comment.get(keyword_end..) else {
+            return keyword_end..keyword_end;
+        };
+        let line_end = rest.find('\n').map_or(comment.len(), |n| keyword_end + n);
+        let line = &comment[keyword_end..line_end];
+        let id_start = keyword_end + (line.len() - line.trim_start().len());
+        id_start..token_end(comment, id_start, line_end)
+    }
+
+    /// The token as written in `comment`: the ID and, when an `@` follows
+    /// it, the revision as written (`R-12@3`, `X@3a`).
+    #[must_use]
+    pub fn token<'c>(&self, comment: &'c str) -> &'c str {
+        comment.get(self.token_range(comment)).unwrap_or_default()
+    }
 }
 
 /// Every marker in one comment's text, in order of appearance.
@@ -188,16 +226,20 @@ pub fn markers_in(comment: &str) -> Vec<Marker> {
         let id_start = keyword_end + (line.len() - line.trim_start().len());
         let id_end = id_end(comment, id_start, line_end);
         let id = comment[id_start..id_end].to_owned();
+        let token_end = token_end(comment, id_start, line_end);
         let mut cursor = id_end;
         let mut rev = None;
-        if comment[cursor..line_end].starts_with('@') {
-            let digits_len = comment[cursor + 1..line_end]
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(line_end - cursor - 1);
-            if digits_len > 0 {
-                rev = comment[cursor + 1..cursor + 1 + digits_len].parse().ok();
-                cursor += 1 + digits_len;
+        // `id_end` stops at any `@`, `token_end` only at one beginning a
+        // keyword: when the token runs past this `@`, the rest of it is
+        // the revision as written.
+        if token_end > cursor && comment[cursor..line_end].starts_with('@') {
+            let digits = &comment[cursor + 1..token_end];
+            if (1..=MAX_REV_DIGITS).contains(&digits.len())
+                && digits.bytes().all(|byte| byte.is_ascii_digit())
+            {
+                rev = digits.parse().ok();
             }
+            cursor = token_end;
         }
         let (levels, note_from) = match level_list(comment, cursor, line_end) {
             None => (Levels::Default, Some(cursor)),
@@ -251,9 +293,24 @@ impl LineEnds {
 
 /// Where the ID starting at `from` ends: at whitespace, `@`, `[`, `*/` or `to`.
 fn id_end(text: &str, from: usize, to: usize) -> usize {
+    ends_at(text, from, to, true)
+}
+
+/// Where the token starting at `from` ends: at whitespace, `[`, `*/`, the
+/// next `@keyword` or `to`.
+fn token_end(text: &str, from: usize, to: usize) -> usize {
+    ends_at(text, from, to, false)
+}
+
+/// The first whitespace, `[`, `*/` from `from`, and the first `@` when
+/// `at_ends` (an ID), else the first `@` beginning a keyword (a token:
+/// `X@@verifies Y` holds two markers), or `to`.
+fn ends_at(text: &str, from: usize, to: usize, at_ends: bool) -> usize {
     let rest = &text[from..to];
     for (index, c) in rest.char_indices() {
-        if c.is_whitespace() || c == '@' || c == '[' {
+        // `@` is one byte, so `from + index + 1` is a character boundary.
+        let at_stops = c == '@' && (at_ends || keyword_at(text, from + index + 1).is_some());
+        if c.is_whitespace() || at_stops || c == '[' {
             return from + index;
         }
         // `*` is one byte, so `index + 1` is a character boundary.
@@ -354,9 +411,10 @@ fn next_keyword_start(text: &str, from: usize, to: usize) -> usize {
     to
 }
 
-/// Latin: ASCII letters, digits, `-`, `_`, `.`, `:`, `/`; an empty ID is not
-/// a script mix (it is counted apart by the callers).
+/// Latin: ASCII letters, digits, `-`, `_`, `.`, `:`, `/`, `#` (`ID#SECTION`,
+/// task spec `code-refs`); an empty ID is not a script mix (it is counted
+/// apart by the callers).
 fn is_latin_id(id: &str) -> bool {
     id.chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/'))
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/' | '#'))
 }

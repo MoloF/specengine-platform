@@ -80,7 +80,7 @@ spec new KIND [--parent ID] [TITLE]      # the registry issues the ID, opens $ED
 spec edit ID                             # owner edit = instantly applied proposal
 spec search "query"
 spec graph ID [--impact] [--type T] [--depth N] [--archive] [--format dot|mermaid]
-spec refs ID                             # reverse lookup
+spec refs REF [--json]                   # reverse lookup, shipped: docs/canon/code-bindings.md
 spec unmapped [PATH]                     # spec coverage of sources
 spec bundle REF… [--budget N]            # shipped, default 2000: docs/canon/spec-cli-bundle.md; --task T: Phase 2
 

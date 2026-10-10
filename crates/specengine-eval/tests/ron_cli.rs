@@ -829,3 +829,36 @@ fn pilot_a_prints_parse_clean_share_and_categories() {
 fn pilot_b_prints_parse_clean_share_and_categories() {
     pilot_run("SPECENGINE_PILOT_B", "pilot-b");
 }
+
+/// Task spec `code-refs` (review iteration 2): the eval's RON path reads
+/// the marker grammar's tokens — `@implements @verifies X` and
+/// `@implements X@@verifies Y` hold two markers each, the empty ID counted
+/// apart. M: drop the keyword stop (two markers instead of four).
+#[test]
+fn a_keyword_after_an_empty_or_glued_token_is_a_marker_of_its_own() {
+    let scratch = Scratch::new("glued");
+    let corpus = scratch.join("corpus");
+    fs::create_dir_all(&corpus).unwrap();
+    fs::write(
+        corpus.join("glued.ron"),
+        "Config(\n    // @implements @verifies GOAL-01\n    speed: 4.5,\n    // @implements X-1@@verifies Y-2\n    hp: 1,\n)\n",
+    )
+    .unwrap();
+    let out = scratch.join("out");
+    let output = run(&[
+        "ron",
+        "--pilot",
+        corpus.to_str().unwrap(),
+        "--out",
+        out.to_str().unwrap(),
+    ]);
+    let envelope = envelope(&output);
+    let markers = &envelope["result"]["markers"];
+    assert_eq!(markers["total"], 4, "{markers}");
+    assert_eq!(
+        markers["by_relation"],
+        serde_json::json!({"implements": 2, "verifies": 2})
+    );
+    assert_eq!(markers["id_empty"], 1);
+    assert_eq!(markers["anchored"]["lexer"], 4);
+}

@@ -728,6 +728,25 @@ fn core_normal_graph_has_no_other_specengine_crate_but_the_model() {
     }
 }
 
+/// docs/features/code-refs.md RD-8: tree-sitter (layer A) reaches the CLI
+/// through `specengine-code` only; the core and the store stay free of it,
+/// and of `specengine-code` (M: a tree-sitter crate in the core's or the
+/// store's normal graph turns this red).
+#[test]
+fn core_and_store_have_no_tree_sitter() {
+    for package in ["specengine-core", "specengine-store"] {
+        let graph = normal_graph(package);
+        let offenders: Vec<&(String, String)> = graph
+            .iter()
+            .filter(|(name, _)| name.starts_with("tree-sitter") || name == "specengine-code")
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "{package}'s normal graph reaches {offenders:?}"
+        );
+    }
+}
+
 #[test]
 fn model_and_core_sources_do_no_file_io() {
     let pattern = ["std::fs", "File::", "OpenOptions"];
@@ -1172,9 +1191,10 @@ fn serde_json_float_roundtrip_is_set_on_the_workspace_pin_only() {
 /// compile-time graph through the `clap_derive` and `serde_derive`
 /// proc-macros (as it does the model's and the core's), so the check is on
 /// the linked graph (`-e normal,no-proc-macro`), as
-/// `core_tree_has_no_rust_analyzer_syn3_or_bevy` does.
-const CLI_FORBIDDEN: [&str; 11] = [
-    "specengine-code",
+/// `core_tree_has_no_rust_analyzer_syn3_or_bevy` does. `specengine-code`
+/// (layer A, tree-sitter) is the CLI's since `spec refs`
+/// (docs/features/code-refs.md TE-8).
+const CLI_FORBIDDEN: [&str; 10] = [
     "specengine-import",
     "specengine-mcp",
     "specengine-eval",
@@ -1197,6 +1217,7 @@ fn cli_normal_graph_is_model_core_store_without_measurement_mcp_or_rust_analyzer
         "specengine-model",
         "specengine-core",
         "specengine-store",
+        "specengine-code",
         "clap",
         "serde",
         "serde_json",
@@ -1347,11 +1368,14 @@ fn cli_direct_dependencies_are_all_workspace_entries() {
             "clap",
             "serde",
             "serde_json",
+            "specengine-code",
             "specengine-core",
             "specengine-model",
             "specengine-store",
+            "toml",
         ],
-        "the CLI's direct dependencies (docs/features/spec-cli.md, Crate)"
+        "the CLI's direct dependencies (docs/features/spec-cli.md, Crate; \
+         docs/features/code-refs.md TE-8)"
     );
 }
 
@@ -1456,9 +1480,11 @@ fn store_and_cli_normal_dependencies_are_2a1_s() {
                 "clap",
                 "serde",
                 "serde_json",
+                "specengine-code",
                 "specengine-core",
                 "specengine-model",
                 "specengine-store",
+                "toml",
             ][..],
         ),
     ] {
@@ -1815,8 +1841,9 @@ fn eval_direct_dependencies_gain_exactly_the_cli_library() {
 }
 
 /// AC-09: the CLI's own direct dependencies are unchanged by `w`: the
-/// model, core and store, `clap`, `serde`, `serde_json`, nothing else of
-/// any kind (its normal graph is pinned by
+/// model, core and store, `clap`, `serde`, `serde_json` (and, since
+/// docs/features/code-refs.md TE-8, `specengine-code` and `toml`), nothing
+/// else of any kind (its normal graph is pinned by
 /// `cli_normal_graph_is_model_core_store_without_measurement_mcp_or_rust_analyzer`,
 /// `CLI_FORBIDDEN` holding `specengine-eval`).
 #[test]
@@ -1834,9 +1861,11 @@ fn cli_direct_dependencies_are_unchanged_by_w() {
             "clap",
             "serde",
             "serde_json",
+            "specengine-code",
             "specengine-core",
             "specengine-model",
             "specengine-store",
+            "toml",
         ],
         "the CLI's direct normal dependencies"
     );

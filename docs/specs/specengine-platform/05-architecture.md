@@ -165,9 +165,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 
 ### 5.3. Markers and the sync matrix
 
-**Marker grammar** (`.rs` and `.ron` alike) and **RON binding** (own lexer, §9; the field path is the `qpath`, `data/movement.ron#root.stamina.regen_per_second`): `docs/canon/code-identity.md`. In Rust a marker applies to the next item; Rust binding (Phase 3) follows the RON principles.
-
-**Revision in the marker** (`@3`, ADR-0018) — tracey discipline. First the code is brought to the new rule text, **then** the marker is raised, and the raise is visible in the code diff as a review record. Marker `@2` on a node with `rev: 3` means `spec_ahead` even without a lock. Marker `@4` on a node with `rev: 3` means `predated` (a non-existent revision; OpenFastTrace reports it separately). A marker without a revision is allowed for weak bindings and in adoption mode.
+**Marker grammar** and **RON binding** (own lexer, §9): `docs/canon/code-identity.md`. **Rust binding**, a marker's ID and revision states (`@2` on `rev: 3` is `spec_ahead`, `@4` `predated`, no `@N` `unversioned`), weak mentions, `spec refs`: `docs/canon/code-bindings.md`. **Revision in the marker** (`@3`, ADR-0018, tracey discipline): the code is brought to the new text first, then the marker is raised, visible in the code diff (`docs/canon/architecture-code.md#markers`).
 
 **Drift-check cascade** — the next level runs only if the previous one said "changed":
 

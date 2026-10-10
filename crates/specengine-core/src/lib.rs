@@ -49,11 +49,15 @@
 //!   lexical fold and the opening rule (`docs/canon/gate.md`, ADR-0037);
 //! - [`round`] — the pure half of a question round: the sheet's bounds,
 //!   its order key, the reading time and the grammar of the returned
-//!   answers (`docs/canon/round.md`, ADR-0038).
+//!   answers (`docs/canon/round.md`, ADR-0038);
+//! - [`code_toml`] — `CodeConfig::from_toml`: the `[code]` table, the code
+//!   tree `spec refs` walks, read apart from the reads (task spec
+//!   `code-refs`, "The code table").
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod check;
+pub mod code_toml;
 pub mod create;
 mod front_matter;
 pub mod gate;
@@ -84,6 +88,7 @@ use specengine_model::{
     LinkTarget, Node, ParentRef, ParsedFile, PathTarget, Reference, Span,
 };
 
+pub use code_toml::{CodeConfig, code_from_toml};
 pub use front_matter::{KeyType, TYPED_KEYS};
 pub use gate::{GateConfig, GateMode};
 pub use norm::{NORM_RECIPE, norm_input};

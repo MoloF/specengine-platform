@@ -48,7 +48,7 @@ pub const MAX_SEGMENT_BYTES: usize = 128;
 /// Ends a segment cut at [`MAX_SEGMENT_BYTES`].
 pub const TRUNCATION_MARK: char = '…';
 
-use crate::markers::{Marker, markers_in};
+use crate::markers::{Levels, Marker, Relation, markers_in};
 
 /// What a marker resolved to.
 ///
@@ -135,6 +135,17 @@ pub struct RonMarker {
     pub marker: Marker,
     /// 1-based line of the comment's first byte.
     pub line: usize,
+    /// Byte range of the whole comment.
+    pub comment: Range<usize>,
+    pub anchor: Anchor,
+}
+
+/// One comment of a `.ron` file and the [`Anchor`] a marker in it gets:
+/// the anchor of every comment, marked or not (task spec `code-refs`,
+/// "Mentions": a mention belongs to the binding its comment would get as
+/// a marker).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommentAnchor {
     /// Byte range of the whole comment.
     pub comment: Range<usize>,
     pub anchor: Anchor,
@@ -308,4 +319,40 @@ pub fn analyze(source: &str) -> RonAnalysis {
         }))
         .collect();
     RonAnalysis::assemble(rejected, comments, walked.markers, walked.colliding_groups)
+}
+
+/// The anchor of every comment of `source`, in source order: the walk of
+/// [`analyze`] with one probe per comment, so each comment binds exactly as
+/// a marker in it does (the anchor never depends on what the comment says).
+#[must_use]
+pub fn comment_anchors(source: &str) -> Vec<CommentAnchor> {
+    let (tokens, _) = lexer::lex(source);
+    let probes: Vec<(usize, Marker)> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.kind.is_comment())
+        .map(|(index, _)| (index, probe()))
+        .collect();
+    structure::walk(source, &tokens, probes)
+        .markers
+        .into_iter()
+        .map(|resolved| CommentAnchor {
+            comment: resolved.comment,
+            anchor: resolved.anchor,
+        })
+        .collect()
+}
+
+/// A marker standing for a whole comment in [`comment_anchors`]; its
+/// fields are never read.
+fn probe() -> Marker {
+    Marker {
+        relation: Relation::Implements,
+        id: String::new(),
+        rev: None,
+        levels: Levels::Default,
+        note: None,
+        id_latin: true,
+        offset: 0,
+    }
 }

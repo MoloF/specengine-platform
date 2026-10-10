@@ -1,0 +1,11 @@
+# Package of the code-a fixture: parsed by the code walk, never built
+# (`src/broken.rs` carries a deliberate parse error). Its `[package] name`
+# differs from its directory so the bin unit shows which one names it.
+# `[workspace]` keeps it out of the repository workspace.
+[package]
+name = "tally-kit"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

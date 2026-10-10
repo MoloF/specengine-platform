@@ -2758,9 +2758,11 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "specengine-code",
  "specengine-core",
  "specengine-model",
  "specengine-store",
+ "toml",
 ]
 
 [[package]]

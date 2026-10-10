@@ -72,6 +72,6 @@ Walks (`Direction`; `docs/canon/spec-cli-graph.md`): `graph_direction` follows e
 
 ## Open minors
 
-- The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment; `specengine-code` `markers.rs` `is_latin_id` rejects `/`, `#` → the marker-parser increment: both then use this crate.
+- The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment. `specengine-code` `markers.rs` `is_latin_id` (ASCII letters, digits, `-_.:/#`, so `slug/ID`, `ID#SECTION` count as Latin) is a second Latin test; `spec refs` re-reads each marker ID with this crate's grammar (`docs/canon/code-bindings.md`) → the marker-parser increment: then it uses this crate.
 - `see:R-12` in prose reads as project `see` → the `project:` increment.
 - A name-shape body is greedy (`MEC-STAMINA-based` is one ID); the check's `Resolver` falls back (`docs/canon/spec-check-graph.md`).

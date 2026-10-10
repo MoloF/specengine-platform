@@ -394,7 +394,22 @@ pub(crate) fn no_reference(written: &str, scheme: &IdScheme) -> String {
 
 /// Exit 2: look-alike letters or mixed scripts, with the Latin form.
 pub(crate) fn latin_fix(written: &str, homoglyphs: &[specengine_model::Homoglyph]) -> String {
-    let fix: String = if homoglyphs.is_empty() {
+    let fix = latin_text(written, homoglyphs);
+    if fix.is_ascii() && fix != written {
+        format!(
+            "`{written}` mixes scripts or uses look-alike letters; IDs are Latin only: \
+             write `{fix}`"
+        )
+    } else {
+        format!("`{written}` mixes scripts; IDs are Latin only: write it in Latin letters")
+    }
+}
+
+/// `written` with each look-alike replaced by its Latin letter (`homoglyphs`'
+/// spans are offsets into `written`), or every character normalised when
+/// none is listed (a mixed script); not ASCII when no Latin form exists.
+pub(crate) fn latin_text(written: &str, homoglyphs: &[specengine_model::Homoglyph]) -> String {
+    if homoglyphs.is_empty() {
         written.chars().map(normalize_char).collect()
     } else {
         // Spans are offsets into `written` (parsed with base 0).
@@ -413,14 +428,6 @@ pub(crate) fn latin_fix(written: &str, homoglyphs: &[specengine_model::Homoglyph
         }
         fixed.push_str(written.get(cursor..).unwrap_or_default());
         fixed
-    };
-    if fix.is_ascii() && fix != written {
-        format!(
-            "`{written}` mixes scripts or uses look-alike letters; IDs are Latin only: \
-             write `{fix}`"
-        )
-    } else {
-        format!("`{written}` mixes scripts; IDs are Latin only: write it in Latin letters")
     }
 }
 
@@ -436,9 +443,19 @@ pub(crate) fn project_qualified(written: &str) -> CliError {
 /// `aliases:` still declare the reference; none when the fresh parse no
 /// longer holds it.
 fn pick(parsed: &ParsedFile, target: &Target, written: &str) -> Vec<usize> {
-    let Target::Reference(reference) = target else {
-        return vec![0];
-    };
+    match target {
+        Target::Reference(reference) => pick_reference(parsed, reference, written),
+        Target::Path(_) => vec![0],
+    }
+}
+
+/// [`pick`] for a reference of the grammar (also `spec refs`' marker and
+/// mention IDs, task spec `code-refs`, "States").
+pub(crate) fn pick_reference(
+    parsed: &ParsedFile,
+    reference: &Reference,
+    written: &str,
+) -> Vec<usize> {
     let with_id = |id: &str, from: usize| -> Vec<usize> {
         parsed
             .nodes

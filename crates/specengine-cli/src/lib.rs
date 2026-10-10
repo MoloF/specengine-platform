@@ -129,6 +129,7 @@ mod apply;
 mod bundle;
 mod cap;
 mod check;
+mod code_walk;
 mod corpus;
 mod create;
 mod decide;
@@ -150,6 +151,7 @@ mod project;
 mod proposals;
 mod propose;
 mod refresh;
+mod refs;
 mod review;
 mod round;
 mod search;
@@ -213,6 +215,9 @@ pub use propose::{
     propose_with_task,
 };
 pub use refresh::{IndexOutcome, IndexRequest, index};
+pub use refs::{
+    BindingRow, CodeCount, MarkerRow, MentionRow, RefsNode, RefsOutcome, RefsRequest, refs,
+};
 pub use review::{ReviewRequest, review, review_brief};
 pub use round::{
     AnswerOutcome, RoundAnswer, RoundAnswerBody, RoundAnswerEntry, RoundAnswerRequest,
@@ -412,6 +417,8 @@ pub enum Outcome {
     Check(CheckOutcome),
     /// `health`: the unapplied amendments of the working tree.
     Health(HealthOutcome),
+    /// `refs`: what in the code names a node.
+    Refs(Box<RefsOutcome>),
     Export(ExportOutcome),
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
@@ -450,6 +457,7 @@ impl Outcome {
             Self::Tree(tree) if tree.reason.is_some() => Exit::NotFound,
             Self::Graph(graph) if graph.reason.is_some() => Exit::NotFound,
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
+            Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
@@ -477,6 +485,7 @@ impl Outcome {
             Self::Bundle(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
+            Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -534,6 +543,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Bundle(outcome) => bundle::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
+        Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
@@ -564,6 +574,7 @@ impl serde::Serialize for Outcome {
             Self::Bundle(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
+            Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),

@@ -12,7 +12,7 @@ description = "The `spec` command line of SpecEngine: init, index, search and sh
 name = "spec"
 path = "src/main.rs"
 
-# On `specengine-{model,core,store}` only: never `specengine-{code,import,mcp,eval,ra}`,
+# On `specengine-{model,core,store,code}` only: never `specengine-{import,mcp,eval,ra}`,
 # never `rusqlite` directly (the store owns the database; no `rusqlite` type
 # crosses its API). Every command lives in the library (`src/lib.rs`), the
 # reuse contract of MCP stdio and the Phase 2 daemon bridge.
@@ -20,6 +20,12 @@ path = "src/main.rs"
 specengine-model = { path = "../specengine-model" }
 specengine-core = { path = "../specengine-core" }
 specengine-store = { path = "../specengine-store" }
+# Layer A for `spec refs`: Rust comment binding, RON anchors, `qpath`
+# (docs/features/code-refs.md, "Description and interactions").
+specengine-code = { path = "../specengine-code" }
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# A package's `[package] name` in `spec refs`' code walk; already in the
+# graph at this pin through `specengine-core`.
+toml.workspace = true

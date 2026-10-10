@@ -1,0 +1,18 @@
+# Fixture corpus code-a (docs/features/code-refs.md, TE-1): a small library
+# that counts up to a cap, its specification and its code. Prefixes and kinds
+# of its own; the code walk reads `[code]` (the table of that spec's "Data").
+# What `spec refs` and the binding library must give: `expected.json`.
+
+[project]
+slug = "code-a"
+
+[ids]
+PIECE = { kind = "piece",     shape = "name" }
+LAW   = { kind = "law",       shape = "name" }
+GOAL  = { kind = "objective", width = 2, aliases_from = ["AIM"] }
+PREM  = { kind = "premise",   width = 3 }
+PASS  = { kind = "pass-mark", width = 2, scope = "feature" }
+
+[code]
+roots   = ["crates", "data", "tools/loose.rs"]
+exclude = ["crates/*/tests/fixtures/**"]

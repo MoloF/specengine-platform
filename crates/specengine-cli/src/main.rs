@@ -37,7 +37,7 @@ use specengine_cli::{
     ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
     GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
+    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
     RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest,
     TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
     TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest,
@@ -166,6 +166,12 @@ enum Command {
     },
     /// List the unapplied amendments: the working tree's live documents that name a node they amend (`links: {amends: [ID]}`), each with those links; read-only, exit 0 whatever is listed, 2 when it cannot run (no project, a config error, an incomplete walk).
     Health,
+    /// List what in the code names REF: the markers (`@implements`, `@verifies`, `@configures`, `@assumes`) and comment mentions under `[code]`, each with its state and binding; read-only, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run (no `[code]`, a config error, an incomplete walk).
+    Refs {
+        /// Any form `show` takes.
+        #[arg(value_name = "REF")]
+        reference: String,
+    },
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
         #[command(subcommand)]
@@ -764,6 +770,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             )?)
         }
         Command::Health => Outcome::Health(specengine_cli::health(env, globals)?),
+        Command::Refs { reference } => Outcome::Refs(Box::new(specengine_cli::refs(
+            env,
+            globals,
+            &RefsRequest { reference },
+        )?)),
         Command::Export {
             what: Export::Index { stdout },
         } => Outcome::Export(specengine_cli::export_index(

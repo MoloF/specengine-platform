@@ -359,8 +359,9 @@ fn dependencies(manifest: &str) -> BTreeSet<String> {
 }
 
 /// "Roles": the slice changes no manifest: the four crates keep their
-/// direct dependencies, and neither `similar` nor `rusqlite_migration`
-/// enters a manifest or the lock.
+/// direct dependencies (the CLI's gained `specengine-code` and `toml` with
+/// `spec refs`, docs/features/code-refs.md TE-8), and neither `similar` nor
+/// `rusqlite_migration` enters a manifest or the lock.
 #[test]
 fn ac20_no_dependency_is_added() {
     let root = repository_root();
@@ -377,9 +378,11 @@ fn ac20_no_dependency_is_added() {
                 "specengine-model",
                 "specengine-core",
                 "specengine-store",
+                "specengine-code",
                 "clap",
                 "serde",
                 "serde_json",
+                "toml",
             ]),
         ),
         (

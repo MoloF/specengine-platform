@@ -8,16 +8,16 @@ reviewed: 2026-10-10
 
 # SpecEngine architecture rules: the code layer
 
-The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`.
+The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`.
 
 <a id="markers"></a>
 ## Markers
 
 Rule: `architecture.md#markers`. ADR-0010, ADR-0016, ADR-0018.
 
-- A marker is a comment in `.rs` or `.ron`: `// @implements ID@rev [tiers]`, also `@verifies`, `@configures`, `@assumes`. Grammar, levels, RON field paths: `code-identity.md` "Marker grammar", "RON binding".
+- A marker is a comment in `.rs` or `.ron`: `// @implements ID@rev [tiers]`, also `@verifies`, `@configures`, `@assumes`. Grammar, levels, RON field paths: `code-identity.md` "Marker grammar", "RON binding"; the Rust item it binds, its ID and revision states: `code-bindings.md` "Rust binding", "ID state", "Revision state".
 - The revision in a marker is raised after the code is brought in line with the node's new text; the AST hashes of the verified state live in `spec.lock` (`#spec-lock`).
-- Existing ID citations in code automatically become weak `mentions` links, never bindings. Markers are placed only in new work and when code is touched; there is no mass conversion.
+- Existing ID citations in code comments automatically become weak `mentions` links, never bindings (`code-bindings.md` "Mentions", listed by `spec refs`). Markers are placed only in new work and when code is touched; there is no mass conversion.
 
 <a id="code-identity"></a>
 ## Symbol identity and digest
@@ -25,7 +25,7 @@ Rule: `architecture.md#markers`. ADR-0010, ADR-0016, ADR-0018.
 Rule: `architecture.md#code-identity`. ADR-0020, ADR-0021.
 
 - The marker provides a link's identity; a symbol's `qpath` is only its name. The digest is a normalized tree-sitter AST.
-- Layers (05 §5.1): A, tree-sitter and markers, the MVP, built (`code-identity.md`); C, rust-analyzer as a library, the Phase 3 precision layer (`crates/specengine-ra`, outside `default-members`); B, the Bevy `schedule_data` dump, Phase 3. What A cannot enumerate, a generic system's instances, needs B or C.
+- Layers (05 §5.1): A, tree-sitter and markers, the MVP, built (`code-identity.md`, bindings `code-bindings.md`); C, rust-analyzer as a library, the Phase 3 precision layer (`crates/specengine-ra`, outside `default-members`); B, the Bevy `schedule_data` dump, Phase 3. What A cannot enumerate, a generic system's instances, needs B or C.
 
 <a id="spec-lock"></a>
 ## `spec.lock` writers

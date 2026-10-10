@@ -457,12 +457,20 @@ fn zone_name_problem(name: &str) -> Option<String> {
 
 /// Why `glob` is no zone glob; `None`: it is one.
 fn glob_problem(glob: &str) -> Option<String> {
+    dialect_problem(glob, "a zone glob")
+}
+
+/// Why `glob` is outside the `[paths] exclude` dialect (root-relative, `*`,
+/// `**`, `?`, every other character literal); `None`: it is in it.
+/// `noun` names the glob in the message (`a zone glob`; `[code] exclude`'s
+/// too, task spec `code-refs`).
+pub(crate) fn dialect_problem(glob: &str, noun: &str) -> Option<String> {
     if let Err(problem) = checked_path(glob, false) {
         return Some(problem);
     }
     if let Some(reserved) = glob.chars().find(|c| GLOB_RESERVED.contains(c)) {
         return Some(format!(
-            "{glob:?} holds `{reserved}`: a zone glob takes `*`, `**` and `?`, every other \
+            "{glob:?} holds `{reserved}`: {noun} takes `*`, `**` and `?`, every other \
              character literally, so `[`, `]`, `{{`, `}}` and `\\` are refused"
         ));
     }

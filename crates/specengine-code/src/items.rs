@@ -51,6 +51,10 @@ pub struct ItemRecord {
     pub line: usize,
     /// The item or an attached attribute has a parse error (never hashed then).
     pub has_error: bool,
+    /// The hash, or `cannot_verify` with its categories. In an analysis
+    /// that is not [`FileAnalysis::hashed`] (the comment binding's), only
+    /// an item with a parse error has its state; an error-free item's is
+    /// `cannot_verify` with no category, which hashing never gives.
     pub state: HashState,
 }
 
@@ -73,6 +77,10 @@ pub struct FileAnalysis {
     /// `ERROR` nodes at file or module level that did not become an item.
     pub orphan_errors: usize,
     pub mod_declarations: Vec<ModDeclaration>,
+    /// Every item was hashed ([`analyze_tree`]); `false` for the comment
+    /// binding's analysis ([`crate::bind`]), which hashes none and reads
+    /// only the error categories of items with a parse error.
+    pub hashed: bool,
 }
 
 impl FileAnalysis {
@@ -95,13 +103,36 @@ pub fn analyze_file(parser: &mut RustParser, source: &str) -> Option<FileAnalysi
 /// Collects the items of an already parsed file.
 #[must_use]
 pub fn analyze_tree(tree: &Tree, source: &str) -> FileAnalysis {
+    analyze_with_nodes(tree, source, Hashing::Every).0
+}
+
+/// Which items an analysis hashes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Hashing {
+    /// Every item ([`analyze_tree`]).
+    Every,
+    /// None: only an item with a parse error gets its state, the error
+    /// categories `hash_item` reads without hashing ([`crate::bind`]).
+    ErrorsOnly,
+}
+
+/// [`analyze_tree`] (hashing as `hashing` says) and each item's node, in
+/// the order of [`FileAnalysis::items`] (the comment binding of
+/// [`crate::bind`]).
+pub(crate) fn analyze_with_nodes<'tree>(
+    tree: &'tree Tree,
+    source: &str,
+    hashing: Hashing,
+) -> (FileAnalysis, Vec<Node<'tree>>) {
     let root = tree.root_node();
     let mut analysis = FileAnalysis {
         has_error: root.has_error(),
+        hashed: hashing == Hashing::Every,
         ..FileAnalysis::default()
     };
-    collect(root, source.as_bytes(), &mut analysis);
-    analysis
+    let mut nodes = Vec::new();
+    collect(root, source.as_bytes(), hashing, &mut analysis, &mut nodes);
+    (analysis, nodes)
 }
 
 struct Scope {
@@ -130,7 +161,13 @@ impl<'tree> Level<'tree> {
 /// inline `mod`, `impl` or `trait` body, then its next sibling. An explicit
 /// stack of [`Level`]s instead of recursion, so the nesting depth of the file
 /// never bounds the thread stack.
-fn collect(root: Node, source: &[u8], out: &mut FileAnalysis) {
+fn collect<'tree>(
+    root: Node<'tree>,
+    source: &[u8],
+    hashing: Hashing,
+    out: &mut FileAnalysis,
+    nodes: &mut Vec<Node<'tree>>,
+) {
     let mut stack = vec![Level::new(
         root,
         Scope {
@@ -157,10 +194,11 @@ fn collect(root: Node, source: &[u8], out: &mut FileAnalysis) {
         if !is_item {
             continue;
         }
-        let record = make_record(child, source, scope);
+        let record = make_record(child, source, scope, hashing);
         let label = record.label.clone();
         let name = record.name.clone();
         out.items.push(record);
+        nodes.push(child);
         let body = match kind {
             "mod_item" => match child.child_by_field_name("body") {
                 Some(body) => {
@@ -201,7 +239,7 @@ fn collect(root: Node, source: &[u8], out: &mut FileAnalysis) {
     }
 }
 
-fn make_record(node: Node, source: &[u8], scope: &Scope) -> ItemRecord {
+fn make_record(node: Node, source: &[u8], scope: &Scope, hashing: Hashing) -> ItemRecord {
     let kind = node.kind();
     let name = node
         .child_by_field_name("name")
@@ -212,6 +250,16 @@ fn make_record(node: Node, source: &[u8], scope: &Scope) -> ItemRecord {
     } else {
         name.clone().unwrap_or_else(|| kind.to_owned())
     };
+    let has_error = item_has_error(node);
+    let state = match hashing {
+        Hashing::Every => hash_item(node, source),
+        // An item with a parse error is never hashed: `hash_item` reads
+        // only its error categories.
+        Hashing::ErrorsOnly if has_error => hash_item(node, source),
+        Hashing::ErrorsOnly => HashState::CannotVerify {
+            categories: Vec::new(),
+        },
+    };
     ItemRecord {
         kind: kind.to_owned(),
         name,
@@ -220,8 +268,8 @@ fn make_record(node: Node, source: &[u8], scope: &Scope) -> ItemRecord {
         owner: scope.owner.clone(),
         byte_range: node.byte_range(),
         line: node.start_position().row + 1,
-        has_error: item_has_error(node),
-        state: hash_item(node, source),
+        has_error,
+        state,
     }
 }
 

@@ -1,0 +1,124 @@
+{
+ "_comment": "What docs/features/code-refs.md (draft, 2026-10-10) says the code walk, the binding library and `spec refs` give on this corpus (TE-1). `markers`: every marker of the walked files, in walk order (byte-sorted paths, then line); `row` is the marker's `spec refs` text row (`relation | path:line:column | token | id_state[ fix] | rev_state | levels | binding[ | note]`, split on ` | `) under each node of `listed_under` (none: the library alone sees it); `binding_line` the bound item's first line. `rule` names the binding rule or category the row covers, `mutation` the named test whose mutation turns it red. `mentions`: every comment citation, sorted as refs prints them. `generated`: files a test writes into its temp copy (raw Cyrillic stays out of the repository, ADR-0024), with their rows; `rows_by_holder` where one marker names several nodes. `crlf`: the same rows with every LF of the walked files turned to CRLF. `open`: readings of the draft to reconcile once the code lands. Derived, not repeated: the JSON marker's `id` is the token up to its first `@`, `rev` the 1-9 digits after it ending the token (else null); `levels` `default` -> [sig, body] / `default`, `[a, b]` -> [a, b] / `declared`, `invalid:<c>` -> null / `<c>`; the JSON `binding` splits the text form (kind, qpath, item_kind, ambiguity, category) and takes `line` from `binding_line`. `spec refs <ID>` prints, per holder, the node's `header`, its `row`s ordered by relation (implements, verifies, configures, assumes), path bytes, line, column, then its mention rows, blocks apart by an empty line, then the summary (`refs_stdout_example`).",
+ "config": {"roots": ["crates", "data", "tools/loose.rs"], "exclude": ["crates/*/tests/fixtures/**"]},
+ "code": {"files": 8, "rs": 7, "ron": 1, "skipped": 0},
+ "walked": [
+   "crates/tally/src/broken.rs",
+   "crates/tally/src/counter.rs",
+   "crates/tally/src/extra/moved.rs",
+   "crates/tally/src/lib.rs",
+   "crates/tally/src/main.rs",
+   "crates/tally/tests/bounds.rs",
+   "data/limits.ron",
+   "tools/loose.rs"
+  ],
+ "not_walked": ["crates/tally/src/.draft.rs", "crates/tally/tests/fixtures/sample.rs"],
+ "nodes": [
+   {"id": "PIECE-COUNTER", "kind": "piece", "title": "Counter", "path": "docs/spec/counter.md", "line": 1, "rev": 3, "rev_written": true, "header": "PIECE-COUNTER | piece | Counter | docs/spec/counter.md:1 | rev 3"},
+   {"id": "LAW-BOUND", "kind": "law", "title": "Bound", "path": "docs/spec/counter.md", "line": 13, "rev": 2, "rev_written": true, "header": "LAW-BOUND | law | Bound | docs/spec/counter.md:13 | rev 2"},
+   {"id": "LAW-STEP", "kind": "law", "title": "Step", "path": "docs/spec/counter.md", "line": 17, "rev": 1, "rev_written": false, "header": "LAW-STEP | law | Step | docs/spec/counter.md:17 | rev 1 (none written)"},
+   {"id": "LAW-ODD", "kind": "law", "title": "Odd", "path": "docs/spec/counter.md", "line": 22, "rev": null, "rev_written": true, "header": "LAW-ODD | law | Odd | docs/spec/counter.md:22 | rev unknown"},
+   {"id": "GOAL-01", "kind": "objective", "title": "The count stops at the cap", "path": "docs/records/GOAL-01.md", "line": 1, "rev": 1, "rev_written": false, "header": "GOAL-01 | objective | The count stops at the cap | docs/records/GOAL-01.md:1 | rev 1 (none written)"},
+   {"id": "PREM-001", "kind": "premise", "title": "Callers step from one thread", "path": "docs/records/PREM-001.md", "line": 1, "rev": 1, "rev_written": false, "header": "PREM-001 | premise | Callers step from one thread | docs/records/PREM-001.md:1 | rev 1 (none written)"},
+   {"id": "PASS-01", "kind": "pass-mark", "title": "Stepping past the cap keeps the cap", "path": "docs/features/cap-check.md", "line": 13, "rev": 1, "rev_written": false, "header": "PASS-01 | pass-mark | Stepping past the cap keeps the cap | docs/features/cap-check.md:13 | rev 1 (none written)"}
+  ],
+ "markers": [
+   {"row": "implements | crates/tally/src/broken.rs:4:4 | GOAL-01@1 | resolved | current | default | cannot_verify other", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "7", "mutation": "marker_on_broken_item_cannot_verify"},
+   {"row": "implements | crates/tally/src/broken.rs:11:4 | LAW-STEP@1 | resolved | current | default | item crates/tally::broken::intact function_item", "listed_under": ["LAW-STEP"], "binding_line": 12, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:2:5 | PIECE-COUNTER@2 | resolved | spec_ahead | default | module crates/tally::counter", "listed_under": ["PIECE-COUNTER"], "binding_line": null, "rule": "5", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:4:4 | GOAL-01 | resolved | unversioned | default | unanchored not_an_item | see LAW-STEP", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "6 not_an_item (use)", "mutation": "marker_above_use_is_unanchored"},
+   {"row": "configures | crates/tally/src/counter.rs:8:29 | LAW-BOUND@2 | resolved | current | default | item crates/tally::counter::CAP const_item", "listed_under": ["LAW-BOUND"], "binding_line": 8, "rule": "3", "mutation": "trailing_marker_binds_its_line_item"},
+   {"row": "implements | crates/tally/src/counter.rs:13:4 | PIECE-COUNTER@3 | resolved | current | [sig, body] | item crates/tally::counter::Tally struct_item", "listed_under": ["PIECE-COUNTER"], "binding_line": 17, "rule": "2 (crosses blank, ///, #[derive])", "mutation": "marker_above_derive_binds_the_struct"},
+   {"row": "implements | crates/tally/src/counter.rs:18:8 | LAW-STEP | resolved | unversioned | default | unanchored not_an_item", "listed_under": ["LAW-STEP"], "binding_line": null, "rule": "6 not_an_item (field)", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:22:17 | LAW-BOUND@3 | resolved | predated | default | item crates/tally::counter::impl Tally impl_item ambiguous duplicate", "listed_under": ["LAW-BOUND"], "binding_line": 22, "rule": "4", "mutation": "newer_marker_is_predated"},
+   {"row": "implements | crates/tally/src/counter.rs:23:8 | LAW-STEP@1 | resolved | current | default | item crates/tally::counter::Tally::step function_item", "listed_under": ["LAW-STEP"], "binding_line": 23, "rule": "1", "mutation": "section_marker_compares_the_section_rev"},
+   {"row": "implements | crates/tally/src/counter.rs:25:39 | GOAL-01 | resolved | unversioned | default | unanchored in_body", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "6 in_body", "mutation": "marker_in_body_is_unanchored"},
+   {"row": "implements | crates/tally/src/counter.rs:29:8 | AIM-01@1 | alias | current | [body] | item crates/tally::counter::Tally::value function_item | mutation: return the cap", "listed_under": ["GOAL-01"], "binding_line": 30, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:34:8 | GOAL-01@ | resolved | bad_rev | default | unanchored not_an_item", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "6 not_an_item (associated const)", "mutation": null},
+   {"row": "assumes | crates/tally/src/counter.rs:37:8 | PREM-001 | resolved | unversioned | default | unanchored no_item", "listed_under": ["PREM-001"], "binding_line": null, "rule": "6 no_item (before })", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:41:8 | GOAL-01@1234567890 | resolved | bad_rev | default | item crates/tally::counter::Tally::reset function_item", "listed_under": ["GOAL-01"], "binding_line": 42, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:45:6 | LAW-BOUND@3a | resolved | bad_rev | default | item crates/tally::counter::impl Tally impl_item ambiguous duplicate", "listed_under": ["LAW-BOUND"], "binding_line": 40, "rule": "3 (} closing an impl)", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:48:8 | PIECE-COUNTER#LAW-BOUND@2 | resolved | current | default | item crates/tally::counter::<Tally as fmt::Display>::fmt function_item", "listed_under": ["LAW-BOUND"], "binding_line": 49, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:56:8 | LAW-ODD@1 | resolved | rev_unknown | default | item crates/tally::counter::Limit::max function_signature_item", "listed_under": ["LAW-ODD"], "binding_line": 57, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:61:8 | LAW-BOUND | resolved | unversioned | default | unanchored not_an_item", "listed_under": ["LAW-BOUND"], "binding_line": null, "rule": "6 not_an_item (variant)", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:67:8 | GOAL-01 | resolved | unversioned | default | unanchored in_macro", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "6 in_macro (macro_rules! body)", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:74:9 | LAW-STEP@2 | resolved | predated | default | module crates/tally::counter::inner", "listed_under": ["LAW-STEP"], "binding_line": null, "rule": "5 (inline mod)", "mutation": "section_marker_compares_the_section_rev"},
+   {"row": "verifies | crates/tally/src/counter.rs:77:8 | GOAL-01 | resolved | unversioned | invalid:duplicate | item crates/tally::counter::inner::limit function_item", "listed_under": ["GOAL-01"], "binding_line": 78, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/counter.rs:84:8 | PIECE-COUNTER@3 | resolved | current | default | unanchored in_body", "listed_under": ["PIECE-COUNTER"], "binding_line": null, "rule": "6 in_body (fn in a body is no item)", "mutation": null},
+   {"row": "implements | crates/tally/src/extra/moved.rs:3:4 | LAW-BOUND@1 | resolved | spec_ahead | default | item crates/tally::extra::moved::shift function_item ambiguous path_attribute", "listed_under": ["LAW-BOUND"], "binding_line": 4, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:2:5 | PIECE-COUNTER@3 | resolved | current | default | module crates/tally", "listed_under": ["PIECE-COUNTER"], "binding_line": null, "rule": "5", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:4:4 | GOAL-01 | resolved | unversioned | default | unanchored not_an_item", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "6 not_an_item (#![..])", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:7:4 | LAW-STEP | resolved | unversioned | default | item crates/tally::moved mod_item", "listed_under": ["LAW-STEP"], "binding_line": 9, "rule": "2 (crosses #[path])", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:11:4 | other:GOAL-01 | other_project | unversioned | default | item crates/tally::broken mod_item", "listed_under": [], "binding_line": 12, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:13:4 | PR-7 | queue | unversioned | default | item crates/tally::counter mod_item", "listed_under": [], "binding_line": 14, "rule": "2", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:16:4 | ZZZ-1 | dangling | unversioned | default | unanchored not_an_item", "listed_under": [], "binding_line": null, "rule": "6 not_an_item (use)", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:17:4 | GOAL-99@2 | dangling | rev_unknown | default | unanchored not_an_item", "listed_under": [], "binding_line": null, "rule": "6 not_an_item (use)", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:18:4 |  | dangling | unversioned | default | unanchored not_an_item", "listed_under": [], "binding_line": null, "rule": "6 not_an_item (use)", "mutation": null},
+   {"row": "implements | crates/tally/src/lib.rs:21:4 | GOAL-01@1 | resolved | current | default | unanchored no_item", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "6 no_item (file end)", "mutation": null},
+   {"row": "implements | crates/tally/src/main.rs:1:4 | PREM-001@1 | resolved | current | default | item crates/tally::bin:tally-kit::main function_item", "listed_under": ["PREM-001"], "binding_line": 2, "rule": "2", "mutation": null},
+   {"row": "verifies | crates/tally/tests/bounds.rs:1:5 | PIECE-COUNTER | resolved | unversioned | default | module crates/tally::test:bounds", "listed_under": ["PIECE-COUNTER"], "binding_line": null, "rule": "5", "mutation": null},
+   {"row": "verifies | crates/tally/tests/bounds.rs:4:4 | LAW-BOUND@2 | resolved | current | [body] | item crates/tally::test:bounds::stops_at_cap function_item | mutation: drop the cap", "listed_under": ["LAW-BOUND"], "binding_line": 6, "rule": "2 (crosses #[test])", "mutation": null},
+   {"row": "verifies | crates/tally/tests/bounds.rs:14:4 | cap-check/PASS-01 | resolved | unversioned | invalid:unknown | item crates/tally::test:bounds::steps_by_one function_item", "listed_under": ["PASS-01"], "binding_line": 16, "rule": "2 (crosses #[test])", "mutation": null},
+   {"row": "configures | data/limits.ron:2:4 | PIECE-COUNTER@3 | resolved | current | default | ron data/limits.ron#root", "listed_under": ["PIECE-COUNTER"], "binding_line": null, "rule": "ron 4 (own line)", "mutation": null},
+   {"row": "configures | data/limits.ron:4:17 | LAW-BOUND@2 | resolved | current | default | ron data/limits.ron#root.cap", "listed_under": ["LAW-BOUND"], "binding_line": null, "rule": "ron 2 (trailing)", "mutation": null},
+   {"row": "configures | data/limits.ron:6:17 | LAW-STEP | resolved | unversioned | default | ron data/limits.ron#root.step ambiguous duplicate", "listed_under": ["LAW-STEP"], "binding_line": null, "rule": "ron 2 (trailing)", "mutation": null},
+   {"row": "configures | data/limits.ron:8:8 | GOAL-01 | resolved | unversioned | default | unanchored no_value", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "ron 5", "mutation": null},
+   {"row": "implements | tools/loose.rs:2:5 | GOAL-01 | resolved | unversioned | default | module . ambiguous unrooted", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "5", "mutation": null},
+   {"row": "implements | tools/loose.rs:5:4 | PREM-001@1 | resolved | current | default | item .::seed function_item ambiguous unrooted", "listed_under": ["PREM-001"], "binding_line": 6, "rule": "2", "mutation": null}
+  ],
+ "mentions": [
+   {"row": "mention | crates/tally/src/broken.rs:10:4 | GOAL-77 | dangling | item crates/tally::broken::intact function_item", "listed_under": [], "binding_line": 12, "mutation": null},
+   {"row": "mention | crates/tally/src/counter.rs:4:28 | LAW-STEP | resolved | file", "listed_under": ["LAW-STEP"], "binding_line": null, "mutation": null},
+   {"row": "mention | crates/tally/src/counter.rs:7:28 | LAW-BOUND | resolved | item crates/tally::counter::CAP const_item", "listed_under": ["LAW-BOUND"], "binding_line": 8, "mutation": "doc_comment_mention_belongs_to_its_item"},
+   {"row": "mention | crates/tally/src/counter.rs:15:40 | AIM-01 | alias | item crates/tally::counter::Tally struct_item", "listed_under": ["GOAL-01"], "binding_line": 17, "mutation": "doc_comment_mention_belongs_to_its_item"},
+   {"row": "mention | crates/tally/src/counter.rs:24:18 | LAW-BOUND | resolved | item crates/tally::counter::Tally::step function_item", "listed_under": ["LAW-BOUND"], "binding_line": 23, "mutation": null},
+   {"row": "mention | crates/tally/src/counter.rs:91:26 | GOAL-01 | resolved | file", "listed_under": ["GOAL-01"], "binding_line": null, "mutation": null},
+   {"row": "mention | crates/tally/src/lib.rs:1:44 | GOAL-01 | resolved | module crates/tally", "listed_under": ["GOAL-01"], "binding_line": null, "mutation": null},
+   {"row": "mention | data/limits.ron:1:25 | GOAL-01 | resolved | ron data/limits.ron#root", "listed_under": ["GOAL-01"], "binding_line": null, "mutation": null},
+   {"row": "mention | data/limits.ron:5:12 | LAW-STEP | resolved | ron data/limits.ron#root.step ambiguous duplicate", "listed_under": ["LAW-STEP"], "binding_line": null, "mutation": null}
+  ],
+ "not_mentions": [
+   {"path": "crates/tally/src/counter.rs", "line": 4, "written": "GOAL-01", "why": "a marker's own token (every marker token alike); the note's LAW-STEP on that line does count", "mutation": "marker_id_is_not_a_mention"},
+   {"path": "crates/tally/src/counter.rs", "line": 11, "written": "GOAL-01", "why": "string literal: \"GOAL-01 // @implements LAW-STEP\" is neither a mention nor a marker", "mutation": "string_literal_ids_are_not_mentions"}
+  ],
+ "crlf": "same rows, same columns",
+ "generated": {
+  "files": [
+    {"path": "crates/tally/src/look.rs", "parts": [{"text": "// @implements \u0420IECE-COUNTER@3\npub fn look() {}\n\n// @implements GOAL-03@2\npub fn twin() {}\n", "times": 1}]},
+    {"path": "data/deep.ron", "parts": [{"text": "// @configures GOAL-01\n", "times": 1}, {"text": "[", "times": 513}, {"text": "\n// @configures LAW-STEP@1\n1\n", "times": 1}, {"text": "]", "times": 513}, {"text": "\n", "times": 1}]},
+    {"path": "docs/records/GOAL-03.md", "parts": [{"text": "---\nclass: canon\nid: GOAL-03\nrev: 2\nowner: owner\nreviewed: 2026-10-10\n---\n\n# First holder\n", "times": 1}]},
+    {"path": "docs/records/GOAL-03-twin.md", "parts": [{"text": "---\nclass: canon\nid: GOAL-03\nowner: owner\nreviewed: 2026-10-10\n---\n\n# Second holder\n", "times": 1}]}
+   ],
+  "code": {"files": 10, "rs": 8, "ron": 2, "skipped": 0},
+  "nodes": [
+    {"id": "GOAL-03", "kind": "objective", "title": "First holder", "path": "docs/records/GOAL-03.md", "line": 1, "rev": 2, "rev_written": true, "header": "GOAL-03 | objective | First holder | docs/records/GOAL-03.md:1 | rev 2"},
+    {"id": "GOAL-03", "kind": "objective", "title": "Second holder", "path": "docs/records/GOAL-03-twin.md", "line": 1, "rev": 1, "rev_written": false, "header": "GOAL-03 | objective | Second holder | docs/records/GOAL-03-twin.md:1 | rev 1 (none written)"}
+   ],
+  "markers": [
+    {"row": "implements | crates/tally/src/look.rs:1:4 | \u0420IECE-COUNTER@3 | homoglyph PIECE-COUNTER | rev_unknown | default | item crates/tally::look::look function_item", "listed_under": ["PIECE-COUNTER"], "binding_line": 2, "rule": "2", "mutation": "homoglyph_marker_is_never_resolved"},
+    {"rows_by_holder": {"docs/records/GOAL-03.md": "implements | crates/tally/src/look.rs:4:4 | GOAL-03@2 | ambiguous | current | default | item crates/tally::look::twin function_item", "docs/records/GOAL-03-twin.md": "implements | crates/tally/src/look.rs:4:4 | GOAL-03@2 | ambiguous | predated | default | item crates/tally::look::twin function_item"}, "listed_under": ["GOAL-03"], "binding_line": 5, "rule": "2", "mutation": null},
+    {"row": "configures | data/deep.ron:1:4 | GOAL-01 | resolved | unversioned | default | ron data/deep.ron#root", "listed_under": ["GOAL-01"], "binding_line": null, "rule": "ron 4 (own line)", "mutation": null},
+    {"row": "configures | data/deep.ron:3:4 | LAW-STEP@1 | resolved | current | default | cannot_verify nesting_too_deep", "listed_under": ["LAW-STEP"], "binding_line": null, "rule": "ron depth cap", "mutation": null}
+   ],
+  "mentions": []
+ },
+ "open": [
+   "bad_rev ids (counter.rs:34 GOAL-01@, :41 GOAL-01@1234567890, :45 LAW-BOUND@3a): id_state read as `resolved` -- the ID is the token up to `@`, read by parse_reference; JSON rev null; no note (today's parser leaves `@` as the note of `GOAL-01@`).",
+   "module bindings of crate roots render the package (and unit) alone: lib.rs `module crates/tally`, tests/bounds.rs `module crates/tally::test:bounds`; an inline mod `module crates/tally::counter::inner`. The draft shows only `src/a.rs` -> `<pkg>::a`.",
+   "a file outside every package (tools/loose.rs) takes the eval's package label `.`: item `.::seed`, module `.`, both ` ambiguous unrooted`.",
+   "JSON binding `line`: an item's node start (attributes are siblings, excluded: tests/bounds.rs:4 -> 6, not the `#[test]` line 5); null for module, ron, unanchored, cannot_verify and file; cannot_verify keeps qpath and item_kind null.",
+   "JSON marker `id` is the token's ID part as written: `AIM-01` (alias), the Cyrillic-led ID (homoglyph), `PIECE-COUNTER#LAW-BOUND`, `cap-check/PASS-01`, `other:GOAL-01`, `` (empty).",
+   "LAW-ODD (`rev=0`): node rev null, rev_written true, header `rev unknown`; its marker counter.rs:56 `LAW-ODD@1` is `rev_unknown` although its id is `resolved`.",
+   "code.skipped counts only content (and names) that are not UTF-8: the `.`-name and the excluded file are neither files nor skipped.",
+   "not in the fixture, a draft question: an inner doc comment (`//!`) on its own line directly above an item -- rule 2 (first that applies) binds the item, rule 5 / rustdoc the module. Every `//!` here is followed by `use` or `#![..]`, so no row depends on it.",
+   "not in the fixture: a mention in an unanchored RON comment (`the innermost enclosing item` has no RON reading).",
+   "a mention inside a marker's note (counter.rs:4 `see LAW-STEP`) counts and belongs to `file`: the marker comment is unanchored at file level.",
+   "`PIECE-COUNTER#LAW-BOUND@2` (counter.rs:48) is listed under LAW-BOUND only, never under PIECE-COUNTER (`not its sections or parents`).",
+   "JSON binding qpath of a RON anchor is `<path>#<field path>` (`data/limits.ron#root.cap`), as the text row.",
+   "generated GOAL-03 (two holders): one marker, a block per holder with its own rev_state (current under rev 2, predated under the unwritten rev 1); the summary counts the rows printed (markers 2).",
+   "cannot_verify category of broken.rs `let x = 1 2;` is `other`, as the same construct in fixtures/ast-hash/src/broken.rs."
+  ],
+ "refs_stdout_example": {
+  "LAW-STEP": "LAW-STEP | law | Step | docs/spec/counter.md:17 | rev 1 (none written)\nimplements | crates/tally/src/broken.rs:11:4 | LAW-STEP@1 | resolved | current | default | item crates/tally::broken::intact function_item\nimplements | crates/tally/src/counter.rs:18:8 | LAW-STEP | resolved | unversioned | default | unanchored not_an_item\nimplements | crates/tally/src/counter.rs:23:8 | LAW-STEP@1 | resolved | current | default | item crates/tally::counter::Tally::step function_item\nimplements | crates/tally/src/counter.rs:74:9 | LAW-STEP@2 | resolved | predated | default | module crates/tally::counter::inner\nimplements | crates/tally/src/lib.rs:7:4 | LAW-STEP | resolved | unversioned | default | item crates/tally::moved mod_item\nconfigures | data/limits.ron:6:17 | LAW-STEP | resolved | unversioned | default | ron data/limits.ron#root.step ambiguous duplicate\nmention | crates/tally/src/counter.rs:4:28 | LAW-STEP | resolved | file\nmention | data/limits.ron:5:12 | LAW-STEP | resolved | ron data/limits.ron#root.step ambiguous duplicate\nrefs: markers 6, mentions 2; code files 8 (.rs 7, .ron 1), skipped 0\n"
+ }
+}
