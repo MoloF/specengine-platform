@@ -133,18 +133,18 @@ spec-writer:
 
 CLI, lock, verify, ADR. `--deep`, a `qpath` discriminator, the suffix index (slice 6); per-branch ratios (Phase 4); following RON or a RON shape level; ast-grep user anchors; MCP `check_binding`; UI. Level 2 (Q5).
 
-- **5b `lock-levels`** (after slices 3, 4a): lock format 2 (every level and fingerprint per entry, `levels` the union of the markers', no `ast_hash`, `code_recipe` v3), level-aware verify (`code_ahead levels_changed`), `spec lock rebase` (Q2) re-deriving each entry from its own `file_blob`, a new ADR adding that writer to ADR-0041.
-- **5c `anchor-states`** (after 5b): `EXACT`/`MOVED`/`AMBIGUOUS`/`LOST` per entry and run, never stored; candidates by equal `body`, then `skeleton` in the entry's file, ties by `quote`; a mutual unique match only; trivial bodies and RON `LOST`.
+- **5b `lock-levels`** (drafted 2026-10-12: `docs/features/lock-levels.md`, ADR-0050): lock format 2, level-aware verify, `spec lock rebase`.
+- **5c `anchor-states`** (after 5b, reading format 2's stored `body_hash`, fingerprints and `body_bytes`: `lock-levels.md` "Format 2"): `EXACT`/`MOVED`/`AMBIGUOUS`/`LOST` per entry and run, never stored; candidates by equal `body`, then `skeleton` in the entry's file, ties by `quote`; a mutual unique match only; trivial bodies and RON `LOST`.
 
 ## Open
 
 | Point | Answer |
 |---|---|
 | Q1 slice 5 | split: 5a `hash-levels`, 5b `lock-levels`, 5c `anchor-states` |
-| Q2 format-1 and old-recipe locks | `spec lock rebase` in 5b, with a new ADR |
+| Q2 format-1 and old-recipe locks | `spec lock rebase` in 5b, ADR-0050 (`lock-levels.md`) |
 | Q3 triviality | `body_bytes < 124` blocks a follow everywhere (AC-15 as written) |
 | Q4 a lost marker | not followed: the marker is the identity (ADR-0020); `broken_binding marker_gone` |
-| Q5 level 2 (05 s5.3 step 2) | never built; its line goes at 5b's shipping |
+| Q5 level 2 (05 s5.3 step 2) | never built; its line (05:173) goes at the shipping of 4a or 5b, whichever is first (`lock-levels.md` "Risks") |
 
 Decided under the owner's pre-approval, review open; WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.
 

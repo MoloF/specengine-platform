@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture, crates/specengine-code, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-12
 ---
 
 # SpecEngine architecture rules: the code layer
@@ -32,27 +32,28 @@ Rule: `architecture.md#code-identity`. ADR-0020, ADR-0021, ADR-0048, ADR-0049.
 <a id="spec-lock"></a>
 ## `spec.lock` writers
 
-Rule: `architecture.md#apply`. ADR-0041, ADR-0043, ADR-0044, ADR-0045.
+Rule: `architecture.md#apply`. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 `spec.lock` (verified node ↔ symbol hash pairs, committed: `architecture.md#layout`) is neither a spec file nor a `generated` document. Only the owner's terminal `[y/N]` writes it, through these writers alone:
 
 - `spec lock accept` over committed bytes (ADR-0041), or `spec approve` of a `drift` item running it (ADR-0045);
 - `spec lock regen`, for a merge (ADR-0041);
+- `spec lock rebase`, into this build's `format` and `code_recipe`: each entry's code hashes re-derived from its own `file_blob`, never `HEAD`'s tree or the working tree; key, `rev`, `spec_hash`, `file_blob`, `commit`, `verified_*` kept; an entry it cannot re-derive dropped and named; never another `norm_recipe` or an older format (ADR-0050);
 - `spec approve --editorial`, in its apply commit (ADR-0043);
 - `spec verify --tests`: `[[tested]]` evidence added on a pass, removed on a failure (ADR-0041, ADR-0044).
 
 Each but a merge's and an editorial apply's is its own commit with provenance. Never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit.
 
-As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. The approve and `verify --tests` writers are not built yet.
+As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. The approve, rebase (`docs/features/lock-levels.md`) and `verify --tests` writers are not built yet.
 
 <a id="verify"></a>
 ## Drift: `spec verify`
 
-Rule: `architecture.md#control`. ADR-0042, ADR-0045.
+Rule: `architecture.md#control`. ADR-0042, ADR-0045, ADR-0050.
 
 - `spec verify` shows drift between `spec.lock` and the tree as Fix, Check or Pre-existing findings.
 - Only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix. Otherwise `spec propose drift` queues the findings as items that stop nothing (ADR-0045), reads show the same states as `sync` (`#sync-in-reads`) and Health lists them (`#health`).
-- A binding it cannot verify is never `ok`: exit 2 in every mode.
+- A binding it cannot verify is never `ok`: exit 2 in every mode; a lock of another format or recipe too, until `spec lock rebase` carries it over (`#spec-lock`).
 
 <a id="sync-in-reads"></a>
 ## Sync in reads

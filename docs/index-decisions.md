@@ -58,3 +58,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0047](decisions/ADR-0047.md) Health lists code assuming a decision, unbound nodes and drift, read-only · architecture · accepted
 - [ADR-0048](decisions/ADR-0048.md) Layer B facts are files the project writes; they annotate symbols, never bind · code · accepted
 - [ADR-0049](decisions/ADR-0049.md) Layer C runs as its own executable, on request, and only advises · code · accepted
+- [ADR-0050](decisions/ADR-0050.md) spec lock rebase re-hashes the lock from the bytes the owner accepted · architecture · accepted

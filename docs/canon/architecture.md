@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-12
 ---
 
 # SpecEngine architecture rules
@@ -32,14 +32,14 @@ An approved proposal is applied only in the worktree, branch and base commit it 
 
 A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue, a project's generator its output). ADR-0003, ADR-0013, ADR-0022; owner, Q3, 2026-09-30.
 
-`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `docs/canon/architecture-code.md#spec-lock`; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045.
+`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `docs/canon/architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the blobs the owner accepted, never the current tree; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 <a id="control"></a>
 ## Control and no blocking
 
 - Discrepancies, questions and proposals block nothing: a node may have several open proposals, rebased on `base_hash` when applied; an agent keeps working on a working answer, marked `// @assumes PR-…`, and a decision unlike it makes a follow-up task. ADR-0012.
 - The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`docs/canon/gate.md`). ADR-0012, ADR-0039.
-- `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; `spec propose drift` queues items that stop nothing; a binding it cannot verify is never `ok`. How: `docs/canon/architecture-code.md#verify`. ADR-0042, ADR-0045.
+- `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; `spec propose drift` queues items that stop nothing; a binding it cannot verify is never `ok`. How: `docs/canon/architecture-code.md#verify`. ADR-0042, ADR-0045, ADR-0050.
 - Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it; a code-layer failure leaves a read's spec part and exit as they were, `sync` unknown, never `ok`. How: `docs/canon/architecture-code.md#sync-in-reads`. ADR-0046.
 - `spec health` lists, read-only, markers naming a queue item, an archived node or one in question; live nodes the project's `[[health.bound]]` rules select that no marker binds; plain `spec verify`'s non-`ok` findings. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `docs/canon/architecture-code.md#health`. ADR-0047.
 

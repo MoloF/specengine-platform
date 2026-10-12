@@ -30,7 +30,7 @@ WA-1, WA-2, WA-7; `code_decls`, `role` and the pass's facts: SW refinement. Per-
 |---|---|---|
 | `code_files` | `(wt, path)` | `lang`, `blake3`, `size`, `read_error`, `utf8`, `package`, `role`, `module`, `orphan_errors`, `targets_fp`; pass: `declared_by` |
 | `code_packages` | `(wt, dir)` | `manifest_b3`, `source`, `targets` (JSON) |
-| `symbols` | `(file, ord)`; `qpath`, `name` indexed | `item_kind`, `name` (bare last segment), `owner`, `qpath` (discriminator in), `discriminator`, `parent_ord`, start/end line and byte, `signature`, `hash_state`, `ast_hash`, `layer`; pass: `twin_files` |
+| `symbols` | `(file, ord)`; `qpath`, `name` indexed | `item_kind`, `name` (bare last segment), `owner`, `qpath` (discriminator in), `discriminator`, `parent_ord`, start/end line and byte, `signature`, `hash_state`, `ast_hash` (2026-10-12: after 5b `sig_hash`, `body_hash`, `deps_hash` in its place, `lock-levels.md` "Format 2"), `layer`; pass: `twin_files` |
 | `symbol_suffixes` | `(file, ord, depth)`; `suffix` indexed | `suffix` |
 | `code_decls` | `(file, ord)` | `target` (a `#[path]` module's path), `line` |
 | `code_markers` | `(file, ord)` | `relation`, `token`, `id`, `rev`, `levels`, `levels_state`, `note`, `line`, `column`, `binding`, `symbol_ord`, `anchor` (module qpath, RON path, category) |
@@ -150,7 +150,7 @@ spec-writer:
 
 ## Risks
 
-Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `CODE_INDEX_FORMAT` (TE-2). The stored `ast_hash` feeds 7a's read `sync` (equal bytes, equal hash: `bundle-bindings.md` "Description and interactions"); `verify` and the lock writers still hash afresh (05 s5.2). Each refresh hashes every code file; DB growth unpruned. Pilots hold no marker.
+Incremental ≠ rebuild via cross-file facts, manifests, `[ids]`, an unbumped `CODE_INDEX_FORMAT` (TE-2). The stored `ast_hash` (after 5b the level digests; 2026-10-12, `lock-levels.md` "Level-aware verify") feeds 7a's read `sync` (equal bytes, equal hash: `bundle-bindings.md` "Description and interactions"); `verify` and the lock writers still hash afresh (05 s5.2). Each refresh hashes every code file; DB growth unpruned. Pilots hold no marker.
 
 ## Out of scope
 

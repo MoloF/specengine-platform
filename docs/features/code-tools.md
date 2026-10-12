@@ -61,7 +61,7 @@ WA-16, Q5. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--co
 - **Text**: 4a's row lines, `ok` rows too (class `-`), hints, the summary `verify --node <REF>[ --symbol <QPATH>]: ` + 4a's after `verify: `; cut at `OUTPUT_CAP_CHARS`, then `[truncated: <k> rows not shown; narrow with --symbol QPATH]`.
 - **JSON**: 4a's, rows the printed ones; `node` (holders' IDs), `symbol` after `base`; `omitted` `{rows}` last; the three null without `--node`.
 
-**Row keys**, every verify (SW refinement: `--node` rows equal a full run's): `ast_hash` after `compared`, the item's v2 hash on disk for an `item` row whose item exists error-free, else null: level 1 equal: E's `ast_hash` (same bytes and recipe; nothing hashed, 4a's cascade unchanged); else `hash_item` over this run's parse; never the index's column (05:162). Each `markers` item `{line, rev, id_state, rev_state}` (`code-bindings.md`).
+**Row keys**, every verify (SW refinement: `--node` rows equal a full run's): `ast_hash` after `compared`, the item's v2 hash on disk for an `item` row whose item exists error-free, else null: level 1 equal: E's `ast_hash` (same bytes and recipe; nothing hashed, 4a's cascade unchanged); else `hash_item` over this run's parse; never the index's column (05:162). 2026-10-12, `lock-levels.md` "Level-aware verify": format 2 has no `ast_hash`; 5b's row key `levels` (`{lock, markers, changed}`) follows `compared`, and this key, the JSON below and RD-6 are restated over the level digests before 6b's code. Each `markers` item `{line, rev, id_state, rev_state}` (`code-bindings.md`).
 
 ```
 check | code_ahead code_changed | LAW-BOUND | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally impl_item

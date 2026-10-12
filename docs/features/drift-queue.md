@@ -41,7 +41,7 @@ WA-3, Q2. Per node (canonical, or the gone ID): `code_ahead`, `spec_ahead`, `con
 WA-4. A `proposals` row, kind `drift`: `target_id` the node (or gone ID); `target_path` `spec.lock` (root-relative: what approve writes); `target_ids` `[target_id]`; the place (ADR-0032), `base_commit` `HEAD`; `severity`; `summary` its rows' distinct `state[ category]` by key, `, `-joined (`conflict, code_ahead code_changed`; SW refinement: the inbox line); `author`, `task_id` as the intake's; `diagnostics` `[]`; `drift`, `drift_hash` below; all else NULL.
 
 - `drift`: compact JSON `{"rows":[<row>…],"more":<n>}`, each row a `spec-verify.md` "Output" `rows` item (`pre_existing` `true`), the first 64 (`DRIFT_ROWS_MAX`) by key, `more` the rest (SW refinement).
-- `drift_hash` = `b3_hash("specengine-drift/v1" LF <compact JSON>)`, one array per non-`ok` row (all), by key: `[node, relation, file, kind, symbol, item_kind, state, category, detail, marker_revs, lock_rev, lock_spec_hash, lock_ast_hash, lock_file_blob, rev, norm_hash, ast_hash, file_blob]`; `marker_revs` the markers' `@N` ascending, `null` (unversioned) first; `lock_*` the entry's or `null`; the last four the node's revision and `norm_hash`, the item hash and blob OID at `HEAD`, or `null`. Not hashed: lines, times, the entry's `commit` and `verified_at`, the `HEAD` commit, the mode. A moved marker line is the same drift; a further code change is new drift.
+- `drift_hash` = `b3_hash("specengine-drift/v1" LF <compact JSON>)`, one array per non-`ok` row (all), by key: `[node, relation, file, kind, symbol, item_kind, state, category, detail, marker_revs, lock_rev, lock_spec_hash, lock_code, lock_file_blob, rev, norm_hash, code, file_blob]`; `marker_revs` the markers' `@N` ascending, `null` (unversioned) first; `lock_*` the entry's or `null`, `lock_code` its code fields as `render_lock` writes them, one string (format 2: `levels` through `body_bytes`; 2026-10-12, `lock-levels.md` Q7, in place of `lock_ast_hash`); the last four the node's revision and `norm_hash`, `code` (the same fields as verify computed them at `HEAD`, rendered alike) and the blob OID at `HEAD`, or `null`. Not hashed: lines, times, the entry's `commit` and `verified_at`, the `HEAD` commit, the mode. A moved marker line is the same drift; a further code change is new drift.
 
 ### Kind family
 
@@ -190,7 +190,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 ## Dependencies and ordering
 
 - **Needs**: slice 1 `code-refs` (walk, binding; its code uncommitted); 3 `spec-lock` (accept as one function taking a consent closure and extra trailers; the gone-node drop); 4a `spec-verify` (the judge, "Base"); 4b `rev-discipline` (schema 7, `approve --editorial`, 47 review keys). All drafts, no code.
-- **Order**: 1 -> 3 -> 4a -> 4b -> 4c; this spec and ADR-0045 now, code after 4b. **Independent**: 8a; 8b (its tests cover a drift approve); 5b (`drift_hash` uses row fields, not lock bytes). **Later**: Phase 4 screens; slice 9.
+- **Order**: 1 -> 3 -> 4a -> 4b -> 4c; this spec and ADR-0045 now, code after 4b. **Independent**: 8a; 8b (its tests cover a drift approve). **Not independent of 5b** (2026-10-12, `lock-levels.md` Q7): `drift_hash` takes the entry's code fields as rendered, and a rebase commit settles no item (completion needs `Proposal:` and `Lock:`). **Later**: Phase 4 screens; slice 9.
 
 ## Implementation
 

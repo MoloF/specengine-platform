@@ -44,7 +44,7 @@ Q7, WA-11.
 
 - **REV**: a leading `-` or a control character: exit 2 before any git call. Then `git rev-parse --verify --end-of-options <REV>^{commit}`; not a commit: exit 1 ``spec: --since `<REV>` is not a commit``.
 - **Compared**: REV's tree with the working tree on disk under the `[code]` roots and excludes, untracked files included, `.gitignore` and the git index never read (as `spec check --changed`, `spec-check-git.md` "The changed check"). `spec.lock` is not involved: drift since verification is `spec verify`'s question.
-- **Reads**: REV's `ls-tree -r -z` once; disk OIDs from one `hash-object --no-filters --stdin-paths`. Equal OID: unchanged. A differing path: REV's blob from one `cat-file --batch`, parsed; each item's `hash_item` (v2) against the index's `ast_hash`; a RON file whole.
+- **Reads**: REV's `ls-tree -r -z` once; disk OIDs from one `hash-object --no-filters --stdin-paths`. Equal OID: unchanged. A differing path: REV's blob from one `cat-file --batch`, parsed; each item's `hash_item` (v2) against the index's `ast_hash`; a RON file whole. 2026-10-12, `lock-levels.md`: after 5b the item comparison uses 5a's level digests against the index's (6a's columns), restated before 7b's code.
 - **Delta**: `added` (disk only), `removed` (REV only), `changed` (both, the hash differs), each `{file, symbol, item_kind, line}` (`line` the disk's, REV's for removed), by file bytes, line, symbol; an equal-hash edit (a comment, formatting) is no change; `renamed` null until 5c.
 
 ### Output
