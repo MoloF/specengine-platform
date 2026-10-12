@@ -134,7 +134,7 @@ spec-writer:
 CLI, lock, verify, ADR. `--deep`, a `qpath` discriminator, the suffix index (slice 6); per-branch ratios (Phase 4); following RON or a RON shape level; ast-grep user anchors; MCP `check_binding`; UI. Level 2 (Q5).
 
 - **5b `lock-levels`** (drafted 2026-10-12: `docs/features/lock-levels.md`, ADR-0050): lock format 2, level-aware verify, `spec lock rebase`.
-- **5c `anchor-states`** (after 5b, reading format 2's stored `body_hash`, fingerprints and `body_bytes`: `lock-levels.md` "Format 2"): `EXACT`/`MOVED`/`AMBIGUOUS`/`LOST` per entry and run, never stored; candidates by equal `body`, then `skeleton` in the entry's file, ties by `quote`; a mutual unique match only; trivial bodies and RON `LOST`.
+- **5c `anchor-states`** (after 5b, reading format 2's stored `body_hash`, fingerprints and `body_bytes`: `lock-levels.md` "Format 2"): `EXACT`/`MOVED`/`AMBIGUOUS`/`LOST` per entry and run, never stored; candidates by equal `body`, then `skeleton` in the entry's file, ties by `quote`; a mutual unique match only; trivial bodies and RON `LOST`. Drafted 2026-10-12: `docs/features/anchor-states.md` (candidates: marker bindings of the entry's node and relation).
 
 ## Open
 

@@ -19,6 +19,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
+- [docs/features/anchor-states.md](features/anchor-states.md) anchor-states: a renamed or moved binding judged against its old lock entry · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
 - [docs/features/bevy-roles.md](features/bevy-roles.md) bevy-roles: framework roles of Rust items in the code index, opt-in [code] frameworks · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft

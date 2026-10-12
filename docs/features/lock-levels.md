@@ -203,7 +203,7 @@ spec-writer:
 
 ## Out of scope
 
-5a's functions; 5c's anchor states (fingerprints stored, never matched; `moved` stays null); `--deep`; rebasing `norm_recipe`; regen across formats; an MCP tool, UI or plugin command. **8b** (`tested-evidence.md`): its `[[tested]]` blocks make format 3; a rebase re-derives or drops them.
+5a's functions; 5c's anchor states (fingerprints stored, never matched; `moved` stays null; drafted 2026-10-12, `anchor-states.md`, which overrides "Level-aware verify"'s `path` line at its shipping); `--deep`; rebasing `norm_recipe`; regen across formats; an MCP tool, UI or plugin command. **8b** (`tested-evidence.md`): its `[[tested]]` blocks make format 3; a rebase re-derives or drops them.
 
 ## Open
 
