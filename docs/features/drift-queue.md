@@ -168,7 +168,7 @@ Canon contradictions (ADR-0041, ADR-0042, `#control`, `spec-lock.md` WA-12, `rev
 
 ## Out of scope
 
-A daemon, watcher or CI raising items (06:118); drift screens, UI staging, a `follow_up` stage key (Phase 4); the Health drift row (slice 9); several REFs in one item; a hand accept settling items; `@assumes` tasks (06:103); follow-ups for other kinds; 5b `spec lock rebase` and 8b `[[tested]]` (kept: approve shares accept's function).
+A daemon, watcher or CI raising items (06:118); drift screens, UI staging, a `follow_up` stage key (Phase 4); the Health drift row (slice 9); several REFs in one item; a hand accept settling items; `@assumes` tasks (06:103); follow-ups for other kinds; 5b `spec lock rebase`; 8b `[[tested]]` (`tested-evidence.md`: approve shares accept's function, so a block is kept, a gone node's dropped, an editorial approve refreshes its `spec_hash`; whichever of 4c and 8b ships second tests approve).
 
 ## Open
 
@@ -190,7 +190,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 ## Dependencies and ordering
 
 - **Needs**: slice 1 `code-refs` (walk, binding; its code uncommitted); 3 `spec-lock` (accept as one function taking a consent closure and extra trailers; the gone-node drop); 4a `spec-verify` (the judge, "Base"); 4b `rev-discipline` (schema 7, `approve --editorial`, 47 review keys). All drafts, no code.
-- **Order**: 1 -> 3 -> 4a -> 4b -> 4c; this spec and ADR-0045 now, code after 4b. **Independent**: 8a; 8b (its tests cover a drift approve). **Not independent of 5b** (2026-10-12, `lock-levels.md` Q7): `drift_hash` takes the entry's code fields as rendered, and a rebase commit settles no item (completion needs `Proposal:` and `Lock:`). **Later**: Phase 4 screens; slice 9.
+- **Order**: 1 -> 3 -> 4a -> 4b -> 4c; this spec and ADR-0045 now, code after 4b. **Independent**: 8a; 8b (the later of 4c and 8b tests a drift approve). **Not independent of 5b** (2026-10-12, `lock-levels.md` Q7): `drift_hash` takes the entry's code fields as rendered, and a rebase commit settles no item (completion needs `Proposal:` and `Lock:`). **Later**: Phase 4 screens; slice 9.
 
 ## Implementation
 

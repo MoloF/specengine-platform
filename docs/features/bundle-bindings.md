@@ -20,7 +20,7 @@ Delivered: each binding of the nodes read, with its `sync`, in the call the agen
 
 - **An agent** gets, in `get_context_bundle`, `get_node`, `get_tree` or `get_task`, the code bound to its nodes and each binding's `sync`. **The owner**: the same in the daemon's JSON (screens: Phase 4).
 - **Freshness** (WA-2): a read printing code data (bundle, `show --bindings`, tree, `task show`, 7b's `impact`) refreshes the md index, then 6a's code index (`symbol-index.md` "Cache key and cross-file pass"), when `[code]` exists; `show` without `--bindings`, `search`, `graph` never walk code. Amends `symbol-index.md` WA-6, RD-11.
-- **Sync** (Q5; WA-3..WA-5): 4a's pure core judge (`spec-verify.md` "States") over the refreshed index rows, `spec.lock` (slice 3's reader) and the read's own parse for R, H. An item compares the indexed `ast_hash` with the lock's (no git); a locked `module` or `ron` row takes its blob OID from one `git hash-object --no-filters --stdin-paths` per read (`GitEnv::child_vars`). 2026-10-12, `lock-levels.md` "Level-aware verify": after 5b an item compares the indexed level digests of (the lock's ∪ the markers' levels) minus `path` with the lock's, a `module` or `ron` row whose blob differs is judged by levels too (its digests from 6a's index or the read's own parse), and a format-1 lock gives `sync` unknown with the rebase note. Plain state: no base, no Pre-existing, no `verified` (8b, Q10).
+- **Sync** (Q5; WA-3..WA-5): 4a's pure core judge (`spec-verify.md` "States") over the refreshed index rows, `spec.lock` (slice 3's reader) and the read's own parse for R, H. An item compares the indexed `ast_hash` with the lock's (no git); a locked `module` or `ron` row takes its blob OID from one `git hash-object --no-filters --stdin-paths` per read (`GitEnv::child_vars`). 2026-10-12, `lock-levels.md` "Level-aware verify": after 5b an item compares the indexed level digests of (the lock's ∪ the markers' levels) minus `path` with the lock's, a `module` or `ron` row whose blob differs is judged by levels too (its digests from 6a's index or the read's own parse), and a format-1 lock gives `sync` unknown with the rebase note. Plain state: no base, no Pre-existing; a per-node `tested` (`tested-evidence.md` "Surfaces", no level number) added by whichever of 7a and 8b ships second (Q10).
 - **Crates**: core the pure selection, order and fit, 4a's judge reused; store queries over 6a's tables by node ID (never a walk) and the blob call; CLI `bundle`, `show`, `tree`, `package`, verify's delta; model the row type, replacing `PackageBinding {}`; MCP `with`, mirrors; HTTP `with=bindings`; UI types only (Q14). No new crate or dependency. Relations are the marker vocabulary, never kinds (WA-17).
 - **Unchanged**: every read's exit; verify's rows and verdict; `spec check`, gate, hook, CI; `INDEX_FORMAT`, queue schema; `TASK_PACKAGE_SCHEMA_VERSION` 1 (a promised key filled); `graph`, `search`. **Writes**: the data directory only.
 - **Overridden lines**, fixed at shipping (SW-2): `spec-cli-bundle.md` layers 5, 9 and "Not yet"; `task-package.md`'s "`bindings` `[]` until Phase 3"; `mcp-read.md` `with`'s enum; 05:215, 07:26, 07:78.
@@ -140,7 +140,7 @@ The fit re-estimates the whole body per candidate (3 000: 1.13 s, `spec-cli-bund
 
 ## Out of scope
 
-`verified`, evidence levels in reads (8b, Q10); `bindings.moved` (5c); level-aware sync (5b); layers B, C; a call-graph radius; the `spec index` delta; open-proposal counters; `show --history`; `--task`, `get_context_bundle {task_id}`, the `bundles` log, `compact`; 6b's tools; UI screens (Phase 4); `unbound`, Health (9); writing markers; the gate's file-to-node map. 7b: `impact`, `delta.symbols`.
+evidence levels (none: `tested-evidence.md` Q5); `tested` (Q10, the later of 7a and 8b); `bindings.moved` (5c); level-aware sync (5b); layers B, C; a call-graph radius; the `spec index` delta; open-proposal counters; `show --history`; `--task`, `get_context_bundle {task_id}`, the `bundles` log, `compact`; 6b's tools; UI screens (Phase 4); `unbound`, Health (9); writing markers; the gate's file-to-node map. 7b: `impact`, `delta.symbols`.
 
 ## Open
 
@@ -153,7 +153,7 @@ The fit re-estimates the whole body per candidate (3 000: 1.13 s, `spec-cli-bund
 | Q5 sync | 4a's plain state over index, lock, parse | the marker's rev hides `code_ahead` |
 | Q6 code fails | degrade ("Degrade") | exit 2: one bad file breaks every read |
 | Q9 ADR | ADR-0046 | the canon contradicts four interfaces |
-| Q10 `verified` | 8b | 7 waits two slices |
+| Q10 `verified` | per-node `tested`, added by whichever of 7a and 8b ships second (`tested-evidence.md`) | 7 waits two slices |
 | Q11 package | "Task package" | a second worktree walked per `get_task` |
 | Q12 tree | own rows with `[code]` | drift needs a second call |
 | Q14 UI | provisional types only | rows typed `BundleItem[]` |
@@ -167,7 +167,7 @@ WA-n: the analysis' working answers (2026-10-10), below; "SW refinement": the sp
 ## Dependencies and ordering
 
 - **Needs**: 1 `code-refs` (built, unshipped) -> 3 `spec-lock` (the reader) -> 4a `spec-verify` (judge, row key, blob call) -> 6a `symbol-index` (tables, refresh, signature); [6b optional, spends `INSTRUCTIONS` room first] -> 7a -> 7b.
-- **Order**: this spec and ADR-0046 now, code after 6a; 6c first if AC-10's no-op timing fails. **Independent**: 4b, 4c, 8a. **Later**: 5b, 5c, 8b (`verified` here), Phase 4.
+- **Order**: this spec and ADR-0046 now, code after 6a; 6c first if AC-10's no-op timing fails. **Independent**: 4b, 4c, 8a. **Later**: 5b, 5c, Phase 4. **Either side**: 8b (`tested` here, by the later).
 
 ## Implementation
 

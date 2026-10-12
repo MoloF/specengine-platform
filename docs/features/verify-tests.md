@@ -18,7 +18,7 @@ Delivered (8a): `[verify] tests`, the project's runner as an argv template; `spe
 
 - **The owner** runs it on a terminal after committing. **An agent** never starts it: no MCP tool, route, UI button, hook, CI step or role (ADR-0044); `report_run` changes nothing (07:38). **A project** writes its runner; SpecEngine names none, parses no output; the pipeline never runs a pilot's suite (WA-17).
 - **Crates**: core the two `[verify]` keys, expansion, selection, verdicts (pure); store the event (`record_verify_tests`, as `record_gate_observed`), a whole-tree status read; CLI the command, the runner. `libc` =0.2.189 joins the CLI, Unix only (Q4, owner-approved); nothing else.
-- **Unchanged**: `spec check`, the gate, task states, claims, `runs`, `INDEX_FORMAT`, the queue schema, MCP, HTTP, UI, `.githooks`, CI; `spec.lock` untouched. **Writes**: the data directory (index, event); the command's own writes are the project's (into the tree: step 10).
+- **Unchanged**: `spec check`, the gate, task states, claims, `runs`, `INDEX_FORMAT`, the queue schema, MCP, HTTP, UI, `.githooks`, CI; `spec.lock` untouched (8b writes it: `tested-evidence.md`). **Writes**: the data directory (index, event); the command's own writes are the project's (into the tree: step 10).
 - **Overridden live-spec lines**, fixed at shipping: 05:75, 05:95, 05:196, 05:204; 06:140, 06:160; 07:104 and 07 s5's example.
 
 ## Data
@@ -99,7 +99,7 @@ WA-9, WA-15. A test: `passed` (exit 0 in time), `failed` (non-zero or a signal),
 
 ### Event
 
-WA-11, Q3. One `verify.tests` per run that started a command (verdicts `verified`, `unverified`, `changed`, `refused`, `interrupted`), in the slug's queue, written last as `gate.observed` is (`gate.md` "Event": one `Immediate` transaction, the build's schema, streamed, not in the UI's closed list); a failure prints `warning:`, exit unchanged. Payload keys in order: `task` (or null), `worktree`, `branch`, `commit`, `command` (the template), `timeout`, `verdict`, `probes` (`argv`, `exit`, `signal`, `outcome`, `output_hash`), `tests` run (`file`, `symbol`, `nodes`, `argv`, `exit`, `signal`, `outcome`, `output_hash` `b3:`, `tail` or null), `nodes` (`id`, `verdict`, `state`), `lock_commit` (null until 8b), `by` (the committer identity).
+WA-11, Q3. One `verify.tests` per run that started a command (verdicts `verified`, `unverified`, `changed`, `refused`, `interrupted`), in the slug's queue, written last as `gate.observed` is (`gate.md` "Event": one `Immediate` transaction, the build's schema, streamed, not in the UI's closed list); a failure prints `warning:`, exit unchanged. Payload keys in order: `task` (or null), `worktree`, `branch`, `commit`, `command` (the template), `timeout`, `verdict`, `probes` (`argv`, `exit`, `signal`, `outcome`, `output_hash`), `tests` run (`file`, `symbol`, `nodes`, `argv`, `exit`, `signal`, `outcome`, `output_hash` `b3:`, `tail` or null), `nodes` (`id`, `verdict`, `state`), `lock_commit` (null until 8b: `tested-evidence.md` "The run's write"), `by` (the committer identity).
 
 ### Output
 
@@ -115,7 +115,7 @@ node R-14: no runnable test
 verify --tests: unverified: 3 nodes (0 verified, 2 failed, 0 not verifiable, 1 no runnable test); 3 tests (1 passed, 1 failed, 0 timed out, 1 not run)
 ```
 
-**JSON** (exits 0, 1, 2 after discovery), every key, absent null, no timing, output hash, tail or worktree; keys in order: `task`, `branch`, `commit`, `command`, `timeout`, `verdict`, `counts` (`nodes`: `verified`, `failed`, `not_verifiable`, `no_runnable_test`; `tests`: `passed`, `failed`, `timed_out`, `not_run`; `probes`), `tests` (`file`, `kind`, `symbol`, `nodes`, `argv` or null, `outcome`, `exit`, `signal`, `reason`), `nodes` (`id`, `verdict`, `state`), `lock` (null until 8b), `cannot`, `notes`.
+**JSON** (exits 0, 1, 2 after discovery), every key, absent null, no timing, output hash, tail or worktree; keys in order: `task`, `branch`, `commit`, `command`, `timeout`, `verdict`, `counts` (`nodes`: `verified`, `failed`, `not_verifiable`, `no_runnable_test`; `tests`: `passed`, `failed`, `timed_out`, `not_run`; `probes`), `tests` (`file`, `kind`, `symbol`, `nodes`, `argv` or null, `outcome`, `exit`, `signal`, `reason`), `nodes` (`id`, `verdict`, `state`), `lock` (null until 8b: `tested-evidence.md` "The run's write"), `cannot`, `notes`.
 
 ### spec verify --task
 
@@ -163,8 +163,8 @@ The probe triggers a build (600 s may be short cold); it catches "nothing matche
 
 ## Out of scope
 
-- **8b `tested-evidence`** (Q1, Q2, Q7), to draft. Lock `format` 3, only when a block exists, after 5b's format 2 (2026-10-12, `lock-levels.md`): per node `[[tested]]` (`node`, `rev`, `spec_hash`, `bound_hash`, `tests`, `commit`, `verified_at`); `bound_hash` = BLAKE3 over every binding naming the node, in lock key order with its `ast_hash` or `file_blob`, from `HEAD`'s blobs (format 2 has no `ast_hash`: 8b's draft names the code fields it takes). A run adds or refreshes a verified node's block and removes a failed node's (amends ADR-0041), nothing else, never a `[[binding]]`; an equal block stays byte-identical. Before writing, `HEAD`, branch, lock bytes, status re-read (changed: nothing written, exit 1); `commit_only` of `spec.lock`, hooks run: `spec: verify tests <IDs>`, trailers `Lock:` per node, `Lock-mode: tests`, `Decided-by:`, `Test-command:`. Accept keeps blocks, as does a `drift` item's approve, which runs accept's function (4c, `drift-queue.md`; 8b's tests cover it); a gone node's accept drops its block; regen merges per node (later `verified_at`, then bytes); the editorial refresh sets the block's `spec_hash` too, so since 4b moved it into the apply commit (ADR-0043), an editorial `spec approve` refreshes `[[tested]]`. `verified` per read: the block's `rev`, `spec_hash` and `bound_hash` current, else `stale <spec_changed|code_changed>`, `node_gone`, `unverifiable <state>`: a `tested` section of plain verify, no finding, no exit effect; 8b also adds it to 7a's reads (bundle, show, tree, package). Criteria: the analysis' RD-15..RD-18.
-- Batching; running module or RON bindings; a dry run; MCP, HTTP, UI surfaces; package keys; `verified` in reads (8b, not 7: `bundle-bindings.md` Q10); Health (9b `health-drift`: non-`verified` entries as `drift.tested`, added by whichever of 8b and 9b ships second; 2026-10-10); UI (Phase 4); the rest of `impl_status`; parsing output; `tests_reaching`; `needs:` (05:211); CI writes; a watcher.
+- **8b `tested-evidence`** (`tested-evidence.md`; Q1, Q2, Q7): per-node `[[tested]]` blocks, lock `format` 3 only when one exists; the write after step 10, under this question, in its own commit; the per-node `tested` state; blocks under accept, `--editorial`, a gone node, regen and `spec lock rebase`. After 4a, 8a, 5b.
+- Batching; running module or RON bindings; a dry run; MCP, HTTP, UI surfaces; package keys; `tested` in reads and Health (8b "Surfaces": whichever of 8b and 7a or 9b ships second); UI (Phase 4); the rest of `impl_status`; parsing output; `tests_reaching`; `needs:` (05:211); CI writes; a watcher.
 
 ## Open
 

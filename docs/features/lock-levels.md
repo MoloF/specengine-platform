@@ -203,7 +203,7 @@ spec-writer:
 
 ## Out of scope
 
-5a's functions; 5c's anchor states (fingerprints stored, never matched; `moved` stays null); `--deep`; rebasing `norm_recipe`; regen across formats; an MCP tool, UI or plugin command. **8b `tested-evidence`** (drafted next): its `[[tested]]` blocks raise the format to 3 only when a block exists.
+5a's functions; 5c's anchor states (fingerprints stored, never matched; `moved` stays null); `--deep`; rebasing `norm_recipe`; regen across formats; an MCP tool, UI or plugin command. **8b** (`tested-evidence.md`): its `[[tested]]` blocks make format 3; a rebase re-derives or drops them.
 
 ## Open
 

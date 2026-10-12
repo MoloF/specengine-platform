@@ -40,12 +40,12 @@ WA-8, Q7. A row of 9a's shape (`health-code.md` "The document"), its `rows` and 
 - `counts`: verify's, verbatim (plain: `pre_existing` 0). `rows`: verify's without `ok`, its key order and objects verbatim; a `cannot_verify` row (class `cannot`) is a row, not the row state `cannot`.
 - `notes`: verify's, but the mode note (Health has no mode).
 - Left out (WA-8): `mode`, `verdict`, `base`, `cascade`, `delta`, the `hint:` lines; the word `blocked` never appears.
-- `tested` (8b): present only once 8b has shipped: 8b's `tested` entries not `verified`, in its order and shape; added by whichever of 8b and 9b ships second, with `daemon-keys.json`.
+- `tested` (8b, `tested-evidence.md` "Surfaces"): plain verify's `tested` entries not `verified`, verbatim, by node bytes; present only once 8b has shipped; added by whichever of 8b and 9b ships second, with `daemon-keys.json`.
 - State: `measured` when verify answers without a run cause (no `spec.lock`: its `unlocked` rows); `off` with no `[code]` (code-refs' sentence less `spec: `); `cannot` on any other run cause of plain verify (`spec-verify.md` "Verdict and exit": a config error, `[verify]`'s too; a walk gap; no worktree, no git, a git failure; `spec.lock` invalid, unmerged, another format or recipe; HOME, the data directory), `causes` its `cannot:` lines verbatim, `counts` and `rows` null, never 0.
 
 ### Text
 
-Rows' lines in row order 4, 5, 6, their summaries in that order, `code:`, the last line unchanged (9a "Text"). Row 6: each row as verify's text line prefixed `drift | ` (never `pre-existing `); with 8b, its `tested` lines likewise; the summary `drift: <f> fix, <c> check, <k> cannot, <o> ok; <s> skipped` (verify's, less verdict, mode, cascade):
+Rows' lines in row order 4, 5, 6, their summaries in that order, `code:`, the last line unchanged (9a "Text"). Row 6: each row as verify's text line prefixed `drift | ` (never `pre-existing `); with 8b, verify's `tested` lines likewise (`drift | tested | <state>[ <category>] | <node>`); the summary `drift: <f> fix, <c> check, <k> cannot, <o> ok; <s> skipped` (verify's, less verdict, mode, cascade):
 
 ```text
 drift | fix | conflict | LAW-STEP | implements | crates/tally/src/counter.rs | item crates/tally::counter::Tally::step function_item
