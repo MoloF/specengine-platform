@@ -1,6 +1,6 @@
-//! A code tree's Rust items and modules named at once (task spec
-//! `code-refs`, "Binding rules": a bound item gives its `qpath` and its
-//! ambiguity, shown, not resolved). The units and paths of
+//! A code tree's Rust items and modules named at once
+//! (`docs/canon/code-bindings.md` "Rust binding": a bound item gives its
+//! `qpath` and its ambiguity, shown, not resolved). The units and paths of
 //! `docs/canon/code-identity.md` "Units and `qpath`" over the caller's
 //! package tables, then one ambiguity per item, the first that applies — `path_attribute` (its file is the
 //! target of a `#[path]` attribute and in no shared unit), `unrooted` (its

@@ -1355,10 +1355,10 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     let plugin: Value = serde_json::from_str(plugin).expect("plugin.json");
     let market: Value = serde_json::from_str(marketplace).expect("marketplace.json");
     // docs/features/kind-decision.md W24: 0.5.0; kind-amendment W36: 0.6.0;
-    // norm-hash: 0.7.0.
-    if plugin["version"] != "0.7.0" {
+    // norm-hash: 0.7.0; spec-lock: 0.7.1.
+    if plugin["version"] != "0.7.1" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.7.0",
+            "plugin.json: version {}, not 0.7.1",
             plugin["version"]
         ));
     }
@@ -1428,6 +1428,6 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.7.0\"", "\"0.2.0\"", 1);
-    assert_names(&r2_problems(&older, &market), "not 0.7.0", "0.2.0");
+    let older = plugin.replacen("\"0.7.1\"", "\"0.2.0\"", 1);
+    assert_names(&r2_problems(&older, &market), "not 0.7.1", "0.2.0");
 }

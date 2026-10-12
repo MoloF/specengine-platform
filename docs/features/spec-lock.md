@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
-scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures]
-ref: Phase 3 plan 2026-10-10, slice 3 (WA-1..WA-16; Q1-Q3 decided under the owner's pre-approval, review open), Q4 from `spec-verify.md` Q3; 05 s3.5, s5.3; 06 s4, s6; 07 s2; 08 s2
+status: shipped
+scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-code, plugin, fixtures]
+ref: Phase 3 plan 2026-10-10, slice 3 (WA-1..WA-16; Q1-Q4 and the review's points decided under the owner's pre-approval, review open), Q4 from `spec-verify.md` Q3; 05 s3.5, s5.3; 06 s4, s6; 07 s2; 08 s2; Rust 3 iterations, review accepted
+shipped: 2026-10-12
 adrs: [ADR-0041]
 ---
 
@@ -10,194 +11,116 @@ adrs: [ADR-0041]
 
 ## Why
 
-Nothing ties a node's `norm_hash` at revision R to its bound items' AST hashes at a commit: slice 4 cannot tell `ok` from `code_ahead` (05 s5.3), slice 8 has nowhere to write a passing run (06 s6), and "rewrote the meaning, coverage stayed green" (05 s3.5) cannot be ruled out.
-
-Delivered: a canonical, committed `<root>/spec.lock`; `spec lock accept REF [--editorial]` (committed bytes, a commit with provenance each) and `spec lock regen` (a merge resolver, no hashing); ADR-0041 names the writers (`architecture.md#apply`, listed in `architecture-code.md#spec-lock`). Needs slices 1 (`code-refs.md`), 2 (`norm-hash.md`).
+Nothing tied a node's `norm_hash` at revision R to its bound items' AST hashes at a commit: slice 4 could not tell `ok` from `code_ahead` (05 s5.3), slice 8 had nowhere to write a passing run (06 s6), and "rewrote the meaning, coverage stayed green" (05 s3.5) could not be ruled out. Delivered: a canonical, committed `<root>/spec.lock`; `spec lock accept REF [--editorial]` (committed bytes, one verified commit with provenance each) and `spec lock regen` (a merge resolver, no hashing). ADR-0041 names the writers (`architecture.md#apply`, `architecture-code.md#spec-lock`). Built on slices 1 (`code-refs.md`) and 2 (`norm-hash.md`).
 
 ## Description and interactions
 
-- **The owner**, on a terminal, after committing: `spec lock accept R-12` (a list, `[y/N]`, a commit); after a merge conflicting in `spec.lock`, `spec lock regen`.
-- **An agent** never writes it: no MCP tool, route or UI stage writes it (WA-12, amended by ADR-0045: a `drift` queue item, raised by `spec propose drift` or MCP `report_drift`, only asks the owner, whose `spec approve` runs this accept: `drift-queue.md`); plugin roles say so (WA-16). **Not a spec file** (WA-1): a proposal would let an agent write hashes as its text.
-- **Crates** (WA-13): core the model (parse, render, both merges; pure, pinned `toml`); store two git reads beside `WorktreeGit` (a blob OID at a commit, a path's unmerged stages); CLI the commands over slices 1-2 (walk, binding, `hash_item`, `norm_input`, `revision`). No new crate or dependency. **Unchanged**: plain `spec check` never reads the lock (4b's rule reads `HEAD`'s and the staged one: `rev-discipline.md`); hook triggers, CI, `INDEX_FORMAT`, MCP, HTTP, UI; no `spec lock show`; no `[code]` here, so no lock (WA-15).
-- **Spelling** `spec lock regen`, not 05's `--regen`: owner-confirmed writes are verb subcommands with their own flags, exits and `require_terminal` name (`--staged` flags `round answer`, never a parent), so a bare `spec lock` stays a usage error.
-- **Overridden live-spec lines**, fixed at shipping (SW-3; the convention binds canon, not planning specs): 05:20 "apply_proposal — one door" over `spec.lock`; 05:95 `owner | ci` (CI writes nothing); 05:99 "Generated", `--regen`; 05:103, 07:105 `spec bump --editorial` (`spec lock accept --editorial`, and 4b's `spec approve --editorial` in its apply commit, ADR-0043; `bump` never writes the lock); 07:106 `ID` -> `REF`, `regen`; 06:121 "lock updated" = the owner's accept (Q3).
+Canon: `docs/canon/spec-lock.md`, `spec-lock-accept.md`, `architecture-code.md#spec-lock`; the core, store, CLI, code READMEs; `plugin.md`, `plugin-files.md` (0.7.1). An agent never writes the lock: no MCP tool, route or UI stage (WA-12; a `drift` item's approve runs this accept: ADR-0045, `drift-queue.md`); the plugin's roles and `feature` skill say "or the lock" (WA-16). Not a spec file (WA-1). Unchanged: plain `spec check`, hook triggers, CI, `INDEX_FORMAT`, MCP, HTTP, UI; no new crate or dependency; this repository has no `[code]`, so no lock (WA-15). Spelling `spec lock regen`, not 05's `--regen`: owner-confirmed writes are verb subcommands with their own exits and `require_terminal` name; a bare `spec lock` is a usage error. Live-spec lines fixed: 05 s3.5 (`owner | ci`, "Generated", `--regen`, a format pointer, the lock half of `bump --editorial`), 06:121, 06:140, 07:106, 08:41, 08:44; left: 05:20's diagram, 07:105 and the rest of 05:103 (`bump`, slice 4b).
 
 ## Data
 
 ### The file
 
-WA-4. One per root, `<root>/spec.lock` (`architecture.md#layout`), rendered by SpecEngine, never by `toml`'s serializer:
-
-```toml
-# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit
-format = 1
-norm_recipe = "specengine-norm/v1"
-code_recipe = "specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15"
-
-[[binding]]
-node = "R-12"
-rev = 3
-spec_hash = "b3:9f2c<60 hex>"
-relation = "implements"
-file = "crates/game/src/stamina.rs"
-kind = "item"
-symbol = "game::stamina::regen_system"
-item_kind = "function_item"
-ast_hash = "b3:41aa<60 hex>"
-file_blob = "5f1c9e<34 hex>"
-commit = "a0cea48<33 hex>"
-verified_by = "owner"
-verified_at = "2026-10-10"
-```
-
-- `code_recipe`: `recipe_header()`'s parts (`RECIPE`, `TREE_SITTER_RUST_VERSION`, `abi_version()`) as `<RECIPE> tree-sitter-rust/<version> abi/<n>`; `norm_recipe` = `NORM_RECIPE`.
-- Bytes: keys in the order shown; blocks by key (below); an empty line before each block; LF, a final LF; UTF-8, no BOM; basic strings escaping only `"`, `\` (`\"`, `\\`) and U+0000-U+001F, U+007F (`\b \t \n \f \r`, else `\u00XX`); full OIDs; `verified_at` the command's UTC date.
-- Reader (any TOML layout): exit 2 `spec.lock:<line>: <message>` on another `format`; an unknown, missing or repeated key; a duplicate binding key; a wrong form (`b3:` + 64 lowercase hex; a 40- or 64-hex OID; `rev` 1-999 999 999; a known relation, kind; `item_kind`, `ast_hash` iff `kind = "item"`; a clean relative `file`; `verified_by = "owner"`, never a test run, whose evidence is 8b's `[[tested]]`; a date); another build's recipes (both named).
+`docs/canon/spec-lock.md` "The file" (WA-4).
 
 ### Entry
 
-WA-5. One `[[binding]]` per lockable marker binding; markers giving one key are one entry; mentions never.
-
-| Key | Value |
-|---|---|
-| `node` | the canonical cited ID (`slug/AC-07` if feature-scoped), never an alias |
-| `rev`, `spec_hash` | the node's revision R (an `unversioned` marker is locked at R) and `norm_hash`, at the commit |
-| `relation`, `file` | `implements`, `verifies`, `configures`, `assumes`; root-relative, `/`-separated |
-| `kind`, `symbol` | `item` + qpath, `module` + qpath, `ron` + field path (`root.stamina.regen_per_second`; `code-refs.md` "spec refs") |
-| `item_kind`, `ast_hash` | items only: the tree-sitter kind; `b3:` + `Digest::to_hex` of the whole item (levels ignored) |
-| `file_blob`, `commit` | the file's blob OID in HEAD's tree; HEAD's full OID |
-| `verified_by`, `verified_at` | `"owner"`; `YYYY-MM-DD` |
-
-Key and order: `node` bytes; `relation` as listed; `file`, `kind`, `symbol`, `item_kind` bytes. Until a later `format`, not recorded: levels and their hashes, fingerprints, anchor state, text hash, positions, test evidence (8b `[[tested]]`, the next `format`); `impl_status` never: `verified` is computed from that evidence (ADR-0044).
+`docs/canon/spec-lock.md` "Entry" (WA-5): keys, order, the reader, the key rules.
 
 ### Lockability
 
-WA-6, Q2. A binding `spec refs` lists under the node (`code-refs.md` "States") is locked only if each row allows; else `not locked: <state>`, never fresh (05 s5.3).
-
-| Row | Locked | Never |
-|---|---|---|
-| `id_state` | `resolved`, `alias` | `ambiguous`, `homoglyph` |
-| `rev_state` | `current`, `unversioned` | `spec_ahead`, `predated`, `bad_rev`, `rev_unknown` |
-| binding | `item` with a v2 digest; `module`, `ron` by `file_blob` alone until slice 5 | `ambiguous <reason>`, `unanchored`, `cannot_verify` |
+`docs/canon/spec-lock.md` "Lockability" (WA-6, Q2).
 
 ### spec lock accept
 
-WA-2, WA-3, WA-7, WA-9, WA-10, Q1. In order:
-
-1. `require_terminal("lock accept")` before anything is read.
-2. Discovery, config, `[code]` (none: `code-refs.md`'s exact text); REF as `spec show` (a gone node: "A gone node").
-3. Git: a worktree, HEAD born, on a branch, no operation in progress (`place`, `operation_in_progress`); the lock read.
-4. Slice 1's walk finds the node's markers. **Inputs** tracked and clean, else each named with its state (`modified`, `staged`, `untracked`, `deleted`, `not tracked`), `commit them first`: the node's file, its markers' files, `specengine.toml`, `spec.lock`, and a holder deleted or renamed in the worktree whose HEAD blob marks the node (SW refinement: else its entries vanish).
-5. Each input parsed, bound, hashed from its HEAD blob's raw bytes (`blob_at`, no filters); OIDs from HEAD's tree. The node's revision readable, `norm_hash` non-null.
-6. **Merge** into the node's entries: lockable bindings fresh; one equal on `rev`, `spec_hash`, `ast_hash`, `file_blob` byte-identical (`commit`, `verified_at` too); not lockable now: the old entry kept; vanished: dropped. Refused: an old entry at R with another `spec_hash` (changed without a raise: `--editorial`, or a proposal raising `rev`). Other nodes' entries keep their values.
-7. Nothing to change: no question; exit 0 `nothing to change` if some binding is locked as it is, else exit 1 saying why none can be.
-8. stdout, key order: `<change> | <relation> | <file> | <kind> <symbol>[ <item_kind>][ | <state>]`, change `new`, `refreshed`, `unchanged`, `kept`, `dropped`, `not locked`. stderr: `lock R-12 rev 3 (accept: 2 new, 1 refreshed, 1 kept, 1 dropped) at <commit> on <branch> in <worktree>? [y/N]`; only `y`, `yes`; no `--yes`.
-9. Re-read HEAD, branch, lock bytes; a change: `spec.lock changed while being accepted; nothing written`.
-10. Write atomically (`replace_file`; a first lock `intent_to_add`); `commit_only`, hooks run, never `--no-verify`: `spec: lock R-12`, an empty line, `Lock: R-12`, `Lock-mode: accept|editorial`, `Decided-by: <committer_ident>`; one parent, the old HEAD; only `spec.lock` changed; other staged paths stay staged. A failure restores the bytes (a new file removed).
+`docs/canon/spec-lock-accept.md` "Steps", "The lock commit" (WA-2, WA-3, WA-7, WA-9, WA-10, Q1).
 
 ### --editorial
 
-WA-8. Sets `spec_hash` to the current `norm_hash` on the node's entries at R, nothing else (code hashes, `file_blob`, `commit`, `verified_*` kept); `Lock-mode: editorial`. Inputs: the node's file, `specengine.toml`, `spec.lock`; no walk (SW refinement). No entry at R (after a raise): exit 1; all match: exit 0 `nothing to change`. Asks `lock R-12 rev 3 (editorial: spec_hash of 3 entries) at <commit> on <branch> in <worktree>? [y/N]`.
+`docs/canon/spec-lock-accept.md` "`--editorial`" (WA-8).
 
 ### A gone node
 
-`spec-verify.md` Q3. When the lock holds entries whose `node` is REF's bytes and no node has that canonical ID (deleted, or renamed with the old ID now an alias: SW refinement), accept drops exactly those entries: the exception to exit 1 "REF names nothing", checked once the lock is read (step 3). Steps 1-3, 9, 10 as accept; inputs `specengine.toml`, `spec.lock` only; no walk, no hash: a drop writes no hash, so no false `ok` follows (the bindings read `unlocked`). stdout `dropped | <relation> | <file> | <kind> <symbol>[ <item_kind>]`; asks `lock R-12 (gone: 3 dropped) at <commit> on <branch> in <worktree>? [y/N]`; trailers as accept's.
+`docs/canon/spec-lock-accept.md` "A gone node" (Q4).
 
 ### spec lock regen
 
-WA-11. Only while `spec.lock` is unmerged (`ls-files -u -z`); each stage present parses and shares `format` and recipes. Per entry key:
-
-| Base -> ours, theirs | Result |
-|---|---|
-| same on both, or changed on one side | that entry |
-| deleted on one side, unchanged on the other | deleted |
-| deleted on one side, changed on the other | the changed one |
-| changed differently (add/add without base too) | the later `verified_at`, then the block first by bytes |
-
-Side-symmetric. Reads no code or spec file, computes no hash: each choice keeps an owner-accepted pair (drift possible, never a false `ok`); never rebuilds from the tree. stdout `<choice> | <node> | <relation> | <file> | <kind> <symbol>`, choice `both`, `ours`, `theirs`, `deleted`, `later`, `bytes`; asks `merge spec.lock (<n> entries, <k> by verified_at or bytes) in <worktree>? [y/N]`; writes the worktree file only; prints `next: git add spec.lock, then commit the merge`.
+`docs/canon/spec-lock.md` "`spec lock regen`" (WA-11).
 
 ### Exits
 
-WA-14; one-line messages (CLI README "Output").
-
-| Exit | `accept` | `regen` |
-|---|---|---|
-| 0 | committed; nothing to change | written |
-| 1 | REF names nothing (and no gone node's entries) or several; no marker names the node; nothing lockable; a dirty input; revision unreadable or `norm_hash` null; text changed at R; `--editorial`, no entry at R; an ignored `spec.lock` (before asking); not `y`; changed while accepting; a failed commit | no conflict; declined; changed while running |
-| 2 | not a terminal; usage; discovery, config; no `[code]`; a walk gap; no git worktree; unborn or detached HEAD; an operation in progress; an unreadable lock, other recipes; no committer identity | accept's first four; a stage unreadable; recipes differ |
+`docs/canon/spec-lock-accept.md` "Exits"; regen's in its section (WA-14).
 
 ## Rules and edge cases
 
-- WHEN one commit is accepted from two roots, another cwd, in reverse creation order, with `core.autocrlf=true` or through an alias marker, the system SHALL write identical bytes; a SHA-256 repository gives 64-hex OIDs, the same `b3:` hashes (WA-4).
-- No absolute path, name, e-mail, time of day, abbreviated OID, line or column; IDs, paths, opaque symbols, the model's relations only (WA-5, WA-15).
-- Each lock travels on its worktree's branch; git's `index.lock` orders commits; branches meet in a merge; daemon and gate never touch it (WA-10). Writes: the data directory, `spec.lock`, one commit; no queue row, event or index change.
-- Each accept walks the code tree, hashing the node's items only; a `[sig]` marker gets the whole item's hash until slice 5.
+`docs/canon/spec-lock.md` "The file", "Travel and writes": one commit, one lock from any root, cwd, order, line ending or alias; no position, identity or time of day; writes only the data directory, `spec.lock` and one commit; nothing blocked (ADR-0012).
 
 ## Acceptance criteria
 
+Core `tests/lock_model.rs` (12); CLI `lock_accept.rs` (22), `lock_commit.rs` (22), `lock_exits.rs` (23), `lock_regen.rs` (9), `lock_pilot.rs` (1, `#[ignore]`), helpers `lock_common/`; golden `fixtures/spec-lock/code-a.lock` (11 entries). Pins rewritten: code `hash_traps.rs`, `code_bind.rs` (`NotHashed`); CLI `code_refs_walk.rs` (the lock reads no item `.state`, hashes only through `hash_bound_items`); MCP `plugin_{files,roles,skills}.rs` (0.7.1). 52 mutation runs, 51 red (M08: "Implementation").
+
 rust-developer:
 
-- [ ] RD-1 -- the core model is pure. M: `std::fs` -> `model_and_core_sources_do_no_file_io`.
-- [ ] RD-2 -- bytes = the golden; a reordered, CRLF or re-spaced equivalent renders back. M: insertion order -> `lock_entries_are_sorted_by_key`; CRLF -> `lock_bytes_are_lf_with_a_final_lf`.
-- [ ] RD-3 -- the reader. M: an unknown key accepted -> `lock_unknown_key_is_refused`.
-- [ ] RD-4 -- terminal first. M: REF resolved before it -> `not_a_terminal_wins_over_a_bad_ref`.
-- [ ] RD-5 -- `*.rs ident`, `"$Id$"` in a bound `fn`: the committed bytes' lock. M: worktree bytes -> `lock_hashes_the_committed_blob`.
-- [ ] RD-6 -- each dirty input (modified, staged, untracked, a deleted holder) named, exit 1. M: only the node's file checked -> `dirty_bound_file_refuses_accept`.
-- [ ] RD-7 -- "Lockability". M: `cannot_verify` locked -> `cannot_verify_binding_is_never_locked`; `spec_ahead` -> `marker_behind_the_revision_is_not_locked`; an ambiguous qpath -> `ambiguous_binding_is_not_locked`; RON `ast_hash` -> `ron_binding_is_locked_by_blob_only`.
-- [ ] RD-8 -- step 6. M: a new `spec_hash` at R -> `meaning_change_without_a_revision_is_refused`; others re-rendered -> `other_nodes_entries_are_untouched`.
-- [ ] RD-9 -- a second accept: exit 0, no prompt, HEAD unmoved. M: re-stamped -> `second_accept_changes_nothing`.
-- [ ] RD-10 -- `--editorial`. M: `ast_hash` refreshed -> `editorial_keeps_code_hashes`; after a raise -> `editorial_after_a_revision_raise_is_refused`.
-- [ ] RD-11 -- the commit. M: `--no-verify` -> `lock_commit_runs_hooks`; a staged path committed -> `lock_commit_takes_only_the_lock`.
-- [ ] RD-12 -- step 9. M: no re-read -> `lock_changed_while_accepting_is_refused`.
-- [ ] RD-13 -- regen. M: always ours -> `regen_is_symmetric`; a hash computed -> `regen_reads_no_code_and_no_spec` (code and spec removed, same output); exit 0 -> `regen_without_a_conflict_is_exit_1`.
-- [ ] RD-14 -- no new crate. M: `sha1` -> the CLI pin in `build_graph.rs`.
-- [ ] RD-15 -- writes per "Rules". M: a queue event -> `lock_accept_writes_no_queue_row`.
-- [ ] RD-16 -- plugin roles and session: "... or writes a spec file" + "or the lock"; a PATCH after 0.7.0, `PINS`. M: version kept -> `plugin_files`.
-- [ ] RD-17 -- "A gone node": a deleted node's and a renamed one's (old ID now an alias) entries dropped after `y`, one commit, other entries byte-identical. M: exit 1 "names nothing" -> `gone_node_entries_are_dropped`; the alias resolved first -> `alias_of_a_gone_id_drops_its_entries`.
+- [x] RD-1 -- `model_and_core_sources_do_no_file_io`.
+- [x] RD-2 -- `the_golden_renders_back`, `a_respaced_equivalent_renders_back`, `lock_entries_are_sorted_by_key`, `lock_bytes_are_lf_with_a_final_lf`.
+- [x] RD-3 -- `lock_unknown_key_is_refused`, `the_reader_refuses_every_wrong_form` (25 cases at their lines), `another_builds_recipes_are_refused_naming_both`, `escaped_symbols_read_back`.
+- [x] RD-4 -- `not_a_terminal_wins_over_a_bad_ref`.
+- [x] RD-5 -- `lock_hashes_the_committed_blob`.
+- [x] RD-6 -- `dirty_bound_file_refuses_accept`, `every_dirty_input_is_named` (10 states), `every_changed_code_file_and_manifest_is_dirty` (untracked, manifests dropped: red).
+- [x] RD-7 -- `cannot_verify_binding_is_never_locked`, `marker_behind_the_revision_is_not_locked`, `ambiguous_binding_is_not_locked`, `ron_binding_is_locked_by_blob_only`.
+- [x] RD-8 -- `meaning_change_without_a_revision_is_refused`, `other_nodes_entries_are_untouched`.
+- [x] RD-9 -- `second_accept_changes_nothing`.
+- [x] RD-10 -- `editorial_keeps_code_hashes`, `editorial_after_a_revision_raise_is_refused`.
+- [x] RD-11 -- `lock_commit_runs_hooks`, `lock_commit_takes_only_the_lock`; the outcome table: ten `lock_commit.rs` tests, one per check, row and the restore guard (`a_hook_that_rewrites_the_staged_lock_fails_the_accept`, `a_commit_off_its_branch_is_unverified`, …).
+- [x] RD-12 -- `lock_changed_while_accepting_is_refused`.
+- [x] RD-13 -- `regen_is_symmetric`, `regen_reads_no_code_and_no_spec`, `regen_without_a_conflict_is_exit_1`.
+- [x] RD-14 -- `build_graph.rs` `cli_direct_dependencies_are_all_workspace_entries` (a `sha1` dependency: red).
+- [x] RD-15 -- `lock_accept_writes_no_queue_row`.
+- [x] RD-16 -- "or the lock" in the five roles and `feature`; `plugin.json` 0.7.1, `PINS` `fc9423b7…1902`; `plugin_files` ac10.
+- [x] RD-17 -- `gone_node_entries_are_dropped`, `alias_of_a_gone_id_drops_its_entries`, `a_node_deleted_only_in_the_worktree_is_not_gone`, `a_gone_id_with_a_revision_drops_its_entries`.
 
 test-engineer:
 
-- [ ] TE-1 -- a temp repo from `fixtures/code-a/`, a golden lock: a document `rev: 3`, a section `rev=2`, a feature-scoped AC `@verifies`, an alias marker, a RON `@configures`, a `//!` marker.
-- [ ] TE-2 -- "Lockability": each `id_state`, `rev_state`, binding kind, with its mutation.
-- [ ] TE-3 -- every exit 1 and 2 cause; after each, `git status --porcelain=v1 -z --untracked-files=all` and HEAD unchanged.
-- [ ] TE-4 -- determinism per "Rules". M: a path in a hash input.
-- [ ] TE-5 -- no position, identity or time of day. M: a line -> `lock_has_no_positions`.
-- [ ] TE-6 -- editorial: at R, after a raise, all matching, dirty code ignored.
-- [ ] TE-7 -- regen after a real `git merge`: add/add, modify/modify, delete/unchanged, delete/modify, identical sides, other headers (exit 2); swapped sides, same file; non-adjacent blocks merge cleanly.
-- [ ] TE-8 -- trailers parse by `git interpret-trailers --parse`; a hook's file proves hooks ran; a failing hook restores the bytes.
-- [ ] TE-9 -- plain `spec check` equal with and without `spec.lock` (4b's rule reads it under `--staged`, `--changed` only); `.githooks/pre-commit` untouched. M: plain check reads the lock.
-- [ ] TE-10 -- `fixtures/spec-c` exits 2 naming `[code]`; the core module holds no fixture prefix, kind, `function_item`, `.rs`, `crate::`.
-- [ ] TE-11 -- pilots, manual (`#[ignore]`, release, foreground), a scratch clone: counts by state; no pilot name or path committed.
+- [x] TE-1 -- `golden_lock_of_code_a` (every hash recomputed independently), `golden_accepts_ask_and_commit_once_each`, `accept_on_a_terminal_commits_the_lock`.
+- [x] TE-2 -- `every_row_of_code_a_is_judged_by_lockability`, `ambiguous_and_look_alike_ids_are_not_locked`, RD-7's four.
+- [x] TE-3 -- `lock_exits.rs`: every exit 1 and 2 cause; after each, HEAD, refs, index, `status --porcelain=v1 -z --untracked-files=all` and files unchanged.
+- [x] TE-4 -- `one_commit_gives_one_lock` (M: a path in a hash input), `a_sha256_repository_gives_the_same_hashes`.
+- [x] TE-5 -- `lock_has_no_positions`.
+- [x] TE-6 -- the five `editorial_*` tests.
+- [x] TE-7 -- `regen_merges_every_case` (11 cases after a real `git merge`), `regen_resolves_whole_file_conflicts`, `non_adjacent_blocks_merge_cleanly`, `regen_refuses_other_headers_and_unreadable_stages`; four more in `lock_regen.rs`.
+- [x] TE-8 -- `lock_commit_trailers_parse` (a caller's `Proposal:` too), `a_failing_hook_restores_the_bytes`, `lock_commit_runs_hooks`.
+- [x] TE-9 -- `plain_check_never_reads_the_lock`; `.githooks/pre-commit` untouched.
+- [x] TE-10 -- `no_code_table_is_exit_2_naming_it`, `the_core_lock_module_knows_no_domain`.
+- [ ] TE-11 -- `lock_pilot.rs` `pilot_rows_by_state` (`#[ignore]`, release, a scratch clone, consent declined): manual, owner; not run.
 
 spec-writer:
 
 - [x] SW-1 -- this spec.
 - [x] SW-2 -- ADR-0041, `architecture.md` `#apply` and `#layout` in the same change.
-- [ ] SW-3 -- at shipping: Tier 2 `docs/canon/spec-lock.md`; the overridden lines (05 s3.5 a format pointer), 06:140, 08:44; CLI, store, core READMEs; `plugin.md:38`, `:47`; `CLAUDE.md` State.
+- [x] SW-3 -- `docs/canon/spec-lock.md`, `spec-lock-accept.md` (new); `architecture-code.md`, `plugin.md`, `plugin-files.md`, `code-bindings.md`, `code-identity.md`, `node-revision.md`; core, store, CLI, code READMEs; 05, 06, 07, 08 lines above; `CLAUDE.md`.
 - [x] SW-4 -- `export index`, `check` clean.
-
-## Risks
-
-- A grammar bump (tree-sitter-rust 0.24.2, ABI 15) re-hashes every item; accept refuses such a lock (exit 2) until slice 5.
-- Commits decay (rebase, squash, gc): Phase 4's diffs show "history unavailable"; a renamed ID's entries read `node_gone` (slice 4a) until `accept <old ID>` drops them.
-- Friction: commit first; a prompt and commit per node; ~1 % of valid code fails tree-sitter-rust.
-- Cooperative: a faked terminal passes (ADR-0034); the gate skips `spec.lock`; hooks run on the lock commit; stdin signing fails; LFS filters hash pointer bytes.
 
 ## Out of scope
 
-Slice 4a (`spec-verify.md`, ADR-0042): comparing (cascade, matrix, verdicts), lock findings, orphans. 4b `rev-discipline` (ADR-0043): the revision rule, `spec bump`, an editorial apply writing the lock in its commit. 4c `drift-queue` (`drift-queue.md`, ADR-0045): a `drift` queue kind whose approve runs this accept; so accept, the editorial refresh and the gone-node drop are one library function taking a consent closure and extra trailers (`Proposal:`), called by both commands. 5 (`hash-levels.md` Q1): 5a levels, fingerprints, the RON recipe; 5b format 2 and `spec lock rebase` (a new ADR); 5c anchors. 6/7: lock data in reads. 8a `verify-tests` (ADR-0044): the runner, no lock write; 8b `tested-evidence`: `[[tested]]` in the next `format`, accept keeping, regen merging, an editorial refresh updating it. Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
+Slice 4a (`spec-verify.md`, ADR-0042): comparing, lock findings, orphans. 4b `rev-discipline` (ADR-0043): the revision rule, `spec bump`, an editorial apply writing the lock in its commit. 4c `drift-queue` (ADR-0045): a `drift` kind whose approve calls `lock_accept` with its consent and `Proposal:` trailer. 5: levels, fingerprints, the RON recipe; format 2 and `spec lock rebase` (a new ADR); anchors. 6/7: lock data in reads. 8a `verify-tests` (ADR-0044); 8b `[[tested]]` in the next format. Phase 4: history diffs. Not planned: a merge driver, a `spec.lock` gate rule, several REFs, UI staging, a queue event.
 
 ## Open
 
-| Point | Answer |
-|---|---|
-| Q1 who commits | accept, the lock alone, hooks run, inputs from a clean HEAD |
-| Q2 RON and modules | by `file_blob` alone until slice 5 |
-| Q3 naming writers | by consent: the owner's `[y/N]`; an editorial approve refreshes in its apply commit (ADR-0043), a `drift` item's approve (ADR-0045, `drift-queue.md`) runs the same accept |
-| Q4 a gone node's entries (`spec-verify.md` Q3) | `accept <gone ID>` drops them, same `[y/N]` and commit |
-
-Decided under the owner's pre-approval, review open; WA-1..WA-16: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.
+Decided under the owner's pre-approval, review open: Q1 the lock alone, from a clean HEAD, hooks run; Q2 RON and modules by `file_blob` until slice 5; Q3 writers by consent; Q4 `accept <gone ID>` drops its entries; WA-1..WA-16. From the review: strict dirty inputs (every changed or untracked walked `.rs`/`.ron`, every `Cargo.toml` at or above a root); gone only when HEAD agrees; the fourth post-commit check (committed bytes = confirmed bytes); success only a verified commit; known limits: git-ignored walked files, `id_state` on the working-tree corpus. Working answers, pinned, now canon: a header-only lock, a non-UTF-8 blob exit 2, row order, the four counts, regen's recipes and `deleted`, a `git mv` holder.
 
 ## Implementation
 
-Not started. To record: modules, TE-11's figures, deviations with reasons.
+| Module | What it does |
+|---|---|
+| core `lock.rs` (new), `lib.rs` | `parse_lock`, `render_lock`, `key_problem`/`KeyProblem`, `merge_accept`, `refresh_editorial`, `drop_node`, `merge_stages`; pure |
+| store `worktree.rs`, `lib.rs` | reads `blob_oid` (`:(literal)`), `unmerged_stages`, `status_entries(paths, untracked)` -> `StatusEntry`, `is_ignored`; one write `reset_path` (`git reset -q -- :(literal)<path>`, scrubbed environment, no `GIT_OPTIONAL_LOCKS`); `commit_of`, `blob_at` reused at step 10 |
+| CLI `lock.rs`, `lock_regen.rs` (new) | `lock_accept` (accept, editorial, gone; a `LockConsent` closure, `LockTrailer`s), `lock_regen`; `Check::{Ours, NotAlone, Unverified}` |
+| CLI `main.rs`, `lib.rs`, `refs.rs`, `code_walk.rs` | `lock accept|regen`, `show_and_ask`; `Outcome::{Lock, LockRegen}`; state constants, `MANIFEST`, `code_config` shared `pub(crate)` |
+| code `hash.rs`, `items.rs`, `bind.rs`, `lib.rs`; eval `ast_hash` | `HashState::NotHashed` for the binder's error-free items, `hash_bound_items`, `MOD_KIND` exported |
+| plugin | five roles, `feature`: "or the lock"; 0.7.1 |
+
+Deviations, accepted in review. Iteration 1: four store reads, not two (state letters name each dirty input; `check-ignore` for a first lock); "kept" only with a key (a Rust `cannot_verify` keeps entries naming a now-broken item of its file; `unanchored`, RON `cannot_verify` drop); one key from several markers lockable only if all allow; exit 2 when HEAD's blob gives other items than the working tree's (names come from the walk); `--config` naming another file exit 2, `--editorial` on a gone ID exit 1; the consent closure gets the rows (stdout) before the question (stderr); `NotHashed` a new variant, as `Option<HashState>` broke more callers (code-refs' carry-over); the skill omits "(spec.lock)" for its 4 096 B body cap. Iteration 2 (the review's major: success without a check): the commit verified as `spec approve` verifies; `key_problem` shared, after a TAB path bricked the lock; step 9's exact text; the data directory before the prompt; 5(a) replaces "a holder deleted or renamed"; 5(b) over any changed `.md`; `blob_oid` literal; a gone ID's `@rev` stripped. Iteration 3: the fourth check and the restore guard (a hook rewriting the staged lock; a concurrent same-node accept; restoring over a foreign lock); advice `<commit>^`, not the old HEAD (a foreign commit underneath); the commit found through `refs/heads/<branch>`, as approve; `reset_path` where the branch did not move after git said made; branch unmoved but HEAD moved: unverified, nothing restored (the worktree may sit elsewhere); a failed commit whose moved branch cannot be verified: left as written (it may be this run's); a parser panic at HEAD exits 2.
+
+Carried to slice 4a's developer: `lock.rs:1810-1815` "changed meanwhile" omits the index entry left (a first lock's intent-to-add, or the confirmed bytes staged); `:1701-1706` a failed commit with an unreadable branch is restored, not "unverified, left as written" (practically unreachable); `:1845` "its bytes restored" even when the restore failed; `:1779` comment wrong for a commit deleting `spec.lock` (`Unverified`, still exit 1); `store/worktree.rs:26-28` says every command but `commit` gets `GIT_OPTIONAL_LOCKS=0` ("every read"); `lock.rs:41-52` step 6 omits the two iteration-3 outcomes. Pointers still citing this spec's headings, to retarget to the two canons: core `lock.rs:1`, `lib.rs:56`; store `worktree.rs:11`; CLI `lib.rs:27,120`, `lock.rs:1-8` (also "task spec `drift-queue`"), `lock_regen.rs:1`. Test gaps: M08 survives (RD-6 enforced twice, `inputs` and `changed_code`: either alone can regress unseen; both mutated, red); unpinned: a parser panic at HEAD, two step-10 rows, `--json`.
+
+Runs (iteration 3): fmt, clippy (workspace, MCP probes) clean; nextest code, core, store, CLI, MCP 1 855 passed, 1 skipped (`lock_pilot`); eval `build_graph`, `doc_pointers` 42/42; `spec check` clean.

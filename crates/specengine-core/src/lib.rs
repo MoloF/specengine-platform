@@ -51,8 +51,12 @@
 //!   its order key, the reading time and the grammar of the returned
 //!   answers (`docs/canon/round.md`, ADR-0038);
 //! - [`code_toml`] — `CodeConfig::from_toml`: the `[code]` table, the code
-//!   tree `spec refs` walks, read apart from the reads (task spec
-//!   `code-refs`, "The code table").
+//!   tree `spec refs` walks, read apart from the reads
+//!   (`docs/canon/code-bindings.md` "The `[code]` table");
+//! - [`lock`] — `spec.lock`'s model (task spec `spec-lock`): the reader,
+//!   the canonical render, an accept's merge into one node's entries, its
+//!   editorial refresh and a gone node's drop, and `spec lock regen`'s
+//!   merge of a conflict's stages; pure, no hash computed, no path read.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -64,6 +68,7 @@ pub mod gate;
 mod glob;
 pub mod intake;
 mod lines;
+pub mod lock;
 mod markdown;
 mod norm;
 mod own_text;

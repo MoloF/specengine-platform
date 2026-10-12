@@ -120,7 +120,7 @@ pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use worktree::{
     ChangedPath, CreateFileError, CreatedFile, GitError, ListedWorktree, Merge, Operation,
-    PlaceError, WorktreeGit, create_file, replace_file, same_repository,
+    PlaceError, StatusEntry, WorktreeGit, create_file, replace_file, same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

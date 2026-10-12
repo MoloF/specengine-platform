@@ -8,8 +8,8 @@
 //!   (ADR-0009, ADR-0026 `<slug>/ID`, `ID#SECTION`). An empty ID (the
 //!   keyword ends the line) is its own case, never "not Latin".
 //! - **token**: the ID's first byte to the first whitespace, `[`, `*/`, the
-//!   next `@keyword` or line end (`R-12@3`, `slug/AC-07`; task spec
-//!   `code-refs`, "States").
+//!   next `@keyword` or line end (`R-12@3`, `slug/AC-07`;
+//!   `docs/canon/code-identity.md` "Marker grammar").
 //! - **rev**: `@` right after the ID and 1 to 9 ASCII digits ending the
 //!   token; anything else after the `@` (`X@`, `X@3a`, ten digits) is a
 //!   malformed revision: no rev, and never note text.
@@ -184,8 +184,8 @@ pub struct Marker {
 impl Marker {
     /// The token's byte range in `comment`, the text this marker was found
     /// in: the ID's first byte to the first whitespace, `[`, `*/`, the next
-    /// `@keyword` or line end (task spec `code-refs`, "States"); empty for
-    /// an empty ID.
+    /// `@keyword` or line end; empty for an empty ID
+    /// (`docs/canon/code-identity.md` "Marker grammar").
     #[must_use]
     pub fn token_range(&self, comment: &str) -> Range<usize> {
         let keyword_end = self.offset + 1 + self.relation.as_str().len();
@@ -411,9 +411,9 @@ fn next_keyword_start(text: &str, from: usize, to: usize) -> usize {
     to
 }
 
-/// Latin: ASCII letters, digits, `-`, `_`, `.`, `:`, `/`, `#` (`ID#SECTION`,
-/// task spec `code-refs`); an empty ID is not a script mix (it is counted
-/// apart by the callers).
+/// Latin: ASCII letters, digits, `-`, `_`, `.`, `:`, `/`, `#` (`ID#SECTION`;
+/// `docs/canon/code-identity.md` "Marker grammar"); an empty ID is not a
+/// script mix (it is counted apart by the callers).
 fn is_latin_id(id: &str) -> bool {
     id.chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/' | '#'))

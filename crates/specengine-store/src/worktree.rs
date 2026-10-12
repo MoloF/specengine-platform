@@ -7,7 +7,13 @@
 //! a new file created without ever replacing one ([`create_file`]), its
 //! intent-to-add entry
 //! and its removal ([`WorktreeGit::intent_to_add`],
-//! [`WorktreeGit::remove_cached`]), the name-status of a commit
+//! [`WorktreeGit::remove_cached`]), for `spec.lock`
+//! (`docs/features/spec-lock.md` "spec lock accept", "spec lock regen") a
+//! file's blob OID at a commit ([`WorktreeGit::blob_oid`]), a path's
+//! unmerged stages ([`WorktreeGit::unmerged_stages`]), paths' status
+//! letters ([`WorktreeGit::status_entries`]), whether a path is ignored
+//! ([`WorktreeGit::is_ignored`]) and a path's index entry set back to
+//! `HEAD`'s ([`WorktreeGit::reset_path`]), the name-status of a commit
 //! ([`WorktreeGit::name_status`]).
 //! `crate::git` stays the read side of `spec check`, resolving `GIT_*`
 //! against the caller; here nothing of the caller's repository is used.
@@ -784,6 +790,22 @@ impl WorktreeGit {
         success(COMMAND, self.output(&args, false)?).map(|_| ())
     }
 
+    /// `git reset -q -- :(literal)<path>`: the path's index entry set back
+    /// to `HEAD`'s (none when `HEAD` has none), its file untouched (a
+    /// `spec.lock` whose `commit --only` updated the index, then no commit
+    /// stayed on the branch).
+    pub fn reset_path(&self, path: &str) -> Result<(), GitError> {
+        const COMMAND: &str = "reset";
+        let spec = literal(path);
+        let args = [
+            OsStr::new("reset"),
+            OsStr::new("-q"),
+            OsStr::new("--"),
+            OsStr::new(&spec),
+        ];
+        success(COMMAND, self.output(&args, false)?).map(|_| ())
+    }
+
     /// The paths that differ between the commits `from` and `to` with
     /// their status letter (`diff-tree -r -z --name-status --no-renames
     /// --no-commit-id --end-of-options`), top-relative, in git's order; a
@@ -907,6 +929,172 @@ impl WorktreeGit {
                 OsStr::new("-q"),
                 OsStr::new("--end-of-options"),
                 OsStr::new(&object),
+            ],
+            true,
+        )?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => Err(failed(COMMAND, &output)),
+        }
+    }
+
+    /// The blob OID of the top-relative `path` in `commit`'s tree (`ls-tree
+    /// -z --full-tree --end-of-options <commit> -- :(literal)<path>`, the entry whose
+    /// path is exactly `path` and whose type is `blob`); `None` when the
+    /// tree holds no such file (none, a directory, a submodule). A path
+    /// [`Self::blob_at`] refuses is refused alike, unread.
+    pub fn blob_oid(&self, commit: &str, path: &str) -> Result<Option<String>, GitError> {
+        const COMMAND: &str = "ls-tree";
+        if path.is_empty() || path.starts_with("./") || path.starts_with("../") {
+            return Err(GitError::Unreadable { command: COMMAND });
+        }
+        let spec = literal(path);
+        let output = self.read(
+            COMMAND,
+            &[
+                "ls-tree",
+                "-z",
+                "--full-tree",
+                "--end-of-options",
+                commit,
+                "--",
+                &spec,
+            ],
+        )?;
+        for record in output.split(|&byte| byte == 0) {
+            if record.is_empty() {
+                continue;
+            }
+            // `<mode> SP <type> SP <oid> TAB <path>`.
+            let (head, named) = record
+                .iter()
+                .position(|&byte| byte == b'\t')
+                .map(|tab| (&record[..tab], &record[tab + 1..]))
+                .ok_or(GitError::Unreadable { command: COMMAND })?;
+            let fields: Vec<&[u8]> = head.split(|&byte| byte == b' ').collect();
+            let [_, kind, oid] = fields.as_slice() else {
+                return Err(GitError::Unreadable { command: COMMAND });
+            };
+            if named != path.as_bytes() || *kind != b"blob" {
+                continue;
+            }
+            if !is_oid(oid) {
+                return Err(GitError::Unreadable { command: COMMAND });
+            }
+            return String::from_utf8(oid.to_vec())
+                .map(Some)
+                .map_err(|_| GitError::Unreadable { command: COMMAND });
+        }
+        Ok(None)
+    }
+
+    /// The unmerged stages of `path` in the index (`ls-files -u -z --
+    /// :(literal)<path>`), each with its blob's bytes as stored (`cat-file
+    /// blob <oid>`): `(stage, bytes)` by stage, 1 the base, 2 ours, 3
+    /// theirs; empty when `path` is not unmerged.
+    pub fn unmerged_stages(&self, path: &str) -> Result<Vec<(u8, Vec<u8>)>, GitError> {
+        const COMMAND: &str = "ls-files";
+        let spec = literal(path);
+        let output = self.read(COMMAND, &["ls-files", "-u", "-z", "--", &spec])?;
+        let mut stages = BTreeMap::new();
+        for record in output.split(|&byte| byte == 0) {
+            if record.is_empty() {
+                continue;
+            }
+            // `<mode> SP <oid> SP <stage> TAB <path>`.
+            let (head, named) = record
+                .iter()
+                .position(|&byte| byte == b'\t')
+                .map(|tab| (&record[..tab], &record[tab + 1..]))
+                .ok_or(GitError::Unreadable { command: COMMAND })?;
+            if named != path.as_bytes() {
+                continue;
+            }
+            let fields: Vec<&[u8]> = head.split(|&byte| byte == b' ').collect();
+            let [_, oid, stage] = fields.as_slice() else {
+                return Err(GitError::Unreadable { command: COMMAND });
+            };
+            let stage = match *stage {
+                b"1" => 1,
+                b"2" => 2,
+                b"3" => 3,
+                _ => return Err(GitError::Unreadable { command: COMMAND }),
+            };
+            let oid = std::str::from_utf8(oid)
+                .ok()
+                .filter(|oid| is_oid(oid.as_bytes()))
+                .ok_or(GitError::Unreadable { command: COMMAND })?;
+            stages.insert(stage, oid.to_owned());
+        }
+        stages
+            .into_iter()
+            .map(|(stage, oid)| {
+                self.read("cat-file", &["cat-file", "--end-of-options", "blob", &oid])
+                    .map(|bytes| (stage, bytes))
+            })
+            .collect()
+    }
+
+    /// The status of each path under the `paths` (`status --porcelain=v1
+    /// -z --no-renames --untracked-files=all|no -- :(literal)<path>…`), in
+    /// git's order: the index's and the working tree's status letters
+    /// against `HEAD` (`??` untracked) and the top-relative path, lossily
+    /// UTF-8. A path git prints nothing for is clean (or ignored, or
+    /// absent). No path given: nothing asked, empty.
+    pub fn status_entries(
+        &self,
+        paths: &[&str],
+        untracked: bool,
+    ) -> Result<Vec<StatusEntry>, GitError> {
+        const COMMAND: &str = "status";
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let specs: Vec<String> = paths.iter().map(|path| literal(path)).collect();
+        let mut args = vec![
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--no-renames",
+            if untracked {
+                "--untracked-files=all"
+            } else {
+                "--untracked-files=no"
+            },
+            "--",
+        ];
+        args.extend(specs.iter().map(String::as_str));
+        let output = self.read(COMMAND, &args)?;
+        let mut entries = Vec::new();
+        for record in output.split(|&byte| byte == 0) {
+            if record.is_empty() {
+                continue;
+            }
+            // `XY SP <path>`.
+            let [index, worktree, b' ', path @ ..] = record else {
+                return Err(GitError::Unreadable { command: COMMAND });
+            };
+            entries.push(StatusEntry {
+                index: char::from(*index),
+                worktree: char::from(*worktree),
+                path: String::from_utf8_lossy(path).into_owned(),
+            });
+        }
+        Ok(entries)
+    }
+
+    /// Git's ignore rules match `path`, relative to the handle's directory
+    /// (`check-ignore -q -- <path>` exits 0; 1: they do not). A tracked
+    /// path is never ignored.
+    pub fn is_ignored(&self, path: &str) -> Result<bool, GitError> {
+        const COMMAND: &str = "check-ignore";
+        let output = self.output(
+            &[
+                OsStr::new("check-ignore"),
+                OsStr::new("-q"),
+                OsStr::new("--"),
+                OsStr::new(path),
             ],
             true,
         )?;
@@ -1091,6 +1279,19 @@ impl fmt::Display for ChangedPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.status, self.path)
     }
+}
+
+/// One path `status --porcelain=v1` prints ([`WorktreeGit::status_entries`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusEntry {
+    /// The index against `HEAD`: ` ` unchanged, `M`, `T`, `A`, `D`; `?`
+    /// untracked; `U` and the like unmerged.
+    pub index: char,
+    /// The working tree against the index: ` `, `M`, `T`, `D`; `?`
+    /// untracked.
+    pub worktree: char,
+    /// Top-relative.
+    pub path: String,
 }
 
 /// Why [`create_file`] wrote nothing.

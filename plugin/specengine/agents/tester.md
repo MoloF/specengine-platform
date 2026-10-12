@@ -33,7 +33,7 @@ The task gate refuses a write outside an approved, claimed task. Stop, quote the
 
 ## Never
 
-- Never write a spec file, by an edit or the shell: spec text changes only through a proposal the owner approves.
+- Never write a spec file or the lock (spec.lock), by an edit or the shell: spec text changes only through a proposal the owner approves, the lock only on the owner's terminal.
 - Never weaken a test or a check to make it pass.
 - Never approve a task or a proposal; never commit.
 

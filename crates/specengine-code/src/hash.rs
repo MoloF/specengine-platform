@@ -564,11 +564,19 @@ impl ErrorCategory {
 
 /// Result of hashing one item: a digest, or the explicit refusal to produce one.
 ///
-/// `CannotVerify` is never collapsed into a hash of any kind.
+/// `CannotVerify` is never collapsed into a hash of any kind; `NotHashed`
+/// is neither a hash nor a refusal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashState {
     Hashed(Digest),
-    CannotVerify { categories: Vec<ErrorCategory> },
+    CannotVerify {
+        categories: Vec<ErrorCategory>,
+    },
+    /// The analysis did not hash the item: an error-free item of the
+    /// comment binding's analysis ([`crate::bind`]). Never given by
+    /// [`hash_item`] or [`hash_node`]; whoever needs its hash hashes it
+    /// ([`crate::bind::hash_bound_items`]).
+    NotHashed,
 }
 
 impl HashState {
@@ -576,7 +584,7 @@ impl HashState {
     pub fn digest(&self) -> Option<Digest> {
         match self {
             Self::Hashed(digest) => Some(*digest),
-            Self::CannotVerify { .. } => None,
+            Self::CannotVerify { .. } | Self::NotHashed => None,
         }
     }
 }

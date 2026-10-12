@@ -33,12 +33,14 @@
 //!   calls in macro token trees (names only); what it cannot read is reported
 //!   with a category.
 //!
-//! Phase 3 slice `code-refs` (task spec `code-refs`, "Binding rules",
+//! Phase 3 slice `code-refs` (`docs/canon/code-bindings.md` "Rust binding",
 //! "Mentions"):
 //!
 //! - [`bind`] — every comment of a Rust file bound to an item, a module,
 //!   nothing (with a category) or `cannot_verify`, and where a mention in
 //!   it belongs; [`ron::comment_anchors`] the same for every RON comment;
+//!   [`hash_bound_items`] the hashes of chosen bound items (slice
+//!   `spec-lock`), the binding itself hashing none;
 //! - [`naming`] — a tree's items and modules named at once: `qpath` and
 //!   ambiguity (`path_attribute`, `unrooted`, `duplicate`).
 
@@ -54,10 +56,12 @@ pub mod qpath;
 pub mod ron;
 
 pub use bevy::{BevyAnalysis, detect, detect_file};
-pub use bind::{Binding, BoundComment, RustBinding, Unanchored, bind_file, bind_tree};
+pub use bind::{
+    Binding, BoundComment, RustBinding, Unanchored, bind_file, bind_tree, hash_bound_items,
+};
 pub use grammar::{GrammarInfo, RustParser, grammar_info};
 pub use hash::{Digest, ErrorCategory, HashState, RECIPE, hash_item, normalize, recipe_header};
-pub use items::{FileAnalysis, ItemRecord, ModDeclaration, analyze_file, analyze_tree};
+pub use items::{FileAnalysis, ItemRecord, MOD_KIND, ModDeclaration, analyze_file, analyze_tree};
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
 pub use naming::{Name, NamedFile, Names, ROOT_PACKAGE, name_files};
 pub use qpath::{

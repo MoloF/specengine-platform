@@ -1,4 +1,4 @@
-//! Rust comments bound to items (task spec `code-refs`, "Binding rules"):
+//! Rust comments bound to items (`docs/canon/code-bindings.md` "Rust binding"):
 //! every comment of a file, doc comments included, gets one [`Binding`],
 //! the place a marker in it names, and the place a mention in it belongs
 //! to ("Mentions").
@@ -51,7 +51,7 @@ use tree_sitter::{Node, Tree};
 
 use crate::grammar::RustParser;
 use crate::hash::{ErrorCategory, HashState, hash_item, is_comment};
-use crate::items::{FileAnalysis, Hashing, analyze_with_nodes};
+use crate::items::{FileAnalysis, Hashing, MOD_KIND, analyze_with_nodes};
 
 /// Kinds a comment inside of which is `in_macro`: a macro call (its token
 /// tree included) and a `macro_rules!` definition (its rules included). A
@@ -70,8 +70,7 @@ const INITIALIZER_SIGN: &str = "=";
 /// An outer attribute `#[..]`, crossed by rule 2.
 const ATTRIBUTE_KIND: &str = "attribute_item";
 
-/// The item kinds whose `body` is a container of items.
-const MOD_KIND: &str = "mod_item";
+/// The item kinds whose `body` is a container of items ([`MOD_KIND`] too).
 const MEMBER_OWNER_KINDS: [&str; 2] = ["impl_item", "trait_item"];
 
 /// The field naming a body.
@@ -156,8 +155,9 @@ pub struct BoundComment {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustBinding {
     /// The items ([`crate::items::analyze_tree`]'s, not hashed:
-    /// [`FileAnalysis::hashed`] is `false`, and only an item with a parse
-    /// error has its state); bindings index them.
+    /// [`FileAnalysis::hashed`] is `false`, only an item with a parse
+    /// error has its state, an error-free one [`HashState::NotHashed`]:
+    /// [`hash_bound_items`] hashes one); bindings index them.
     pub analysis: FileAnalysis,
     /// Every comment, in source order.
     pub comments: Vec<BoundComment>,
@@ -214,8 +214,28 @@ fn first_category(state: &HashState) -> ErrorCategory {
         HashState::CannotVerify { categories } => {
             categories.first().copied().unwrap_or(ErrorCategory::Other)
         }
-        HashState::Hashed(_) => ErrorCategory::Other,
+        HashState::Hashed(_) | HashState::NotHashed => ErrorCategory::Other,
     }
+}
+
+/// The whole-item hashes ([`hash_item`], the recipe of 05 §5.2) of the
+/// items at `items`, indexes into the [`RustBinding::analysis`] that
+/// [`bind_tree`] gives for the same `tree` and `source`, in the order
+/// asked; `None` for an index past its items. Only these items are
+/// hashed: the binding itself hashes none (an error-free item's state
+/// there is [`HashState::NotHashed`]), so a caller that needs a bound
+/// item's hash (`spec.lock`) asks for it here and never reads that state.
+#[must_use]
+pub fn hash_bound_items(tree: &Tree, source: &str, items: &[usize]) -> Vec<Option<HashState>> {
+    let (_, nodes) = analyze_with_nodes(tree, source, Hashing::ErrorsOnly);
+    items
+        .iter()
+        .map(|&index| {
+            nodes
+                .get(index)
+                .map(|node| hash_item(*node, source.as_bytes()))
+        })
+        .collect()
 }
 
 /// The node a comment or token hangs under, as the rules need it.

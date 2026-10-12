@@ -36,12 +36,12 @@ use specengine_cli::{
     CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest,
     ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
     GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
-    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
-    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest,
-    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
-    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest,
-    render_json, render_text,
+    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest, LockPrompt,
+    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
+    RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
+    SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -232,6 +232,11 @@ enum Command {
         #[command(subcommand)]
         command: RoundCommand,
     },
+    /// spec.lock, what the owner verified: a node's spec hash and its bound code's hashes at a commit, written only on the owner's terminal.
+    Lock {
+        #[command(subcommand)]
+        command: LockCommand,
+    },
     /// Work on the project's tasks: only the owner moves one to `ready` (approve, on a terminal); an agent reads its package, plans, claims, reports and completes it.
     Task {
         #[command(subcommand)]
@@ -279,6 +284,21 @@ enum RoundCommand {
         #[arg(long)]
         staged: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum LockCommand {
+    /// Lock REF's marker bindings over HEAD's committed bytes: its revision and spec hash, each bound item's hash, each file's blob; lists the changes, asks [y/N] on the terminal, commits spec.lock alone. Exit 0 committed or nothing to change, 1 refused (a dirty input, text changed at the revision, nothing lockable, not confirmed), 2 cannot run.
+    Accept {
+        /// Any form `show` takes; a gone node's old ID drops its entries.
+        #[arg(value_name = "REF")]
+        reference: String,
+        /// Only set the spec hash of REF's entries at its revision to its current text's (an editorial change); nothing else.
+        #[arg(long)]
+        editorial: bool,
+    },
+    /// After a merge conflicting in spec.lock: merge its stages per entry (no code read, no hash computed), ask [y/N] on the terminal, write the working-tree file; then git add and commit the merge. Exit 0 written, 1 no conflict or not confirmed, 2 cannot run.
+    Regen,
 }
 
 #[derive(Subcommand)]
@@ -1136,6 +1156,43 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &mut terminal,
             )?))
         }
+        Command::Lock {
+            command:
+                LockCommand::Accept {
+                    reference,
+                    editorial,
+                },
+        } => {
+            // Before anything is read: the lock is the owner's alone.
+            require_terminal("lock accept")?;
+            let mut consent = |prompt: &LockPrompt<'_>| show_and_ask(prompt, json);
+            Outcome::Lock(Box::new(specengine_cli::lock_accept(
+                env,
+                globals,
+                &LockAcceptRequest {
+                    reference,
+                    editorial,
+                    now: now(),
+                    git: process_git(env),
+                },
+                &mut consent,
+                &[],
+            )?))
+        }
+        Command::Lock {
+            command: LockCommand::Regen,
+        } => {
+            require_terminal("lock regen")?;
+            let mut consent = |prompt: &LockPrompt<'_>| show_and_ask(prompt, json);
+            Outcome::LockRegen(Box::new(specengine_cli::lock_regen(
+                env,
+                globals,
+                &LockRegenRequest {
+                    git: process_git(env),
+                },
+                &mut consent,
+            )?))
+        }
         Command::Task { command } => run_task(env, globals, command)?,
         // Run apart, before the environment is read (`run_gate`).
         Command::Gate { .. } => {
@@ -1597,6 +1654,18 @@ fn ask(question: &str) -> bool {
         Ok(_) => matches!(answer.trim(), "y" | "yes"),
         Err(_) => false,
     }
+}
+
+/// `spec lock`'s consent: the rows on stdout (text only; `--json` prints
+/// one document at the end), then the question on stderr and one answer
+/// line from the terminal; only `y` or `yes` consents.
+fn show_and_ask(prompt: &LockPrompt<'_>, json: bool) -> bool {
+    if !json {
+        let mut stdout = std::io::stdout().lock();
+        let _ = stdout.write_all(prompt.rows.as_bytes());
+        let _ = stdout.flush();
+    }
+    ask(prompt.question)
 }
 
 /// `spec round answer`'s terminal: the report on stdout before the first

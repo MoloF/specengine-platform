@@ -33,6 +33,10 @@ pub const ITEM_KINDS: &[&str] = &[
 /// Item kinds collected inside `impl` and `trait` bodies (methods).
 pub const MEMBER_KINDS: &[&str] = &["function_item", "function_signature_item"];
 
+/// The kind of a `mod` item, inline or a declaration: an inline one's body
+/// is a module, which a comment binds as such.
+pub const MOD_KIND: &str = "mod_item";
+
 /// One item and its hash state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemRecord {
@@ -54,7 +58,8 @@ pub struct ItemRecord {
     /// The hash, or `cannot_verify` with its categories. In an analysis
     /// that is not [`FileAnalysis::hashed`] (the comment binding's), only
     /// an item with a parse error has its state; an error-free item's is
-    /// `cannot_verify` with no category, which hashing never gives.
+    /// [`HashState::NotHashed`], which hashing never gives: hash it
+    /// ([`crate::bind::hash_bound_items`]), never read it as a refusal.
     pub state: HashState,
 }
 
@@ -77,9 +82,12 @@ pub struct FileAnalysis {
     /// `ERROR` nodes at file or module level that did not become an item.
     pub orphan_errors: usize,
     pub mod_declarations: Vec<ModDeclaration>,
-    /// Every item was hashed ([`analyze_tree`]); `false` for the comment
-    /// binding's analysis ([`crate::bind`]), which hashes none and reads
-    /// only the error categories of items with a parse error.
+    /// Every error-free item went through `hash_item` ([`analyze_tree`]):
+    /// a digest, or `cannot_verify` `nesting_too_deep` when its walk could
+    /// not finish. An item with a parse error is never hashed, in either
+    /// analysis: its state is `cannot_verify` with the error categories.
+    /// `false` for the comment binding's analysis ([`crate::bind`]), which
+    /// hashes none: its error-free items are [`HashState::NotHashed`].
     pub hashed: bool,
 }
 
@@ -200,7 +208,7 @@ fn collect<'tree>(
         out.items.push(record);
         nodes.push(child);
         let body = match kind {
-            "mod_item" => match child.child_by_field_name("body") {
+            MOD_KIND => match child.child_by_field_name("body") {
                 Some(body) => {
                     let mut mod_path = scope.mod_path.clone();
                     mod_path.push(name.unwrap_or_default());
@@ -256,9 +264,7 @@ fn make_record(node: Node, source: &[u8], scope: &Scope, hashing: Hashing) -> It
         // An item with a parse error is never hashed: `hash_item` reads
         // only its error categories.
         Hashing::ErrorsOnly if has_error => hash_item(node, source),
-        Hashing::ErrorsOnly => HashState::CannotVerify {
-            categories: Vec::new(),
-        },
+        Hashing::ErrorsOnly => HashState::NotHashed,
     };
     ItemRecord {
         kind: kind.to_owned(),

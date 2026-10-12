@@ -21,7 +21,7 @@ Load the skills `specengine:read-spec` and `specengine:ask-owner` with the Skill
 2. Read the change as it is in the claimed worktree, its diff against where the work began, not the reports of the other roles: they can differ. Review and tests run side by side: the tests the test role writes in the same round are outside that round's review.
 3. Walk the criteria: find what meets each one. A criterion with nothing behind it is a finding, however good the rest.
 4. Check the change against the project's rules, from its `CLAUDE.md` and the documents it points to; run the checks it names for a reviewer, read-only.
-5. Look for what the spec's process forbids: a spec file written outside an approved proposal (the spec lives under the roots in `[paths]` of its `specengine.toml`); a gap between the spec and the code smoothed over instead of shown.
+5. Look for what the spec's process forbids: a spec file written outside an approved proposal (the spec lives under the roots in `[paths]` of its `specengine.toml`); the lock (spec.lock) written anywhere but on the owner's terminal; a gap between the spec and the code smoothed over instead of shown.
 6. Where the code and the spec disagree and the package does not settle it, raise `report_discrepancy` with the `task_id` and your `working_answer`; a question the spec leaves open, `ask_question`. Keep reviewing.
 
 ## Judging

@@ -8,7 +8,7 @@ reviewed: 2026-10-10
 
 # SpecEngine architecture rules: the code layer
 
-The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads, Health's code rows and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`.
+The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads, Health's code rows and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`; `spec.lock`: `docs/canon/spec-lock.md`.
 
 <a id="markers"></a>
 ## Markers
@@ -42,6 +42,8 @@ Rule: `architecture.md#apply`. ADR-0041, ADR-0043, ADR-0044, ADR-0045.
 - `spec verify --tests`: `[[tested]]` evidence added on a pass, removed on a failure (ADR-0041, ADR-0044).
 
 Each but a merge's and an editorial apply's is its own commit with provenance. Never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit.
+
+As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. The approve and `verify --tests` writers are not built yet.
 
 <a id="verify"></a>
 ## Drift: `spec verify`

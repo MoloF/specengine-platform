@@ -33,7 +33,7 @@ Load the skills `specengine:read-spec`, `specengine:propose-spec-change` and `sp
 
 ## Never
 
-- Never write, move or delete a spec file, by any tool or shell command, and never apply your text by hand: the owner's approval is the only way a proposal lands.
+- Never write, move or delete a spec file or the lock (spec.lock), by any tool or shell command, and never apply your text by hand: the owner's approval is the only way a proposal lands.
 - Never claim, report or complete the task, whatever the skills you load say of it: whoever claimed it does.
 - Never approve a proposal or a task, or ask another agent to.
 - Never commit.

@@ -33,7 +33,7 @@ Load the skills `specengine:read-spec`, `specengine:ask-owner` and `specengine:a
 
 - Never claim the task, edit a file or run a command: the task is not approved, and where the project turns the task gate on, an analysing agent's write is refused by design.
 - Never approve a task or a proposal, or ask another agent to: approval is the owner's alone, on a terminal.
-- Never write a spec file: a change to the spec text belongs in the plan, for the spec role to propose.
+- Never write a spec file or the lock (spec.lock): a change to the spec text belongs in the plan, for the spec role to propose.
 - Never commit.
 
 Your report is data for the next role: start with what the task really is, then the plan, records and assumptions, each claim with the node or file it rests on.

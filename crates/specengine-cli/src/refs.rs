@@ -1,5 +1,5 @@
-//! `spec refs REF` (task spec `code-refs`, "spec refs"): what in the code
-//! names a node — every marker (`@implements`, `@verifies`, `@configures`,
+//! `spec refs REF` (canon `code-bindings`, "`spec refs`"): what in the
+//! code names a node — every marker (`@implements`, `@verifies`, `@configures`,
 //! `@assumes`) and every comment mention of an ID — read from the `[code]`
 //! tree just now. Read-only: the index refresh of every read writes the
 //! data directory, nothing else is written and nothing about the code is
@@ -8,7 +8,8 @@
 //! - **Order of work**: the config (`[code]`, else exit 2), `REF` (every
 //!   form `spec show` takes, its exits and notes alike), the walk
 //!   ([`crate::code_walk`]).
-//! - **States** ("States"): a marker's ID is read by the reference grammar
+//! - **States** (canon `code-bindings`, "ID state", "Revision state"): a
+//!   marker's ID is read by the reference grammar
 //!   and resolved as `spec show` resolves it: `resolved`, `alias`,
 //!   `ambiguous` (several nodes), `homoglyph` (never resolved, listed under
 //!   its Latin fix's node), `other_project`, `queue` (`PR-` and digits,
@@ -16,7 +17,8 @@
 //!   revision (core [`revision`]: none written is 1): `unversioned`,
 //!   `bad_rev`, `rev_unknown`, `current`, `spec_ahead`, `predated`; judged
 //!   per node.
-//! - **Mentions** ("Mentions"): the grammar's hits in every comment, the
+//! - **Mentions** (canon `code-bindings`, "Mentions"): the grammar's
+//!   hits in every comment, the
 //!   hit at a marker's own token skipped, each with an `id_state` and the
 //!   place its comment's binding gives it.
 //! - **Blocks**: a block per node `REF` names (several holders: one
@@ -38,7 +40,7 @@ use specengine_model::{IdScheme, IdScript, Reference, grammar};
 use crate::cap::OUTPUT_CAP_CHARS;
 use crate::code_walk::{CodeTree, read_tree};
 use crate::corpus::indexed;
-use crate::project::{config_error, discover_with_text};
+use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::search::notes;
 use crate::show::{Target, classify, latin_text, not_indexed, pick_reference, project_qualified};
 use crate::{CliError, Env, Globals, Message, one_line};
@@ -46,19 +48,23 @@ use crate::{CliError, Env, Globals, Message, one_line};
 /// Why a written `@rev` of `REF` is ignored (the note's end).
 const REV_IGNORED: &str = "`spec refs` lists every marker whatever its revision";
 
-/// The binding words of a row.
+/// The binding words of a row (`spec lock accept`'s rows too).
 const ITEM: &str = "item";
 const MODULE: &str = "module";
 const RON: &str = "ron";
-const UNANCHORED: &str = "unanchored";
-const CANNOT_VERIFY: &str = "cannot_verify";
+pub(crate) const UNANCHORED: &str = "unanchored";
+pub(crate) const CANNOT_VERIFY: &str = "cannot_verify";
 const FILE: &str = "file";
 
+/// An ambiguous binding's word, before its reason (`spec lock accept`'s
+/// state; a `spec refs` row prints ` ambiguous <reason>`).
+pub(crate) const AMBIGUOUS: &str = "ambiguous";
+
 /// A RON comment binding no value; a RON container past the depth cap.
-const RON_NO_VALUE: &str = "no_value";
-const RON_TOO_DEEP: &str = "nesting_too_deep";
+pub(crate) const RON_NO_VALUE: &str = "no_value";
+pub(crate) const RON_TOO_DEEP: &str = "nesting_too_deep";
 /// The one ambiguity of a RON path.
-const RON_DUPLICATE: &str = "duplicate";
+pub(crate) const RON_DUPLICATE: &str = "duplicate";
 
 /// `spec refs` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -183,14 +189,7 @@ struct Omitted {
 pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsOutcome, CliError> {
     let (project, text) = discover_with_text(env, globals)?;
     project.slug()?;
-    let code = CodeConfig::from_toml(&text)
-        .map_err(|error| config_error(&project.config_label, &error))?
-        .ok_or_else(|| {
-            CliError::spec(format!(
-                "{} has no [code] table: the code layer is off (add [code] with roots)",
-                project.config_label
-            ))
-        })?;
+    let code = code_config(&project, &text)?;
 
     let written = request.reference.trim();
     let scheme = &project.config.scheme;
@@ -241,6 +240,19 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
     })
 }
 
+/// The `[code]` table of the config read from `text`; none: exit 2, the
+/// code layer is off (`spec lock` too).
+pub(crate) fn code_config(project: &ProjectRoot, text: &str) -> Result<CodeConfig, CliError> {
+    CodeConfig::from_toml(text)
+        .map_err(|error| config_error(&project.config_label, &error))?
+        .ok_or_else(|| {
+            CliError::spec(format!(
+                "{} has no [code] table: the code layer is off (add [code] with roots)",
+                project.config_label
+            ))
+        })
+}
+
 /// Exit 1: the reason on one line.
 fn not_found(request: &RefsRequest, reason: String, messages: Vec<Message>) -> RefsOutcome {
     RefsOutcome {
@@ -255,9 +267,9 @@ fn not_found(request: &RefsRequest, reason: String, messages: Vec<Message>) -> R
 /// A node: its file (an index into the resolver's path-ordered files) and
 /// its position in that file's parse. Ordered by (path, position).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct NodeKey {
-    file: usize,
-    ord: usize,
+pub(crate) struct NodeKey {
+    pub(crate) file: usize,
+    pub(crate) ord: usize,
 }
 
 /// The rows of one block before sorting.
@@ -267,9 +279,9 @@ struct Block {
     mentions: Vec<MentionRow>,
 }
 
-/// How a written ID fared (task spec `code-refs`, "States").
+/// How a written ID fared (canon `code-bindings`, "ID state").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IdState {
+pub(crate) enum IdState {
     Resolved,
     Alias,
     Ambiguous,
@@ -280,7 +292,7 @@ enum IdState {
 }
 
 impl IdState {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Resolved => "resolved",
             Self::Alias => "alias",
@@ -301,23 +313,24 @@ impl IdState {
 /// A written ID judged: its state, its Latin fix, the nodes it is listed
 /// under (a look-alike's: its fix's).
 #[derive(Debug, Clone)]
-struct Judged {
-    state: IdState,
+pub(crate) struct Judged {
+    pub(crate) state: IdState,
     fix: Option<String>,
-    nodes: Vec<NodeKey>,
+    pub(crate) nodes: Vec<NodeKey>,
 }
 
-/// The corpus as the index gave it, by the resolver's path order.
-struct Corpus<'a> {
-    resolver: Resolver<'a>,
-    files: Vec<&'a CheckFile>,
+/// The corpus as the index gave it, by the resolver's path order (also
+/// `spec lock accept`'s: [`crate::lock`]).
+pub(crate) struct Corpus<'a> {
+    pub(crate) resolver: Resolver<'a>,
+    pub(crate) files: Vec<&'a CheckFile>,
     scheme: &'a IdScheme,
     /// Written text → its judgement: one resolution per distinct text.
     judged: HashMap<String, Judged>,
 }
 
 impl<'a> Corpus<'a> {
-    fn new(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths) -> Self {
+    pub(crate) fn new(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths) -> Self {
         let resolver = Resolver::new(input, scheme, paths);
         // The first file of a path, as the resolver keeps it.
         let mut by_path: BTreeMap<&str, &CheckFile> = BTreeMap::new();
@@ -339,7 +352,7 @@ impl<'a> Corpus<'a> {
 
     /// The nodes `REF` names, by (path, position); `Ok(Err)`: none, with
     /// the reason (exit 1).
-    fn target_nodes(
+    pub(crate) fn target_nodes(
         &self,
         target: &Target,
         written: &str,
@@ -411,7 +424,7 @@ impl<'a> Corpus<'a> {
 
     /// `written` (a marker's ID, a mention as written) judged, once per
     /// distinct text.
-    fn judge(&mut self, written: &str) -> Judged {
+    pub(crate) fn judge(&mut self, written: &str) -> Judged {
         if let Some(judged) = self.judged.get(written) {
             return judged.clone();
         }
@@ -563,7 +576,12 @@ impl<'a> Corpus<'a> {
 }
 
 /// The `@N` of a marker against a node's revision, the first that applies.
-fn rev_state(marker: &Marker, token: &str, state: IdState, node: Revision) -> &'static str {
+pub(crate) fn rev_state(
+    marker: &Marker,
+    token: &str,
+    state: IdState,
+    node: Revision,
+) -> &'static str {
     if token.len() == marker.id.len() {
         return "unversioned";
     }
@@ -834,7 +852,7 @@ fn binding_text(binding: &BindingRow) -> String {
     let qpath = binding.qpath.as_deref().map(one_line).unwrap_or_default();
     let ambiguous = binding
         .ambiguity
-        .map(|reason| format!(" ambiguous {reason}"))
+        .map(|reason| format!(" {AMBIGUOUS} {reason}"))
         .unwrap_or_default();
     match binding.kind {
         ITEM => format!(

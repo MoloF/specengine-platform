@@ -505,9 +505,9 @@ fn fixture_sources() -> Vec<(String, String)> {
 /// item of `fixtures/code-a` and of [`ROWS`], LF and CRLF, its items equal
 /// full hashing's (`analyze_tree`) — kind, label, place, `has_error` — and
 /// a broken item's state (every error category) is the same; an
-/// error-free item's state is `cannot_verify` with no category, never a
-/// hash, and the analysis says `hashed: false`. M: skip `hash_item` for
-/// broken items too.
+/// error-free item's state is `HashState::NotHashed`, never a hash, and
+/// the analysis says `hashed: false`. M: skip `hash_item` for broken
+/// items too.
 #[test]
 fn the_binders_analysis_matches_full_hashing_on_errors() {
     let mut sources = fixture_sources();
@@ -561,11 +561,7 @@ fn the_binders_analysis_matches_full_hashing_on_errors() {
                 matches!(&a.state, HashState::CannotVerify { categories } if !categories.is_empty())
                     && a.state == b.state
             } else {
-                matches!(a.state, HashState::Hashed(_))
-                    && b.state
-                        == HashState::CannotVerify {
-                            categories: Vec::new(),
-                        }
+                matches!(a.state, HashState::Hashed(_)) && b.state == HashState::NotHashed
             };
             if !same_item || !same_state {
                 failures.push(format!("{name}: {}\n  full: {a:?}\n  bind: {b:?}", a.label));

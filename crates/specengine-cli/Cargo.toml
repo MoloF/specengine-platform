@@ -20,8 +20,8 @@ path = "src/main.rs"
 specengine-model = { path = "../specengine-model" }
 specengine-core = { path = "../specengine-core" }
 specengine-store = { path = "../specengine-store" }
-# Layer A for `spec refs`: Rust comment binding, RON anchors, `qpath`
-# (docs/features/code-refs.md, "Description and interactions").
+# Layer A for `spec refs` and `spec lock accept`: Rust comment binding,
+# RON anchors, `qpath`, the item hash (docs/canon/code-bindings.md).
 specengine-code = { path = "../specengine-code" }
 clap.workspace = true
 serde.workspace = true

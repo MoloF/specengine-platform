@@ -24,7 +24,10 @@
 //! `kind-amendment`: `spec propose amendment`, a new spec or decision
 //! document amending live nodes, applied as a create's new file; task spec
 //! `health-left`: `spec health`, the unapplied amendments of the working
-//! tree.
+//! tree; task spec `spec-lock`: `spec lock accept` ([`lock_accept`], the
+//! accept, its editorial refresh and a gone node's drop, one function
+//! taking the owner's [`LockConsent`] and extra [`LockTrailer`]s) and
+//! `spec lock regen` ([`lock_regen`]).
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -112,7 +115,9 @@
 //! `spec export index`, which writes only `[paths] index`, and `spec
 //! approve`, which writes only the proposal's target file (or creates its
 //! new file, or its decision record) and commits it in the recorded worktree
-//! (`round answer` too, one record per item the owner confirms); `index`,
+//! (`round answer` too, one record per item the owner confirms), `spec lock
+//! accept`, which writes only `spec.lock` and commits it alone, and `spec
+//! lock regen`, which writes only `spec.lock` (task spec `spec-lock`); `index`,
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state` and `round new` write only the data
 //! directory (`propose question`, `discrepancy` and `decision` too), `export
@@ -145,6 +150,8 @@ mod intake;
 mod interpret;
 mod links;
 mod location;
+mod lock;
+mod lock_regen;
 mod package;
 mod preflight;
 mod project;
@@ -206,6 +213,11 @@ pub use intake::{
 pub use interpret::{InterpretRequest, propose_interpretation, propose_interpretation_brief};
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir};
+pub use lock::{
+    LockAcceptRequest, LockConsent, LockMode, LockOutcome, LockPrompt, LockRow, LockTrailer,
+    lock_accept,
+};
+pub use lock_regen::{LockRegenRequest, RegenOutcome, RegenRow, lock_regen};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
@@ -419,6 +431,10 @@ pub enum Outcome {
     Health(HealthOutcome),
     /// `refs`: what in the code names a node.
     Refs(Box<RefsOutcome>),
+    /// `lock accept`: the node's entries of `spec.lock`, committed.
+    Lock(Box<LockOutcome>),
+    /// `lock regen`: a conflict's stages of `spec.lock` merged.
+    LockRegen(Box<RegenOutcome>),
     Export(ExportOutcome),
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
@@ -458,6 +474,8 @@ impl Outcome {
             Self::Graph(graph) if graph.reason.is_some() => Exit::NotFound,
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
+            Self::Lock(lock) => lock.exit(),
+            Self::LockRegen(regen) => regen.exit(),
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
@@ -486,6 +504,8 @@ impl Outcome {
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::LockRegen(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -508,9 +528,12 @@ impl Outcome {
             lines.push(format!("spec: {}", one_line(reason)));
         }
         // The queue's commands quote agent-written text.
+        // So do the lock's commands: a path, a `qpath`, an ID.
         if matches!(
             self,
             Self::Proposal(_)
+                | Self::Lock(_)
+                | Self::LockRegen(_)
                 | Self::Intake(_)
                 | Self::Stage(_)
                 | Self::Inbox(_)
@@ -544,6 +567,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
+        Outcome::Lock(outcome) => lock::render_text(outcome),
+        Outcome::LockRegen(outcome) => lock_regen::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
@@ -575,6 +600,8 @@ impl serde::Serialize for Outcome {
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),
+            Self::Lock(outcome) => outcome.serialize(serializer),
+            Self::LockRegen(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),

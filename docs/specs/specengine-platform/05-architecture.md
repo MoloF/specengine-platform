@@ -92,15 +92,15 @@ file_blob = "5f1c9e…"       # git blob OID of the file: unchanged → binding 
 spec_hash = "b3:9f2c…"      # norm_hash of the node
 ast_hash  = "b3:41aa…"      # canonical symbol hash
 commit    = "a0cea48"
-verified_by = "owner"       # owner | ci — review record: who, when, against which revision
+verified_by = "owner"       # owner only (CI writes nothing) — review record: who, when, against which revision
 verified_at = "2026-09-28"
 ```
 
-Generated, committed with the code; `spec lock --regen` resolves its conflicts. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
+Committed with the code, written only on the owner's terminal, never by `apply_proposal` (ADR-0041); `spec lock regen` resolves its conflicts. Shipped as `format = 1` (`norm_recipe`, `code_recipe`, more keys per binding): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
 
 **What goes into `norm_hash`** (after Doorstop): the section text and semantic fields (`links`, for records `working_answer` etc.). **Excluded** are presentational and process fields: `title`, `status`, `tier`, `owner`, `reviewed`. Renaming a heading must not invalidate coverage. Shipped as recipe `specengine-norm/v1`, with the revision rule (ADR-0040): `docs/canon/node-revision.md`.
 
-**Node revision `rev`** (after tracey and OpenFastTrace): a monotonic number in front-matter. `spec check --staged` in pre-commit **fails if `norm_hash` changed but `rev` did not**. `spec bump` raises changed nodes' revisions in the git index; `spec bump --editorial ID` marks the edit editorial and updates `spec_hash` in the lock without a new revision. "Rewrote the meaning, coverage stayed green" is impossible, and typos make no false drift.
+**Node revision `rev`** (after tracey and OpenFastTrace): a monotonic number in front-matter. `spec check --staged` in pre-commit **fails if `norm_hash` changed but `rev` did not**. `spec bump` raises changed nodes' revisions in the git index; `spec bump --editorial ID` marks the edit editorial and updates `spec_hash` in the lock without a new revision (shipped for the lock as `spec lock accept --editorial`; `bump`: slice 4b). "Rewrote the meaning, coverage stayed green" is impossible, and typos make no false drift.
 
 ### 3.6. Shared library
 

@@ -118,7 +118,7 @@ Discrepancies, questions and proposals **block nothing**. The guarantee "nothing
 spec verify (pre-push / CI / daemon on FileChanged)
   → RULE-STAM-REGEN: code_ahead (ast_hash changed, spec did not) — commit 8263ce2
   → to the owner's queue: "Code changed after verification"
-       [accept code changes]   → lock updated (editorial for code)
+       [accept code changes]   → the owner's `spec lock accept`
        [this changes the rule] → task to an agent: propose a spec edit
        [reject]                → task: restore behaviour (spec_ahead)
 ```
@@ -137,7 +137,7 @@ Shipped as `round` (`docs/canon/round.md`, ADR-0038); R and A records, cancelled
 ## 6. Implementation, verification, acceptance
 
 1. The developer places `// @implements <node>` at a new or changed symbol, the tester places `// @verifies <AC|node>` at tests.
-2. `spec verify --task T-0107 --tests` runs the bound tests (nextest filter), writes the result to `runs`, on success updates `spec.lock` and `impl_status → verified`. **The machine sets the status, not the agent's self-report.**
+2. `spec verify --task T-0107 --tests` runs the bound tests (nextest filter), writes the result to `runs`, on success records evidence in `spec.lock` (`[[tested]]`, slice 8b, ADR-0044) and `impl_status → verified`. **The machine sets the status, not the agent's self-report.**
 3. `complete_task` → `done`. Manual criteria (`kind: manual`) stay open and land in the "awaiting acceptance" panel.
 4. `spec ship <feature>`: the feature spec is compressed to intent and criteria, the rest goes to the archive; `--accepted` sets `acceptance: accepted`.
 

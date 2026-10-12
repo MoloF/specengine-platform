@@ -113,4 +113,3 @@ refs: markers 2, mentions 1; code files 8 (.rs 7, .ron 1), skipped 0
 - The whole tree is parsed per call (an index: slice 6, `symbol-index`); measured in debug, 457 `.rs` files in ~5.5 s.
 - An unreadable root manifest renders units such as `.::bin:.::main`: deterministic, kept.
 - Untested: non-UTF-8 names, readdir order (the test host's file system refuses the one, sorts the other).
-- The binder's error-free items hold a placeholder hash state (`crates/specengine-code/README.md` "Modules"): slice 3 needs a view without it first.

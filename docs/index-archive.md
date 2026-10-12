@@ -61,6 +61,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) shipped
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped
 - [docs/features/spec-index.md](features/spec-index.md) shipped
+- [docs/features/spec-lock.md](features/spec-lock.md) shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped
 - [docs/features/spec-serve.md](features/spec-serve.md) shipped
 - [docs/features/task-package.md](features/task-package.md) shipped

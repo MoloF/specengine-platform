@@ -97,4 +97,4 @@ Pilots (read-only): A 0.2 % of 11 852 items ambiguous — `duplicate` 29 in 11 g
 ## Open
 
 - A process-group kill.
-- Phase 3: `symbols` and `markers` rows, `spec.lock`, per-level hashes, level meaning in RON, the impl `disambiguator`.
+- Phase 3: `symbols` and `markers` rows, per-level hashes, level meaning in RON, the impl `disambiguator`.

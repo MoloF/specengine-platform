@@ -141,9 +141,9 @@ pub struct RonMarker {
 }
 
 /// One comment of a `.ron` file and the [`Anchor`] a marker in it gets:
-/// the anchor of every comment, marked or not (task spec `code-refs`,
-/// "Mentions": a mention belongs to the binding its comment would get as
-/// a marker).
+/// the anchor of every comment, marked or not (a mention belongs to the
+/// binding its comment would get as a marker:
+/// `docs/canon/code-bindings.md` "Mentions").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommentAnchor {
     /// Byte range of the whole comment.

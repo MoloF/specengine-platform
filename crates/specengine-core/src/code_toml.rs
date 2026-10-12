@@ -1,6 +1,6 @@
-//! The `[code]` table of `specengine.toml` (task spec `code-refs`, "The
-//! code table"): which code tree the commands that read code (`spec refs`)
-//! walk. Read apart from the reads ([`CodeConfig::from_toml`];
+//! The `[code]` table of `specengine.toml`
+//! (`docs/canon/code-bindings.md` "The `[code]` table"): which code tree
+//! the commands that read code (`spec refs`, `spec lock accept`) walk. Read apart from the reads ([`CodeConfig::from_toml`];
 //! [`crate::ProjectConfig::from_toml`] only name-checks `code`, so a bad
 //! `[code]` fails no other command). Pure: the text in, the checked values
 //! out; which roots exist is the walker's business.

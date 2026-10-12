@@ -204,6 +204,9 @@ fn items_with_parse_errors_are_cannot_verify_and_never_hashed() {
             HashState::Hashed(digest) => {
                 panic!("{source:?} has a parse error but was hashed as {digest}")
             }
+            HashState::NotHashed => {
+                panic!("{source:?} has a parse error but `hash_item` left it unhashed")
+            }
         }
         assert!(
             states[0].digest().is_none(),

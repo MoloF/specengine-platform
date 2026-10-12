@@ -1,4 +1,5 @@
-//! The code tree `spec refs` reads (task spec `code-refs`, "The walk"):
+//! The code tree `spec refs` and `spec lock accept` read (canon
+//! `code-bindings`, "The walk"):
 //! the `[code]` roots walked, every file read once, Rust files parsed and
 //! their comments bound (`specengine-code`), RON comments anchored, the
 //! Rust items named over their packages. Nothing is written; nothing about
@@ -54,7 +55,7 @@ pub(crate) const RUST_EXTENSION: &str = ".rs";
 pub(crate) const RON_EXTENSION: &str = ".ron";
 
 /// The manifest that makes a directory a package.
-const MANIFEST: &str = "Cargo.toml";
+pub(crate) const MANIFEST: &str = "Cargo.toml";
 
 /// The manifest's table and key naming the package.
 const PACKAGE_TABLE: &str = "package";

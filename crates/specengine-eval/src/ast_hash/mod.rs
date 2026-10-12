@@ -528,7 +528,8 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
         .clone()
         .filter_map(|item| match &item.state {
             specengine_code::HashState::CannotVerify { categories } => Some(categories),
-            specengine_code::HashState::Hashed(_) => None,
+            // `analyze_tree` hashes every error-free item: never `NotHashed`.
+            specengine_code::HashState::Hashed(_) | specengine_code::HashState::NotHashed => None,
         })
         .flatten()
         .map(|category| category.as_str())
@@ -586,7 +587,8 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
                                 specengine_code::HashState::CannotVerify { categories } => {
                                     categories.iter().map(|c| c.as_str()).collect()
                                 }
-                                specengine_code::HashState::Hashed(_) => Vec::new(),
+                                specengine_code::HashState::Hashed(_)
+                                | specengine_code::HashState::NotHashed => Vec::new(),
                             },
                             perturbed: perturbed_hashes[index]
                                 .iter()

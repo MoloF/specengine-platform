@@ -941,22 +941,42 @@ fn manifests_name_packages_alike_from_any_root() {
 // ------------------------------------- the binder's state (iteration 2)
 
 /// Review iteration 2's API note: in `RustBinding::analysis` an error-free
-/// item's state is `cannot_verify` with no category, a value hashing never
-/// gives. Nothing outside `bind.rs` reads it: the walk, the naming and
-/// `refs` name no `HashState`, and every `.state` they read is a
-/// judgement's or a level list's.
+/// item's state is `HashState::NotHashed`, a value hashing never gives.
+/// Nothing outside `bind.rs` reads it: the walk, the naming and `refs`
+/// name no `HashState`, and every `.state` they read is a judgement's or a
+/// level list's. `spec lock accept` (docs/features/spec-lock.md) hashes
+/// the items it locks through `hash_bound_items` alone: `lock.rs` names
+/// `HashState` only for that function's results, and like `lock_regen.rs`
+/// reads no item's `.state` (a judgement's, a level list's or a printed
+/// row's only).
 #[test]
 fn nothing_outside_the_binder_reads_an_items_state() {
-    for file in [
-        "crates/specengine-cli/src/code_walk.rs",
-        "crates/specengine-cli/src/refs.rs",
-        "crates/specengine-code/src/naming.rs",
+    for (file, hashes) in [
+        ("crates/specengine-cli/src/code_walk.rs", false),
+        ("crates/specengine-cli/src/refs.rs", false),
+        ("crates/specengine-code/src/naming.rs", false),
+        ("crates/specengine-cli/src/lock.rs", true),
+        ("crates/specengine-cli/src/lock_regen.rs", false),
     ] {
         let whole = fs::read_to_string(repository_root().join(file)).expect("a source");
         let source = whole
             .find("\n#[cfg(test)]\nmod ")
             .map_or(whole.as_str(), |at| &whole[..at]);
-        assert!(!source.contains("HashState"), "{file} names HashState");
+        if hashes {
+            assert!(
+                source.contains("hash_bound_items("),
+                "{file} hashes its items through `hash_bound_items`"
+            );
+            for other in ["hash_item(", "hash_node("] {
+                assert!(
+                    !source.contains(other),
+                    "{file} hashes through `{other}`, not `hash_bound_items`"
+                );
+            }
+        } else {
+            assert!(!source.contains("HashState"), "{file} names HashState");
+        }
+        let lock_file = file.contains("/lock");
         let mut from = 0;
         while let Some(found) = source[from..].find(".state") {
             let at = from + found;
@@ -974,7 +994,7 @@ fn nothing_outside_the_binder_reads_an_items_state() {
                 .rev()
                 .collect();
             assert!(
-                before == "judged" || before == "levels",
+                before == "judged" || before == "levels" || (lock_file && before == "row"),
                 "{file}: `{before}.state` reads a state"
             );
         }

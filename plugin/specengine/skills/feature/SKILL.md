@@ -46,7 +46,7 @@ Rounds used up with findings open: `report_run` with an outcome other than compl
 ## Never
 
 - Never wait for the owner's decision or re-read the task until it changes; never approve a task or a proposal, nor ask a role to.
-- Never commit, and never write a spec file: spec changes are proposals the owner approves.
+- Never commit, and never write a spec file or the lock: spec changes are proposals the owner approves.
 - Never work in another worktree or send a role to one.
 - A package marked stale is reported, never a stop. A refused write goes to the owner with the step it names (`specengine:implement`).
 

@@ -450,7 +450,7 @@ fn pick(parsed: &ParsedFile, target: &Target, written: &str) -> Vec<usize> {
 }
 
 /// [`pick`] for a reference of the grammar (also `spec refs`' marker and
-/// mention IDs, task spec `code-refs`, "States").
+/// mention IDs, canon `code-bindings`, "ID state").
 pub(crate) fn pick_reference(
     parsed: &ParsedFile,
     reference: &Reference,
