@@ -61,7 +61,7 @@ WA-2, Q6. 9a's list gains row 6: no `[code]` -> rows 4-6 `off`; a bad `[code]`, 
 
 ### One walk
 
-WA-4, Q8. 9a's `code_walk::read_tree` result feeds rows 4-5 and verify's judge; 6a's code index is neither read nor refreshed. If 4a's judge cannot take a walk, this slice refactors it, `spec verify` byte-identical (RD-13).
+WA-4, Q8. 9a's `code_walk::read_tree` result feeds rows 4-5 and verify's judge; 6a's code index is neither read nor refreshed. 4a's CLI judge takes the walk (`spec-verify.md` RD-10) and re-parses only the bound files whose blob changed (its Q4), `spec verify` byte-identical (RD-13).
 
 ### Route and UI
 
@@ -84,7 +84,7 @@ WA-9, WA-10.
 rust-developer, M: mutation -> the test turning red (CLI `tests/health.rs` unless named; RD-1..RD-6, RD-8..RD-12: `health-code.md`):
 
 - [ ] RD-7 -- M: `ok` rows listed -> `drift_lists_no_ok_row`; an own judge -> `drift_equals_verify_rows_minus_ok`; a run cause read as zero -> `verify_run_cause_is_drift_cannot_never_zero`.
-- [ ] RD-13 -- M: the shared walk changes verify -> 4a's golden `verify` tests; a second walk per call -> `health_parses_each_code_file_once` (how it counts: the developer's; SW refinement).
+- [ ] RD-13 -- M: the shared walk changes verify -> 4a's golden `verify` tests; a second walk per call -> `health_calls_read_tree_once` (counts `read_tree` calls; verify's re-parse of changed bound files is no walk, `spec-verify.md` Q4).
 - [ ] RD-14 -- M: exit 1 under `enforce` -> `drift_never_exits_1_under_enforce`; `mode`, `verdict`, `blocked` or a `hint:` in Health -> `health_carries_no_verdict_mode_or_hint`.
 - [ ] RD-15 -- 9a's tests extended to `drift`: `health_code_keys_present_without_code_table`, `health_writes_no_lock_queue_row_or_event` (lock bytes too), `health_code_rows_are_byte_identical_across_roots_and_order`, http `a_row_that_cannot_be_measured_is_still_a_200` (an invalid lock). M: each key or scenario dropped -> its test.
 - [ ] RD-16 -- 8b shipped first: M: a `verified` entry listed -> `drift_tested_lists_only_unverified`; else 8b's spec takes it.
@@ -116,7 +116,7 @@ spec-writer:
 
 ## Risks
 
-Cost: a Health entry runs verify too (`hash-object` over the bound files, the parse shared), in the project's turn; TE-7 measures. Vocabulary: verify's `fix` class shows, `blocked` never. Flood: before any lock accept every binding is `unlocked`; the class counts keep it readable. 4a's judge may need a refactor to take a walk (RD-13). Stale: code edits fire no event; the row is as of its read. `daemon-keys.json` changes again if 8b ships after.
+Cost: a Health entry runs verify too (`hash-object` over the bound files, the walk shared, changed bound files re-parsed), in the project's turn; TE-7 measures. Vocabulary: verify's `fix` class shows, `blocked` never. Flood: before any lock accept every binding is `unlocked`; the class counts keep it readable. Stale: code edits fire no event; the row is as of its read. `daemon-keys.json` changes again if 8b ships after.
 
 ## Out of scope
 
