@@ -10,13 +10,13 @@ adrs: [ADR-0047]
 
 ## Why
 
-Health's row 6 (06 s7: drift) reads "Not measured yet". `spec verify` (4a) shows drift only to whoever runs it, 4c queues it only when raised (`drift-queue.md`); Health is where the owner looks without asking. ADR-0047 lets it list plain verify's findings, read-only, never a verdict (`architecture-code.md#health`, `#verify`).
+Health's row 6 (06 s7: drift) reads "Not measured yet". `spec verify` (4a) shows drift only to whoever runs it, 4c-1 queues it only when raised (`drift-queue.md`); Health is where the owner looks without asking. ADR-0047 lets it list plain verify's findings, read-only, never a verdict (`architecture-code.md#health`, `#verify`).
 
 Slice 9 split (Q1): 9a `health-code.md` (rows 4-5, the rule table, the document's row shape), 9b this. **In scope:** the `drift` key of `spec health [--json]` and its route; verify's judge run in-process over 9a's walk; 8b's non-`verified` `tested` entries if 8b has shipped; Health's row 6, provisional types, mocks.
 
 ## Description and interactions
 
-- **The owner** sees each drifting binding's class, state, node, file and symbol without running `spec verify`; settling it stays `spec lock accept` or 4c's queue, on a terminal.
+- **The owner** sees each drifting binding's class, state, node, file and symbol without running `spec verify`; settling it stays `spec lock accept` or 4c-1's queue, on a terminal.
 - **Crates**: CLI `health.rs` calls verify's library judge (4a) in plain mode over 9a's code walk, so a call walks code once (WA-4); http tests; ui the part. No core or store change, no new crate or dependency.
 - **Unchanged**: `spec verify`'s text, JSON and exits, byte for byte; rows 3-5; `spec check`, hook, CI, gate, `spec.lock`, the queue. Git: verify's own reads only (`hash-object --no-filters`, never `-w`); no `status` or `diff`.
 - **Overridden lines**, fixed at shipping (SW-4): `health.md` "UI" (row 6 "Not measured yet"); `spec-verify.md` "Out of scope" (9b).
@@ -69,7 +69,7 @@ WA-9, WA-10.
 
 - Route as 9a: any row state a 200; the body grows by `drift`.
 - `ui/src/health/`: row 6 "Drift" becomes a part beside rows 4-5, 9a's four states, "None" and "over <rows> bindings, <skipped> skipped" at zero. Rows in the daemon's order, 10 then "Show all <n>"; class and state through the label map (`labels.ts`: `fix` "Fix", `check` "Check", `cannot` "Cannot verify"; an unknown word raw, so 5b's and 5c's states pass); the node linked to the tree, file and symbol plain.
-- No new trigger: drift moves with code edits and lock commits that fire no event; a 4c approve's `proposal.applied` already re-reads; "Check again" re-reads.
+- No new trigger: drift moves with code edits and lock commits that fire no event; a 4c-1 approve's `proposal.applied` already re-reads; "Check again" re-reads.
 - **Exceptions to `.claude/agents/ui-developer.md`** (ADR-0033): provisional types in `ui/src/api/provisional.ts` citing `docs/features/health-drift.md` "Data"; no type generation (none exists).
 
 ## Rules and edge cases
@@ -120,7 +120,7 @@ Cost: a Health entry runs verify too (`hash-object` over the bound files, the wa
 
 ## Out of scope
 
-`verify --changed` (base, Pre-existing) in Health; `mode`, verdicts, hints; diffs, the diff inspector, `lock accept` or 4c's raise from the UI (Phase 4 drift screens, 08:50); 6a's store; a watcher; other worktrees; MCP; `verified` elsewhere in the UI (Phase 4).
+`verify --changed` (base, Pre-existing) in Health; `mode`, verdicts, hints; diffs, the diff inspector, `lock accept` or 4c-1's raise from the UI (Phase 4 drift screens, 08:50); 6a's store; a watcher; other worktrees; MCP; `verified` elsewhere in the UI (Phase 4).
 
 ## Open
 

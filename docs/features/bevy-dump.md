@@ -180,7 +180,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 ## Dependencies and ordering
 
 - **Needs**: 10a `bevy-roles` (hard: `frameworks`, `code_roles`, `fixtures/code-bevy`); 6a `symbol-index` (hard: symbols, `code_packages.targets`, `name` lookups, `CodeAnalyzer`); 1 `code-refs` (shipped). Soft: 6b (MCP for free).
-- **Order**: 5a -> 10a -> 10b, **built right before 12 `machine-bindings`**, which reads the skipped `dependency` edges. Slice 11 `layer-c` is independent of 10b: ADR-0048 leaves layer C to its own decision. `INDEX_FORMAT` +1 per part, once if 10a and 10b ship together.
+- **Order**: 5a-1 -> 10a -> 10b, **built right before 12 `machine-bindings`**, which reads the skipped `dependency` edges. Slice 11 `layer-c` is independent of 10b: ADR-0048 leaves layer C to its own decision. `INDEX_FORMAT` +1 per part, once if 10a and 10b ship together.
 
 ## Implementation
 

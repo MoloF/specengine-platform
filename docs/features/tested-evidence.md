@@ -16,10 +16,10 @@ Delivered: one `[[tested]]` block per node in `spec.lock`, pinned by `rev`, `spe
 
 ## Description and interactions
 
-- **Boundary.** 8a: config, selection, runner, verdicts, event, the single `[y/N]`. 8b: the block and format 3, the write and its commit, the per-node state, `tested` in plain verify, blocks under accept, `--editorial`, a gone node, regen and rebase, 8a's `lock` and `lock_commit`. 4c unchanged: its approve runs accept's function and inherits; stale evidence never becomes a drift item (that would amend ADR-0045). 7a reads, 9b Health: "Surfaces".
+- **Boundary.** 8a: config, selection, runner, verdicts, event, the single `[y/N]`. 8b: the block and format 3, the write and its commit, the per-node state, `tested` in plain verify, blocks under accept, `--editorial`, a gone node, regen and rebase, 8a's `lock` and `lock_commit`. 4c-1 unchanged: its approve runs accept's function and inherits; stale evidence never becomes a drift item (that would amend ADR-0045). 7a reads, 9b Health: "Surfaces".
 - **The owner** answers 8a's one question, now naming the lock commit. **An agent** reads `tested`; it never writes evidence: no MCP tool, route, hook, CI step or role (ADR-0044); `report_run` changes nothing (07:38).
 - **Crates.** Core `lock.rs`: the block in `Lock`, `parse_lock`/`render_lock` for format 3, `bound_bytes` (the canonical input; core has no BLAKE3), `tested_state`, blocks in `merge_accept`, `drop_node`, `refresh_editorial`, `merge_stages` and the rebase. CLI: the write after the run, `write_and_commit`/`check_lock_commit` taking a set of nodes (5b gave them a subject), `LockMode` `tests`, hashing with store's `b3_hash`, `tested` output. Store nothing new; model, MCP, HTTP, UI only as mirrors with 7a or 9b. No new crate or dependency.
-- **Order** (2026-10-12): after 4a, 8a and 5b (levels, `spec lock rebase`); soft after 4b-1 (8b changes `refresh_editorial`, which 4b-1 runs inside the apply commit filtered to vouching entries, `rev-discipline.md` Q10: the later wires vouching blocks into the editorial apply) and 4b-2 (its rule reads blocks: `rev-rule.md`); 4c, 7a, 9b on either side, the later adding its part.
+- **Order** (2026-10-12): after 4a, 8a and 5b (levels, `spec lock rebase`); soft after 4b-1 (8b changes `refresh_editorial`, which 4b-1 runs inside the apply commit filtered to vouching entries, `rev-discipline.md` Q10: the later wires vouching blocks into the editorial apply) and 4b-2 (its rule reads blocks: `rev-rule.md`); 4c-1, 7a, 9b on either side, the later adding its part.
 - **4a is not edited** (being implemented): at 8b's shipping plain `spec verify` gains a `tested` key and section ("Plain verify"), null under `--changed`, no exit effect; 4a's code and goldens change then.
 
 ## Data
@@ -67,7 +67,7 @@ per binding naming the node (any relation, through an alias too), in EntryKey or
   an empty line
 ```
 
-- **Never**: `levels` (evidence is about behaviour: a body edit under a `[sig]` marker stales it, a narrowed marker does not; SW refinement), `skeleton_hash`, `quote_hash` (textual, its context lines and comments), `body_bytes` (5c's), `file_blob`, `commit`, `verified_*`, any git OID (a SHA-256 repository gives the same `b3:`, `spec-lock.md` "The file"). Same treatment as 4c's `drift_hash` (`lock-levels.md` Q7).
+- **Never**: `levels` (evidence is about behaviour: a body edit under a `[sig]` marker stales it, a narrowed marker does not; SW refinement), `skeleton_hash`, `quote_hash` (textual, its context lines and comments), `body_bytes` (5c's), `file_blob`, `commit`, `verified_*`, any git OID (a SHA-256 repository gives the same `b3:`, `spec-lock.md` "The file"). Same treatment as 4c-1's `drift_hash` (`lock-levels.md` Q7).
 - **At the write**: from `HEAD`'s blobs, raw, as accept's step 5 hashes them (its exits too: a filter giving other items, a blob not UTF-8), before the question.
 - **On a read**: over the reader's walk of the disk; a binding whose lock entry's `file_blob` equals the file's on-disk blob takes that entry's digests (4a's level 1, same recipe), else this read's parse, each file once (SW refinement: reads parse only what verify parses, plus bindings without an entry).
 - **AC-2, "a comment elsewhere"** under 5b's digests: an `item` holds as under v2 (comments, rustfmt, a neighbour); a `module` binding now holds for comments and rustfmt (`walk3`), where the analysis' raw blob staled on any byte, but any code edit in its file stales it (the file is the unit); a `ron` binding now holds for comments and sibling values (`value_hash`). `quote_hash` would break both, so it is out.
@@ -122,7 +122,7 @@ WA-10, Q3, Q8.
 
 | Writer | Blocks |
 |---|---|
-| accept (`merge_accept`), so 4c's approve | kept byte for byte; an entry or the node's block at R with another `spec_hash` refuses: "text changed at R" |
+| accept (`merge_accept`), so 4c-1's approve | kept byte for byte; an entry or the node's block at R with another `spec_hash` refuses: "text changed at R" |
 | a gone node (`drop_node`) | the node's block dropped with its entries, row `dropped \| tested`; a block alone suffices to drop |
 | `--editorial` (`refresh_editorial`); 4b-1's editorial apply | a block at R (the editorial apply: a vouching one, `spec_hash` the old `norm_hash`) takes the new `spec_hash` with the entries, row `refreshed \| tested`; "no entry at R" means neither; asks `(editorial: spec_hash of 3 entries and its tested block)` |
 | regen (`merge_stages`) | per node by the `spec-lock.md` "`spec lock regen`" table (base -> ours, theirs; later `verified_at`, then bytes); format 2 and 3 stages of equal recipes merge, the result 3 iff a block remains; rows `<choice> \| <node> \| tested`, a block counted as an entry |
@@ -168,7 +168,7 @@ test-engineer:
 - [ ] TE-1 -- AC-8 end to end with 8a's fake runners (8a's TE-2 "`spec.lock` untouched" becomes this): `report_run` alone -> no block; a pass -> a block, one commit passing the four checks, plain verify `verified`; the text edited, no raise -> `stale spec_changed`; raised, markers lagging -> `unverifiable spec_ahead`; the implementation, the test or a bound RON value edited, a `@verifies` added -> `stale code_changed`; a comment elsewhere, rustfmt, a sibling RON value -> `verified`; a failing run -> the block removed. Each step names its mutation.
 - [ ] TE-2 -- two roots, another cwd, reverse creation order, `core.autocrlf=true`, a SHA-256 repository: identical lock bytes, stdout, JSON.
 - [ ] TE-3 -- a hook refusing the commit -> bytes restored, exit 1, `lock_commit` null, the event written; `HEAD` moving during the run -> nothing written; text changed at R -> exit 1, nothing run. After each, `git status --porcelain=v1 -z --untracked-files=all`, `HEAD`, refs, index unchanged.
-- [ ] TE-4 -- blocks present under accept, `--editorial`, a gone node, regen (format 2 against 3), and a rebase of a simulated grammar bump (5b's TE-5 pattern) giving `rebased`, `entry_dropped`, `unproven`; a drift approve if 4c has shipped, 4b-1's editorial apply if 4b-1 has.
+- [ ] TE-4 -- blocks present under accept, `--editorial`, a gone node, regen (format 2 against 3), and a rebase of a simulated grammar bump (5b's TE-5 pattern) giving `rebased`, `entry_dropped`, `unproven`; a drift approve if 4c-1 has shipped, 4b-1's editorial apply if 4b-1 has.
 - [ ] TE-5 -- reads and Health show verify's state (whichever ships second); `daemon-keys.json` updated.
 - [ ] TE-6 -- the genre scan green; no pilot run (pilots have 0 bound tests).
 

@@ -68,11 +68,11 @@ WA-11. Review key `revisions` after `conflict` (47 keys; `decision-staging.md` h
 {"decision":"approve","option":null,"answer":null,"canon":null,"editorial":true,"note":"typo","span_hash":"<target span hash>"}
 ```
 
-A bare `spec approve PR` confirms it, printing `spec approve PR --editorial`; typed flags replace it whole. Queue schema 7 (store `QUEUE_SCHEMA_VERSION` 6 today; 4c takes 8) adds `"editorial":null` to open approve stages (older binaries refused). `get_proposal`'s schema gains both. No column or event: the trailers are the record.
+A bare `spec approve PR` confirms it, note kept, its staged line (`decision-staging.md`) ending in `--editorial`: ``staged <at>: spec approve PR-0004 --note "typo" --editorial``; typed flags, `--editorial` too, replace it whole, its note dropped (Q14). Queue schema 7 (store `QUEUE_SCHEMA_VERSION` 6 today; 4c takes 8) adds `"editorial":null` to open approve stages (older binaries refused). `get_proposal`'s schema gains both. No column or event: the trailers are the record.
 
 ### UI
 
-WA-12. Accept in the decision dialog gets "Editorial: keep the revision", shown only when `revisions` is a non-empty array, staged `editorial: true`, copied `spec approve PR-0004 --editorial`; the card lists `revisions` as returned.
+WA-12, Q14. Accept in the decision dialog gets "Editorial: keep the revision", shown only when `revisions` is a non-empty array, staged `editorial: true`; a version revised while the dialog is open unchecks it (the default is a meaning approve). The staged card copies the bare `spec approve PR-0004` (the stage confirms, its note kept) and shows an "Editorial: keep the revision" row; the card lists `revisions` as returned. The UI and daemon ship together: every approve POST sends `editorial` (`null` unless checked); an older daemon refuses the unknown key.
 
 ## Rules and edge cases
 
@@ -102,13 +102,13 @@ test-engineer:
 
 ui-developer:
 
-- [ ] UI-1 -- shown on a file-form create card -> `editorial_toggle_hidden_without_revisions`. UI-2 -- the flag dropped from stage or copied command -> the contract test against the mock.
+- [ ] UI-1 -- shown on a file-form create card -> `editorial_toggle_hidden_without_revisions`. UI-2 -- the flag dropped from the stage, or the staged card losing its Editorial row -> the contract test against the mock; the copied command stays bare.
 - [ ] UI-3 -- the UI computing `rev + 1` -> the mock with `to` 9 for rev 3 fails. UI-4 -- provisional types (`StagedChoice`, the review document), `?scenario=editorial` "Mock data"; typecheck, lint, tests.
 
 spec-writer:
 
 - [x] SW-1 -- this spec, refreshed and split 2026-10-13 (`rev-rule.md`, 08 s2, the drafts pointing at either half). SW-2 -- ADR-0043; `architecture.md` `#apply`, `#layout` (detail in `node-revision.md` "Raising"), `#implementation-base`. SW-3 -- `export index`, `check` clean.
-- [ ] SW-4 -- at shipping: "Raising"'s approval bullet as built; `proposal-apply.md` (steps 3, 5-10, completion, reject, the "Known limits" rev line), `proposal-queue.md`, `decision-staging.md` (stage 7 keys, review 47, schema 7); `spec-lock-accept.md` "Steps" 6 and `spec-verify-output.md` "Hints" (no "proposal raising `rev`"; "set the marker"); `architecture-code.md#spec-lock` (the approve writer built); `plugin-files.md` (0.7.2); the overridden lines; CLI, core, store READMEs; `CLAUDE.md`.
+- [ ] SW-4 -- at shipping: "Raising"'s approval bullet as built; `proposal-apply.md` (steps 3, 5-10, completion, reject, the "Known limits" rev line), `proposal-queue.md`, `decision-staging.md` (stage 7 keys, review 47, schema 7, the staged line and the card's Editorial row, Q14); `spec-lock-accept.md` "Steps" 6 and `spec-verify-output.md` "Hints" (no "proposal raising `rev`"; "set the marker"); `architecture-code.md#spec-lock` (the approve writer built); `plugin-files.md` (0.7.2); the overridden lines; CLI, core, store READMEs; `CLAUDE.md`.
 
 ## Risks
 
@@ -127,9 +127,10 @@ spec-writer:
 - Q10 an editorial approve refreshes only vouching entries (`spec_hash` equals the old `norm_hash`, at R) via `refresh_editorial` with an optional filter; `spec lock accept --editorial` keeps "all at R".
 - Q11 a raise into a closed class without `rev` refuses at step 6, before the prompt, exit 1, naming the class and both ways out (admit `rev` in `[classes]`, or `--editorial`).
 - Q12 completing an apply made before 4b accepts step 5's text with or without the raise.
+- Q14 the staged card copies the bare `spec approve PR-0004` (the stage confirms, its note kept) with an "Editorial: keep the revision" row; the terminal's staged line ends in `--editorial`; a typed `--editorial` would replace the stage, dropping its note. A version revised while the dialog is open unchecks the toggle. UI and daemon ship together: every approve POST sends `editorial`, `null` by default; an older daemon refuses the key. Decided 2026-10-13 under the owner's pre-approval, review open.
 - Q2, Q4, Q9, Q13 and `--staged` beside `--changed`: `rev-rule.md` "Open".
 
-Q1-Q7 decided 2026-10-10, Q8-Q13 2026-10-13, under the owner's pre-approval, review open; WA-n: the analysis (2026-10-10).
+Q1-Q7 decided 2026-10-10, Q8-Q14 2026-10-13, under the owner's pre-approval, review open; WA-n: the analysis (2026-10-10).
 
 ## Implementation
 

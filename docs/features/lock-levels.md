@@ -14,12 +14,12 @@ Format 1 (`docs/canon/spec-lock.md` "Entry") keeps one v2 `ast_hash` per item an
 
 Nor can anything carry a lock across a change of format or recipe (WA-1): accept exits 2 on other recipes, regen needs one format and recipe set, a hand edit is forbidden (ADR-0041). A grammar bump strands every lock (`spec-lock.md` "Known limits"), and ADR-0042's "until … re-accepted" cannot happen as built. 5b is itself such a change.
 
-Delivered: `format = 2` (levels, every level's digest, 5a's fingerprints; no `ast_hash`), accept and verify reading levels, and `spec lock rebase`, the first migration writer (ADR-0050; `architecture-code.md#spec-lock`). After 5a (whose code it calls, adding no hashing: WA-2) and 4a; before 8b, 5c, 6a, 6b, 7a, 7b.
+Delivered: `format = 2` (levels, every level's digest, 5a's fingerprints; no `ast_hash`), accept and verify reading levels, and `spec lock rebase`, the first migration writer (ADR-0050; `architecture-code.md#spec-lock`). After 5a-2 (5a-1's code it calls, adding no hashing: WA-2), 4a and 6a (`symbol-index.md` Q11); before 8b, 5c, 6b, 7a, 7b.
 
 ## Description and interactions
 
 - **The owner** meets an old lock as verify's exit 2 with a rebase hint, and runs `spec lock rebase` on a terminal: a row per entry, one question, one verified commit. **An agent** sees `code_ahead code_changed <levels>`, `code_ahead levels_changed` in verify and reads' `sync`; it never rebases (no MCP tool or plugin command).
-- **Crates** (WA-12: core sees digests, level names, `body_bytes` only). Core: the format-2 model (`parse_lock`, `render_lock`, `same_pair`), the level comparison, its own copy of the four names (pinned against `markers.rs`); no tree-sitter. Code: 5a's `item_levels`, `module_levels`, `ron::value_hash`; at most a helper beside `hash_bound_items`; the blob-local locator. Store: blobs by OID through the existing `cat-file --batch` session. CLI: accept, verify, regen, `build_recipes`, a new `lock_rebase.rs`; `write_and_commit`, `check_lock_commit` take a subject (a node, or the rebase). No new crate or dependency.
+- **Crates** (WA-12: core sees digests, level names, `body_bytes` only). Core: the format-2 model (`parse_lock`, `render_lock`, `same_pair`), the level comparison, its own copy of the four names (pinned against `markers.rs`); no tree-sitter. Code: 5a-1's `item_levels`, `module_levels`, `ron::value_hashes` (`hash-levels.md` "Entry points"); the blob-local locator. Store: blobs by OID through the existing `cat-file --batch` session. CLI: accept, verify, regen, `build_recipes`, a new `lock_rebase.rs`; `write_and_commit`, `check_lock_commit` take a subject (a node, or the rebase). No new crate or dependency.
 - **Unchanged**: MCP, HTTP, UI, plugin, eval, the gate, `spec check` (4b-2's `rev-not-raised` reads format 1's and 2's `node`, `rev`, `spec_hash` alike: `rev-rule.md` Q9), the index, the queue. **Nothing is blocked** (ADR-0012): spec work, the gate and MCP never read the lock; reads show `sync` unknown with a note, Health a cause; only a project's own `[verify]` CI or hook stops. **One door** (ADR-0050): rebase writes `spec.lock` alone, never via MCP, a role, a hook, CI or the daemon; its commit settles no `drift` item (completion needs `Proposal:` and `Lock:`; WA-9).
 - **4a's lines overridden at 5b's shipping** (WA-11; 4a shipped them as written): `docs/canon/spec-verify.md` "States" (code changed by levels, every kind; `code_ahead levels_changed`); "Cascade" (level 3 by levels, `module`, `ron` too, `compared` `ast`); "Verdict and exit" cause (7) and "A project's hook" (Q8 here); "Known limits"' autocrlf and noise lines; `docs/canon/spec-verify-output.md` "Hints" (4a gives a run cause no hint; cause (6) gains the rebase hint). For its implementation, no text change: (a) core's judge takes a code-comparison outcome from its producer (`unchanged`, the changed levels, `cannot_verify`), never two `ast_hash` strings; (b) the base lock source stays pluggable (its RD-10 seams); optionally `"levels": null` reserved per JSON row. Other overridden lines: SW-4.
 
@@ -57,7 +57,7 @@ verified_by = "owner"
 verified_at = "2026-10-10"
 ```
 
-- Header: `code_recipe` = `<LEVEL_RECIPE> tree-sitter-rust/<version> abi/<n>` (`build_recipes` leaves v2's `RECIPE`); `norm_recipe` and the comment line (it names `spec lock`) unchanged. The entry key is unchanged (core `EntryKey`; WA-3): regen's merge, 4a's rows and 4c's items keep theirs.
+- Header: `code_recipe` = `<LEVEL_RECIPE> tree-sitter-rust/<version> abi/<n>` (`build_recipes` leaves v2's `RECIPE`); `norm_recipe` and the comment line (it names `spec lock`) unchanged. The entry key is unchanged (core `EntryKey`; WA-3): regen's merge, 4a's rows and 4c-1's items keep theirs.
 - Keys in this order (WA-4: `*_hash` as `spec_hash` and 05:152's `body_hash`): `node, rev, spec_hash, relation, file, kind, symbol, item_kind?, levels, sig_hash, body_hash, deps_hash, skeleton_hash?, quote_hash?, body_bytes?, file_blob, commit, verified_by, verified_at`.
 
 | Key | Value |
@@ -78,7 +78,7 @@ verified_at = "2026-10-10"
 |---|---|---|
 | `id_state`, `rev_state` | as format 1 | as format 1 |
 | `levels` (new) | `Default`, a declared list | `Invalid` (`unclosed`, `unknown`, `duplicate`, `empty`): `not locked: bad_levels` |
-| binding | `item`, `module` with levels hashed; `ron` with a `value_hash` | `ambiguous <reason>`, `unanchored`, `cannot_verify`: format 1's, plus a `module` whose file has any parse error, a `ron` value whose file has a lexer error |
+| binding | `item`, `module` with levels hashed; `ron` with a `value_hash` | `ambiguous <reason>`, `unanchored`, `cannot_verify`: format 1's, plus a `module` whose file has any parse error, a `ron` value of a file `RonAnalysis` rejects |
 
 **Merge**: `same_pair` (core `lock.rs`) compares `rev`, `spec_hash`, `levels`, the three digests, the fingerprints, `body_bytes`, `file_blob`; equal is `unchanged`, byte-identical; a changed `deps_hash` alone refreshes. `--editorial` and 4b-1's editorial apply keep every code field byte for byte.
 
@@ -88,7 +88,7 @@ WA-10, WA-11, Q5, Q6. Per row with a lock entry E and bound markers: L_lock = E'
 
 1. A marker's levels `Invalid`: 4a's `bad_marker bad_levels`, in its order of states.
 2. The blob equals `file_blob`: code unchanged, nothing parsed (`compared: blob`). Markers bind in their own file (WA-10): L_mark moves only through an ID's resolution (a new alias), and L_lock ≠ L_mark then reads `levels_changed` (SW refinement).
-3. Else the digests from this run's parse, as accept's. `CannotVerify`: `cannot_verify item_error`, detail the first `ErrorCategory` of the item or a module's file; a RON file's lexer error: detail `ron_lexer` (SW refinement).
+3. Else the digests from this run's parse, as accept's. `CannotVerify`: `cannot_verify item_error`, detail the first `ErrorCategory` of the item or a module's file; a RON file `RonAnalysis` rejects: its first `error_categories` entry (`hash-levels.md` Q7).
 4. C's digests against E's; those differing, in canonical order, are `changed`. Non-empty: code changed, `code_changed`, detail `changed` joined by `,` (`body,deps`). Empty and L_lock ≠ L_mark: code changed, `levels_changed`, detail `<L_lock>-><L_mark>` (`sig,body->sig`). Else code unchanged.
 
 - **4a's matrix stands**, "code changed" now steps 2 and 4: spec unchanged `code_ahead code_changed|levels_changed` (Check, the hint accept's); spec changed and raised `code_ahead raised`; changed, not raised `conflict` (Fix). Q6: `levels_changed` is Check.
@@ -121,7 +121,7 @@ WA-7, WA-8, Q1, Q2, Q4. `spec lock rebase [--json]` (+ `--root`, `--config`):
 |---|---|---|
 | `item` | items of `item_kind` (`code-bindings.md` "Rust binding") whose in-file name (inline `mod`s, owner, name, rendered as the walk renders a `qpath`) is `symbol` or ends it at a `::` boundary | `item_levels` |
 | `module` | the file's module; each inline `mod` whose in-file path ends `symbol` at a `::` boundary | `module_levels`; the `mod_item`'s `item_levels` |
-| `ron` | the anchor of `symbol`'s field path (`code-identity.md` "RON binding") | `ron::value_hash` |
+| `ron` | the anchor of `symbol`'s field path (`code-identity.md` "RON binding") | `ron::value_hashes` |
 
 - **Ties**: of several candidates, those a marker of the blob binds whose token, or `spec show`'s resolution of it, is the entry's `node`, with its `relation`; one left is located, else `ambiguous`.
 - **Cross-check**: a format-1 `item` entry under this build's own v2 recipe (`RECIPE tree-sitter-rust/<v> abi/<n>`) must give its `ast_hash` again via `hash_item`, else `hash_mismatch`. Under another recipe nothing can be cross-checked: the location stands, with one `note: rebase: "<old code_recipe>" is not this build's: located without a hash cross-check`.
@@ -130,7 +130,7 @@ WA-7, WA-8, Q1, Q2, Q4. `spec lock rebase [--json]` (+ `--root`, `--config`):
 |---|---|
 | `blob_missing` | no object of that OID (gc, a partial or shallow clone) |
 | `not_utf8` | the blob is not UTF-8 |
-| `cannot_verify <category>` | the located unit gives `CannotVerify`; a RON lexer error, `nesting_too_deep` |
+| `cannot_verify <category>` | the located unit gives `CannotVerify` (a RON file: any rejection) |
 | `symbol_gone` | no candidate |
 | `ambiguous` | the markers leave several candidates or none; an `Ambiguous` RON anchor |
 | `hash_mismatch` | the cross-check fails |
@@ -192,14 +192,13 @@ spec-writer:
 - [x] SW-1 -- this spec.
 - [x] SW-2 -- ADR-0050; `architecture.md#apply`, `#control`'s ADR list; `architecture-code.md#spec-lock` (writer, ADRs, "As built"), `#verify`.
 - [x] SW-3 -- drafts refreshed 2026-10-12, each pointing here: 4b, 4c (`drift_hash`, Q7; "Order"), 6a, 6b, 7a, 7b, 8a's 8b line, `hash-levels.md`, 08:41; 4a overridden here, not edited.
-- [ ] SW-4 -- at shipping: `spec-lock.md` ("The file", "Entry", "Lockability", `regen`, a rebase section, "Known limits"), `spec-lock-accept.md` (step 6, "Exits"), 4a's verify canon, 05 s3.5, s5.2, :173 (unless 4a deleted it), 07:106-107, 08:41, AC-2, the CLI, core, store, code READMEs, `CLAUDE.md` State.
+- [ ] SW-4 -- at shipping: `spec-lock.md` ("The file", "Entry", "Lockability", `regen`, a rebase section, "Known limits"), `spec-lock-accept.md` (step 6, "Exits"), 4a's verify canon, 05 s3.5, s5.2, 07:106-107, 08:41, AC-2, the CLI, core, store, code READMEs, `CLAUDE.md` State.
 - [x] SW-5 -- `export index`, `check` clean.
 
 ## Risks
 
-- The RON lexer is not in `code_recipe`: a lexer change must bump `LEVEL_RECIPE`; only the golden's RON digests catch it.
+- The RON lexer is not in `code_recipe`: a lexer change must bump `LEVEL_RECIPE`; 5a-1's stream pin and the golden's RON digests catch it.
 - Blob-local location may drop entries: safe (`unlocked`), noisy.
-- 05:173 (level 2) is claimed by 4a and `hash-levels.md` Q5: whichever ships first deletes it.
 - Alias resolution reads the working-tree corpus (`spec-lock-accept.md` "Known limits"), rebase's ties and format-1 levels too.
 - Entries grow about 1.8x; core copies the level names (RD-10).
 
@@ -213,7 +212,7 @@ spec-writer:
 |---|---|---|
 | Q1 an entry rebase cannot re-derive | dropped, named, counted | refusing all strands the lock (no other writer) |
 | Q2 locating the item | in its blob: name suffix, markers, v2 cross-check | a walk per distinct `commit`; decayed ones drop anyway |
-| Q3 a format-1 lock under 5b | exit 2, the rebase hint | a second, v2 judge; `ast_hash` alive in 4c, 6a, 6b, 7a |
+| Q3 a format-1 lock under 5b | exit 2, the rebase hint | a second, v2 judge; `ast_hash` alive in 4c-1, 6a, 6b, 7a |
 | Q4 levels of a format-1 entry | its blob markers' union, else `sig, body` | `sig, body`: every narrower marker `levels_changed` |
 | Q5 levels verify compares | the lock's ∪ the markers' | markers only: narrowing hides a body edit |
 | Q6 class of `levels_changed` | Check | Fix stops `enforce` CIs on a contract edit |

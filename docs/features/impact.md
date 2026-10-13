@@ -44,7 +44,7 @@ Q7, WA-11.
 
 - **REV**: a leading `-` or a control character: exit 2 before any git call. Then `git rev-parse --verify --end-of-options <REV>^{commit}`; not a commit: exit 1 ``spec: --since `<REV>` is not a commit``.
 - **Compared**: REV's tree with the working tree on disk under the `[code]` roots and excludes, untracked files included, `.gitignore` and the git index never read (as `spec check --changed`, `spec-check-git.md` "The changed check"). `spec.lock` is not involved: drift since verification is `spec verify`'s question.
-- **Reads**: REV's `ls-tree -r -z` once; disk OIDs from one `hash-object --no-filters --stdin-paths`. Equal OID: unchanged. A differing path: REV's blob from one `cat-file --batch`, parsed; each item's `hash_item` (v2) against the index's `ast_hash`; a RON file whole. 2026-10-12, `lock-levels.md`: after 5b the item comparison uses 5a's level digests against the index's (6a's columns), restated before 7b's code.
+- **Reads**: REV's `ls-tree -r -z` once; disk OIDs from one `hash-object --no-filters --stdin-paths`. Equal OID: unchanged. A differing path: REV's blob from one `cat-file --batch`, parsed; each item's 5a level digests against the index's (6a's columns; it stores no `ast_hash`: `symbol-index.md` Q11, 2026-10-13); a RON file whole.
 - **Delta**: `added` (disk only), `removed` (REV only), `changed` (both, the hash differs), each `{file, symbol, item_kind, line}` (`line` the disk's, REV's for removed), by file bytes, line, symbol; an equal-hash edit (a comment, formatting) is no change; `renamed` null until 5c.
 
 ### Output
@@ -53,11 +53,11 @@ Text: seeds, the four lists, the summary; a row is 7a's line (`bundle-bindings.m
 
 ```
 since a0cea48: 1 file, 1 changed, 1 added, 0 removed
-  changed | crates/tally/src/counter.rs:22-30 | crates/tally::counter::impl Tally impl_item
+  changed | crates/tally/src/counter.rs:22-30 | crates/tally::counter::impl Tally #1 impl_item
   added | crates/tally/src/counter.rs:41-44 | <qpath> function_item
 node LAW-BOUND | law | Bound | docs/spec/counter.md:13 | distance 0
 node cap-check/PASS-01 | pass-mark | Stepping past the cap keeps the cap | docs/features/cap-check.md:13 | distance 1
-symbol LAW-BOUND | implements | crates/tally/src/counter.rs:22-30 | item crates/tally::counter::impl Tally impl_item | layer a | sync code_ahead code_changed
+symbol LAW-BOUND | implements | crates/tally/src/counter.rs:22-30 | item crates/tally::counter::impl Tally #1 impl_item | layer a | sync code_ahead code_changed
   sig impl Tally
 test cap-check/PASS-01 | verifies | crates/tally/tests/bounds.rs:16-22 | item <qpath> function_item | layer a | sync unlocked
 task T-0003 | in_progress | Raise the cap | LAW-BOUND

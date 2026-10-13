@@ -130,7 +130,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec; 08 s2 lists 10a; a dated note in `symbol-index.md`; `export index`, `check` clean.
-- [ ] SW-2 -- at shipping: `code-bindings.md` "The `[code]` table" (`frameworks`; `bevy` an unknown key); a Tier 2 `docs/canon/code-roles.md` (≤ 12 288 B; `code-identity.md` is full at 12 272); `specengine-code` README (10 221 of 10 240 B: detail down to that canon first), store, CLI READMEs; 05 s5.1 :128 pointer; 07 :30 (`find_symbols` roles), :204 (`bevy = true` -> `frameworks`); `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping: `code-bindings.md` "The `[code]` table" (`frameworks`; `bevy` an unknown key); a Tier 2 `docs/canon/code-roles.md` (≤ 12 288 B; `code-identity.md` is full at 12 272); `specengine-code` README (10 199 of 10 240 B: 5a-1 moves "Hash recipe" down first), store, CLI READMEs; 05 s5.1 :128 pointer; 07 :30 (`find_symbols` roles), :204 (`bevy = true` -> `frameworks`); `CLAUDE.md` State.
 - [x] SW-3 -- no ADR of its own (ADR-0048 is 10b's).
 
 ## Risks
@@ -160,8 +160,8 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 
 ## Dependencies and ordering
 
-- **Needs**: 1 `code-refs` (shipped: `[code]`, the walk); 6a `symbol-index` (hard: tables, `CodeAnalyzer`, tiers, `code_fp`); 5a `hash-levels` first (both edit `specengine-code` `lib.rs`). Soft: 6b `code-tools` (`find_symbols` inherits roles; whichever ships second carries the mirror keys).
-- **Order**: 5a, 6a -> 10a -> 10b (`bevy-dump.md`, its `not_dumped` reads 10a's rows), built right before 12 `machine-bindings`; 10a before 11 `layer-c`, which refines text-only roles. 6c only if TE-7 breaks AC-10.
+- **Needs**: 1 `code-refs` (shipped: `[code]`, the walk); 6a `symbol-index` (hard: tables, `CodeAnalyzer`, tiers, `code_fp`); 5a-1 `hash-levels` first (both edit `specengine-code` `lib.rs`). Soft: 6b `code-tools` (`find_symbols` inherits roles; whichever ships second carries the mirror keys).
+- **Order**: 5a-1, 6a -> 10a -> 10b (`bevy-dump.md`, its `not_dumped` reads 10a's rows), built right before 12 `machine-bindings`; 10a before 11 `layer-c`, which refines text-only roles. 6c only if TE-7 breaks AC-10.
 
 ## Implementation
 

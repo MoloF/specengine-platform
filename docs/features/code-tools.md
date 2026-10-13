@@ -61,10 +61,10 @@ WA-16, Q5. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--co
 - **Text**: 4a's row lines, `ok` rows too (class `-`), hints, the summary `verify --node <REF>[ --symbol <QPATH>]: ` + 4a's after `verify: `; cut at `OUTPUT_CAP_CHARS`, then `[truncated: <k> rows not shown; narrow with --symbol QPATH]`.
 - **JSON**: 4a's, rows the printed ones; `node` (holders' IDs), `symbol` after `base`; `omitted` `{rows}` last; the three null without `--node`.
 
-**Row keys**, every verify (SW refinement: `--node` rows equal a full run's): `ast_hash` after `compared`, the item's v2 hash on disk for an `item` row whose item exists error-free, else null: level 1 equal: E's `ast_hash` (same bytes and recipe; nothing hashed, 4a's cascade unchanged); else `hash_item` over this run's parse; never the index's column (05:162). 2026-10-12, `lock-levels.md` "Level-aware verify": format 2 has no `ast_hash`; 5b's row key `levels` (`{lock, markers, changed}`) follows `compared`, and this key, the JSON below and RD-6 are restated over the level digests before 6b's code. Each `markers` item `{line, rev, id_state, rev_state}` (`code-bindings.md`).
+**Row keys**, every verify (SW refinement: `--node` rows equal a full run's): `ast_hash` after `compared`, the item's v2 hash on disk for an `item` row whose item exists error-free, else null: level 1 equal: E's `ast_hash` (same bytes and recipe; nothing hashed, 4a's cascade unchanged); else `hash_item` over this run's parse; never the index's level columns (05:162). 2026-10-12, `lock-levels.md` "Level-aware verify": format 2 has no `ast_hash`; 5b's row key `levels` (`{lock, markers, changed}`) follows `compared`, and this key, the JSON below and RD-6 are restated over the level digests before 6b's code. Each `markers` item `{line, rev, id_state, rev_state}` (`code-bindings.md`).
 
 ```
-check | code_ahead code_changed | LAW-BOUND | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally impl_item
+check | code_ahead code_changed | LAW-BOUND | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally #1 impl_item
 - | ok | LAW-BOUND | configures | data/limits.ron | ron root.cap
 verify --node LAW-BOUND: observed [observe]: 0 fix, 1 check (0 pre-existing), 0 cannot, 1 ok; 1 by blob, 1 by ast; 0 skipped
 ```
@@ -73,7 +73,7 @@ verify --node LAW-BOUND: observed [observe]: 0 fix, 1 check (0 pre-existing), 0 
 {"mode":"observe","base":null,"node":["LAW-BOUND"],"symbol":null,"verdict":"observed",
  "counts":{"rows":2,"ok":1,"fix":0,"check":1,"cannot":0,"pre_existing":0,"skipped":0},"cascade":{"by_blob":1,"by_ast":1},
  "rows":[{"node":"LAW-BOUND","relation":"implements","file":"crates/tally/src/counter.rs","kind":"item",
-   "symbol":"crates/tally::counter::impl Tally","item_kind":"impl_item","state":"code_ahead","category":"code_changed",
+   "symbol":"crates/tally::counter::impl Tally #1","item_kind":"impl_item","state":"code_ahead","category":"code_changed",
    "detail":null,"class":"check","pre_existing":false,"markers":[{"line":21,"rev":3,"id_state":"resolved","rev_state":"current"}],
    "node_rev":3,"lock":{"rev":3,"commit":"<40 hex>","verified_at":"2026-10-10"},"compared":"ast","ast_hash":"<64 hex>"},{…}],
  "delta":{…},"cannot":[],"notes":[],"omitted":null}
@@ -117,7 +117,7 @@ rust-developer, M: mutation -> the test turning red:
 - [ ] RD-3 -- parity per tool and exit on `code-a`. M: an MCP-side sort or cut, or exit 1 as success -> `code_tools_equal_the_cli`.
 - [ ] RD-4 -- schemas. M: a nested or `oneOf` input -> `mcp_read`'s flat-schema test; a CLI key without its mirror -> the schema walker; `item_kind` an enum -> `code_mirrors_keep_kinds_free`.
 - [ ] RD-5 -- `--node`. M: own states or filter -> `check_binding_equals_the_verify_rows`; sections taken -> `verify_node_lists_the_node_not_its_sections`; a homoglyph marker dropped -> `verify_node_follows_refs_listing`; counts over all rows -> `verify_node_counts_its_rows_only`; REF naming nothing at exit 1 -> `verify_node_naming_nothing_is_exit_2`; tiers on QPATH -> `verify_symbol_is_byte_exact`.
-- [ ] RD-6 -- row keys. M: the index's `ast_hash` read (its column tampered) -> `check_binding_ast_hash_is_fresh`; a blob-equal row hashed -> 4a's `blob_equal_entries_are_not_hashed`; a key dropped -> `verify_json_every_key_present`.
+- [ ] RD-6 -- row keys. M: the index's level digests read (their columns tampered; 2026-10-13, `symbol-index.md` Q11) -> `check_binding_levels_are_fresh`; a blob-equal row hashed -> 4a's `blob_equal_entries_are_not_hashed`; a key dropped -> `verify_json_every_key_present`.
 - [ ] RD-7 -- WA-18. M: the exit-2 document dropped -> `check_binding_cannot_verify_keeps_its_rows`; a document at a usage exit 2 -> `check_binding_usage_has_no_document`; another tool's exit-2 document kept -> `mcp_read`'s exit-2 test.
 - [ ] RD-8 -- `INSTRUCTIONS`. M: a tool unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`'s asserts; text changed, pin kept -> `mcp_decision.rs`.
 - [ ] RD-9 -- size: text + `structuredContent` ≤ `MAX_RESULT_CHARS` per tool. M: `unmapped` JSON uncut -> `mcp_size`; `--node` uncut -> `verify_node_cut_names_narrowing`.
@@ -141,7 +141,7 @@ spec-writer:
 
 ## Risks
 
-`INSTRUCTIONS` keeps 44 B after 6b; 4c's `report_drift` line (~108 B), 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~190: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity, described). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
+`INSTRUCTIONS` keeps 44 B after 6b; 4c-1's `report_drift` line (~108 B), 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~190: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity, described). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
 
 ## Out of scope
 
@@ -157,7 +157,7 @@ HTTP routes, UI (Q8, Phase 4); `delta.symbols`, `get_impact` (7b, Q6); `with: ["
 | Q6 `delta.symbols` | 7b `impact` | a git reader here |
 | Q7 coverage | 6a's containment; mentions apart | path classes break genre |
 | Q8 HTTP | none now | keys before Phase 4 screens |
-| SW `INSTRUCTIONS` | 6b's text; **4c, 7a, 7b re-measure after 6b** and make their own room | 6b cuts for drafts that may change |
+| SW `INSTRUCTIONS` | 6b's text; **4c-1, 7a, 7b re-measure after 6b** and make their own room | 6b cuts for drafts that may change |
 | Names (2026-10-10) | CLI flag names, REF `id`, every tool; 7b amended | 07's `node_id`, `qpath`: two vocabularies |
 | SW REF | naming nothing: exit 2 | exit 1 breaks ADR-0042's Fix-only exit 1 |
 
@@ -170,7 +170,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 ## Dependencies and ordering
 
 - **Needs**: 1 `code-refs` (shipped); 3 `spec-lock` (the reader); 4a `spec-verify` (the judge, the command, its JSON); 6a `symbol-index` (index, `symbols`, `unmapped`, `refs` from it).
-- **Order**: 6a and 4a -> 6b -> the `INSTRUCTIONS` lines of 4c, 7a, 7b. **Independent**: 5a-5c, 8a, 9a, 9b. **Later**: Phase 4 (HTTP, UI).
+- **Order**: 6a and 4a -> 6b -> the `INSTRUCTIONS` lines of 4c-1, 7a, 7b; 6b after 5b and 5c (2026-10-13, `symbol-index.md` Q11), its row keys over the level digests. **Independent**: 8a, 9a, 9b. **Later**: Phase 4 (HTTP, UI).
 
 ## Implementation
 

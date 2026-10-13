@@ -195,7 +195,7 @@ Q7: `health-drift.md`. WA-n: the analysis' working answers (2026-10-10), [A] ass
 
 - **Needs**: slice 1 `code-refs` (shipped, `code-bindings.md`); the queue (Phase 2). Nothing of 3-8.
 - **Order**: may be pulled forward right after `code-refs`, before slice 3 (Q1: only slice 1 and the queue); else at 08's position before 9b. Beside slice 3, both touch `ProjectConfig`'s name-checked tables: the later rebases.
-- **Interplay**: 4c's `family()` rejudges the `decides()` call (`drift` does not decide); 6a reaches row 5 through slice 1; 9b shares walk, keys, parts.
+- **Interplay**: 4c-1's `family()` rejudges the `decides()` call (`drift` does not decide); 6a reaches row 5 through slice 1; 9b shares walk, keys, parts.
 
 ## Implementation
 

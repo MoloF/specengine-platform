@@ -19,8 +19,8 @@ Delivered: each binding of the nodes read, with its `sync`, in the call the agen
 ## Description and interactions
 
 - **An agent** gets, in `get_context_bundle`, `get_node`, `get_tree` or `get_task`, the code bound to its nodes and each binding's `sync`. **The owner**: the same in the daemon's JSON (screens: Phase 4).
-- **Freshness** (WA-2): a read printing code data (bundle, `show --bindings`, tree, `task show`, 7b's `impact`) refreshes the md index, then 6a's code index (`symbol-index.md` "Cache key and cross-file pass"), when `[code]` exists; `show` without `--bindings`, `search`, `graph` never walk code. Amends `symbol-index.md` WA-6, RD-11.
-- **Sync** (Q5; WA-3..WA-5): 4a's pure core judge (`docs/canon/spec-verify.md` "States") over the refreshed index rows, `spec.lock` (slice 3's reader) and the read's own parse for R, H. An item compares the indexed `ast_hash` with the lock's (no git); a locked `module` or `ron` row takes its blob OID from one `git hash-object --no-filters --stdin-paths` per read (`GitEnv::child_vars`). 2026-10-12, `lock-levels.md` "Level-aware verify": after 5b an item compares the indexed level digests of (the lock's ∪ the markers' levels) minus `path` with the lock's, a `module` or `ron` row whose blob differs is judged by levels too (its digests from 6a's index or the read's own parse), and a format-1 lock gives `sync` unknown with the rebase note. Plain state: no base, no Pre-existing; a per-node `tested` (`tested-evidence.md` "Surfaces", no level number) added by whichever of 7a and 8b ships second (Q10).
+- **Freshness** (WA-2): a read printing code data (bundle, `show --bindings`, tree, `task show`, 7b's `impact`) refreshes the md index, then 6a's code index (`symbol-index.md` "Cache key and cross-file pass"), when `[code]` exists; `show` without `--bindings`, `search`, `graph` never walk code. Amends `symbol-index.md` WA-6, RD-9 (RD-11 before 2026-10-13).
+- **Sync** (Q5; WA-3..WA-5): 4a's pure core judge (`docs/canon/spec-verify.md` "States") over the refreshed index rows, `spec.lock` (slice 3's reader) and the read's own parse for R, H. An item compares the indexed level digests of (the lock's ∪ the markers' levels) minus `path` with the lock's (no git; `lock-levels.md` "Level-aware verify": 5b ships first, `symbol-index.md` Q11); a locked `module` or `ron` row takes its blob OID from one `git hash-object --no-filters --stdin-paths` per read (`GitEnv::child_vars`) and, when it differs, is judged by levels from the read's own parse of that file (6a stores no module or RON digest: its Q14); a format-1 lock gives `sync` unknown with the rebase note. Plain state: no base, no Pre-existing; a per-node `tested` (`tested-evidence.md` "Surfaces", no level number) added by whichever of 7a and 8b ships second (Q10).
 - **Crates**: core the pure selection, order and fit, 4a's judge reused; store queries over 6a's tables by node ID (never a walk) and the blob call; CLI `bundle`, `show`, `tree`, `package`, verify's delta; model the row type, replacing `PackageBinding {}`; MCP `with`, mirrors; HTTP `with=bindings`; UI types only (Q14). No new crate or dependency. Relations are the marker vocabulary, never kinds (WA-17).
 - **Unchanged**: every read's exit; verify's rows and verdict; `spec check`, gate, hook, CI; `INDEX_FORMAT`, queue schema; `TASK_PACKAGE_SCHEMA_VERSION` 1 (a promised key filled); `graph`, `search`. **Writes**: the data directory only.
 - **Overridden lines**, fixed at shipping (SW-2): `spec-cli-bundle.md` layers 5, 9 and "Not yet"; `task-package.md`'s "`bindings` `[]` until Phase 3"; `mcp-read.md` `with`'s enum; 05:215, 07:26, 07:78.
@@ -33,14 +33,14 @@ WA-6, Q2. One object in every read (and 7b's): the lock key (`docs/canon/spec-ve
 
 ```json
 {"node":"LAW-BOUND","relation":"implements","file":"crates/tally/src/counter.rs","kind":"item",
- "symbol":"crates/tally::counter::impl Tally","item_kind":"impl_item","line":22,"end_line":30,
+ "symbol":"crates/tally::counter::impl Tally #1","item_kind":"impl_item","line":22,"end_line":30,
  "signature":"impl Tally","layer":"a","sync":"code_ahead","category":"code_changed","detail":null}
 ```
 
 Text, one line per row, then `  sig <signature>` when not null (`node` first, SW refinement: a document target holds its sections' rows):
 
 ```
-LAW-BOUND | implements | crates/tally/src/counter.rs:22-30 | item crates/tally::counter::impl Tally impl_item | layer a | sync code_ahead code_changed
+LAW-BOUND | implements | crates/tally/src/counter.rs:22-30 | item crates/tally::counter::impl Tally #1 impl_item | layer a | sync code_ahead code_changed
   sig impl Tally
 cap-check/PASS-01 | verifies | crates/tally/tests/bounds.rs:16-22 | item <qpath> function_item | layer a | sync unlocked
 ```
@@ -108,7 +108,7 @@ rust-developer, M: mutation -> the test turning red:
 - [ ] RD-4 -- no `[code]`: on `spec-a`, `spec-b` bundle text and `bundle_hash`, show and tree text equal pinned goldens. M: an empty heading or a note -> `no_code_table_reads_are_unchanged`.
 - [ ] RD-5 -- each "Degrade" cause: exit 0, the same spec part, the table's rows, one note. M: exit 2 propagated -> `bundle_survives_a_broken_code_layer`; older rows after a bad `[code]` -> `bad_code_table_shows_no_stale_rows`.
 - [ ] RD-6 -- fit. M: rows before layer 2 -> `bindings_follow_criteria`; the reserve without rows -> `frame_reserve_counts_binding_rows`; `bundle_fit.rs` asserts the budget bound with rows present.
-- [ ] RD-7 -- M: `show` without `--bindings` refreshes code -> `show_never_walks_code` (6a's RD-11, reworded); `with` ignored -> `get_node_with_bindings_equals_show_bindings`.
+- [ ] RD-7 -- M: `show` without `--bindings` refreshes code -> `show_never_walks_code` (6a-2's RD-9 `show_search_graph_never_refresh_code`, reworded); `with` ignored -> `get_node_with_bindings_equals_show_bindings`.
 - [ ] RD-8 -- tree. M: descendants counted -> `tree_counts_own_rows`; counters without `[code]` -> `tree_without_code_has_null_bindings`.
 - [ ] RD-9 -- package. M: `schema_version` 2 -> `p2_2_the_package_schema_is_pinned_at_version_1` (its key paths gain the row's); no cap -> `package_bindings_are_capped_with_a_note`; a stack literal -> the P2-3 scan.
 - [ ] RD-10 -- M: `tests_reaching` left null -> `tests_reaching_lists_bound_tests`.
@@ -140,7 +140,7 @@ The fit re-estimates the whole body per candidate (3 000: 1.13 s, `spec-cli-bund
 
 ## Out of scope
 
-evidence levels (none: `tested-evidence.md` Q5); `tested` (Q10, the later of 7a and 8b); `bindings.moved` (5c); level-aware sync (5b); layers B, C; a call-graph radius; the `spec index` delta; open-proposal counters; `show --history`; `--task`, `get_context_bundle {task_id}`, the `bundles` log, `compact`; 6b's tools; UI screens (Phase 4); `unbound`, Health (9); writing markers; the gate's file-to-node map. 7b: `impact`, `delta.symbols`.
+evidence levels (none: `tested-evidence.md` Q5); `tested` (Q10, the later of 7a and 8b); `bindings.moved` (5c); layers B, C; a call-graph radius; the `spec index` delta; open-proposal counters; `show --history`; `--task`, `get_context_bundle {task_id}`, the `bundles` log, `compact`; 6b's tools; UI screens (Phase 4); `unbound`, Health (9); writing markers; the gate's file-to-node map. 7b: `impact`, `delta.symbols`.
 
 ## Open
 
@@ -162,12 +162,12 @@ WA-n: the analysis' working answers (2026-10-10), below; "SW refinement": the sp
 
 ## Working answers
 
-[P] checked, [A] assumed. WA-1 [P] layers 5, 9 are empty placeholders (core `check/bundle.rs`, MCP `mirror.rs`). WA-2 [P/A] the bundle refreshes the md index only; 6a's no-other-read rule amended. WA-3 [P/A] `sync` is computed only (05 s3.4), 4a's judge pure, index rows pure functions of the bytes: a read's sync can equal verify's (RD-3). WA-4 [P/A] 6a's tables hold every judge input; its "`ast_hash` display only" amended. WA-5 [P/A] items need no git; only locked `module`, `ron` rows need a blob OID. WA-6 [P/A] the row key is the lock key, one object everywhere. WA-7 [P] reads never change their exit on freshness (CLI README); the bundle already tolerates unrelated broken config. WA-8 [P] package `bindings` always `[]`, schema `{"type":"object"}`, a new key keeps `schema_version`. WA-9 [P] `with` is the closed enum `["links"]`; HTTP `nodes` takes `with`. WA-12, WA-13 [P] slice 7 owns `tests_reaching` and read sync; `verified` needs 8b. WA-15 [A] the bundle, MCP and package canons near 12 288 B: detail to `code-reads.md`. WA-16 [P/A] pilots hold no markers: W unmoved, value shown on `code-a`. WA-17 [P] relations are the marker vocabulary (ADR-0010), not kinds.
+[P] checked, [A] assumed. WA-1 [P] layers 5, 9 are empty placeholders (core `check/bundle.rs`, MCP `mirror.rs`). WA-2 [P/A] the bundle refreshes the md index only; 6a's no-other-read rule amended. WA-3 [P/A] `sync` is computed only (05 s3.4), 4a's judge pure, index rows pure functions of the bytes: a read's sync can equal verify's (RD-3). WA-4 [P/A] 6a's tables hold every judge input (level digests: `symbol-index.md` Q11); its "`ast_hash` display only" amended. WA-5 [P/A] items need no git; only locked `module`, `ron` rows need a blob OID. WA-6 [P/A] the row key is the lock key, one object everywhere. WA-7 [P] reads never change their exit on freshness (CLI README); the bundle already tolerates unrelated broken config. WA-8 [P] package `bindings` always `[]`, schema `{"type":"object"}`, a new key keeps `schema_version`. WA-9 [P] `with` is the closed enum `["links"]`; HTTP `nodes` takes `with`. WA-12, WA-13 [P] slice 7 owns `tests_reaching` and read sync; `verified` needs 8b. WA-15 [A] the bundle, MCP and package canons near 12 288 B: detail to `code-reads.md`. WA-16 [P/A] pilots hold no markers: W unmoved, value shown on `code-a`. WA-17 [P] relations are the marker vocabulary (ADR-0010), not kinds.
 
 ## Dependencies and ordering
 
 - **Needs**: 1 `code-refs` (built, unshipped) -> 3 `spec-lock` (the reader) -> 4a `spec-verify` (judge, row key, blob call) -> 6a `symbol-index` (tables, refresh, signature); [6b optional, spends `INSTRUCTIONS` room first] -> 7a -> 7b.
-- **Order**: this spec and ADR-0046 now, code after 6a; 6c first if AC-10's no-op timing fails. **Independent**: 4b, 4c, 8a. **Later**: 5b, 5c, Phase 4. **Either side**: 8b (`tested` here, by the later).
+- **Order**: this spec and ADR-0046 now, code after 6a, 5b and 5c (2026-10-13, `symbol-index.md` Q11); 6c first if AC-10's no-op timing (`noop_ms` ≤ 200) fails. **Independent**: 4b, 4c, 8a. **Later**: Phase 4. **Either side**: 8b (`tested` here, by the later).
 
 ## Implementation
 

@@ -185,7 +185,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
 | unparseable / symbol ambiguous | | `cannot_verify` | **never counted as `ok`**; shown separately |
 
-`spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — a Fix finding blocks, only under the project's own `[verify] mode` (ADR-0042), **2** — the run cannot be trusted, no verdict (`docs/canon/spec-verify.md` "Verdict and exit"; the backlog: `spec propose drift`, 4c). Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
+`spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — a Fix finding blocks, only under the project's own `[verify] mode` (ADR-0042), **2** — the run cannot be trusted, no verdict (`docs/canon/spec-verify.md` "Verdict and exit"; the backlog: `spec propose drift`, 4c-1). Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
 
 Git as the truth gives "since verification" diffs for free: the old spec text and the old code come from the commit recorded in the lock.
 
