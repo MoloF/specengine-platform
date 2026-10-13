@@ -101,7 +101,7 @@ spec task approve T | changes T --note "..." | cancel T
 
 # code and drift
 spec symbols [--file F] [--unbound]
-spec verify [--task T] [--tests] [--changed PATH]   # exit 0 ok · 1 Fix-level findings · 2 run cannot be trusted
+spec verify [--changed] [--json]                    # shipped: docs/canon/spec-verify.md; --staged 4b, --task/--tests 8a
 spec bump [--editorial ID]                           # bump rev of changed nodes (pre-commit fails without it)
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md
 spec lock regen                                     # a merge conflicting in spec.lock: docs/canon/spec-lock.md

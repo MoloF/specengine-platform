@@ -8,8 +8,9 @@
 //! intent-to-add entry
 //! and its removal ([`WorktreeGit::intent_to_add`],
 //! [`WorktreeGit::remove_cached`]), for `spec.lock`
-//! (`docs/features/spec-lock.md` "spec lock accept", "spec lock regen") a
-//! file's blob OID at a commit ([`WorktreeGit::blob_oid`]), a path's
+//! (`docs/canon/spec-lock-accept.md` "Steps", "The lock commit";
+//! `docs/canon/spec-lock.md` "`spec lock regen`") a file's blob OID at a
+//! commit ([`WorktreeGit::blob_oid`]), a path's
 //! unmerged stages ([`WorktreeGit::unmerged_stages`]), paths' status
 //! letters ([`WorktreeGit::status_entries`]), whether a path is ignored
 //! ([`WorktreeGit::is_ignored`]) and a path's index entry set back to
@@ -23,9 +24,11 @@
 //! (and the names git 2.50 lists, should an older git list fewer):
 //! `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
 //! `GIT_COMMON_DIR`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, …; with
-//! `GIT_TERMINAL_PROMPT=0` and stdin null. Every command but `commit` also
-//! gets `GIT_OPTIONAL_LOCKS=0`, so a read (`review`) writes nothing in the
-//! worktree's git dir. `commit` runs the hooks (never `--no-verify`).
+//! `GIT_TERMINAL_PROMPT=0` and stdin null. Every read also gets
+//! `GIT_OPTIONAL_LOCKS=0`, so a read (`review`) writes nothing in the
+//! worktree's git dir; the writes (`commit`, `add --intent-to-add`, `rm
+//! --cached`, `reset`) do not. `commit` runs the hooks (never
+//! `--no-verify`).
 //!
 //! **Paths** given to a command are relative to the handle's directory
 //! (the worktree's top for an apply), passed as `:(literal)` pathspecs;

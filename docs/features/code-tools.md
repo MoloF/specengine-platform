@@ -20,7 +20,7 @@ Delivered: four read tools, twins of `spec symbols`, `refs`, `unmapped` and the 
 - **Crates**: CLI the `--node` selection and row keys over 4a's command; MCP `code.rs` (new: the four tools over the CLI library), `mirror.rs`, `server.rs` (`INSTRUCTIONS`, the exit-2 rule); `plugin/` skills, version, `PINS`. MCP `[dependencies]` stay 7 (`build_graph.rs`); store, core, model unchanged.
 - **Freshness**: each tool refreshes the md, then 6a's code index (`symbol-index.md` WA-6); `verify --node` uses the index only to pick files, then reads, parses, hashes them afresh (05:162).
 - **Unchanged**: `spec check`, hook, gate, CI, `INDEX_FORMAT`, queue schema, HTTP (Q8; `daemon-keys`), UI, other tools, verify but for the row keys. **Writes**: the data directory only; never `spec.lock`, a queue row, an event, a file under the root.
-- **Overridden lines**, fixed at shipping (SW-2): 07:30-37 (`find_symbols` `node_id`, `path:line`, "Bevy layer"; `refs` "tests, records"; `check_binding {node_id, qpath}`); `spec-verify.md` "Command and rows" ("No … REF"); `mcp-read.md` "Parity" (exit 2), "Texts"; `plugin-files.md` "Content" ("all thirteen named", stale at fourteen).
+- **Overridden lines**, fixed at shipping (SW-2): 07:30-37 (`find_symbols` `node_id`, `path:line`, "Bevy layer"; `refs` "tests, records"; `check_binding {node_id, qpath}`); `docs/canon/spec-verify.md` (its command line, "Rows"); `mcp-read.md` "Parity" (exit 2), "Texts"; `plugin-files.md` "Content" ("all thirteen named", stale at fourteen).
 
 ## Data
 

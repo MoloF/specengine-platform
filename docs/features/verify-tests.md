@@ -25,7 +25,7 @@ Delivered (8a): `[verify] tests`, the project's runner as an argv template; `spe
 
 ### The verify table
 
-WA-2. Two keys join 4a's `mode` (`spec-verify.md` "The verify table"):
+WA-2. Two keys join 4a's `mode` (`docs/canon/spec-verify.md` "The `[verify]` table"):
 
 ```toml
 [verify]

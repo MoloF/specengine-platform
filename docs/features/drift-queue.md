@@ -29,18 +29,18 @@ Only whoever runs the read-only `spec verify` sees drift; its Pre-existing findi
 WA-1, WA-2, Q1, Q3. `spec propose drift [REF…] [A] [--task T] [--json]` (`A`: `agent-intake.md` "Tools"; `--config` as the queue's).
 
 - **REF**, 0-16: each as accept's step 2 (`spec-lock.md`: a node, or a gone ID with entries in `HEAD`'s lock); the node only, not its sections (SW refinement). None: a **sweep**.
-- **Order**: discovery, config; `specengine.toml` tracked and clean (exit 1 naming its state, `commit it first`); `[code]`; the place as `proposal-queue.md` "Creation" 5 (`base_commit` = `HEAD`); REFs; `--task` (`tasks.md` "Task-bound proposals"); 4a's judge over `HEAD` alone (`spec-verify.md` "Base"); the insert.
+- **Order**: discovery, config; `specengine.toml` tracked and clean (exit 1 naming its state, `commit it first`); `[code]`; the place as `proposal-queue.md` "Creation" 5 (`base_commit` = `HEAD`); REFs; `--task` (`tasks.md` "Task-bound proposals"); 4a's judge over `HEAD` alone (`docs/canon/spec-verify.md` "Base"); the insert.
 - Uncommitted edits are never judged: the rows are what `--changed` calls Pre-existing, so the queue is the backlog.
 
 ### Triggers
 
-WA-3, Q2. Per node (canonical, or the gone ID): `code_ahead`, `spec_ahead`, `conflict`, `broken_binding` raise an item (05:182-185); `unlocked` only for a named REF, never in a sweep (adoption: `spec-verify.md` "Risks"); `cannot_verify`, `bad_marker`, `predated` never on their own (05:187-188). The item lists all its node's non-`ok` rows; severity `high` when one is class `fix`, else `normal`.
+WA-3, Q2. Per node (canonical, or the gone ID): `code_ahead`, `spec_ahead`, `conflict`, `broken_binding` raise an item (05:182-185); `unlocked` only for a named REF, never in a sweep (adoption: `docs/canon/spec-verify.md` "Known limits"); `cannot_verify`, `bad_marker`, `predated` never on their own (05:187-188). The item lists all its node's non-`ok` rows; severity `high` when one is class `fix`, else `normal`.
 
 ### The item
 
 WA-4. A `proposals` row, kind `drift`: `target_id` the node (or gone ID); `target_path` `spec.lock` (root-relative: what approve writes); `target_ids` `[target_id]`; the place (ADR-0032), `base_commit` `HEAD`; `severity`; `summary` its rows' distinct `state[ category]` by key, `, `-joined (`conflict, code_ahead code_changed`; SW refinement: the inbox line); `author`, `task_id` as the intake's; `diagnostics` `[]`; `drift`, `drift_hash` below; all else NULL.
 
-- `drift`: compact JSON `{"rows":[<row>…],"more":<n>}`, each row a `spec-verify.md` "Output" `rows` item (`pre_existing` `true`), the first 64 (`DRIFT_ROWS_MAX`) by key, `more` the rest (SW refinement).
+- `drift`: compact JSON `{"rows":[<row>…],"more":<n>}`, each row a `docs/canon/spec-verify-output.md` "JSON" `rows` item (`pre_existing` `true`), the first 64 (`DRIFT_ROWS_MAX`) by key, `more` the rest (SW refinement).
 - `drift_hash` = `b3_hash("specengine-drift/v1" LF <compact JSON>)`, one array per non-`ok` row (all), by key: `[node, relation, file, kind, symbol, item_kind, state, category, detail, marker_revs, lock_rev, lock_spec_hash, lock_code, lock_file_blob, rev, norm_hash, code, file_blob, moved_from]`; `marker_revs` the markers' `@N` ascending, `null` (unversioned) first; `lock_*` the entry's or `null`, `lock_code` its code fields as `render_lock` writes them, one string (format 2: `levels` through `body_bytes`; 2026-10-12, `lock-levels.md` Q7, in place of `lock_ast_hash`); the last four the node's revision and `norm_hash`, `code` (the same fields as verify computed them at `HEAD`, rendered alike) and the blob OID at `HEAD`, or `null`; `moved_from` the row's `anchor.from` as `[file, kind, symbol, item_kind]`, else `null`, always `null` until 5c ships (2026-10-12, `anchor-states.md` Q6: reserved, so no `v2`). Not hashed: lines, times, the entry's `commit` and `verified_at`, the `HEAD` commit, the mode. A moved marker line is the same drift; a further code change is new drift.
 
 ### Kind family
@@ -74,7 +74,7 @@ WA-13, WA-14, Q12. `report_drift {node_ids?: 1-16, task_id?, author_role, author
 
 - `INSTRUCTIONS` gains `- report_drift = spec propose drift: queues HEAD's lock drift for the owner; evidence computed, never typed.`, trimmed elsewhere to stay ASCII and, with the probe text, within `TEXT_LIMIT` 2 048 B (`server.rs`, `mcp_tasks.rs`).
 - `ask-owner` (`plugin.md` "Skills", a PATCH) gains `Drift between spec.lock and the code (spec verify findings): report_drift, no node_ids for every drifting node, a named node also when never locked; it takes no evidence; the owner accepts the lock or sends a task.`
-- 4a's hint: `hint: drift: spec propose drift queues it for the owner` (`spec-verify.md` "Output").
+- Verify's hint, deferred from 4a (`docs/canon/spec-verify-output.md` "Hints"): once, when a row is `code_ahead`, `spec_ahead`, `conflict` or `broken_binding`, after the other hints, `hint: drift: spec propose drift queues it for the owner`.
 
 ### Review, inbox, round, stage
 

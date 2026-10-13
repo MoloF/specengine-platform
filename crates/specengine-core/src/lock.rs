@@ -1,8 +1,9 @@
-//! `spec.lock`'s model (`docs/features/spec-lock.md` "The file", "Entry"):
+//! `spec.lock`'s model (`docs/canon/spec-lock.md` "The file", "Entry"):
 //! the reader, the canonical render, an accept's merge into one node's
-//! entries ("spec lock accept" step 6), the editorial refresh
-//! ("--editorial"), a gone node's drop ("A gone node") and `spec lock
-//! regen`'s merge of a conflict's stages ("spec lock regen"). Pure: the
+//! entries (`docs/canon/spec-lock-accept.md` "Steps", step 6), the
+//! editorial refresh (its "`--editorial`"), a gone node's drop (its "A gone
+//! node") and `spec lock regen`'s merge of a conflict's stages
+//! (`docs/canon/spec-lock.md` "`spec lock regen`"). Pure: the
 //! text in, the values out; no hash is computed and no file or git object
 //! read here (the CLI hashes, reads and writes). Writers: ADR-0041,
 //! `docs/canon/architecture-code.md#spec-lock`.

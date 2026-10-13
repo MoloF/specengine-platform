@@ -25,7 +25,7 @@ Slice 9 split (Q1): 9a `health-code.md` (rows 4-5, the rule table, the document'
 
 ### `drift`
 
-WA-8, Q7. A row of 9a's shape (`health-code.md` "The document"), its `rows` and `counts` from plain `spec verify --json` (`spec-verify.md` "Output"), plus `notes`:
+WA-8, Q7. A row of 9a's shape (`health-code.md` "The document"), its `rows` and `counts` from plain `spec verify --json` (`docs/canon/spec-verify-output.md` "JSON"), plus `notes`:
 
 ```json
 "drift":{"state":"measured","causes":[],
@@ -41,7 +41,7 @@ WA-8, Q7. A row of 9a's shape (`health-code.md` "The document"), its `rows` and 
 - `notes`: verify's, but the mode note (Health has no mode).
 - Left out (WA-8): `mode`, `verdict`, `base`, `cascade`, `delta`, the `hint:` lines; the word `blocked` never appears.
 - `tested` (8b, `tested-evidence.md` "Surfaces"): plain verify's `tested` entries not `verified`, verbatim, by node bytes; present only once 8b has shipped; added by whichever of 8b and 9b ships second, with `daemon-keys.json`.
-- State: `measured` when verify answers without a run cause (no `spec.lock`: its `unlocked` rows); `off` with no `[code]` (code-refs' sentence less `spec: `); `cannot` on any other run cause of plain verify (`spec-verify.md` "Verdict and exit": a config error, `[verify]`'s too; a walk gap; no worktree, no git, a git failure; `spec.lock` invalid, unmerged, another format or recipe; HOME, the data directory), `causes` its `cannot:` lines verbatim, `counts` and `rows` null, never 0.
+- State: `measured` when verify answers without a run cause (no `spec.lock`: its `unlocked` rows); `off` with no `[code]` (code-refs' sentence less `spec: `); `cannot` on any other run cause of plain verify (`docs/canon/spec-verify.md` "Verdict and exit": a config error, `[verify]`'s too; a walk gap; no worktree, no git, a git failure; `spec.lock` invalid, unmerged, another format or recipe; HOME, the data directory), `causes` its `cannot:` lines verbatim, `counts` and `rows` null, never 0.
 
 ### Text
 

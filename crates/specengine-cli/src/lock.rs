@@ -1,11 +1,11 @@
-//! `spec lock accept REF [--editorial]` (task spec `spec-lock`, "spec lock
-//! accept", "--editorial", "A gone node"): what the owner verified,
-//! written to `<root>/spec.lock` on the owner's terminal and committed
-//! alone (its writers: canon `architecture-code`, "`spec.lock` writers").
-//! One library function, [`lock_accept`], is the accept, the editorial
-//! refresh and a gone node's drop; it takes the owner's [`LockConsent`]
-//! and extra trailers, so a `drift` item's approve (slice 4c, task spec
-//! `drift-queue`) runs this same accept with its `Proposal:`.
+//! `spec lock accept REF [--editorial]` (canon `spec-lock-accept`,
+//! "Steps", "The lock commit", "`--editorial`", "A gone node"): what the
+//! owner verified, written to `<root>/spec.lock` on the owner's terminal
+//! and committed alone (its writers: canon `architecture-code`,
+//! "`spec.lock` writers"). One library function, [`lock_accept`], is the
+//! accept, the editorial refresh and a gone node's drop; it takes the
+//! owner's [`LockConsent`] and extra trailers, so a `drift` item's approve
+//! (that canon's opening) runs this same accept with its `Proposal:`.
 //!
 //! In order (`main` refuses a stdin that is no terminal before anything is
 //! read):
@@ -41,15 +41,21 @@
 //! 6. the commit, the branch's tip (`refs/heads/<branch>`), verified as
 //!    `spec approve` verifies its own, and more: one parent, the old
 //!    `HEAD`; only `spec.lock` changed; a `Lock:` trailer naming the node;
-//!    its `spec.lock` the bytes the owner confirmed. Success is only a
-//!    verified commit. A commit made that fails a check: exit 1 naming the
-//!    commit, what is wrong and `git reset --soft <commit>^` (history never
-//!    rewritten); one that cannot be read, or a branch that cannot: exit 1,
-//!    unverified. A failed commit whose branch moved to a commit that fails
-//!    a check is not this run's: the bytes restored, exit 1; a branch that
-//!    did not move after a commit git reported made: the bytes and the
-//!    lock's index entry restored, exit 1. Bytes are restored only while
-//!    the file still holds what this run wrote.
+//!    its `spec.lock` the bytes the owner confirmed (a commit without it
+//!    fails that check). Success is only a verified commit. A commit made
+//!    that fails a check: exit 1 naming the commit, what is wrong and `git
+//!    reset --soft <commit>^` (history never rewritten); one that cannot be
+//!    read, or a branch that cannot: exit 1, unverified. After a commit git
+//!    reported made, a branch that did not move: the bytes and the lock's
+//!    index entry restored, exit 1; the branch unmoved but `HEAD` moved:
+//!    unverified, nothing restored, exit 1. A failed commit whose branch
+//!    moved to a commit that fails a check is not this run's: the bytes
+//!    restored, exit 1; one whose moved branch cannot be verified, or whose
+//!    branch cannot be read or names no commit: unverified, the bytes left
+//!    as written, exit 1; an unmoved branch: the bytes restored, exit 1.
+//!    Bytes are restored only while the file still holds what this run
+//!    wrote; else they and the lock's index entry are left as they are,
+//!    and so said.
 //!
 //! Writes the data directory (the index refresh, the commit message's
 //! scratch file), `spec.lock` and one commit; no queue row or event.
@@ -62,8 +68,8 @@ use std::path::Path;
 
 use serde::Serialize;
 use specengine_code::{
-    Anchor, Binding, HashState, MOD_KIND, Marker, RECIPE, Relation, RustParser, bind_tree,
-    comment_anchors, grammar_info, hash_bound_items, markers_in,
+    Anchor, Binding, FileAnalysis, HashState, MOD_KIND, Marker, Name, RECIPE, Relation, RustParser,
+    bind_tree, comment_anchors, grammar_info, hash_bound_items, markers_in,
 };
 use specengine_core::check::resolve::feature_stem;
 use specengine_core::check::{CheckInput, Resolver};
@@ -348,7 +354,7 @@ pub(crate) struct ReadLock {
 
 /// `<root>/spec.lock` read and parsed against this build's recipes (an
 /// absent file: an empty lock); exit 2 when it cannot be read.
-fn read_lock(root: &Path, recipes: &Recipes) -> Result<ReadLock, CliError> {
+pub(crate) fn read_lock(root: &Path, recipes: &Recipes) -> Result<ReadLock, CliError> {
     let bytes = read_lock_bytes(root)?;
     let lock = match &bytes {
         None => Lock::empty(recipes.clone()),
@@ -593,8 +599,10 @@ struct Found {
     target: Target,
 }
 
-/// What a marker binds.
-enum Target {
+/// What a marker binds, and the lock key it gives: the one key builder of
+/// `spec lock accept` and `spec verify` (task spec `spec-verify`,
+/// "Command and rows": rows keyed as accept keys entries).
+pub(crate) enum Target {
     /// An item (its index), named.
     Item {
         index: usize,
@@ -617,6 +625,125 @@ enum Target {
         state: &'static str,
         category: &'static str,
     },
+}
+
+impl Target {
+    /// What a Rust comment's `binding` binds: `analysis` the bound file's
+    /// items, `names` the walk's names of those items, `module` the file's
+    /// module's.
+    pub(crate) fn of_rust(
+        binding: Binding,
+        analysis: &FileAnalysis,
+        names: &[Name],
+        module: Option<&Name>,
+    ) -> Self {
+        let ambiguity = |name: Option<&Name>| {
+            name.and_then(|name| name.ambiguity.map(|ambiguity| ambiguity.as_str()))
+        };
+        match binding {
+            Binding::Item(item) => {
+                let name = names.get(item);
+                Self::Item {
+                    index: item,
+                    qpath: name.map(|name| name.qpath.clone()).unwrap_or_default(),
+                    item_kind: analysis
+                        .items
+                        .get(item)
+                        .map(|record| record.kind.clone())
+                        .unwrap_or_default(),
+                    ambiguity: ambiguity(name),
+                }
+            }
+            Binding::Module(None) => Self::Module {
+                qpath: module.map(|name| name.qpath.clone()).unwrap_or_default(),
+                ambiguity: ambiguity(module),
+            },
+            Binding::Module(Some(item)) => {
+                let name = names.get(item);
+                Self::Module {
+                    qpath: name.map(|name| name.qpath.clone()).unwrap_or_default(),
+                    ambiguity: ambiguity(name),
+                }
+            }
+            Binding::Unanchored(category) => Self::Keyless {
+                state: UNANCHORED,
+                category: category.as_str(),
+            },
+            Binding::CannotVerify(category) => Self::Keyless {
+                state: CANNOT_VERIFY,
+                category: category.as_str(),
+            },
+            Binding::File => Self::Keyless {
+                state: UNANCHORED,
+                category: "",
+            },
+        }
+    }
+
+    /// What a RON comment's `anchor` binds.
+    pub(crate) fn of_ron(anchor: &Anchor) -> Self {
+        match anchor {
+            Anchor::Path { path, .. } => Self::Ron {
+                path: path.clone(),
+                ambiguity: None,
+            },
+            Anchor::Ambiguous { path, .. } => Self::Ron {
+                path: path.clone(),
+                ambiguity: Some(RON_DUPLICATE),
+            },
+            Anchor::Unanchored => Self::Keyless {
+                state: UNANCHORED,
+                category: RON_NO_VALUE,
+            },
+            Anchor::CannotVerify => Self::Keyless {
+                state: CANNOT_VERIFY,
+                category: RON_TOO_DEEP,
+            },
+        }
+    }
+
+    /// The binding's ambiguity, if it has a key.
+    pub(crate) fn ambiguity(&self) -> Option<&'static str> {
+        match self {
+            Self::Item { ambiguity, .. }
+            | Self::Module { ambiguity, .. }
+            | Self::Ron { ambiguity, .. } => *ambiguity,
+            Self::Keyless { .. } => None,
+        }
+    }
+
+    /// The lock key a marker of `node` (the canonical cited ID) with
+    /// `relation` in `file` gives; `Err`: no key, the keyless binding's row
+    /// place (kind its state, symbol its category).
+    pub(crate) fn key(
+        &self,
+        node: &str,
+        relation: LockRelation,
+        file: &str,
+    ) -> Result<EntryKey, RowPlace> {
+        let key = |kind: LockKind, symbol: &str, item_kind: Option<&str>| EntryKey {
+            node: node.to_owned(),
+            relation,
+            file: file.to_owned(),
+            kind,
+            symbol: symbol.to_owned(),
+            item_kind: item_kind.map(str::to_owned),
+        };
+        match self {
+            Self::Item {
+                qpath, item_kind, ..
+            } => Ok(key(LockKind::Item, qpath, Some(item_kind))),
+            Self::Module { qpath, .. } => Ok(key(LockKind::Module, qpath, None)),
+            Self::Ron { path, .. } => Ok(key(LockKind::Ron, path, None)),
+            Self::Keyless { state, category } => Err(RowPlace {
+                relation,
+                file: file.to_owned(),
+                kind: (*state).to_owned(),
+                symbol: (*category).to_owned(),
+                item_kind: None,
+            }),
+        }
+    }
 }
 
 /// `spec lock accept` without `--editorial`.
@@ -886,50 +1013,7 @@ fn committed_bindings(
                 let Some(comment_text) = text.get(comment.range.clone()) else {
                     continue;
                 };
-                let target = || match comment.binding {
-                    Binding::Item(item) => {
-                        let name = names.get(item);
-                        Target::Item {
-                            index: item,
-                            qpath: name.map(|name| name.qpath.clone()).unwrap_or_default(),
-                            item_kind: binding
-                                .analysis
-                                .items
-                                .get(item)
-                                .map(|record| record.kind.clone())
-                                .unwrap_or_default(),
-                            ambiguity: name.and_then(|name| {
-                                name.ambiguity.map(|ambiguity| ambiguity.as_str())
-                            }),
-                        }
-                    }
-                    Binding::Module(None) => Target::Module {
-                        qpath: module.map(|name| name.qpath.clone()).unwrap_or_default(),
-                        ambiguity: module
-                            .and_then(|name| name.ambiguity.map(|ambiguity| ambiguity.as_str())),
-                    },
-                    Binding::Module(Some(item)) => {
-                        let name = names.get(item);
-                        Target::Module {
-                            qpath: name.map(|name| name.qpath.clone()).unwrap_or_default(),
-                            ambiguity: name.and_then(|name| {
-                                name.ambiguity.map(|ambiguity| ambiguity.as_str())
-                            }),
-                        }
-                    }
-                    Binding::Unanchored(category) => Target::Keyless {
-                        state: UNANCHORED,
-                        category: category.as_str(),
-                    },
-                    Binding::CannotVerify(category) => Target::Keyless {
-                        state: CANNOT_VERIFY,
-                        category: category.as_str(),
-                    },
-                    Binding::File => Target::Keyless {
-                        state: UNANCHORED,
-                        category: "",
-                    },
-                };
+                let target = || Target::of_rust(comment.binding, &binding.analysis, names, module);
                 node_markers(comment_text, corpus, node.key, rev, &target, &mut found);
             }
             let wanted: Vec<usize> = found
@@ -955,24 +1039,7 @@ fn committed_bindings(
                 let Some(comment_text) = text.get(anchor.comment.clone()) else {
                     continue;
                 };
-                let target = || match &anchor.anchor {
-                    Anchor::Path { path, .. } => Target::Ron {
-                        path: path.clone(),
-                        ambiguity: None,
-                    },
-                    Anchor::Ambiguous { path, .. } => Target::Ron {
-                        path: path.clone(),
-                        ambiguity: Some(RON_DUPLICATE),
-                    },
-                    Anchor::Unanchored => Target::Keyless {
-                        state: UNANCHORED,
-                        category: RON_NO_VALUE,
-                    },
-                    Anchor::CannotVerify => Target::Keyless {
-                        state: CANNOT_VERIFY,
-                        category: RON_TOO_DEEP,
-                    },
-                };
+                let target = || Target::of_ron(&anchor.anchor);
                 node_markers(comment_text, corpus, node.key, rev, &target, &mut found);
             }
         }
@@ -1049,14 +1116,6 @@ fn classify_found(
     hashes: &BTreeMap<usize, HashState>,
     bindings: &mut Bindings,
 ) {
-    let key = |kind: LockKind, symbol: &str, item_kind: Option<&str>| EntryKey {
-        node: node.to_owned(),
-        relation: found.relation,
-        file: path.to_owned(),
-        kind,
-        symbol: symbol.to_owned(),
-        item_kind: item_kind.map(str::to_owned),
-    };
     let verified = |ast_hash: Option<String>| Verified {
         rev: pair.facts.rev,
         spec_hash: pair.facts.spec_hash.to_owned(),
@@ -1065,66 +1124,32 @@ fn classify_found(
         commit: pair.facts.commit.to_owned(),
         verified_at: pair.facts.today.to_owned(),
     };
-    let ambiguous = |reason: &str| format!("{AMBIGUOUS} {reason}");
-    let (key, result): (EntryKey, Result<Verified, String>) = match &found.target {
-        Target::Keyless { state, category } => {
-            let place = RowPlace {
-                relation: found.relation,
-                file: path.to_owned(),
-                kind: (*state).to_owned(),
-                symbol: (*category).to_owned(),
-                item_kind: None,
-            };
-            let state = found.refused.clone().unwrap_or_else(|| (*state).to_owned());
+    let key = match found.target.key(node, found.relation, path) {
+        Ok(key) => key,
+        Err(place) => {
+            let state = found.refused.clone().unwrap_or_else(|| place.kind.clone());
             bindings.keyless.insert((place, state));
             return;
         }
-        Target::Item {
-            index,
-            qpath,
-            item_kind,
-            ambiguity,
-        } => {
-            let key = key(LockKind::Item, qpath, Some(item_kind));
-            let result = match (&found.refused, ambiguity) {
-                (Some(state), _) => Err(state.clone()),
-                (None, Some(reason)) => Err(ambiguous(reason)),
-                (None, None) => match hashes.get(index) {
-                    Some(HashState::Hashed(digest)) => {
-                        Ok(verified(Some(format!("b3:{}", digest.to_hex()))))
-                    }
-                    Some(HashState::CannotVerify { categories }) => {
-                        Err(categories.first().map_or_else(
-                            || CANNOT_VERIFY.to_owned(),
-                            |category| format!("{CANNOT_VERIFY} {}", category.as_str()),
-                        ))
-                    }
-                    Some(HashState::NotHashed) | None => Err(CANNOT_VERIFY.to_owned()),
-                },
-            };
-            (key, result)
-        }
-        Target::Module { qpath, ambiguity } => {
-            let key = key(LockKind::Module, qpath, None);
-            let result = match (&found.refused, ambiguity) {
-                (Some(state), _) => Err(state.clone()),
-                (None, Some(reason)) => Err(ambiguous(reason)),
-                (None, None) => Ok(verified(None)),
-            };
-            (key, result)
-        }
-        Target::Ron {
-            path: field,
-            ambiguity,
-        } => {
-            let key = key(LockKind::Ron, field, None);
-            let result = match (&found.refused, ambiguity) {
-                (Some(state), _) => Err(state.clone()),
-                (None, Some(reason)) => Err(ambiguous(reason)),
-                (None, None) => Ok(verified(None)),
-            };
-            (key, result)
-        }
+    };
+    let result = match (&found.refused, found.target.ambiguity()) {
+        (Some(state), _) => Err(state.clone()),
+        (None, Some(reason)) => Err(format!("{AMBIGUOUS} {reason}")),
+        (None, None) => match &found.target {
+            Target::Item { index, .. } => match hashes.get(index) {
+                Some(HashState::Hashed(digest)) => {
+                    Ok(verified(Some(format!("b3:{}", digest.to_hex()))))
+                }
+                Some(HashState::CannotVerify { categories }) => {
+                    Err(categories.first().map_or_else(
+                        || CANNOT_VERIFY.to_owned(),
+                        |category| format!("{CANNOT_VERIFY} {}", category.as_str()),
+                    ))
+                }
+                Some(HashState::NotHashed) | None => Err(CANNOT_VERIFY.to_owned()),
+            },
+            _ => Ok(verified(None)),
+        },
     };
     // A key the lock could not read back (a path with a TAB) is never
     // written: core's one check, the reader's too.
@@ -1178,7 +1203,7 @@ fn marks_node(comment: &str, corpus: &mut Corpus<'_>, key: NodeKey) -> bool {
 }
 
 /// The lock's relation of a marker's.
-fn relation_of(marker: &Marker) -> LockRelation {
+pub(crate) fn relation_of(marker: &Marker) -> LockRelation {
     match marker.relation {
         Relation::Implements => LockRelation::Implements,
         Relation::Verifies => LockRelation::Verifies,
@@ -1331,7 +1356,7 @@ fn changed_code(repo: &Repo, code: &CodeConfig) -> Result<Vec<(String, &'static 
 
 /// A root-relative `Cargo.toml` that can name a walked file: under a root,
 /// or in a directory a root lies under (the project root's included).
-fn is_manifest(code: &CodeConfig, path: &str) -> bool {
+pub(crate) fn is_manifest(code: &CodeConfig, path: &str) -> bool {
     let Some(dir) = path.strip_suffix(MANIFEST) else {
         return false;
     };
@@ -1347,7 +1372,7 @@ fn is_manifest(code: &CodeConfig, path: &str) -> bool {
 
 /// A root-relative path the walk would read: `.rs` or `.ron`, a root or
 /// under one, no `.`-name below it, not excluded.
-fn is_code_path(code: &CodeConfig, path: &str) -> bool {
+pub(crate) fn is_code_path(code: &CodeConfig, path: &str) -> bool {
     (path.ends_with(RUST_EXTENSION) || path.ends_with(RON_EXTENSION))
         && code.roots.iter().any(|root| {
             path == root
@@ -1698,12 +1723,24 @@ fn write_and_commit(
                     why.join("; ")
                 ))),
             },
-            _ => {
+            Ok(Some(_)) => {
+                // The branch did not move: no commit of this run is on it.
                 let restored = undo_back.restore(false, &mut outcome);
                 Ok(outcome.refused(&format!(
                     "the commit of {LOCK_FILE} failed, {restored}: {error}"
                 )))
             }
+            // The commit may have been made: nothing is restored.
+            Ok(None) => Ok(outcome.refused(&format!(
+                "the commit of {LOCK_FILE} failed ({error}), yet `{branch}` names no commit now: \
+                 it is unverified and {LOCK_FILE} is left as written{}",
+                head_hint(repo)
+            ))),
+            Err(read) => Ok(outcome.refused(&format!(
+                "the commit of {LOCK_FILE} failed ({error}), and `{branch}` cannot be read \
+                 ({read}): it is unverified and {LOCK_FILE} is left as written{}",
+                head_hint(repo)
+            ))),
         },
     }
 }
@@ -1771,12 +1808,17 @@ fn check_lock_commit(
         Ok(_) => wrong.push(format!("it has no `{LOCK_TRAILER}: {node}` trailer")),
         Err(error) => unread.push(format!("its trailers cannot be read: {error}")),
     }
-    match repo.git.blob_at(commit, top_path) {
-        Ok(bytes) if bytes == rendered.as_bytes() => {}
-        Ok(_) => wrong.push(format!(
-            "its {top_path} is not the bytes the owner confirmed"
-        )),
-        // A commit without the file fails the changed paths above already.
+    // A commit deleting the file fails this check (it may pass the
+    // changed paths', which a deletion of `spec.lock` alone satisfies).
+    match repo.git.blob_oid(commit, top_path) {
+        Ok(None) => wrong.push(format!("it has no {top_path}")),
+        Ok(Some(_)) => match repo.git.blob_at(commit, top_path) {
+            Ok(bytes) if bytes == rendered.as_bytes() => {}
+            Ok(_) => wrong.push(format!(
+                "its {top_path} is not the bytes the owner confirmed"
+            )),
+            Err(error) => unread.push(format!("its {top_path} cannot be read: {error}")),
+        },
         Err(error) => unread.push(format!("its {top_path} cannot be read: {error}")),
     }
     if !wrong.is_empty() {
@@ -1807,33 +1849,52 @@ impl Undo<'_> {
     /// index entry removed. A file someone changed meanwhile is never
     /// touched. The refusal's clause.
     fn restore(&self, index: bool, outcome: &mut LockOutcome) -> String {
+        let top_path = self.top_path;
         let now = fs::read(self.path).ok();
         if now.as_deref() != Some(self.rendered) {
+            // The index entry this run made stays too: a first lock's
+            // intent-to-add entry, or the confirmed bytes a `commit --only`
+            // that left no commit staged.
+            let entry = match (self.created, index) {
+                (Some(_), _) => format!(
+                    ", and so is its intent-to-add entry in the index (`git rm --cached -- \
+                     {top_path}` drops it)"
+                ),
+                (None, true) => format!(
+                    ", and so is its index entry, which holds the bytes confirmed (`git reset -q \
+                     -- {top_path}` sets it back to HEAD's)"
+                ),
+                (None, false) => String::new(),
+            };
             return format!(
-                "{LOCK_FILE} was changed meanwhile, so it is left as it is, not restored"
+                "{LOCK_FILE} was changed meanwhile, so it is left as it is, not restored{entry}"
             );
         }
-        let top_path = self.top_path;
+        let mut failed = false;
         match (self.created, &self.read.bytes) {
             (Some(created), _) => {
                 if let Err(error) = self.repo.git.remove_cached(top_path) {
+                    failed = true;
                     outcome.messages.push(Message::Warning(format!(
                         "cannot drop the index entry of {LOCK_FILE}: {error}; `git rm --cached -- \
                          {top_path}` drops it"
                     )));
                 }
                 for left in created.remove() {
+                    failed = true;
                     outcome.messages.push(Message::Warning(left));
                 }
             }
             (None, Some(bytes)) => {
                 if let Err(error) = replace_file(self.path, bytes) {
+                    failed = true;
                     outcome.messages.push(Message::Warning(format!(
                         "cannot restore {LOCK_FILE}: {error}; `git checkout -- {top_path}` \
                          restores it"
                     )));
                 }
                 if index && let Err(error) = self.repo.git.reset_path(top_path) {
+                    failed = true;
                     outcome.messages.push(Message::Warning(format!(
                         "cannot set the index entry of {LOCK_FILE} back to HEAD's: {error}; `git \
                          reset -q -- {top_path}` does"
@@ -1842,7 +1903,11 @@ impl Undo<'_> {
             }
             (None, None) => {}
         }
-        "its bytes restored".to_owned()
+        if failed {
+            "it is not restored (see the warning)".to_owned()
+        } else {
+            "its bytes restored".to_owned()
+        }
     }
 }
 

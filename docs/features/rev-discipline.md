@@ -115,6 +115,7 @@ rust-developer (mutation -> the test that must fail):
 - [ ] RD-10 -- any write (status, `HEAD`, index, queue) -> `bump_writes_nothing`; `bump_marks_vouched_nodes_required`, `bump_has_no_editorial_flag`.
 - [ ] RD-11 -- `verify_staged_judges_the_index_not_the_disk`, `verify_staged_runs_no_hash_object`, `staged_and_changed_exclude_each_other`.
 - [ ] RD-12 -- a kind literal -> the genre scan; a new dependency -> the CLI pin in `build_graph.rs`.
+- [ ] RD-13 -- 4a's carried review items, code only, code-reviewer checks (`spec-verify.md` "Implementation"): CLI `verify.rs` (~640-646) conflict hint "raise the marker to its revision" -> "set the marker to its revision" (it also serves R < `rev_L`; the spec-writer changes `spec-verify-output.md` "Hints"' quote with it); store `git.rs` `Staged::blob` doc and `verify_git.rs:16` "each OID once" -> "once per `read_files` call"; code pointers to `spec-verify.md`'s headings retargeted to its two canons.
 
 test-engineer:
 

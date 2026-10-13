@@ -1,0 +1,15 @@
+# Fixture corpus verify-ecs (docs/features/spec-verify.md, TE-4..TE-7): a
+# small ECS-style game crate (systems, a plugin registering them, RON
+# tuning data) with its design spec, every binding sound, so a lock accepted
+# over it verifies clean. Its prefixes and kinds are its own; nothing in the
+# core knows them. The tests accept its nodes in a scratch repository.
+
+[project]
+slug = "verify-ecs"
+
+[ids]
+PERK = { kind = "perk",   shape = "name" }
+TUNE = { kind = "tuning", width = 2 }
+
+[code]
+roots = ["crates", "assets"]

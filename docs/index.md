@@ -34,7 +34,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/lock-levels.md](features/lock-levels.md) lock-levels: spec.lock format 2, level-aware verify, spec lock rebase · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-code, fixtures · draft
 - [docs/features/rev-discipline.md](features/rev-discipline.md) rev-discipline: a changed meaning raises the revision, or the owner calls it editorial · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/features/spec-verify.md](features/spec-verify.md) spec-verify: drift between spec.lock and the tree · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft
 - [docs/features/symbol-index.md](features/symbol-index.md) symbol-index: stored code rows, symbol lookup, coverage · crates/specengine-store, crates/specengine-code, crates/specengine-cli, crates/specengine-eval, fixtures · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-tests.md](features/verify-tests.md) verify-tests: bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft

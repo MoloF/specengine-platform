@@ -21,7 +21,7 @@ Delivered: `format = 2` (levels, every level's digest, 5a's fingerprints; no `as
 - **The owner** meets an old lock as verify's exit 2 with a rebase hint, and runs `spec lock rebase` on a terminal: a row per entry, one question, one verified commit. **An agent** sees `code_ahead code_changed <levels>`, `code_ahead levels_changed` in verify and reads' `sync`; it never rebases (no MCP tool or plugin command).
 - **Crates** (WA-12: core sees digests, level names, `body_bytes` only). Core: the format-2 model (`parse_lock`, `render_lock`, `same_pair`), the level comparison, its own copy of the four names (pinned against `markers.rs`); no tree-sitter. Code: 5a's `item_levels`, `module_levels`, `ron::value_hash`; at most a helper beside `hash_bound_items`; the blob-local locator. Store: blobs by OID through the existing `cat-file --batch` session. CLI: accept, verify, regen, `build_recipes`, a new `lock_rebase.rs`; `write_and_commit`, `check_lock_commit` take a subject (a node, or the rebase). No new crate or dependency.
 - **Unchanged**: MCP, HTTP, UI, plugin, eval, the gate, `spec check`, the index, the queue. **Nothing is blocked** (ADR-0012): spec work, the gate and MCP never read the lock; reads show `sync` unknown with a note, Health a cause; only a project's own `[verify]` CI or hook stops. **One door** (ADR-0050): rebase writes `spec.lock` alone, never via MCP, a role, a hook, CI or the daemon; its commit settles no `drift` item (completion needs `Proposal:` and `Lock:`; WA-9).
-- **4a's lines overridden at 5b's shipping** (WA-11: `spec-verify.md` stays as written while implemented): "States" (code changed by levels, every kind; `code_ahead levels_changed`); "Cascade and spec side" (level 3 by levels, `module`, `ron` too, `compared` `ast`); "Output"'s hint "other recipes: no accept"; "Verdict and exit" cause (7) and its Q7 hook rule (Q8 here); "Risks"' noise line. For its implementation, no text change: (a) core's judge takes a code-comparison outcome from its producer (`unchanged`, the changed levels, `cannot_verify`), never two `ast_hash` strings; (b) the base lock source stays pluggable (its RD-10 seams); optionally `"levels": null` reserved per JSON row. Other overridden lines: SW-4.
+- **4a's lines overridden at 5b's shipping** (WA-11; 4a shipped them as written): `docs/canon/spec-verify.md` "States" (code changed by levels, every kind; `code_ahead levels_changed`); "Cascade" (level 3 by levels, `module`, `ron` too, `compared` `ast`); "Verdict and exit" cause (7) and "A project's hook" (Q8 here); "Known limits"' autocrlf and noise lines; `docs/canon/spec-verify-output.md` "Hints" (4a gives a run cause no hint; cause (6) gains the rebase hint). For its implementation, no text change: (a) core's judge takes a code-comparison outcome from its producer (`unchanged`, the changed levels, `cannot_verify`), never two `ast_hash` strings; (b) the base lock source stays pluggable (its RD-10 seams); optionally `"levels": null` reserved per JSON row. Other overridden lines: SW-4.
 
 ## Data
 
@@ -99,7 +99,7 @@ WA-10, WA-11, Q5, Q6. Per row with a lock entry E and bound markers: L_lock = E'
 
 Q3, Q8.
 
-- **Format 1, or another `code_recipe`**: 4a's run cause (6), then `hint: spec.lock: run spec lock rebase on a terminal` (for "other recipes: no accept"). Accept, `--editorial` exit 2: `spec.lock: format 1 ("<recipe>"), this build writes 2 ("<recipe>"): run spec lock rebase on a terminal`; 4b's editorial apply too, on format 1 only (it needs this build's `format` and `norm_recipe`). Reads: `sync` unknown, `note: bindings: <the cause>`. Another `norm_recipe`: exit 2, no hint.
+- **Format 1, or another `code_recipe`**: 4a's run cause (6), then `hint: spec.lock: run spec lock rebase on a terminal` (4a prints no hint for a run cause). Accept, `--editorial` exit 2: `spec.lock: format 1 ("<recipe>"), this build writes 2 ("<recipe>"): run spec lock rebase on a terminal`; 4b's editorial apply too, on format 1 only (it needs this build's `format` and `norm_recipe`). Reads: `sync` unknown, `note: bindings: <the cause>`. Another `norm_recipe`: exit 2, no hint.
 - **Regen** writes format 2 only: a format-1 stage exits 2 with the hint; format-2 stages sharing another `code_recipe` merge as today (no hashing); differing stages exit 2 (abort, rebase the lagging branch, merge again).
 - **Base** (Q8; overrides 4a's cause (7)): under `--changed` (4b: `--staged`), a `HEAD` lock of format 1 or another `code_recipe` beside a current lock of this build's: `HEAD`'s rows are judged with the current lock, `note: HEAD's spec.lock is format <n> ("<recipe>"): judged with the current lock`. A rebase changes no key, `rev`, `spec_hash` or `file_blob`: a project hook running `spec verify --changed` under `enforce-introduced` (4a's Q7) passes its commit. Unreadable, another `norm_recipe`: still cause (7).
 
@@ -151,6 +151,8 @@ committed 3f9a1c0<33 hex>
 
 WA-6: no real format-1 lock exists (no `[code]` here, no pilot marker, slice 3's pilot accept never ran). `fixtures/spec-lock/code-a.lock` (pinned by `lock_accept.rs`) becomes accept's format-2 golden; its format-1 bytes move to `fixtures/spec-lock/code-a.format-1.lock`, rebase's input; 4a's RD-10 keeps its path.
 
+Until this slice's `levels` row (RD-3 `invalid_levels_are_not_locked`) accept locks a marker whose levels are `Invalid`: the format-1 golden's 11 entries hold `counter.rs:77` `[path, path]` and `bounds.rs:14` `[Sig]`; the format-2 golden leaves both out (9), and 4a's RD-10 reads them `bad_marker bad_levels` either way (`spec-verify.md` Q8).
+
 ## Rules and edge cases
 
 - WHEN a rebase runs, the system SHALL read code only from each entry's `file_blob` by OID and SHALL drop, never guess, an entry it cannot re-derive (Q1).
@@ -181,7 +183,7 @@ test-engineer:
 - [ ] TE-4 -- migration: the format-1 golden committed -> verify exit 2 with the hint -> rebase, `y` -> one commit passing the four checks -> verify all `ok` -> `spec lock accept <each node>` `nothing to change`.
 - [ ] TE-5 -- a simulated grammar bump (a committed format-2 lock naming another tree-sitter-rust): verify exit 2, the hint; rebase, under the note, gives accept's golden.
 - [ ] TE-6 -- an OID no object has: `dropped blob_missing`, then verify `unlocked`.
-- [ ] TE-7 -- byte-identical lock, stdout, stderr, JSON: two roots, another cwd, `core.autocrlf=true`, the input's entries reversed.
+- [ ] TE-7 -- byte-identical lock, stdout, stderr, JSON: two roots, another cwd, `core.autocrlf=true`, the input's entries reversed. Under `core.autocrlf=true` module and RON rows read `ok` by digest, lifting 4a's `code_ahead blob` limit (`spec-verify.md` Q9).
 - [ ] TE-8 -- a project pre-commit hook running `spec verify --changed` under `enforce-introduced` passes the rebase commit, exit 0 (Q8). M: `HEAD`'s lock as cause (7).
 - [ ] TE-9 -- after every refusal and an `N`: `git status --porcelain=v1 -z --untracked-files=all`, `HEAD`, refs, index, `spec.lock` bytes unchanged.
 

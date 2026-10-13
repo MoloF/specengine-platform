@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-12
+reviewed: 2026-10-13
 ---
 
 # `spec lock accept`: the owner's lock commit
@@ -27,7 +27,7 @@ Each accept walks the code tree, hashing the node's items only.
 
 ## The lock commit
 
-Written atomically (`replace_file`; a first lock created with an intent-to-add entry); `git commit --only spec.lock`, hooks run, never `--no-verify`: `spec: lock R-12`, an empty line, `Lock: R-12`, `Lock-mode: accept|editorial`, `Decided-by: <committer_ident>`, a caller's trailers; other staged paths stay staged. The commit is the tip of `refs/heads/<branch>`, verified by four checks: its parents exactly the old HEAD; `spec.lock` alone changed; a `Lock:` trailer naming the node; its raw `spec.lock` blob the bytes the owner confirmed. **Exit 0 only for a verified commit**, stdout ending `committed <oid>`; history is never rewritten; a refusal prints no `committed` line.
+Written atomically (`replace_file`; a first lock created with an intent-to-add entry); `git commit --only spec.lock`, hooks run, never `--no-verify`: `spec: lock R-12`, an empty line, `Lock: R-12`, `Lock-mode: accept|editorial`, `Decided-by: <committer_ident>`, a caller's trailers; other staged paths stay staged. The commit is the tip of `refs/heads/<branch>`, verified by four checks: its parents exactly the old HEAD; `spec.lock` alone changed; a `Lock:` trailer naming the node; its raw `spec.lock` blob the bytes the owner confirmed (a commit deleting `spec.lock` passes the second, fails this one: "it has no <path>", `<path>` the lock's path from the repository top). **Exit 0 only for a verified commit**, stdout ending `committed <oid>`; history is never rewritten; a refusal prints no `committed` line.
 
 | Git said | The branch | Result |
 |---|---|---|
@@ -40,9 +40,10 @@ Written atomically (`replace_file`; a first lock created with an intent-to-add e
 | failed | moved, all four hold | exit 0, a warning (this run's) |
 | failed | moved, a check fails | not this run's: bytes restored, exit 1 |
 | failed | moved, a check unreadable | exit 1, bytes left as written |
-| failed | unmoved, none, unreadable | bytes restored, exit 1 |
+| failed | unmoved | bytes restored, exit 1 "the commit of spec.lock failed, its bytes restored: <error>" |
+| failed | names no commit, unreadable | exit 1 "it is unverified and spec.lock is left as written" (the commit may have been made), nothing restored, the hint |
 
-Bytes are restored only while the file still holds what the run wrote; else "changed meanwhile, left as it is". After a failed commit git has rolled its index back itself.
+Restoring puts the old bytes back (a first lock: file and intent-to-add entry removed), only while the file still holds what the run wrote; else "spec.lock was changed meanwhile, so it is left as it is, not restored", naming the index entry the run made, left too: a first lock's ", and so is its intent-to-add entry in the index (`git rm --cached -- <path>` drops it)"; after "made, unmoved, HEAD too" ", and so is its index entry, which holds the bytes confirmed (`git reset -q -- <path>` sets it back to HEAD's)". A restore step that fails (the bytes, the index entry, a first lock's file or entry) is a warning naming the git command that does it (`git checkout -- <path>`, `git reset -q -- <path>`, `git rm --cached -- <path>`), and the refusal says "it is not restored (see the warning)", never "its bytes restored". After a failed commit git has rolled its index back itself.
 
 ## `--editorial`
 
@@ -70,5 +71,5 @@ One-line messages (CLI README "Exit codes and streams"); after a refusal HEAD, r
 - A marker's `id_state` is judged on the working-tree spec corpus: an uncommitted alias or duplicate ID elsewhere changes which markers lock.
 - Both leave orphans or unlocked rows at the commit, never a false `ok`.
 - A clean filter on `spec.lock` (LFS) fails the fourth check: exit 1 after the commit is made; LFS on code hashes pointer bytes.
-- Hooks run on the lock commit; stdin signing fails. Friction: commit first, one prompt and commit per node.
+- Hooks run on the lock commit (a project's verify hook: `docs/canon/spec-verify.md` "A project's hook"); stdin signing fails. Friction: commit first, one prompt and commit per node.
 - Unpinned: a parser panic at HEAD (no input found), "made, the branch unreadable" and "failed, moved, all four hold" (not stageable).

@@ -39,8 +39,9 @@
 //! - [`bind`] — every comment of a Rust file bound to an item, a module,
 //!   nothing (with a category) or `cannot_verify`, and where a mention in
 //!   it belongs; [`ron::comment_anchors`] the same for every RON comment;
-//!   [`hash_bound_items`] the hashes of chosen bound items (slice
-//!   `spec-lock`), the binding itself hashing none;
+//!   [`hash_bound_items`] the hashes of chosen bound items (the lock's
+//!   `ast_hash`: `docs/canon/spec-lock.md` "Entry"), the binding itself
+//!   hashing none;
 //! - [`naming`] — a tree's items and modules named at once: `qpath` and
 //!   ambiguity (`path_attribute`, `unrooted`, `duplicate`).
 

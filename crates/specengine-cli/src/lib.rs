@@ -24,10 +24,13 @@
 //! `kind-amendment`: `spec propose amendment`, a new spec or decision
 //! document amending live nodes, applied as a create's new file; task spec
 //! `health-left`: `spec health`, the unapplied amendments of the working
-//! tree; task spec `spec-lock`: `spec lock accept` ([`lock_accept`], the
-//! accept, its editorial refresh and a gone node's drop, one function
-//! taking the owner's [`LockConsent`] and extra [`LockTrailer`]s) and
-//! `spec lock regen` ([`lock_regen`]).
+//! tree; `spec lock accept` ([`lock_accept`], the accept, its editorial
+//! refresh and a gone node's drop, one function taking the owner's
+//! [`LockConsent`] and extra [`LockTrailer`]s: canon
+//! `spec-lock-accept`, "Steps") and `spec lock regen` ([`lock_regen`]:
+//! canon `spec-lock`, "`spec lock regen`"); task
+//! spec `spec-verify`: `spec verify [--changed]` ([`verify`]), drift
+//! between `spec.lock` and the tree, read-only.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -101,9 +104,13 @@
 //!   ([`Serve::Start`], `main` execs it); [`DaemonFile`] is `daemon.json`,
 //!   which only the daemon writes ([`prepared_data_dir`], [`checked_data_dir`]
 //!   its data directory, created and guarded);
+//! - [`verify`]: `spec verify [--changed]`, a state per lock key and
+//!   marker binding, Fix, Check or Pre-existing findings, the verdict under
+//!   `[verify] mode`; its run causes are in the report (exit 2);
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`),
-//!   blocked (`check`) or refused by the proposal or its target (the queue's
-//!   commands), 2 could not run (`check`: could not check).
+//!   blocked (`check`, `verify`) or refused by the proposal or its target
+//!   (the queue's commands), 2 could not run (`check`: could not check;
+//!   `verify`: could not verify).
 //!
 //! One database state gives one stdout, byte for byte: nothing depends on
 //! time, storage order or the absolute root (`check`: one tree, config,
@@ -117,7 +124,8 @@
 //! new file, or its decision record) and commits it in the recorded worktree
 //! (`round answer` too, one record per item the owner confirms), `spec lock
 //! accept`, which writes only `spec.lock` and commits it alone, and `spec
-//! lock regen`, which writes only `spec.lock` (task spec `spec-lock`); `index`,
+//! lock regen`, which writes only `spec.lock` (canon `spec-lock`,
+//! "Travel and writes"); `index`, `verify`,
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state` and `round new` write only the data
 //! directory (`propose question`, `discrepancy` and `decision` too), `export
@@ -169,6 +177,8 @@ mod state;
 mod state_file;
 mod task;
 mod tree;
+mod verify;
+mod verify_rows;
 
 use std::ffi::OsString;
 use std::fmt;
@@ -291,6 +301,7 @@ pub use task::{
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
+pub use verify::{VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow, verify};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -435,6 +446,8 @@ pub enum Outcome {
     Lock(Box<LockOutcome>),
     /// `lock regen`: a conflict's stages of `spec.lock` merged.
     LockRegen(Box<RegenOutcome>),
+    /// `verify`: drift between `spec.lock` and the tree.
+    Verify(Box<VerifyOutcome>),
     Export(ExportOutcome),
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
@@ -476,6 +489,7 @@ impl Outcome {
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
+            Self::Verify(verify) => verify.exit(),
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
@@ -506,6 +520,7 @@ impl Outcome {
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::LockRegen(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Verify(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -534,6 +549,7 @@ impl Outcome {
             Self::Proposal(_)
                 | Self::Lock(_)
                 | Self::LockRegen(_)
+                | Self::Verify(_)
                 | Self::Intake(_)
                 | Self::Stage(_)
                 | Self::Inbox(_)
@@ -569,6 +585,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Lock(outcome) => lock::render_text(outcome),
         Outcome::LockRegen(outcome) => lock_regen::render_text(outcome),
+        Outcome::Verify(outcome) => verify::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
@@ -602,6 +619,7 @@ impl serde::Serialize for Outcome {
             Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Lock(outcome) => outcome.serialize(serializer),
             Self::LockRegen(outcome) => outcome.serialize(serializer),
+            Self::Verify(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),

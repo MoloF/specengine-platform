@@ -34,6 +34,12 @@
 //!   directory's name, `.` for the root (never the root's own name: the
 //!   output does not depend on where the tree is checked out). No package:
 //!   unrooted. No subprocess.
+//!
+//! A commit's code tree (`spec verify --changed`'s base, task spec
+//! `spec-verify`, "Base") is built from its blobs by
+//! [`tree_of_blobs`]: the same binding and naming, the commit's manifests
+//! in place of the disk's, a file's binding reused from the working tree's
+//! walk when its bytes are equal.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
@@ -62,6 +68,7 @@ const PACKAGE_TABLE: &str = "package";
 const PACKAGE_NAME: &str = "name";
 
 /// One Rust file, read and bound.
+#[derive(Clone)]
 pub(crate) struct RustFile {
     pub path: String,
     pub text: String,
@@ -69,6 +76,7 @@ pub(crate) struct RustFile {
 }
 
 /// One RON file, read and anchored.
+#[derive(Clone)]
 pub(crate) struct RonFile {
     pub path: String,
     pub text: String,
@@ -85,6 +93,22 @@ pub(crate) struct CodeTree {
     pub names: Names,
     /// Files and names skipped for not being UTF-8.
     pub skipped: usize,
+    /// The files skipped for content that is not UTF-8, by path.
+    pub not_utf8: BTreeSet<String>,
+    /// Every directory the naming asked for a `Cargo.toml` (a package's
+    /// nearest one, and those below it on the way), with what it found.
+    pub manifests: BTreeMap<String, ManifestSeen>,
+}
+
+/// What a directory's `Cargo.toml` was to the naming.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ManifestSeen {
+    /// No regular file named exactly `Cargo.toml`.
+    Absent,
+    /// A regular file, its bytes.
+    Bytes(Vec<u8>),
+    /// A regular file that could not be read.
+    Unreadable,
 }
 
 /// What the listing found.
@@ -115,6 +139,8 @@ pub(crate) fn read_tree(
         ron: Vec::new(),
         names: Names::default(),
         skipped: listing.skipped_names,
+        not_utf8: BTreeSet::new(),
+        manifests: BTreeMap::new(),
     };
     for path in &listing.files {
         if let Some(dir) = &first_unlisted
@@ -127,6 +153,7 @@ pub(crate) fn read_tree(
         let Ok(text) = String::from_utf8(bytes) else {
             messages.push(Message::Note(format!("{path} is not UTF-8: skipped")));
             tree.skipped += 1;
+            tree.not_utf8.insert(path.clone());
             continue;
         };
         if path.ends_with(RUST_EXTENSION) {
@@ -155,7 +182,93 @@ pub(crate) fn read_tree(
             "the directory `{shown}` cannot be listed"
         )));
     }
-    tree.names = name_tree(root, &listing, &tree.rust);
+    let mut manifests = DiskManifests {
+        root,
+        listing: &listing,
+        holds: BTreeMap::new(),
+        seen: BTreeMap::new(),
+    };
+    tree.names = name_tree(&tree.rust, &mut manifests);
+    tree.manifests = manifests.seen;
+    Ok(tree)
+}
+
+/// A commit's code tree from its blobs: `files` the `.rs` and `.ron` files
+/// the walk would read at the commit (root-relative), `manifests` by
+/// directory each regular `Cargo.toml` it holds under a code root or at or
+/// above one (a directory missing: none there). Each file is bound or
+/// anchored from its bytes, unless `reuse` (the working tree's walk) holds
+/// the same path with the same text: its binding is taken (it depends on
+/// the bytes alone); the names are made over the commit's files and
+/// manifests. Content that is not UTF-8 is skipped and counted, as the
+/// walk skips it. `Err`: the first Rust file the parser gives no tree, as
+/// the walk's gap.
+pub(crate) fn tree_of_blobs(
+    files: BTreeMap<String, Vec<u8>>,
+    manifests: &BTreeMap<String, ManifestSeen>,
+    reuse: &CodeTree,
+) -> Result<CodeTree, String> {
+    let mut parser =
+        RustParser::new().map_err(|error| format!("the Rust grammar cannot be loaded: {error}"))?;
+    let mut tree = CodeTree {
+        rust: Vec::new(),
+        ron: Vec::new(),
+        names: Names::default(),
+        skipped: 0,
+        not_utf8: BTreeSet::new(),
+        manifests: BTreeMap::new(),
+    };
+    for (path, bytes) in files {
+        let Ok(text) = String::from_utf8(bytes) else {
+            tree.skipped += 1;
+            tree.not_utf8.insert(path);
+            continue;
+        };
+        if path.ends_with(RUST_EXTENSION) {
+            let reused = reuse
+                .rust
+                .binary_search_by(|file| file.path.as_str().cmp(&path))
+                .ok()
+                .map(|at| &reuse.rust[at])
+                .filter(|file| file.text == text);
+            let file = match reused {
+                Some(file) => file.clone(),
+                None => {
+                    let binding = bind_file(&mut parser, &text).ok_or_else(|| {
+                        format!("`{path}` cannot be parsed (the parser gave no tree)")
+                    })?;
+                    RustFile {
+                        path,
+                        text,
+                        binding,
+                    }
+                }
+            };
+            tree.rust.push(file);
+        } else {
+            let reused = reuse
+                .ron
+                .binary_search_by(|file| file.path.as_str().cmp(&path))
+                .ok()
+                .map(|at| &reuse.ron[at])
+                .filter(|file| file.text == text);
+            let file = match reused {
+                Some(file) => file.clone(),
+                None => RonFile {
+                    anchors: comment_anchors(&text),
+                    path,
+                    text,
+                },
+            };
+            tree.ron.push(file);
+        }
+    }
+    let mut blobs = BlobManifests {
+        by_dir: manifests,
+        seen: BTreeMap::new(),
+    };
+    tree.names = name_tree(&tree.rust, &mut blobs);
+    tree.manifests = blobs.seen;
     Ok(tree)
 }
 
@@ -294,14 +407,78 @@ fn walk(root: &Path, start: &str, config: &CodeConfig, listing: &mut Listing) {
     }
 }
 
+/// Where the naming looks for a directory's `Cargo.toml`: the working
+/// tree, or a commit's blobs. Each records what it found.
+trait Manifests {
+    /// `dir` (root-relative, `""` the root) holds a regular file named
+    /// exactly `Cargo.toml`.
+    fn holds(&mut self, dir: &str) -> bool;
+    /// The manifest of `dir`, which holds one.
+    fn read(&mut self, dir: &str) -> Manifest;
+}
+
+/// The working tree's manifests: a listed directory's from the listing,
+/// any other probed once.
+struct DiskManifests<'a> {
+    root: &'a Path,
+    listing: &'a Listing,
+    holds: BTreeMap<String, bool>,
+    seen: BTreeMap<String, ManifestSeen>,
+}
+
+impl Manifests for DiskManifests<'_> {
+    fn holds(&mut self, dir: &str) -> bool {
+        if let Some(&known) = self.holds.get(dir) {
+            return known;
+        }
+        let known = if self.listing.listed.contains(dir) {
+            self.listing.manifests.contains(dir)
+        } else {
+            holds_manifest(&self.root.join(dir))
+        };
+        self.holds.insert(dir.to_owned(), known);
+        if !known {
+            self.seen.insert(dir.to_owned(), ManifestSeen::Absent);
+        }
+        known
+    }
+
+    fn read(&mut self, dir: &str) -> Manifest {
+        let seen = match fs::read(self.root.join(dir).join(MANIFEST)) {
+            Ok(bytes) => ManifestSeen::Bytes(bytes),
+            Err(_) => ManifestSeen::Unreadable,
+        };
+        let manifest = manifest_of(&seen);
+        self.seen.insert(dir.to_owned(), seen);
+        manifest
+    }
+}
+
+/// A commit's manifests, by directory.
+struct BlobManifests<'a> {
+    by_dir: &'a BTreeMap<String, ManifestSeen>,
+    seen: BTreeMap<String, ManifestSeen>,
+}
+
+impl Manifests for BlobManifests<'_> {
+    fn holds(&mut self, dir: &str) -> bool {
+        let seen = self.by_dir.get(dir).unwrap_or(&ManifestSeen::Absent);
+        self.seen.insert(dir.to_owned(), seen.clone());
+        *seen != ManifestSeen::Absent
+    }
+
+    fn read(&mut self, dir: &str) -> Manifest {
+        manifest_of(self.by_dir.get(dir).unwrap_or(&ManifestSeen::Absent))
+    }
+}
+
 /// The names of the Rust files: packages found, their targets laid out,
 /// every item and module named.
-fn name_tree(root: &Path, listing: &Listing, rust: &[RustFile]) -> Names {
-    let mut probed: BTreeMap<String, bool> = BTreeMap::new();
+fn name_tree(rust: &[RustFile], manifests: &mut dyn Manifests) -> Names {
     let mut packages: Vec<Option<PathBuf>> = Vec::with_capacity(rust.len());
     let mut package_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
     for file in rust {
-        let package = package_of(root, &file.path, listing, &mut probed);
+        let package = package_of(&file.path, manifests);
         if let Some(dir) = &package {
             let inner = Path::new(&file.path)
                 .strip_prefix(dir)
@@ -313,7 +490,7 @@ fn name_tree(root: &Path, listing: &Listing, rust: &[RustFile]) -> Names {
     }
     let tables: BTreeMap<PathBuf, PackageTargets> = package_files
         .iter()
-        .map(|(dir, files)| (dir.clone(), package_targets(root, dir, files)))
+        .map(|(dir, files)| (dir.clone(), package_targets(dir, files, manifests)))
         .collect();
     let paths: Vec<PathBuf> = rust.iter().map(|file| PathBuf::from(&file.path)).collect();
     let named: Vec<NamedFile<'_>> = rust
@@ -331,12 +508,7 @@ fn name_tree(root: &Path, listing: &Listing, rust: &[RustFile]) -> Names {
 
 /// The nearest directory of `path`, its own up to the root (`""`),
 /// holding a regular `Cargo.toml`.
-fn package_of(
-    root: &Path,
-    path: &str,
-    listing: &Listing,
-    probed: &mut BTreeMap<String, bool>,
-) -> Option<PathBuf> {
+fn package_of(path: &str, manifests: &mut dyn Manifests) -> Option<PathBuf> {
     let mut dir = path;
     loop {
         dir = match dir.rfind('/') {
@@ -344,14 +516,7 @@ fn package_of(
             None if dir.is_empty() => return None,
             None => "",
         };
-        let holds = if listing.listed.contains(dir) {
-            listing.manifests.contains(dir)
-        } else {
-            *probed
-                .entry(dir.to_owned())
-                .or_insert_with(|| holds_manifest(&root.join(dir)))
-        };
-        if holds {
+        if manifests.holds(dir) {
             return Some(PathBuf::from(dir));
         }
         if dir.is_empty() {
@@ -381,8 +546,8 @@ enum Manifest {
 
 /// The targets of the package in `dir` (relative to the root) over its
 /// walked `files` (relative to `dir`).
-fn package_targets(root: &Path, dir: &Path, files: &[PathBuf]) -> PackageTargets {
-    let name = match read_manifest(&root.join(dir).join(MANIFEST)) {
+fn package_targets(dir: &Path, files: &[PathBuf], manifests: &mut dyn Manifests) -> PackageTargets {
+    let name = match manifests.read(&dir.to_string_lossy()) {
         Manifest::Virtual => {
             return PackageTargets {
                 source: TargetSource::Layout,
@@ -398,9 +563,12 @@ fn package_targets(root: &Path, dir: &Path, files: &[PathBuf]) -> PackageTargets
     layout_targets(&name, files.iter().map(PathBuf::as_path))
 }
 
-/// The manifest at `path`, read for its `[package] name` only.
-fn read_manifest(path: &Path) -> Manifest {
-    let Some(manifest) = fs::read_to_string(path)
+/// A manifest as seen, read for its `[package] name` only.
+fn manifest_of(seen: &ManifestSeen) -> Manifest {
+    let ManifestSeen::Bytes(bytes) = seen else {
+        return Manifest::Unread;
+    };
+    let Some(manifest) = std::str::from_utf8(bytes)
         .ok()
         .and_then(|text| text.parse::<toml::Table>().ok())
     else {

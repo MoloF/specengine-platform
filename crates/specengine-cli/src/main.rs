@@ -41,7 +41,8 @@ use specengine_cli::{
     RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
     SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
     TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, render_json, render_text,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, VerifyRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -171,6 +172,12 @@ enum Command {
         /// Any form `show` takes.
         #[arg(value_name = "REF")]
         reference: String,
+    },
+    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode.
+    Verify {
+        /// Judge against HEAD too: a finding HEAD already has is pre-existing.
+        #[arg(long)]
+        changed: bool,
     },
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
@@ -794,6 +801,14 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             env,
             globals,
             &RefsRequest { reference },
+        )?)),
+        Command::Verify { changed } => Outcome::Verify(Box::new(specengine_cli::verify(
+            env,
+            globals,
+            &VerifyRequest {
+                changed,
+                git: process_git(env),
+            },
         )?)),
         Command::Export {
             what: Export::Index { stdout },

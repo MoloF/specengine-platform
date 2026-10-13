@@ -53,10 +53,17 @@
 //! - [`code_toml`] — `CodeConfig::from_toml`: the `[code]` table, the code
 //!   tree `spec refs` walks, read apart from the reads
 //!   (`docs/canon/code-bindings.md` "The `[code]` table");
-//! - [`lock`] — `spec.lock`'s model (task spec `spec-lock`): the reader,
-//!   the canonical render, an accept's merge into one node's entries, its
-//!   editorial refresh and a gone node's drop, and `spec lock regen`'s
-//!   merge of a conflict's stages; pure, no hash computed, no path read.
+//! - [`lock`] — `spec.lock`'s model (`docs/canon/spec-lock.md` "The file",
+//!   "Entry"): the reader, the canonical render, an accept's merge into one
+//!   node's entries, its editorial refresh and a gone node's drop
+//!   (`docs/canon/spec-lock-accept.md` "Steps", "A gone node"), and `spec
+//!   lock regen`'s merge of a conflict's stages; pure, no hash computed, no
+//!   path read;
+//! - [`verify`] — the pure half of `spec verify`
+//!   (`docs/features/spec-verify.md` "The verify table", "States",
+//!   "Verdict and exit"): the `[verify]` table read apart from the reads,
+//!   the row key, the judge over one row's facts from any source, the
+//!   classes and the verdict.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -82,6 +89,7 @@ pub mod round;
 pub mod scheme_toml;
 pub mod task;
 pub mod tokens;
+pub mod verify;
 pub mod walk_scope;
 mod yaml;
 
@@ -105,6 +113,7 @@ pub use project_toml::{
 pub use revision::{Revision, revision};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};
 pub use tokens::tokens_est;
+pub use verify::{VerifyConfig, verify_from_toml};
 pub use walk_scope::{DOCUMENT_EXTENSION, WalkScope, is_clean_relative, is_under};
 pub use yaml::{MAX_ALIAS_EXPANSION, MAX_DEPTH};
 

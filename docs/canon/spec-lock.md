@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-12
+reviewed: 2026-10-13
 ---
 
 # `spec.lock`: the file, its entries, `spec lock regen`
 
-`<root>/spec.lock`, one per project root beside `specengine.toml`, committed: per marker binding, a node's revision and `norm_hash` paired with its code's hashes at a commit, so drift can be told from `ok`. Neither a spec file nor `generated`: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock` (ADR-0041). Built: `spec lock accept REF [--editorial]` (`docs/canon/spec-lock-accept.md`) and `spec lock regen` (below). Model: core `lock`, pure; git: store `WorktreeGit`; commands: CLI `lock.rs`, `lock_regen.rs` (their READMEs). Plain `spec check`, the index, MCP, HTTP, UI, the gate and the daemon never read or write it. No `[code]`, no lock.
+`<root>/spec.lock`, one per project root beside `specengine.toml`, committed: per marker binding, a node's revision and `norm_hash` paired with its code's hashes at a commit, so drift can be told from `ok`. Neither a spec file nor `generated`: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock` (ADR-0041). Built: `spec lock accept REF [--editorial]` (`docs/canon/spec-lock-accept.md`) and `spec lock regen` (below). Model: core `lock`, pure; git: store `WorktreeGit`; commands: CLI `lock.rs`, `lock_regen.rs` (their READMEs). Plain `spec check`, the index, MCP, HTTP, UI, the gate and the daemon never read or write it; `spec verify` only reads it (`docs/canon/spec-verify.md`). No `[code]`, no lock.
 
 ## The file
 

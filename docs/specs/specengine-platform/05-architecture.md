@@ -157,7 +157,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 
 **`qpath` lookup** — through a suffix index from day one: in cgr a linear scan of the name registry ate 48 % CPU; the index sped this up 178–382×. `find_symbols` accepts both a name and `path:line` (returns the definitions covering the line, innermost first); ranking: exact → path suffix → same name. Every resolved link carries a resolution confidence (`exact | heuristic`), and destructive operations (rebinding, ID rename) **refuse** to act on a heuristic without an explicit flag.
 
-**Reply to every write** (cgr "structural delta" contract): `spec verify`/`reindex` return `{symbols: {added, removed, renamed, changed}, bindings: {moved, ambiguous, lost, stale}, affected_nodes, tests_reaching, ms}`. `spec check --base <ref>` returns the same for pre-commit and CI.
+**Reply to every write** (cgr "structural delta" contract): `spec verify --json` returns `delta` `{symbols: {added, removed, renamed, changed}, bindings: {moved, ambiguous, lost, stale}, affected_nodes, tests_reaching}`, no `ms` (no timing in output); `symbols` from 7b, `moved` 5c, `tests_reaching` 7a (built: `docs/canon/spec-verify-output.md` "JSON"). No `spec check --base <ref>`: a project's pre-commit or CI runs `spec verify --changed`.
 
 **Performance is not a concern** (research, several hundred kLOC, 14 cores): parse + hash ~112 MB/s with rayon and one `Parser` per thread (`thread_local!`); no caching or incremental parsing for the hash layer, the complexity goes into correctness.
 
@@ -170,7 +170,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 **Drift-check cascade** — the next level runs only if the previous one said "changed":
 
 1. **git blob OID** of the file matches the lock → all bindings in the file are fresh, no parsing (Swimm `file_blobs` technique). "Which nodes could this commit touch" reduces to a set intersection of changed paths;
-2. **normalized text** of the region (comments stripped, whitespace collapsed, string literals verbatim) — the fallback when the symbol does not parse;
+2. *(dropped: a normalized-text fallback would pass a symbol that does not parse, which is `cannot_verify`, exit 2; `docs/canon/spec-verify.md` "Cascade")*;
 3. **canonical AST hash** of the symbol (§5.2);
 4. *(optional, later)* **LLM audit** only over nodes flagged at steps 2–3. The audit runs in a **clean context** of a separate agent without Edit/Write, and every behavioural claim must carry a `file:line` quote.
 
@@ -185,7 +185,7 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
 | unparseable / symbol ambiguous | | `cannot_verify` | **never counted as `ok`**; shown separately |
 
-`spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — something blocks, **2** — the run cannot be trusted, no verdict. Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
+`spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — a Fix finding blocks, only under the project's own `[verify] mode` (ADR-0042), **2** — the run cannot be trusted, no verdict (`docs/canon/spec-verify.md` "Verdict and exit"; the backlog: `spec propose drift`, 4c). Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
 
 Git as the truth gives "since verification" diffs for free: the old spec text and the old code come from the commit recorded in the lock.
 

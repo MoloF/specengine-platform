@@ -35,8 +35,10 @@
 //! Every child: `-c core.fsmonitor=false`, the variables of [`GitEnv`]
 //! with the path variables made absolute and `GIT_OPTIONAL_LOCKS=0`,
 //! `GIT_NO_LAZY_FETCH=1`, `GIT_NO_REPLACE_OBJECTS=1`,
-//! `GIT_TERMINAL_PROMPT=0`; stdin null but `cat-file`'s request pipe;
-//! stderr captured (`cat-file`: discarded) and never relayed. A failure is
+//! `GIT_TERMINAL_PROMPT=0`; stdin null but `cat-file`'s request pipe and
+//! the path list `hash-object --stdin-paths` reads (written from another
+//! thread); stderr captured (`cat-file`, `hash-object`: discarded) and
+//! never relayed. A failure is
 //! a cause with a fixed one-line message at `.`: never git's text, never an
 //! absolute path.
 //!
@@ -45,6 +47,14 @@
 //! the root `rev-parse --is-inside-work-tree`, `rev-parse --verify -q
 //! HEAD`, when born `ls-tree -r -z <oid>`, and one `cat-file --batch`
 //! session; never `ls-files` or the intent-to-add detector.
+//!
+//! `spec verify` (`docs/features/spec-verify.md` "Base") reads through
+//! [`crate::verify_git`] on [`Staged::head_only`]'s session: requests by
+//! name in the one `cat-file --batch` (a path's stages, `:1:./spec.lock`
+//! to `:3:./spec.lock`, relative to the root), `hash-object --no-filters
+//! --stdin-paths` over absolute paths
+//! (raw bytes, `-w` never), `rev-parse --verify -q <rev>^{commit}`, when it
+//! names a commit `ls-tree -r -z <oid>`.
 //!
 //! `cat-file --batch` runs in strict lockstep, without `--buffer`: one
 //! request is written and its whole reply read before the next, so neither
@@ -604,9 +614,27 @@ impl Git {
     /// `HEAD`'s commit: `Some(oid)` when born, `None` when unborn (exit 1,
     /// nothing printed); anything else is a failure.
     fn head(&self) -> Result<Option<String>, GitFailure> {
+        self.verify_rev("HEAD")
+    }
+
+    /// The commit `rev` names (`rev-parse --verify -q <rev>^{commit}`):
+    /// `None` when it names none (an unborn `HEAD` too); a `rev` starting
+    /// with `-` is refused unrun (it would read as an option).
+    fn commit_named(&self, rev: &str) -> Result<Option<String>, GitFailure> {
+        if rev.starts_with('-') || rev.contains(['\n', '\0']) {
+            return Err(GitFailure::Unreadable {
+                command: "rev-parse",
+            });
+        }
+        self.verify_rev(&format!("{rev}^{{commit}}"))
+    }
+
+    /// `rev-parse --verify -q <spec>`: one OID, or `None` (exit 1, nothing
+    /// printed); anything else is a failure.
+    fn verify_rev(&self, spec: &str) -> Result<Option<String>, GitFailure> {
         const COMMAND: &str = "rev-parse";
         let output = self
-            .command(&["rev-parse", "--verify", "-q", "HEAD"])
+            .command(&["rev-parse", "--verify", "-q", spec])
             .output()
             .map_err(|error| self.spawn_failure(&error))?;
         let unreadable = GitFailure::Unreadable { command: COMMAND };
@@ -666,6 +694,67 @@ impl Git {
             .filter(|path| !path.is_empty())
             .map(<[u8]>::to_vec)
             .collect())
+    }
+
+    /// The blob OIDs of the files at `paths` (absolute), their raw bytes
+    /// hashed (`hash-object --no-filters --stdin-paths`: no clean filter,
+    /// nothing written), in the order given. The paths go to stdin from
+    /// another thread, so neither pipe can fill while the other waits; a
+    /// path holding a control character, `"` or `\` is C-quoted, as git
+    /// reads a line starting with `"`.
+    fn hash_paths(&self, paths: &[PathBuf]) -> Result<Vec<String>, GitFailure> {
+        const COMMAND: &str = "hash-object";
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        let unreadable = GitFailure::Unreadable { command: COMMAND };
+        let mut input = Vec::new();
+        for path in paths {
+            input.extend(stdin_path(path).ok_or(unreadable.clone())?);
+            input.push(b'\n');
+        }
+        let mut child = self
+            .command(&["hash-object", "--no-filters", "--stdin-paths"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|error| self.spawn_failure(&error))?;
+        let Some(mut stdin) = child.stdin.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(unreadable);
+        };
+        let writer = std::thread::spawn(move || stdin.write_all(&input));
+        let output = child.wait_with_output();
+        let written = writer.join();
+        let output = output.map_err(|_| unreadable.clone())?;
+        if !output.status.success() {
+            return Err(GitFailure::Failed {
+                command: COMMAND,
+                code: output.status.code(),
+            });
+        }
+        if !matches!(written, Ok(Ok(()))) {
+            return Err(unreadable);
+        }
+        let body = output
+            .stdout
+            .strip_suffix(b"\n")
+            .ok_or(unreadable.clone())?;
+        let oids: Vec<String> = body
+            .split(|&byte| byte == b'\n')
+            .map(|oid| {
+                is_oid(oid)
+                    .then(|| String::from_utf8(oid.to_vec()).ok())
+                    .flatten()
+            })
+            .collect::<Option<_>>()
+            .ok_or(unreadable.clone())?;
+        if oids.len() != paths.len() {
+            return Err(unreadable);
+        }
+        Ok(oids)
     }
 
     fn cat_file(&self) -> Result<CatFile, GitFailure> {
@@ -770,6 +859,59 @@ impl CatFile {
         }
     }
 
+    /// Writes one request by name (`:2:./spec.lock`) and reads its whole
+    /// reply: `None` for `<name> missing`, else the object's OID and its
+    /// blob ([`Blob::Foreign`] for another type).
+    fn get_named(&mut self, name: &str) -> Result<Option<(String, Blob)>, GitFailure> {
+        let unreadable = || GitFailure::Unreadable {
+            command: Self::COMMAND,
+        };
+        if name.contains(['\n', '\r']) {
+            return Err(unreadable());
+        }
+        let stdin = self.stdin.as_mut().ok_or_else(unreadable)?;
+        stdin
+            .write_all(format!("{name}\n").as_bytes())
+            .and_then(|()| stdin.flush())
+            .map_err(|_| unreadable())?;
+        let mut header = Vec::new();
+        self.stdout
+            .read_until(b'\n', &mut header)
+            .map_err(|_| unreadable())?;
+        let header = header.strip_suffix(b"\n").ok_or_else(unreadable)?;
+        if header.strip_suffix(b" missing") == Some(name.as_bytes()) {
+            return Ok(None);
+        }
+        let fields: Vec<&[u8]> = header.split(|&byte| byte == b' ').collect();
+        let [oid, kind, size] = fields.as_slice() else {
+            return Err(unreadable());
+        };
+        if !is_oid(oid) {
+            return Err(unreadable());
+        }
+        let size: u64 = std::str::from_utf8(size)
+            .ok()
+            .and_then(|size| size.parse().ok())
+            .ok_or_else(unreadable)?;
+        let mut bytes = Vec::new();
+        (&mut self.stdout)
+            .take(size)
+            .read_to_end(&mut bytes)
+            .map_err(|_| unreadable())?;
+        let mut end = [0_u8; 1];
+        self.stdout.read_exact(&mut end).map_err(|_| unreadable())?;
+        if u64::try_from(bytes.len()).ok() != Some(size) || end != *b"\n" {
+            return Err(unreadable());
+        }
+        let oid = String::from_utf8(oid.to_vec()).map_err(|_| unreadable())?;
+        let blob = if *kind == b"blob" {
+            Blob::Bytes(bytes)
+        } else {
+            Blob::Foreign
+        };
+        Ok(Some((oid, blob)))
+    }
+
     /// Closes the requests and waits: the session must end cleanly, with
     /// nothing left unread.
     fn finish(mut self) -> Result<(), GitFailure> {
@@ -812,6 +954,43 @@ impl Drop for CatFile {
             let _ = self.child.wait();
         }
     }
+}
+
+/// One line of `hash-object --stdin-paths`: the path's bytes, C-quoted
+/// (in `"`, with `\"`, `\\` and octal escapes) when it holds a control
+/// character, `"` or `\`; `None` for a path that cannot be given as bytes.
+fn stdin_path(path: &Path) -> Option<Vec<u8>> {
+    let bytes = path_bytes(path)?;
+    let plain = !bytes
+        .iter()
+        .any(|&byte| byte < 0x20 || byte == 0x7f || byte == b'"' || byte == b'\\');
+    if plain {
+        return Some(bytes);
+    }
+    let mut quoted = vec![b'"'];
+    for byte in bytes {
+        match byte {
+            b'"' => quoted.extend_from_slice(b"\\\""),
+            b'\\' => quoted.extend_from_slice(b"\\\\"),
+            byte if byte < 0x20 || byte == 0x7f => {
+                quoted.extend_from_slice(format!("\\{byte:03o}").as_bytes());
+            }
+            byte => quoted.push(byte),
+        }
+    }
+    quoted.push(b'"');
+    Some(quoted)
+}
+
+#[cfg(unix)]
+fn path_bytes(path: &Path) -> Option<Vec<u8>> {
+    use std::os::unix::ffi::OsStrExt;
+    Some(path.as_os_str().as_bytes().to_vec())
+}
+
+#[cfg(not(unix))]
+fn path_bytes(path: &Path) -> Option<Vec<u8>> {
+    path.to_str().map(|text| text.as_bytes().to_vec())
 }
 
 /// A stage-0 entry the intent-to-add detector must rule on: the empty blob
@@ -941,6 +1120,28 @@ impl Staged {
     /// `HEAD`'s commit in the root: `None` when unborn.
     pub(crate) fn head(&self) -> Result<Option<String>, GitFailure> {
         self.git.head()
+    }
+
+    /// The commit `rev` names, in the root: `None` when it names none.
+    pub(crate) fn commit_named(&self, rev: &str) -> Result<Option<String>, GitFailure> {
+        self.git.commit_named(rev)
+    }
+
+    /// The object `name` names (`:2:./spec.lock`), read through the
+    /// session (started on first use): `None` when git has none.
+    pub(crate) fn named(&mut self, name: &str) -> Result<Option<(String, Blob)>, GitFailure> {
+        let session = match &mut self.session {
+            Some(session) => session,
+            None => self.session.insert(self.git.cat_file()?),
+        };
+        session.get_named(name)
+    }
+
+    /// The blob OIDs of the root-relative files `paths` as they are on
+    /// disk (raw bytes, no filter), in the order given.
+    pub(crate) fn hash_files(&self, paths: &[&str]) -> Result<Vec<String>, GitFailure> {
+        let absolute: Vec<PathBuf> = paths.iter().map(|path| self.root.join(path)).collect();
+        self.git.hash_paths(&absolute)
     }
 
     /// The tree of commit `oid` under the root (`ls-tree -r -z`),

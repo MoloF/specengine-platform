@@ -37,6 +37,12 @@
 //!   (docs/features/spec-cli-introduced.md); [`check_changed_with_notes`]:
 //!   over the working tree, config and baseline from disk, judged against
 //!   `HEAD` the same way (docs/features/spec-cli-changed.md);
+//! - [`VerifyGit`]: the git reads of `spec verify`
+//!   (`docs/features/spec-verify.md` "Base"): the check's base reader
+//!   under the caller's [`GitEnv`] extended to code, manifests and
+//!   `spec.lock` for any commit ([`CommitListing`], [`CommitFile`]), a
+//!   path's unmerged stages and files on disk by blob OID (`hash-object`
+//!   without `-w`);
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -85,6 +91,7 @@ mod schema;
 mod search;
 mod source;
 mod update;
+mod verify_git;
 mod worktree;
 mod write;
 
@@ -118,6 +125,10 @@ pub use queue::{
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
+pub use verify_git::{
+    COMMIT_NOT_A_BLOB, CommitEntry, CommitEntryKind, CommitFile, CommitListing,
+    MISSING_COMMIT_BLOB, VerifyGit,
+};
 pub use worktree::{
     ChangedPath, CreateFileError, CreatedFile, GitError, ListedWorktree, Merge, Operation,
     PlaceError, StatusEntry, WorktreeGit, create_file, replace_file, same_repository,

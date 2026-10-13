@@ -1,5 +1,5 @@
-//! `spec lock regen` (task spec `spec-lock`, "spec lock regen"): a merge
-//! that conflicts in `spec.lock` resolved on the owner's terminal (canon
+//! `spec lock regen` (canon `spec-lock`, "`spec lock regen`"): a
+//! merge that conflicts in `spec.lock` resolved on the owner's terminal (canon
 //! `architecture-code`, "`spec.lock` writers"). Only while `spec.lock` is
 //! unmerged (`ls-files -u`): each stage present read (another format, a
 //! key or a form refused: exit 2),

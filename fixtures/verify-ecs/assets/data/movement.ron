@@ -1,0 +1,5 @@
+// Movement tuning.
+Movement(
+    regen_per_second: 2.5, // @configures TUNE-01@1
+    sprint_cost: 4.0,
+)

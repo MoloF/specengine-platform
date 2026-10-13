@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [architecture, crates/specengine-code, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-12
+reviewed: 2026-10-13
 ---
 
 # SpecEngine architecture rules: the code layer
 
-The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads, Health's code rows and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`; `spec.lock`: `docs/canon/spec-lock.md`.
+The detail of the code layer's rules: markers, symbol identity, `spec.lock`, drift, sync in reads, Health's code rows and test evidence. `docs/canon/architecture.md` states each rule in a sentence or two with its ADRs and points at its section here; both change only through a new decision, in the same change (promotion rule). Design: 05 §3.5, §5. Layer A as built: `docs/canon/code-identity.md`; markers bound to code and `spec refs`: `docs/canon/code-bindings.md`; revisions and `norm_hash`: `docs/canon/node-revision.md`; `spec.lock`: `docs/canon/spec-lock.md`; `spec verify`: `docs/canon/spec-verify.md`.
 
 <a id="markers"></a>
 ## Markers
@@ -54,6 +54,8 @@ Rule: `architecture.md#control`. ADR-0042, ADR-0045, ADR-0050.
 - `spec verify` shows drift between `spec.lock` and the tree as Fix, Check or Pre-existing findings.
 - Only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix. Otherwise `spec propose drift` queues the findings as items that stop nothing (ADR-0045), reads show the same states as `sync` (`#sync-in-reads`) and Health lists them (`#health`).
 - A binding it cannot verify is never `ok`: exit 2 in every mode; a lock of another format or recipe too, until `spec lock rebase` carries it over (`#spec-lock`).
+
+As built (slice 4a): rows, states, the cascade, the base and the run causes in `docs/canon/spec-verify.md`; text, hints and JSON in `docs/canon/spec-verify-output.md`. `spec propose drift` (`docs/features/drift-queue.md`) is not built yet.
 
 <a id="sync-in-reads"></a>
 ## Sync in reads
