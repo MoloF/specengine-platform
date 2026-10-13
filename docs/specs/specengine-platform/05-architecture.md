@@ -100,7 +100,7 @@ Committed with the code, written only on the owner's terminal, never by `apply_p
 
 **What goes into `norm_hash`** (after Doorstop): the section text and semantic fields (`links`, for records `working_answer` etc.). **Excluded** are presentational and process fields: `title`, `status`, `tier`, `owner`, `reviewed`. Renaming a heading must not invalidate coverage. Shipped as recipe `specengine-norm/v1`, with the revision rule (ADR-0040): `docs/canon/node-revision.md`.
 
-**Node revision `rev`** (after tracey and OpenFastTrace): a monotonic number in front-matter. `spec check --staged` in pre-commit **fails if `norm_hash` changed but `rev` did not**. `spec bump` raises changed nodes' revisions in the git index; `spec bump --editorial ID` marks the edit editorial and updates `spec_hash` in the lock without a new revision (shipped for the lock as `spec lock accept --editorial`; `bump`: slice 4b). "Rewrote the meaning, coverage stayed green" is impossible, and typos make no false drift.
+**Node revision `rev`** (after tracey and OpenFastTrace): a monotonic number in front-matter. `spec check --staged` in pre-commit **fails if `norm_hash` changed but `rev` did not**. `spec bump` raises changed nodes' revisions in the git index; `spec bump --editorial ID` marks the edit editorial and updates `spec_hash` in the lock without a new revision (shipped for the lock as `spec lock accept --editorial`; `bump`: slice 4b-2). "Rewrote the meaning, coverage stayed green" is impossible, and typos make no false drift.
 
 ### 3.6. Shared library
 

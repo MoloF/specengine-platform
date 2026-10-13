@@ -98,7 +98,7 @@ Noise until 5b: RON and modules by blob (Q9), `[sig]` hashed whole, every bindin
 
 ## Out of scope
 
-- **4b `rev-discipline`** (ADR-0043, AC-13): the rule in `check --staged`, `--changed`; apply raising `rev`; an editorial approve; `spec bump`; `verify --staged`.
+- **4b** (ADR-0043, AC-13, split 2026-10-13): 4b-1 `rev-discipline`, apply raising `rev`, an editorial approve; 4b-2 `rev-rule`, the rule in `check --staged`, `--changed`, `spec bump`, `verify --staged`.
 - **4c `drift-queue`** (ADR-0045): `spec propose drift` (MCP `report_drift`) queues `HEAD`'s rows as `drift` items, the backlog; approve runs accept; verify gains the drift hint and stays read-only.
 - 5a-5c levels, lock format 2, `spec lock rebase`, `MOVED`/`AMBIGUOUS`/`LOST`; 6b `--node REF`; 7a `tests_reaching`, `sync` in reads; 7b `delta.symbols`; 8a `--tests`, `--task`; 8b; 9a; 9b: plain findings as Health row 6, never the verdict (ADR-0047). Not planned: a PATH, a debt baseline, a watcher, `spec check --base REF`.
 
@@ -112,7 +112,7 @@ Noise until 5b: RON and modules by blob (Q9), `[sig]` hashed whole, every bindin
 | Q4 hashing needs a tree; the walk keeps none | re-parse only bound files whose blob changed; 9b's RD-13 counts `read_tree` calls |
 | Q5 unmerged `spec.lock` | stages `:1:`-`:3:` in the base `cat-file --batch`, inside the canon's git list |
 | Q6 a key `key_problem` refuses | `unlocked`, detail `key_problem`, the hint naming the field |
-| Q7 hooks vs accept's lock commit | a project's hook runs `--changed` under `enforce-introduced` (4b: `--staged`); no ADR |
+| Q7 hooks vs accept's lock commit | a project's hook runs `--changed` under `enforce-introduced` (4b-2: `--staged`); no ADR |
 | Q8 the golden lock's invalid levels (`counter.rs:77`, `bounds.rs:14`) | accept locks them until 5b (`lock-levels.md` RD-3); verify reads them `bad_marker bad_levels` |
 | Q9 `core.autocrlf`, `eol` | `hash-object --no-filters` stays (`architecture-code.md#sync-in-reads`); `module`, `ron` rows `code_ahead` by blob, a named limit until 5b's digests; items verify |
 
@@ -133,4 +133,4 @@ Deviations, accepted in review, in the canon as built: RD-10's golden test renam
 
 Runs (iteration 2): fmt, clippy clean; nextest core, store, CLI 1 646 passed, 2 skipped (pilots). Gaps: Rust `nesting_too_deep` (`Comparison::CannotVerify`) pinned in core only; TE-10's figures not taken.
 
-Carried to 4b's developer (`rev-discipline.md` RD-13), code only: CLI `verify.rs:640-646`'s "raise the marker to its revision" also serves R < `rev_L`: "set the marker to its revision", with `spec-verify-output.md` "Hints"' quote changed in the same change; store `git.rs` `Staged::blob` doc and `verify_git.rs:16` "each OID once": "once per `read_files` call"; pointers to this spec's headings retargeted to the two canons (core `lib.rs:63`, `verify.rs:2`; store `git.rs:51`, `verify_git.rs:1`, `lib.rs:41`; CLI `lib.rs:32`, `code_walk.rs:39`, `verify.rs:1`, `verify_rows.rs:2,757`, `lock.rs:603`, as "canon `spec-verify`"): "The verify table" -> "The `[verify]` table", "Command and rows" -> "Rows", "Cascade and spec side" -> "Cascade", "Output" -> `spec-verify-output.md`. Accepted: `tree_of_blobs` clones reused files (the current side borrows the walk).
+Carried to 4b-1's developer (`rev-discipline.md` RD-8), code only: CLI `verify.rs:640-646`'s "raise the marker to its revision" also serves R < `rev_L`: "set the marker to its revision", with `spec-verify-output.md` "Hints"' quote changed in the same change; store `git.rs` `Staged::blob` doc and `verify_git.rs:16` "each OID once": "once per `read_files` call"; pointers to this spec's headings retargeted to the two canons (core `lib.rs:63`, `verify.rs:2`; store `git.rs:51`, `verify_git.rs:1`, `lib.rs:41`; CLI `lib.rs:32`, `code_walk.rs:39`, `verify.rs:1`, `verify_rows.rs:2,757`, `lock.rs:603`, as "canon `spec-verify`"): "The verify table" -> "The `[verify]` table", "Command and rows" -> "Rows", "Cascade and spec side" -> "Cascade", "Output" -> `spec-verify-output.md`. Accepted: `tree_of_blobs` clones reused files (the current side borrows the walk).

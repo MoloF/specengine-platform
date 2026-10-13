@@ -66,7 +66,7 @@ Check rows never block. Plain, `enforce-introduced` has no base and is judged as
 
 ## A project's hook
 
-A project hooking verify into its commits runs `spec verify --changed` under `enforce-introduced` (4b: `--staged`). Accept's lock commit runs hooks and covers one node, so a plain or `enforce` hook refuses it while another node has a Fix row (two `conflict` nodes deadlock). This repository's hook runs `spec check` only.
+A project hooking verify into its commits runs `spec verify --changed` under `enforce-introduced` (4b-2 `rev-rule`: `--staged`). Accept's lock commit runs hooks and covers one node, so a plain or `enforce` hook refuses it while another node has a Fix row (two `conflict` nodes deadlock). This repository's hook runs `spec check` only.
 
 ## Known limits
 

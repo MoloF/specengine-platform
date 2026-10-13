@@ -2,34 +2,34 @@
 class: spec
 status: draft
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui, plugin, fixtures]
-ref: Phase 3 plan 2026-10-10, slice 4b (WA-1..WA-14; Q1-Q7 decided under the owner's pre-approval, review open); 05 s3.5; 07 s2; 08 s2, AC-13
+ref: Phase 3 plan 2026-10-10, slice 4b-1 (4b split 2026-10-13, Q8; WA-1..WA-14); refreshed 2026-10-13 against shipped spec-lock and spec-verify; 05 s3.5; 07 s2; 08 s2, AC-13
 adrs: [ADR-0043]
 ---
 
-# rev-discipline: a changed meaning raises the revision, or the owner calls it editorial
+# rev-discipline (4b-1): approval raises a changed meaning's revision, or the owner calls it editorial
 
 ## Why
 
-Nothing raises a revision: apply writes the text as sent, an agent may change `rev=`, and a meaning approve and an editorial one make the same commit. So "rewrote the meaning, coverage stayed green" (05 s3.5) stays possible, and the drafted `spec lock accept --editorial` hashes committed bytes: it runs after a text commit whose hook the rule would fail.
+Nothing raises a revision: apply writes the text as sent, an agent may change `rev=`, and a meaning approve and an editorial one make the same commit. So "rewrote the meaning, coverage stayed green" (05 s3.5) stays possible. The shipped `spec lock accept --editorial` (`docs/canon/spec-lock-accept.md` "`--editorial`") reads the node's file, config and lock clean at `HEAD`, so it runs after the text commit, whose hook 4b-2's rule fails.
 
-Delivered, by ADR-0043 (amends ADR-0041; `architecture.md#apply`, `#layout`; `node-revision.md` "Raising"): the raise at apply; `spec approve --editorial`, refreshing the lock in the same commit; `rev-not-raised` (AC-13); `spec bump`; `spec verify --staged`. Needs slices 1, 3, 4a as drafted.
-
-**Owner review: risk 3, "content never blocks".** The rule refuses a commit over a spec change, beside ADR-0012 and `docs/README.md` "Enforcement" ("content never does"). The reading taken: it judges whether a locked node's change was *declared* (a raise or an editorial refresh), never what the text says; ADR-0019 took it from tracey; `[check] mode` gates it (`observe` never blocks), debt covers it. Read as content, it becomes a warning and AC-13 is unmet. "Enforcement" gets the clause at shipping (SW-4).
+Delivered here, by ADR-0043 (amends ADR-0041; `architecture.md#apply`, `#layout`; `node-revision.md` "Raising"): the raise at apply; an agent's revision change refused at creation; `spec approve --editorial`, refreshing the vouching lock entries in the apply commit; its stage, schema 7, the review's `revisions`; UI; the skill. 4b's other half, 4b-2 (`docs/features/rev-rule.md`): `rev-not-raised` (AC-13), `spec bump`, `spec verify --staged`. 4b-1 adds no check. Built on the canon of slices 1, 3 and 4a: `code-bindings.md`, `node-revision.md`, `spec-lock.md`, `spec-lock-accept.md`, `spec-verify.md`, `spec-verify-output.md`.
 
 ## Description and interactions
 
-- **The owner** approves as today, meaning by default (the prompt names the raise); `--editorial` or a staged `editorial: true` keeps revisions, the `[y/N]` confirming the lock write (ADR-0041). By hand: raise `rev` (`spec bump` prints the line); an editorial edit of a locked node: Q5.
-- **An agent** never writes a revision (Q7) and says "editorial" in the rationale, text only (Q6). The `propose-spec-change` skill gains (plugin PATCH bump): `Keep every rev as you read it: approval sets revisions. If you believe the change is editorial (wording, no meaning), say "editorial" in the rationale; the owner decides.`
-- **A project** in `enforce` or `enforce-introduced` gets the rule with its first committed `spec.lock`; its hook may run `spec verify --staged` on `[code]` files and `spec.lock` (documented, not shipped).
-- **This repository** (WA-10): no `spec.lock`, nothing in scope: output byte-identical, `CHECK_CODES` 36; hook, CI unchanged; `verify --staged` not wired (no `[code]`). With every ID in scope, each ADR edit would need `rev:`, which the closed decision class refuses.
-- **Crates** (WA-13): core the rule, the raise, bump's rows (pure); store lock blobs, a multi-path `commit_only`, queue schema 7; CLI, MCP, UI, plugin, fixtures; HTTP no code; no new crate or dependency.
-- **Overridden live-spec lines**, fixed at shipping: 05:103, 07:105-106 (`bump` writing revisions, `--editorial` the lock), 05:224, 06:97, 08:44, 08:82 (Q4).
+- **The owner** approves as today, meaning by default (the prompt names the raise); `--editorial` or a staged `editorial: true` keeps revisions, the `[y/N]` confirming the lock write (ADR-0041). By hand: raise `rev` (4b-2's `spec bump` prints the line); an editorial edit of a locked node: Q5.
+- **An agent** never writes a revision (Q7) and says "editorial" in the rationale, text only (Q6). The skill `plugin/specengine/skills/propose-spec-change/SKILL.md` gains (plugin 0.7.1 -> 0.7.2, PATCH, `plugin-files.md` "Changing it"): `Keep every rev as you read it: approval sets revisions. If you believe the change is editorial (wording, no meaning), say "editorial" in the rationale; the owner decides.`
+- **This repository** (WA-10): no `spec.lock`, so no refresh. The raise reaches only nodes with an ID, here ADRs, whose closed `decision` class admits no `rev` (`specengine.toml` `[classes]`): an update changing an ADR's meaning is refused at step 6 (Q11), as "never edited, only superseded" already asks. Hook, CI unchanged.
+- **Crates** (WA-13): core the raise's rows and line writes (pure), one vouching predicate (an entry of the node at R whose `spec_hash` is the given `norm_hash`; with 8b its `[[tested]]` block), `refresh_editorial` taking it as an optional filter (Q10), the stage's key; store `commit_only` over several paths (`worktree.rs`, one path today), queue schema 7; CLI apply's steps 3, 5-10, completion and reject's lookup; MCP `get_proposal`'s schema; UI; plugin; fixtures. HTTP no code; no new crate or dependency.
+- **Later slices**: 4c takes schema 7, `approve --editorial` on a `drift` item (running `lock_accept --editorial`), `revisions` null for a kind writing no existing node; 5b code fields kept byte for byte; 4b-2, 8b the one predicate, 8b the one `refresh_editorial`.
+- **Overridden live-spec lines**, fixed at shipping: 05:99 ("never by `apply_proposal`"), 05:222 ("To come: hashes recomputed"), 06:97 ("to come: `spec_hash` recomputed"), 07:94 (`spec approve … [--editorial]`).
 
 ## Data
 
 ### Raising at apply
 
-WA-1, WA-2, Q3. Kinds `update`, `interpretation`, section-form `create` (a new file writes none). Each node with an ID in both step 3's read and step 5's text, by canonical ID, after step 6's structure check: `norm_hash` changed -> revision := current + 1 ("current" from the file at apply, so a rebase over a raise raises from it), kept under `--editorial`; unchanged -> kept; never lowered. A section's readable `rev=N` replaced in place, else ` rev=N` appended before its heading's `}`; a document's `rev:` value replaced, else `rev: N` inserted after its `id:` line, with that line's ending. A current revision unreadable: exit 1 at step 6 naming the node.
+WA-1, WA-2, Q3. Kinds `update`, `interpretation`, section-form `create` (a new file writes none). Each node with an ID in both step 3's read and step 5's text, by canonical ID, after step 6's structure check: `norm_hash` changed -> revision := current + 1 ("current" from the file at apply, so a rebase over a raise raises from it), kept under `--editorial`; unchanged -> kept; never lowered. A section's readable `rev=N` replaced in place, else ` rev=N` appended before its heading's `}`; a document's `rev:` value replaced, else `rev: N` inserted after its `id:` line, with that line's ending.
+
+Refused at step 6, before the prompt, exit 1 naming the node: a current revision unreadable; one at `REV_MAX` (999 999 999, core `lock.rs`); a document's raise into a `closed` class listing `rev` in neither `required` nor `optional` (Q11): `` `ADR-0007`: class `decision` is closed and does not admit `rev`: admit it in [classes], or approve with --editorial ``.
 
 ```
 ## Cost {#R-12 rev=3}  ->  ## Cost {#R-12 rev=4}
@@ -40,11 +40,15 @@ Prompt: `apply PR-0007 to docs/spec/combat.md on main in /w (applies; raises R-1
 
 ### Creation
 
-WA-4, Q7. Creation 3 (so apply's step 6) refuses a text changing a revision as core `revision()` reads it, compared as values (`Unwritten` -> `Written(1)` too: SW refinement): exit 1 `` `R-12`'s revision changed (3 -> 4): keep rev as read; approval sets revisions ``.
+WA-4, Q7. Creation's check 3 (so apply's step 6) refuses a text changing a revision as core `revision()` reads it: the `Revision` variant and its value both compared (`node-revision.md` "Revision"), so `Unwritten` <-> `Written(_)` is refused, `Written(1)` too: exit 1 `` `R-12`'s revision changed (3 -> 4): keep rev as read; approval sets revisions ``.
 
 ### Editorial refresh
 
-WA-5, Q1. Under `--editorial`, step 3: no `<root>/spec.lock` -> text only; else tracked and clean (exit 1, as accept's step 4), this build's `format` and `norm_recipe` (exit 2). A changed node's entries at its revision whose `spec_hash` equals its old `norm_hash` get the new one (with 8b its `[[tested]]` block too, `tested-evidence.md` Q3); all else byte-identical (the code fields: format 1's `ast_hash`, format 2's `levels` through `body_bytes` (2026-10-12, `lock-levels.md` "Accept"; format 1 under 5b: exit 2 with the rebase hint); `file_blob`, `commit`, `verified_*`, other entries, the header with `code_recipe`). Step 8 re-reads the lock (changed: exit 1), writes both atomically; step 9 `git commit --only … -- :(literal)<path> :(literal)<root>/spec.lock`, a failure restoring both; step 10: exactly those paths, each refreshed `spec_hash` = the committed blob's `norm_hash`.
+WA-5, Q1, Q10. Under `--editorial`, step 3 also reads `<root>/spec.lock`: none -> text only; else tracked and equal to `HEAD` (exit 1, as accept's inputs, `spec-lock-accept.md` "Steps" 4), parsed by core `parse_lock(text, None)`, its `format` and `norm_recipe` then compared with this build's (exit 2 naming both; under 5b, format 1 exits 2 with the rebase hint, `lock-levels.md` "Old locks and the base"). `code_recipe` is ignored: a deliberate difference from accept's `read_lock`, which refuses any other recipe; the refresh writes no code field.
+
+**Refreshed** (Q10): each changed node's vouching entries, at its revision R with `spec_hash` equal to its old `norm_hash` (step 3's), take the new one, through `refresh_editorial` with the predicate as filter; `spec lock accept --editorial` keeps "every entry at R". An entry at R with another `spec_hash` (an earlier unreviewed change: a regen leftover, a `--no-verify` commit) is left, still a Fix for verify. With 8b, a vouching `[[tested]]` block too (`tested-evidence.md` Q3). All else byte-identical: the code fields (format 1's `ast_hash`; format 2's `levels` through `body_bytes`, `lock-levels.md` "Accept"), `file_blob`, `commit`, `verified_*`, other entries, the header.
+
+**Write and commit**: step 8 re-reads the lock (changed: exit 1 `spec.lock changed while being applied; nothing written`), then replaces each file atomically, the text first, the lock second. Step 9: `git commit --only … -- :(literal)<path> :(literal)<root>/spec.lock`. A failure restores both by accept's table and rules (`spec-lock-accept.md` "The lock commit"; CLI `lock.rs` `Undo`): each file only while it holds this run's bytes, a failed restore a warning naming its git command, never "restored". Step 10: one parent, the old `HEAD`; exactly those two paths changed; `Proposal:` the ID; one `Lock:` trailer per refreshed node; the committed `spec.lock` blob the bytes confirmed (accept's fourth check, `check_lock_commit`: a hook rewriting the lock fails it, a commit deleting it too); each refreshed `spec_hash` the committed text blob's `norm_hash`. No entry refreshed: the path alone, as today.
 
 ```
 Base-commit: <hex>
@@ -53,42 +57,18 @@ Lock: R-12
 Lock-mode: editorial
 ```
 
-Trailers after `Base-commit:`, `Interprets:` last; a meaning approve's `Revision: R-12 3 -> 4` per raised node, file order; `Lock:` per node whose entries changed, then one `Lock-mode`. Completion and reject's lookup take the path alone, or with `spec.lock` and `Lock-mode: editorial`.
-
-### The rule `rev-not-raised`
-
-WA-6, WA-7, WA-14, Q2. One error code (`CHECK_CODES` 36), in check, not verify (WA-14), under `--staged` and `--changed` only. **In scope**: a node whose canonical ID is at `HEAD` and in the checked tree, its `HEAD` revision readable and `norm_hash` non-null, `HEAD`'s `spec.lock` holding an entry (with 8b, or a `[[tested]]` block: `tested-evidence.md` Q3) for it at that revision with `spec_hash` = that `norm_hash`. **Finding**: the checked `norm_hash` non-null and different, the checked revision unreadable or not above `HEAD`'s, and the checked lock not carrying the new hash on each vouching entry (same key, or the node's block, same `rev`). **Lock**: `--staged` the index's blob (`GIT_INDEX_FILE`, apply's `--only` index too), `--changed` the disk; none at `HEAD`: nothing in scope; either unparseable, another `format` or `norm_recipe`, unmerged under `--staged`: cannot check (exit 2); `code_recipe` ignored. Always introduced; `[check] mode` decides; debt covers it.
-
-```
-error  docs/spec/combat.md:14: rev-not-raised: `R-12` changed at rev 3, which spec.lock vouches for: raise it (rev=4), or have the owner approve it through the queue with --editorial
-```
-
-Line: the heading or the `id:` line; subject the ID; `fix` the raised line as apply writes it. Unlocked nodes, marker-only bindings, `@N` pins: no finding (bump's `suggested`).
-
-### spec bump
-
-WA-8. `spec bump [--staged] [--json]` (+ `--root`, `--config`), read-only: no file, index entry, git object, queue row or event. The disk (as `check --changed`) or `--staged` the index, against `HEAD`. A row per node with an ID at `HEAD` whose `norm_hash` changed and revision is not above `HEAD`'s, by path and line; `required` when the rule finds it, else `suggested`; `to` = `HEAD`'s + 1:
-
-```
-required | R-12 | docs/spec/combat.md:14 | rev 3 -> 4 | 2 lock entries | ## Cost {#R-12 rev=4}
-suggested | R-13 | docs/spec/combat.md:30 | rev 1 -> 2 | 0 lock entries | ## Range {#R-13 rev=2}
-hint: suggested: raising it makes markers naming it lag
-```
-
-`hint: required:` gives the finding's ways out. JSON `{rows: [{need, id, path, line, rev, to, lock_entries, write}]}`; an unreadable revision `rev ?`, `rev` and `write` null. None: `nothing to raise`. Exit 0 when run; 2 on check's run or the rule's lock causes; `--editorial` a usage error.
-
-**`spec verify --staged`** (WA-9): 4a's judge over the git index (documents, `[code]` files, `spec.lock`, `specengine.toml` unless `--config`), level 1 by the index's OIDs against `file_blob` (no `hash-object`), base `HEAD`; with `--changed`: exit 2; exits by `[verify] mode`.
+Trailers after `Base-commit:`, `Interprets:` last; a meaning approve's `Revision: R-12 3 -> 4` per raised node, file order; `Lock:` per node whose entries changed, then one `Lock-mode`. Completion and reject's lookup take the path alone, or with `spec.lock` and `Lock-mode: editorial`. Completion accepts step 5's text with or without the raise (Q12), so an apply interrupted before 4b-1 still completes.
 
 ### Review document, stage, queue
 
-WA-11. Review key `revisions` after `conflict` (47 keys; place: SW refinement): `null` when the kind writes no existing node or the preview `conflicts` or is `unavailable`; else per node whose `norm_hash` changes (step 3 against step 5), `to` a meaning approve's, `lock_entries` an editorial one's (0 without a lock; `null` and a note if unreadable); text `revisions: R-12 3 -> 4 (2 lock entries)`. The approve stage gains `editorial` (`true` or `null`) after `canon`, 7 keys; `true` on a kind writing no existing node: refused when staged, a corrupt row when found:
+WA-11. Review key `revisions` after `conflict` (47 keys; `decision-staging.md` has 46): `null` when the kind writes no existing node or the preview `conflicts` or is `unavailable`; else per node whose `norm_hash` changes (step 3 against step 5), `to` a meaning approve's, `lock_entries` the vouching entries an editorial one refreshes (0 without a lock; `null` and a note if unreadable); text `revisions: R-12 3 -> 4 (2 lock entries)`. The approve stage gains `editorial` (`true` or `null`) after `canon`, 7 keys; `true` on a kind writing no existing node: refused when staged, a corrupt row when found:
 
 ```json
 "revisions": [{"id": "R-12", "rev": 3, "to": 4, "lock_entries": 2}]
 {"decision":"approve","option":null,"answer":null,"canon":null,"editorial":true,"note":"typo","span_hash":"<target span hash>"}
 ```
 
-A bare `spec approve PR` confirms it, printing `spec approve PR --editorial`; typed flags replace it whole. Queue schema 7 adds `"editorial":null` to open approve stages (older binaries refused). `get_proposal`'s schema gains both. No column or event: the trailers are the record.
+A bare `spec approve PR` confirms it, printing `spec approve PR --editorial`; typed flags replace it whole. Queue schema 7 (store `QUEUE_SCHEMA_VERSION` 6 today; 4c takes 8) adds `"editorial":null` to open approve stages (older binaries refused). `get_proposal`'s schema gains both. No column or event: the trailers are the record.
 
 ### UI
 
@@ -97,34 +77,28 @@ WA-12. Accept in the decision dialog gets "Editorial: keep the revision", shown 
 ## Rules and edge cases
 
 - WHEN a proposal is applied, the system SHALL keep the revision of a whitespace-, heading- or move-only change (ADR-0040); a heading rename meeting an earlier raise of that line conflicts at step 5 (exit 1).
-- WHEN one commit is checked from two roots, another cwd or creation order, findings and rows SHALL be byte-identical. Genre-neutral: IDs and the lock only.
-- Two branches' refreshes of one entry meet in `spec lock regen`, one may drop; it and the escapes (`--no-verify`, `observe`, no hook, CI's plain check) show in verify as `spec_ahead same_revision`.
+- WHEN an editorial approve meets entries at R that do not vouch for the old text, the system SHALL leave them byte-identical (Q10).
+- Two branches' refreshes of one entry meet in `spec lock regen`, one may drop: verify shows it as `spec_ahead same_revision`. Genre-neutral: the raise keys only on canonical IDs, `norm_hash`, `[classes]` and the lock.
 
 ## Acceptance criteria
 
 rust-developer (mutation -> the test that must fail):
 
-- [ ] RD-1 -- the rule, pure: every ID judged -> `unlocked_node_change_is_no_finding`; evidence ignored -> `refreshed_entries_pass_at_the_same_revision`; one of two refreshed -> `partial_refresh_is_a_finding`; a lower revision -> `lowered_revision_is_a_finding`; the heading hashed -> `heading_rename_is_no_finding`; by path -> `moved_section_is_no_finding`; a non-vouching entry -> `pre_existing_lock_drift_is_out_of_scope`; `std::fs` -> `model_and_core_sources_do_no_file_io`; a block judged as an entry -> `tested_block_vouches_like_an_entry` (the later of 4b and 8b).
-- [ ] RD-2 -- wiring: runs plain -> `plain_check_has_no_rev_finding`; the default index -> `rule_reads_the_lock_through_git_index_file`; `observe` blocks -> `observe_never_blocks_a_rev_finding`; `code_recipe` read -> `other_code_recipe_lock_still_checks`; an invalid lock passes -> `invalid_lock_is_cannot_check`. `CHECK_CODES` 36; `check_parity.rs` unchanged.
-- [ ] RD-3 -- raising: `meaning_approve_raises_each_changed_node`, `editorial_approve_keeps_revisions`, `whitespace_only_change_keeps_revision`, `apply_never_lowers_a_revision`, `unchanged_nested_section_keeps_its_revision`, `document_rev_line_follows_id_with_its_line_ending`, `unreadable_current_revision_refuses_at_step_6`; from the base -> `rebased_apply_raises_from_the_current_revision`.
-- [ ] RD-4 -- editorial: a second commit -> `editorial_apply_is_one_commit_of_text_and_lock`; a code field touched (`ast_hash`; under 5b, `levels` through `body_bytes`, `lock-levels.md`) -> `editorial_refresh_keeps_code_hashes_and_commit`; `only_vouching_entries_are_refreshed`, `dirty_lock_refuses_editorial_apply`, `editorial_without_a_lock_writes_text_only`, `editorial_prompt_names_the_lock_write`, `step_10_checks_the_lock_hash_against_the_committed_blob`; a block at R skipped -> `editorial_apply_refreshes_tested` (the later of 4b and 8b, `tested-evidence.md`).
-- [ ] RD-5 -- the raise removed -> `apply_commits_pass_the_revision_rule` (a real hook, a lock). RD-7 -- a revision change accepted -> `proposal_changing_a_revision_is_refused`.
-- [ ] RD-6 -- `interrupted_editorial_apply_completes`, `interrupted_meaning_apply_completes_with_the_raise`, `reject_refuses_with_a_two_path_apply_commit`.
-- [ ] RD-8 -- `editorial_on_a_new_file_is_a_usage_error`, `staged_editorial_is_confirmed_by_a_bare_approve`, `typed_flags_replace_a_staged_editorial`, `schema_7_rewrites_open_approve_stages`.
-- [ ] RD-9 -- `review_document_every_key_present` (47), `revisions_null_for_a_new_file`, `revisions_read_the_current_file`.
-- [ ] RD-10 -- any write (status, `HEAD`, index, queue) -> `bump_writes_nothing`; `bump_marks_vouched_nodes_required`, `bump_has_no_editorial_flag`.
-- [ ] RD-11 -- `verify_staged_judges_the_index_not_the_disk`, `verify_staged_runs_no_hash_object`, `staged_and_changed_exclude_each_other`.
-- [ ] RD-12 -- a kind literal -> the genre scan; a new dependency -> the CLI pin in `build_graph.rs`.
-- [ ] RD-13 -- 4a's carried review items, code only, code-reviewer checks (`spec-verify.md` "Implementation"): CLI `verify.rs` (~640-646) conflict hint "raise the marker to its revision" -> "set the marker to its revision" (it also serves R < `rev_L`; the spec-writer changes `spec-verify-output.md` "Hints"' quote with it); store `git.rs` `Staged::blob` doc and `verify_git.rs:16` "each OID once" -> "once per `read_files` call"; code pointers to `spec-verify.md`'s headings retargeted to its two canons.
+- [ ] RD-1 -- raising: `meaning_approve_raises_each_changed_node`, `editorial_approve_keeps_revisions`, `whitespace_only_change_keeps_revision`, `apply_never_lowers_a_revision`, `unchanged_nested_section_keeps_its_revision`, `document_rev_line_follows_id_with_its_line_ending`, `unreadable_current_revision_refuses_at_step_6`, `raise_at_max_revision_refuses`; from the base -> `rebased_apply_raises_from_the_current_revision`; a raise into a closed class without `rev` written -> `raise_into_a_closed_contract_refuses_at_step_6`.
+- [ ] RD-2 -- editorial: a second commit -> `editorial_apply_is_one_commit_of_text_and_lock`; a code field touched (`ast_hash`; under 5b, `levels` through `body_bytes`) -> `editorial_refresh_keeps_code_hashes_and_commit`; an unfiltered refresh -> `only_vouching_entries_are_refreshed`; accept's `read_lock` -> `editorial_refresh_ignores_code_recipe`; `dirty_lock_refuses_editorial_apply`, `editorial_without_a_lock_writes_text_only`, `editorial_prompt_names_the_lock_write`, `step_10_checks_the_lock_hash_against_the_committed_blob`, `hook_rewriting_the_lock_fails_step_10`, `editorial_commit_deleting_the_lock_fails_step_10`, `failed_editorial_commit_restores_text_and_lock`; a block at R skipped -> `editorial_apply_refreshes_tested` (the later of 4b-1 and 8b, `tested-evidence.md`).
+- [ ] RD-3 -- creation: a revision change accepted -> `proposal_changing_a_revision_is_refused`; compared by `number()` -> `unwritten_to_written_one_is_refused`.
+- [ ] RD-4 -- completion, reject: `interrupted_editorial_apply_completes`, `interrupted_meaning_apply_completes_with_the_raise`, `reject_refuses_with_a_two_path_apply_commit`; the raise required -> `unraised_apply_commit_completes` (Q12).
+- [ ] RD-5 -- stage, schema: `editorial_on_a_new_file_is_a_usage_error`, `staged_editorial_is_confirmed_by_a_bare_approve`, `typed_flags_replace_a_staged_editorial`, `schema_7_rewrites_open_approve_stages`.
+- [ ] RD-6 -- review: `review_document_every_key_present` (47), `revisions_null_for_a_new_file`, `revisions_read_the_current_file`.
+- [ ] RD-7 -- a kind literal -> the genre scan; a new dependency -> the CLI pin in `build_graph.rs`.
+- [ ] RD-8 -- carry-overs, code only, the code-reviewer checks: 4a's (`docs/features/spec-verify.md` "Implementation", last paragraph): CLI `verify.rs` conflict hint "raise the marker to its revision" -> "set the marker to its revision"; store `git.rs` module doc and `Staged::blob`'s "each OID is requested once": requested again once `read_files` has moved it out; `verify_git.rs` module doc "each OID once" -> "once per `read_files` call"; code pointers to that feature retargeted to canon `docs/canon/spec-verify.md`, `spec-verify-output.md`, headings verbatim ("The `[verify]` table", "Rows", "States", "Cascade", "Base", "Verdict and exit", "Hints"). After Q7 no proposal raises `rev`: CLI `verify.rs` `SAME_REVISION_STEP` and accept's refusal (`lock.rs`) say "raise its `rev` by hand, commit, then accept; or `--editorial`" -> `same_revision_hint_names_a_raise_and_editorial` (4b-2 adds `spec bump`).
 
 test-engineer:
 
-- [ ] TE-1 -- AC-13: temp repos from `fixtures/code-a/`, slice 3's golden lock, a hook running `spec check --staged --root .` under `enforce`: a locked node edited without a raise refused, naming it and both ways out; raised by hand, whitespace-only, an unlocked node pass; `observe` passes, the finding in `--json`; `enforce-introduced` refuses. M: the rule off.
-- [ ] TE-2 -- apply through the hook: meaning 3 -> 4; editorial stays 3, entries refreshed, `spec verify` `ok`; a rebase 3 -> 4 -> 5; nested sections; a document; CRLF; an interpretation's trailers. TE-3 -- interrupted before and after the commit: completed, reject refused.
-- [ ] TE-4 -- `--changed` = `--staged` on equal trees; plain unchanged. TE-5 -- an invalid lock exits 2; another `code_recipe` judged; unmerged; two refreshes through `regen`.
-- [ ] TE-6 -- an HTTP stage `editorial: true` -> the terminal's staged line; migration 6 -> 7; `daemon-keys.json` (stage 7, review 47). TE-7 -- `bump` rows, read-only. TE-8 -- `verify --staged`, index unlike disk.
-- [ ] TE-9 -- here: an ADR edit staged, no finding; the hook untouched. TE-10 -- `fixtures/spec-c`, no finding; the source scan. TE-11 -- two roots, cwd, creation order.
-- [ ] TE-12 -- pilots, manual, scratch clones: silent without a lock; with slice 3's TE-11 lock, in-scope count and timing; no pilot name committed.
+- [ ] TE-1 -- apply through a hook running `spec check --staged --root .`, a lock from `fixtures/spec-lock/code-a.lock` or CLI `tests/verify_common/`'s four accepted `verify-ecs` nodes: meaning 3 -> 4; editorial stays 3, vouching entries refreshed, a non-vouching one byte-identical, `spec verify` `ok`; a rebase 3 -> 4 -> 5; nested sections; a document; CRLF; an interpretation's trailers; a closed class without `rev` refused at step 6, `--editorial` passes.
+- [ ] TE-2 -- interrupted before and after the commit: completed, reject refused; a pre-4b-1 apply commit (no raise) completes.
+- [ ] TE-3 -- an HTTP stage `editorial: true` -> the terminal's staged line; migration 6 -> 7; `daemon-keys.json` (stage 7, review 47).
+- [ ] TE-4 -- carry-overs: `crates/specengine-code/tests/code_bind.rs`'s "Binding rules" -> `code-bindings.md` "Rust binding"; `code_refs_walk.rs`'s accept pointer -> `spec-lock-accept.md` "Steps". Expected churn: apply tests committing a meaning change now carry the raise (`proposal_apply.rs`, `proposal_content.rs`, `proposal_kinds.rs`).
 
 ui-developer:
 
@@ -133,27 +107,30 @@ ui-developer:
 
 spec-writer:
 
-- [x] SW-1 -- this spec. SW-2 -- ADR-0043; `architecture.md` `#apply`, `#layout` (detail in `node-revision.md` "Raising"), `#implementation-base`. SW-3 -- `spec-lock.md`, `spec-verify.md` amended; 08 s2 marks 4b draft. SW-5 -- `export index`, `check` clean.
-- [ ] SW-4 -- at shipping: "Raising" as built; `proposal-apply.md` (steps 3, 5-10, completion, the "Known limits" rev line), `proposal-queue.md`, `decision-staging.md`, `spec-check*.md`, `docs/README.md` "Enforcement" (risk 3); the overridden lines; 08 AC-13 (Q4) met; CLI, core, store READMEs; `CLAUDE.md`.
+- [x] SW-1 -- this spec, refreshed and split 2026-10-13 (`rev-rule.md`, 08 s2, the drafts pointing at either half). SW-2 -- ADR-0043; `architecture.md` `#apply`, `#layout` (detail in `node-revision.md` "Raising"), `#implementation-base`. SW-3 -- `export index`, `check` clean.
+- [ ] SW-4 -- at shipping: "Raising"'s approval bullet as built; `proposal-apply.md` (steps 3, 5-10, completion, reject, the "Known limits" rev line), `proposal-queue.md`, `decision-staging.md` (stage 7 keys, review 47, schema 7); `spec-lock-accept.md` "Steps" 6 and `spec-verify-output.md` "Hints" (no "proposal raising `rev`"; "set the marker"); `architecture-code.md#spec-lock` (the approve writer built); `plugin-files.md` (0.7.2); the overridden lines; CLI, core, store READMEs; `CLAUDE.md`.
 
 ## Risks
 
-- **Content never blocks** (risk 3): "Why". The largest to build: apply's one-path invariants (steps 9-10, completion, reject's lookup, section-form create, `commit_only`).
-- Writing revisions: flow-style front-matter, CRLF, attribute blocks; a raise in a closed contract without `rev` gets `key-extra` (not used here). Schema 7 refuses older binaries; `verify --staged` parses changed code blobs (AC-10).
+- The largest to build: apply's one-path invariants (steps 3, 8-10, completion, reject's lookup, section-form create, `commit_only`).
+- Raises on unlocked nodes (Q3) reach every project using the queue, `[code]` or not: apply diffs gain `rev=` lines; closed classes meet Q11. Writing revisions: flow-style front-matter, CRLF, attribute blocks. Schema 7 refuses older binaries.
 
 ## Out of scope
 
-4c `drift-queue` (`drift-queue.md`, ADR-0045); slice 5 levels, lock format 2; slice 8: 8a `verify-tests` (`spec verify --tests` runs the bound tests, `verify-tests.md`), 8b `tested-evidence` (writes their evidence into `spec.lock`). A staged lock writer (Q5); a commit-msg hook; a CI range check; `spec edit`; a per-node editorial choice in one proposal; `@rev` pins; raising markers; Health rows; a shipped hook script; a lock here.
+4b-2 `rev-rule` (the rule, `spec bump`, `verify --staged`); 4c `drift-queue` (ADR-0045); slice 5 levels, lock format 2; 8a `verify-tests`, 8b `tested-evidence`. A staged lock writer (Q5); `spec edit`; a per-node editorial choice in one proposal; `@rev` pins; raising markers; a lock here.
 
 ## Open
 
-- Q1 the editorial proof: one commit of text and the lock's `spec_hash` (ADR-0043 amends ADR-0041).
-- Q2 the rule's scope: nodes a `HEAD` lock entry vouches for; none here. Q3 apply raises each node with an ID whose `norm_hash` changes, locked or not.
-- Q4 AC-13 becomes "a locked node's `norm_hash` changed with neither a revision raise nor an editorial refresh of its lock entries" (08, at shipping).
+- Q1 the editorial proof: one commit of text and the lock's `spec_hash` (ADR-0043 amends ADR-0041). Q3 apply raises each node with an ID whose `norm_hash` changes, locked or not.
 - Q5 a hand editorial edit of a locked node: the queue (`propose update`, `approve --editorial`) or `--no-verify`, then `spec lock accept --editorial`, or, once 4c ships, `spec propose drift <ID>` and `spec approve PR --editorial` on its `spec_ahead` item (ADR-0045). Q6 the agent's hint: rationale text only. Q7 an agent's revision change: refused at creation.
+- Q8 split under ADR-0043, no new ADR: 4b-1 this file (identifier `rev-discipline`), 4b-2 `rev-rule.md`; 4c may start after 4b-1; 4b-2's rule after 4b-1 (else every meaning apply on a locked node fails its hook), its `verify --staged` needs only 4a.
+- Q10 an editorial approve refreshes only vouching entries (`spec_hash` equals the old `norm_hash`, at R) via `refresh_editorial` with an optional filter; `spec lock accept --editorial` keeps "all at R".
+- Q11 a raise into a closed class without `rev` refuses at step 6, before the prompt, exit 1, naming the class and both ways out (admit `rev` in `[classes]`, or `--editorial`).
+- Q12 completing an apply made before 4b accepts step 5's text with or without the raise.
+- Q2, Q4, Q9, Q13 and `--staged` beside `--changed`: `rev-rule.md` "Open".
 
-Decided under the owner's pre-approval, review open; WA-n: the analysis (2026-10-10); "SW refinement": the spec-writer's.
+Q1-Q7 decided 2026-10-10, Q8-Q13 2026-10-13, under the owner's pre-approval, review open; WA-n: the analysis (2026-10-10).
 
 ## Implementation
 
-Not started. To record: modules, TE-12's figures, deviations with reasons.
+Not started. To record: modules, deviations with reasons. Criteria renumbered at the split (2026-10-13), old -> new: RD-3 -> 1, RD-4 -> 2, RD-7 -> 3, RD-6 -> 4, RD-8 -> 5, RD-9 -> 6, RD-12 -> 7 (in `rev-rule.md` too), RD-13 -> 8; TE-2 -> 1, TE-3 -> 2, TE-6 -> 3, TE-4 new; SW-1, SW-2 kept, SW-3 dropped (its drafts shipped), SW-5 -> SW-3, SW-4's approval part kept; the rest in `rev-rule.md`.

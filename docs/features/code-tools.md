@@ -53,7 +53,7 @@ WA-18: MCP takes the CLI's own exception (`--json` "none for 2 (`check`: its rep
 
 ### spec verify --node
 
-WA-16, Q5. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--config`), plain only: with `--changed` (4b's `--staged`, 8a's `--task`, `--tests` alike), or `--symbol` alone: usage, exit 2. Order: config, `[verify]`, REF, the md and code index refresh, selection, lock, files, judge.
+WA-16, Q5. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--config`), plain only: with `--changed` (4b-2's `--staged`, `rev-rule.md`; 8a's `--task`, `--tests` alike), or `--symbol` alone: usage, exit 2. Order: config, `[verify]`, REF, the md and code index refresh, selection, lock, files, judge.
 
 - **REF**: `spec show`'s resolver; naming nothing, a look-alike, `project:`: exit 2, stdout empty, show's `spec: <reason>` (SW refinement: ADR-0042 keeps exit 1 for Fix alone); several holders: one `warning:`, all of them.
 - **Rows**: plain `spec verify`'s rows (4a "Command and rows", "States") that `spec refs REF` lists under REF's holders: holding a marker listed there (`code-bindings.md` "ID state": `resolved`, `alias`, each `ambiguous`, `homoglyph` under its fix's node), or a lock entry whose `node` is a holder's ID; never sections' or parents'. `--symbol`: then rows whose `symbol` is QPATH byte for byte (`ron` also `<file>#<symbol>`); no tiers (SW refinement: qpaths come from `find_symbols`, `refs`; a gone symbol still matches its lock row; 2026-10-12, `anchor-states.md`: so does a moved row whose `anchor.from` symbol is QPATH, anchors paired before the filter). Zero rows: exit 0, `clean`, `note: verify: <REF> has no binding[ on <QPATH>]`.

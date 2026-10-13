@@ -146,7 +146,7 @@ Working answers, owner pre-approved, review open; they frame 12b and 12c too.
 - **WA-11 [P]** Consumers (read-only greps, 2026-10-10): one holds free `&str` constants with hyphenless codes, asserted mostly as literals in tests; the other none ID-shaped.
 - **WA-12 [P]** A fresh constant binding is at best level 3; level 1 needs `@verifies` run.
 - **WA-13 [P/A]** A constant's body is its value: until 5b a rename reads `code_ahead`; 5b gives `[body]`; under 124 B 5c never follows.
-- **WA-14 [P]** `spec check`, `CHECK_CODES` (36 after 4b) unchanged.
+- **WA-14 [P]** `spec check`, `CHECK_CODES` (36 after 4b-2) unchanged.
 - **WA-15 [A]** Deferring costs nothing: the lock key fits, the index is rebuildable.
 
 ## Dependencies and ordering
