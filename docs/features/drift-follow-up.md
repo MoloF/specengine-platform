@@ -85,3 +85,5 @@ Follow-ups for other kinds; a follow-up without a reject; a `follow_up` stage ke
 ## Implementation
 
 Not started. Criteria from `drift-queue.md` (2026-10-13), old -> new: RD-11 -> RD-1 (plus the lock commit test), RD-16's follow-up half -> RD-2 (plus the cap), RD-3 new; TE-6's follow-ups -> TE-1; SW-4's follow-up canon -> SW-2.
+
+Carry-over from 4c-1 (its Q-D, 2026-10-14; code, the code-reviewer checks): CLI `create.rs` (~1159-1160, ~1409) and `decide.rs` (~647) print four raw pathspecs (one `git commit … -- <path>`, three `git rm --cached`; the worktree already named); quote each by `pathspec_word` (beside `one_line` in CLI `lib.rs` once 4c-1 ships).
