@@ -740,21 +740,36 @@ impl WorktreeGit {
     /// `git commit --only --cleanup=verbatim -F <scratch file> --
     /// :(literal)<path>`: commits exactly `path`'s working-tree bytes, other
     /// staged paths left staged; the hooks run. A failure carries git's
-    /// stderr (a hook's output, `index.lock`).
+    /// stderr (a hook's output, `index.lock`). [`Self::commit_only_paths`]
+    /// of the one path.
     pub fn commit_only(&self, scratch: &Path, message: &str, path: &str) -> Result<(), GitError> {
+        self.commit_only_paths(scratch, message, &[path])
+    }
+
+    /// `git commit --only --cleanup=verbatim -F <scratch file> --
+    /// :(literal)<path>…`: commits exactly the working-tree bytes of
+    /// `paths` (an editorial apply's text and `spec.lock`, task spec
+    /// `rev-discipline`), other staged paths left staged; the hooks run. A
+    /// failure carries git's stderr (a hook's output, `index.lock`).
+    pub fn commit_only_paths(
+        &self,
+        scratch: &Path,
+        message: &str,
+        paths: &[&str],
+    ) -> Result<(), GitError> {
         const COMMAND: &str = "commit";
         let mut files = Scratch::default();
         let message_file = files.write(scratch, "message", message.as_bytes())?;
-        let spec = literal(path);
-        let args: [&OsStr; 7] = [
+        let specs: Vec<String> = paths.iter().map(|path| literal(path)).collect();
+        let mut args: Vec<&OsStr> = vec![
             OsStr::new("commit"),
             OsStr::new("--only"),
             OsStr::new("--cleanup=verbatim"),
             OsStr::new("-F"),
             message_file.as_os_str(),
             OsStr::new("--"),
-            OsStr::new(&spec),
         ];
+        args.extend(specs.iter().map(OsStr::new));
         let output = self.output(&args, false);
         // Removed whatever happened: a leftover scratch file never turns a
         // made commit into a failure.

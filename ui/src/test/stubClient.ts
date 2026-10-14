@@ -51,7 +51,7 @@ export const STUB_TREE = [
 /** The stub's stored stage of a stage body: less `updated_at`, an approve's `span_hash` null. */
 function storedOf(stage: RoundAnswerBody["stage"]): Stage {
   return stage.decision === "approve"
-    ? { decision: "approve", option: stage.option, answer: stage.answer, canon: stage.canon, note: stage.note, span_hash: null }
+    ? { decision: "approve", option: stage.option, answer: stage.answer, canon: stage.canon, editorial: stage.editorial, note: stage.note, span_hash: null }
     : { decision: "reject", reason: stage.reason };
 }
 

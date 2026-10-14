@@ -131,8 +131,8 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     // Kinds are raw strings: spelled only in mocks and tests (ADR-0031).
     expect(reviews.filter((review) => review.kind === "amendment").map((review) => review.id)).toEqual([AMENDMENT]);
     const review = await client.getProposal(SLUG, AMENDMENT);
-    // A new file's review document: the 46 keys of any review.
-    expect(Object.keys(review)).toHaveLength(46);
+    // A new file's review document: the 47 keys of any review.
+    expect(Object.keys(review)).toHaveLength(47);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,
@@ -150,6 +150,8 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
       diagnostics: [],
       preview: "applies",
       conflict: null,
+      // A new file writes no existing node: no revision to raise (docs/features/rev-discipline.md "Review document, stage, queue").
+      revisions: null,
       decided_by: null,
       decided_at: null,
       decision_note: null,
@@ -221,7 +223,7 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     expect(sheet.notes).toContain("4 open change proposal(s) not on this sheet: PR-0042, PR-0049, PR-0051 and PR-0052; spec inbox lists them");
     const review = await client.getProposal(SLUG, AMENDMENT);
     const outcome = await client.stageRoundAnswers(SLUG, [
-      { id: AMENDMENT, stage: { decision: "approve", option: null, answer: null, canon: null, note: null, updated_at: review.updated_at ?? "" } },
+      { id: AMENDMENT, stage: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, updated_at: review.updated_at ?? "" } },
     ]);
     expect(outcome.answers.map(({ id, outcome: made, reason }) => [id, made, reason])).toEqual([
       [AMENDMENT, "refused", "`PR-0052` is a change proposal (amendment): `spec approve PR-0052` decides it"],
@@ -313,7 +315,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     expect(stage.mock.calls).toEqual([
-      [SLUG, AMENDMENT, { decision: "approve", option: null, answer: null, canon: null, note: "Surge first, absorb later." }, read.updated_at],
+      [SLUG, AMENDMENT, { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: "Surge first, absorb later." }, read.updated_at],
     ]);
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
     expect(within(staged).getByText(`spec approve ${AMENDMENT}`).tagName).toBe("CODE");
@@ -327,6 +329,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
       option: null,
       answer: null,
       canon: null,
+      editorial: null,
       note: "Surge first, absorb later.",
       span_hash: null,
     });
@@ -387,7 +390,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     });
     const path = `/api/projects/${SLUG}/proposals/${AMENDMENT}/decision`;
     expect(posted).toEqual([
-      { url: path, body: `{"decision":"approve","option":null,"answer":null,"canon":null,"note":null,"updated_at":"${read.updated_at ?? ""}"}` },
+      { url: path, body: `{"decision":"approve","option":null,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"${read.updated_at ?? ""}"}` },
       { url: path, body: `{"decision":"reject","reason":"Not this release.","updated_at":"${approved.updated_at ?? ""}"}` },
     ]);
     expect((await served.getProposal(SLUG, AMENDMENT)).staged).toEqual({ decision: "reject", reason: "Not this release." });

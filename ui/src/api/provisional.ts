@@ -182,15 +182,18 @@ export type Choice = { option: number } | { working_answer: true } | { answer: s
 
 /**
  * An approve staged on an open proposal: the flags of `spec approve`, absent `null`; `option`
- * indexes `options`; `span_hash` the target's span hash when staged (an update's, a section-form
- * create's), `null` for a deciding kind or a file-form create.
- * Source: `docs/canon/decision-staging.md` "The stage".
+ * indexes `options`; `editorial` next, `true` for `--editorial` (the revisions kept, the vouching
+ * `spec.lock` entries refreshed), else `null`, never `false` (7 keys); `span_hash` the
+ * target's span hash when staged (an update's, a section-form create's), `null` for a deciding
+ * kind or a file-form create.
+ * Sources: `docs/canon/decision-staging.md` "The stage"; `docs/features/rev-discipline.md` "Review document, stage, queue".
  */
 export interface StagedApprove {
   decision: "approve";
   option: number | null;
   answer: string | null;
   canon: string | null;
+  editorial: true | null;
   note: string | null;
   span_hash: string | null;
 }
@@ -217,15 +220,16 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
 /**
  * The review document of one proposal, as `spec review PR --json` (the daemon's `proposals/:id`):
  * every key present, absent `null`, lists `[]`. The exit-1 document (no such proposal here) has
- * every scalar `null` and its reason as the last of `notes`. A question or a discrepancy fills the
- * eleven keys after `updated_at` instead of an update's texts, `diff` and `preview`; a decided
- * one its record's five after `linked`; `task_id`, after `choice`, the task it was raised for;
- * `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after them, an
- * interpretation's decision and texts (46 keys).
+ * every scalar `null` and its reason as the last of `notes`. `revisions`, after `conflict`, the
+ * nodes whose meaning the change alters and what approval does to their revisions. A question or a
+ * discrepancy fills the eleven keys after `updated_at` instead of an update's texts, `diff` and
+ * `preview`; a decided one its record's five after `linked`; `task_id`, after `choice`, the task it
+ * was raised for; `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after
+ * them, an interpretation's decision and texts (47 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
  * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
- * `docs/features/kind-interpretation.md` "Data".
+ * `docs/features/kind-interpretation.md` "Data"; `docs/features/rev-discipline.md` "Review document, stage, queue".
  */
 export interface Proposal {
   id: string | null;
@@ -248,6 +252,13 @@ export interface Proposal {
   diff: string | null;
   preview: Preview | null;
   conflict: string | null;
+  /**
+   * Each node whose `norm_hash` the change alters, in the daemon's order, a raise refused at
+   * apply's step 6 among them (its `to` null, its `refused` the reason); `[]` when none does; null
+   * when the kind writes no existing node or the preview conflicts or is unavailable. Shown as
+   * sent: the UI never works out a revision.
+   */
+  revisions: RevisionChange[] | null;
   decided_by: string | null;
   decided_at: string | null;
   decision_note: string | null;
@@ -288,6 +299,25 @@ export interface Proposal {
   interpretation: Interpretation | null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
   notes: string[];
+}
+
+/**
+ * One node of the review document's `revisions`, keys in this order: `id` its canonical ID, `rev`
+ * its revision in the file now, `to` the revision a meaning approve writes (the daemon's number,
+ * never `rev + 1` worked out here), null when that raise is refused; `lock_entries` the
+ * `spec.lock` entries vouching for the old text that an editorial approve refreshes (0 without a
+ * lock; null when the lock is unreadable, a note saying why); `refused` null, or the daemon's
+ * reason a meaning approve cannot raise the node (apply's step 6: a closed class without `rev`,
+ * the highest revision, a revision that cannot be written; each names `--editorial`), `to` then
+ * null. Sources: `docs/features/rev-discipline.md` "Review document, stage, queue";
+ * `docs/canon/node-revision.md` "Raising".
+ */
+export interface RevisionChange {
+  id: string;
+  rev: number;
+  to: number | null;
+  lock_entries: number | null;
+  refused: string | null;
 }
 
 /**

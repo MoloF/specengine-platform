@@ -218,6 +218,7 @@ export function ledgerApi(now: number): MockProject {
         base_text: ENDPOINT_TEXT,
         diff: ENDPOINT_DIFF,
         preview: "applies",
+        revisions: [{ id: "EP-REFUND-CREATE", rev: 2, to: 3, lock_entries: 0, refused: null }],
         author: agent("spec-writer", "R-0422"),
         diagnostics: [
           {

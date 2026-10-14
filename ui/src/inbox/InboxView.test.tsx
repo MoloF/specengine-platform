@@ -882,7 +882,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     expect(client.stageDecision.mock.calls).toEqual([
-      ["alpha", "PR-0008", { decision: "approve", option: null, answer: null, canon: null, note: null }, "2026-10-01T10:00:00Z"],
+      ["alpha", "PR-0008", { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null }, "2026-10-01T10:00:00Z"],
     ]);
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
     expect(within(staged).getByText("The working answer")).toBeTruthy();
@@ -943,7 +943,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
         proposal.id === "PR-1"
           ? {
               ...proposal,
-              staged: { decision: "approve", option: 0, answer: null, canon: null, note: null, span_hash: null },
+              staged: { decision: "approve", option: 0, answer: null, canon: null, editorial: null, note: null, span_hash: null },
               staged_at: "2026-10-06T09:00:00Z",
               updated_at: "2026-10-06T09:00:00Z",
             }
@@ -1095,7 +1095,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     expect(client.stageDecision.mock.calls).toEqual([
-      ["alpha", "PR-1", { decision: "approve", option: 2, answer: null, canon: null, note: "Matches the tide table" }, "2026-10-01T11:00:00Z"],
+      ["alpha", "PR-1", { decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: "Matches the tide table" }, "2026-10-01T11:00:00Z"],
     ]);
   });
 
@@ -1187,7 +1187,7 @@ describe("a staged choice on the card (AC-14 of decision-staging)", () => {
         expect(screen.queryByRole("dialog")).toBeNull();
       });
       expect(client.stageDecision.mock.calls).toEqual([
-        ["alpha", "PR-0004", { decision: "approve", option: 2, answer: null, canon: null, note: "keep the cap" }, "2026-10-01T10:00:00Z"],
+        ["alpha", "PR-0004", { decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: "keep the cap" }, "2026-10-01T10:00:00Z"],
       ]);
       expect(politeRegion().textContent).toBe(`Staged Accept on PR-0004 at ${STAGED_AT}; nothing is applied yet. Confirm it on a terminal: spec approve PR-0004.`);
       const staged = await stagedRegion();
@@ -1283,7 +1283,7 @@ describe("a staged choice on the card (AC-14 of decision-staging)", () => {
   it("a staged approve's dialog names the choice it replaces", async () => {
     const queue = STAGING.map((proposal) =>
       proposal.id === "PR-0004"
-        ? { ...proposal, staged: { decision: "approve" as const, option: 0, answer: null, canon: null, note: null, span_hash: null }, staged_at: "2026-10-06T08:00:00Z" }
+        ? { ...proposal, staged: { decision: "approve" as const, option: 0, answer: null, canon: null, editorial: null, note: null, span_hash: null }, staged_at: "2026-10-06T08:00:00Z" }
         : proposal,
     );
     await openInbox(queue, "#/alpha/inbox/PR-0004");
@@ -1312,7 +1312,7 @@ describe("a stage changed outside this tab (AC-14 of decision-staging)", () => {
     };
   }
 
-  const OUTSIDE = { decision: "approve", option: 1, answer: null, canon: null, note: "from elsewhere", span_hash: null };
+  const OUTSIDE = { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "from elsewhere", span_hash: null };
 
   it("an outside stage raises an alert naming the proposal and its time; Dismiss takes it away", async () => {
     const { client, emit } = live(STAGING);

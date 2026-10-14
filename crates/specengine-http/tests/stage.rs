@@ -303,7 +303,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
             "\"decision\":\"approve\"".to_owned(),
             format!(
                 "{{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
-                 \"note\":null,\"span_hash\":\"{span}\"}}"
+                 \"editorial\":null,\"note\":null,\"span_hash\":\"{span}\"}}"
             ),
         ),
         (
@@ -312,7 +312,8 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
              \"note\":\"asked twice\""
                 .to_owned(),
             "{\"decision\":\"approve\",\"option\":null,\"answer\":\"Yes, at zero.\",\
-             \"canon\":\"EDGE-STAM-ZERO\",\"note\":\"asked twice\",\"span_hash\":null}"
+             \"canon\":\"EDGE-STAM-ZERO\",\"editorial\":null,\"note\":\"asked twice\",\
+             \"span_hash\":null}"
                 .to_owned(),
         ),
         (
@@ -321,7 +322,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
              \"note\":\"keep the cap\""
                 .to_owned(),
             "{\"decision\":\"approve\",\"option\":1,\"answer\":null,\"canon\":null,\
-             \"note\":\"keep the cap\",\"span_hash\":null}"
+             \"editorial\":null,\"note\":\"keep the cap\",\"span_hash\":null}"
                 .to_owned(),
         ),
     ];
@@ -335,7 +336,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         );
         assert!(reply.cors_headers().is_empty(), "{reply:?}");
         let document = reply.json();
-        assert_eq!(document.as_object().unwrap().len(), 46, "{document}");
+        assert_eq!(document.as_object().unwrap().len(), 47, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -1109,19 +1110,19 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    sqlite3(&db(&s.home), "PRAGMA user_version = 7;");
+    sqlite3(&db(&s.home), "PRAGMA user_version = 8;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
     );
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
-    assert!(message.contains('7') && message.contains('6'), "{message}");
+    assert!(message.contains('8') && message.contains('7'), "{message}");
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "7",
+        "8",
         "left alone"
     );
     assert_eq!(
@@ -1184,7 +1185,7 @@ fn the_page_is_judged_before_the_path_is_decoded() {
 /// raised through `spec propose interpretation`; `option`, `answer`,
 /// `canon` each 400 with the CLI's line naming the flag and the kind,
 /// nothing stored, no event; a plain approve 200, its stage holding the
-/// target's current `span_hash` ("Data"'s six keys), the document's 46
+/// target's current `span_hash` ("Data"'s six keys), the document's 47
 /// keys with the interpretation; the repository untouched. M: `span_hash`
 /// null.
 #[test]
@@ -1258,12 +1259,12 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     let reply = stage_now(&server, &id, "\"decision\":\"approve\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
-    assert_eq!(document.as_object().unwrap().len(), 46, "{document}");
+    assert_eq!(document.as_object().unwrap().len(), 47, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
         json!({"decision": "approve", "option": null, "answer": null, "canon": null,
-            "note": null, "span_hash": span})
+            "editorial": null, "note": null, "span_hash": span})
     );
     assert_eq!(
         document["interpretation"],
@@ -1285,7 +1286,7 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
         row(&s.home, &id),
         format!(
             "open|{{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
-             \"note\":null,\"span_hash\":\"{span}\"}}|{at}|{at}"
+             \"editorial\":null,\"note\":null,\"span_hash\":\"{span}\"}}|{at}|{at}"
         )
     );
     // The review served after: the same stage.
@@ -1340,7 +1341,7 @@ fn raise_decision(s: &Setup) -> String {
 /// docs/features/kind-decision.md AC-R6, the daemon's half: a decision
 /// staged through `POST …/decision` as a question is: `option` (alone or
 /// with an `answer`) 400 with the CLI's W19 line naming `a decision`,
-/// nothing stored, no event; no flag 200 (the review document's 46 keys,
+/// nothing stored, no event; no flag 200 (the review document's 47 keys,
 /// kind `decision`, the stage stored); an `answer` 200, replacing it; the
 /// repository untouched. M: `stage.rs`'s arm `None`.
 #[test]
@@ -1371,14 +1372,14 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     let reply = stage_now(&server, &id, "\"decision\":\"approve\",\"note\":\"keep\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
-    assert_eq!(document.as_object().unwrap().len(), 46, "{document}");
+    assert_eq!(document.as_object().unwrap().len(), 47, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));
     assert_eq!(
         document["staged"],
         json!({"decision": "approve", "option": null, "answer": null, "canon": null,
-            "note": "keep", "span_hash": null})
+            "editorial": null, "note": "keep", "span_hash": null})
     );
     let reply = stage_now(&server, &id, "\"decision\":\"approve\",\"answer\":\"No.\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
@@ -1390,7 +1391,7 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
         row(&s.home, &id),
         format!(
             "open|{{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\"canon\":null,\
-             \"note\":null,\"span_hash\":null}}|{at}|{at}"
+             \"editorial\":null,\"note\":null,\"span_hash\":null}}|{at}|{at}"
         )
     );
     assert_eq!(read(&server, &id)["staged"]["answer"], json!("No."));
@@ -1403,4 +1404,105 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     assert_eq!(reply.status, 400, "{}", reply.text());
     drop(server);
     assert_eq!(repository(&s, &s.a), before, "the repository untouched");
+}
+
+// -------------------------------------------------- rev-discipline TE-3
+
+/// docs/features/rev-discipline.md TE-3 ("Review document, stage, queue";
+/// "UI": every approve POST sends `editorial`): a same-origin POST staging
+/// `editorial: true` with a note on the open update answers 200, the
+/// stage stored with `"editorial":true` after `canon`; on a question (a
+/// kind writing no existing node) 400, nothing stored. The terminal's bare
+/// `spec approve PR` shows the staged line ending in `--editorial`
+/// (``staged <at>: spec approve PR-0001 --note "typo" --editorial``) and
+/// the question `(applies, editorial: … stays 1, staged)`; consented, the
+/// file is the text as sent (no raise), the note kept.
+/// M: `editorial` dropped from the stage or from its staged line.
+#[test]
+fn rev_discipline_te3_a_staged_editorial_is_the_terminals_staged_line() {
+    let s = setup("stage-rd-te3");
+    let server = Server::serve(&s.home, &s.cwd, &[&s.a]);
+    let reply = stage_now(
+        &server,
+        &s.update,
+        "\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
+         \"editorial\":true,\"note\":\"typo\"",
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let document = reply.json();
+    let span = document["staged"]["span_hash"]
+        .as_str()
+        .expect("an update's span hash")
+        .to_owned();
+    assert_eq!(
+        document["staged"],
+        json!({"decision": "approve", "option": null, "answer": null, "canon": null,
+            "editorial": true, "note": "typo", "span_hash": span})
+    );
+    let at = document["staged_at"]
+        .as_str()
+        .expect("staged_at")
+        .to_owned();
+    assert_eq!(
+        row(&s.home, &s.update),
+        format!(
+            "open|{{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
+             \"editorial\":true,\"note\":\"typo\",\"span_hash\":\"{span}\"}}|{at}|{at}"
+        )
+    );
+    let question_row = row(&s.home, &s.question);
+    let reply = stage_now(
+        &server,
+        &s.question,
+        "\"decision\":\"approve\",\"editorial\":true",
+    );
+    assert_eq!(reply.status, 400, "{}", reply.text());
+    assert_eq!(row(&s.home, &s.question), question_row, "nothing stored");
+    drop(server);
+
+    let (env, globals) = library_env(&s, &s.a);
+    let before = std::fs::read_to_string(s.a.join("docs/spec/movement/stamina.md")).unwrap();
+    let mut questions = Vec::new();
+    let applied = specengine_cli::approve(
+        &env,
+        &globals,
+        &ApproveRequest {
+            id: s.update.clone(),
+            note: None,
+            now: specengine_cli::utc_now(),
+            git: git_env(&s, &s.a),
+        },
+        &mut |question: &str| {
+            questions.push(question.to_owned());
+            true
+        },
+    )
+    .expect("approve");
+    assert_eq!(
+        applied.exit(),
+        specengine_cli::Exit::Answered,
+        "{applied:?}"
+    );
+    assert_eq!(
+        questions,
+        [format!(
+            "staged {at}: spec approve {} --note \"typo\" --editorial\napply {} to \
+             docs/spec/movement/stamina.md on main in {} (applies, editorial: EDGE-STAM-ZERO \
+             stays 1, staged)? [y/N]",
+            s.update,
+            s.update,
+            s.a.display()
+        )]
+    );
+    let after = std::fs::read_to_string(s.a.join("docs/spec/movement/stamina.md")).unwrap();
+    assert!(
+        after.contains("## Depletion {#EDGE-STAM-ZERO}\n"),
+        "kept: {after}"
+    );
+    assert_ne!(after, before);
+    assert_eq!(
+        applied.document.decision_note.as_deref(),
+        Some("typo"),
+        "the staged note kept"
+    );
 }

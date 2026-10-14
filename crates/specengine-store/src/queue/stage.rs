@@ -2,7 +2,10 @@
 //! (`docs/canon/decision-staging.md` "The stage", "Queue"): queue step
 //! 4 → 5 adds `staged` (compact JSON, one of
 //! the two shapes, keys in their order) and `staged_at` (the UTC time it was
-//! staged), both `NULL` when nothing is staged. A stage is set, replaced and
+//! staged), both `NULL` when nothing is staged. Step 6 → 7 (task spec
+//! `rev-discipline`) adds the approve shape's `editorial` (`true` or
+//! `null`) after `canon`: an open approve stage of schema 6 is rewritten
+//! with `"editorial":null` ([`upgrade_stage`]). A stage is set, replaced and
 //! cleared only on an `open` proposal ([`ProposalQueue::stage_from`],
 //! [`ProposalQueue::unstage_from`]: one `Immediate` transaction with its
 //! event, a compare-and-set on the [`Seen`] read); every op that leaves
@@ -18,9 +21,9 @@
 //! [`ProposalQueue::stage_from`]: super::ProposalQueue::stage_from
 //! [`ProposalQueue::unstage_from`]: super::ProposalQueue::unstage_from
 
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
-use specengine_core::proposal::is_utc_timestamp;
+use specengine_core::proposal::{EDITORIAL, is_utc_timestamp};
 
 use super::{
     Proposal, ProposalKind, ProposalStatus, QueueError, Seen, SqliteQueue, UnreadableRow, changed,
@@ -37,8 +40,9 @@ pub const EVENT_UNSTAGED: &str = "proposal.unstaged";
 /// approve|reject` would take
 /// (`docs/canon/decision-staging.md` "The stage"). Stored and serialized
 /// as one of
-/// `{"decision":"approve","option":…,"answer":…,"canon":…,"note":…,"span_hash":…}`
-/// and `{"decision":"reject","reason":"…"}`, compact, keys in this order.
+/// `{"decision":"approve","option":…,"answer":…,"canon":…,"editorial":…,"note":…,"span_hash":…}`
+/// (`editorial` `true` or `null`) and `{"decision":"reject","reason":"…"}`,
+/// compact, keys in this order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stage {
     /// `spec approve PR` with these flags; `None` when absent.
@@ -49,6 +53,10 @@ pub enum Stage {
         answer: Option<String>,
         /// `--canon REF`: a kind that decides.
         canon: Option<String>,
+        /// `--editorial`: the revisions kept, the vouching `spec.lock`
+        /// entries refreshed (task spec `rev-discipline`); only on a kind
+        /// writing an existing node. Stored `true`, else `null`.
+        editorial: bool,
         /// `--note T`.
         note: Option<String>,
         /// An `update`'s or a section-form `create`'s target span hash when
@@ -74,6 +82,8 @@ struct ApproveShape<'a> {
     option: Option<u64>,
     answer: Option<&'a str>,
     canon: Option<&'a str>,
+    /// `true`, or `null` (never `false`).
+    editorial: Option<bool>,
     note: Option<&'a str>,
     span_hash: Option<&'a str>,
 }
@@ -92,6 +102,7 @@ impl Serialize for Stage {
                 option,
                 answer,
                 canon,
+                editorial,
                 note,
                 span_hash,
             } => ApproveShape {
@@ -99,6 +110,7 @@ impl Serialize for Stage {
                 option: *option,
                 answer: answer.as_deref(),
                 canon: canon.as_deref(),
+                editorial: editorial.then_some(true),
                 note: note.as_deref(),
                 span_hash: span_hash.as_deref(),
             }
@@ -142,6 +154,11 @@ impl Stage {
                 },
                 answer: text_of("answer")?,
                 canon: text_of("canon")?,
+                editorial: match object.get(EDITORIAL)? {
+                    Value::Null => false,
+                    Value::Bool(true) => true,
+                    _ => return None,
+                },
                 note: text_of("note")?,
                 span_hash: text_of("span_hash")?,
             },
@@ -162,9 +179,9 @@ impl Stage {
     /// Why a proposal of `kind` (`new_file`: a new file, a create's or an
     /// amendment's) cannot hold this stage: a decision flag of a kind that
     /// takes none (a kind that applies takes none; a question or a decision
-    /// no `--option`; a discrepancy no `--answer`), a span hash on a kind
-    /// that has no span (a deciding kind, a new file), a blank reason;
-    /// `None`: it can.
+    /// no `--option`; a discrepancy no `--answer`), a span hash or
+    /// `editorial` on a kind that has no span (a deciding kind, a new file:
+    /// it writes no existing node), a blank reason; `None`: it can.
     pub fn problem(&self, kind: ProposalKind, new_file: bool) -> Option<String> {
         match self {
             Self::Reject { reason } => reason
@@ -175,6 +192,7 @@ impl Stage {
                 option,
                 answer,
                 canon,
+                editorial,
                 span_hash,
                 ..
             } => {
@@ -212,6 +230,12 @@ impl Stage {
                     ));
                 }
                 let spanless = kind.decides() || new_file;
+                if spanless && *editorial {
+                    return Some(format!(
+                        "a staged `{EDITORIAL}` on {}, which writes no existing node",
+                        kind.with_article()
+                    ));
+                }
                 (spanless && span_hash.is_some()).then(|| {
                     format!(
                         "a staged `span_hash` on {} that has no target span",
@@ -262,14 +286,82 @@ pub(super) fn decode(
             id,
             "staged",
             "not the compact `{\"decision\":\"approve\",\"option\":…,\"answer\":…,\"canon\":…,\
-             \"note\":…,\"span_hash\":…}` or `{\"decision\":\"reject\",\"reason\":\"…\"}`, keys \
-             in this order",
+             \"editorial\":…,\"note\":…,\"span_hash\":…}` or `{\"decision\":\"reject\",\"reason\":\
+             \"…\"}`, keys in this order",
         )
     })?;
     if let Some(problem) = stage.problem(kind, new_file) {
         return Err(corrupt(id, "staged", problem));
     }
     Ok(Some(StagedChoice { stage, at }))
+}
+
+/// Queue schema 6's approve shape, keys in order, without `editorial`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApproveShape6 {
+    decision: String,
+    option: Option<u64>,
+    answer: Option<String>,
+    canon: Option<String>,
+    note: Option<String>,
+    span_hash: Option<String>,
+}
+
+/// A stage stored by queue schema 6 in its approve shape, byte for byte,
+/// rewritten in schema 7's (`"editorial":null` after `canon`); `None` for
+/// anything else (a reject, schema 7's shape, a corrupt text), which stays
+/// as it is.
+pub(super) fn upgrade_stage(text: &str) -> Option<String> {
+    let old: ApproveShape6 = serde_json::from_str(text).ok()?;
+    if old.decision != "approve" {
+        return None;
+    }
+    let stage = Stage::Approve {
+        option: old.option,
+        answer: old.answer,
+        canon: old.canon,
+        editorial: false,
+        note: old.note,
+        span_hash: old.span_hash,
+    };
+    let upgraded = stage.to_json();
+    // A string value holds no bare `"`: the first match is the key.
+    let removed = upgraded.replacen(&format!(",\"{EDITORIAL}\":null"), "", 1);
+    (removed == text).then_some(upgraded)
+}
+
+/// Queue step 6 → 7: every open approve stage in schema 6's shape
+/// rewritten in schema 7's ([`upgrade_stage`]); `staged_at` and
+/// `updated_at` kept, no event. Also run on a restored dump, so a dump of
+/// schema 6 restores its stages in this build's shape.
+pub(super) fn upgrade_stages(conn: &rusqlite::Connection) -> Result<(), QueueError> {
+    let mut rows: Vec<(String, String, String)> = Vec::new();
+    {
+        let mut statement = conn
+            .prepare(
+                "SELECT id, project, staged FROM main.proposals WHERE staged IS NOT NULL AND \
+                 status = ?1",
+            )
+            .db()?;
+        let mut found = statement.query([ProposalStatus::Open.as_str()]).db()?;
+        while let Some(row) = found.next().db()? {
+            let staged: Option<String> = row.get(2).ok();
+            if let (Ok(id), Ok(project), Some(staged)) = (row.get(0), row.get(1), staged) {
+                rows.push((id, project, staged));
+            }
+        }
+    }
+    for (id, project, staged) in rows {
+        if let Some(upgraded) = upgrade_stage(&staged) {
+            conn.execute(
+                "UPDATE main.proposals SET staged = ?1 WHERE id = ?2 AND project = ?3",
+                [upgraded.as_str(), id.as_str(), project.as_str()],
+            )
+            .db()?;
+        }
+    }
+    Ok(())
 }
 
 /// `{"id":…,"staged":{…},"staged_at":…}`, keys in this order.

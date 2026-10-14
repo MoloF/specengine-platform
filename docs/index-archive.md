@@ -46,6 +46,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/queue-export.md](features/queue-export.md) shipped
 - [docs/features/queue-path-targets.md](features/queue-path-targets.md) shipped
 - [docs/features/ref-superseded-records.md](features/ref-superseded-records.md) shipped
+- [docs/features/rev-discipline.md](features/rev-discipline.md) shipped
 - [docs/features/round.md](features/round.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped

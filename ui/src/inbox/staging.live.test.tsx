@@ -123,9 +123,9 @@ describe("staging over the daemon (AC-14 of decision-staging)", () => {
     });
     const posts = fetchStub.mock.calls.filter((call) => call[1]?.method === "POST");
     expect(posts).toHaveLength(1);
-    expect(posts[0]?.[1]?.body).toBe(`{"decision":"approve","option":2,"answer":null,"canon":null,"note":"keep the cap","updated_at":"${READ_AT}"}`);
+    expect(posts[0]?.[1]?.body).toBe(`{"decision":"approve","option":2,"answer":null,"canon":null,"editorial":null,"note":"keep the cap","updated_at":"${READ_AT}"}`);
     expect(posts[0]?.[1] !== undefined && "signal" in posts[0][1]).toBe(false);
-    expect(queue.proposal.staged).toEqual({ decision: "approve", option: 2, answer: null, canon: null, note: "keep the cap", span_hash: null });
+    expect(queue.proposal.staged).toEqual({ decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: "keep the cap", span_hash: null });
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
     expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec approve PR-0004`);
     expect(within(screen.getByRole("listbox")).getAllByRole("option").map((option) => option.dataset.proposal)).toEqual(["PR-0004"]);

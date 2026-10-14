@@ -91,7 +91,7 @@ spec propose interpretation ID --decision REF ...  # proposal-interpretation.md
 spec propose question|discrepancy …     # shipped: docs/canon/agent-intake.md
 spec inbox [--all]                       # to come: --severity, --task
 spec review PR-ID                        # to come: interactive edit/changes/defer
-spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF]  # a terminal's [y/N]; no flag: the staged choice
+spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF] [--editorial]  # a terminal's [y/N]; no flag: the staged choice
 spec reject PR-ID --reason ...          # --reason optional when a reject is staged (decision-staging)
 
 # tasks: shipped (+ an agent's plan, claim, report, complete), docs/canon/tasks.md

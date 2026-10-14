@@ -33,6 +33,7 @@ import type {
 import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { checkReportOf } from "./check";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
+import { editorialScenario } from "./editorial";
 import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
@@ -102,6 +103,9 @@ export class MockClient implements SpecEngineClient {
         project.corpus = { documents: [], links: [], treeNotes: [EMPTY_TREE_NOTE] };
         this.tasks.set(project.project.slug, { tasks: [], notes: [] });
       }
+    }
+    if (scenario === "editorial") {
+      editorialScenario(this.projects, at);
     }
     if (scenario === "large") {
       const harbor = this.project("harbor-sim");
@@ -209,7 +213,8 @@ export class MockClient implements SpecEngineClient {
   /**
    * Stages a choice as the daemon does (`docs/canon/decision-staging.md` "The stage", "Daemon"):
    * on an open proposal read at its current `updated_at` only, the flags checked against its
-   * options, replacing any staged choice; nothing applied. The `conflict` scenario: the first stage
+   * options (`--editorial` only on a change that writes an existing node), replacing any staged
+   * choice; nothing applied. The `conflict` scenario: the first stage
    * of each proposal finds one staged meanwhile by another page, so it is refused 409 with the
    * current document's reason, and the next one, on the new `updated_at`, is taken.
    */
@@ -308,6 +313,11 @@ export class MockClient implements SpecEngineClient {
     }
     if (stage.note !== null && bytesOf(stage.note) > NOTE_MAX_BYTES) {
       throw new ClientError({ status: 400, message: `spec: --note: over ${String(NOTE_MAX_BYTES)} bytes` });
+    }
+    // A usage refusal, as `spec approve --editorial` on a kind writing no existing node exits 2
+    // (`docs/features/rev-discipline.md` "Review document, stage, queue"): here, one with no base text.
+    if (stage.editorial === true && review.base_text === null) {
+      throw new ClientError({ status: 400, message: `spec: --editorial: \`${review.id}\` writes no existing node, so it raises no revision; approve it without --editorial` });
     }
   }
 

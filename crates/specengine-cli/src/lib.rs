@@ -28,9 +28,9 @@
 //! refresh and a gone node's drop, one function taking the owner's
 //! [`LockConsent`] and extra [`LockTrailer`]s: canon
 //! `spec-lock-accept`, "Steps") and `spec lock regen` ([`lock_regen`]:
-//! canon `spec-lock`, "`spec lock regen`"); task
-//! spec `spec-verify`: `spec verify [--changed]` ([`verify`]), drift
-//! between `spec.lock` and the tree, read-only.
+//! canon `spec-lock`, "`spec lock regen`"); `spec verify [--changed]`
+//! ([`verify`]: canon `spec-verify`, "Rows", "Verdict and exit"),
+//! drift between `spec.lock` and the tree, read-only.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -62,7 +62,11 @@
 //!   review document
 //!   ([`ProposalDocument`]); `approve` and `reject` take the owner's
 //!   [`Consent`] (`main`: a terminal and a `[y/N]` prompt; [`approve_with`]
-//!   takes a decision's [`ApproveFlags`]), and every
+//!   takes a decision's [`ApproveFlags`], [`approve_editorial`]
+//!   `--editorial`; an apply raises
+//!   the revision of each node whose meaning it changes, or keeps it and
+//!   refreshes the vouching `spec.lock` entries in its commit: task spec
+//!   `rev-discipline`), and every
 //!   request carries the caller's git environment ([`process_git`]) and,
 //!   where the queue records a time, the clock's `now` ([`utc_now`]);
 //!   [`propose_brief`], [`propose_create_brief`], [`review_brief`]: their
@@ -168,6 +172,7 @@ mod propose;
 mod refresh;
 mod refs;
 mod review;
+mod revisions;
 mod round;
 mod search;
 mod serve;
@@ -186,7 +191,8 @@ use std::path::PathBuf;
 
 pub use amend::{AmendmentRequest, propose_amendment, propose_amendment_brief};
 pub use apply::{
-    ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_with, reject,
+    ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_editorial, approve_with,
+    reject,
 };
 pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,

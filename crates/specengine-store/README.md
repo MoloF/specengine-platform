@@ -3,16 +3,16 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-10-13
+reviewed: 2026-10-14
 ---
 
 # specengine-store -- the spec index
 
-A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). The DB, outside the repository (ADR-0001, ADR-0003), also holds the queue, not derived. A default member on `-model`, `-core`, `rusqlite` (FTS5), `blake3`, `serde_json` (pinned: `stack.md`). Callers: the CLI (an update per read), `specengine-eval`.
+A rebuildable SQLite + FTS5 projection of `specengine_core::parse` over one worktree, updated incrementally. The hard property: **after any sequence of edits the incremental index equals a fresh rebuild, row for row** (equal canonical dumps). The DB, outside the repository (ADR-0001, ADR-0003), also holds the queue, not derived. A default member on `-model`, `-core`, `rusqlite` (FTS5), `blake3`, `serde_json` (pins: `stack.md`). Callers: the CLI (an update per read), `specengine-eval`.
 
 ## API
 
-No `rusqlite` type in a public signature (`docs/canon/architecture.md#distribution`).
+No `rusqlite` type in a public signature (`architecture.md#distribution`).
 
 - `trait Source {root, list -> Listing {paths, missing_roots, skipped_names, unreadable_dirs}, probe, read, is_dir}`: `WorkingTree::new(root, &Paths)` canonicalises the root; `GitIndex::open(root, &Paths, &GitEnv)` (checks only): the staged regular blobs by the walk rules, read up front.
 - `SqliteIndex::open(db, project, root)`: a handle on one worktree `(project, canonical root)`; a DB holds several. Inherent: `root()`, `project()`, `settings() -> DbSettings` (PRAGMAs, `fts5`, `sqlite_version`), `check_fts()`, `dump()`, `dump_worktree()`. `Send`, not `Sync`.
@@ -21,7 +21,7 @@ No `rusqlite` type in a public signature (`docs/canon/architecture.md#distributi
 - `spec check`, no database (`spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` -> `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) -> `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic -> a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)`; `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}`, `check_changed_with_notes` (against `HEAD`: `spec-check-git.md`), `check_staged` (the report). `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 8`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 - `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`, `norm_hash`.
-- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record}.md`): `ProposalQueue` (schema 6: `create_intake`, `next_record`, `approve_record_from`, `reserved` (`Reservation.kind`), `stage_from`, `unstage_from`), tasks (`tasks.md`), the gate (`gate.md`), `SqliteQueue::open(db, project)`, `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch; callers decode range names), `{,is_}intent_to_add`, `remove_cached`, `name_status`; the lock's (`spec-lock-accept.md`): `blob_oid`, `unmerged_stages`, `status_entries`, `is_ignored`, `reset_path` (a write); `spec verify`'s: `VerifyGit::{open, is_unmerged, hash_files, list_commit, read_files, finish}` (`spec-verify.md` "Base"); `replace_file`, `create_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
+- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record}.md`): `ProposalQueue` (schema 7: open approve stages gain `editorial`, `proposal-revisions.md`; `create_intake`, `next_record`, `approve_record_from`, `reserved` (`Reservation.kind`), `stage_from`, `unstage_from`), tasks (`tasks.md`), the gate (`gate.md`), `SqliteQueue::open(db, project)`, `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): `commit_only{,_paths}`, `blob_at` (raw), `has_path`, `branch_commits_with_trailer` (whole branch; callers decode range names), `{,is_}intent_to_add`, `remove_cached`, `name_status`; the lock's (`spec-lock-accept.md`): `blob_oid`, `unmerged_stages`, `status_entries`, `is_ignored`, `reset_path` (a write); `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"); `replace_file`, `create_file`, `same_repository`; `span_hash`, `update_file`, `introduced_findings`.
 
 ## Rows
 

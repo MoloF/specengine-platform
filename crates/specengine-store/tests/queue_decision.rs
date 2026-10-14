@@ -494,6 +494,7 @@ fn ac_r6_a_decision_stage_takes_an_answer_never_an_option() {
         option,
         answer: answer.map(str::to_owned),
         canon: None,
+        editorial: false,
         note: None,
         span_hash: None,
     };
@@ -509,6 +510,7 @@ fn ac_r6_a_decision_stage_takes_an_answer_never_an_option() {
         option: None,
         answer: None,
         canon: None,
+        editorial: false,
         note: None,
         span_hash: Some(format!("b3:{}", blake3_hex(b"span"))),
     };
@@ -559,7 +561,7 @@ fn ac_r6_a_decision_stage_takes_an_answer_never_an_option() {
         row(&staged, "PR-0001")[column_at("staged")].as_deref(),
         Some(
             "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\"canon\":null,\
-             \"note\":null,\"span_hash\":null}"
+             \"editorial\":null,\"note\":null,\"span_hash\":null}"
         )
     );
 }
@@ -652,6 +654,7 @@ fn ac_r6_a_corrupt_decision_row_is_named() {
                 option: None,
                 answer: Some("No.".to_owned()),
                 canon: None,
+                editorial: false,
                 note: None,
                 span_hash: None,
             },
@@ -811,6 +814,7 @@ fn ac_r12_a_decision_its_update_and_record_round_trip_byte_identical() {
                 option: None,
                 answer: None,
                 canon: Some("EDGE-STAM-ZERO".to_owned()),
+                editorial: false,
                 note: Some("Keep.".to_owned()),
                 span_hash: None,
             },

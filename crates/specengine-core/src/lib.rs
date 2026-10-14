@@ -37,7 +37,11 @@
 //!   ID, the splice, the structure check, the creation refusals and the
 //!   findings an edit introduces (task spec `proposal-apply`);
 //! - [`proposal`] — the queue's own words: `PR-NNNN` and its look-alikes,
-//!   the `[ids]` clash, the author, the apply commit's message;
+//!   the `[ids]` clash, the author, the apply commit's message and its
+//!   trailers;
+//! - [`raise`] — revisions at apply (ADR-0043; task spec `rev-discipline`):
+//!   a text changing a revision, the nodes whose meaning a change alters,
+//!   the raise, its refusals and the lines it writes;
 //! - [`intake`] — the pure half of the agent intake: the two kinds that
 //!   never apply, their enums, caps and field checks, the dedup's
 //!   normalised text (`docs/canon/agent-intake.md` "Rules", "Dedup");
@@ -60,7 +64,7 @@
 //!   lock regen`'s merge of a conflict's stages; pure, no hash computed, no
 //!   path read;
 //! - [`verify`] — the pure half of `spec verify`
-//!   (`docs/features/spec-verify.md` "The verify table", "States",
+//!   (`docs/canon/spec-verify.md` "The `[verify]` table", "States",
 //!   "Verdict and exit"): the `[verify]` table read apart from the reads,
 //!   the row key, the judge over one row's facts from any source, the
 //!   classes and the verdict.
@@ -83,6 +87,7 @@ pub mod patch;
 pub mod paths_toml;
 pub mod project_toml;
 pub mod proposal;
+pub mod raise;
 pub mod record;
 mod revision;
 pub mod round;

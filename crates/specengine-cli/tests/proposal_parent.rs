@@ -132,7 +132,8 @@ fn a_non_idempotent_rebased_applys_commit_completes_without_a_second_commit() {
     let outcome = outcome.unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
     assert!(
-        questions.len() == 1 && questions[0].ends_with(" (rebases)? [y/N]"),
+        questions.len() == 1
+            && questions[0].ends_with(" (rebases; raises EDGE-SPRINT-EMPTY 1 -> 2)? [y/N]"),
         "the apply rebases: {questions:?}"
     );
     let commit = pair.rev(&pair.linked, "t1");
@@ -204,7 +205,8 @@ fn a_rebased_applys_commit_completes_after_its_base_commit_is_pruned() {
     let outcome = outcome.unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
     assert!(
-        questions.len() == 1 && questions[0].ends_with(" (rebases)? [y/N]"),
+        questions.len() == 1
+            && questions[0].ends_with(" (rebases; raises EDGE-SPRINT-EMPTY 1 -> 2)? [y/N]"),
         "the apply rebases: {questions:?}"
     );
     pair.sql(&format!(

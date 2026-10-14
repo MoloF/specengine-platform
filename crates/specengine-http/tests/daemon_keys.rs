@@ -70,6 +70,15 @@
 //! draft amending `RULE-STAM-REGEN`, an accepted decision whose links are
 //! resolved, an alias, dangling and in a Tier 3 file). M: a key dropped
 //! from the CLI struct.
+//!
+//! TE-3 of docs/features/rev-discipline.md, its Rust half ("Review
+//! document, stage, queue"): `Proposal` holds `revisions` after `conflict`
+//! (47 keys), `StagedApprove` `editorial` after `canon` (7 keys); one set
+//! more, 45 in all, last: `RevisionRow`, the five keys of a `revisions`
+//! entry (`{id, rev, to, lock_entries, refused}`, Q15), from the reviews of
+//! the update of `EDGE-STAM-ZERO` and the interpretation of
+//! `RULE-STAM-REGEN`, each changing its node's meaning. M: `editorial`
+//! dropped from the stage; `refused` dropped from the entry.
 
 mod common;
 mod task_state;
@@ -376,6 +385,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .text()
             .to_owned(),
     ];
+    // rev-discipline: the entries of the reviews whose `revisions` is an
+    // array (the update's and the interpretation's; the question's and the
+    // discrepancy's are `null`).
+    let revision_rows: Vec<String> = [&reviews[1], &interpretations[0]]
+        .iter()
+        .flat_map(|text| raw_items(text, "revisions"))
+        .collect();
+    assert_eq!(revision_rows.len(), 2, "one entry each: {revision_rows:?}");
     let nodes: Vec<String> = ["MEC-STAMINA", "NOPE-1"]
         .iter()
         .map(|reference| {
@@ -696,6 +713,10 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "ShownLink",
             one_key_set("ShownLink", &items(&amendments, "links"), keys_of),
         ),
+        (
+            "RevisionRow",
+            one_key_set("RevisionRow", &revision_rows, keys_of),
+        ),
     ]
 }
 
@@ -819,11 +840,19 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/task-package.md "Data", AC-10: the review document
     // gains `task_id` after `choice`; decision-staging `staged`,
     // `staged_at` after it, before `notes`; docs/features/kind-interpretation.md
-    // `interpretation` after `staged_at`: 46 keys.
+    // `interpretation` after `staged_at`: 46 keys; docs/features/rev-discipline.md
+    // `revisions` after `conflict`: 47.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 46, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 47, "{:?}", sets[2].1);
+    let conflict = sets[2].1.iter().position(|key| key == "conflict");
     assert_eq!(
-        sets[2].1[40..],
+        sets[2].1[conflict.expect("conflict") + 1],
+        "revisions",
+        "{:?}",
+        sets[2].1
+    );
+    assert_eq!(
+        sets[2].1[41..],
         [
             "choice",
             "task_id",
@@ -836,7 +865,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
     // and `debt` both there; a plain check never sends a base's keys.
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
-    assert_eq!(names.len(), 44, "{names:?} (health-left: 41 -> 44)");
+    assert_eq!(
+        names.len(),
+        45,
+        "{names:?} (health-left: 41 -> 44; rev-discipline: 45)"
+    );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -909,9 +942,18 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // decision-staging's two, last: the stage's shapes, keys in the canon's
     // order ("The stage").
     assert_eq!(sets[32].0, "StagedApprove");
+    // docs/features/rev-discipline.md: `editorial` after `canon`, 7 keys.
     assert_eq!(
         sets[32].1,
-        ["decision", "option", "answer", "canon", "note", "span_hash"]
+        [
+            "decision",
+            "option",
+            "answer",
+            "canon",
+            "editorial",
+            "note",
+            "span_hash"
+        ]
     );
     assert_eq!(sets[33].0, "StagedReject");
     assert_eq!(sets[33].1, ["decision", "reason"]);
@@ -955,6 +997,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "type", "origin", "at", "name", "written", "path", "line", "state", "reason"
         ]
     );
+    // rev-discipline's one, last: docs/features/rev-discipline.md
+    // "Review document, stage, queue" ("5 keys", `refused` last).
+    assert_eq!(sets[44].0, "RevisionRow");
+    assert_eq!(sets[44].1, ["id", "rev", "to", "lock_entries", "refused"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -975,8 +1021,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 44 sets (41 until
-/// docs/features/health-left.md added its three, AC-T2); a decision
+/// unchanged, no new key): the fixture holds 45 sets (41 until
+/// docs/features/health-left.md added its three, AC-T2, and
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -990,8 +1037,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        44,
-        "44 sets: 41, and health-left's three (docs/features/health-left.md AC-T2)"
+        45,
+        "45 sets: 41, health-left's three (docs/features/health-left.md AC-T2) and \
+         rev-discipline's `RevisionRow` (TE-3)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1001,7 +1049,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
             .map(|key| key.as_str().expect("a key").to_owned())
             .collect()
     };
-    assert_eq!(set("Proposal").len(), 46);
+    assert_eq!(set("Proposal").len(), 47);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -1104,8 +1152,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 44 sets
-/// (41 until docs/features/health-left.md added its three, AC-T2); "Data"'s
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 45 sets
+/// (41 until docs/features/health-left.md added its three, AC-T2, and
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3); "Data"'s
 /// amendment raised through `spec propose amendment` is
 /// served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -1122,8 +1171,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        44,
-        "44 sets: 41, and health-left's three (docs/features/health-left.md AC-T2)"
+        45,
+        "45 sets: 41, health-left's three (docs/features/health-left.md AC-T2) and \
+         rev-discipline's `RevisionRow` (TE-3)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1133,7 +1183,7 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
             .map(|key| key.as_str().expect("a key").to_owned())
             .collect()
     };
-    assert_eq!(set("Proposal").len(), 46);
+    assert_eq!(set("Proposal").len(), 47);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

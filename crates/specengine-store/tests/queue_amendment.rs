@@ -575,6 +575,7 @@ fn ac_r8_an_amendment_stages_an_approve_without_a_span_hash() {
             option,
             answer: answer.map(str::to_owned),
             canon: canon.map(str::to_owned),
+            editorial: false,
             note: None,
             span_hash: span.then(|| "b3:00".to_owned()),
         }
@@ -632,7 +633,7 @@ fn ac_r8_an_amendment_stages_an_approve_without_a_span_hash() {
 /// reservation of the open one restored. M: export skipping the kind.
 #[test]
 fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 6);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
     assert_eq!(PROPOSAL_COLUMNS.len(), 44);
     let scratch = Scratch::new("qa-schema");
     let db = scratch.db("q");
@@ -651,7 +652,7 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "44"

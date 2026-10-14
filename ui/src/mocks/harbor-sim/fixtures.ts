@@ -30,6 +30,11 @@ import { nodeKinds, specStatuses } from "./kinds";
 // file-form create's row (no base, the whole new file its text, `target_ids` its path and its one
 // new ID) whose text declares `links: {amends: [RULE-HIGH-WATER]}`; the amended ID only there.
 //
+// rev-discipline (docs/features/rev-discipline.md "Review document, stage, queue"): each change
+// that alters a node's meaning lists it in `revisions`, its revision now and the one approval
+// writes; harbor-sim has no spec.lock, so no lock entry, and no raise is refused (the `editorial`
+// scenario gives it a lock and refuses one raise).
+//
 // health-left (docs/features/health-left.md "Data", Mocks): two live documents that amend a node,
 // roots of the tree, their amends links among the corpus's: the accepted decision DEC-0014, whose
 // RULE-QUAY-LIGHTS names nothing any more, and a draft feature spec with no ID amending
@@ -883,6 +888,8 @@ export function harborSim(now: number): MockProject {
         rationale: "The 2026 dredging deepened berth 4; the scenario data already uses 14.5 m.",
         diff: DRAFT_DIFF,
         preview: "rebases",
+        // As the daemon reads the file now (docs/features/rev-discipline.md "Review document, stage, queue"): no spec.lock here.
+        revisions: [{ id: "RULE-BERTH-DRAFT", rev: 4, to: 5, lock_entries: 0, refused: null }],
         notes: ["rebases: RULE-BERTH-DRAFT changed after this proposal was raised (PR-0039 applied)"],
         author: agent("spec-writer", "R-2190"),
         created_at: at(185),
@@ -1065,6 +1072,7 @@ export function harborSim(now: number): MockProject {
         rationale: `Weather joins the tick order the harbour clock fixes.\n${WEATHER_DECISION} makes weather a system of its own.`,
         diff: CLOCK_DIFF,
         preview: "applies",
+        revisions: [{ id: "RULE-HARBOR-CLOCK", rev: 4, to: 5, lock_entries: 0, refused: null }],
         interpretation: { ...CLOCK_INTERPRETATION },
         author: agent("spec-writer", "R-2251"),
         created_at: at(30),
@@ -1106,6 +1114,7 @@ export function harborSim(now: number): MockProject {
         rationale: "The decision taken while wiring crane dispatch, written into the cranes page.\nBoth cranes work one ship together.",
         diff: CRANES_DIFF,
         preview: "applies",
+        revisions: [{ id: "MEC-CARGO-CRANES", rev: 1, to: 2, lock_entries: 0, refused: null }],
         linked: "PR-0050",
         author: agent("rust-developer", "R-2262"),
         created_at: at(20),

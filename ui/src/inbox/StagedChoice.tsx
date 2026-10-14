@@ -29,7 +29,9 @@ function stagedLabel(label: string | undefined) {
 /**
  * The owner's staged choice (`docs/canon/decision-staging.md` "UI"): when it was staged, the
  * terminal command that confirms it with Copy (fixed words and a checked ID, never free text), what
- * is staged, and Unstage. Nothing staged: nothing shown. The proposal stays open and listed.
+ * is staged, and Unstage. Nothing staged: nothing shown. The proposal stays open and listed. An
+ * editorial approve copies the same bare command, which confirms the stage with its note, and shows
+ * an Editorial row (`docs/features/rev-discipline.md` "UI").
  */
 export function StagedChoice({
   id,
@@ -93,6 +95,12 @@ export function StagedChoice({
               <>
                 <dt>Canon</dt>
                 <dd className="mono">{staged.canon}</dd>
+              </>
+            )}
+            {staged.editorial === true && (
+              <>
+                <dt>Editorial</dt>
+                <dd>Keep the revision</dd>
               </>
             )}
             {staged.note !== null && (

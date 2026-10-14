@@ -6,7 +6,7 @@ import { createQueryClient } from "./provider";
 // own when one of its writes accounts for it, each write for one event, a refused one for none.
 
 const REJECT = { decision: "reject", reason: "dup" } as const;
-const APPROVE = { decision: "approve", option: 1, answer: null, canon: null, note: "n" } as const;
+const APPROVE = { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "n" } as const;
 
 afterEach(() => {
   vi.useRealTimers();

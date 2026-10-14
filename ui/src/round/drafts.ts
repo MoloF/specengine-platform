@@ -98,17 +98,18 @@ export function stateOf(item: RoundItem, draft: Draft | undefined): DraftState {
 /**
  * The choice a ready draft stages, as the decision route takes it: an option as `option`, the
  * working answer as an approve with every flag null, an own answer as `answer`, a reject with its
- * reason; never a note or a canon (W-9). Over a cap it is sent all the same: the daemon's refusal
- * decides, nothing is cut (W-14).
+ * reason; never a note or a canon (W-9), never `editorial` (a question writes no existing node:
+ * `docs/features/rev-discipline.md` "Review document, stage, queue"). Over a cap it is sent all the
+ * same: the daemon's refusal decides, nothing is cut (W-14).
  */
 export function choiceOf(draft: Draft): StageChoice | null {
   switch (draft.pick) {
     case "option":
-      return draft.option === null ? null : { decision: "approve", option: draft.option, answer: null, canon: null, note: null };
+      return draft.option === null ? null : { decision: "approve", option: draft.option, answer: null, canon: null, editorial: null, note: null };
     case "working":
-      return { decision: "approve", option: null, answer: null, canon: null, note: null };
+      return { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null };
     case "answer":
-      return { decision: "approve", option: null, answer: textOf(draft), canon: null, note: null };
+      return { decision: "approve", option: null, answer: textOf(draft), canon: null, editorial: null, note: null };
     case "reject":
       return { decision: "reject", reason: textOf(draft) };
     case "open":

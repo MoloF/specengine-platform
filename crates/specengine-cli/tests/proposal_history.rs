@@ -551,7 +551,8 @@ fn a_missing_base_commit_reads_the_whole_branch_and_lets_reject_through() {
     assert_eq!(
         questions,
         [format!(
-            "apply {first} to {PATH} on t1 in {worktree} (applies)? [y/N]"
+            "apply {first} to {PATH} on t1 in {worktree} (applies; raises EDGE-SPRINT-EMPTY 1 -> \
+             2)? [y/N]"
         )],
         "the question alone, no note line"
     );
@@ -698,7 +699,10 @@ fn a_failed_lookups_note_is_shown_before_the_consent_question() {
     wrapped.push(&path);
     let git = with_vars(&pair.git_env(&pair.main), &[("PATH", OsStr::new(&wrapped))]);
     let worktree = pair.proposal(&id).place.worktree;
-    let question = format!("apply {id} to {PATH} on t1 in {worktree} (applies)? [y/N]");
+    let question = format!(
+        "apply {id} to {PATH} on t1 in {worktree} (applies; raises EDGE-SPRINT-EMPTY 1 -> 2)? \
+         [y/N]"
+    );
     let note = format!("cannot tell whether `{id}` has its commit on `t1`: ");
     let noted = |questions: &[String]| {
         assert_eq!(questions.len(), 1, "{questions:?}");

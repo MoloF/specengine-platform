@@ -609,11 +609,13 @@ fn the_record_is_one_event_with_its_four_keys_in_order() {
 
 #[test]
 fn the_record_goes_only_into_schema_six() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 6, "this build's queue schema");
+    // docs/features/rev-discipline.md "Review document, stage, queue":
+    // queue schema 7.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 7, "this build's queue schema");
     let repos = Repos::new("qg-record-4");
     drop(repos.queue(PROJECT));
-    // A queue at schema 5 (as a build before kind-interpretation left it).
-    sqlite3(&repos.db, "PRAGMA user_version = 5;");
+    // A queue at schema 6 (as a build before rev-discipline left it).
+    sqlite3(&repos.db, "PRAGMA user_version = 6;");
     let observed = GateObserved {
         path: "src/a.rs".to_owned(),
         zone: Some("code".to_owned()),
@@ -622,7 +624,7 @@ fn the_record_goes_only_into_schema_six() {
     };
     assert!(!record_gate_observed(&repos.db, PROJECT, &observed, T0, later()).unwrap());
     assert_eq!(sqlite3(&repos.db, "SELECT count(*) FROM events;"), "0");
-    assert_eq!(sqlite3(&repos.db, "PRAGMA user_version;"), "5");
+    assert_eq!(sqlite3(&repos.db, "PRAGMA user_version;"), "6");
 }
 
 // ------------------------------------------------------------- the deadline

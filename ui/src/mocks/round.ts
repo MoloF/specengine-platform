@@ -189,6 +189,9 @@ function stageFlaw(review: StoredReview, stage: StageBody): string | null {
   } else if (last >= 0) {
     return `\`${id}\` takes one of its options by number, 0-${String(last)}, or a reject with its reason`;
   }
+  if (stage.editorial === true) {
+    return `--editorial: \`${id}\` writes no existing node, so it raises no revision`;
+  }
   if (stage.answer !== null) {
     if (bytesOf(stage.answer) > ANSWER_MAX_BYTES) {
       return `the answer: ${String(bytesOf(stage.answer))} bytes; at most ${String(ANSWER_MAX_BYTES)}`;
@@ -230,7 +233,7 @@ function queueFlaw(review: StoredReview | undefined, id: string, read: string): 
 /** The stored stage of a stage body: less `updated_at`; an approve's `span_hash` null (a deciding kind). */
 function storedOf(stage: StageBody): Stage {
   if (stage.decision === "approve") {
-    return { decision: "approve", option: stage.option, answer: stage.answer, canon: stage.canon, note: stage.note, span_hash: null };
+    return { decision: "approve", option: stage.option, answer: stage.answer, canon: stage.canon, editorial: stage.editorial, note: stage.note, span_hash: null };
   }
   return { decision: "reject", reason: stage.reason };
 }

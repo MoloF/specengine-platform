@@ -243,7 +243,7 @@ async function stageWith(client: StubClient, change: Parameters<StageMutate>[0])
   return queryClient;
 }
 
-const STAGE = { id: "PR-1", stage: { decision: "approve", option: null, answer: null, canon: null, note: "ok" }, updatedAt: "2026-10-01T10:00:00Z" } as const;
+const STAGE = { id: "PR-1", stage: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: "ok" }, updatedAt: "2026-10-01T10:00:00Z" } as const;
 
 function invalidated(queryClient: QueryClient, keys: readonly (readonly unknown[])[]): (boolean | undefined)[] {
   return keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);

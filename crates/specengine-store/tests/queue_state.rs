@@ -323,10 +323,10 @@ fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 6);
-    sqlite3(&db, "PRAGMA user_version = 7");
+    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 7);
+    sqlite3(&db, "PRAGMA user_version = 8");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 7 }) => {}
+        Err(QueueError::SchemaTooNew { found: 8 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }

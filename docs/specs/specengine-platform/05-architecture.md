@@ -96,7 +96,7 @@ verified_by = "owner"       # owner only (CI writes nothing) — review record: 
 verified_at = "2026-09-28"
 ```
 
-Committed with the code, written only on the owner's terminal, never by `apply_proposal` (ADR-0041); `spec lock regen` resolves its conflicts. Shipped as `format = 1` (`norm_recipe`, `code_recipe`, more keys per binding): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
+Committed with the code, written only on the owner's terminal (ADR-0041), by `apply_proposal` only under `--editorial` (ADR-0043); `spec lock regen` resolves its conflicts. Shipped as `format = 1` (`norm_recipe`, `code_recipe`, more keys per binding): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
 
 **What goes into `norm_hash`** (after Doorstop): the section text and semantic fields (`links`, for records `working_answer` etc.). **Excluded** are presentational and process fields: `title`, `status`, `tier`, `owner`, `reviewed`. Renaming a heading must not invalidate coverage. Shipped as recipe `specengine-norm/v1`, with the revision rule (ADR-0040): `docs/canon/node-revision.md`.
 
@@ -219,7 +219,7 @@ The full scenario is in `06-workflows.md`. The engine invariants:
 1. A discrepancy comes **with evidence**, a **gap type** and **priced options**; a question with a working answer and the other way's price (`docs/canon/agent-intake.md`).
 2. It is validated before the owner sees it: introduced findings attached, never refusing (`docs/canon/proposal-queue.md` "Creation").
 3. **Deduplication** against accepted decisions and the queue: re-asking a settled question is the most expensive noise in the queue (canon `agent-intake`).
-4. `approve` calls `apply_proposal` (`docs/canon/proposal-apply.md`; a question or discrepancy: a decision record, `decision-apply`): applied where raised (ADR-0004, ADR-0032), one commit `spec: apply PR-0042` with provenance (ADR-0005). To come: hashes recomputed.
+4. `approve` calls `apply_proposal` (`docs/canon/proposal-apply.md`; a question or discrepancy: a decision record, `decision-apply`): applied where raised (ADR-0004, ADR-0032), one commit `spec: apply PR-0042` with provenance (ADR-0005); revisions: `docs/canon/proposal-revisions.md`.
 5. **Nothing blocks** (ADR-0012): several proposals may be open on a node; on apply each rebases from its `base_hash` by three-way merge, a conflict refused with its text (shipped; resolving it in a UI diff: later). The only control point is **task approval by the owner**: `claim_task` from MCP hands out only `ready`, and `ready` is set by a human.
 6. **Reconciliation with the working answer**: agent code written before the decision carries `// @assumes PR-…`; a decision diverging from the working answer creates a follow-up task.
 7. **Task staleness** (`docs/canon/task-package.md`): a `spec_snapshot` node changed in the compared place sets an informational `stale` per read, with the diff; its own proposals applied there refresh the snapshot.

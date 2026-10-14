@@ -386,8 +386,10 @@ fn ac02_the_queue_tools_change_no_state() {
         let regen = base(&mut session, "RULE-STAM-REGEN");
         let mut args = discrepancy_args(&["RULE-STAM-REGEN"], &format!("Departs in {era:?}."));
         args["distinct_from"] = json!(["DEC-0023"]);
+        // The held apply above raised the node to `rev=2`: the patch keeps
+        // it as read (docs/features/rev-discipline.md "Creation", Q7).
         args["proposed_patch"] = json!({"target": "RULE-STAM-REGEN", "base": regen,
-            "text": "## Regeneration {#RULE-STAM-REGEN}\n- At rest only.\n",
+            "text": "## Regeneration {#RULE-STAM-REGEN rev=2}\n- At rest only.\n",
             "rationale": "Rest."});
         let reply = session.call("report_discrepancy", args);
         let document = answered(&reply, "report");

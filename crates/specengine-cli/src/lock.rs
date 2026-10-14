@@ -600,8 +600,8 @@ struct Found {
 }
 
 /// What a marker binds, and the lock key it gives: the one key builder of
-/// `spec lock accept` and `spec verify` (task spec `spec-verify`,
-/// "Command and rows": rows keyed as accept keys entries).
+/// `spec lock accept` and `spec verify`
+/// (canon `spec-verify`, "Rows": rows keyed as accept keys entries).
 pub(crate) enum Target {
     /// An item (its index), named.
     Item {
@@ -842,9 +842,9 @@ fn accept(
         }) => {
             let reason = format!(
                 "`{}` rev {rev}: its text changed since spec.lock vouched for it at this revision \
-                 ({} {} `{}`: spec_hash {locked}, now {current}): raise its revision through a \
-                 proposal, or `spec lock accept {} --editorial` for an editorial change; nothing \
-                 written",
+                 ({} {} `{}`: spec_hash {locked}, now {current}): raise its `rev` by hand, commit, \
+                 then accept; or `--editorial` for an editorial change (`spec lock accept {} \
+                 --editorial`); nothing written",
                 node.canonical,
                 key.relation.as_str(),
                 key.kind.as_str(),
@@ -1426,7 +1426,7 @@ fn editorial(
         Err(reason) => return Ok(outcome.refused(&reason)),
     };
     outcome.rev = Some(rev);
-    let refreshed = refresh_editorial(&read.lock, &node.canonical, rev, &spec_hash);
+    let refreshed = refresh_editorial(&read.lock, &node.canonical, rev, &spec_hash, None);
     if refreshed.at_rev.is_empty() {
         let reason = format!(
             "`{}` has no entry at rev {rev} (its revision was raised, or it was never locked): \

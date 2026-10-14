@@ -29,7 +29,8 @@
 //!     when the hold was reopened meanwhile: the commit is this run's), the
 //!     index updated (failure: a warning); else it stays `approved`, exit 1
 //!     naming the commit (the branch did not move: the commit `HEAD` names
-//!     now).
+//!     now; neither moved, an editorial apply's text and lock named, left
+//!     written and staged, with the git commands that put them back).
 //!
 //! Every refusal at steps 2–10 logs one `proposal.apply_failed`. Only a
 //! run that wrote `approved` at its own step 7 reopens, and only while the
@@ -57,6 +58,17 @@
 //! enclosing or inside it whose pre-apply hash is its snapshot hash take
 //! the applied text and hash ([`task_refresh`]).
 //!
+//! Revisions (task spec `rev-discipline`; [`crate::revisions`]):
+//! step 6 raises each node whose meaning the change alters, the question
+//! naming the raises (`(applies; raises R-12 3 -> 4)`) and the commit a
+//! `Revision:` trailer each. [`approve_editorial`] keeps them: step 3 also
+//! reads `spec.lock` (tracked and clean), step 6 sets the new `norm_hash`
+//! on the entries that vouched for the old text, step 8 re-reads the lock
+//! and writes it after the text, step 9 commits both paths with `Lock:`
+//! and `Lock-mode: editorial` (a failure restores each file only while it
+//! holds this run's bytes), step 10 checks both paths, the lock's bytes,
+//! the trailers and each refreshed hash against the committed text.
+//!
 //! An interpretation (task spec `kind-interpretation`) applies as an
 //! update: its decision checked again at step 4, named on stderr before the
 //! question (`interprets <ID> (<path>)`), its commit's body the rationale
@@ -80,8 +92,9 @@
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
+use specengine_core::lock::LOCK_FILE;
 use specengine_core::proposal::{
-    CommitFacts, Interprets, PROPOSAL_TRAILER, commit_message_interpreting,
+    CommitFacts, EDITORIAL, Interprets, PROPOSAL_TRAILER, commit_message_raising,
 };
 use specengine_model::IdScheme;
 use specengine_store::{
@@ -103,6 +116,9 @@ use crate::proposals::{
     with_diff, written_id,
 };
 use crate::review::stale_note;
+use crate::revisions::{
+    apply_trailers, lock_in_commit, lock_unchanged, pathspec_word, restore, restored_clause,
+};
 use crate::stage::{self, Staging};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 use crate::{create, decide};
@@ -123,6 +139,7 @@ pub struct ApproveRequest {
 
 /// `spec approve`'s flags of a kind that decides (canon
 /// `decision-record`, "Flags"); all `None` for a kind that applies.
+/// `--editorial` is no decision flag: [`approve_editorial`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApproveFlags {
     /// `--option N`: a discrepancy's chosen option, from 0.
@@ -179,7 +196,23 @@ pub fn approve_with(
     flags: &ApproveFlags,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_approve(env, globals, request, flags, consent).map_err(escaped_error)
+    run_approve(env, globals, request, flags, false, consent).map_err(escaped_error)
+}
+
+/// `spec approve PR --editorial [--note T]` (task spec `rev-discipline`):
+/// [`approve_with`], the owner calling the change editorial: every
+/// revision the change would raise kept, the `spec.lock` entries that
+/// vouched for the old text set to the new `norm_hash` in the same commit.
+/// Typed, it replaces a staged choice whole; on a kind writing no existing
+/// node (a kind that decides, a new file): exit 2.
+pub fn approve_editorial(
+    env: &Env,
+    globals: &Globals,
+    request: &ApproveRequest,
+    flags: &ApproveFlags,
+    consent: Consent<'_>,
+) -> Result<ProposalOutcome, CliError> {
+    run_approve(env, globals, request, flags, true, consent).map_err(escaped_error)
 }
 
 fn run_approve(
@@ -187,6 +220,7 @@ fn run_approve(
     globals: &Globals,
     request: &ApproveRequest,
     flags: &ApproveFlags,
+    editorial: bool,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Approve;
@@ -259,9 +293,13 @@ fn run_approve(
     }
     // The staged choice: taken when no flag is typed, else left unused,
     // named (canon `decision-staging`, "Terminal").
-    let (request, flags, staging) = Staging::for_approve(&proposal, request, flags);
+    let (request, flags, editorial, staging) =
+        Staging::for_approve(&proposal, request, flags, editorial);
     messages.extend(staging.notes());
     let (request, flags) = (&request, &flags);
+    if let Some(reason) = editorial_refusal(&proposal, editorial) {
+        return Err(CliError::spec(reason));
+    }
     if proposal.kind.decides() {
         return decide::approve_record(
             env,
@@ -312,7 +350,9 @@ fn run_approve(
     }
 
     // Until step 7 writes `approved`, this run holds nothing: a refusal
-    // only logs, whatever state another run left.
+    // only logs, whatever state another run left. A meaning approve
+    // refuses at step 6 on the first node whose raise is refused (task
+    // spec `rev-discipline` Q15: the plan keeps it for the review).
     let mut steps = StepRead::default();
     let prepared = match prepare_spanned(
         env,
@@ -321,7 +361,12 @@ fn run_approve(
         &proposal,
         &mut messages,
         &mut steps,
-    ) {
+        editorial,
+    )
+    .and_then(|prepared| match prepared.revisions.refusal() {
+        Some(failure) => Err(failure),
+        None => Ok(prepared),
+    }) {
         Ok(prepared) => prepared,
         Err(mut failure) => {
             if let Some(commit) = &failure.completing {
@@ -398,13 +443,23 @@ fn run_approve(
         }
         _ => String::new(),
     };
+    // The raise, or what `--editorial` keeps and refreshes (task spec
+    // `rev-discipline`); `--editorial` changing nothing is noted.
+    let editorial_note = prepared.revisions.editorial_note();
+    if let Some(note) = &editorial_note {
+        messages.push(Message::Note(note.clone()));
+    }
+    let noted_editorial = editorial_note
+        .map(|note| format!("{}\n", Message::Note(note).line()))
+        .unwrap_or_default();
     let question = format!(
-        "{interprets}{}apply {id} to {} on {} in {} ({}{})? [y/N]",
+        "{interprets}{noted_editorial}{}apply {id} to {} on {} in {} ({}{}{})? [y/N]",
         staging.preface(stale.as_deref()),
         prepared.top_path,
         proposal.place.branch,
         proposal.place.worktree,
         prepared.preview.as_str(),
+        prepared.revisions.question(),
         staging.mark()
     );
     if !consent(&noted(unknown.as_deref(), &escape_controls(&question))) {
@@ -450,11 +505,13 @@ fn run_approve(
         Err(error) => return Err(queue_cannot(error)),
     };
 
-    // Step 8: the place and the file as checked, then the write.
+    // Step 8: the place and the file as checked (an editorial apply's
+    // lock too), then the write: the text, then the lock.
     let path = proposal.target_path.as_str();
     let file = prepared.tree.root().join(path);
-    let unchanged = place_unchanged(&prepared.git, &prepared.head, &proposal.place).and_then(
-        |()| match prepared.tree.read(path) {
+    let lock = prepared.revisions.lock.as_ref();
+    let unchanged = place_unchanged(&prepared.git, &prepared.head, &proposal.place)
+        .and_then(|()| match prepared.tree.read(path) {
             Ok(bytes) if bytes == prepared.bytes => Ok(()),
             Ok(_) => Err(StepFailure::refused(
                 8,
@@ -464,8 +521,8 @@ fn run_approve(
                 8,
                 format!("cannot read `{path}` again: {error}; nothing written"),
             )),
-        },
-    );
+        })
+        .and_then(|()| lock.map_or(Ok(()), lock_unchanged));
     if let Err(failure) = unchanged {
         return failed(
             &mut context,
@@ -477,10 +534,37 @@ fn run_approve(
             messages,
         );
     }
-    if let Err(error) = replace_file(&file, &prepared.patched) {
+    if let Err(error) = replace_file(&file, prepared.written()) {
         let failure = StepFailure::refused(
             8,
             format!("cannot write `{path}`: {error}; nothing written"),
+        );
+        return failed(
+            &mut context,
+            request,
+            &proposal,
+            Some(&held),
+            failure,
+            Some(prepared.preview),
+            messages,
+        );
+    }
+    if let Some(lock) = lock
+        && let Err(error) = replace_file(&lock.path, lock.rendered.as_bytes())
+    {
+        // The text put back only while it holds this run's bytes.
+        let text = restore(
+            &file,
+            &prepared.top_path,
+            &proposal.place.worktree,
+            prepared.written(),
+            &prepared.bytes,
+            &mut messages,
+        );
+        let text = restored_clause(&[(path, text)]);
+        let failure = StepFailure::refused(
+            8,
+            format!("cannot write {LOCK_FILE}: {error}; {text}; nothing committed"),
         );
         return failed(
             &mut context,
@@ -503,7 +587,10 @@ fn run_approve(
             how: &interpretation.how,
             why: &interpretation.why,
         });
-    let message = commit_message_interpreting(
+    // The revisions raised or kept, the nodes whose lock entries change.
+    let revised = prepared.revisions.revised();
+    let locked = prepared.revisions.locked();
+    let message = commit_message_raising(
         &CommitFacts {
             id: &id,
             rationale: &proposal.rationale,
@@ -512,10 +599,13 @@ fn run_approve(
             base_commit: &proposal.place.base_commit,
         },
         interprets.as_ref(),
+        &apply_trailers(&revised, &locked),
     );
+    let mut paths = vec![prepared.top_path.as_str()];
+    paths.extend(lock.map(|lock| lock.top_path.as_str()));
     if let Err(error) = prepared
         .git
-        .commit_only(&context.data_dir, &message, &prepared.top_path)
+        .commit_only_paths(&context.data_dir, &message, &paths)
     {
         // Git can fail after making the commit (an index write): this
         // run's commit, on the branch or where `HEAD` went, is judged by
@@ -534,16 +624,43 @@ fn run_approve(
                 )));
             }
             Made::Nothing { foreign } => {
-                let restored = match replace_file(&file, &prepared.bytes) {
-                    Ok(()) => "its bytes restored".to_owned(),
-                    Err(restore) => {
-                        messages.push(Message::Warning(format!(
-                            "cannot restore `{path}` in {}: {restore}; it holds the \
-                             proposal's bytes, uncommitted",
-                            proposal.place.worktree
-                        )));
-                        "its bytes NOT restored".to_owned()
+                let restored = match lock {
+                    // Both put back by accept's rules: each only while it
+                    // holds this run's bytes.
+                    Some(lock) => {
+                        let text = restore(
+                            &file,
+                            &prepared.top_path,
+                            &proposal.place.worktree,
+                            prepared.written(),
+                            &prepared.bytes,
+                            &mut messages,
+                        );
+                        let locked = restore(
+                            &lock.path,
+                            &lock.top_path,
+                            &proposal.place.worktree,
+                            lock.rendered.as_bytes(),
+                            &lock.bytes,
+                            &mut messages,
+                        );
+                        restored_clause(&[(path, text), (LOCK_FILE, locked)])
                     }
+                    None => match replace_file(&file, &prepared.bytes) {
+                        Ok(()) => "its bytes restored".to_owned(),
+                        Err(restore) => {
+                            messages.push(Message::Warning(format!(
+                                "cannot restore `{path}` in {}: {restore}; it holds the \
+                                 proposal's bytes, uncommitted",
+                                proposal.place.worktree
+                            )));
+                            "its bytes NOT restored".to_owned()
+                        }
+                    },
+                };
+                let path = match lock {
+                    Some(_) => format!("{path}` and `{LOCK_FILE}"),
+                    None => path.to_owned(),
                 };
                 let foreign = foreign.map_or_else(String::new, |tip| {
                     format!(
@@ -570,18 +687,46 @@ fn run_approve(
 
     // Step 10.
     // This run's own commit verified: `applied`, even when its hold was
-    // reopened meanwhile.
-    let changes_only_the_path =
-        |commit: &str| match prepared.git.changed_paths(&prepared.head, commit) {
+    // reopened meanwhile. An editorial one with its lock: both paths, the
+    // lock as confirmed, its `Lock:` trailers and hashes.
+    let changes_only_the_path = |commit: &str| match lock {
+        Some(lock) => lock_in_commit(
+            &prepared.git,
+            &prepared.head,
+            commit,
+            &prepared.top_path,
+            lock,
+            &prepared.revisions.nodes,
+            path,
+            &prepared.recorded.config.scheme,
+        ),
+        None => match prepared.git.changed_paths(&prepared.head, commit) {
             Ok(changed) if changed == [prepared.top_path.as_str()] => Ok(()),
             Ok(changed) => Err(format!("it changes {}", changed.join(", "))),
             Err(error) => Err(error.to_string()),
-        };
-    match verify(
+        },
+    };
+    // Neither the branch nor `HEAD` moved: an editorial apply's two files
+    // stay as the commit left them (their index entries are not checked);
+    // nothing is restored, the refusal names both and the way back, each
+    // path a quoted literal pathspec.
+    let left = lock.map(|lock| {
+        let (text, locked) = (
+            pathspec_word(&prepared.top_path),
+            pathspec_word(&lock.top_path),
+        );
+        format!(
+            "; `{path}` and `{LOCK_FILE}` stay as the commit left them in {}: `git reset -q -- \
+             {text} {locked}`, then `git checkout -- {text} {locked}` puts them back",
+            proposal.place.worktree
+        )
+    });
+    match verify_leaving(
         &prepared.git,
         &prepared.head,
         &proposal,
         &changes_only_the_path,
+        left.as_deref(),
     ) {
         Ok(commit) => {
             let refresh = task_refresh(
@@ -589,7 +734,7 @@ fn run_approve(
                 &proposal,
                 &prepared.recorded.config.scheme,
                 &prepared.bytes,
-                &prepared.patched,
+                prepared.written(),
             );
             let recorded = record_applied(
                 &mut context,
@@ -650,6 +795,22 @@ fn run_approve(
     }
 }
 
+/// Why `--editorial` does not go with `proposal` (task spec
+/// `rev-discipline`): a kind writing no existing node (a kind that
+/// decides, a new file) has no revision to keep; exit 2's reason. `None`
+/// when not given or it goes.
+pub(crate) fn editorial_refusal(proposal: &Proposal, editorial: bool) -> Option<String> {
+    if !editorial || !(proposal.kind.decides() || proposal.new_file()) {
+        return None;
+    }
+    let id = &proposal.id;
+    Some(format!(
+        "`--{EDITORIAL}` keeps the revisions of the nodes an apply changes; `{id}` is {}, which \
+         writes no existing node: `spec approve {id}` without it; nothing changed",
+        proposal.kind.with_article()
+    ))
+}
+
 /// Why `flags` do not go with a kind that applies (a decision flag decides
 /// a kind that decides, the kinds named by `decides()`): exit 2's reason;
 /// `None` when none is given.
@@ -681,6 +842,19 @@ pub(crate) fn verify(
     proposal: &Proposal,
     content: &dyn Fn(&str) -> Result<(), String>,
 ) -> Result<String, String> {
+    verify_leaving(git, head, proposal, content, None)
+}
+
+/// [`verify`]; `left`: the clause closing the refusal when neither the
+/// branch nor `HEAD` moved, the files left written and staged (an
+/// editorial apply's text and lock: their names and the way back).
+pub(crate) fn verify_leaving(
+    git: &WorktreeGit,
+    head: &str,
+    proposal: &Proposal,
+    content: &dyn Fn(&str) -> Result<(), String>,
+    left: Option<&str>,
+) -> Result<String, String> {
     let old_head = head;
     let branch = &proposal.place.branch;
     let commit = match git.commit_of(&format!("refs/heads/{branch}")) {
@@ -694,8 +868,9 @@ pub(crate) fn verify(
             Ok(_) => {
                 return Err(format!(
                     "`{branch}` did not move from {commit} and HEAD names no new commit; `{}` \
-                     stays approved",
-                    proposal.id
+                     stays approved{}",
+                    proposal.id,
+                    left.unwrap_or_default()
                 ));
             }
             Err(error) => {

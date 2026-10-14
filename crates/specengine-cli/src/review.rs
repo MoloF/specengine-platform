@@ -20,8 +20,18 @@
 //! the recorded root's index as the preview's step 4 refreshed it, its own
 //! refresh only when the preview stopped before. A staged approve whose
 //! `span_hash` is not the target's now gets the staleness note (canon
-//! `decision-staging`, "Staleness").
+//! `decision-staging`, "Staleness"). An update, an interpretation or a
+//! section-form create that applies or rebases gets its `revisions` (task
+//! spec `rev-discipline`): per node whose meaning it changes, its revision
+//! read now, what a meaning approve raises it to, the `spec.lock` entries
+//! an editorial one refreshes (0 without a lock; `null` and a note when
+//! the lock cannot be read) and why a meaning approve refuses its raise
+//! (`refused`, `to` then `null`, and a note `meaning approve not
+//! applicable (step 6): <refused>`: the preview stays, the text an
+//! editorial approve writes); `null` for any other kind or preview (an
+//! unreadable current revision makes it `unavailable`).
 
+use specengine_core::raise::RevisionRow;
 use specengine_store::{GitEnv, Proposal, ProposalStatus, Stage};
 
 use crate::create::prepare_file;
@@ -31,6 +41,7 @@ use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed,
     escaped_error, find, no_proposal, open_context, with_diff, written_id,
 };
+use crate::revisions::{lock_for_review, rows};
 use crate::{CliError, Env, Globals, Message, one_line};
 
 /// `spec review` options.
@@ -147,6 +158,9 @@ pub(crate) fn previewed(
 pub(crate) struct PreviewRun {
     preview: Option<Preview>,
     conflict: Option<String>,
+    /// The review document's `revisions`; `None` but for a kind writing an
+    /// existing node that applies or rebases.
+    revisions: Option<Vec<RevisionRow>>,
     notes: Vec<String>,
     /// The target's span hash now; `None` unread.
     pub span: Option<String>,
@@ -199,8 +213,26 @@ pub(crate) fn preview_run(
         prepare_file(env, git_env, context, proposal, messages).map(|_| Preview::Applies)
     } else {
         let mut read = StepRead::default();
-        let prepared = prepare_spanned(env, git_env, context, proposal, messages, &mut read)
-            .map(|prepared| prepared.preview);
+        // A meaning approve's plan; a refused raise keeps the preview (the
+        // text an editorial approve writes) and is named per node (task
+        // spec `rev-discipline` Q15).
+        let prepared = prepare_spanned(env, git_env, context, proposal, messages, &mut read, false)
+            .map(|prepared| {
+                let lock = lock_for_review(&prepared.recorded.root);
+                if let Err(why) = &lock {
+                    run.notes
+                        .push(one_line(&format!("lock_entries unknown: {why}")));
+                }
+                let rows = rows(&prepared.revisions.nodes, &lock);
+                run.notes.extend(rows.iter().filter_map(|row| {
+                    let refused = row.refused.as_deref()?;
+                    Some(format!(
+                        "meaning approve not applicable (step 6): {refused}"
+                    ))
+                }));
+                run.revisions = Some(rows);
+                prepared.preview
+            });
         run.span = read.span;
         run.corpus = read.corpus;
         prepared
@@ -238,6 +270,7 @@ pub(crate) fn document_with(
     let applies = matches!(run.preview, Some(Preview::Applies | Preview::Rebases));
     document.preview = run.preview;
     document.conflict = run.conflict;
+    document.revisions = run.revisions;
     document.notes.extend(run.notes);
     if applies && let Some(note) = stale_note(proposal, run.span.as_deref()) {
         document.notes.push(note);

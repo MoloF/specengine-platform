@@ -39,6 +39,7 @@ describe("scenarioFromSearch", () => {
     ["?scenario=conflict", "conflict"],
     ["?scenario=large", "large"],
     ["?scenario=cannot-check", "cannot-check"],
+    ["?scenario=editorial", "editorial"],
     ["?scenario=bogus", "normal"],
     ["?other=1", "normal"],
   ])("reads %j as %s", (search, scenario) => {
@@ -145,10 +146,10 @@ describe("the normal scenario", () => {
   it("stages an approve: the review document keeps it with its time, the proposal stays open and listed", async () => {
     const client = new MockClient("normal", { now: clock });
     const before = await client.getProposal("harbor-sim", "PR-0041");
-    const staged = await client.stageDecision("harbor-sim", "PR-0041", { decision: "approve", option: 1, answer: null, canon: null, note: "go" }, before.updated_at ?? "");
+    const staged = await client.stageDecision("harbor-sim", "PR-0041", { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "go" }, before.updated_at ?? "");
     expect([staged.status, staged.staged, staged.staged_at, staged.updated_at]).toEqual([
       "open",
-      { decision: "approve", option: 1, answer: null, canon: null, note: "go", span_hash: null },
+      { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "go", span_hash: null },
       "2026-10-05T12:00:00Z",
       "2026-10-05T12:00:00Z",
     ]);
@@ -160,8 +161,8 @@ describe("the normal scenario", () => {
   it("stages an update's approve with its target's span hash; a reject with its reason; a second stage replaces the first", async () => {
     const client = new MockClient("normal", { now: clock });
     const update = await client.getProposal("harbor-sim", "PR-0042");
-    const approved = await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, note: null }, update.updated_at ?? "");
-    expect(approved.staged).toEqual({ decision: "approve", option: null, answer: null, canon: null, note: null, span_hash: update.base_hash });
+    const approved = await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null }, update.updated_at ?? "");
+    expect(approved.staged).toEqual({ decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, span_hash: update.base_hash });
     const rejected = await client.stageDecision("harbor-sim", "PR-0042", { decision: "reject", reason: "Too early" }, approved.updated_at ?? "");
     expect(rejected.staged).toEqual({ decision: "reject", reason: "Too early" });
     expect(ids((await client.getInbox("harbor-sim")).proposals)).toContain("PR-0042");
@@ -179,7 +180,7 @@ describe("the normal scenario", () => {
   it("refuses in the daemon's words, nothing stored: flag usage 400, not open or changed since read 409, unknown 404", async () => {
     const client = new MockClient("normal", { now: clock });
     const read = (await client.getProposal("harbor-sim", "PR-0041")).updated_at ?? "";
-    const approve = (option: number | null) => ({ decision: "approve" as const, option, answer: null, canon: null, note: null });
+    const approve = (option: number | null) => ({ decision: "approve" as const, option, answer: null, canon: null, editorial: null, note: null });
     const refusals = [
       await rejection(client.stageDecision("harbor-sim", "PR-0041", approve(null), read)),
       await rejection(client.stageDecision("harbor-sim", "PR-0042", approve(0), (await client.getProposal("harbor-sim", "PR-0042")).updated_at ?? "")),

@@ -433,7 +433,8 @@ fn ac03_approve_by_path_commits_the_whole_file_alone() {
     assert_eq!(
         questions,
         [format!(
-            "apply {id} to {TUNING} on t1 in {} (applies)? [y/N]",
+            "apply {id} to {TUNING} on t1 in {} (applies; raises stamina-tuning/AC-07 1 -> 2)? \
+             [y/N]",
             pair.linked.display()
         )]
     );
@@ -460,9 +461,12 @@ fn ac03_approve_by_path_commits_the_whole_file_alone() {
         format!(
             "spec: apply {id}\n\nUpdate {TUNING}.\n\n\
              Proposal: {id}\nDecided-by: {DECIDER}\nProposed-by: {provenance}\n\
-             Base-commit: {old}"
+             Base-commit: {old}\nRevision: stamina-tuning/AC-07 1 -> 2"
         )
     );
+    // The whole file as sent, AC-07's changed prose raising it
+    // (docs/features/rev-discipline.md "Raising at apply").
+    let new_text = new_text.replacen("{#AC-07}", "{#AC-07 rev=2}", 1);
     assert_eq!(read(&pair.linked, TUNING), new_text.as_bytes());
     assert_eq!(
         pair.git
@@ -512,7 +516,12 @@ fn ac04_a_path_update_rebases_or_stops_on_the_conflict() {
         Exit::Answered,
         "{questions:?}"
     );
-    assert!(questions[0].ends_with(" (rebases)? [y/N]"), "{questions:?}");
+    // AC-07's prose changed: raised by its canonical ID
+    // (docs/features/rev-discipline.md "Raising at apply").
+    assert!(
+        questions[0].ends_with(" (rebases; raises stamina-tuning/AC-07 1 -> 2)? [y/N]"),
+        "{questions:?}"
+    );
     let now = read_text(&pair.linked, TUNING);
     for kept in [
         "priority: low\n",
@@ -1143,7 +1152,7 @@ fn ac10_path_targets_round_trip_through_a_backup() {
     let text = String::from_utf8(bytes.clone()).expect("a UTF-8 dump");
     assert!(
         text.starts_with(
-            "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,"
         ),
         "{text}"
@@ -1440,7 +1449,10 @@ fn a_document_given_an_id_later_keeps_its_path_rows() {
     let (outcome, questions) = pair.approve_answer(&pair.main, &id, true, pair.git_env(&pair.main));
     let outcome = outcome.unwrap_or_else(|error| panic!("approve: {error}"));
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
-    assert!(questions[0].ends_with(" (rebases)? [y/N]"), "{questions:?}");
+    assert!(
+        questions[0].ends_with(" (rebases; raises stamina-tuning/AC-07 1 -> 2)? [y/N]"),
+        "{questions:?}"
+    );
     let now = read_text(&cwd, TUNING);
     for kept in [
         "---\nid: MEC-TUNING\nclass: spec\n",

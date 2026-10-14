@@ -713,6 +713,7 @@ fn ac_r6_approve_commits_the_body_and_interprets_last() {
              Why interpretation was needed:\n{WHY}\n\nProposal: {id}\nDecided-by: {decided_by}\n\
              Proposed-by: agent role=spec-author model=claude-opus-5-5 run=unknown\n\
              Base-commit: {base}\n\
+             Revision: RULE-STAM-REGEN 1 -> 2\n\
              Interprets: DEC-0023"
         )
     );
@@ -731,6 +732,9 @@ fn ac_r6_approve_commits_the_body_and_interprets_last() {
             "Decided-by",
             "Proposed-by",
             "Base-commit",
+            // docs/features/rev-discipline.md "Editorial refresh": the
+            // raise's trailer after `Base-commit:`, `Interprets:` last.
+            "Revision",
             "Interprets"
         ]
     );
@@ -750,7 +754,8 @@ fn ac_r6_the_consent_question_names_the_decision_first() {
     assert_eq!(questions.len(), 1);
     assert!(
         questions[0].starts_with(&format!(
-            "interprets DEC-0023 ({DEC23})\napply {id} to {STAMINA} on t1 in {} (applies)? [y/N]",
+            "interprets DEC-0023 ({DEC23})\napply {id} to {STAMINA} on t1 in {} (applies; raises \
+             RULE-STAM-REGEN 1 -> 2)? [y/N]",
             pair.linked.display()
         )),
         "{questions:?}"
@@ -782,7 +787,10 @@ fn ac_r6_an_interpretation_rebases_or_is_refused_with_the_conflict() {
     let base = pair.rev(&pair.linked, "HEAD");
     let (outcome, questions) = pair.approve_answer(&pair.main, &id, true, pair.git_env(&pair.main));
     assert_eq!(outcome.expect("approve").exit(), Exit::Answered);
-    assert!(questions[0].ends_with(" (applies)? [y/N]"), "{questions:?}");
+    assert!(
+        questions[0].ends_with(" (applies; raises RULE-STAM-REGEN 1 -> 2)? [y/N]"),
+        "{questions:?}"
+    );
     let head = pair.rev(&pair.linked, "t1");
     assert_eq!(pair.rev(&pair.linked, &format!("{head}^")), base);
     let file = read_text(&pair.linked, STAMINA);
@@ -817,7 +825,10 @@ fn ac_r6_an_interpretation_rebases_or_is_refused_with_the_conflict() {
     let (outcome, questions) =
         merged.approve_answer(&merged.main, &id, true, merged.git_env(&merged.main));
     assert_eq!(outcome.expect("approve").exit(), Exit::Answered);
-    assert!(questions[0].ends_with(" (rebases)? [y/N]"), "{questions:?}");
+    assert!(
+        questions[0].ends_with(" (rebases; raises RULE-STAM-REGEN 1 -> 2)? [y/N]"),
+        "{questions:?}"
+    );
     let head = merged.rev(&merged.linked, "t1");
     assert_eq!(merged.rev(&merged.linked, &format!("{head}^")), base);
     let (_, span) = merged.span(&merged.linked, "RULE-STAM-REGEN");
@@ -975,7 +986,8 @@ fn ac_r6_a_decision_flag_on_an_interpretation_is_exit_2() {
 
 // ------------------------------------------------------------------ AC-R7
 
-/// AC-R7: the review document's 46 keys, `interpretation` after
+/// AC-R7: the review document's 47 keys (46 until
+/// docs/features/rev-discipline.md added `revisions`), `interpretation` after
 /// `staged_at` ("Data"'s object; `null` on an update); its text block;
 /// kept by `--brief` (the texts dropped); the inbox line `PR-0001 |
 /// interpretation | open | RULE-STAM-REGEN | t1 | <created_at> | <the
@@ -988,9 +1000,10 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let update = pair.propose_edit(&pair.linked, "EDGE-STAM-ZERO", ZERO.0, ZERO.1);
     let raw = review_json(&pair, &pair.main, &id);
     let keys = task_common::keys(&raw);
-    assert_eq!(keys.len(), 46, "{keys:?}");
+    // 47 since docs/features/rev-discipline.md added `revisions`.
+    assert_eq!(keys.len(), 47, "{keys:?}");
     assert_eq!(
-        keys[42..],
+        keys[43..],
         ["staged", "staged_at", "interpretation", "notes"],
         "{keys:?}"
     );
@@ -1041,7 +1054,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let brief_value = json_of(&brief_json);
     assert_eq!(brief_value["interpretation"], value["interpretation"]);
     assert_eq!(brief_value["new_text"], Value::Null);
-    assert_eq!(task_common::keys(&brief_json).len(), 46);
+    assert_eq!(task_common::keys(&brief_json).len(), 47);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1474,7 +1487,7 @@ fn spec_c_a_decision_is_told_by_its_class_not_an_ids_kind() {
 // ----------------------------------------------------------------- AC-R13
 
 /// AC-R13: `export state` with an interpretation: header `{"format":2,
-/// "queue_schema":6,…}`, its row's `interpretation` the stored JSON text;
+/// "queue_schema":7,…}`, its row's `interpretation` the stored JSON text;
 /// imported into a fresh `HOME`, the export byte-identical, the row read
 /// equal. A schema-5 dump whose row carries `interpretation` is refused
 /// naming its line. M: import refuses schema 5 (`stage_confirm.rs` holds
@@ -1522,7 +1535,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1555,7 +1568,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
 
     // A schema-5 dump cannot carry the column.
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    v5[0] = v5[0].replacen("\"queue_schema\":6,", "\"queue_schema\":5,", 1);
+    v5[0] = v5[0].replacen("\"queue_schema\":7,", "\"queue_schema\":5,", 1);
     let file = dumps.join("v5-with-44.jsonl");
     std::fs::write(&file, format!("{}\n", v5.join("\n"))).unwrap();
     let home = pair.scratch.home("v5");

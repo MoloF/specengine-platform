@@ -162,6 +162,14 @@ const PINS: &[(&str, &str)] = &[
         "0.7.1",
         "fc9423b7a3fb0c1c4b3b1c9b841fb0f7edf2e51c628379e8135bacdc14881902",
     ),
+    // docs/features/rev-discipline.md "Description and interactions"
+    // (0.7.1 -> 0.7.2, PATCH): `propose-spec-change` says to keep every
+    // rev as read and to call an editorial change so in the rationale; no
+    // tool or key changed.
+    (
+        "0.7.2",
+        "2e04bbb043c3c996eead31f4fe397362a34c170931836dd51dc3d8186b1c88c3",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
@@ -1242,9 +1250,9 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of spec-lock: 0.7.1, after norm-hash's 0.7.0.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.7.1"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.7.0");
+    // The pin of rev-discipline: 0.7.2, after spec-lock's 0.7.1.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.7.2"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.7.1");
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

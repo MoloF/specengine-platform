@@ -260,6 +260,7 @@ fn approve_body(answer: Option<&str>) -> impl FnOnce(String) -> StageBody {
         option: None,
         answer,
         canon: None,
+        editorial: None,
         note: None,
         updated_at,
     }
@@ -427,6 +428,7 @@ fn working_answer() -> Stage {
         option: None,
         answer: None,
         canon: None,
+        editorial: false,
         note: None,
         span_hash: None,
     }
@@ -437,6 +439,7 @@ fn option_stage(option: u64) -> Stage {
         option: Some(option),
         answer: None,
         canon: None,
+        editorial: false,
         note: None,
         span_hash: None,
     }
@@ -447,6 +450,7 @@ fn answer_stage(answer: &str) -> Stage {
         option: None,
         answer: Some(answer.to_owned()),
         canon: None,
+        editorial: false,
         note: None,
         span_hash: None,
     }
@@ -2092,6 +2096,7 @@ fn stage_checks_its_clock_and_id_before_the_queue_is_opened() {
             option: Some(1),
             answer: None,
             canon: None,
+            editorial: None,
             note: None,
             updated_at: updated_at.to_owned(),
         },
@@ -2957,6 +2962,7 @@ fn approve_of(
             option,
             answer: answer.map(str::to_owned),
             canon: None,
+            editorial: None,
             note: None,
             updated_at: updated_at.to_owned(),
         },
@@ -3117,7 +3123,7 @@ fn ui_round_stage_answers_stage_in_round_order_against_the_updated_at_shown() {
     assert_eq!(
         json["answers"][3]["stage"],
         json!({"decision": "approve", "option": null, "answer": own, "canon": null,
-            "note": null, "span_hash": null})
+            "editorial": null, "note": null, "span_hash": null})
     );
 
     // Answered again from a sheet read now: it replaces each, naming when.

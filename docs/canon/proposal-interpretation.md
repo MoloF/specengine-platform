@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-14
 ---
 
 # Proposal kind: interpretation
@@ -39,7 +39,7 @@ Stored: the document's `id:`, canonical; an id-less decision document by its pat
 
 Queue step 6, one `Immediate` transaction: `ALTER TABLE proposals ADD COLUMN interpretation TEXT`; `QUEUE_SCHEMA_VERSION` 6, `PROPOSAL_COLUMNS` 44, `proposal_columns(5)` the first 43. Schema 5 opens as 6, the column NULL; 7 -> exit 2 `schema version 7, this build knows 6`. A migrated queue refuses older builds (`SchemaTooNew`): `spec`, `specengine-mcp` and the daemon come from one build. The row: an update's columns plus `interpretation`, compact JSON, keys in order: `{"decision":"DEC-0023","how":"...","why":"..."}`. Corrupt, named (`get`, `list` fail; inbox skips it, a note): the column on another kind or NULL on this one; another shape (a key missing, extra, reordered, not a string); a blank value; a text over the cap.
 
-**Review document**, 46 keys: `interpretation` after `staged_at`, before `notes`, the object or `null`, kept by `--brief` (MCP `get_proposal`, `mirror.rs`). Text, escaped (`escape_controls`; JSON and the commit raw):
+**Review document**, 47 keys (`revisions`: `proposal-revisions.md`): `interpretation` after `staged_at`, before `notes`, the object or `null`, kept by `--brief` (MCP `get_proposal`, `mirror.rs`). Text, escaped (`escape_controls`; JSON and the commit raw):
 
 ```
 interpretation:
@@ -54,7 +54,7 @@ interpretation:
 
 ## Apply
 
-An update's consent, steps, runs, rebase, conflict and reject (`proposal-apply.md`). The line before the question: `interprets <stored ID> (<its path at step 4>)`. Step 4 refuses a decision no longer accepted: exit 1 `--decision: <why>`, one `apply_failed` (step 4), nothing written. `--option`, `--answer`, `--canon`: exit 2. The commit (`commit_message_interpreting`), exactly `M <path>`:
+An update's consent, steps, runs, rebase, conflict and reject (`proposal-apply.md`). The line before the question: `interprets <stored ID> (<its path at step 4>)`. Step 4 refuses a decision no longer accepted: exit 1 `--decision: <why>`, one `apply_failed` (step 4), nothing written. `--option`, `--answer`, `--canon`: exit 2. The commit (`commit_message_raising`), exactly `M <path>` (`--editorial` with a refreshed lock: and `spec.lock`), the revision trailers before `Interprets:` (`proposal-revisions.md`):
 
 ```
 spec: apply PR-0007
@@ -69,6 +69,7 @@ Why interpretation was needed:
 
 Proposal: PR-0007
 Decided-by: ... (the four trailers as an update's)
+Revision: R-12 3 -> 4
 Interprets: DEC-0023
 ```
 

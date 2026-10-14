@@ -177,9 +177,9 @@ Owner pre-approved, review open (Q1-Q12 2026-10-10, Q13-Q20 2026-10-13); each an
 
 ## Dependencies and ordering
 
-- **Needs**: slices 1, 3, 4a, shipped; 4b-1 `rev-discipline`, draft (schema 7, the `--editorial` flag check, 47 review keys; its multi-path `commit_only` changes accept's call, which 4b-1 adapts).
+- **Needs**: slices 1, 3, 4a, shipped; 4b-1 `rev-discipline`, shipped 2026-10-14 (schema 7, the `--editorial` flag check, 47 review keys, `commit_only_paths`: `proposal-revisions.md`).
 - **Order**: 1 -> 3 -> 4a -> 4b-1 -> 4c-1 -> 4c-2. **Independent**: 8a; 4b-2 (the commit's judge shared; its rule silent on the lock-only commit); 8b (one accept keeps its blocks; the later of 4c-1 and 8b tests a drift approve). **Not independent of 5b** (`lock-levels.md` Q7): `lock_code` as rendered; a rebase commit settles nothing. **Later**: 5c fills `moved_from`; 9a takes `family()`; 9b re-reads on a drift approve's `proposal.applied`; Phase 4 screens.
 
 ## Implementation
 
-Not started. To record: modules, TE-12's figures, deviations with reasons. Carry-over: "slice 4c" in CLI `lock.rs` (module, `LockTrailer` docs) and `tests/lock_commit.rs` -> canon `proposal-drift.md` at SW-4. Criteria renumbered at the split (2026-10-13), old -> new: RD-1..RD-10 kept; RD-11 -> 4c-2 RD-1; RD-12..RD-19 -> 11..18 (RD-16's follow-up half -> 4c-2 RD-2); RD-19 new; TE-1..TE-12 kept (TE-6's follow-ups -> 4c-2 TE-1); UI-1, SW-1..SW-5 kept (follow-up canon -> 4c-2 SW-2). 4c-2: `drift-follow-up.md`.
+Not started. To record: modules, TE-12's figures, deviations with reasons. Carry-over: "slice 4c" in CLI `lock.rs` (module, `LockTrailer` docs) and `tests/lock_commit.rs` -> canon `proposal-drift.md` at SW-4. From 4b-1, code only: CLI `lock.rs` undo messages (~1864, ~1892) quote pathspecs by `revisions::pathspec_word` at the `lock_plan`/`lock_commit` split; `apply.rs` module doc (~32) and `verify_leaving` doc (~848): "left written and staged" -> "stay as the commit left them". Criteria renumbered at the split (2026-10-13), old -> new: RD-1..RD-10 kept; RD-11 -> 4c-2 RD-1; RD-12..RD-19 -> 11..18 (RD-16's follow-up half -> 4c-2 RD-2); RD-19 new; TE-1..TE-12 kept (TE-6's follow-ups -> 4c-2 TE-1); UI-1, SW-1..SW-5 kept (follow-up canon -> 4c-2 SW-2). 4c-2: `drift-follow-up.md`.

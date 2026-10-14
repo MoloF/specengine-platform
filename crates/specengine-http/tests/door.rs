@@ -872,7 +872,7 @@ fn ui_round_t02_the_round_routes_change_nothing_and_a_valid_post_only_stages() {
     let mut staged = before.1[0].clone();
     let object = staged.as_object_mut().unwrap();
     let stage = json!({"decision": "approve", "option": null, "answer": null, "canon": null,
-        "note": null, "span_hash": null});
+        "editorial": null, "note": null, "span_hash": null});
     object.insert("staged".to_owned(), stage.clone());
     object.insert("staged_at".to_owned(), json!(at));
     object.insert("updated_at".to_owned(), json!(at));

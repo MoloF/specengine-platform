@@ -944,8 +944,9 @@ fn manifests_name_packages_alike_from_any_root() {
 /// item's state is `HashState::NotHashed`, a value hashing never gives.
 /// Nothing outside `bind.rs` reads it: the walk, the naming and `refs`
 /// name no `HashState`, and every `.state` they read is a judgement's or a
-/// level list's. `spec lock accept` (docs/features/spec-lock.md) hashes
-/// the items it locks through `hash_bound_items` alone: `lock.rs` names
+/// level list's. `spec lock accept`
+/// (`docs/canon/spec-lock-accept.md` "Steps") hashes the items it locks
+/// through `hash_bound_items` alone: `lock.rs` names
 /// `HashState` only for that function's results, and like `lock_regen.rs`
 /// reads no item's `.state` (a judgement's, a level list's or a printed
 /// row's only).

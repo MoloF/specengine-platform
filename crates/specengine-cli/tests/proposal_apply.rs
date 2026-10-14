@@ -44,6 +44,17 @@ fn append(root: &std::path::Path, relative: &str, line: &str) {
     write(root, relative, text);
 }
 
+/// `text` with the unwritten revision of `id` raised to 2 as a meaning
+/// approve writes it (docs/features/rev-discipline.md "Raising at apply":
+/// ` rev=N` appended before its heading's `}`).
+fn raised_once(text: &str, id: &str) -> String {
+    let at = text
+        .find(&format!("{{#{id}"))
+        .unwrap_or_else(|| panic!("no heading of {id} in {text:?}"));
+    let close = at + text[at..].find('}').expect("its `}`");
+    format!("{} rev=2{}", &text[..close], &text[close..])
+}
+
 /// `state` with the proposals left out (they change by design).
 fn worktrees(state: &State) -> State {
     State {
@@ -86,9 +97,10 @@ fn ac07_library_approve_commits_on_t1_in_the_linked_worktree() {
         assert_eq!(
             questions,
             [format!(
-                "apply PR-0001 to {} on t1 in {} (applies)? [y/N]",
+                "apply PR-0001 to {} on t1 in {} (applies; raises {} 1 -> 2)? [y/N]",
                 case.path,
-                pair.linked.display()
+                pair.linked.display(),
+                case.target
             )],
             "{}",
             case.fixture
@@ -113,12 +125,16 @@ fn ac07_library_approve_commits_on_t1_in_the_linked_worktree() {
                 "spec: apply PR-0001\n\nSay it precisely.\n\nA second paragraph.\n\n\
                  Proposal: PR-0001\nDecided-by: {DECIDER}\n\
                  Proposed-by: agent role=spec-writer model=claude-opus-5-5 run=run-7\n\
-                 Base-commit: {base}"
+                 Base-commit: {base}\n\
+                 Revision: {} 1 -> 2",
+                case.target
             ),
             "{}",
             case.fixture
         );
-        // Exactly the span replaced.
+        // Exactly the span replaced, its revision raised
+        // (docs/features/rev-discipline.md "Raising at apply").
+        let new_text = raised_once(&new_text, case.target);
         let span = text.as_bytes();
         let at = old
             .windows(span.len())
@@ -448,7 +464,18 @@ fn ac11_a_later_proposal_rebases_or_is_refused_with_the_conflict() {
             "{}: {outcome:?}",
             case.fixture
         );
-        assert!(questions[0].ends_with(" (rebases)? [y/N]"), "{questions:?}");
+        // The second edit's node raised from the file as read
+        // (docs/features/rev-discipline.md "Raising at apply"): spec-a's
+        // target, raised to 2 by the first apply; spec-b's nested
+        // `FLAG-DRY-RUN`, written `rev=2`.
+        let raised = match case.fixture {
+            "spec-a" => "EDGE-SPRINT-EMPTY 2 -> 3",
+            _ => "FLAG-DRY-RUN 2 -> 3",
+        };
+        assert!(
+            questions[0].ends_with(&format!(" (rebases; raises {raised})? [y/N]")),
+            "{questions:?}"
+        );
         assert_eq!(commits(&pair, &pair.main, &format!("{base}..t1")).len(), 2);
         let (span_now, text_now) = pair.span(&pair.linked, case.target);
         assert!(
@@ -505,7 +532,10 @@ fn ac12_an_edit_above_the_target_survives() {
     pair.approve_ok(&pair.main, &id);
     assert_eq!(
         read_text(&pair.linked, path),
-        edit(&above, "the sprint ends;", "the sprint ends at once;")
+        raised_once(
+            &edit(&above, "the sprint ends;", "the sprint ends at once;"),
+            "EDGE-SPRINT-EMPTY"
+        )
     );
 }
 
@@ -1064,7 +1094,8 @@ fn a_root_below_the_top_applies_at_its_top_relative_path() {
     assert_eq!(
         questions,
         [format!(
-            "apply PR-0001 to proj/docs/spec/movement/sprint.md on t1 in {} (applies)? [y/N]",
+            "apply PR-0001 to proj/docs/spec/movement/sprint.md on t1 in {} (applies; raises \
+             EDGE-SPRINT-EMPTY 1 -> 2)? [y/N]",
             linked.display()
         )]
     );
@@ -1190,7 +1221,10 @@ fn crlf_files_keep_their_line_ends() {
     let after = read_text(&pair.linked, path);
     assert_eq!(
         after,
-        text.replace("the sprint ends;", "the sprint ends at once;")
+        raised_once(
+            &text.replace("the sprint ends;", "the sprint ends at once;"),
+            "EDGE-SPRINT-EMPTY"
+        )
     );
 }
 

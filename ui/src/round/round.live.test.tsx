@@ -15,7 +15,7 @@ const Q_READ = "2026-10-07T17:49:50Z";
 const D_READ = "2026-10-07T17:40:02Z";
 const STAGED_AT = "2026-10-08T09:12:40Z";
 
-const OWN_ANSWER: Stage = { decision: "approve", option: null, answer: "no, 2 s", canon: null, note: null, span_hash: null };
+const OWN_ANSWER: Stage = { decision: "approve", option: null, answer: "no, 2 s", canon: null, editorial: null, note: null, span_hash: null };
 const REJECT: Stage = { decision: "reject", reason: "dup" };
 
 function sheet(): RoundSheet {
@@ -137,7 +137,7 @@ describe("the round POST over the daemon (U-04)", () => {
     expect(urlsOf(fetchStub).filter((url) => url.endsWith("/answers"))).toEqual(["/api/projects/example/round/answers"]);
     expect(post?.[1]?.body).toBe(
       '{"project":"example","answers":[' +
-        `{"id":"PR-0003","stage":{"decision":"approve","option":null,"answer":"no, 2 s","canon":null,"note":null,"updated_at":"${Q_READ}"}},` +
+        `{"id":"PR-0003","stage":{"decision":"approve","option":null,"answer":"no, 2 s","canon":null,"editorial":null,"note":null,"updated_at":"${Q_READ}"}},` +
         `{"id":"PR-0005","stage":{"decision":"reject","reason":"dup","updated_at":"${D_READ}"}}]}`,
     );
     expect(post?.[1]?.headers).toEqual({ Accept: "application/json", "Content-Type": "application/json" });
@@ -212,7 +212,7 @@ describe("this tab's own writes (U-06)", () => {
     emit("proposal.staged", { id: "PR-0003", staged: OWN_ANSWER, staged_at: STAGED_AT }, 61);
     emit("proposal.staged", { id: "PR-0005", staged: REJECT, staged_at: STAGED_AT }, 62);
     expect(screen.queryByText(/outside this tab/)).toBeNull();
-    emit("proposal.staged", { id: "PR-0005", staged: { decision: "approve", option: 1, answer: null, canon: null, note: null, span_hash: null }, staged_at: "2026-10-08T09:20:00Z" }, 63);
+    emit("proposal.staged", { id: "PR-0005", staged: { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: null, span_hash: null }, staged_at: "2026-10-08T09:20:00Z" }, 63);
     const alert = (await screen.findByText("The staged decision on PR-0005 changed outside this tab")).closest('[role="alert"]');
     expect(alert?.textContent).toContain("2026-10-08T09:20:00Z");
   });

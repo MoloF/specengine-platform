@@ -619,7 +619,7 @@ fn a_corrupt_create_row_names_its_column() {
 /// docs/features/proposal-kinds.md, kept). M: a column or a schema bump.
 #[test]
 fn ac14_creates_keep_schema_3_and_40_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 6);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
     assert_eq!(PROPOSAL_COLUMNS.len(), 44);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);
     let scratch = Scratch::new("qk-schema");
@@ -637,7 +637,7 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "44"

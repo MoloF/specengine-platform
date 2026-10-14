@@ -1,7 +1,7 @@
 {
   "Project": ["slug", "name", "root", "branch"],
   "InboxEntry": ["id", "kind", "status", "target_id", "target_ids", "branch", "created_at", "rationale", "severity", "summary", "record_id", "staged_at"],
-  "Proposal": ["id", "project", "kind", "status", "target_id", "target_path", "worktree", "branch", "base_commit", "base_hash", "base_text", "new_text", "patch_hash", "rationale", "author", "diagnostics", "diff", "preview", "conflict", "decided_by", "decided_at", "decision_note", "applied_commit", "created_at", "updated_at", "target_ids", "severity", "gap_type", "summary", "working_answer", "price_of_other", "evidence", "options", "recommendation", "distinct_from", "linked", "record_id", "record_path", "record_title", "record_text", "choice", "task_id", "staged", "staged_at", "interpretation", "notes"],
+  "Proposal": ["id", "project", "kind", "status", "target_id", "target_path", "worktree", "branch", "base_commit", "base_hash", "base_text", "new_text", "patch_hash", "rationale", "author", "diagnostics", "diff", "preview", "conflict", "revisions", "decided_by", "decided_at", "decision_note", "applied_commit", "created_at", "updated_at", "target_ids", "severity", "gap_type", "summary", "working_answer", "price_of_other", "evidence", "options", "recommendation", "distinct_from", "linked", "record_id", "record_path", "record_title", "record_text", "choice", "task_id", "staged", "staged_at", "interpretation", "notes"],
   "NodeView": ["ref", "reason", "notes", "nodes"],
   "SearchHit": ["id", "kind", "title", "path", "line", "ord", "archived", "snippet"],
   "BundleView": ["refs", "reason", "notes", "task", "budget", "tokens", "chars", "bytes", "bundle_hash", "body", "layers", "tail", "more"],
@@ -31,7 +31,7 @@
   "TaskRun": ["run", "role", "started_at", "ended_at", "outcome", "summary", "changed_files"],
   "TaskBundle": ["node_ids", "budget", "bundle_hash"],
   "Author": ["type", "role", "model", "run"],
-  "StagedApprove": ["decision", "option", "answer", "canon", "note", "span_hash"],
+  "StagedApprove": ["decision", "option", "answer", "canon", "editorial", "note", "span_hash"],
   "StagedReject": ["decision", "reason"],
   "RoundSheet": ["project", "items", "more", "minutes", "notes"],
   "RoundItem": ["id", "kind", "severity", "gap_type", "summary", "working_answer", "price_of_other", "options", "recommendation", "evidence", "targets", "tasks", "worktree", "branch", "author", "staged", "staged_at", "created_at", "updated_at"],
@@ -42,5 +42,6 @@
   "Interpretation": ["decision", "how", "why"],
   "HealthReport": ["documents", "amendments", "notes"],
   "UnappliedAmendment": ["path", "id", "title", "class", "status", "links"],
-  "ShownLink": ["type", "origin", "at", "name", "written", "path", "line", "state", "reason"]
+  "ShownLink": ["type", "origin", "at", "name", "written", "path", "line", "state", "reason"],
+  "RevisionRow": ["id", "rev", "to", "lock_entries", "refused"]
 }

@@ -76,6 +76,7 @@ fn approve_body(
         option,
         answer,
         canon: None,
+        editorial: None,
         note,
         updated_at,
     }
@@ -221,12 +222,13 @@ fn ac07_a_staged_approve_is_shown_and_confirmed_on_a_terminal() {
             option: Some(1),
             answer: None,
             canon: None,
+            editorial: false,
             note: Some("n".to_owned()),
             span_hash: None,
         })
     );
     let stored = "{\"decision\":\"approve\",\"option\":1,\"answer\":null,\"canon\":null,\
-                  \"note\":\"n\",\"span_hash\":null}";
+                  \"editorial\":null,\"note\":\"n\",\"span_hash\":null}";
     assert_eq!(stage_columns(&pair, &id), format!("{stored}|{STAGED}"));
     let base = pair.rev(&pair.linked, "t1");
 
@@ -573,6 +575,7 @@ fn ac10_a_stage_replaced_between_the_question_and_y_is_refused() {
             option: None,
             answer: None,
             canon: None,
+            editorial: false,
             note: Some("second".to_owned()),
             span_hash: None,
         }),
@@ -634,6 +637,7 @@ fn ac10_a_stage_replaced_between_the_question_and_y_is_refused() {
                 option: Some(2),
                 answer: None,
                 canon: None,
+                editorial: false,
                 note: None,
                 span_hash: None,
             }),
@@ -692,6 +696,7 @@ fn ac10_a_stage_replaced_before_a_completion_records_nothing() {
                     option: None,
                     answer: None,
                     canon: None,
+                    editorial: false,
                     note: Some("by someone else".to_owned()),
                     span_hash: None,
                 }),
@@ -801,6 +806,7 @@ fn ac11_a_target_changed_after_the_stage_is_noted_and_applied_as_it_rebases() {
             option: None,
             answer: None,
             canon: None,
+            editorial: false,
             note: None,
             span_hash: Some(then.clone()),
         }),
@@ -845,9 +851,10 @@ fn ac11_a_target_changed_after_the_stage_is_noted_and_applied_as_it_rebases() {
         questions,
         [format!(
             "staged {STAGED}: spec approve {id}\nnote: {note}\napply {id} to {} on t1 in {} \
-             (rebases, staged)? [y/N]",
+             (rebases; raises {} 1 -> 2, staged)? [y/N]",
             case.path,
-            pair.linked.display()
+            pair.linked.display(),
+            case.target
         )]
     );
     assert_eq!(pair.proposal(&id).status, ProposalStatus::Applied);
@@ -905,10 +912,11 @@ fn ac11_a_target_changed_only_before_the_stage_gives_no_note() {
     assert_eq!(
         questions,
         [format!(
-            "staged {STAGED}: spec approve {id}\napply {id} to {} on t1 in {} (rebases, \
-             staged)? [y/N]",
+            "staged {STAGED}: spec approve {id}\napply {id} to {} on t1 in {} (rebases; raises \
+             {} 1 -> 2, staged)? [y/N]",
             case.path,
-            pair.linked.display()
+            pair.linked.display(),
+            case.target
         )]
     );
 }
@@ -961,6 +969,7 @@ fn ac11_a_file_form_create_stages_no_span_hash_and_a_section_form_its_targets() 
             option: None,
             answer: None,
             canon: None,
+            editorial: false,
             note: Some("ok".to_owned()),
             span_hash: None,
         })
@@ -1009,17 +1018,17 @@ fn ac02_a_queue_of_a_newer_schema_exits_2_naming_both() {
     let pair = Pair::new("ds-ac02", "spec-a");
     let case = &CASES[0];
     pair.propose_edit(&pair.linked, case.target, case.first.0, case.first.1);
-    pair.sql("PRAGMA user_version = 7;");
+    pair.sql("PRAGMA user_version = 8;");
     for args in [vec!["inbox"], vec!["review", "PR-0001"]] {
         let run = pair.spec_piped(&pair.main, &args, b"");
         run.code(2);
         assert!(
-            run.stderr.contains("schema version 7, this build knows 6"),
+            run.stderr.contains("schema version 8, this build knows 7"),
             "{args:?}: {}",
             run.show()
         );
     }
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "7", "left alone");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "8", "left alone");
 }
 
 // ------------------------------------------------------------------ AC-12
@@ -1136,7 +1145,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     let bytes = export(&pair, &pair.home, &dumps.join("q.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":2,\"queue_schema\":6,"),
+        rows[0].starts_with("{\"format\":2,\"queue_schema\":7,"),
         "{}",
         rows[0]
     );
@@ -1183,7 +1192,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let v6 = lines(&current);
     assert_eq!(
         v6[0],
-        "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"events\":1}"
     );
     let tail = ",\"staged\":null,\"staged_at\":null,\"interpretation\":null}}";
@@ -1198,7 +1207,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // current dump.
     let interpretation = ",\"interpretation\":null}}";
     let mut v5 = v6.clone();
-    v5[0] = v5[0].replacen("\"queue_schema\":6,", "\"queue_schema\":5,", 1);
+    v5[0] = v5[0].replacen("\"queue_schema\":7,", "\"queue_schema\":5,", 1);
     v5[1] = format!("{}}}}}", &v5[1][..v5[1].len() - interpretation.len()]);
     let file = write("v5.jsonl", &v5);
     let home = pair.scratch.home("v5");
@@ -1208,7 +1217,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // Format 2, schema 4: its 41 columns; restores, the stage NULL, and
     // re-exports as the current dump.
     let mut v4 = v6.clone();
-    v4[0] = v4[0].replacen("\"queue_schema\":6,", "\"queue_schema\":4,", 1);
+    v4[0] = v4[0].replacen("\"queue_schema\":7,", "\"queue_schema\":4,", 1);
     v4[1] = format!("{}}}}}", &v4[1][..v4[1].len() - tail.len()]);
     let file = write("v4.jsonl", &v4);
     let home = pair.scratch.home("v4");
@@ -1232,7 +1241,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
         (
             "format-2-schema-3",
             v2_at_3,
-            "(it holds queue schemas 4 to 6)",
+            "(it holds queue schemas 4 to 7)",
         ),
     ] {
         let file = write(&format!("{name}.jsonl"), &rows);
@@ -1268,7 +1277,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let bytes = export(&pair, &pair.home, &dumps.join("from-4.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
+        rows[0].starts_with("{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
         "{}",
         rows[0]
     );
@@ -1301,6 +1310,7 @@ fn a_question_staged_with_an_answer_and_canon_is_recorded_with_them() {
         option: None,
         answer: Some("No, it waits.".to_owned()),
         canon: Some("EDGE-STAM-ZERO".to_owned()),
+        editorial: None,
         note: None,
         updated_at,
     };
@@ -1450,8 +1460,8 @@ fn a_staged_value_with_lf_cr_or_tab_is_shown_on_one_line() {
         questions,
         [format!(
             "staged {STAGED}: spec approve {update} --note \"line one\\nline two\\tend\"\napply \
-             {update} to {} on t1 in {worktree} (applies, staged)? [y/N]",
-            case.path
+             {update} to {} on t1 in {worktree} (applies; raises {} 1 -> 2, staged)? [y/N]",
+            case.path, case.target
         )]
     );
     one_staged_line(&questions[0], &format!("apply {update} to "));
@@ -1546,6 +1556,7 @@ fn a_completion_refuses_a_stage_that_changed_during_the_question() {
         option: None,
         answer: None,
         canon: None,
+        editorial: false,
         note: Some("from a page".to_owned()),
         span_hash: None,
     };

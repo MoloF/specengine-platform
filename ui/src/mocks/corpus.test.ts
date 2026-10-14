@@ -253,7 +253,7 @@ describe("scenarios and decisions", () => {
     const client = mock();
     const before = await client.getNode("harbor-sim", "RULE-BERTH-DRAFT");
     const read = (await client.getProposal("harbor-sim", "PR-0042")).updated_at ?? "";
-    await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, note: null }, read);
+    await client.stageDecision("harbor-sim", "PR-0042", { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null }, read);
     expect(await client.getNode("harbor-sim", "RULE-BERTH-DRAFT")).toEqual(before);
   });
 });

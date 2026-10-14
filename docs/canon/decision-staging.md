@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-14
 ---
 
 # Decision staging: UI prepares, terminal confirms
@@ -22,23 +22,23 @@ ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), b
 `staged`, compact JSON, keys in this order, one of:
 
 ```json
-{"decision":"approve","option":1,"answer":null,"canon":null,"note":"keep the cap","span_hash":null}
+{"decision":"approve","option":1,"answer":null,"canon":null,"editorial":null,"note":"keep the cap","span_hash":null}
 {"decision":"reject","reason":"duplicate of PR-0003"}
 ```
 
-An approve's absent flags are `null`. `span_hash`: an `update`'s, `interpretation`'s or section-form `create`'s target span hash as apply step 5 reads it (steps 2-6 run read-only, as `spec review`); `null` for a new file (`create`, `amendment`), a deciding kind, and when steps 2-4 cannot read the target or the proposal's own commit is on its branch. `staged_at`: UTC `YYYY-MM-DDTHH:MM:SSZ`.
+An approve's absent flags are `null`; `editorial` `true` or `null` (`proposal-revisions.md` "Stage and UI"). `span_hash`: an `update`'s, `interpretation`'s or section-form `create`'s target span hash as apply step 5 reads it (steps 2-6 run read-only, as `spec review`); `null` for a new file (`create`, `amendment`), a deciding kind, and when steps 2-4 cannot read the target or the proposal's own commit is on its branch. `staged_at`: UTC `YYYY-MM-DDTHH:MM:SSZ`.
 
-Checked as the terminal checks its flags, before anything is stored: the ID and repository (`proposal-queue.md` "Place, IDs, repositories"; another existing repository refused; an orphan takes only a reject, and may be unstaged); state `open` (an applied one's naming its commit); then the `updated_at` the caller read (``` `PR-0004` changed since it was read: updated at <t1>, the choice was made on the one of <t2>; read it again; nothing staged ```); the decision flags (`decide.rs` first checks, `decision-record.md` "Flags": ``--option 5: `PR-0003` has options 0-1; nothing changed``; a decision flag on an applying kind; a question whose only target is a path, no `--canon`: a usage refusal); a blank reason; the caps, `note`, `reason` 4 096 bytes (``--note: <n> bytes; at most 4096; nothing changed``; `spec approve --note`, `spec reject --reason` alike, exit 1), `answer` 2 048, `canon` 512; a character the queue escapes (U+202E, U+0007), named.
+Checked as the terminal checks its flags, before anything is stored: the ID and repository (`proposal-queue.md` "Place, IDs, repositories"; another existing repository refused; an orphan takes only a reject, and may be unstaged); state `open` (an applied one's naming its commit); then the `updated_at` the caller read (``` `PR-0004` changed since it was read: updated at <t1>, the choice was made on the one of <t2>; read it again; nothing staged ```); the decision flags (`decide.rs` first checks, `decision-record.md` "Flags"; a decision flag on an applying kind, `editorial` on a kind writing no existing node, a question whose only target is a path, no `--canon`: a usage refusal); a blank reason; the caps, `note`, `reason` 4 096 bytes (``--note: <n> bytes; at most 4096; nothing changed``; `spec approve --note`, `spec reject --reason` alike, exit 1), `answer` 2 048, `canon` 512; a character the queue escapes (U+202E, U+0007), named.
 
 ## Queue
 
-Queue schema 5 (migration step 5, one transaction adding TEXT `staged`, `staged_at`; `proposal_columns(4)` the first 41): both NULL when nothing is staged. Schema 4 opens as 5, then 6. A migrated queue refuses older binaries (`SchemaTooNew`): restart the daemon, reinstall `specengine-mcp`.
+Queue schema 5 (migration step 5, one transaction adding TEXT `staged`, `staged_at`; `proposal_columns(4)` the first 41): both NULL when nothing is staged. Schema 4 opens as 5, then 6, 7. A migrated queue refuses older binaries (`SchemaTooNew`): restart the daemon, reinstall `specengine-mcp`.
 
 `stage_from(id, seen, stage, now)` sets both (`staged_at`, `updated_at` = `now`) on `open` only, one `Immediate` transaction with `proposal.staged` and a compare-and-set on `Seen {status, updated_at, staged}`; else `Changed`, `Status`, `Invalid` (a stage the kind cannot hold), nothing written. `unstage_from(id, seen, now)` NULLs both with `proposal.unstaged`; nothing staged -> `Ok(false)`, no write, no event. Every op leaving `open` (approve, reject, apply, a completion) NULLs both in its transaction, no `.unstaged`. `approve_from`, `approve_record_from`, `reject_from`, `reject_orphan` compare `staged` too. `Decision {decided_by, note, staged_at}`: `staged_at` the stage it confirms, else `None`; a compare-and-set op refuses one the row does not hold (`Invalid`); `approve`, `reject`, `applied_with` compare nothing (the CLI compares before a completion: "Terminal").
 
 Events `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}`, `proposal.unstaged` `{"id":"PR-0004"}`: seven proposal events, `QUEUE_EVENT_TYPES` 16 (the two after `.apply_failed`). `.approved`, `.rejected` add `"staged_at"` when they confirm a stage.
 
-**Corrupt row**, named (`get`, `list` fail; `inbox` skips it, a note): another shape (a key missing, extra or reordered, a wrong type; an answer on a discrepancy; `option` or `canon` on a kind taking none; `span_hash` on a deciding kind or a new file; a blank reason); one column NULL alone; a stage on a state but `open`.
+**Corrupt row**, named (`get`, `list` fail; `inbox` skips it, a note): another shape (a key missing, extra or reordered, a wrong type; an answer on a discrepancy; `option` or `canon` on a kind taking none; `span_hash` or `editorial` on a deciding kind or a new file; a blank reason); one column NULL alone; a stage on a state but `open`.
 
 **Gap** (the compare-and-set key `updated_at` has 1 s resolution): a stage made in the same second as the UI's read replaces another without a 409; its event still raises the alert ("UI"). The terminal compares the stage itself.
 
@@ -48,7 +48,7 @@ Events `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}`, `p
 
 | On `/api/projects/:p/proposals/:id/decision` | Answer |
 |---|---|
-| `POST`, the stage less `span_hash`, plus `updated_at` as read | 200 the review document; 400 a body that does not decode (``spec: the stage is not ... as JSON: <why>; nothing changed``) or flag usage; 404 unknown; 409 refused, the refused review document; 503 cannot run |
+| `POST`, the stage less `span_hash`, plus `updated_at` as read | 200 the review document; 400 a body that does not decode (why named) or flag usage; 404 unknown; 409 refused, the refused review document; 503 cannot run |
 | `DELETE` | 200 the document, nothing staged too (no event); 404; 409 not `open`, another repository; 503 |
 
 A second POST replaces the stage, one event. Bodies: 404, 409 the review document (exit 1's); 400, 403, 405, 413, 415, 503 the error body `{status, message}`.
@@ -57,7 +57,7 @@ Past the fence (`crates/specengine-http/README.md` "Fence"), in order, nothing r
 
 ## Terminal
 
-`spec approve PR` with no decision flag (nor `--note`) and an approve staged confirms it. On stderr, right before the question: ``staged 2026-10-07T17:49:50Z: spec approve PR-0003 --option 1 --note "n"`` and the chosen option's review line (``  [1] label | effect | price``). Values double-quoted, `\` and `"` backslashed; the staged line stays one line: LF, CR, TAB written `\n`, `\r`, `\t`, every other control escaped. The question's parenthesis ends `, staged`: `(applies, staged)`, `(rebases, staged)`, a new file's `(new file, staged)`, a record's mid-line ``apply PR-0003 as DEC-0024 (option 1, staged) on <branch> in <worktree>? [y/N]``; a completion's gains ` (staged)`. `y` applies with the staged flags, checked again as typed ones, `.approved` carrying `staged_at`; anything else -> exit 1, the stage kept.
+`spec approve PR` with no decision flag (nor `--note`) and an approve staged confirms it. On stderr, right before the question: ``staged 2026-10-07T17:49:50Z: spec approve PR-0003 --option 1 --note "n"`` (`--editorial` last) and the chosen option's review line (``  [1] label | effect | price``). Values double-quoted, `\` and `"` backslashed; the staged line stays one line: LF, CR, TAB written `\n`, `\r`, `\t`, every other control escaped. The question's parenthesis ends `, staged`: `(applies, staged)`, `(rebases, staged)`, a new file's `(new file, staged)`, a record's mid-line ``apply PR-0003 as DEC-0024 (option 1, staged) on <branch> in <worktree>? [y/N]``; a completion's gains ` (staged)`. `y` applies with the staged flags, checked again as typed ones, `.approved` carrying `staged_at`; anything else -> exit 1, the stage kept.
 
 `spec reject PR`: `--reason` may be omitted only when a reject is staged (`RejectRequest.reason` optional); shown alike (``staged <at>: spec reject PR-0005 --reason "..."``, the question ending `, staged)? [y/N]`), its reason stored in `decision_note`. Nothing staged -> exit 2 ``` `spec reject PR` needs `--reason T`: no reject is staged on it; say why the proposal is rejected; nothing changed ```; an approve staged -> exit 2 ``` `PR` has an approve staged at <at>: `spec approve PR` confirms it; `spec reject PR --reason T` rejects it; nothing changed ```.
 
@@ -71,15 +71,12 @@ A staged `span_hash` other than the target's now (step 5) gives ``staged against
 
 ## Documents
 
-The review document: `staged` (the object or `null`), `staged_at` after `task_id` (46 keys); text lines `staged:` (compact JSON), `staged_at:`. Inbox entries: `staged_at` after `record_id` (12 keys); text state `open (staged)`. `fixtures/daemon-keys.json` pins them (the two shapes, 6 and 2 keys). MCP `get_proposal` = `review --brief --json`, its output schema's `staged` two closed objects. Backups keep stages (`queue-backup.md` "Format").
+The review document: `staged` (the object or `null`), `staged_at` after `task_id`, `revisions` after `conflict` (47 keys); text lines `staged:` (compact JSON), `staged_at:`. Inbox entries: `staged_at` after `record_id` (12 keys); text state `open (staged)`. `fixtures/daemon-keys.json` pins them (the two shapes, 7 and 2 keys; 45 sets). MCP `get_proposal` = `review --brief --json`, its output schema's `staged` two closed objects. Backups keep stages (`queue-backup.md` "Format").
 
 ## UI
 
-`stageDecision(project, id, stage, updatedAt)` (POST), `unstageDecision(project, id)` (DELETE), no `AbortSignal`: a write's answer is always taken. The decision dialog stages against the shown version's `updated_at`: Accept an option (`[0]`, `[1]`, as `--option N`) or the working answer, and a note; Reject a reason; no `--answer`, `--canon`; it says when it replaces a staged choice. Clarification and defer send nothing (``Not built yet: only Accept and Reject are staged``). The card's "Staged decision": ``Staged <at>. Confirm on a terminal: spec approve PR-0004`` (a reject: `spec reject PR-0004`) with Copy (fixed words and an ID matching `^PR-[0-9]{4,}$`, else no command), the choice (labels escaped: `shownSlot`), Unstage; the list marks it "Staged"; it stays in the inbox. A 409 or 404 carrying a review document rejects as `ClientError` with its last note; the dialog stays. A stage event re-reads that project's inbox, that proposal and round sheets, no task. A stage changed outside this tab raises a `role="alert"` above every screen of the project (Show, Dismiss): this tab's writes are tracked per `QueryClient`, each accounting for one event, for 60 s; an unstage only when a stage was cached or shown (`round-ui.md`) and no outside stage event arrived since. `StagedChoice`, `DecisionDialog` load lazily. An interpretation's dialog names its decision (`proposal-interpretation.md` "UI"). The mock stages alike; `?scenario=conflict`: a first stage finds one staged elsewhere (409), the next is taken.
+`stageDecision(project, id, stage, updatedAt)` (POST), `unstageDecision(project, id)` (DELETE), no `AbortSignal`: a write's answer is always taken. The decision dialog stages against the shown version's `updated_at`: Accept an option (`[0]`, `[1]`, as `--option N`) or the working answer, and a note; Reject a reason; Editorial: `proposal-revisions.md`; no `--answer`, `--canon`; it says when it replaces a staged choice. Clarification and defer send nothing (``Not built yet: only Accept and Reject are staged``). The card's "Staged decision": ``Staged <at>. Confirm on a terminal: spec approve PR-0004`` (a reject: `spec reject PR-0004`) with Copy (fixed words and an ID matching `^PR-[0-9]{4,}$`, else no command), the choice (labels escaped: `shownSlot`), Unstage; the list marks it "Staged"; it stays in the inbox. A 409 or 404 carrying a review document rejects as `ClientError` with its last note; the dialog stays. A stage event re-reads that project's inbox, that proposal and round sheets, no task. A stage changed outside this tab raises a `role="alert"` above every screen of the project (Show, Dismiss): this tab's writes are tracked per `QueryClient`, each accounting for one event, for 60 s; an unstage only when a stage was cached or shown (`round-ui.md`) and no outside stage event arrived since. An interpretation's dialog names its decision (`proposal-interpretation.md` "UI"). The mock stages alike; `?scenario=conflict`: a first stage finds one staged elsewhere (409), the next is taken.
 
 ## Threat model
 
-- Any local process of any account can read everything served and stage (loopback is not per-user); the fence stops other sites' pages. `specengine-http` is a queue writer.
-- None confirms from an ordinary shell; a process faking a terminal (`script`) can, as with flags today.
-- Residual: a reflex `y` on a stage an agent or a page injected. Mitigations: the whole choice and its time on one line before the key, the outside-change alert, the event log, no MCP stage tool, the header rule.
-- Hosting or a shared machine: infrastructure first (ADR-0034).
+`serve.md` "Trust": any local process may read and stage, the fence stops other sites' pages, none confirms from an ordinary shell (one faking a terminal can), hosting needs infrastructure first. `specengine-http` is a queue writer. Residual: a reflex `y` on a stage an agent or a page injected. Mitigations: the whole choice and its time on one line before the key, the outside-change alert, the event log, no MCP stage tool, the header rule.

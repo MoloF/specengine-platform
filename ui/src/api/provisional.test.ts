@@ -18,6 +18,7 @@ import type {
   GraphView,
   OwnerNote,
   Proposal,
+  RevisionChange,
   SearchHit,
   SearchResults,
   ShownNode,
@@ -609,18 +610,60 @@ describe("the stage's types (AC-14 of decision-staging)", () => {
   });
 
   it("type a staged choice as one of the canon's two shapes, an approve's absent flags null", () => {
-    const approve: Stage = { decision: "approve", option: 1, answer: null, canon: null, note: "keep the cap", span_hash: null };
+    const approve: Stage = { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "keep the cap", span_hash: null };
     const reject: Stage = { decision: "reject", reason: "duplicate of PR-0003" };
     expect([Object.keys(approve), Object.keys(reject)]).toEqual([
-      ["decision", "option", "answer", "canon", "note", "span_hash"],
+      ["decision", "option", "answer", "canon", "editorial", "note", "span_hash"],
       ["decision", "reason"],
     ]);
     // What the UI sends: the stage less span_hash, which the daemon reads itself.
-    const sent: StageChoice = { decision: "approve", option: null, answer: null, canon: null, note: null };
-    expect(Object.keys(sent)).toEqual(["decision", "option", "answer", "canon", "note"]);
+    const sent: StageChoice = { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null };
+    expect(Object.keys(sent)).toEqual(["decision", "option", "answer", "canon", "editorial", "note"]);
   });
 
   it("keep no decision, commit or apply result: the UI never decides (ADR-0035)", () => {
     expect(source).not.toMatch(/export (type|interface) (Decision|DecisionResult|Commit)\b/);
+  });
+});
+
+/** This slice's spec (UI-4 of docs/features/rev-discipline.md). */
+const REV_DISCIPLINE = '`docs/features/rev-discipline.md` "Review document, stage, queue"';
+
+describe("the revision types (UI-4 of rev-discipline)", () => {
+  it.each(["StagedApprove", "Proposal", "RevisionChange"])("%s cites the slice's Review document, stage, queue", (type) => {
+    expect(commentOf(type)).toContain(REV_DISCIPLINE);
+  });
+
+  it("gives a revisions entry exactly the spec's five keys, in its order: id, rev, to, lock_entries, refused", () => {
+    const keys = { id: true, rev: true, to: true, lock_entries: true, refused: true } satisfies Record<keyof RevisionChange, true>;
+    const entry: RevisionChange = { id: "R-12", rev: 3, to: 4, lock_entries: 2, refused: null };
+    expect([Object.keys(keys), Object.keys(entry)]).toEqual([
+      ["id", "rev", "to", "lock_entries", "refused"],
+      ["id", "rev", "to", "lock_entries", "refused"],
+    ]);
+    // An unreadable lock: the count null, a note saying why.
+    const unread: RevisionChange = { id: "R-12", rev: 3, to: 4, lock_entries: null, refused: null };
+    expect(unread.lock_entries).toBeNull();
+  });
+
+  it("types a refused raise: to null, refused the daemon's reason (Q15 of rev-discipline)", () => {
+    const refused: RevisionChange = {
+      id: "ADR-0007",
+      rev: 1,
+      to: null,
+      lock_entries: 0,
+      refused: "`ADR-0007`: class `decision` is closed and does not admit `rev`: admit it in [classes], or approve with --editorial",
+    };
+    expect([refused.to, refused.refused]).toEqual([null, expect.stringContaining("--editorial")]);
+    expect(source).toMatch(/^  to: number \| null;\n  lock_entries: number \| null;\n  refused: string \| null;\n\}$/m);
+  });
+
+  it("types the review's revisions as a list or null, and the stage's editorial as true or null, never false", () => {
+    const none: Pick<Proposal, "revisions"> = { revisions: null };
+    const unchanged: Pick<Proposal, "revisions"> = { revisions: [] };
+    expect([none.revisions, unchanged.revisions]).toEqual([null, []]);
+    const editorial: Extract<StageChoice, { decision: "approve" }>["editorial"][] = [true, null];
+    expect(editorial).toEqual([true, null]);
+    expect(source).toMatch(/^  editorial: true \| null;$/m);
   });
 });

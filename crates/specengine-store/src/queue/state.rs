@@ -16,7 +16,8 @@ use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::INTERPRETATION_KIND;
 
 use super::{
-    ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, corrupt, migrate, tasks, user_version,
+    ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, corrupt, migrate, stage, tasks,
+    user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -101,8 +102,8 @@ const SCHEMA_4_COLUMNS: usize = 41;
 const SCHEMA_5_COLUMNS: usize = 43;
 
 /// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3, 4, 5 and 6 (this build's) are known, a dump of any restores; `None`
-/// for any other.
+/// 3, 4, 5, 6 and 7 (this build's; 6 → 7 adds no column) are known, a dump
+/// of any restores; `None` for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
@@ -110,10 +111,14 @@ pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
         3 => Some(&PROPOSAL_COLUMNS[..SCHEMA_3_COLUMNS]),
         4 => Some(&PROPOSAL_COLUMNS[..SCHEMA_4_COLUMNS]),
         5 => Some(&PROPOSAL_COLUMNS[..SCHEMA_5_COLUMNS]),
-        QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
+        INTERPRETATION_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
 }
+
+/// The queue schema that added the last column (step 5 → 6): every later
+/// one has [`PROPOSAL_COLUMNS`].
+const INTERPRETATION_SCHEMA: i64 = 6;
 
 /// Every column of `tasks`, in table order (`docs/canon/tasks.md` "Store"),
 /// all `TEXT` (`revision` a decimal counter from 1).
@@ -507,6 +512,9 @@ impl SqliteQueue {
                     .db()?;
             }
         }
+        // A dump of queue schema 6 holds its open approve stages in that
+        // schema's shape: rewritten as step 6 → 7 rewrites them.
+        stage::upgrade_stages(&tx)?;
         tx.commit().db()?;
         Ok(Restore::Restored)
     }

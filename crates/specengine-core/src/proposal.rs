@@ -287,6 +287,83 @@ pub fn commit_message_interpreting(
     facts: &CommitFacts<'_>,
     interprets: Option<&Interprets<'_>>,
 ) -> String {
+    commit_message_raising(facts, interprets, &ApplyTrailers::default())
+}
+
+/// The trailer recording a revision at apply (task spec `rev-discipline`):
+/// `Revision: R-12 3 -> 4` (raised), `Revision: R-12 3 (editorial)` (kept).
+pub const REVISION_TRAILER: &str = "Revision";
+
+/// The trailer naming a node whose `spec.lock` entries a commit sets.
+pub const LOCK_TRAILER: &str = "Lock";
+
+/// The trailer saying how a commit set `spec.lock`: `accept` or
+/// [`EDITORIAL`].
+pub const LOCK_MODE_TRAILER: &str = "Lock-mode";
+
+/// The owner's call that a change is editorial: `spec approve --editorial`,
+/// a staged approve's key, `Lock-mode: editorial`.
+pub const EDITORIAL: &str = "editorial";
+
+/// One node whose meaning an apply changes: its canonical ID, its revision
+/// as read, and what it was raised to (`None`: kept, an editorial approve).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Revised<'a> {
+    pub id: &'a str,
+    pub rev: u32,
+    pub to: Option<u32>,
+}
+
+/// The trailers an apply commit adds after `Base-commit:` and before
+/// `Interprets:`: a `Revision:` per node whose meaning changes (`revised`,
+/// file order), a `Lock:` per node whose `spec.lock` entries it sets
+/// (`locked`), then one `Lock-mode: editorial` when any is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ApplyTrailers<'a> {
+    pub revised: &'a [Revised<'a>],
+    pub locked: &'a [&'a str],
+}
+
+impl ApplyTrailers<'_> {
+    /// The trailer lines, each ending in LF.
+    fn lines(&self) -> String {
+        let mut out = String::new();
+        for revised in self.revised {
+            match revised.to {
+                Some(to) => out.push_str(&format!(
+                    "{REVISION_TRAILER}: {} {} -> {to}\n",
+                    revised.id, revised.rev
+                )),
+                None => out.push_str(&format!(
+                    "{REVISION_TRAILER}: {} {} ({EDITORIAL})\n",
+                    revised.id, revised.rev
+                )),
+            }
+        }
+        for id in self.locked {
+            out.push_str(&format!("{LOCK_TRAILER}: {id}\n"));
+        }
+        if !self.locked.is_empty() {
+            out.push_str(&format!("{LOCK_MODE_TRAILER}: {EDITORIAL}\n"));
+        }
+        out
+    }
+}
+
+/// [`commit_message_interpreting`] with an apply's revision and lock
+/// trailers (`trailers`) after `Base-commit:`, `Interprets:` still last:
+///
+/// ```text
+/// Base-commit: <hex>
+/// Revision: R-12 3 (editorial)
+/// Lock: R-12
+/// Lock-mode: editorial
+/// ```
+pub fn commit_message_raising(
+    facts: &CommitFacts<'_>,
+    interprets: Option<&Interprets<'_>>,
+    trailers: &ApplyTrailers<'_>,
+) -> String {
     let (body, trailer) = match interprets {
         Some(interprets) => (
             format!(
@@ -299,12 +376,13 @@ pub fn commit_message_interpreting(
     };
     format!(
         "{COMMIT_SUBJECT} {id}\n\n{rationale}{body}\n\n{PROPOSAL_TRAILER}: {id}\nDecided-by: \
-         {decided_by}\nProposed-by: {provenance}\nBase-commit: {base}\n{trailer}",
+         {decided_by}\nProposed-by: {provenance}\nBase-commit: {base}\n{applied}{trailer}",
         id = facts.id,
         rationale = facts.rationale,
         decided_by = facts.decided_by,
         provenance = facts.author.provenance(),
         base = facts.base_commit,
+        applied = trailers.lines(),
     )
 }
 

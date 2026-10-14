@@ -421,6 +421,10 @@ pub(crate) struct ReviewDocument {
     pub preview: Option<Preview>,
     /// `null` in a brief answer.
     pub conflict: Option<String>,
+    /// Per node whose meaning the change alters (task spec
+    /// `rev-discipline`); `null` when the kind writes no existing node or
+    /// the preview conflicts or is unavailable.
+    pub revisions: Option<Vec<RevisionShape>>,
     pub decided_by: Option<String>,
     pub decided_at: Option<String>,
     pub decision_note: Option<String>,
@@ -470,6 +474,21 @@ pub(crate) struct InterpretationShape {
     pub why: String,
 }
 
+/// A node whose meaning a proposal changes: its revision read now, what a
+/// meaning approve raises it to (`null` when refused), the `spec.lock`
+/// entries an editorial one refreshes (`null` when the lock cannot be
+/// read) and why a meaning approve refuses the raise (`null` when it
+/// raises; the reason names `--editorial`).
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct RevisionShape {
+    pub id: String,
+    pub rev: u32,
+    pub to: Option<u32>,
+    pub lock_entries: Option<u64>,
+    pub refused: Option<String>,
+}
+
 /// A staged choice (`docs/canon/decision-staging.md` "The stage"): one of
 /// two closed objects.
 #[derive(JsonSchema)]
@@ -490,6 +509,8 @@ pub(crate) struct StagedApprove {
     pub answer: Option<String>,
     /// The section its record governs.
     pub canon: Option<String>,
+    /// `true`: approved as editorial, revisions kept; else `null`.
+    pub editorial: Option<bool>,
     pub note: Option<String>,
     /// The target's span hash when staged (an update's or a section-form
     /// create's).

@@ -1,8 +1,9 @@
-//! `spec verify [--changed] [--json]` (task spec `spec-verify`,
-//! "Command and rows", "Verdict and exit", "Output"): drift between
-//! `spec.lock` and the tree, one row per lock key, each with a state and a
-//! class (Fix, Check, Cannot), Pre-existing with `--changed` when `HEAD`
-//! gives the same; the verdict and exit under `[verify] mode` (canon
+//! `spec verify [--changed] [--json]`
+//! (canon `spec-verify`, "Rows", "Verdict and exit"; canon
+//! `spec-verify-output`, "Hints"): drift between `spec.lock`
+//! and the tree, one row per lock key, each with a state and a class (Fix,
+//! Check, Cannot), Pre-existing with `--changed` when `HEAD` gives the
+//! same; the verdict and exit under `[verify] mode` (canon
 //! `architecture-code`, "Drift: `spec verify`"). Read-only: only the data
 //! directory is written (the index refresh); never `spec.lock`, the
 //! worktree, a git object, a queue row or an event.
@@ -547,10 +548,10 @@ fn row_line(row: &VerifyRow) -> String {
 }
 
 /// The next step for text changed at the locked revision (accept refuses
-/// it).
-const SAME_REVISION_STEP: &str = "the node's text changed at its locked revision: `spec lock \
-     accept <ID> --editorial` for an editorial change, else a proposal raising its `rev` first \
-     (accept refuses text changed at a revision)";
+/// it): no proposal raises a revision, approval sets it.
+const SAME_REVISION_STEP: &str = "the node's text changed at its locked revision: raise its \
+     `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock \
+     accept <ID> --editorial`); accept refuses text changed at a revision";
 
 /// One hint per state and category present (`unlocked key_problem` apart):
 /// the next step, as accept takes it.
@@ -640,7 +641,7 @@ fn hints(rows: &[VerifyRow]) -> Vec<String> {
                     if conflicts.1 {
                         steps.push(
                             "at a revision the lock does not hold, the marker not raised: \
-                             check the code against the node, raise the marker to its \
+                             check the code against the node, set the marker to its \
                              revision, commit, then `spec lock accept <ID>` on a terminal",
                         );
                     }

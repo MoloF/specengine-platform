@@ -264,7 +264,7 @@ describe("controls by structure, nothing picked (U-03)", () => {
     expect(stageButton().textContent).toBe("Stage 1 answer");
     fireEvent.click(stageButton());
     await waitFor(() => {
-      expect(posted(client)).toEqual([[{ id: "PR-0005", stage: { decision: "approve", option: 2, answer: null, canon: null, note: null, updated_at: T0 } }]]);
+      expect(posted(client)).toEqual([[{ id: "PR-0005", stage: { decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: null, updated_at: T0 } }]]);
     });
   });
 });
@@ -294,9 +294,9 @@ describe("one POST; refused drafts stay, staged ones clear (U-04)", () => {
     });
     expect(client.stageRoundAnswers.mock.calls[0]?.[0]).toBe("alpha");
     expect(JSON.stringify(posted(client)[0])).toBe(
-      `[{"id":"PR-0003","stage":{"decision":"approve","option":null,"answer":null,"canon":null,"note":null,"updated_at":"${T0}"}},` +
+      `[{"id":"PR-0003","stage":{"decision":"approve","option":null,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"${T0}"}},` +
         `{"id":"PR-0005","stage":{"decision":"reject","reason":"dup","updated_at":"${T0}"}},` +
-        `{"id":"PR-0007","stage":{"decision":"approve","option":null,"answer":"no,\\n2 s","canon":null,"note":null,"updated_at":"${T0}"}}]`,
+        `{"id":"PR-0007","stage":{"decision":"approve","option":null,"answer":"no,\\n2 s","canon":null,"editorial":null,"note":null,"updated_at":"${T0}"}}]`,
     );
   });
 
@@ -307,7 +307,7 @@ describe("one POST; refused drafts stay, staged ones clear (U-04)", () => {
       client.state.round = {
         ...client.state.round,
         items: client.state.round.items.map((item) =>
-          item.id === "PR-0003" ? { ...item, staged: { decision: "approve", option: null, answer: null, canon: null, note: null, span_hash: null }, staged_at: STAGED_AT, updated_at: STAGED_AT } : item,
+          item.id === "PR-0003" ? { ...item, staged: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, span_hash: null }, staged_at: STAGED_AT, updated_at: STAGED_AT } : item,
         ),
       };
       return Promise.resolve({
@@ -315,7 +315,7 @@ describe("one POST; refused drafts stay, staged ones clear (U-04)", () => {
         answers: answers.map(({ id }) =>
           id === "PR-0005"
             ? { id, outcome: "refused", stage: null, staged_at: null, replaced: null, reason }
-            : { id, outcome: "staged", stage: { decision: "approve", option: null, answer: null, canon: null, note: null, span_hash: null }, staged_at: STAGED_AT, replaced: null, reason: null },
+            : { id, outcome: "staged", stage: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, span_hash: null }, staged_at: STAGED_AT, replaced: null, reason: null },
         ),
         notes: ["PR-0001: a corrupt row (the stage's shape); not listed"],
       });
@@ -486,7 +486,7 @@ describe("the terminal step (U-07)", () => {
   it("Copy takes exactly `spec round answer --staged`, the root shown, never copied; per-item commands only for PR-<4+ digits>", async () => {
     const writeText = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    const stage = { decision: "approve", option: null, answer: null, canon: null, note: null, span_hash: null } as const;
+    const stage = { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, span_hash: null } as const;
     const items = [
       aRoundItem({ id: "PR-0003", staged: stage, staged_at: "2026-10-07T17:49:50Z" }),
       aRoundItem({ id: "PR-12", staged: { decision: "reject", reason: "dup" }, staged_at: "2026-10-07T17:50:00Z" }),
@@ -705,7 +705,7 @@ describe("a pick the revised item no longer offers (review minor 1)", () => {
     fireEvent.click(within(card("PR-0003")).getByRole("radio", { name: /^\[1\]/ }));
     fireEvent.click(stageButton());
     await waitFor(() => {
-      expect(posted(client)).toEqual([[{ id: "PR-0003", stage: { decision: "approve", option: 1, answer: null, canon: null, note: null, updated_at: T1 } }]]);
+      expect(posted(client)).toEqual([[{ id: "PR-0003", stage: { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: null, updated_at: T1 } }]]);
     });
   });
 });
@@ -820,7 +820,7 @@ describe("a staged option's label as the sheet writes it (review minor 4)", () =
     const item = aRoundItem({
       id: "PR-0005",
       options: [{ label: `left ${RLO}right`, effect: "e", price: "p" }],
-      staged: { decision: "approve", option: 0, answer: null, canon: null, note: null, span_hash: null },
+      staged: { decision: "approve", option: 0, answer: null, canon: null, editorial: null, note: null, span_hash: null },
       staged_at: "2026-10-07T17:49:50Z",
     });
     const { client } = serving(aRoundSheet([item]));

@@ -704,6 +704,43 @@ fn repeated_key(text: &str) -> String {
     format!("key `{text}` repeats an earlier key of the same mapping")
 }
 
+/// Where a document's revision is written: the file range of its
+/// top-level `rev:` value as the YAML reader spans it, and the file offset
+/// where its `id:` value (else its key) ends.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RevSites {
+    pub rev: Option<Range<usize>>,
+    pub id_end: Option<usize>,
+}
+
+/// The [`RevSites`] of the file `text`; `None` when it has no closed block
+/// or its YAML is no mapping that reads.
+pub(crate) fn rev_sites(text: &str) -> Option<RevSites> {
+    let block = split(text).block?;
+    let start = block.yaml.start;
+    let root = yaml::parse(text.get(block.yaml.clone())?).ok()?;
+    let YValue::Map(entries) = root.value else {
+        return None;
+    };
+    let in_file = |span: &Option<Range<usize>>| {
+        span.as_ref()
+            .map(|span| start + span.start..start + span.end)
+    };
+    let mut sites = RevSites::default();
+    for (key, value) in &entries {
+        match key.value.scalar_text().as_deref() {
+            Some(crate::revision::REV_KEY) => sites.rev = in_file(&value.span),
+            Some("id") => {
+                sites.id_end = in_file(&value.span)
+                    .or_else(|| in_file(&key.span))
+                    .map(|span| span.end);
+            }
+            _ => {}
+        }
+    }
+    Some(sites)
+}
+
 /// A float as a front-matter value: finite as itself, NaN and ±infinity
 /// (any YAML spelling, an overflowing literal) as the YAML text `.nan`,
 /// `.inf`, `-.inf`, so every [`FmValue::Float`] is finite and survives a

@@ -152,13 +152,13 @@ describe("each method hits its URL (AC-09)", () => {
     await new HttpClient().stageDecision(
       "alpha",
       "PR-0004",
-      { decision: "approve", option: 2, answer: null, canon: null, note: "keep the cap" },
+      { decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: "keep the cap" },
       "2026-10-06T09:14:02Z",
     );
     expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/proposals/PR-0004/decision"]);
     const init = fetchStub.mock.calls[0]?.[1];
     expect(init?.method).toBe("POST");
-    expect(init?.body).toBe('{"decision":"approve","option":2,"answer":null,"canon":null,"note":"keep the cap","updated_at":"2026-10-06T09:14:02Z"}');
+    expect(init?.body).toBe('{"decision":"approve","option":2,"answer":null,"canon":null,"editorial":null,"note":"keep the cap","updated_at":"2026-10-06T09:14:02Z"}');
     expect(init?.headers).toEqual({ Accept: "application/json", "Content-Type": "application/json" });
   });
 
@@ -432,13 +432,13 @@ describe("answers (AC-09)", () => {
   it("resolves a stage's and an unstage's 200 to the review document as sent", async () => {
     const staged = aProposal({
       id: "PR-0004",
-      staged: { decision: "approve", option: 1, answer: null, canon: null, note: "n", span_hash: null },
+      staged: { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "n", span_hash: null },
       staged_at: "2026-10-06T09:14:02Z",
       updated_at: "2026-10-06T09:14:02Z",
     });
     stubFetch((_url, init) => jsonAnswer(200, init?.method === "DELETE" ? { ...staged, staged: null, staged_at: null } : staged));
     const client = new HttpClient();
-    expect(await client.stageDecision("alpha", "PR-0004", { decision: "approve", option: 1, answer: null, canon: null, note: "n" }, "2026-10-06T09:00:00Z")).toEqual(staged);
+    expect(await client.stageDecision("alpha", "PR-0004", { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: "n" }, "2026-10-06T09:00:00Z")).toEqual(staged);
     expect(await client.unstageDecision("alpha", "PR-0004")).toEqual({ ...staged, staged: null, staged_at: null });
   });
 
@@ -606,7 +606,7 @@ describe("the live tail (AC-09)", () => {
     new HttpClient().subscribe("alpha", (event) => events.push(event));
     const source = only();
     source.open();
-    const staged = '{"id":"PR-0004","staged":{"decision":"approve","option":1,"answer":null,"canon":null,"note":"keep the cap","span_hash":null},"staged_at":"2026-10-06T09:14:02Z"}';
+    const staged = '{"id":"PR-0004","staged":{"decision":"approve","option":1,"answer":null,"canon":null,"editorial":null,"note":"keep the cap","span_hash":null},"staged_at":"2026-10-06T09:14:02Z"}';
     source.emit("proposal.staged", staged, "90");
     source.emit("proposal.unstaged", '{"id":"PR-0004"}', "91");
     expect(events).toEqual([

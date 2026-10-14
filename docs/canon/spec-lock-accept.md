@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-13
+reviewed: 2026-10-14
 ---
 
 # `spec lock accept`: the owner's lock commit
@@ -17,7 +17,7 @@ reviewed: 2026-10-13
 3. Git: a worktree, HEAD born, on a branch, no operation in progress; the lock read. REF naming entries while no node has that canonical ID: "A gone node".
 4. The code walk finds the node's markers. **Inputs**, tracked and equal to HEAD, else each named with its state (`modified`, `staged`, `untracked`, `deleted`, `not tracked`), exit 1 `…: commit them first; nothing written`: the node's file, its markers' files, `specengine.toml`, `spec.lock`; every `.rs`/`.ron` the walk reads that is modified, staged, deleted or untracked; every `Cargo.toml` under a code root or in a directory at or above one, up to the project root (its manifest whenever it exists). Names, `qpath`s, ambiguity depend on them all: one commit, one lock.
 5. Each marker file bound, its bound items hashed (`hash_bound_items`), from its HEAD blob's raw bytes (`blob_at`, no filters: `*.rs ident`, `$Id$` stay unexpanded); OIDs from HEAD's tree; the node's revision and `norm_hash` from its file's HEAD blob.
-6. **Merge** (`merge_accept`): a lockable binding `new`/`refreshed`, or `unchanged` when equal on `rev`, `spec_hash`, `ast_hash`, `file_blob` (byte-identical, `commit` and `verified_at` too); a binding with a key not lockable now keeps its entry (`kept`); a vanished key is `dropped`. An old entry at R with another `spec_hash` refuses, exit 1 (a meaning change without a raise: `--editorial`, or a proposal raising `rev`). Other nodes' entries keep their bytes.
+6. **Merge** (`merge_accept`): a lockable binding `new`/`refreshed`, or `unchanged` when equal on `rev`, `spec_hash`, `ast_hash`, `file_blob` (byte-identical, `commit` and `verified_at` too); a binding with a key not lockable now keeps its entry (`kept`); a vanished key is `dropped`. An old entry at R with another `spec_hash` refuses, exit 1 (a meaning change without a raise: "raise its `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`)"; an approve raises it itself, `proposal-revisions.md`). Other nodes' entries keep their bytes.
 7. Nothing to change: no question; exit 0 `nothing to change` if some binding is locked as it is, else exit 1 saying why none can be.
 8. Before asking: the committer identity, a first lock git ignores, the data directory. Rows on stdout in key order, `<change> | <relation> | <file> | <kind> <symbol>[ <item_kind>][ | <state>]`, change `new`, `refreshed`, `unchanged`, `kept`, `dropped`, `not locked` (keyless: kind `unanchored`/`cannot_verify`, symbol its category); stderr `lock R-12 rev 3 (accept: 2 new, 1 refreshed, 1 kept, 1 dropped) at <commit> on <branch> in <worktree>? [y/N]`, all four counts always; only `y`, `yes`; no `--yes`.
 9. HEAD, the branch, the lock's bytes read again; a change: exit 1 `spec.lock changed while being accepted; nothing written`.

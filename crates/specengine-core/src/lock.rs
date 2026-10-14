@@ -929,13 +929,23 @@ fn same_pair(held: &Verified, now: &Verified) -> bool {
         && held.file_blob == now.file_blob
 }
 
+/// The one vouching predicate (`docs/canon/node-revision.md` "Raising"):
+/// the entry under `key` is one of `node` (canonical ID bytes) at `rev`
+/// whose `spec_hash` is `norm_hash`, so it vouches for that text at that
+/// revision. An entry at `rev` with another `spec_hash` (an earlier
+/// unreviewed change) vouches for nothing.
+pub fn vouches(key: &EntryKey, verified: &Verified, node: &str, rev: u32, norm_hash: &str) -> bool {
+    key.node == node && verified.rev == rev && verified.spec_hash == norm_hash
+}
+
 /// An editorial refresh: the new lock and the node's entries at the
 /// revision, each with whether its `spec_hash` changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Editorial {
     pub lock: Lock,
-    /// The node's entries at the revision, in key order: `true` when its
-    /// `spec_hash` was set.
+    /// The node's entries at the revision (with a filter, those vouching
+    /// for the old text only), in key order: `true` when its `spec_hash`
+    /// was set.
     pub at_rev: Vec<(EntryKey, bool)>,
 }
 
@@ -948,12 +958,27 @@ impl Editorial {
 
 /// `--editorial`: `spec_hash` set to `spec_hash` on the node's entries at
 /// `rev`, nothing else (code hashes, `file_blob`, `commit`, `verified_*`
-/// kept).
-pub fn refresh_editorial(old: &Lock, node: &str, rev: u32, spec_hash: &str) -> Editorial {
+/// kept). `vouching`, the node's old `norm_hash`, filters them: only the
+/// entries that vouched for the old text ([`vouches`]) are set, any other
+/// at `rev` is left byte for byte and not listed (`spec approve
+/// --editorial`, task spec `rev-discipline` Q10); `None`: every entry at
+/// `rev` (`spec lock accept --editorial`).
+pub fn refresh_editorial(
+    old: &Lock,
+    node: &str,
+    rev: u32,
+    spec_hash: &str,
+    vouching: Option<&str>,
+) -> Editorial {
     let mut lock = old.clone();
     let mut at_rev = Vec::new();
     for (key, verified) in lock.entries.iter_mut() {
         if key.node != node || verified.rev != rev {
+            continue;
+        }
+        if let Some(old_hash) = vouching
+            && !vouches(key, verified, node, rev, old_hash)
+        {
             continue;
         }
         let changed = verified.spec_hash != spec_hash;

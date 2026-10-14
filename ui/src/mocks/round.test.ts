@@ -29,9 +29,9 @@ function readAt(sheet: RoundSheet, id: string): string {
   return sheet.items.find((item) => item.id === id)?.updated_at ?? "not on the sheet";
 }
 
-const working = (updatedAt: string): StageBody => ({ decision: "approve", option: null, answer: null, canon: null, note: null, updated_at: updatedAt });
-const option = (index: number, updatedAt: string): StageBody => ({ decision: "approve", option: index, answer: null, canon: null, note: null, updated_at: updatedAt });
-const own = (text: string, updatedAt: string): StageBody => ({ decision: "approve", option: null, answer: text, canon: null, note: null, updated_at: updatedAt });
+const working = (updatedAt: string): StageBody => ({ decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, updated_at: updatedAt });
+const option = (index: number, updatedAt: string): StageBody => ({ decision: "approve", option: index, answer: null, canon: null, editorial: null, note: null, updated_at: updatedAt });
+const own = (text: string, updatedAt: string): StageBody => ({ decision: "approve", option: null, answer: text, canon: null, editorial: null, note: null, updated_at: updatedAt });
 const reject = (reason: string, updatedAt: string): StageBody => ({ decision: "reject", reason, updated_at: updatedAt });
 
 afterEach(() => {
@@ -119,7 +119,7 @@ describe("the normal scenario", () => {
       ["PR-0046", "refused", null, "`PR-0046` is deferred"],
       ["PR-9999", "refused", null, "no proposal `PR-9999` in this project's queue"],
     ]);
-    expect(document.answers[0]?.stage).toEqual({ decision: "approve", option: null, answer: "Two shifts,\nfrom 2027", canon: null, note: null, span_hash: null });
+    expect(document.answers[0]?.stage).toEqual({ decision: "approve", option: null, answer: "Two shifts,\nfrom 2027", canon: null, editorial: null, note: null, span_hash: null });
     const after = await client.getRound("harbor-sim");
     expect(after.items.filter((item) => item.staged !== null).map((item) => [item.id, item.staged_at, item.updated_at])).toEqual([
       ["PR-0041", AT, AT],

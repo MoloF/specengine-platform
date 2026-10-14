@@ -1,5 +1,5 @@
 //! The pure half of `spec verify`
-//! (`docs/features/spec-verify.md` "The verify table", "States",
+//! (`docs/canon/spec-verify.md` "The `[verify]` table", "States",
 //! "Verdict and exit"): the `[verify]` table read apart from the reads,
 //! the row key, the facts one row is judged by, the judge, the classes and
 //! the verdict (ADR-0042,

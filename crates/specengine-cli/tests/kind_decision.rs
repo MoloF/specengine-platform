@@ -255,6 +255,7 @@ fn stage_of(
                 option,
                 answer: answer.map(str::to_owned),
                 canon: None,
+                editorial: None,
                 note: None,
                 updated_at: pair.proposal(id).updated_at,
             },
@@ -1064,6 +1065,7 @@ fn ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
             option: None,
             answer: None,
             canon: None,
+            editorial: false,
             note: None,
             span_hash: None
         })
@@ -1081,7 +1083,7 @@ fn ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
         pair.sql(&format!("SELECT staged FROM proposals WHERE id = '{id}';"))
             .trim(),
         "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\"canon\":null,\
-         \"note\":null,\"span_hash\":null}"
+         \"editorial\":null,\"note\":null,\"span_hash\":null}"
     );
     let review = json_of(&printed(&pair.review_ok(&pair.main, &id)).1);
     assert_eq!(review["kind"], json!("decision"));
@@ -1120,7 +1122,7 @@ fn ac_r6_a_corrupt_decision_row_is_named_by_review_and_inbox() {
     );
     pair.decide_ok(&pair.main, &decided, &flags(None, None, None), None);
     let staged_option = "{\"decision\":\"approve\",\"option\":0,\"answer\":null,\"canon\":null,\
-                         \"note\":null,\"span_hash\":null}";
+                         \"editorial\":null,\"note\":null,\"span_hash\":null}";
     for (label, sql, broken, column) in [
         (
             "an option staged",
@@ -1350,6 +1352,7 @@ fn ac_r7_the_round_asks_a_decision_as_a_question() {
             option: None,
             answer: Some("No: zero only slows.".to_owned()),
             canon: None,
+            editorial: false,
             note: None,
             span_hash: None
         })

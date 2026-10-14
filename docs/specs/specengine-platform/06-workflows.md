@@ -94,7 +94,7 @@ One queue in three places:
 
 | Decision | Effect |
 |---|---|
-| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): committed `spec: apply PR-0042` where raised (ADR-0005, ADR-0032), rebased if the node changed; a question, discrepancy or decision: one decision record (`decision-apply`, `kind-decision`); to come: `spec_hash` recomputed, the task's `spec_snapshot` updated |
+| **Accept "spec to code"** / edit and accept | `apply_proposal` (`docs/canon/proposal-apply.md`): committed `spec: apply PR-0042` where raised (ADR-0005, ADR-0032), rebased if the node changed; a question, discrepancy or decision: one decision record (`decision-apply`, `kind-decision`); a changed meaning's revision raised, or `--editorial`: the vouching `spec.lock` entries refreshed in the commit (`docs/canon/proposal-revisions.md`); a task-bound one refreshes its task's snapshot (`docs/canon/tasks.md`) |
 | **Accept "code to spec"** | spec unchanged; the decision record says the code is wrong; to come: an item in the task plan |
 | **Reject** | closed with a reason (`spec reject`); a repeated question or discrepancy gets it back as a hit; to come: the reason indexed, for `update` too |
 | **Needs clarification** | `changes_requested` with the owner's question → the agent sees it in `get_proposal`/`get_task` and extends |

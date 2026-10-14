@@ -1,5 +1,6 @@
-//! docs/features/code-refs.md TE-2 and RD-3 ("Binding rules"): every rule
-//! and every unanchored category of a Rust comment's binding is a row of
+//! docs/features/code-refs.md TE-2 and RD-3
+//! (`docs/canon/code-bindings.md` "Rust binding"): every rule and every
+//! unanchored category of a Rust comment's binding is a row of
 //! [`ROWS`], each run on the source as written (LF) and with every line end
 //! turned to CRLF at test time, each naming the mutation that turns it red.
 //! The five RD-3 mutations have a test of their own name.

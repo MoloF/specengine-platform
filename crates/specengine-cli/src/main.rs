@@ -219,6 +219,9 @@ enum Command {
         /// A question, a discrepancy or a decision: the section its record governs (ID, ID#SECTION or path#anchor), instead of its first ID.
         #[arg(long, value_name = "REF")]
         canon: Option<String>,
+        /// An editorial change (wording, no meaning): keep every revision the change would raise, and set the new spec hash on the spec.lock entries that vouched for the old text, in the same commit.
+        #[arg(long)]
+        editorial: bool,
     },
     /// Reject an open or approved proposal, never one whose `Proposal:` commit is on its branch; asks for consent on the terminal.
     Reject {
@@ -1098,10 +1101,16 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             option,
             answer,
             canon,
+            editorial,
         } => {
             require_terminal("approve")?;
             let mut consent = ask;
-            Outcome::Proposal(Box::new(specengine_cli::approve_with(
+            let approve = if editorial {
+                specengine_cli::approve_editorial
+            } else {
+                specengine_cli::approve_with
+            };
+            Outcome::Proposal(Box::new(approve(
                 env,
                 globals,
                 &ApproveRequest {

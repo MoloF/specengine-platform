@@ -1,5 +1,5 @@
-//! The git reads of `spec verify` (`docs/features/spec-verify.md` "Base",
-//! "Cascade and spec side"): the check's base reader
+//! The git reads of `spec verify` (`docs/canon/spec-verify.md` "Base",
+//! "Cascade"): the check's base reader
 //! ([`Staged::head_only`]: its environment, its guard, its one `cat-file
 //! --batch` session) extended to code, manifests and `spec.lock`, for any
 //! commit. Read-only: git runs in the root under the caller's [`GitEnv`]
@@ -13,7 +13,8 @@
 //!   blob OID, raw bytes, no clean filter, never `-w`;
 //! - `rev-parse --verify -q <rev>^{commit}`, then `ls-tree -r -z <oid>`:
 //!   a commit's tree under the root, root-relative;
-//! - in the session, the blobs of the paths asked for, each OID once.
+//! - in the session, the blobs of the paths asked for, each OID once per
+//!   `read_files` call.
 //!
 //! Every failure is a [`Cause`] at `.` with a fixed message, never git's
 //! text or an absolute path.

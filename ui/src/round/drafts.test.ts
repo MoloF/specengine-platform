@@ -20,7 +20,7 @@ describe("a draft's answer (U-04)", () => {
   it("sends an option as option N, every other flag null, then the updated_at shown, in this key order", () => {
     const item = aRoundItem({ id: "PR-0005", kind: "riddle", options: OPTIONS, recommendation: 1 });
     expect(JSON.stringify(answerOf(item, draft({ pick: "option", option: 1 })))).toBe(
-      '{"id":"PR-0005","stage":{"decision":"approve","option":1,"answer":null,"canon":null,"note":null,"updated_at":"2026-10-01T10:00:00Z"}}',
+      '{"id":"PR-0005","stage":{"decision":"approve","option":1,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"2026-10-01T10:00:00Z"}}',
     );
   });
 
@@ -31,6 +31,7 @@ describe("a draft's answer (U-04)", () => {
       option: null,
       answer: null,
       canon: null,
+      editorial: null,
       note: null,
       updated_at: "2026-10-01T10:00:00Z",
     });
@@ -39,6 +40,7 @@ describe("a draft's answer (U-04)", () => {
       option: null,
       answer: "no,\n2 s",
       canon: null,
+      editorial: null,
       note: null,
       updated_at: "2026-10-01T10:00:00Z",
     });

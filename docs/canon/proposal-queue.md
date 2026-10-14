@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-14
 ---
 
 # Proposal queue: commands, states, store
 
-An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Not yet: re-targeting, `has_open_proposal`.
+An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Not yet: re-targeting, `has_open_proposal`.
 
 ## Commands
 
@@ -19,7 +19,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 - `spec review PR` -> every document key as `key: value`, absent `-`; `base_text`, `new_text`, `rationale`, `diff`, `conflict`, `decision_note` as blocks indented two spaces; `diagnostics`, `notes` as `key: <n>` and an indented line each.
 - `spec approve PR [--note T]` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T` (empty -> exit 2) -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line and the last of `notes`.
 
-JSON of propose, review, approve, reject: the **review document** (MCP `get_proposal`), every key, absent = `null`, none starting `block`: `{id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, …, notes}` (`…`: `agent-intake.md` "Review document", `decision-record.md`, `tasks.md`, `decision-staging.md`). `diff`: base -> new hunks of `git diff --no-index --no-color --no-ext-diff --diff-algorithm=myers -U3` under `--- base <path>`, `+++ proposed <path>` (from the worktree top). `preview` (open, approved): apply steps 2-6 read-only -> `applies`, `rebases`, `conflicts` (+ `conflict`, the merge's text) or `unavailable` (note `not applicable now (step <n>): <reason>`); its own commit on the branch -> `unavailable`, steps not run, note ``its commit <sha> is on `<branch>`: `spec approve PR` completes it; no new apply is needed``; a lookup git cannot make -> note ``cannot tell whether its commit is on `<branch>`: <why>``. Review writes in no worktree.
+JSON of propose, review, approve, reject: the **review document** (MCP `get_proposal`), every key, absent = `null`, none starting `block`: `{id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, …, notes}` (`…`: `agent-intake.md` "Review document", `decision-record.md`, `tasks.md`, `decision-staging.md`). `diff`: base -> new hunks of `git diff --no-index --no-color --no-ext-diff --diff-algorithm=myers -U3` under `--- base <path>`, `+++ proposed <path>` (from the worktree top). `preview` (open, approved): apply steps 2-6 read-only -> `applies`, `rebases`, `conflicts` (+ `conflict`, the merge's text) or `unavailable` (note `not applicable now (step <n>): <reason>`; a raise refused: `proposal-revisions.md` "Review"); its own commit on the branch -> `unavailable`, steps not run, note ``its commit <sha> is on `<branch>`: `spec approve PR` completes it; no new apply is needed``; a lookup git cannot make -> note ``cannot tell whether its commit is on `<branch>`: <why>``. Review writes in no worktree.
 
 ## Creation
 
@@ -27,7 +27,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 1. The target resolves as in `spec show` (CLI README "Rules"): an ID or `slug/ID` to one holder; a `.md` path to its file's document, the whole file (unlike `show`, no node -> exit 1). Not `class: generated`, its prefix (a section's: also its document's) without `immutable_text`. An alias, a legacy ID, `#SECTION`, `@rev`, `[[…]]` -> exit 1 naming the canonical ID when known; a look-alike, mixed script, `project:` -> exit 2. Stored **canonical**: a bare feature-scoped ID as `slug/ID`; a path as its document's `id:` as if written (refused, or held elsewhere: exit 1 `` `<p>` declares `<ID>`… ``), else as itself (an `id:` since -> exit 1).
 2. `--base` is the span's hash now; stale -> exit 1 printing the current one.
-3. The text verbatim (no line-ending normalisation), a section's trailing whitespace (space, tab, CR, LF) dropped, as no section span ends in it; spliced into exactly the span and parsed afresh, the file keeps its ordered (ID, heading level) list, the target spans exactly the text, and the file changes (else exit 1 `no change: …`). Refused: an `{#ID}` or `id:` dropped or added (`create`: `proposal-kinds.md`), a level changed, a heading of the same or a higher level added.
+3. The text verbatim (no line-ending normalisation), a section's trailing whitespace (space, tab, CR, LF) dropped, as no section span ends in it; spliced into exactly the span and parsed afresh, the file keeps its ordered (ID, heading level) list, the target spans exactly the text, and the file changes (else exit 1 `no change: …`). Refused: an `{#ID}` or `id:` dropped or added (`create`: `proposal-kinds.md`), a level changed, a heading of the same or a higher level added, a revision changed.
 4. Validation: the tree read and parsed once, checked as is and with the one file swapped, judged as against `HEAD` (`spec-check-git.md`): introduced findings in `diagnostics`, never refusing (ADR-0012); a parser panic on the patched bytes gives none.
 5. Binding (ADR-0032): the canonical worktree top, `root_rel` (the root in it, `''` at its top), the git common dir, the branch (`symbolic-ref`), `HEAD` as `base_commit`. A root in no worktree, a detached or unborn `HEAD` -> exit 2.
 
@@ -56,11 +56,11 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON `{type: human|agent, role, model, run}`; `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (0 to 6, `QUEUE_SCHEMA_VERSION`; higher -> exit 2, nothing changed), one `Immediate` transaction; step 2's intake columns, `create_intake`, the intake kinds' `Invalid`: `agent-intake.md` "Stored"; step 3's record columns, their ops, `Issued`: `decision-record.md`; step 4's tasks: `tasks.md`; 5's stages: `decision-staging.md`; 6's: `interpretation` (above). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (0 to 7, `QUEUE_SCHEMA_VERSION`; higher -> exit 2, nothing changed), one `Immediate` transaction; step 2's intake: `agent-intake.md` "Stored"; 3's records: `decision-record.md`; 4's tasks: `tasks.md`; 5's stages: `decision-staging.md`; 6's: `interpretation` (above); 7's, no column: an approve stage's `editorial`. The index leaves them and `user_version` alone.
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, CLI, MCP and `specengine-http` (stages) write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
 
-`trait ProposalQueue`, `SqliteQueue::open(db, project)`; `QueueError {Store, SchemaTooNew, Unknown, Status, Invalid, Changed, Issued, Reserved, TaskRefused}` (`Status` names an applied one's commit; `Store`, `SchemaTooNew` exit 2). `Seen {status, updated_at, staged}` (`Proposal::seen()`), a run's compare-and-set key; `Decision {decided_by, note, staged_at}`.
+`trait ProposalQueue`, `SqliteQueue::open(db, project)`; `QueueError` (`Status` names an applied one's commit; `Store`, `SchemaTooNew` exit 2). `Seen {status, updated_at, staged}` (`Proposal::seen()`), a run's compare-and-set key; `Decision {decided_by, note, staged_at}`.
 
 | Op | Does |
 |---|---|
@@ -74,11 +74,11 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | `reject_from(id, seen, decision, now)` | `open`/`approved` -> `rejected`, `.rejected`, compare-and-set as above |
 | `reject_orphan` | `reject_from`, for an orphan |
 
-Also `events()` by `seq`, `dump()`, `reserved()`; unconditional ops for store tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
+Also `events()`, `dump()`, `reserved()`; unconditional ops for store tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
 
 **Checked when read**: a `base_commit` no object ID, a `branch` git refuses as a branch name or starting with `-`, an author field off its grammar: a corrupt row, never handed to git (`get`, `list` fail naming row and column, review, approve, reject exit 2; `inbox` skips it, a note).
 
 ## Terminal and git safety
 
 - **Escaping** (agent-written text in the queue commands' output, prompts, stderr): every C0 control but LF, TAB and a CRLF's CR, DEL, every C1 and the bidi marks, embeddings, overrides and isolates (U+061C, U+200E, U+200F, U+202A-U+202E, U+2066-U+2069) print as `\u{1b}` (lower-case hex); JSON escapes by itself, values raw. `inbox`'s rationale turns a lone CR into a space.
-- **Git** (store `WorktreeGit`): `git -C <dir>`, stdin null, `GIT_TERMINAL_PROMPT=0`, without every variable `git rev-parse --local-env-vars` lists; every command but `commit` with `GIT_OPTIONAL_LOCKS=0`. Paths as `:(literal)` pathspecs; every revision after `--end-of-options`, checked by `rev-parse --verify`; `blob_at`, `has_path` refuse an empty, `./` or `../` path unread. `diff`, `merge-file` with `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` (the repository's config still read). Scratch files (merge and diff sides, the message): new, in the data directory, removed after.
+- **Git** (store `WorktreeGit`): `git -C <dir>`, stdin null, `GIT_TERMINAL_PROMPT=0`, without every variable `git rev-parse --local-env-vars` lists; every command but `commit` with `GIT_OPTIONAL_LOCKS=0`. Paths as `:(literal)` pathspecs (`commit_only_paths`: several); every revision after `--end-of-options`, checked by `rev-parse --verify`; `blob_at`, `has_path` refuse an empty, `./` or `../` path unread. `diff`, `merge-file` with `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` (the repository's config still read). Scratch files (merge and diff sides, the message): new, in the data directory, removed after.

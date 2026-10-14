@@ -247,7 +247,7 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":5,\
+        "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":5,\
          \"tasks\":0,\"runs\":0,\"events\":6}"
     );
     assert_eq!(PROPOSAL_COLUMNS.len(), 44);
@@ -330,7 +330,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":6,")
+        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":7,")
             && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,"),
         "{}",
         v3_lines[0]
@@ -338,7 +338,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":2,\"queue_schema\":6,",
+            "\"format\":2,\"queue_schema\":7,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
@@ -428,7 +428,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
 
     let inbox = pair.inbox(&pair.main, false).expect("inbox");
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "7");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),

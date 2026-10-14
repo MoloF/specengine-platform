@@ -38,6 +38,7 @@ use std::io::Read as _;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 
+use specengine_core::check::resolve::feature_stem;
 use specengine_core::check::{CheckInput, Resolver};
 use specengine_core::create::{Sections, SectionsError, add_sections};
 use specengine_core::intake::{AuthorInput, author_problem, rationale_problem};
@@ -55,6 +56,7 @@ use specengine_store::{
 };
 
 use crate::corpus::indexed;
+use crate::create::canonical_in;
 use crate::interpret::canon_note;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{
@@ -62,6 +64,7 @@ use crate::proposals::{
     open_context, queue_cannot,
 };
 use crate::review::previewed;
+use crate::revisions::revision_refusal;
 use crate::show::{latin_fix, no_reference, not_indexed, project_qualified, unclean_path};
 use crate::task::bound_task;
 use crate::{CliError, Env, Globals, Message, store_error};
@@ -747,7 +750,10 @@ pub(crate) fn checked_located(
         return Ok(Err(format!("the span of `{target_id}` is not UTF-8")));
     };
 
-    // 3. The structure.
+    // 3. The structure, and no revision changed (task spec
+    // `rev-discipline` Q7: approval sets revisions).
+    let slug = feature_stem(&project.config.paths.features, &path);
+    let name = |id: &str| canonical_in(scheme, slug, id);
     if rule == SpanRule::Sections {
         let sections = match panic::catch_unwind(AssertUnwindSafe(|| {
             add_sections(&path, &bytes, &parsed, ord, text, scheme)
@@ -767,6 +773,9 @@ pub(crate) fn checked_located(
             parsed: after_parsed,
             added,
         } = sections;
+        if let Some(reason) = revision_refusal(&parsed, &after_parsed, &name) {
+            return Ok(Err(reason));
+        }
         return Ok(Ok(CheckedUpdate {
             target_id,
             path,
@@ -787,6 +796,9 @@ pub(crate) fn checked_located(
         Ok(update) => update,
         Err(error) => return Ok(Err(format!("`{target_id}`: {error}"))),
     };
+    if let Some(reason) = revision_refusal(&parsed, &update.parsed, &name) {
+        return Ok(Err(reason));
+    }
     if update.bytes == bytes {
         return Ok(Err(format!(
             "no change: `{path}` with the new text of `{target_id}` is byte for byte the \

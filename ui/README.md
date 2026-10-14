@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-14
 ---
 
 # ui -- the web UI
 
-The owner's screens: 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui` (ADR-0011, ADR-0014, ADR-0033, ADR-0036), nothing blocked (`#control`). State: every 07 s3 screen built (08 s2 Phase 4).
+The owner's screens: 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules, with their ADRs: `docs/canon/architecture.md#ui`; nothing blocked (`#control`).
 
 ## Stack
 
@@ -19,7 +19,7 @@ A standalone pnpm project on strict TypeScript: no root `package.json`, no works
 - One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints (07 s3); reads take the query's `AbortSignal` (superseded: aborted; never the check or health read), writes none; `getRound`, `stageRoundAnswers` alike. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily (a loading line; failed: why, reload).
 - App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
 - An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent (none now), `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
-- The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`docs/canon/decision-staging.md`).
+- The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`decision-staging.md`).
 
 ## Screen rules
 
@@ -60,7 +60,7 @@ The owner's allowlist: the 17 below (2026-10-05; the last two ADR-0036). `packag
 
 **Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, the laptop 24.14): after a Node upgrade.
 
-**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`ui/pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `ui/.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `ui/pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
+**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
 
 ## Gates
 
@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`; projects `harbor-sim`, `ledger-api`, stages kept to a reload.
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial` (`proposal-revisions.md`); projects `harbor-sim`, `ledger-api`, stages kept to a reload.
 3. The slice's checks: its spec's "Owner's manual check".
 
 ## Roles here

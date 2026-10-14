@@ -16,6 +16,8 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
 import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
+import { isRefused } from "./revisions";
+import { RevisionList } from "./RevisionList";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
 
@@ -379,6 +381,24 @@ function ReviewBody({
           </>
         )}
       </Section>
+
+      {/* As the review document lists them after `conflict`; null: no section (the key decides, never the kind). */}
+      {review.revisions !== null && (
+        <Section title="Revisions">
+          {review.revisions.length === 0 ? (
+            <p className="muted">No node's meaning changes: approval keeps every revision.</p>
+          ) : (
+            <>
+              <p className="muted">
+                {review.revisions.some(isRefused)
+                  ? "The terminal refuses a meaning approval while a raise below is refused, for the reason given. An editorial approval keeps every revision and refreshes the lock entries that vouch for the old text."
+                  : "Approval raises each revision below. An editorial approval keeps them and refreshes the lock entries that vouch for the old text."}
+              </p>
+              <RevisionList entries={review.revisions} />
+            </>
+          )}
+        </Section>
+      )}
 
       {diagnostics.length > 0 && (
         <Section title="Check findings the change introduces">

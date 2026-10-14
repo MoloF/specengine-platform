@@ -67,14 +67,14 @@ describe("the round's answers", () => {
   it("POSTs exactly {project, answers} as JSON to /api/projects/:p/round/answers, with no AbortSignal", async () => {
     const fetchStub = stubFetch(() => jsonAnswer(200, { project: "alpha", answers: [], notes: [] }));
     await new HttpClient().stageRoundAnswers("alpha", [
-      { id: "PR-0003", stage: { decision: "approve", option: 1, answer: null, canon: null, note: null, updated_at: "2026-10-07T17:49:50Z" } },
+      { id: "PR-0003", stage: { decision: "approve", option: 1, answer: null, canon: null, editorial: null, note: null, updated_at: "2026-10-07T17:49:50Z" } },
       { id: "PR-0005", stage: { decision: "reject", reason: "dup", updated_at: "2026-10-07T17:40:02Z" } },
     ]);
     expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/round/answers"]);
     const init = fetchStub.mock.calls[0]?.[1];
     expect(init?.method).toBe("POST");
     expect(init?.body).toBe(
-      '{"project":"alpha","answers":[{"id":"PR-0003","stage":{"decision":"approve","option":1,"answer":null,"canon":null,"note":null,"updated_at":"2026-10-07T17:49:50Z"}},' +
+      '{"project":"alpha","answers":[{"id":"PR-0003","stage":{"decision":"approve","option":1,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"2026-10-07T17:49:50Z"}},' +
         '{"id":"PR-0005","stage":{"decision":"reject","reason":"dup","updated_at":"2026-10-07T17:40:02Z"}}]}',
     );
     expect(init?.headers).toEqual({ Accept: "application/json", "Content-Type": "application/json" });
@@ -88,7 +88,7 @@ describe("the round's answers", () => {
         {
           id: "PR-0003",
           outcome: "staged",
-          stage: { decision: "approve", option: null, answer: "no, 2 s", canon: null, note: null, span_hash: null },
+          stage: { decision: "approve", option: null, answer: "no, 2 s", canon: null, editorial: null, note: null, span_hash: null },
           staged_at: "2026-10-08T09:12:40Z",
           replaced: null,
           reason: null,

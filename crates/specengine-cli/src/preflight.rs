@@ -29,7 +29,13 @@
 //!    applied it on top of its parent but does not complete it
 //!    ([`TrailerCommit::carries`]): no new apply, never a merge on top of
 //!    the proposal's own commit;
-//! 6. structure: creation's check on this file (exit 1).
+//! 6. structure: creation's check on this file, a revision changed by the
+//!    text included (exit 1); then the revisions ([`crate::revisions`]):
+//!    each node whose meaning changes raised, or kept under `--editorial`
+//!    with its vouching `spec.lock` entries refreshed (step 3 then reads
+//!    the lock too), the refusals before the prompt; a refused raise is
+//!    kept in [`Prepared::revisions`], refusing a meaning approve only
+//!    (`spec review` lists it, its preview kept).
 //!
 //! A create's new sections (task spec `proposal-kinds`) take the same
 //! steps: 4 also finds its new IDs free in the refreshed index, checked
@@ -71,12 +77,13 @@ use std::path::{Path, PathBuf};
 use specengine_core::ProjectConfig;
 use specengine_core::check::{CheckInput, Resolver};
 use specengine_core::create::add_sections;
+use specengine_core::lock::LOCK_FILE;
 use specengine_core::patch::{
     HolderError, is_section, locate, one_holder, span_bytes, splice, update_refusal, update_text,
 };
 use specengine_core::proposal::PROPOSAL_TRAILER;
 use specengine_model::node::Node;
-use specengine_model::{ParsedFile, grammar};
+use specengine_model::{IdScheme, ParsedFile, grammar};
 use specengine_store::{
     GitEnv, GitError, Merge, Place, Proposal, Source as _, SpecIndex as _, WorkingTree,
     WorktreeGit, same_repository, span_hash, update_file,
@@ -89,6 +96,9 @@ use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
 use crate::proposals::{Preview, QueueContext, top_of, top_path};
 use crate::propose::is_path_target;
 use crate::refresh::refresh;
+use crate::revisions::{
+    Revisions, Step6, editorial_commit, raised_span, revision_refusal, step_3_lock, step_6,
+};
 use crate::{Env, Exit, Message, one_line};
 
 /// Apply steps 2–6 passed: what steps 7–10 act on.
@@ -104,13 +114,29 @@ pub(crate) struct Prepared {
     pub tree: WorkingTree,
     /// The file as read at step 3.
     pub bytes: Vec<u8>,
-    /// The file to write (step 6).
+    /// Step 5's text in the file: what an editorial approve writes, and a
+    /// meaning one when no node's meaning changes ([`Prepared::written`]).
     pub patched: Vec<u8>,
+    /// What step 6 decided about revisions (task spec `rev-discipline`):
+    /// per node, its raise or why not, and the bytes a meaning approve
+    /// writes. A refused raise refuses a meaning approve only
+    /// ([`Revisions::refusal`]); the review lists it.
+    pub revisions: Revisions,
     /// [`Preview::Applies`] or [`Preview::Rebases`].
     pub preview: Preview,
     /// An interpretation's decision as step 4 found it again (the prompt
     /// names its path); `None` for any other kind.
     pub interprets: Option<Decided>,
+}
+
+impl Prepared {
+    /// The file steps 8 to 10 write: step 5's text with its raises written
+    /// ([`Revisions::raised`]), or as it is under `--editorial` or with no
+    /// node raised. A meaning approve with a refused raise never reaches
+    /// step 8 ([`Revisions::refusal`]).
+    pub(crate) fn written(&self) -> &[u8] {
+        self.revisions.raised.as_deref().unwrap_or(&self.patched)
+    }
 }
 
 /// What apply steps 2–6 read on their way, kept whatever they answer.
@@ -172,11 +198,13 @@ impl StepFailure {
 
 /// Apply steps 2–6 for `proposal`, writing nothing but the data directory
 /// (the recorded root's index, git's scratch files): `spec approve`'s
-/// checks and `spec review`'s preview. `read` gets what the steps read,
-/// kept by a refusal too ([`StepRead`]): the span hash (a staged choice's
-/// `span_hash` and its staleness note, canon `decision-staging`,
-/// "Staleness") and the recorded root's index refreshed at step 4 (the
-/// review's note on an update in a decision's `canon:`).
+/// checks and `spec review`'s preview (a meaning approve's). `read` gets
+/// what the steps read, kept by a refusal too ([`StepRead`]): the span hash
+/// (a staged choice's `span_hash` and its staleness note, canon
+/// `decision-staging`, "Staleness") and the recorded root's index refreshed
+/// at step 4 (the review's note on an update in a decision's `canon:`).
+/// `editorial`: `spec approve --editorial` (step 3 reads `spec.lock`, step
+/// 6 keeps revisions).
 pub(crate) fn prepare_spanned(
     env: &Env,
     git_env: &GitEnv,
@@ -184,6 +212,7 @@ pub(crate) fn prepare_spanned(
     proposal: &Proposal,
     messages: &mut Vec<Message>,
     read: &mut StepRead,
+    editorial: bool,
 ) -> Result<Prepared, StepFailure> {
     let place = &proposal.place;
     let path = proposal.target_path.as_str();
@@ -246,6 +275,13 @@ pub(crate) fn prepare_spanned(
             ),
         ));
     }
+    // Under `--editorial`, `spec.lock` too (task spec `rev-discipline`,
+    // "Editorial refresh").
+    let lock = if editorial {
+        step_3_lock(&git, &head, &recorded.root, &top_of(proposal, LOCK_FILE))?
+    } else {
+        None
+    };
 
     // Step 4: resolve.
     let mut index =
@@ -321,10 +357,10 @@ pub(crate) fn prepare_spanned(
     // exactly its stored new IDs (a text already in place: below). A
     // create's text to write: first step 4's new IDs, free in the index
     // refreshed now.
-    let patched = if create {
+    let (patched, patched_parsed) = if create {
         let spliced = splice(&bytes, node.span, update_text(&text, is_section(node)));
         if spliced == bytes {
-            spliced
+            (spliced, parsed.clone())
         } else {
             let corpus = Corpus::of(input, scheme, &recorded.config.paths);
             if let Some((id, holder)) = proposal
@@ -359,13 +395,19 @@ pub(crate) fn prepare_spanned(
                     ),
                 ));
             }
-            sections.bytes
+            (sections.bytes, sections.parsed)
         }
     } else {
-        update_file(path, &bytes, &parsed, ord, &text, scheme)
-            .map_err(|error| StepFailure::refused(6, format!("`{target}`: {error}")))?
-            .bytes
+        let update = update_file(path, &bytes, &parsed, ord, &text, scheme)
+            .map_err(|error| StepFailure::refused(6, format!("`{target}`: {error}")))?;
+        (update.bytes, update.parsed)
     };
+    // Creation's check 3 on this file: a revision the text changes.
+    let slug = resolver.feature_slug(path);
+    let name = |id: &str| canonical_in(scheme, slug, id);
+    if let Some(reason) = revision_refusal(&parsed, &patched_parsed, &name) {
+        return Err(StepFailure::refused(6, reason));
+    }
     // The proposal's `Proposal:` commits on the branch. Step 5's text
     // already there (the patched file is the file as read; equal bytes
     // pass step 6 always): completed by its own commit, or one that does
@@ -383,6 +425,21 @@ pub(crate) fn prepare_spanned(
     {
         return Err(failure);
     }
+    // Step 6's revisions: raised, or kept under `--editorial` with the
+    // vouching lock entries refreshed. A refused raise is kept in the plan
+    // (`approve` refuses on it, `review` lists it).
+    let revisions = step_6(Step6 {
+        path,
+        before: &bytes,
+        before_parsed: &parsed,
+        after: &patched,
+        after_parsed: &patched_parsed,
+        scheme,
+        name: &name,
+        root: &recorded.root,
+        editorial,
+        lock,
+    })?;
     Ok(Prepared {
         git,
         head,
@@ -392,6 +449,7 @@ pub(crate) fn prepare_spanned(
         tree,
         bytes,
         patched,
+        revisions,
         preview,
         interprets,
     })
@@ -1168,9 +1226,12 @@ pub(crate) fn adds_file(
 }
 
 /// One trailer commit judged: it completes the proposal with one parent,
-/// changing only the target's path, its text there step 5's on its parent
-/// ([`written_on`]: what the apply wrote on top of it) or on itself
-/// ([`settled`]: the new text, a split or cherry-picked apply's merge).
+/// changing only the target's path (or that path and `spec.lock`, its
+/// `Lock-mode:` trailer `editorial`: an editorial apply's, task spec
+/// `rev-discipline`), its text there step 5's on its parent
+/// ([`written_on`]: what the apply wrote on top of it, with or without the
+/// revisions a meaning approve raises) or on itself ([`settled`]: the new
+/// text, a split or cherry-picked apply's merge).
 fn trailer_commit(
     git: &WorktreeGit,
     scratch: &Path,
@@ -1187,10 +1248,18 @@ fn trailer_commit(
             .is_some_and(|parent| written_on(git, scratch, held, parent, proposal, config_now)),
         _ => false,
     };
+    let lock_path = top_of(proposal, LOCK_FILE);
+    let only = |changed: &[String]| {
+        changed == [path.as_str()]
+            || (changed.len() == 2
+                && changed.contains(&path)
+                && changed.contains(&lock_path)
+                && editorial_commit(git, &commit))
+    };
     let not_completing = match &parents {
         Ok(parents) => match parents.as_slice() {
             [parent] => match git.changed_paths(parent, &commit) {
-                Ok(changed) if changed == [path.as_str()] => match &held {
+                Ok(changed) if only(&changed) => match &held {
                     Err(why) => Some(why.clone()),
                     Ok(_) if carries => None,
                     Ok(held) => settled(git, scratch, held, proposal),
@@ -1209,10 +1278,14 @@ fn trailer_commit(
     }
 }
 
-/// The target in one commit's blob of its path (raw bytes).
+/// The target in one commit's blob of its path (raw bytes), parsed under
+/// `scheme`.
 struct Held {
     bytes: Vec<u8>,
+    parsed: ParsedFile,
+    ord: usize,
     node: Node,
+    scheme: IdScheme,
 }
 
 impl Held {
@@ -1220,12 +1293,28 @@ impl Held {
     fn holds(&self, text: &str) -> bool {
         span_bytes(&self.bytes, &self.node) == update_text(text, is_section(&self.node)).as_bytes()
     }
+
+    /// The span is `text` spliced into `before` with the revisions a
+    /// meaning approve raises there ([`raised_span`]).
+    fn holds_raised(&self, before: &Held, path: &str, text: &str) -> bool {
+        raised_span(
+            path,
+            &before.bytes,
+            &before.parsed,
+            before.ord,
+            text,
+            &before.scheme,
+        )
+        .is_some_and(|raised| span_bytes(&self.bytes, &self.node) == raised.as_slice())
+    }
 }
 
 /// `commit`'s span is step 5's text on `parent`'s blob of the path: the
 /// new text where the parent's span is the base, else the merge an apply
 /// on top of `parent` wrote (one run of `git merge-file`, which is not
-/// idempotent: the merge run again on its own result may differ). Anything
+/// idempotent: the merge run again on its own result may differ), as
+/// spliced or with the revisions a meaning approve raises (task spec
+/// `rev-discipline` Q12: an apply made before 4b-1 completes too). Anything
 /// unreadable in the parent: no.
 fn written_on(
     git: &WorktreeGit,
@@ -1240,7 +1329,8 @@ fn written_on(
     };
     matches!(
         step_text(git, scratch, &before.bytes, &before.node, proposal),
-        Ok(StepText::Text(text, _)) if held.holds(&text)
+        Ok(StepText::Text(text, _))
+            if held.holds(&text) || held.holds_raised(&before, &proposal.target_path, &text)
     )
 }
 
@@ -1294,7 +1384,13 @@ fn held_at(
             .map_err(|_| format!("{whose} `{path}` does not hold `{id}` exactly once"))?
     };
     let node = parsed.nodes[ord].clone();
-    Ok(Held { bytes, node })
+    Ok(Held {
+        bytes,
+        parsed,
+        ord,
+        node,
+        scheme: config.scheme,
+    })
 }
 
 /// The config `rev`'s blob is parsed under, with its label: the

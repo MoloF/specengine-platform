@@ -53,6 +53,7 @@ use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity, I
 use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
+use specengine_core::raise::RevisionRow;
 use specengine_store::{
     Choice, GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue, Stage,
     WorktreeGit, same_repository,
@@ -61,6 +62,7 @@ use specengine_store::{
 use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
 use crate::location::prepared_data_dir;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover};
+use crate::revisions::rows_text as revisions_text;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// Which command answered with a review document.
@@ -126,6 +128,11 @@ pub struct ProposalDocument {
     pub preview: Option<Preview>,
     /// `git merge-file`'s text when the preview conflicts.
     pub conflict: Option<String>,
+    /// Per node whose meaning the change alters (task spec
+    /// `rev-discipline`): `{id, rev, to, lock_entries, refused}`, a refused
+    /// raise with `to` `null`; `null` when the kind writes no existing node
+    /// or the preview conflicts or is unavailable.
+    pub revisions: Option<Vec<RevisionRow>>,
     pub decided_by: Option<String>,
     pub decided_at: Option<String>,
     pub decision_note: Option<String>,
@@ -205,6 +212,7 @@ impl ProposalDocument {
             diff: None,
             preview: None,
             conflict: None,
+            revisions: None,
             decided_by: proposal.decided_by.clone(),
             decided_at: proposal.decided_at.clone(),
             decision_note: proposal.decision_note.clone(),
@@ -747,6 +755,8 @@ fn review_text(document: &ProposalDocument) -> String {
     block(&mut out, "diff", document.diff.as_deref());
     line(&mut out, "preview", document.preview.map(Preview::as_str));
     block(&mut out, "conflict", document.conflict.as_deref());
+    let revisions = document.revisions.as_deref().map(revisions_text);
+    line(&mut out, "revisions", revisions.as_deref());
     line(&mut out, "decided_by", document.decided_by.as_deref());
     line(&mut out, "decided_at", document.decided_at.as_deref());
     block(&mut out, "decision_note", document.decision_note.as_deref());

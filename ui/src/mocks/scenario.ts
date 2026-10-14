@@ -2,9 +2,12 @@
 /**
  * `cannot-check`: every read as `normal` but the check, which cannot vouch for the corpus
  * (`docs/features/ui-health.md` "Data"), and the unapplied amendments, refused 503 for the same
- * incomplete walk (`docs/features/health-left.md` "Data").
+ * incomplete walk (`docs/features/health-left.md` "Data"). `editorial`: every read as `normal` but
+ * the lock entries an editorial approval refreshes, harbor-sim's counted and ledger-api's lock
+ * unreadable, and a wording fix with an editorial approve staged (`docs/features/rev-discipline.md`
+ * "UI"; src/mocks/editorial.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

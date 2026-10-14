@@ -321,7 +321,7 @@ describe("the Inbox card and the decision dialog take the decision by structure 
       expect(screen.queryByRole("dialog")).toBeNull();
     });
     expect(stage.mock.calls).toEqual([
-      [SLUG, DECISION, { decision: "approve", option: null, answer: null, canon: null, note: "Two cranes, as built." }, read.updated_at],
+      [SLUG, DECISION, { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: "Two cranes, as built." }, read.updated_at],
     ]);
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
     expect(within(staged).getByText("spec approve PR-0050").tagName).toBe("CODE");
@@ -337,6 +337,7 @@ describe("the Inbox card and the decision dialog take the decision by structure 
       option: null,
       answer: null,
       canon: null,
+      editorial: null,
       note: "Two cranes, as built.",
       span_hash: null,
     });
@@ -356,7 +357,7 @@ describe("the Inbox card and the decision dialog take the decision by structure 
     expect(posted).toEqual([
       {
         url: `/api/projects/${SLUG}/proposals/${DECISION}/decision`,
-        body: `{"decision":"approve","option":null,"answer":null,"canon":null,"note":null,"updated_at":"${read.updated_at ?? ""}"}`,
+        body: `{"decision":"approve","option":null,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"${read.updated_at ?? ""}"}`,
       },
     ]);
   });
@@ -364,7 +365,7 @@ describe("the Inbox card and the decision dialog take the decision by structure 
   it("the daemon's refusal of an option on it is shown in its words: the mock refuses `option` as the daemon does (400)", async () => {
     const client = mock();
     const read = await client.getProposal(SLUG, DECISION);
-    const refused = await client.stageDecision(SLUG, DECISION, { decision: "approve", option: 0, answer: null, canon: null, note: null }, read.updated_at ?? "").then(
+    const refused = await client.stageDecision(SLUG, DECISION, { decision: "approve", option: 0, answer: null, canon: null, editorial: null, note: null }, read.updated_at ?? "").then(
       () => null,
       (error: unknown) => error,
     );
@@ -418,6 +419,7 @@ describe("the Questions screen takes the decision by structure (AC-U2)", () => {
               option: null,
               answer: "No: one crane per ship until the second quay opens.",
               canon: null,
+              editorial: null,
               note: null,
               updated_at: read?.updated_at,
             },
@@ -441,7 +443,7 @@ describe("the Questions screen takes the decision by structure (AC-U2)", () => {
     expect(posted).toEqual([
       {
         url: `/api/projects/${SLUG}/round/answers`,
-        body: `{"project":"${SLUG}","answers":[{"id":"${DECISION}","stage":{"decision":"approve","option":null,"answer":null,"canon":null,"note":null,"updated_at":"${read?.updated_at ?? ""}"}}]}`,
+        body: `{"project":"${SLUG}","answers":[{"id":"${DECISION}","stage":{"decision":"approve","option":null,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"${read?.updated_at ?? ""}"}}]}`,
       },
     ]);
     expect(within(staged).getByText("The working answer")).toBeTruthy();
@@ -461,8 +463,8 @@ describe("the Questions screen takes the decision by structure (AC-U2)", () => {
       offers(item, { ...fresh, pick: "option", option: 0 }),
     ]).toEqual([true, true, false]);
     const outcome = await client.stageRoundAnswers(SLUG, [
-      { id: DECISION, stage: { decision: "approve", option: 0, answer: null, canon: null, note: null, updated_at: item.updated_at } },
-      { id: "PR-0048", stage: { decision: "approve", option: null, answer: null, canon: null, note: null, updated_at: sheet.items.find((entry) => entry.id === "PR-0048")?.updated_at ?? "" } },
+      { id: DECISION, stage: { decision: "approve", option: 0, answer: null, canon: null, editorial: null, note: null, updated_at: item.updated_at } },
+      { id: "PR-0048", stage: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, updated_at: sheet.items.find((entry) => entry.id === "PR-0048")?.updated_at ?? "" } },
     ]);
     expect(outcome.answers.map(({ id, outcome: made, reason }) => [id, made, reason])).toEqual([
       [DECISION, "refused", "--option: `PR-0050` has no options"],

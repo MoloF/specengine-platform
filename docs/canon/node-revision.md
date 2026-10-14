@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-14
 ---
 
 # Node revision and meaning hash
@@ -31,9 +31,9 @@ Core `revision(parsed, ord) -> Revision {Written(u32), Unwritten, Unreadable}`, 
 
 ## Raising
 
-ADR-0043 (`architecture.md#layout`, `#apply`), built by slices 4b-1 (`docs/features/rev-discipline.md`: approval) and 4b-2 (`docs/features/rev-rule.md`: the rule, `spec bump`); until they ship nothing raises a revision and no check reads `spec.lock`.
+ADR-0043 (`architecture.md#layout`, `#apply`), built by slices 4b-1 (approval, shipped 2026-10-14; as built: `docs/canon/proposal-revisions.md`) and 4b-2 (`docs/features/rev-rule.md`: the rule, `spec bump`; until it ships no check reads `spec.lock`).
 
-- **Approval**: `apply_proposal` raises the revision of each node with an ID whose `norm_hash` its change alters, from the file as read at apply, never lowering one. `spec approve --editorial`, the owner's choice, keeps it and, in the same commit, sets the new `norm_hash` on that node's `spec.lock` entries that vouched for the old text at that revision. A proposal whose text changes a revision is refused at creation.
+- **Approval**: `apply_proposal` raises, at step 6, the revision of each node with an ID whose `norm_hash` its change alters, from the file as read at apply, never lowering one; the question and a `Revision:` trailer name it. A meaning approve is refused before the prompt for a node at `REV_MAX`, of a closed class admitting no `rev` or whose raise cannot be written; an unreadable revision refuses any approve. `spec approve --editorial`, the owner's choice, keeps every revision and, in the same commit, sets the new `norm_hash` on that node's `spec.lock` entries that vouched for the old text at that revision (`Lock-mode: editorial`). A proposal whose text changes a revision is refused at creation: approval sets revisions.
 - **The rule**: `spec check --staged` and `--changed`, never plain, give one error per node a `HEAD` lock entry vouches for (at its `HEAD` revision, `spec_hash` = its `HEAD` `norm_hash`) whose `norm_hash` changed with neither a raise nor that refresh in the checked tree; `[check] mode` decides whether it blocks. Unlocked nodes, `@N` pins and commits skipping the hook are not judged.
 - **`spec bump`** only lists nodes changed without a raise, `required` (the rule's) or `suggested`; it writes nothing.
 

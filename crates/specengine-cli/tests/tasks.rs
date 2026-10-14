@@ -810,9 +810,10 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         let (text, raw) = common::proposal::printed(&pair.review_ok(&main, proposal));
         let value = json_of(&raw);
         let keys = task_common::keys(&raw);
-        assert_eq!(keys.len(), 46, "{keys:?}");
+        // 47 since docs/features/rev-discipline.md added `revisions`.
+        assert_eq!(keys.len(), 47, "{keys:?}");
         assert_eq!(
-            keys[40..],
+            keys[41..],
             [
                 "choice",
                 "task_id",
@@ -990,7 +991,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":5,\"runs\":2,\"events\":{events}}}"
         )
     );
@@ -1121,7 +1122,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
@@ -1156,7 +1157,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let mut six = v4_lines.clone();
     six[0] = six[0].replacen("\"runs\":0,", "", 1);
     let mut schema_3 = v4_lines.clone();
-    schema_3[0] = schema_3[0].replacen("\"queue_schema\":6,", "\"queue_schema\":3,", 1);
+    schema_3[0] = schema_3[0].replacen("\"queue_schema\":7,", "\"queue_schema\":3,", 1);
     let mut seven = v4_lines.clone();
     seven[0] = seven[0].replacen("\"format\":2,", "\"format\":1,", 1);
     let mut v3_row_4 = v3_lines.clone();

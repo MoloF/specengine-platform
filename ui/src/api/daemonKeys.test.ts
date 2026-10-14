@@ -20,6 +20,7 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  RevisionChange,
   RoundAnswerEntry,
   RoundAnswersOutcome,
   RoundItem,
@@ -61,8 +62,11 @@ import type {
 // answers document, an entry) and kind-interpretation's one (AC-U1, AC-T4 of
 // docs/features/kind-interpretation.md: the review document's `interpretation`, the
 // `Interpretation` set), and health-left's three (AC-U2, AC-T2 of docs/features/health-left.md: the
-// health document, an amendment, and the link `spec show --links` already sent). While that file is
-// absent the comparison is skipped, saying so; once it exists it names all forty-four.
+// health document, an amendment, and the link `spec show --links` already sent), and
+// rev-discipline's one (UI-4, TE-3 of docs/features/rev-discipline.md: `RevisionRow`, a `revisions`
+// entry, the provisional `RevisionChange`), with the review document's `revisions` after `conflict`
+// (47 keys) and the stage's `editorial` after `canon` (7 keys). While that file is absent the
+// comparison is skipped, saying so; once it exists it names all forty-five.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -86,7 +90,8 @@ const KEYS = {
   // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`,
   // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`,
   // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`,
-  // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`.
+  // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`,
+  // docs/features/rev-discipline.md "Review document, stage, queue" `revisions` after `conflict`.
   Proposal: {
     id: true,
     project: true,
@@ -107,6 +112,7 @@ const KEYS = {
     diff: true,
     preview: true,
     conflict: true,
+    revisions: true,
     decided_by: true,
     decided_at: true,
     decision_note: true,
@@ -137,8 +143,17 @@ const KEYS = {
   } satisfies Record<keyof Proposal, true>,
   // docs/features/kind-interpretation.md "Data": the row's JSON, keys in its order.
   Interpretation: { decision: true, how: true, why: true } satisfies Record<keyof Interpretation, true>,
-  // docs/canon/decision-staging.md "The stage": its two shapes, keys in its order.
-  StagedApprove: { decision: true, option: true, answer: true, canon: true, note: true, span_hash: true } satisfies Record<keyof StagedApprove, true>,
+  // docs/canon/decision-staging.md "The stage": its two shapes, keys in its order; the approve's
+  // `editorial` after `canon`, docs/features/rev-discipline.md "Review document, stage, queue".
+  StagedApprove: {
+    decision: true,
+    option: true,
+    answer: true,
+    canon: true,
+    editorial: true,
+    note: true,
+    span_hash: true,
+  } satisfies Record<keyof StagedApprove, true>,
   StagedReject: { decision: true, reason: true } satisfies Record<keyof StagedReject, true>,
   // crates/specengine-cli/README.md "Output and the cap": `spec show --json`.
   NodeView: { ref: true, reason: true, notes: true, nodes: true } satisfies Record<keyof NodeView, true>,
@@ -333,6 +348,9 @@ const KEYS = {
     state: true,
     reason: true,
   } satisfies Record<keyof ShownLink, true>,
+  // docs/features/rev-discipline.md "Review document, stage, queue": a `revisions` entry, keys in its
+  // order. The file names the set `RevisionRow`; the provisional type is `RevisionChange`.
+  RevisionRow: { id: true, rev: true, to: true, lock_entries: true, refused: true } satisfies Record<keyof RevisionChange, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -342,7 +360,9 @@ const CITED: Record<Named, string> = {
   Project: "slug, name, root, branch",
   InboxEntry: "id, kind, status, target_id, target_ids, branch, created_at, rationale, severity, summary, record_id, staged_at",
   Proposal:
-    "id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
+    "id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, " +
+    "revisions, " +
+    "decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
     "target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked, " +
     "record_id, record_path, record_title, record_text, choice, " +
     "task_id, " +
@@ -350,7 +370,7 @@ const CITED: Record<Named, string> = {
     "interpretation, " +
     "notes",
   Interpretation: "decision, how, why",
-  StagedApprove: "decision, option, answer, canon, note, span_hash",
+  StagedApprove: "decision, option, answer, canon, editorial, note, span_hash",
   StagedReject: "decision, reason",
   NodeView: "ref, reason, notes, nodes",
   SearchHit: "id, kind, title, path, line, ord, archived, snippet",
@@ -392,6 +412,7 @@ const CITED: Record<Named, string> = {
   HealthReport: "documents, amendments, notes",
   UnappliedAmendment: "path, id, title, class, status, links",
   ShownLink: "type, origin, at, name, written, path, line, state, reason",
+  RevisionRow: "id, rev, to, lock_entries, refused",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -441,8 +462,14 @@ const BEFORE_ROUND: readonly Named[] = [...DAEMON_READ, ...UI_LIVE, ...UI_LIVE_T
 /** The forty-one types the fixture named before health-left. */
 const BEFORE_HEALTH_LEFT: readonly Named[] = [...BEFORE_ROUND, ...UI_ROUND, ...KIND_INTERPRETATION];
 
+/** rev-discipline's one: a `revisions` entry (docs/features/rev-discipline.md "Review document, stage, queue", TE-3). */
+const REV_DISCIPLINE: readonly Named[] = ["RevisionRow"];
+
+/** The forty-four types the fixture named before rev-discipline. */
+const BEFORE_REV_DISCIPLINE: readonly Named[] = [...BEFORE_HEALTH_LEFT, ...HEALTH_LEFT];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_HEALTH_LEFT, ...HEALTH_LEFT];
+const ALL: readonly Named[] = [...BEFORE_REV_DISCIPLINE, ...REV_DISCIPLINE];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -466,8 +493,27 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 12 inbox-entry keys, 46 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation)", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 46]);
+  it("counts 4 project keys, 12 inbox-entry keys, 47 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline)", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 47]);
+  });
+
+  it("gives the review document its revisions right after conflict, and the approve stage its editorial right after canon (UI-4 of rev-discipline)", () => {
+    const review = Object.keys(KEYS.Proposal);
+    expect(review.slice(review.indexOf("preview"), review.indexOf("preview") + 4)).toEqual(["preview", "conflict", "revisions", "decided_by"]);
+    expect(Object.keys(KEYS.StagedApprove)).toEqual(["decision", "option", "answer", "canon", "editorial", "note", "span_hash"]);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("revisions");
+    expect(Object.keys(KEYS.StagedReject)).not.toContain("editorial");
+  });
+
+  it("counts rev-discipline's one: a revisions entry's 5 keys, in the spec's order (UI-4, TE-3 of rev-discipline)", () => {
+    expect(REV_DISCIPLINE.map((name) => served(name))).toEqual([["id", "rev", "to", "lock_entries", "refused"]]);
+    expect(ALL.at(-1)).toBe("RevisionRow");
+  });
+
+  it('RevisionRow is the provisional RevisionChange, which cites `docs/features/rev-discipline.md` "Review document, stage, queue"', () => {
+    const at = source.indexOf("export interface RevisionChange ");
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/rev-discipline.md` "Review document, stage, queue"');
   });
 
   it("gives the review document an interpretation after staged_at, before notes, and its three keys (AC-U1 of kind-interpretation)", () => {
@@ -476,8 +522,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("interpretation");
   });
 
-  it("counts the stage's two shapes: 6 keys staged as an approve, 2 as a reject (AC-14 of decision-staging)", () => {
-    expect(DECISION_STAGING.map((name) => served(name).length)).toEqual([6, 2]);
+  it("counts the stage's two shapes: 7 keys staged as an approve, 2 as a reject (AC-14 of decision-staging, UI-4 of rev-discipline)", () => {
+    expect(DECISION_STAGING.map((name) => served(name).length)).toEqual([7, 2]);
   });
 
   it("counts the daemon's keys of ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 (AC-09 of ui-live)", () => {
@@ -500,8 +546,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
-    expect(ALL).toHaveLength(44);
-    expect(new Set(ALL).size).toBe(44);
+    expect(BEFORE_REV_DISCIPLINE).toHaveLength(44);
+    expect(ALL).toHaveLength(45);
+    expect(new Set(ALL).size).toBe(45);
   });
 
   it("counts health-left's three: 3 document keys, 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
@@ -614,12 +661,20 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the forty-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three", () => {
+  it("names exactly the forty-five types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
   });
 
   it.each(NAMES)("%s: the daemon's keys are the type's", (name) => {
     expect([...(sets[name] ?? [])].sort()).toEqual(served(name).sort());
+  });
+
+  it("names rev-discipline's keys where the types put them: revisions after conflict, editorial after canon, a revisions entry's five in order, last (UI-4, TE-3)", () => {
+    const review = sets.Proposal ?? [];
+    expect(review.slice(review.indexOf("conflict") - 1, review.indexOf("conflict") + 3)).toEqual(["preview", "conflict", "revisions", "decided_by"]);
+    expect(sets.StagedApprove).toEqual(served("StagedApprove"));
+    expect(sets.RevisionRow).toEqual(served("RevisionRow"));
+    expect(Object.keys(sets).at(-1)).toBe("RevisionRow");
   });
 
   it("names health-left's keys in the document's order: the health document's three, an amendment's six (AC-T2)", () => {

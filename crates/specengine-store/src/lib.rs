@@ -38,7 +38,7 @@
 //!   over the working tree, config and baseline from disk, judged against
 //!   `HEAD` the same way (docs/features/spec-cli-changed.md);
 //! - [`VerifyGit`]: the git reads of `spec verify`
-//!   (`docs/features/spec-verify.md` "Base"): the check's base reader
+//!   (`docs/canon/spec-verify.md` "Base"): the check's base reader
 //!   under the caller's [`GitEnv`] extended to code, manifests and
 //!   `spec.lock` for any commit ([`CommitListing`], [`CommitFile`]), a
 //!   path's unmerged stages and files on disk by blob OID (`hash-object`

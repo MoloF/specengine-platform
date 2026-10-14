@@ -25,13 +25,14 @@
 //!   Typed flags win whole: the stage is left unused, named in a note.
 
 use serde::{Deserialize, Serialize};
+use specengine_core::proposal::EDITORIAL;
 use specengine_core::record::refused_char;
 use specengine_store::{
     GitEnv, Proposal, ProposalQueue as _, ProposalStatus, QueueError, Stage, StagedChoice,
     same_repository,
 };
 
-use crate::apply::{ApproveFlags, ApproveRequest, flag_on_apply};
+use crate::apply::{ApproveFlags, ApproveRequest, editorial_refusal, flag_on_apply};
 use crate::decide::first_checks;
 use crate::proposals::{
     ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, checked_now, elsewhere,
@@ -58,9 +59,10 @@ pub(crate) fn over_cap(flag: &str, text: &str) -> Option<String> {
 /// A stage as the daemon's decision route receives it: the stage's fields
 /// without `span_hash`, and the `updated_at` of the document the caller
 /// read. `{"decision":"approve","option":1,"answer":null,"canon":null,
-/// "note":"…","updated_at":"…"}` (an approve's flags absent = `null`) or
-/// `{"decision":"reject","reason":"…","updated_at":"…"}`; any other key, or
-/// one missing, is refused.
+/// "editorial":null,"note":"…","updated_at":"…"}` (an approve's flags
+/// absent = `null`; `editorial` `true`, else `null` or `false`, task spec
+/// `rev-discipline`) or `{"decision":"reject","reason":"…",
+/// "updated_at":"…"}`; any other key, or one missing, is refused.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "decision", rename_all = "lowercase", deny_unknown_fields)]
 pub enum StageBody {
@@ -72,6 +74,9 @@ pub enum StageBody {
         answer: Option<String>,
         #[serde(default)]
         canon: Option<String>,
+        /// `--editorial`: `true` stages it.
+        #[serde(default)]
+        editorial: Option<bool>,
         #[serde(default)]
         note: Option<String>,
         updated_at: String,
@@ -87,8 +92,8 @@ impl StageBody {
         serde_json::from_slice(bytes).map_err(|error| {
             CliError::spec(format!(
                 "the stage is not `{{\"decision\":\"approve\",\"option\",\"answer\",\"canon\",\
-                 \"note\",\"updated_at\"}}` or `{{\"decision\":\"reject\",\"reason\",\
-                 \"updated_at\"}}` as JSON: {error}; nothing changed"
+                 \"editorial\",\"note\",\"updated_at\"}}` or `{{\"decision\":\"reject\",\
+                 \"reason\",\"updated_at\"}}` as JSON: {error}; nothing changed"
             ))
         })
     }
@@ -478,14 +483,21 @@ fn checked(
             option,
             answer,
             canon,
+            editorial,
             note,
             ..
         } => {
+            let editorial = *editorial == Some(true);
             let flags = ApproveFlags {
                 option: *option,
                 answer: answer.clone(),
                 canon: canon.clone(),
             };
+            // `true` on a kind writing no existing node: the terminal's
+            // usage refusal.
+            if let Some(reason) = editorial_refusal(proposal, editorial) {
+                return Err((StageCause::Usage, reason));
+            }
             if proposal.kind.applies() {
                 if let Some(reason) = flag_on_apply(proposal, &flags) {
                     return Err((StageCause::Usage, reason));
@@ -521,6 +533,7 @@ fn checked(
                 option: *option,
                 answer: answer.clone(),
                 canon: canon.clone(),
+                editorial,
                 note: note.clone(),
                 span_hash: None,
             })
@@ -552,23 +565,26 @@ pub(crate) struct Staging {
 }
 
 impl Staging {
-    /// `spec approve`'s request and flags: as typed, any stage left unused
-    /// (named) when a flag is typed (`--note` too) or a reject is staged;
-    /// else a staged approve's flags and note.
+    /// `spec approve`'s request, flags and `--editorial`: as typed, any
+    /// stage left unused (named) when a flag is typed (`--note`,
+    /// `--editorial` too) or a reject is staged; else a staged approve's
+    /// flags, `editorial` and note.
     pub(crate) fn for_approve(
         proposal: &Proposal,
         request: &ApproveRequest,
         flags: &ApproveFlags,
-    ) -> (ApproveRequest, ApproveFlags, Self) {
-        let typed = request.note.is_some() || flags.any();
+        editorial: bool,
+    ) -> (ApproveRequest, ApproveFlags, bool, Self) {
+        let typed = request.note.is_some() || flags.any() || editorial;
         let Some(staged) = &proposal.staged else {
-            return (request.clone(), flags.clone(), Self::default());
+            return (request.clone(), flags.clone(), editorial, Self::default());
         };
         match &staged.stage {
             Stage::Approve {
                 option,
                 answer,
                 canon,
+                editorial,
                 note,
                 ..
             } if !typed => {
@@ -582,9 +598,14 @@ impl Staging {
                     canon: canon.clone(),
                 };
                 let staging = Self::confirming(proposal, staged);
-                (taken, flags, staging)
+                (taken, flags, *editorial, staging)
             }
-            _ => (request.clone(), flags.clone(), Self::unused(staged)),
+            _ => (
+                request.clone(),
+                flags.clone(),
+                editorial,
+                Self::unused(staged),
+            ),
         }
     }
 
@@ -730,9 +751,10 @@ pub(crate) fn changed_since(context: &QueueContext, read: &Proposal) -> Option<S
 }
 
 /// The command a stage stands for, on one line: `spec approve PR-0003
-/// --option 1 --note "n"`, `spec reject PR-0005 --reason "…"` (values
-/// [`quoted`]); the line `spec approve|reject` shows before its question,
-/// and a round's sheet after `Staged <at>:`.
+/// --option 1 --note "n"`, `spec approve PR-0004 --note "typo"
+/// --editorial`, `spec reject PR-0005 --reason "…"` (values [`quoted`]);
+/// the line `spec approve|reject` shows before its question, and a round's
+/// sheet after `Staged <at>:`.
 pub(crate) fn staged_command(id: &str, stage: &Stage) -> String {
     match stage {
         Stage::Reject { reason } => format!("spec reject {id} --reason {}", quoted(reason)),
@@ -740,6 +762,7 @@ pub(crate) fn staged_command(id: &str, stage: &Stage) -> String {
             option,
             answer,
             canon,
+            editorial,
             note,
             ..
         } => {
@@ -747,10 +770,17 @@ pub(crate) fn staged_command(id: &str, stage: &Stage) -> String {
             if let Some(option) = option {
                 command.push_str(&format!(" --option {option}"));
             }
-            for (flag, value) in [("--answer", answer), ("--canon", canon), ("--note", note)] {
+            for (flag, value) in [("--answer", answer), ("--canon", canon)] {
                 if let Some(value) = value {
                     command.push_str(&format!(" {flag} {}", quoted(value)));
                 }
+            }
+            if let Some(note) = note {
+                command.push_str(&format!(" --note {}", quoted(note)));
+            }
+            // Last, after `--note` (task spec `rev-discipline` Q14).
+            if *editorial {
+                command.push_str(&format!(" --{EDITORIAL}"));
             }
             command
         }

@@ -85,7 +85,9 @@ const CONFIRM_WORDS = new Map([
 /**
  * The terminal command confirming a staged choice: `spec approve PR-0004` or `spec reject PR-0004`,
  * fixed words and the checked ID only; null when the ID is not a proposal ID or the decision is
- * neither of the two.
+ * neither of the two. An editorial approve's is bare too: the bare command confirms the stage, its
+ * note kept, and typed flags would replace it whole
+ * (`docs/features/rev-discipline.md` "Review document, stage, queue").
  */
 export function confirmCommand(decision: string, id: string): string | null {
   const words = CONFIRM_WORDS.get(decision);

@@ -595,7 +595,7 @@ export type RoundQuery = ReturnType<typeof useRound>;
 /** A stage body's choice: the body less `updated_at`, as an event's stored stage holds it (less `span_hash`). */
 function choiceOf(stage: RoundAnswerBody["stage"]): StageChoice {
   if (stage.decision === "approve") {
-    return { decision: stage.decision, option: stage.option, answer: stage.answer, canon: stage.canon, note: stage.note };
+    return { decision: stage.decision, option: stage.option, answer: stage.answer, canon: stage.canon, editorial: stage.editorial, note: stage.note };
   }
   return { decision: stage.decision, reason: stage.reason };
 }

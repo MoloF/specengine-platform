@@ -888,12 +888,12 @@ fn r05_shuffled_answers_are_staged_in_round_order_and_change_nothing_else() {
     assert!(is_utc(&at), "{at}");
     let stages = [
         json!({"decision": "approve", "option": null, "answer": own, "canon": null,
-            "note": null, "span_hash": null}),
+            "editorial": null, "note": null, "span_hash": null}),
         json!({"decision": "reject", "reason": reason}),
         json!({"decision": "approve", "option": null, "answer": null, "canon": null,
-            "note": null, "span_hash": null}),
+            "editorial": null, "note": null, "span_hash": null}),
         json!({"decision": "approve", "option": 1, "answer": null, "canon": null,
-            "note": null, "span_hash": null}),
+            "editorial": null, "note": null, "span_hash": null}),
     ];
     let requested = [&s.q2, &s.d2, &s.q1, &s.d1];
     assert_eq!(answered.len(), 4, "{}", reply.text());
@@ -909,7 +909,8 @@ fn r05_shuffled_answers_are_staged_in_round_order_and_change_nothing_else() {
     assert!(
         reply.text().contains(
             "\"stage\":{\"decision\":\"approve\",\"option\":null,\"answer\":\"No: walking is 2 \
-             m/s.\\nSprinting is 4 m/s.\",\"canon\":null,\"note\":null,\"span_hash\":null}"
+             m/s.\\nSprinting is 4 m/s.\",\"canon\":null,\"editorial\":null,\"note\":null,\
+             \"span_hash\":null}"
         ),
         "{}",
         reply.text()
@@ -1045,13 +1046,15 @@ fn r06_each_unfit_answer_is_refused_alone_and_the_valid_ones_staged() {
     .expect("approve the update");
     let commit = outcome.document.applied_commit.clone().expect("applied");
     // An update held (`approved`, as a run left it after its step 7: the
-    // status is judged before the kind).
+    // status is judged before the kind). The apply above raised the node
+    // to `rev=2`; the text keeps it as read (docs/features/rev-discipline.md
+    // "Creation", Q7).
     let held = common::propose_update(
         &home,
         &cwd,
         &a,
         "EDGE-STAM-ZERO",
-        "## Depletion {#EDGE-STAM-ZERO}\n- Stamina reaches 0: `Exhausted` after 0.4 s.\n",
+        "## Depletion {#EDGE-STAM-ZERO rev=2}\n- Stamina reaches 0: `Exhausted` after 0.4 s.\n",
     );
     // Another existing repository of the project; one that is gone.
     let other = scratch.repo("spec-a", "other", "main");
@@ -1078,7 +1081,7 @@ fn r06_each_unfit_answer_is_refused_alone_and_the_valid_ones_staged() {
         &cwd,
         &a,
         "EDGE-STAM-ZERO",
-        "## Depletion {#EDGE-STAM-ZERO}\n- Stamina reaches 0: `Exhausted` after 0.3 s.\n",
+        "## Depletion {#EDGE-STAM-ZERO rev=2}\n- Stamina reaches 0: `Exhausted` after 0.3 s.\n",
     );
     let look = ask("Does a sprint end at zero?", "MEC-SPRINT");
     let twice = ask("Does an empty bar stop the run?", "EDGE-STAM-ZERO");
@@ -1389,6 +1392,7 @@ fn r07_an_answer_on_a_staged_item_names_the_stage_it_replaced() {
                 option: None,
                 answer: None,
                 canon: None,
+                editorial: None,
                 note: None,
                 updated_at: current,
             },

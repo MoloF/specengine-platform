@@ -404,7 +404,7 @@ fn ac_r11_propose_change_takes_an_interpretation_as_its_twin() {
     assert_eq!(document["interpretation"], mirrored["interpretation"]);
     assert_eq!(
         document.as_object().map(|object| object.len()),
-        Some(46),
+        Some(47),
         "{document}"
     );
     if let Err(problem) = common::read::conforms(&schemas["get_proposal"], &document, "$") {

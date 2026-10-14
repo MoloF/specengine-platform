@@ -1,7 +1,7 @@
 //! The queue's dump, format 2 (canon `tasks`, "Backup"; format 1: canon
 //! `queue-backup`, "Format"): UTF-8 compact JSON, one object per LF-ended
 //! line. The header
-//! `{"format":2,"queue_schema":6,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`
+//! `{"format":2,"queue_schema":7,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `events` row by `seq`, each
@@ -13,9 +13,11 @@
 //! schema's 24, 35 or 40 columns, the later ones restored `NULL`; format 2
 //! holds queue schema 4 (41 columns, its stages restored `NULL`), 5 (43, a
 //! proposal's `staged`, `staged_at` with them: canon `decision-staging`,
-//! "Documents"; its `interpretation` restored `NULL`) or 6 (this build's
-//! 44, an interpretation's `interpretation` with them: task spec
-//! `kind-interpretation`).
+//! "Documents"; its `interpretation` restored `NULL`), 6 (44, an
+//! interpretation's `interpretation` with them: task spec
+//! `kind-interpretation`; its open approve stages restored in schema 7's
+//! shape) or 7 (this build's 44, an approve stage's `editorial`: task spec
+//! `rev-discipline`).
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's

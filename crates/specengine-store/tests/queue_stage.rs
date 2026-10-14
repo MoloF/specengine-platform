@@ -163,6 +163,7 @@ fn approve_stage(option: Option<u64>, note: Option<&str>, span_hash: Option<&str
         option,
         answer: None,
         canon: None,
+        editorial: false,
         note: note.map(str::to_owned),
         span_hash: span_hash.map(str::to_owned),
     }
@@ -254,7 +255,7 @@ fn three(db: &Path) -> SqliteQueue {
 /// then opened as 6 with its rows and all three `NULL`; schema 7 refused.
 #[test]
 fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 6);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
     assert_eq!(PROPOSAL_COLUMNS.len(), 44);
     assert_eq!(
         PROPOSAL_COLUMNS[40..],
@@ -263,7 +264,10 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     assert_eq!(proposal_columns(4), Some(&PROPOSAL_COLUMNS[..41]));
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(7), None);
+    // Schema 7 adds no column (docs/features/rev-discipline.md "Review
+    // document, stage, queue").
+    assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(8), None);
 
     let scratch = Scratch::new("qst-schema");
     let db = scratch.db("q");
@@ -282,7 +286,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         .expect("a task");
     let made = queue.stored_rows().expect("rows");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
     assert_eq!(
         sqlite3(
             &db,
@@ -321,7 +325,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     assert_eq!(unstepped.tasks[0].id(), Some(task.id.as_str()));
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
     assert_eq!(
         sqlite3(
             &db,
@@ -345,21 +349,21 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7", "stepped once");
 
     // Schema 7: refused by a read and an open, left alone.
-    sqlite3(&db, "PRAGMA user_version = 7;");
+    sqlite3(&db, "PRAGMA user_version = 8;");
     let dumped = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(QueueError::SchemaTooNew { found: 7 }) => {}
-            other => panic!("expected SchemaTooNew 7, got {other:?}"),
+            Err(QueueError::SchemaTooNew { found: 8 }) => {}
+            other => panic!("expected SchemaTooNew 8, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), dumped);
 }
 
@@ -399,7 +403,7 @@ fn stage_sets_replaces_and_unstage_clears_with_one_event_each() {
         "an attribute, not a status"
     );
     let approve_json = "{\"decision\":\"approve\",\"option\":1,\"answer\":null,\"canon\":null,\
-                        \"note\":\"keep the cap\",\"span_hash\":null}";
+                        \"editorial\":null,\"note\":\"keep the cap\",\"span_hash\":null}";
     assert_eq!(first.to_json(), approve_json);
     assert_eq!(
         stage_columns(&db, "PR-0003"),
@@ -482,7 +486,7 @@ fn stage_sets_replaces_and_unstage_clears_with_one_event_each() {
         stage_columns(&db, "PR-0001"),
         format!(
             "{{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
-             \"note\":null,\"span_hash\":\"{span}\"}}|{T1}"
+             \"editorial\":null,\"note\":null,\"span_hash\":\"{span}\"}}|{T1}"
         )
     );
     // A bad clock: refused, nothing written.
@@ -512,6 +516,7 @@ fn a_stage_the_kind_or_state_cannot_hold_is_refused_unwritten() {
         option,
         answer: answer.map(str::to_owned),
         canon: canon.map(str::to_owned),
+        editorial: false,
         note: None,
         span_hash: None,
     };
@@ -529,6 +534,7 @@ fn a_stage_the_kind_or_state_cannot_hold_is_refused_unwritten() {
                 option: None,
                 answer: Some("yes".to_owned()),
                 canon: None,
+                editorial: false,
                 note: None,
                 span_hash: span.clone(),
             },
@@ -540,6 +546,7 @@ fn a_stage_the_kind_or_state_cannot_hold_is_refused_unwritten() {
                 option: None,
                 answer: None,
                 canon: None,
+                editorial: false,
                 note: None,
                 span_hash: span,
             },
@@ -1042,10 +1049,186 @@ fn ac12_stored_rows_reads_the_tasks_of_a_schema_6_queue() {
         )
         .expect("a task");
     let state: StoredQueue = queue.stored_rows().expect("rows");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "6");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
     assert_eq!(state.tasks.len(), 1, "the schema-6 queue's task: {state:?}");
     assert_eq!(state.tasks[0].id(), Some(task.id.as_str()));
     let mut fresh = SqliteQueue::open(scratch.db("fresh"), PROJECT).expect("open");
     fresh.restore(&state).expect("restore");
     assert_eq!(fresh.dump().unwrap(), queue.dump().unwrap());
+}
+
+// ------------------------------------------------- schema 7 (rev-discipline)
+
+/// docs/features/rev-discipline.md RD-5 ("Review document, stage, queue":
+/// queue schema 7 adds `"editorial":null` to open approve stages): a
+/// schema-6 queue holding approve stages in schema 6's shape (an update's
+/// with a note and a span hash, a question's with an answer), a reject and
+/// a corrupt text opens as 7: each approve stage rewritten with
+/// `"editorial":null` after `canon`, byte for byte otherwise, readable;
+/// the reject and the corrupt text as they were; `staged_at`,
+/// `updated_at` kept, no event; a second open changes nothing. A
+/// schema-7 stage of `editorial: true` reads back `true`.
+/// M: step 6 -> 7 rewriting nothing (the old stages read as corrupt).
+#[test]
+fn schema_7_rewrites_open_approve_stages() {
+    let scratch = Scratch::new("qst-schema-7");
+    let db = scratch.db("q");
+    let mut queue = three(&db);
+    queue.create(&update("EDGE-STAM-LOW"), T0).expect("PR-0004");
+    let stage = |id: &str, queue: &mut SqliteQueue, stage: Stage| {
+        let seen = queue.get(id).unwrap().unwrap().seen();
+        queue.stage_from(id, &seen, &stage, T1).expect("staged");
+    };
+    stage(
+        "PR-0001",
+        &mut queue,
+        approve_stage(None, Some("keep \"it\""), Some("b3:aa")),
+    );
+    stage(
+        "PR-0002",
+        &mut queue,
+        Stage::Approve {
+            option: None,
+            answer: Some("No.".to_owned()),
+            canon: None,
+            editorial: false,
+            note: None,
+            span_hash: None,
+        },
+    );
+    stage("PR-0003", &mut queue, reject_stage("a duplicate"));
+    drop(queue);
+    let six_update = "{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
+                      \"note\":\"keep \\\"it\\\"\",\"span_hash\":\"b3:aa\"}";
+    let six_question = "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\
+                        \"canon\":null,\"note\":null,\"span_hash\":null}";
+    let corrupt = "{\"decision\":\"approve\",\"option\":null}";
+    let quote = |text: &str| text.replace('\'', "''");
+    sqlite3(
+        &db,
+        &format!(
+            "UPDATE proposals SET staged = '{}' WHERE id = 'PR-0001'; \
+             UPDATE proposals SET staged = '{}' WHERE id = 'PR-0002'; \
+             UPDATE proposals SET staged = '{}', staged_at = '{T1}' WHERE id = 'PR-0004'; \
+             PRAGMA user_version = 6;",
+            quote(six_update),
+            quote(six_question),
+            quote(corrupt)
+        ),
+    );
+    let reject_before = stage_columns(&db, "PR-0003");
+    let updated = |db: &Path| sqlite3(db, "SELECT id, updated_at FROM proposals ORDER BY id;");
+    let updated_before = updated(&db);
+    let seq = last_seq(&db);
+
+    let queue = SqliteQueue::open(&db, PROJECT).expect("a schema-6 queue opens");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    let seven_update = "{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
+                        \"editorial\":null,\"note\":\"keep \\\"it\\\"\",\"span_hash\":\"b3:aa\"}";
+    let seven_question = "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\
+                          \"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}";
+    assert_eq!(
+        stage_columns(&db, "PR-0001"),
+        format!("{seven_update}|{T1}")
+    );
+    assert_eq!(
+        stage_columns(&db, "PR-0002"),
+        format!("{seven_question}|{T1}")
+    );
+    assert_eq!(
+        stage_columns(&db, "PR-0003"),
+        reject_before,
+        "a reject kept"
+    );
+    assert_eq!(
+        stage_columns(&db, "PR-0004"),
+        format!("{corrupt}|{T1}"),
+        "a corrupt text left as it is"
+    );
+    assert_eq!(updated(&db), updated_before, "updated_at kept");
+    assert_eq!(events_after(&db, seq), Vec::<String>::new(), "no event");
+    let read = queue.get("PR-0001").unwrap().unwrap();
+    assert_eq!(
+        read.staged.expect("readable").stage,
+        approve_stage(None, Some("keep \"it\""), Some("b3:aa"))
+    );
+    assert!(queue.get("PR-0004").is_err(), "the corrupt row still named");
+    drop(queue);
+    let dumped = sqlite3(&db, "SELECT id, staged FROM proposals ORDER BY id;");
+    drop(SqliteQueue::open(&db, PROJECT).expect("reopened"));
+    assert_eq!(
+        sqlite3(&db, "SELECT id, staged FROM proposals ORDER BY id;"),
+        dumped,
+        "a second open changes nothing"
+    );
+
+    // Schema 7's own shape: `true` stored and read back.
+    let scratch = Scratch::new("qst-schema-7-true");
+    let db = scratch.db("q");
+    let mut queue = three(&db);
+    let editorial = Stage::Approve {
+        option: None,
+        answer: None,
+        canon: None,
+        editorial: true,
+        note: Some("typo".to_owned()),
+        span_hash: Some("b3:bb".to_owned()),
+    };
+    stage("PR-0001", &mut queue, editorial.clone());
+    assert_eq!(
+        stage_columns(&db, "PR-0001"),
+        format!(
+            "{{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
+             \"editorial\":true,\"note\":\"typo\",\"span_hash\":\"b3:bb\"}}|{T1}"
+        )
+    );
+    assert_eq!(
+        queue.get("PR-0001").unwrap().unwrap().staged.unwrap().stage,
+        editorial
+    );
+    // `false` is never stored: a corrupt row.
+    sqlite3(
+        &db,
+        "UPDATE proposals SET staged = replace(staged, '\"editorial\":true', \
+         '\"editorial\":false') WHERE id = 'PR-0001';",
+    );
+    assert!(queue.get("PR-0001").is_err(), "editorial false is corrupt");
+}
+
+/// docs/features/rev-discipline.md RD-5, the store half: `editorial` on a
+/// kind writing no existing node (a deciding kind, a new file) is a stage
+/// the kind cannot hold (`Invalid`), nothing written.
+/// M: `editorial` accepted on any kind.
+#[test]
+fn an_editorial_stage_on_a_kind_writing_no_node_is_refused() {
+    let scratch = Scratch::new("qst-editorial-kinds");
+    let db = scratch.db("q");
+    let mut queue = three(&db);
+    queue
+        .create(&new_file("docs/records/R/R-13.md", "R-13"), T0)
+        .expect("PR-0004");
+    let seq = last_seq(&db);
+    for (id, answer) in [
+        ("PR-0002", Some("No.")),
+        ("PR-0003", None),
+        ("PR-0004", None),
+    ] {
+        let stage = Stage::Approve {
+            option: if id == "PR-0003" { Some(0) } else { None },
+            answer: answer.map(str::to_owned),
+            canon: None,
+            editorial: true,
+            note: None,
+            span_hash: None,
+        };
+        let seen = queue.get(id).unwrap().unwrap().seen();
+        match queue.stage_from(id, &seen, &stage, T1) {
+            Err(QueueError::Invalid(message)) => {
+                assert!(message.contains("editorial"), "{id}: {message}");
+            }
+            other => panic!("{id}: expected Invalid, got {other:?}"),
+        }
+        assert_eq!(stage_columns(&db, id), "|", "{id}: nothing written");
+    }
+    assert_eq!(events_after(&db, seq), Vec::<String>::new());
 }

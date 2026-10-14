@@ -35,8 +35,8 @@
 //!   output does not depend on where the tree is checked out). No package:
 //!   unrooted. No subprocess.
 //!
-//! A commit's code tree (`spec verify --changed`'s base, task spec
-//! `spec-verify`, "Base") is built from its blobs by
+//! A commit's code tree (`spec verify --changed`'s base,
+//! canon `spec-verify`, "Base") is built from its blobs by
 //! [`tree_of_blobs`]: the same binding and naming, the commit's manifests
 //! in place of the disk's, a file's binding reused from the working tree's
 //! walk when its bytes are equal.

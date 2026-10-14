@@ -1,8 +1,8 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6; a higher version is a newer
-//! build's: refused),
+//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7; a higher version is a
+//! newer build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
@@ -148,7 +148,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 6;
+pub const QUEUE_SCHEMA_VERSION: i64 = 7;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -1815,8 +1815,10 @@ enum Hold<'a> {
 /// The queue's schema steps, in one `Immediate` transaction: 0 → 1 makes
 /// the tables, 1 → 2 adds the intake columns, 2 → 3 the record columns,
 /// 3 → 4 the tasks, their runs and a proposal's task, 4 → 5 a proposal's
-/// stage, 5 → 6 an interpretation's column (0 → 6 runs all six; a schema-5
-/// DB opens as 6, every `interpretation` `NULL`);
+/// stage, 5 → 6 an interpretation's column, 6 → 7 an approve stage's
+/// `editorial` (no column: every open approve stage rewritten with
+/// `"editorial":null`, task spec `rev-discipline`; 0 → 7 runs all seven; a
+/// schema-5 DB opens as 7, every `interpretation` `NULL`);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -1858,6 +1860,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 5 {
         tx.execute_batch(STEP_6).db()?;
         version = 6;
+    }
+    if version == 6 {
+        stage::upgrade_stages(&tx)?;
+        version = 7;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;

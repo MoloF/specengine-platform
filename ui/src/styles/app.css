@@ -998,6 +998,60 @@ textarea.field {
   font-size: var(--font-size-s);
 }
 
+/* Accept's "Editorial: keep the revision" (docs/features/rev-discipline.md "UI"): laid out as an
+   option, its hint the revisions approval would raise. */
+.editorial-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+}
+
+.editorial-choice input {
+  width: var(--target-min);
+  height: var(--target-min);
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.editorial-body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.editorial-body label {
+  cursor: pointer;
+}
+
+.editorial-body .option-radio-detail {
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* The review's `revisions`, one node per line as `spec review` writes them. */
+.revision-list {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+  overflow-wrap: anywhere;
+}
+
+/* A raise the daemon refused: the line reads "refused", the daemon's reason under it, marked as
+   needing attention, never in a status colour. */
+.revision-refused {
+  display: block;
+  margin-top: var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 3px solid var(--attention);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  white-space: pre-wrap;
+}
+
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;

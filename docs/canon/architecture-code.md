@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture, crates/specengine-code, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-13
+reviewed: 2026-10-14
 ---
 
 # SpecEngine architecture rules: the code layer
@@ -44,7 +44,7 @@ Rule: `architecture.md#apply`. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 Each but a merge's and an editorial apply's is its own commit with provenance. Never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit.
 
-As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. The approve, rebase (`docs/features/lock-levels.md`) and `verify --tests` writers are not built yet.
+As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. As built (slice 4b-1): the approve writer, its vouching entries refreshed in the apply commit, in `docs/canon/proposal-revisions.md` "Editorial approve". The rebase (`docs/features/lock-levels.md`) and `verify --tests` writers are not built yet.
 
 <a id="verify"></a>
 ## Drift: `spec verify`

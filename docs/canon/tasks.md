@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-14
 ---
 
 # Tasks: commands, transitions, place, store
@@ -81,8 +81,8 @@ API: `create_task`, `get_task`, `list_tasks`, `change_task(id, &TaskSeen, &TaskC
 
 ## Backup
 
-`STATE_FORMAT` 2; commands, bounds and import steps: `queue-backup.md`. Header `{"format":2,"queue_schema":6,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), events by `seq`. A schema 1-5 database exports unmigrated as format 2, schema 6 (1-3 without tasks or runs).
+`STATE_FORMAT` 2; commands, bounds and import steps: `queue-backup.md`. Header `{"format":2,"queue_schema":7,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), events by `seq`. A schema 1-6 database exports unmigrated as format 2, schema 7 (1-3 without tasks or runs).
 
-Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`) or 2 (seven keys, schemas 4-6). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven; a task ID not as the queue writes it; a task, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four).
+Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`) or 2 (seven keys, schemas 4-7; a schema-6 dump's open approve stages restored in schema 7's shape, `proposal-revisions.md` "Stage and UI"). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven; a task ID not as the queue writes it; a task, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four).
 
 Count lines `wrote <D>: <p> proposal(s), <t> task(s), <r> run(s), <e> event(s)`, `restored <p> proposal(s), <t> task(s), <r> run(s), <e> event(s) into <db>`; prompt `restore <p> proposal(s), <t> task(s), <r> run(s) and <e> event(s) of <slug> from <FILE> into <db>? [y/N]`; the occupied refusal names the four counts; `--json` `{path|db, proposals, tasks, runs, events}`. `QueueCounts`, `StoredQueue` + `tasks`, `runs` (`StoredTask {columns: [_; 17]}`, `StoredRun {run, columns}`): a task alone makes a queue occupied.

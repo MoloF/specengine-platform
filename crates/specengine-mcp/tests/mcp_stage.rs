@@ -269,6 +269,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
         option: None,
         answer: None,
         canon: None,
+        editorial: None,
         note: Some("ok".to_owned()),
         updated_at,
     });
@@ -280,6 +281,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
         option: Some(1),
         answer: None,
         canon: None,
+        editorial: None,
         note: Some("keep the cap".to_owned()),
         updated_at,
     });
@@ -287,7 +289,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
         (
             update.clone(),
             json!({"decision": "approve", "option": null, "answer": null, "canon": null,
-                "note": "ok", "span_hash": span}),
+                "editorial": null, "note": "ok", "span_hash": span}),
             json!(STAGED),
         ),
         (
@@ -298,7 +300,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
         (
             report.clone(),
             json!({"decision": "approve", "option": 1, "answer": null, "canon": null,
-                "note": "keep the cap", "span_hash": null}),
+                "editorial": null, "note": "keep the cap", "span_hash": null}),
             json!(STAGED),
         ),
         (unstaged.clone(), Value::Null, Value::Null),
@@ -334,7 +336,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
         let schemas = output_schemas(&list);
         let schema = &schemas["get_proposal"];
         let names = property_names(schema);
-        for key in ["task_id", "staged", "staged_at", "notes"] {
+        for key in ["task_id", "staged", "staged_at", "revisions", "notes"] {
             assert!(names.iter().any(|name| name == key), "{key}: {names:?}");
         }
         let mut shapes = Vec::new();
@@ -362,7 +364,17 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
         assert_eq!(
             keys,
             [
-                vec!["answer", "canon", "decision", "note", "option", "span_hash"],
+                // docs/features/rev-discipline.md: the approve shape's
+                // `editorial`.
+                vec![
+                    "answer",
+                    "canon",
+                    "decision",
+                    "editorial",
+                    "note",
+                    "option",
+                    "span_hash",
+                ],
                 vec!["decision", "reason"],
             ],
             "{era:?}: the two closed shapes: {}",

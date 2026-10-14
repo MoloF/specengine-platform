@@ -1,7 +1,6 @@
 //! `spec verify`'s judge over a code tree already walked
-//! (task spec `spec-verify`, "Command and rows", "States",
-//! "Cascade and spec side", "Base"): the rows of one side (the working tree, or a
-//! commit), each judged by core's pure [`judge_row`] over facts gathered
+//! (canon `spec-verify`, "Rows", "States", "Cascade", "Base"): the
+//! rows of one side (the working tree, or a commit), each judged by core's pure [`judge_row`] over facts gathered
 //! here, and, given a base, which rows are Pre-existing. It never calls
 //! [`crate::code_walk::read_tree`]: the caller walks once and hands the
 //! tree in ([`judge_walk`]); a commit's side is read by [`read_head`],
@@ -754,7 +753,7 @@ impl LineStarts {
 // ------------------------------------------------------------------ base
 
 /// The base: `HEAD`'s side read through `git`'s one session
-/// (task spec `spec-verify`, "Base"): its documents as `spec check
+/// (canon `spec-verify`, "Base"): its documents as `spec check
 /// --changed`'s base lists them, the `.rs` and `.ron` files under the code
 /// roots, every `Cargo.toml` under a root or at or above one, `spec.lock`
 /// and the config (`config_path`, root-relative: its mode only). Judged

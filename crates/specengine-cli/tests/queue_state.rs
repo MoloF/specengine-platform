@@ -968,7 +968,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let (_, lines) = small_dump(&pair);
     for (name, from, to) in [
         ("format-3", "\"format\":2,", "\"format\":3,"),
-        ("schema-7", "\"queue_schema\":6,", "\"queue_schema\":7,"),
+        ("schema-8", "\"queue_schema\":7,", "\"queue_schema\":8,"),
     ] {
         let mut newer = lines.clone();
         newer[0] = newer[0].replacen(from, to, 1);
@@ -986,7 +986,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let other_file = other.scratch.dir("dumps").join("zerkalo.jsonl");
     export_ok(&other, &other.home, &other.main, Some(&other_file), NOW);
     let bytes = fs::read(&other_file).unwrap();
-    assert!(bytes.starts_with(b"{\"format\":2,\"queue_schema\":6,\"project\":\"zerkalo\","));
+    assert!(bytes.starts_with(b"{\"format\":2,\"queue_schema\":7,\"project\":\"zerkalo\","));
     let (label, message) = refused_import(&pair, "spec-b", &bytes);
     assert!(message.starts_with(&format!("{label}:1: ")), "{message}");
     assert!(
@@ -1241,7 +1241,7 @@ fn ac08_the_worktree_top_or_the_root_without_git_bounds_the_destination() {
     assert_eq!((outcome.proposals, outcome.events), (0, 0));
     assert_eq!(
         fs::read(&out).unwrap(),
-        b"{\"format\":2,\"queue_schema\":6,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"events\":0}\n"
+        b"{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"events\":0}\n"
     );
     assert!(
         !data_dir(&pair.home).exists(),

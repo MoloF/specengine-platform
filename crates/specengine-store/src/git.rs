@@ -48,7 +48,7 @@
 //! HEAD`, when born `ls-tree -r -z <oid>`, and one `cat-file --batch`
 //! session; never `ls-files` or the intent-to-add detector.
 //!
-//! `spec verify` (`docs/features/spec-verify.md` "Base") reads through
+//! `spec verify` (`docs/canon/spec-verify.md` "Base") reads through
 //! [`crate::verify_git`] on [`Staged::head_only`]'s session: requests by
 //! name in the one `cat-file --batch` (a path's stages, `:1:./spec.lock`
 //! to `:3:./spec.lock`, relative to the root), `hash-object --no-filters
@@ -59,8 +59,9 @@
 //! `cat-file --batch` runs in strict lockstep, without `--buffer`: one
 //! request is written and its whole reply read before the next, so neither
 //! side ever waits on a full pipe (no deadlock whatever the blob sizes).
-//! Each OID is requested once per check: [`Staged::blob`] keeps what it
-//! read, for the index and `HEAD` alike.
+//! [`Staged::blob`] keeps what it read, for the index and `HEAD` alike, so
+//! an OID is requested once, and again only once `read_files` has moved it
+//! out.
 
 use std::collections::{BTreeMap, BTreeSet, btree_map};
 use std::ffi::{OsStr, OsString};
@@ -1103,7 +1104,8 @@ impl Staged {
     }
 
     /// The object `oid`, read through the session (started on first use)
-    /// unless already read: each OID is requested once.
+    /// unless already read: an OID is requested once, and again only once
+    /// `read_files` has moved it out.
     pub(crate) fn blob(&mut self, oid: &str) -> Result<&Blob, GitFailure> {
         match self.objects.entry(oid.to_owned()) {
             btree_map::Entry::Occupied(known) => Ok(known.into_mut()),

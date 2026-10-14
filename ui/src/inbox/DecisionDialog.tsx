@@ -5,6 +5,8 @@ import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { WORDING, type DecisionKind } from "./decisions";
+import { isRefused, revisionsToKeep } from "./revisions";
+import { RevisionList } from "./RevisionList";
 
 function initialOption(proposal: Proposal): number | null {
   if (proposal.options.length === 0) {
@@ -17,11 +19,13 @@ function initialOption(proposal: Proposal): number | null {
 /**
  * The stage a dialog sends (`docs/canon/decision-staging.md` "The stage"): an approve with the
  * chosen option when the proposal has options (else none: a question's working answer, an
- * update's change), no `--answer` or `--canon` from the UI; a reject with its reason.
+ * update's change), `editorial` true when the owner keeps the revisions, else null
+ * (`docs/features/rev-discipline.md` "UI"), no `--answer` or `--canon` from the UI; a reject with
+ * its reason.
  */
-function stageOf(kind: "accept" | "reject", option: number | null, text: string): StageChoice {
+function stageOf(kind: "accept" | "reject", option: number | null, editorial: boolean, text: string): StageChoice {
   return kind === "accept"
-    ? { decision: "approve", option, answer: null, canon: null, note: text === "" ? null : text }
+    ? { decision: "approve", option, answer: null, canon: null, editorial: editorial ? true : null, note: text === "" ? null : text }
     : { decision: "reject", reason: text };
 }
 
@@ -60,7 +64,10 @@ function NotStaged({ id, proposal, kind, onCancel }: { id: string; proposal: Pro
  * revised while the dialog is open (a new `updated_at`, a stage made elsewhere among them) replaces
  * the shown one: the dialog says so, keeps the typed text, picks the new version's recommended
  * option (the option is an index into the new list) and waits for a submit made on the new
- * version, which sends its `updated_at`. Needs clarification and Defer send nothing.
+ * version, which sends its `updated_at`. Accept on a change that alters a node's meaning (the
+ * review's `revisions` a non-empty list) offers "Editorial: keep the revision", unchecked: approval
+ * raises each revision unless the owner says the change is wording only; a revised version unchecks
+ * it again, its revisions being another change's. Needs clarification and Defer send nothing.
  */
 export function DecisionDialog({
   id,
@@ -99,12 +106,16 @@ function StageDialog({
 }) {
   const wording = WORDING[kind];
   const textId = useId();
+  const editorialId = useId();
+  const editorialHintId = useId();
   const missingId = useId();
   const refusalId = useId();
   /** The version on screen: the one opened, then each revision the inbox brings. */
   const [shown, setShown] = useState(proposal);
   const [changed, setChanged] = useState(false);
   const [option, setOption] = useState(() => initialOption(proposal));
+  /** The owner keeps the revisions (`--editorial`); never the default. */
+  const [editorial, setEditorial] = useState(false);
   const [text, setText] = useState("");
   const [missing, setMissing] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -122,6 +133,7 @@ function StageDialog({
     setShown(proposal);
     setChanged(true);
     setOption(initialOption(proposal));
+    setEditorial(false);
   }
 
   // A revision can take away the radio that had focus: put focus on the new choice, not the body.
@@ -132,6 +144,8 @@ function StageDialog({
   }, [changed, shown]);
 
   const hasOptions = kind === "accept" && shown.options.length > 0;
+  /** The nodes whose revisions Accept raises: only then is Editorial offered. */
+  const raised = kind === "accept" ? revisionsToKeep(shown) : null;
   const showMissing = missing && text.trim() === "";
   const describedBy = quiet
     ? ""
@@ -159,7 +173,7 @@ function StageDialog({
     inFlight.current = true;
     setPending(true);
     setRefusal(null);
-    const outcome = await onSubmit(stageOf(kind, hasOptions ? option : null, trimmed), updatedAt);
+    const outcome = await onSubmit(stageOf(kind, hasOptions ? option : null, raised !== null && editorial, trimmed), updatedAt);
     if (outcome !== null) {
       inFlight.current = false;
       setPending(false);
@@ -248,6 +262,36 @@ function StageDialog({
         )}
         {kind === "accept" && !hasOptions && shown.working_answer === null && (
           <p className="dialog-text">This proposal has no options to choose from.</p>
+        )}
+        {raised !== null && (
+          <div className="editorial-choice">
+            <input
+              id={editorialId}
+              type="checkbox"
+              checked={editorial}
+              aria-describedby={editorialHintId}
+              onChange={(event) => {
+                setEditorial(event.target.checked);
+              }}
+            />
+            <div className="editorial-body">
+              <label htmlFor={editorialId} className="option-radio-label">
+                Editorial: keep the revision
+              </label>
+              <div id={editorialHintId} className="option-radio-detail">
+                <p>
+                  {raised.some(isRefused)
+                    ? "Unchecked, this is a meaning approval, which the terminal refuses while a raise below is refused:"
+                    : "Unchecked, approval raises the revision of each node whose meaning the change alters:"}
+                </p>
+                <RevisionList entries={raised} />
+                <p>
+                  Checked, every revision stays as it is, and the lock entries that vouch for the old text take the new text's hash in the
+                  same commit. Only for wording that keeps the meaning.
+                </p>
+              </div>
+            </div>
+          </div>
         )}
         <label className="field-label" htmlFor={textId}>
           {wording.field}

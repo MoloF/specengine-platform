@@ -38,6 +38,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/proposal-interpretation.md](canon/proposal-interpretation.md) Proposal kind: interpretation · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/proposal-revisions.md](canon/proposal-revisions.md) Proposal apply: revisions and the editorial approve · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
 - [docs/canon/queue-backup.md](canon/queue-backup.md) Queue backup and restore · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/round-sheet.md](canon/round-sheet.md) Question rounds: the sheet · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2

@@ -589,7 +589,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/features/decision-apply.md
 /// "Data", "Review document": the five of a decision record after
 /// `linked`).
-const REVIEW_KEYS: [&str; 46] = [
+const REVIEW_KEYS: [&str; 47] = [
     "id",
     "project",
     "kind",
@@ -609,6 +609,9 @@ const REVIEW_KEYS: [&str; 46] = [
     "diff",
     "preview",
     "conflict",
+    // docs/features/rev-discipline.md "Review document, stage, queue":
+    // after `conflict`, 47 keys.
+    "revisions",
     "decided_by",
     "decided_at",
     "decision_note",

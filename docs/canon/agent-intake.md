@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-14
 ---
 
 # Agent intake: queue tools, questions, discrepancies, decisions
@@ -34,7 +34,7 @@ In order; the first refusal answers, exit 1 `<field>: <problem>` (`evidence[2].o
 1. Form -> exit 2 (MCP: rmcp's parameter error): clap, the MCP schema, `--input` not UTF-8 JSON of the shape (unknown or missing field, a bad `severity`, `gap_type`); `--input` errors escaped.
 2. Caps (core constants, UTF-8 bytes, every caller), in input order; required strings not blank, a given optional one not blank either: `node_ids` 1-16; `text`, `summary` <= 1 024; `working_answer`, `price_of_other` <= 2 048; `evidence` 1-8: `file`, `qpath` <= 512, `lines` `N` or `N-M` (1 <= N <= M < 10⁹), `observed`, `documented` <= 1 024; `options` 2-6: `label` <= 128, `effect`, `price` <= 512; `recommendation` an index into them; `proposed_patch` `text` <= 1 MiB, `rationale` <= 4 096 (`propose update`'s too); `distinct_from` <= 64 (`DISTINCT_MAX`) x 1-256, no control character; then the author (Authors).
 3. `node_ids` resolve as `propose update` step 1, generated and `immutable_text` holders allowed (an alias, a legacy ID -> exit 1 naming the canonical; a look-alike, mixed script, `project:` -> exit 2), prefixed `node_ids[i]: `; a node twice once canonical (a path and its `id:`) -> refused naming the first; stored canonical, in given order.
-4. `proposed_patch`: its target resolved and among them, then `propose update` steps 1-4 (prefix `proposed_patch: `; a stale `base` names the current hash); its introduced findings stored, never refusing.
+4. `proposed_patch`: its target resolved and among them, then `propose update` steps 1-4 (prefix `proposed_patch: `; a stale `base` names the current hash; a revision changed refused, `proposal-revisions.md` "Creation"); its introduced findings stored, never refusing.
 5. Place: step 5 (exit 2).
 6. Corpus hits, 7. queue hits and the insert (Dedup).
 

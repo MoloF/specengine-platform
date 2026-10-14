@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-10-14
 ---
 
 # Round routes and screen
@@ -20,7 +20,7 @@ ADR-0035, ADR-0038 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distrib
 
 ```json
 {"project":"example","answers":[
- {"id":"PR-0003","stage":{"decision":"approve","option":null,"answer":"no, 2 s","canon":null,"note":null,"updated_at":"2026-10-07T17:49:50Z"}},
+ {"id":"PR-0003","stage":{"decision":"approve","option":null,"answer":"no, 2 s","canon":null,"editorial":null,"note":null,"updated_at":"2026-10-07T17:49:50Z"}},
  {"id":"PR-0005","stage":{"decision":"reject","reason":"dup","updated_at":"2026-10-07T17:40:02Z"}}]}
 ```
 
@@ -28,7 +28,7 @@ Each `stage` is the decision route's `StageBody` (`decision-staging.md` "Daemon"
 
 ```json
 {"project":"example","answers":[
- {"id":"PR-0003","outcome":"staged","stage":{"decision":"approve","option":null,"answer":"no, 2 s","canon":null,"note":null,"span_hash":null},"staged_at":"2026-10-08T09:12:40Z","replaced":null,"reason":null},
+ {"id":"PR-0003","outcome":"staged","stage":{"decision":"approve","option":null,"answer":"no, 2 s","canon":null,"editorial":null,"note":null,"span_hash":null},"staged_at":"2026-10-08T09:12:40Z","replaced":null,"reason":null},
  {"id":"PR-0005","outcome":"refused","stage":null,"staged_at":null,"replaced":null,"reason":"`PR-0005` is rejected"}],"notes":[]}
 ```
 

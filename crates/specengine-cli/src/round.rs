@@ -1674,6 +1674,7 @@ fn token_stage(
         option,
         answer,
         canon: None,
+        editorial: None,
         note: None,
         updated_at: updated_at.clone(),
     };
