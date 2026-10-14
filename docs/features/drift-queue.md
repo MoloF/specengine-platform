@@ -158,7 +158,7 @@ ui-developer:
 spec-writer:
 
 - [x] SW-1 -- this spec, refreshed and split 2026-10-13. SW-2 -- ADR-0045; `architecture.md#apply`, `#control`. SW-3 -- the drafts naming 4c, 08 s2, 05:188. SW-5 -- `export index`, `check` clean.
-- [ ] SW-4 -- at shipping: Tier 2 canon `docs/canon/proposal-drift.md`; `spec-lock-accept.md` (plan, commit, `proposal`, fifth check, `written`); `proposal-queue.md`, `proposal-apply.md`, `agent-intake.md`, `tasks.md`, `decision-staging.md`, `round.md`, `queue-backup.md` (schema 8, import 4-8), `mcp-read.md`, `plugin.md`, `plugin-files.md`; `family()` for `applies()`/`decides()` there and in `proposal-{kinds,decision,interpretation,amendment}.md`, `decision-record{,-template}.md`; `spec-verify-output.md` "Hints"; `architecture-code.md#spec-lock`, `#verify`; the overridden lines; store, CLI, MCP READMEs; `CLAUDE.md` State.
+- [ ] SW-4 -- at shipping: Tier 2 canon `docs/canon/proposal-drift.md`; `spec-lock-accept.md` (plan, commit, `proposal`, fifth check, `written`); `proposal-{queue,apply,completion,review}.md`, `agent-intake.md`, `tasks.md`, `decision-staging.md`, `round.md`, `queue-backup.md` (schema 8, import 4-8), `mcp-read.md`, `plugin.md`, `plugin-files.md`; `family()` for `applies()`/`decides()` there and in `proposal-{kinds,decision,interpretation,amendment}.md`, `decision-record{,-template}.md`; `spec-verify-output.md` "Hints"; `architecture-code.md#spec-lock`, `#verify`; the overridden lines; store, CLI, MCP READMEs; `CLAUDE.md` State.
 
 ## Risks
 

@@ -13,7 +13,7 @@ adrs: [ADR-0032]
 
 Every Phase 2 spec change (accepted discrepancies, answers, the homoglyph fix of 08 §3 AC-11, compaction) goes through `apply_proposal` (ADR-0004, ADR-0005), which needs no daemon, `norm_hash` or kind vocabulary. Slice 1: the door and the smallest owner loop for one kind, `update` (replace one node's span), applied where it was raised (ADR-0032) as one commit with provenance.
 
-How it works now: `docs/canon/proposal-queue.md` (commands, creation, states, store, escaping, git safety) and `docs/canon/proposal-apply.md` (consent, apply steps, completion, reject, known limits); the binding rule: `docs/canon/architecture.md#apply`. Next slices: 08 Phase 2.
+How it works now: `docs/canon/proposal-queue.md` (commands, creation, states, store, escaping, git safety), `proposal-review.md` (inbox, review document, preview), `proposal-apply.md` (consent, apply steps) and `proposal-completion.md` (completion, reject); the binding rule: `docs/canon/architecture.md#apply`. Next slices: 08 Phase 2.
 
 ## Acceptance criteria
 

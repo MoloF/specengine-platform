@@ -26,7 +26,7 @@ ADR-0045 gives a drift item three outcomes. 4c-1 (`drift-queue.md`) ships approv
 
 ### reject --follow-up
 
-WA-8, Q7. `spec reject PR --reason T [--follow-up code|spec]`. The flag on another kind, staged or not: exit 2 `--follow-up: only a drift item has a follow-up`; another value: exit 2. With it, after plain reject's checks (`proposal-apply.md` "Reject"; its lock commit looked up before and after the prompt: `drift-queue.md` "Approve", completion):
+WA-8, Q7. `spec reject PR --reason T [--follow-up code|spec]`. The flag on another kind, staged or not: exit 2 `--follow-up: only a drift item has a follow-up`; another value: exit 2. With it, after plain reject's checks (`proposal-completion.md` "Reject"; its lock commit looked up before and after the prompt: `drift-queue.md` "Approve", completion):
 
 1. The node resolved now, in the recorded root's refreshed index; gone: exit 1 `--follow-up: R-12 names no node now; reject without it`.
 2. Ask `reject PR-0012 (R-12 in spec.lock on main in <worktree>) and make a draft task (code)? [y/N]`.
@@ -43,7 +43,7 @@ Core renders them from IDs, paths, symbols and states, stack-neutral (07 P2-3), 
 
 ### Exits
 
-`proposal-apply.md` "Reject"'s, plus `--follow-up`: 1 a gone node, a lock commit in history, the state changed since read (nothing written); 2 another kind, another value, no identity.
+`proposal-completion.md` "Reject"'s, plus `--follow-up`: 1 a gone node, a lock commit in history, the state changed since read (nothing written); 2 another kind, another value, no identity.
 
 ## Rules and edge cases
 
@@ -66,7 +66,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec, split from `drift-queue.md` 2026-10-13. SW-3 -- `export index`, `check` clean.
-- [ ] SW-2 -- at shipping: canon `proposal-drift.md` (a follow-up section beside 4c-1's), `proposal-apply.md` "Reject" (the flag, the event's `task`), `tasks.md`; the overridden lines; the core, store, CLI READMEs; `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping: canon `proposal-drift.md` (a follow-up section beside 4c-1's), `proposal-completion.md` "Reject" (the flag, the event's `task`), `tasks.md`; the overridden lines; the core, store, CLI READMEs; `CLAUDE.md` State.
 
 ## Out of scope
 

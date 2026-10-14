@@ -24,7 +24,7 @@ The queue (`proposals`, `tasks`, `runs`, `events` in `<slug>.db`, `proposal-queu
 1. The header `{"format":2,"queue_schema":7,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
 2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs` rows, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 44; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `seq` numbers; JSON columns stay the strings stored.
 
-No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. A format-1 dump (five header keys, `queue_schema` 1-3: 24, 35, 40 proposal columns) or a format-2 one of schema 4-5 (41, 43) restores, the later columns NULL; a schema-6 one's open approve stages gain `"editorial":null`; a schema 1-6 DB exports as format 2, schema 7, unmigrated.
+No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. A format-1 dump (five header keys, `queue_schema` 1-3) or a format-2 one of schema 4-6 restores with its schema's columns (`proposal-queue.md` "Store"), the later ones NULL; a schema-6 one's open approve stages gain `"editorial":null`; a schema 1-6 DB exports as format 2, schema 7, unmigrated.
 
 ```
 {"format":2,"queue_schema":7,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"events":1}
@@ -34,13 +34,7 @@ No export time, host or rowid: equal queues give byte-identical dumps, in any in
 
 ## Export
 
-In order, the first refusal exit 2; nothing is written before step 5.
-
-1. **Bounds**, the directories a dump never goes inside: the root's worktree top (`rev-parse --show-toplevel`); the main worktree, the common dir's parent when the common dir is named `.git` and git's main entry is not bare; every entry of `git worktree list --porcelain -z` (git ≥ 2.36; main first, pruned ones kept; a bare main entry, or one that is the common dir (`--separate-git-dir`), is its git directory); the common dir. Git finding no repository from the root (exit 128, `fatal: not a git repository (or any ` under `LC_ALL=C`): the root alone. Any other git failure (dubious ownership, a broken `.git` file, the root inside a git directory, no `git`, an older git) -> ``cannot tell whether the destination <D> lies inside the repository of the project root <R>: <git error>; nothing written``.
-2. `<D>` resolved (nearest existing ancestor canonical, the rest as written) is **inside** a bound when it starts with the bound's canonical path, or when one of its existing ancestors has the bound's device and inode (a macOS firmlink, a case-folded name) -> ``the destination <D> lies inside <the worktree X of the project root | the worktree X of the project root's repository | the git directory X of the project root's repository>: a dump holds proposal texts, paths and identities and never goes into the repository; nothing written``.
-3. `<D>` exists (a file, a directory, a symlink, a dangling one too) -> ``the destination <D> exists: a dump never replaces a file; name a new one; nothing written``; `--out`'s parent no existing directory -> ``the destination's directory <P> does not exist: `--out` names a new file in an existing directory; nothing written``.
-4. Both tables read raw in one read transaction (`stored_rows`, never `list_readable`); no DB file or no queue tables: an empty dump, `0, 0`, nothing created. A row of another `project` -> ``proposal `PR-…` in <db> is of the project `<p>`, not `<slug>`'s: the dump holds one project's queue; nothing written`` (`event <seq> …`; `of no project (NULL)`).
-5. **Placement**: the default's missing directories made (`backups/` 0700, the data directory as `create_dir_all` makes it); `<D>.partial` created new (0600), written, `fsync`ed, then hard-linked to `<D>` (`link` never replaces a name: a `<D>` appearing meanwhile is step 3's refusal, its bytes untouched; a file system without hard links, exFAT or some network shares: a rename after the check); the partial removed, the directory `fsync`ed. Any failure removes the partial and the directories this run made (innermost first, only while empty; one that stays is named). A stale partial -> ``cannot create <D>.partial: … (left by an export that stopped: remove it); nothing written``, never removed. A partial left or a directory not synced after the dump is whole: exit 0 with a `warning:`.
+Steps 1-5 (the bounds, inside one, an existing `<D>`, the read, the placement; the first refusal exit 2, nothing written before step 5): `queue-export.md`.
 
 ## Import
 
@@ -67,7 +61,7 @@ Neither command writes a spec file, commits, runs apply or completion, or runs g
 | `counts() -> QueueCounts {<C>}` | every table, every project's, one snapshot (`is_empty()`) |
 | `restore(&StoredQueue) -> Restore {Restored, Occupied(QueueCounts)}` | schema steps, then one `Immediate` transaction: all empty or `Occupied`, plain `INSERT`s, commit; a row of another project than the handle's -> `Invalid`, nothing written |
 
-`StoredQueue {proposals, tasks, runs, events}` (`counts()`); `StoredProposal {columns: [Option<String>; 44]}` (`id()`, `project()`), `StoredTask`, `StoredRun` (`tasks.md`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (44; `proposal_columns(schema)`: schema 1's first 24, 2's 35, 3's 40, 4's 41, 5's 43), `TASK_COLUMNS` (17), `RUN_COLUMNS` (11), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
+`StoredQueue {proposals, tasks, runs, events}` (`counts()`); `StoredProposal {columns: [Option<String>; 44]}` (`id()`, `project()`), `StoredTask`, `StoredRun` (`tasks.md`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (44; `proposal_columns(schema)`: `proposal-queue.md` "Store"), `TASK_COLUMNS` (17), `RUN_COLUMNS` (11), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
 
 ## Known limits
 
@@ -75,6 +69,4 @@ None blocks (ADR-0017).
 
 - **Stale backup** (R1): a dump older than the queue loses what came after, whose IDs are issued again; one whose old `Proposal:` commit is on a branch blocks reject. A DB lost before its first export is lost; deleting the data directory deletes `backups/` (copy dumps out).
 - One TEXT value that is no UTF-8 text (written elsewhere) fails every export until fixed.
-- Bounds: git seeing no repository from the root leaves the root as the only bound; another name for a directory inside a worktree (a bind mount) is not recognised (firmlinks are); the common dir's parent counts only when the common dir is named `.git`, so `--separate-git-dir` run from a linked worktree leaves the main checkout unprotected; a submodule root's superproject is not a bound; the data directory is judged against the root by path only.
-- Placement: a crash between the link and the partial's removal leaves `<D>` whole beside its partial; without hard links, a file appearing between the check and the rename is replaced.
 - Import: a FIFO swapped in between the check and the open still blocks; the file is read whole, no size cap; no `[ids]` `PR` clash check; SQLite may leave 0-byte `-wal`, `-shm` files when its open fails (pre-existing).

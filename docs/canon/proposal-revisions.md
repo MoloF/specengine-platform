@@ -8,7 +8,7 @@ reviewed: 2026-10-14
 
 # Proposal apply: revisions and the editorial approve
 
-ADR-0043 (`architecture.md#apply`, `#layout`; the rule: `node-revision.md` "Raising"), built by slice 4b-1 (`docs/features/rev-discipline.md`, 2026-10-14). What `spec approve` adds to `proposal-apply.md`'s steps for the kinds writing an existing node, `update`, `interpretation` and a section-form `create`; a new file and a deciding kind write no revision. Code: core `raise` (pure: pairs, the raise and its refusals, the lines written, `RevisionRow`), `lock::{vouches, refresh_editorial}`, `proposal::commit_message_raising`; CLI `revisions.rs` (steps 3, 6, 8-10, completion, the review's rows), `apply.rs` (`approve_editorial`); store `WorktreeGit::commit_only_paths`.
+ADR-0043 (`architecture.md#apply`, `#layout`; the rule: `node-revision.md` "Raising"), built by slice 4b-1 (`docs/features/rev-discipline.md`, 2026-10-14). What `spec approve` adds to `proposal-apply.md`'s steps for the kinds writing an existing node, `update`, `interpretation` and a section-form `create`; a new file and a deciding kind write no revision. Code: core `raise` (pure: pairs, the raise and its refusals, the lines written; `revision_change`, `RaiseRefusal`, `write_revisions`, `RevisionRow`), `lock::{vouches, refresh_editorial}`, `proposal::commit_message_raising`; CLI `revisions.rs` (steps 3, 6, 8-10, completion, the review's rows), `apply.rs` (`approve_editorial`); store `WorktreeGit::commit_only_paths`.
 
 ## Creation
 
@@ -47,7 +47,7 @@ Lock-mode: editorial
 
 ## Completion and reject
 
-The trailer lookup (`proposal-apply.md` "Completion") completes, and reject refuses on, a commit changing the path alone, or the path and `<root_rel>/spec.lock` when its `Lock-mode:` is `editorial`; its span equal to step 5's text with or without the raise (Q12: an apply made before 4b-1 completes). The hint keeps "changing only `<path>`".
+The trailer lookup (`proposal-completion.md` "Completion") completes, and reject refuses on, a commit changing the path alone, or the path and `<root_rel>/spec.lock` when its `Lock-mode:` is `editorial`; its span equal to step 5's text with or without the raise (Q12: an apply made before 4b-1 completes). The hint keeps "changing only `<path>`".
 
 ## Review
 

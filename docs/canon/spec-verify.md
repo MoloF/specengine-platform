@@ -8,7 +8,7 @@ reviewed: 2026-10-13
 
 # `spec verify`: drift between `spec.lock` and the tree
 
-`spec verify [--changed] [--json]` (+ `--root`, `--config`) judges every lock key against the tree: a state per row, findings Fix, Check or Pre-existing, exit 0, 1 or 2 under `[verify] mode` (ADR-0042, `architecture-code.md#verify`). Read-only: it writes only the data directory (the index refresh), never `spec.lock`, the worktree, a git object, a queue row or an event. `spec check`, this repository's hook, CI, MCP, HTTP, UI and the gate never run it. Judge: core `verify`, pure; git: store `VerifyGit`; command: CLI `verify.rs`, `verify_rows.rs` (their READMEs). Its text, hints and JSON: `docs/canon/spec-verify-output.md`.
+`spec verify [--changed] [--json]` (+ `--root`, `--config`) judges every lock key against the tree: a state per row, findings Fix, Check or Pre-existing, exit 0, 1 or 2 under `[verify] mode` (ADR-0042, `architecture-code.md#verify`). Read-only: it writes only the data directory (the index refresh), never `spec.lock`, the worktree, a git object, a queue row or an event. `spec check`, this repository's hook, CI, MCP, HTTP, UI and the gate never run it. Judge: core `verify` (`VerifyConfig`, `verify_from_toml`, `RowKey`, `judge_row(&RowFacts)`, `verdict`, `is_pre_existing`), pure; git: store `VerifyGit`; command: CLI `verify.rs`, `verify_rows.rs` (their READMEs). Its text, hints and JSON: `docs/canon/spec-verify-output.md`.
 
 ## The `[verify]` table
 

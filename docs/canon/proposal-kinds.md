@@ -12,7 +12,7 @@ Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kin
 
 ## Forms
 
-`spec propose create TARGET [--base HASH] --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID] [--brief]`: caps, outputs (`PR-0001`, `introduced: <n>`), `--brief`, JSON as `propose update`'s (`proposal-queue.md` "Commands").
+`spec propose create TARGET [--base HASH] --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID] [--brief]`: caps, outputs (`PR-0001`, `introduced: <n>`), `--brief`, JSON as `propose update`'s (`proposal-review.md`).
 
 - **File form**: `TARGET` a `.md` path no indexed file has, no `--base`; the text is the whole file, byte for byte; the commit `A <path>`.
 - **Section form**: `TARGET` resolving as an update's (Creation 1, its refusals), `--base` its span hash (Creation 2); the text is the span with new `{#ID}` sections below the target's level; the commit `M <path>`.

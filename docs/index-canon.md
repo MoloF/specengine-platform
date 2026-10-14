@@ -32,14 +32,17 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/plugin-files.md](canon/plugin-files.md) Plugin: files, contract, version, install · plugin · tier 2
 - [docs/canon/plugin.md](canon/plugin.md) Plugin: skills and roles · plugin · tier 2
 - [docs/canon/proposal-amendment.md](canon/proposal-amendment.md) Proposal kind: amendment · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · tier 2
-- [docs/canon/proposal-apply.md](canon/proposal-apply.md) Proposal apply: consent, steps, completion, reject · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/proposal-apply.md](canon/proposal-apply.md) Proposal apply: consent and steps · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/proposal-completion.md](canon/proposal-completion.md) Proposal completion and reject · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/proposal-create-apply.md](canon/proposal-create-apply.md) Proposal kinds: applying a create · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/proposal-decision.md](canon/proposal-decision.md) Proposal kind: decision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · tier 2
 - [docs/canon/proposal-interpretation.md](canon/proposal-interpretation.md) Proposal kind: interpretation · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/proposal-review.md](canon/proposal-review.md) Proposal review: inbox, review document, preview · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/proposal-revisions.md](canon/proposal-revisions.md) Proposal apply: revisions and the editorial approve · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
 - [docs/canon/queue-backup.md](canon/queue-backup.md) Queue backup and restore · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/queue-export.md](canon/queue-export.md) Queue export: bounds and placement · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/round-sheet.md](canon/round-sheet.md) Question rounds: the sheet · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
@@ -53,6 +56,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-check.md](canon/spec-check.md) spec check: what it enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
 - [docs/canon/spec-cli-bundle.md](canon/spec-cli-bundle.md) spec bundle and bundle_hash · crates/specengine-cli, crates/specengine-core, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
+- [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli · tier 2
 - [docs/canon/spec-lock-accept.md](canon/spec-lock-accept.md) spec lock accept: the owner's lock commit · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-lock.md](canon/spec-lock.md) spec.lock: the file, its entries, spec lock regen · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-output.md](canon/spec-verify-output.md) spec verify's output: rows, hints, summary, JSON · crates/specengine-cli · tier 2

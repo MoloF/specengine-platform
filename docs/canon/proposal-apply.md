@@ -6,9 +6,9 @@ owner: owner
 reviewed: 2026-10-14
 ---
 
-# Proposal apply: consent, steps, completion, reject
+# Proposal apply: consent and steps
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
 
 ## Consent
 
@@ -22,7 +22,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 
 ## Apply steps
 
-`approve_with(…, &ApproveRequest, &ApproveFlags, consent)` (a decision flag on an update: exit 2): `applied` -> exit 1 `` `PR` is already applied: commit <sha> ``; `rejected` -> exit 1. Then the trailer lookup ("Completion"); its own commit completes it. Else, in the recorded worktree only:
+`approve_with(…, &ApproveRequest, &ApproveFlags, consent)` (a decision flag on an update: exit 2): `applied` -> exit 1 `` `PR` is already applied: commit <sha> ``; `rejected` -> exit 1. Then the trailer lookup (`proposal-completion.md` "Completion"); its own commit completes it. Else, in the recorded worktree only:
 
 1. Consent (above).
 2. **Place**: the worktree exists, top and common dir as recorded, `HEAD` on the recorded branch with a commit, no merge, rebase, cherry-pick, revert, bisect or sequencer state; else exit 2 (`a <operation> is in progress in <w>: finish or abort it first`, …).
@@ -52,35 +52,9 @@ Base-commit: <40 or 64 hex>
 
 `Decided-by`: the step-7 identity. `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:` follow `Base-commit:`.
 
-## Completion
-
-A proposal's own commit on its branch completes it, no new commit: an interrupted apply, a cherry-pick, a split. **Where**: the recorded worktree when it is a directory of the recorded repository; else the current repository when it is the recorded one (worktree removed); else refused, naming why (the worktree gone and its repository not the current one, no longer a git worktree, another repository's). **Which**: commits with `Proposal: <id>` in `base_commit..refs/heads/<branch>`, newest first; the base commit not in the repository (pruned after a rebase): the branch's whole history. A gone branch fails the lookup: ``the branch `t1` no longer exists; recreate it at its last commit (`git branch t1 <commit>`), then `spec approve PR` or `spec reject PR` ``; base gone too, adding that its base commit <sha> is not in the repository. **Completes**: one parent, only the target's path changed (or with `spec.lock`, `Lock-mode: editorial`), its span equal to step 5's result, raised or not, on the first parent's blob (what an apply wrote on top of it) or on its own blob (the new text; a split or cherry-picked merge), each blob raw (`cat-file blob`) parsed under the `<root_rel>/specengine.toml` of that commit's tree, else the one read now (the recorded root's; the current project's for a current-repository read). Else why: `changes a, b`, `has N parents`, `does not carry the proposal's text`, `cannot be read: …`.
-
-Looked up by approve before step 2 and at step 5, by review, by reject before and after its prompt. Completing (a task's snapshot refreshed as at step 10): `approved -> applied`, no prompt; `open -> applied` after the `complete` question, the identity of where it was looked up (none -> exit 2, logged as step 7); note `` `PR` completed by its commit <sha> on `<branch>`; no new commit ``; writes the queue and the data directory's index only (failed reindex: a `warning:`). A failed lookup is a note for approve and review (appended to an exit-2 reason at steps 2-6) and refuses reject. Hint (steps 5, 10, reject): ``a commit on `<branch>` with the trailer `Proposal: PR`, one parent, changing only `<path>` to the proposal's text completes it (`spec approve PR`)``.
-
-## Reject
-
-`reject(…, &RejectRequest {id, reason?, …}, consent)`: `open` or `approved` only (a deciding kind: `decision-record.md` "Reject"; else exit 1 `` `PR` is applied: only an open or approved proposal is rejected (commit <sha>) ``), never with a `Proposal:` commit on its branch, checked before and after the prompt; refused: nothing written, no event:
-
-- its completing commit -> exit 1 `` `PR` has its commit <sha> on `<branch>`: a proposal whose commit is in history is never rejected; `spec approve PR` completes it ``;
-- another -> the newest named, ` (<k> older one(s) too)`, why it does not complete, the hint;
-- a failed lookup -> exit 1 `` cannot tell whether `PR` has its commit in history: <why, with the way out> ``.
-
-Then `reject_from` on the state read (changed since -> exit 1); `decision_note` the reason, `proposal.rejected`. `decided_by`: the committer where the history was read, else the current repository's; none -> exit 2.
-
-**Orphans** (`proposal-queue.md`): rejected `open` or `approved`, with the note `` `PR` belongs to the repository <dir>, which no longer exists ``. The lookup runs in the current repository on the branch of its name: skipped when neither branch nor base commit is there (another repository); the branch alone missing refuses with the way out ending ``then `spec reject PR` ``; a commit found refuses, suffixed ``; it was recorded in the repository <dir>, now gone or moved: move the repository back to <dir> (`git worktree repair`), then `spec approve PR` `` (`<dir>`: the recorded common dir).
-
 ## Known limits
 
-None blocks.
+None blocks; completion's and reject's: `proposal-completion.md` "Known limits"; the inbox's: `proposal-review.md`.
 
 - Racing terminals meet git's `index.lock` (reported); hooks or signing needing stdin fail (bytes restored); revisions: `proposal-revisions.md`.
-- A reject running while a live apply commits between reject's second check and its write leaves it rejected with its commit in history (the apply's step 10 exits 1, `rejected`): needs a cross-process lock.
-- An end-of-line or clean/smudge filter on spec files (`core.autocrlf`, `eol=crlf`): completion compares raw blobs with worktree bytes: an apply interrupted at step 10 is neither completed nor rejected (later: `cat-file --filters`).
-- The trailer names no project: with several SpecEngine roots in a repository, or a reset data directory, another proposal's same-ID commit on the branch blocks reject; with the base pruned the whole-branch read finds older ones too; approve refuses only when that commit applied the text.
-- A reverted apply commit: approve refused at step 5, reject refused; way out: a completing commit (the hint).
 - A path target follows no rename (step 3 refuses; no re-targeting).
-- An orphan whose branch was renamed and base pruned is rejected without the lookup, even with its commit on the renamed branch.
-- An orphan rejected from a clone that never had its branch refuses (branch missing): `git branch <branch> HEAD`, `spec reject`, delete the branch.
-- A transient failure of only step 5's lookup is dropped (no note); consent still precedes the write.
-- `inbox --all`'s gone note lists gone applied and rejected IDs too.

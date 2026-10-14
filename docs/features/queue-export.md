@@ -12,7 +12,7 @@ shipped: 2026-10-05
 
 The queue (`proposals`, `events` in `<slug>.db`) is the only state git cannot rebuild, and nothing backed it up: a lost DB lost open work and restarted IDs at `PR-0001`, colliding with old `Proposal:` commits. ADR-0003: a JSONL dump to a backup directory, restored by `spec import-state`. No new ADR: `spec export state` spells ADR-0003's `export --state` as a mode, like `export index`; bare `spec export` (`queue.md`) goes to `task-package`.
 
-How it works now: `docs/canon/queue-backup.md` (commands, format, export bounds and placement, import steps, the one door, store ops, known limits); `docs/canon/architecture.md#storage`.
+How it works now: `docs/canon/queue-backup.md` (commands, format, import steps, the one door, store ops, known limits), `queue-export.md` (export bounds and placement); `docs/canon/architecture.md#storage`.
 
 ## Acceptance criteria
 

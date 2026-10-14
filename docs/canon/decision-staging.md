@@ -32,7 +32,7 @@ Checked as the terminal checks its flags, before anything is stored: the ID and 
 
 ## Queue
 
-Queue schema 5 (migration step 5, one transaction adding TEXT `staged`, `staged_at`; `proposal_columns(4)` the first 41): both NULL when nothing is staged. Schema 4 opens as 5, then 6, 7. A migrated queue refuses older binaries (`SchemaTooNew`): restart the daemon, reinstall `specengine-mcp`.
+Queue schema 5 adds TEXT `staged`, `staged_at` (`proposal-queue.md` "Store"): both NULL when nothing is staged. A migrated queue refuses older binaries (`SchemaTooNew`): restart the daemon, reinstall `specengine-mcp`.
 
 `stage_from(id, seen, stage, now)` sets both (`staged_at`, `updated_at` = `now`) on `open` only, one `Immediate` transaction with `proposal.staged` and a compare-and-set on `Seen {status, updated_at, staged}`; else `Changed`, `Status`, `Invalid` (a stage the kind cannot hold), nothing written. `unstage_from(id, seen, now)` NULLs both with `proposal.unstaged`; nothing staged -> `Ok(false)`, no write, no event. Every op leaving `open` (approve, reject, apply, a completion) NULLs both in its transaction, no `.unstaged`. `approve_from`, `approve_record_from`, `reject_from`, `reject_orphan` compare `staged` too. `Decision {decided_by, note, staged_at}`: `staged_at` the stage it confirms, else `None`; a compare-and-set op refuses one the row does not hold (`Invalid`); `approve`, `reject`, `applied_with` compare nothing (the CLI compares before a completion: "Terminal").
 
@@ -71,7 +71,7 @@ A staged `span_hash` other than the target's now (step 5) gives ``staged against
 
 ## Documents
 
-The review document: `staged` (the object or `null`), `staged_at` after `task_id`, `revisions` after `conflict` (47 keys); text lines `staged:` (compact JSON), `staged_at:`. Inbox entries: `staged_at` after `record_id` (12 keys); text state `open (staged)`. `fixtures/daemon-keys.json` pins them (the two shapes, 7 and 2 keys; 45 sets). MCP `get_proposal` = `review --brief --json`, its output schema's `staged` two closed objects. Backups keep stages (`queue-backup.md` "Format").
+`staged`, `staged_at` in the review document, its text and the inbox; their key sets in `fixtures/daemon-keys.json`, MCP `get_proposal`'s schema: `proposal-review.md`.
 
 ## UI
 
