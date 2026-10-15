@@ -109,8 +109,9 @@ impl Sink for blake3::Hasher {
     }
 }
 
-/// Length-prefixed string: `len as u32 LE ‖ bytes`.
-fn put(sink: &mut impl Sink, bytes: &[u8]) {
+/// Length-prefixed string: `len as u32 LE ‖ bytes`. Shared with the v3
+/// levels ([`crate::levels`]), byte for byte.
+pub(crate) fn put<S: Sink + ?Sized>(sink: &mut S, bytes: &[u8]) {
     let len = u32::try_from(bytes.len()).unwrap_or(u32::MAX);
     sink.write(&len.to_le_bytes());
     sink.write(bytes);
@@ -240,7 +241,7 @@ pub fn is_transparent_statement(statement: Node) -> bool {
 }
 
 /// The previous sibling of `node` that is not a comment.
-fn previous_code_sibling(node: Node) -> Option<Node> {
+pub(crate) fn previous_code_sibling(node: Node) -> Option<Node> {
     let mut previous = node.prev_sibling();
     while let Some(candidate) = previous {
         if !is_comment(candidate) {
@@ -264,7 +265,7 @@ pub fn is_body_token_tree(node: Node) -> bool {
 
 /// The item an `attribute_item` is attached to: the next sibling past
 /// attributes and comments.
-fn attributed_item(attribute: Node) -> Option<Node> {
+pub(crate) fn attributed_item(attribute: Node) -> Option<Node> {
     let mut next = attribute.next_sibling();
     while let Some(candidate) = next {
         if candidate.kind() != "attribute_item" && !is_comment(candidate) {
@@ -330,12 +331,14 @@ fn use_run(node: Node) -> Option<Vec<UseMember>> {
 }
 
 /// One ancestor of the node under the cursor, kept while the cursor is below it.
+/// The v3 levels ([`crate::levels`]) walk with the same frames, so N1-N3
+/// read alike in both recipes.
 #[derive(Clone, Copy)]
-struct Frame<'tree> {
+pub(crate) struct Frame<'tree> {
     kind: &'tree str,
     /// The ancestor is a transparent wrapper: no `(`‖kind was emitted for it,
     /// its delimiters are dropped and no `)` closes it.
-    transparent: bool,
+    pub(crate) transparent: bool,
     /// The ancestor is a transparent wrapper standing in a body position, so
     /// its children stand there too (`{ { x } }` as a match-arm value).
     body: bool,
@@ -344,8 +347,19 @@ struct Frame<'tree> {
 }
 
 impl<'tree> Frame<'tree> {
+    /// The frame of a walk's root node of `kind`: not transparent, outside
+    /// any body position and any expression macro.
+    pub(crate) fn root(kind: &'tree str) -> Self {
+        Self {
+            kind,
+            transparent: false,
+            body: false,
+            expression_macro: false,
+        }
+    }
+
     /// The frame of `node`, a child of this frame reached through `field`.
-    fn child(self, node: Node<'tree>, field: Option<&str>, transparent: bool) -> Self {
+    pub(crate) fn child(self, node: Node<'tree>, field: Option<&str>, transparent: bool) -> Self {
         let expression_macro = if self.kind == "macro_invocation" && node.kind() == "token_tree" {
             node.child(0)
                 .is_some_and(|open| matches!(open.kind(), "(" | "["))
@@ -370,7 +384,7 @@ impl<'tree> Frame<'tree> {
     }
 
     /// Whether `node`, a child reached through `field`, is a transparent wrapper.
-    fn transparent_child(self, node: Node<'tree>, field: Option<&str>) -> bool {
+    pub(crate) fn transparent_child(self, node: Node<'tree>, field: Option<&str>) -> bool {
         match node.kind() {
             "expression_statement" => is_transparent_statement(node),
             "block" => self.body_position(field) && is_tail_only_block(node),
@@ -380,7 +394,7 @@ impl<'tree> Frame<'tree> {
     }
 
     /// Whether an anonymous child of this (transparent) frame is a dropped delimiter.
-    fn drops(self, punctuation: &str) -> bool {
+    pub(crate) fn drops(self, punctuation: &str) -> bool {
         self.transparent
             && match self.kind {
                 "block" | "token_tree" => matches!(punctuation, "{" | "}"),
@@ -502,7 +516,7 @@ fn normalize_nested(
 
 /// BLAKE3 output, 32 bytes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Digest([u8; 32]);
+pub struct Digest(pub(crate) [u8; 32]);
 
 impl Digest {
     #[must_use]

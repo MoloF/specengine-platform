@@ -17,6 +17,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/architecture-code.md](canon/architecture-code.md) SpecEngine architecture rules: the code layer · architecture, crates/specengine-code, crates/specengine-cli · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/code-bindings.md](canon/code-bindings.md) Code bindings: [code], markers bound to code, spec refs · crates/specengine-code, crates/specengine-cli, crates/specengine-core · tier 2
+- [docs/canon/code-hash.md](canon/code-hash.md) Code hash: recipe v2 and the v3 levels · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/code-targets.md](canon/code-targets.md) Layer A targets: cargo runner, layout fallback · crates/specengine-eval, crates/specengine-code · tier 2
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2

@@ -27,7 +27,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/constant-census.md](features/constant-census.md) constant-census: which string constants carry a record's code (slice 12a) · crates/specengine-eval, crates/specengine-code, fixtures · draft
 - [docs/features/hash-levels-eval.md](features/hash-levels-eval.md) hash-levels-eval: level and fingerprint figures on fixtures and pilots · crates/specengine-eval, fixtures · draft
 - [docs/features/hash-levels-ron.md](features/hash-levels-ron.md) hash-levels-ron: the value hash of an anchored RON value · crates/specengine-code, fixtures · draft
-- [docs/features/hash-levels.md](features/hash-levels.md) hash-levels: per-level hashes and fingerprints of a bound item · crates/specengine-code, crates/specengine-eval, fixtures · draft
 - [docs/features/health-code.md](features/health-code.md) health-code: Health shows code assuming a decision and nodes no code binds · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/features/health-drift.md](features/health-drift.md) health-drift: Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/features/impact.md](features/impact.md) impact: the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft

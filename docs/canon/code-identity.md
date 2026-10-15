@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-code, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-16
 ---
 
 # Layer A identity: target units, markers, RON paths
@@ -36,7 +36,7 @@ No targets at all (a virtual root, a target-less layout): rules 2–4 give `Unro
 - **ID**: the first non-blank after the keyword on its line, up to whitespace, `@`, `[` or `*/` (`X[sig]` = `X [sig]`; `/* @implements X*/` → `X`). Latin = ASCII letters, digits, `-_.:/#` (`<slug>/ID`, ADR-0026; `ID#SECTION`); else `id_latin` false, counted (ADR-0009). An empty ID (the keyword ends the line or meets `@`, `[`, `*/`) is counted apart, `id_latin` true.
 - **token**: the ID's first byte to whitespace, `[`, `*/`, line end or an `@keyword`: `X@@verifies Y` gives the token `X@` and a `verifies Y` marker.
 - **rev**: `@` right after the ID and 1-9 ASCII digits ending the token (ADR-0018); else (`X@3a`, `X@`, ten digits) no rev and no note.
-- **levels**: optional spaces/tabs, `[`…`]` on the marker's line before a `*/` and the next `@keyword`; items `path|sig|body|deps` (05 §5.2), lowercase, `,`-separated, spaces/tabs around, one trailing `,` tolerated; canonical order `path, sig, body, deps`. None → `Default` (`[sig, body]`), told apart from declared.
+- **levels**: optional spaces/tabs, `[`…`]` on the marker's line before a `*/` and the next `@keyword`; items `path|sig|body|deps` (`code-hash.md` "Levels"), lowercase, `,`-separated, spaces/tabs around, one trailing `,` tolerated; canonical order `path, sig, body, deps`. None → `Default` (`[sig, body]`), told apart from declared.
 - **errors**, the first that applies: `unclosed` (no `]` before the line end, `*/` or the next keyword; no note), `unknown` (any other item, empty ones too: `[Sig]`, `[sig body]`, `[,]`), `duplicate`, `empty` (`[]`, `[ ]`). Never fatal: relation, ID, rev, note kept; levels `Invalid`, untrusted, never the default; a fixed category, never file text.
 - **note**: text after `]` (or `ID[@rev]`), trimmed, `*/` stripped, to the next keyword; a later `[` is note text (`X see [docs]` → that note, `Default`).
 - Linear: the level scan never leaves the marker's line.
@@ -84,4 +84,4 @@ Pilots (read-only): A 0.2 % of 11 852 items ambiguous — `duplicate` 29 in 11 g
 ## Open
 
 - A process-group kill.
-- Phase 3: `symbols` and `markers` rows, per-level hashes, level meaning in RON, the impl `disambiguator`.
+- Phase 3: `symbols` and `markers` rows, level meaning in RON, the impl `disambiguator`.

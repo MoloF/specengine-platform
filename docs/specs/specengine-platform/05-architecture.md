@@ -132,9 +132,8 @@ Layer A details:
 
 ### 5.2. Canonical AST hash
 
-The shipped recipe **`specengine-hash/v2`** (formula, N1-N4, what is and is not hashed, the traps, measurement) and its limits: `crates/specengine-code/README.md` "Hash recipe" and "Known limits and open minors". On top of it, Phase 3:
+The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 records, and **`specengine-hash/v3`** (5a-1 `hash-levels`), a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recording the levels and level-aware verify: 5b-1 `lock-levels.md`.
 
-- **Fingerprint levels** (lockwire idea): a symbol has four independent hashes: `path` (location), `sig` (name-independent signature: parameters, types, return, modifiers, attributes), `body` (normalized body via the `body` field of `function_item`/`impl_item`/`trait_item`), `deps` (sorted set of outgoing calls). **A binding declares which levels it depends on**: an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`. Marker: `// @implements RULE-X@3 [sig]`, default `[sig, body]`. The main way to keep every refactor from becoming an alarm the owner learns to ignore.
 - Option `--deep`: hashes of called functions from the same crate are added, depth 1.
 
 **Following renames and moves — the anchor-state vocabulary of code-graph-rag (cgr)**, which agents already see via MCP. No need to invent our own:
@@ -148,12 +147,7 @@ The shipped recipe **`specengine-hash/v2`** (formula, N1-N4, what is and is not 
 
 cgr's `STALE` (body changed) is our `code_ahead`. The anchor state answers "where is the symbol"; `sync` (§5.3) answers "does the meaning still match".
 
-To find a symbol after a rename and to tell copies apart, **three fingerprints are needed, not one** (cgr technique):
-1. `body_hash` (§5.2) — for drift: identifiers inside the body count;
-2. **skeleton fingerprint** — all names, literals and comments masked, pure structure remains. Survives a rename but coincides for copies. Separate fingerprints **per branch** (statement) give a change ratio ("2 of 6 branches changed") instead of a boolean;
-3. **textual anchor quote** — a digest of the definition text with the name masked plus the lines before and after. Distinguishes copies with the same skeleton.
-
-Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not followed** through renames — empty functions and one-line delegates are "twins", and Bevy has many (`fn build(&self, app) { app.add_systems(..) }`). Principle: "a missed follow heals as STALE, a false follow lies forever". A rename is detected as the pair "symbol vanished + a symbol with the same skeleton appeared in the same file" (one to one). With identical `qpath`s a discriminator applies, and resolution does not depend on row order in the DB.
+Following a rename and telling copies apart takes three fingerprints, not one (cgr technique; `code-hash.md` "Fingerprints"): `body` for drift, `skeleton` (survives a rename, coincides for copies), `quote` (tells copies with one skeleton apart); per-branch skeletons giving a change ratio are Phase 4. A body under the triviality threshold (`code-hash.md` "Triviality", limpet's 124 B) is **not followed**: "a missed follow heals as STALE, a false follow lies forever". A rename is detected as the pair "symbol vanished + a symbol with the same skeleton appeared in the same file" (one to one). With identical `qpath`s a discriminator applies, and resolution does not depend on row order in the DB.
 
 **`qpath` lookup** — through a suffix index from day one: in cgr a linear scan of the name registry ate 48 % CPU; the index sped this up 178–382×. `find_symbols` accepts both a name and `path:line` (returns the definitions covering the line, innermost first); ranking: exact → path suffix → same name. Every resolved link carries a resolution confidence (`exact | heuristic`), and destructive operations (rebinding, ID rename) **refuse** to act on a heuristic without an explicit flag.
 

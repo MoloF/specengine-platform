@@ -11,6 +11,10 @@ pub const TREE_SITTER_VERSION: &str = "0.27.0";
 /// hash deliberately instead of showing up as drift.
 pub const TREE_SITTER_RUST_VERSION: &str = "0.24.2";
 
+/// The grammar's `node-types.json` (`tree_sitter_rust::NODE_TYPES`), kept
+/// for the pin of [`crate::levels::BODY_FIELDS`]: this crate reads no JSON.
+pub const NODE_TYPES: &str = tree_sitter_rust::NODE_TYPES;
+
 /// The Rust grammar as a tree-sitter language.
 #[must_use]
 pub fn language() -> Language {

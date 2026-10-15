@@ -23,6 +23,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/decision-staging.md](features/decision-staging.md) shipped
 - [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped
+- [docs/features/hash-levels.md](features/hash-levels.md) shipped
 - [docs/features/health-left.md](features/health-left.md) shipped
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped
 - [docs/features/import-layout.md](features/import-layout.md) shipped

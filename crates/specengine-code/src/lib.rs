@@ -44,6 +44,18 @@
 //!   hashing none;
 //! - [`naming`] — a tree's items and modules named at once: `qpath` and
 //!   ambiguity (`path_attribute`, `unrooted`, `duplicate`).
+//!
+//! Phase 3 slice 5a-1 `hash-levels` (`crates/specengine-code/README.md`
+//! "Hash recipe"):
+//!
+//! - [`levels`] — recipe `specengine-hash/v3` beside v2: an item's levels
+//!   `sig`, `body`, `deps` and fingerprints `skeleton`, `quote`,
+//!   `body_bytes` ([`LevelHashes`], [`TRIVIAL_BODY_BYTES`]), or
+//!   `cannot_verify` ([`LevelState`]); the file's module
+//!   ([`module_levels`]); the body of every item kind as data
+//!   ([`BODY_FIELDS`], [`body_nodes`]) and the calls `deps` hashes
+//!   ([`call_targets`]); [`item_levels`] the twin of [`hash_bound_items`]
+//!   for chosen bound items. Nothing records these digests yet.
 
 pub mod bevy;
 pub mod bind;
@@ -51,6 +63,7 @@ pub mod comments;
 pub mod grammar;
 pub mod hash;
 pub mod items;
+pub mod levels;
 pub mod markers;
 pub mod naming;
 pub mod qpath;
@@ -59,10 +72,15 @@ pub mod ron;
 pub use bevy::{BevyAnalysis, detect, detect_file};
 pub use bind::{
     Binding, BoundComment, RustBinding, Unanchored, bind_file, bind_tree, hash_bound_items,
+    item_levels,
 };
 pub use grammar::{GrammarInfo, RustParser, grammar_info};
 pub use hash::{Digest, ErrorCategory, HashState, RECIPE, hash_item, normalize, recipe_header};
 pub use items::{FileAnalysis, ItemRecord, MOD_KIND, ModDeclaration, analyze_file, analyze_tree};
+pub use levels::{
+    BODY_FIELDS, BodyField, BodySlot, LEVEL_RECIPE, LevelHashes, LevelState, TRIVIAL_BODY_BYTES,
+    body_nodes, call_targets, level_header, module_levels,
+};
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
 pub use naming::{Name, NamedFile, Names, ROOT_PACKAGE, name_files};
 pub use qpath::{

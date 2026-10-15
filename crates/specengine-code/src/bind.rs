@@ -52,6 +52,7 @@ use tree_sitter::{Node, Tree};
 use crate::grammar::RustParser;
 use crate::hash::{ErrorCategory, HashState, hash_item, is_comment};
 use crate::items::{FileAnalysis, Hashing, MOD_KIND, analyze_with_nodes};
+use crate::levels::{FileLevels, LevelState};
 
 /// Kinds a comment inside of which is `in_macro`: a macro call (its token
 /// tree included) and a `macro_rules!` definition (its rules included). A
@@ -235,6 +236,25 @@ pub fn hash_bound_items(tree: &Tree, source: &str, items: &[usize]) -> Vec<Optio
                 .get(index)
                 .map(|node| hash_item(*node, source.as_bytes()))
         })
+        .collect()
+}
+
+/// The levels and fingerprints ([`crate::levels`], recipe
+/// [`crate::levels::LEVEL_RECIPE`]) of the items at `items`, the twin of
+/// [`hash_bound_items`]: indexes into the [`RustBinding::analysis`] that
+/// [`bind_tree`] gives for the same `tree` and `source` (the order
+/// [`crate::items::analyze_tree`] gives too), in the order asked; `None`
+/// for an index past its items. One item walk per call; never reads an
+/// item's hash state. An inline `mod`'s module
+/// ([`Binding::Module`]`(Some(i))`) is item `i`'s entry; the file's module
+/// is [`crate::levels::module_levels`].
+#[must_use]
+pub fn item_levels(tree: &Tree, source: &str, items: &[usize]) -> Vec<Option<LevelState>> {
+    let (_, nodes) = analyze_with_nodes(tree, source, Hashing::ErrorsOnly);
+    let levels = FileLevels::new(source);
+    items
+        .iter()
+        .map(|&index| nodes.get(index).map(|node| levels.item(*node)))
         .collect()
 }
 

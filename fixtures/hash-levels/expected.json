@@ -1,0 +1,352 @@
+{
+  "_comment": "Expected per-level hashes and fingerprints of docs/features/hash-levels.md (5a-1) over this fixture: TE-1 (pairs), TE-2 (the committed rustfmt variants), TE-3 (broken units), TE-6 (v2 equivalence). No digest is stored here: every expectation is a relation (`equal` or `differs` between two units), a count, a target list or an error category, each of them derivable from the spec by hand. The digests themselves are pinned by RD-3 `level_streams_are_pinned` and, independently of the implementation, by the recipe oracles of crates/specengine-code/tests/hash_levels_props.rs. A pair takes unit `a` of `file`, applies `edit` (its `from` must occur exactly once) and takes unit `b` (default: `a`) of the edited text; without `edit`, `a` and `b` are two units of the same text. A locator names an item by `kind` and `label` (`ItemRecord::label`), plus `owner` for a method and `mod_path` inside an inline `mod` (absent: none); `{\"module\": true}` is the file module. Every pair also holds on the in-memory CRLF copy of both sides. `v2: n5` names the only pairs whose whole-item v2 hash may change while `sig` and `body` do not; `cr_exceptions` names the only items whose v2 hash changes under CRLF. `files` lists every unit of every `.rs` file outside `variants/` in analysis order. Categories `null` are v2's (`hash_item`, `error_categories`), not pinned by hand.",
+  "level_recipe": "specengine-hash/v3",
+  "trivial_body_bytes": 124,
+  "levels": ["sig", "body", "deps"],
+  "fingerprints": ["skeleton", "quote", "body_bytes"],
+  "variants": {
+    "_comment": "Committed rustfmt outputs of every file under src/ (TE-2): each is a fixed point of `rustfmt --edition 2024 --check` with the named config (fmt-60: run from a directory holding a rustfmt.toml with that line), and holds the same tokens as its src/ file but for rustfmt's own rewrites (sorted `use`, `mod` and `extern crate` runs, closure and match-arm braces, commas, layout). Regenerate after editing a src/ file: `rustfmt --edition 2024 --emit stdout < src/x.rs > variants/fmt-default/src/x.rs`, the same with `--config max_width=60` into variants/fmt-60/. nofmt/ (rustc refuses its forms) and broken/ (parse errors) have no variant.",
+    "rustfmt": "rustfmt 1.9.0-stable (48a229ceae 2026-09-01)",
+    "edition": "2024",
+    "configs": { "fmt-default": "", "fmt-60": "max_width = 60\n" },
+    "files": [
+      "src/consts.rs",
+      "src/file_module.rs",
+      "src/functions.rs",
+      "src/macros.rs",
+      "src/modules.rs",
+      "src/systems.rs",
+      "src/traits.rs",
+      "src/types.rs"
+    ]
+  },
+  "files": {
+    "src/consts.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "const_item", "label": "MAX_HP" },
+        { "kind": "const_item", "label": "LIMIT" },
+        { "kind": "const_item", "label": "HELP" },
+        { "kind": "const_item", "label": "WAVE_SIZES" },
+        { "kind": "static_item", "label": "GREETING" },
+        { "kind": "static_item", "label": "TABLE" },
+        { "kind": "static_item", "label": "COUNTER" },
+        { "kind": "const_item", "label": "UNSET" },
+        { "kind": "static_item", "label": "PENDING" }
+      ]
+    },
+    "src/file_module.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "mod_item", "label": "zeta_systems" },
+        { "kind": "mod_item", "label": "alpha_systems" },
+        { "kind": "mod_item", "label": "gamma_macros" },
+        { "kind": "mod_item", "label": "beta_systems" },
+        { "kind": "const_item", "label": "START_LEVEL" },
+        { "kind": "function_item", "label": "run" },
+        { "kind": "function_item", "label": "levels" }
+      ]
+    },
+    "src/functions.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "function_item", "label": "tally_score" },
+        { "kind": "function_item", "label": "clamp_score" },
+        { "kind": "function_item", "label": "copy_one" },
+        { "kind": "function_item", "label": "copy_two" },
+        { "kind": "function_item", "label": "spawn_wave" },
+        { "kind": "function_item", "label": "buffer_of" },
+        { "kind": "function_item", "label": "pick" },
+        { "kind": "function_item", "label": "qualified" },
+        { "kind": "function_item", "label": "with_closure" },
+        { "kind": "function_item", "label": "with_nested" },
+        { "kind": "function_item", "label": "banner" },
+        { "kind": "function_item", "label": "trivial_hp" },
+        { "kind": "function_item", "label": "report" },
+        { "kind": "function_item", "label": "order_calls" },
+        { "kind": "function_item", "label": "long_tick" }
+      ]
+    },
+    "src/macros.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "macro_definition", "label": "square" },
+        { "kind": "macro_definition", "label": "clamp_to" }
+      ]
+    },
+    "src/modules.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "mod_item", "label": "scoring" },
+        { "kind": "function_item", "label": "bonus", "mod_path": ["scoring"] },
+        { "kind": "mod_item", "label": "hub" },
+        { "kind": "mod_item", "label": "zeta", "mod_path": ["hub"] },
+        { "kind": "mod_item", "label": "alpha", "mod_path": ["hub"] },
+        { "kind": "mod_item", "label": "gamma", "mod_path": ["hub"] },
+        { "kind": "mod_item", "label": "beta", "mod_path": ["hub"] },
+        { "kind": "function_item", "label": "wire", "mod_path": ["hub"] },
+        { "kind": "mod_item", "label": "plain" },
+        { "kind": "mod_item", "label": "quiet" }
+      ]
+    },
+    "src/systems.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "struct_item", "label": "ArenaPlugin" },
+        { "kind": "impl_item", "label": "<ArenaPlugin as Plugin>" },
+        { "kind": "function_item", "label": "build", "owner": "<ArenaPlugin as Plugin>" },
+        { "kind": "function_item", "label": "move_players" },
+        { "kind": "function_item", "label": "regen_stamina" },
+        { "kind": "function_item", "label": "spawn_arena" }
+      ]
+    },
+    "src/traits.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "trait_item", "label": "Shape" },
+        { "kind": "function_signature_item", "label": "area", "owner": "Shape" },
+        { "kind": "function_signature_item", "label": "perimeter", "owner": "Shape" },
+        { "kind": "function_item", "label": "scaled", "owner": "Shape" },
+        { "kind": "struct_item", "label": "Square" },
+        { "kind": "impl_item", "label": "<Square as Shape>" },
+        { "kind": "function_item", "label": "area", "owner": "<Square as Shape>" },
+        { "kind": "function_item", "label": "perimeter", "owner": "<Square as Shape>" },
+        { "kind": "impl_item", "label": "Square" },
+        { "kind": "function_item", "label": "new", "owner": "Square" },
+        { "kind": "function_item", "label": "grow", "owner": "Square" },
+        { "kind": "impl_item", "label": "<Square as fmt::Display>" },
+        { "kind": "function_item", "label": "fmt", "owner": "<Square as fmt::Display>" }
+      ]
+    },
+    "src/types.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "struct_item", "label": "Stamina" },
+        { "kind": "struct_item", "label": "Pair" },
+        { "kind": "struct_item", "label": "Marker" },
+        { "kind": "struct_item", "label": "Slots" },
+        { "kind": "enum_item", "label": "Phase" },
+        { "kind": "enum_item", "label": "Code" },
+        { "kind": "union_item", "label": "Bits" },
+        { "kind": "type_item", "label": "Grid" },
+        { "kind": "type_item", "label": "Buffer" }
+      ]
+    },
+    "nofmt/bodiless.rs": {
+      "module": "hashed",
+      "items": [
+        { "kind": "trait_item", "label": "Tick" },
+        { "kind": "struct_item", "label": "Clock" },
+        { "kind": "impl_item", "label": "<Clock as Tick>" },
+        { "kind": "impl_item", "label": "Clock" }
+      ]
+    },
+    "broken/attribute_error.rs": {
+      "module": "cannot_verify",
+      "items": [
+        { "kind": "struct_item", "label": "Torn", "state": "cannot_verify" },
+        { "kind": "function_item", "label": "intact_after" }
+      ]
+    },
+    "broken/body_error.rs": {
+      "module": "cannot_verify",
+      "items": [
+        { "kind": "function_item", "label": "broken_one", "state": "cannot_verify" },
+        { "kind": "function_item", "label": "broken_two", "state": "cannot_verify" },
+        { "kind": "function_item", "label": "intact_neighbour" }
+      ]
+    },
+    "broken/macro_punct.rs": {
+      "module": "cannot_verify",
+      "items": [
+        { "kind": "function_item", "label": "intact_before" },
+        { "kind": "macro_definition", "label": "tilde", "state": "cannot_verify" },
+        { "kind": "function_item", "label": "intact_after" }
+      ]
+    },
+    "broken/missing.rs": {
+      "module": "cannot_verify",
+      "items": [
+        { "kind": "function_item", "label": "missing", "state": "cannot_verify" }
+      ]
+    },
+    "broken/nesting.rs": {
+      "module": "cannot_verify",
+      "items": [
+        { "kind": "function_item", "label": "f", "state": "cannot_verify" }
+      ]
+    }
+  },
+  "broken": [
+    { "file": "broken/attribute_error.rs", "unit": { "kind": "struct_item", "label": "Torn" }, "categories": null, "why": "a parse error in the attached attribute only" },
+    { "file": "broken/attribute_error.rs", "unit": { "module": true }, "categories": null, "why": "an error anywhere in the file refuses its module" },
+    { "file": "broken/body_error.rs", "unit": { "kind": "function_item", "label": "broken_one" }, "categories": ["other"], "why": "a body error refuses sig too" },
+    { "file": "broken/body_error.rs", "unit": { "kind": "function_item", "label": "broken_two" }, "categories": ["other"], "why": "differs from broken_one only inside its ERROR region" },
+    { "file": "broken/body_error.rs", "unit": { "module": true }, "categories": ["other"], "why": "an error anywhere in the file refuses its module" },
+    { "file": "broken/macro_punct.rs", "unit": { "kind": "macro_definition", "label": "tilde" }, "categories": ["macro_punct"], "why": "`~` in a macro body" },
+    { "file": "broken/macro_punct.rs", "unit": { "module": true }, "categories": ["macro_punct"], "why": "an error anywhere in the file refuses its module" },
+    { "file": "broken/missing.rs", "unit": { "kind": "function_item", "label": "missing" }, "categories_include": ["missing"], "why": "a MISSING node" },
+    { "file": "broken/missing.rs", "unit": { "module": true }, "categories_include": ["missing"], "why": "a MISSING node refuses the module" },
+    { "file": "broken/nesting.rs", "unit": { "kind": "function_item", "label": "f" }, "categories": ["nesting_too_deep"], "why": "no parse error, use runs nested past MAX_USE_RUN_NESTING" },
+    { "file": "broken/nesting.rs", "unit": { "module": true }, "categories": ["nesting_too_deep"], "why": "the module walk meets the same runs" }
+  ],
+  "no_differs_pair": [
+    { "kind": "function_signature_item", "levels": ["body", "deps"], "why": "no body field: both are the empty stream" },
+    { "kind": "macro_definition", "levels": ["deps"], "why": "calls inside a macro's token trees are invisible" }
+  ],
+  "cr_exceptions": [
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "banner" }, "why": "a multi-line string literal: v2 hashes its CR, v3 drops it" },
+    { "file": "src/consts.rs", "unit": { "kind": "const_item", "label": "HELP" }, "why": "a multi-line string literal: v2 hashes its CR, v3 drops it" }
+  ],
+  "call_targets": [
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "tally_score" }, "targets": ["clamp_score"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "clamp_score" }, "targets": [] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "copy_one" }, "targets": [".wrapping_add"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "spawn_wave" }, "targets": [".cloned", ".collect", ".insert", ".len", ".values", "Vec::new", "finish_wave", "format!", "prepare_board"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "buffer_of" }, "targets": [".len"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "pick" }, "targets": [] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "qualified" }, "targets": ["<Score as Default>::default"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "with_closure" }, "targets": [".iter", ".map", ".sum", "boost"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "with_nested" }, "targets": ["deep_call", "inner"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "report" }, "targets": [".unwrap", "String::new", "write!"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "order_calls" }, "targets": ["load_level", "start_music"] },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "long_tick" }, "targets": [".iter_mut", ".len", ".retain", ".saturating_add"] },
+    { "file": "src/consts.rs", "unit": { "kind": "const_item", "label": "LIMIT" }, "targets": ["compute_limit"] },
+    { "file": "src/consts.rs", "unit": { "kind": "const_item", "label": "WAVE_SIZES" }, "targets": ["compute_limit"] },
+    { "file": "src/consts.rs", "unit": { "kind": "static_item", "label": "TABLE" }, "targets": ["make_table"] },
+    { "file": "src/consts.rs", "unit": { "kind": "const_item", "label": "UNSET" }, "targets": [] },
+    { "file": "src/types.rs", "unit": { "kind": "struct_item", "label": "Slots" }, "targets": ["slot_count"] },
+    { "file": "src/types.rs", "unit": { "kind": "enum_item", "label": "Code" }, "targets": ["first_code"] },
+    { "file": "src/types.rs", "unit": { "kind": "union_item", "label": "Bits" }, "targets": ["byte_len"] },
+    { "file": "src/types.rs", "unit": { "kind": "type_item", "label": "Buffer" }, "targets": ["buffer_len"] },
+    { "file": "src/traits.rs", "unit": { "kind": "trait_item", "label": "Shape" }, "targets": [".area"] },
+    { "file": "src/traits.rs", "unit": { "kind": "function_signature_item", "label": "area", "owner": "Shape" }, "targets": [] },
+    { "file": "src/traits.rs", "unit": { "kind": "impl_item", "label": "Square" }, "targets": [".abs", "log_growth"] },
+    { "file": "src/traits.rs", "unit": { "kind": "impl_item", "label": "<Square as fmt::Display>" }, "targets": ["write!"] },
+    { "file": "src/modules.rs", "unit": { "kind": "mod_item", "label": "scoring" }, "targets": ["base_bonus"] },
+    { "file": "src/modules.rs", "unit": { "kind": "mod_item", "label": "hub" }, "targets": ["connect_all"] },
+    { "file": "src/macros.rs", "unit": { "kind": "macro_definition", "label": "clamp_to" }, "targets": [] },
+    { "file": "src/file_module.rs", "unit": { "kind": "function_item", "label": "run" }, "targets": ["boot_engine", "fmt::write_marker"] },
+    { "file": "src/systems.rs", "unit": { "kind": "impl_item", "label": "<ArenaPlugin as Plugin>" }, "targets": [".add_systems", ".chain"] },
+    { "file": "src/systems.rs", "unit": { "kind": "function_item", "label": "build", "owner": "<ArenaPlugin as Plugin>" }, "targets": [".add_systems", ".chain"] },
+    { "file": "src/systems.rs", "unit": { "kind": "function_item", "label": "move_players" }, "targets": [".delta_secs"] },
+    { "file": "src/systems.rs", "unit": { "kind": "function_item", "label": "spawn_arena" }, "targets": [".spawn", "Name::new"] }
+  ],
+  "body_bytes": [
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "trivial_hp" }, "body_bytes": 13 },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "pick" }, "body_bytes": 7 },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "banner" }, "body_bytes": 12 },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "copy_one" }, "body_bytes": 19 },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "clamp_score" }, "body_bytes": 33 },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "tally_score" }, "body_bytes": 40 },
+    { "file": "src/functions.rs", "unit": { "kind": "function_item", "label": "long_tick" }, "body_bytes": 175 },
+    { "file": "src/types.rs", "unit": { "kind": "struct_item", "label": "Pair" }, "body_bytes": 12 },
+    { "file": "src/types.rs", "unit": { "kind": "struct_item", "label": "Marker" }, "body_bytes": 0 },
+    { "file": "src/traits.rs", "unit": { "kind": "function_signature_item", "label": "area", "owner": "Shape" }, "body_bytes": 0 },
+    { "file": "src/consts.rs", "unit": { "kind": "const_item", "label": "MAX_HP" }, "body_bytes": 3 },
+    { "file": "src/consts.rs", "unit": { "kind": "static_item", "label": "GREETING" }, "body_bytes": 7 },
+    { "file": "src/consts.rs", "unit": { "kind": "const_item", "label": "UNSET" }, "body_bytes": 0 },
+    { "file": "src/consts.rs", "unit": { "kind": "static_item", "label": "PENDING" }, "body_bytes": 0 },
+    { "file": "src/modules.rs", "unit": { "kind": "mod_item", "label": "plain" }, "body_bytes": 0 },
+    { "file": "src/macros.rs", "unit": { "kind": "macro_definition", "label": "square" }, "body_bytes": 18 },
+    { "file": "nofmt/bodiless.rs", "unit": { "kind": "impl_item", "label": "<Clock as Tick>" }, "body_bytes": 0 }
+  ],
+  "pairs": [
+    { "id": "fn-rename", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "b": { "kind": "function_item", "label": "total_score" }, "edit": { "from": "pub fn tally_score(", "to": "pub fn total_score(" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "equal", "body_bytes": "equal" }, "mutation": "the name node walked into sig, skeleton or quote" },
+    { "id": "fn-param-type", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "tally_score(base: u32,", "to": "tally_score(base: u64," }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "a parameter type left out of sig; a primitive type's text kept in the skeleton" },
+    { "id": "fn-param-name", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "tally_score(base: u32,", "to": "tally_score(points: u32," }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "equal" }, "mutation": "parameter names dropped from sig (v2 counts them)" },
+    { "id": "fn-trailing-comma", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "bonus: u32) -> u32 {", "to": "bonus: u32,) -> u32 {" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "anonymous commas walked into sig or skeleton" },
+    { "id": "fn-return-type", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "buffer_of" }, "edit": { "from": "capacity()]) -> usize {", "to": "capacity()]) -> u64 {" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "the return type in neither stream" },
+    { "id": "fn-type-parameters", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "pick" }, "edit": { "from": "pub fn pick<T: Copy>(", "to": "pub fn pick<T: Clone>(" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "equal" }, "mutation": "type parameters in neither stream" },
+    { "id": "fn-signature-call", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "buffer_of" }, "edit": { "from": "[u8; capacity()]", "to": "[u8; max_capacity()]" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "calls of the signature read as deps" },
+    { "id": "fn-body-literal", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "clamp_score" }, "edit": { "from": "if value > 9_999 {", "to": "if value > 5_000 {" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "a literal's text left out of body; a literal's text kept in the skeleton" },
+    { "id": "fn-body-operator", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "let total = base + bonus;", "to": "let total = base - bonus;" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "differs", "body_bytes": "equal" }, "mutation": "anonymous operators dropped from body or skeleton" },
+    { "id": "fn-deps-added", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "clamp_score(total) }", "to": "clamp_score(total).max(floor()) }" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs", "skeleton": "differs" }, "mutation": "a constant deps hash; calls not collected" },
+    { "id": "fn-deps-order", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "order_calls" }, "edit": { "from": "{ load_level(); start_music(); }", "to": "{ start_music(); load_level(); }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "deps targets in source order, not byte-sorted" },
+    { "id": "fn-deps-macro-arguments", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "report" }, "edit": { "from": "fmt_score(score)", "to": "show_score(score)" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "calls inside a macro's arguments read as deps" },
+    { "id": "fn-deps-path-turbofish", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "spawn_wave" }, "edit": { "from": "let _spare = Vec::<u8>::new();", "to": "let _spare = Vec::new();" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a `::<..>` kept in a path target" },
+    { "id": "fn-deps-method-turbofish", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "spawn_wave" }, "edit": { "from": ".collect::<Vec<_>>()", "to": ".collect()" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a generic_function's type arguments kept in its target" },
+    { "id": "fn-deps-closure", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "with_closure" }, "edit": { "from": "boost(*v)", "to": "amplify(*v)" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside closures skipped" },
+    { "id": "fn-deps-nested-item", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "with_nested" }, "edit": { "from": "deep_call()", "to": "deeper_call()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside nested items skipped" },
+    { "id": "fn-attribute-added", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "copy_one" }, "edit": { "from": "#[inline]\npub fn copy_one", "to": "#[inline]\n#[must_use]\npub fn copy_one" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "differs", "quote": "differs", "body_bytes": "equal" }, "mutation": "attached attributes left out of sig" },
+    { "id": "fn-doc-attribute", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "spawn_wave" }, "edit": { "from": "#[doc = \"Spawns one wave.\"]", "to": "#[doc = \"Spawns two waves.\"]" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "equal" }, "mutation": "`#[doc = ..]` dropped from sig like a doc comment" },
+    { "id": "fn-doc-comment", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "/// Adds the round bonus to a score.", "to": "/// Adds the bonus of one round." }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "quote without its `before` line (here the doc comment); doc comments walked into sig" },
+    { "id": "fn-comment-in-body", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "tally_score" }, "edit": { "from": "{ let total = base + bonus;", "to": "{ /* capped below */ let total = base + bonus;" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "comments walked into body or counted in body_bytes" },
+    { "id": "fn-layout", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "trivial_hp" }, "edit": { "from": "pub fn trivial_hp(hp: u32) -> u32 { hp.min(100) }", "to": "pub fn trivial_hp(hp: u32) -> u32 {\n    hp.min(100)\n}" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "body_bytes from the source span" },
+    { "id": "fn-copies", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "copy_one" }, "b": { "kind": "function_item", "label": "copy_two" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "quote without context lines: copies collide" },
+    { "id": "fn-context-line", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "trivial_hp" }, "edit": { "from": "GO\" }", "to": "GO!\" }" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "quote without its `before` line (a neighbour's last line, a blank line between)" },
+    { "id": "fn-context-far", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "trivial_hp" }, "edit": { "from": "-> &'static str { \"ARENA", "to": "-> &'static str { \"ARENA!" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "equal", "body_bytes": "equal" }, "mutation": "quote reads more than the nearest non-blank line" },
+    { "id": "fn-visibility", "kind": "function_item", "file": "src/functions.rs", "a": { "kind": "function_item", "label": "order_calls" }, "edit": { "from": "pub fn order_calls()", "to": "fn order_calls()" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "differs" }, "mutation": "the visibility in neither stream" },
+    { "id": "sy-system-order", "kind": "function_item", "file": "src/systems.rs", "a": { "kind": "function_item", "label": "build", "owner": "<ArenaPlugin as Plugin>" }, "edit": { "from": "(move_players, regen_stamina).chain()", "to": "(regen_stamina, move_players).chain()" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal" }, "mutation": "a value passed as an argument read as a call (`add_systems(Update, f)`)" },
+    { "id": "sy-schedule", "kind": "function_item", "file": "src/systems.rs", "a": { "kind": "function_item", "label": "build", "owner": "<ArenaPlugin as Plugin>" }, "edit": { "from": "add_systems(Startup, spawn_arena)", "to": "add_systems(PostStartup, spawn_arena)" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal" }, "mutation": "argument values read as deps" },
+    { "id": "sy-impl-system-order", "kind": "impl_item", "file": "src/systems.rs", "a": { "kind": "impl_item", "label": "<ArenaPlugin as Plugin>" }, "edit": { "from": "(move_players, regen_stamina).chain()", "to": "(regen_stamina, move_players).chain()" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "an impl's deps read argument values" },
+    { "id": "fs-return-type", "kind": "function_signature_item", "file": "src/traits.rs", "a": { "kind": "function_signature_item", "label": "area", "owner": "Shape" }, "edit": { "from": "fn area(&self) -> f32;", "to": "fn area(&self) -> f64;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "a signature item's return type left out of sig" },
+    { "id": "fs-copies", "kind": "function_signature_item", "file": "src/traits.rs", "a": { "kind": "function_signature_item", "label": "area", "owner": "Shape" }, "b": { "kind": "function_signature_item", "label": "perimeter", "owner": "Shape" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "the name walked into a signature item's sig" },
+    { "id": "fs-doc-comment", "kind": "function_signature_item", "file": "src/traits.rs", "a": { "kind": "function_signature_item", "label": "area", "owner": "Shape" }, "edit": { "from": "/// The covered area.", "to": "/// The area it covers." }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "quote": "differs" }, "mutation": "doc comments walked into sig" },
+    { "id": "tr-bound", "kind": "trait_item", "file": "src/traits.rs", "a": { "kind": "trait_item", "label": "Shape" }, "edit": { "from": "pub trait Shape: fmt::Debug {", "to": "pub trait Shape: fmt::Debug + Clone {" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "supertrait bounds in neither stream" },
+    { "id": "tr-default-body", "kind": "trait_item", "file": "src/traits.rs", "a": { "kind": "trait_item", "label": "Shape" }, "edit": { "from": "self.area() * k", "to": "self.area() + k" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a trait's members walked into its sig" },
+    { "id": "tr-member-body", "kind": "function_item", "file": "src/traits.rs", "a": { "kind": "function_item", "label": "scaled", "owner": "Shape" }, "edit": { "from": "self.area() * k", "to": "self.area() + k" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a default method's body walked into its sig" },
+    { "id": "tr-deps", "kind": "trait_item", "file": "src/traits.rs", "a": { "kind": "trait_item", "label": "Shape" }, "edit": { "from": "self.area() * k", "to": "self.perimeter() * k" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "a trait's deps short of its default methods' calls" },
+    { "id": "im-self-type", "kind": "impl_item", "file": "src/traits.rs", "a": { "kind": "impl_item", "label": "<Square as Shape>" }, "b": { "kind": "impl_item", "label": "<Rect as Shape>" }, "edit": { "from": "impl Shape for Square {", "to": "impl Shape for Rect {" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "the impl's type in neither stream" },
+    { "id": "im-method-body", "kind": "impl_item", "file": "src/traits.rs", "a": { "kind": "impl_item", "label": "<Square as Shape>" }, "edit": { "from": "{ 4.0 * self.side }", "to": "{ 4.5 * self.side }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal" }, "mutation": "an impl's body walked into its sig" },
+    { "id": "im-deps", "kind": "impl_item", "file": "src/traits.rs", "a": { "kind": "impl_item", "label": "Square" }, "edit": { "from": "log_growth(by)", "to": "log_resize(by)" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "an impl's deps short of its methods' calls" },
+    { "id": "im-deps-equal", "kind": "impl_item", "file": "src/traits.rs", "a": { "kind": "impl_item", "label": "Square" }, "edit": { "from": "self.side += by;", "to": "self.side -= by;" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a constant body hash" },
+    { "id": "im-bodiless", "kind": "impl_item", "file": "nofmt/bodiless.rs", "a": { "kind": "impl_item", "label": "<Clock as Tick>" }, "edit": { "from": "impl Tick for Clock;", "to": "impl Tick for Clock where Clock: Copy;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "body_bytes": "equal" }, "mutation": "a bodiless `impl ... ;` given a body" },
+    { "id": "st-field-type", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Stamina" }, "edit": { "from": "pub current: u32, pub max: u32", "to": "pub current: u64, pub max: u32" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "the struct body walked into sig" },
+    { "id": "st-derive", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Stamina" }, "edit": { "from": "#[derive(Debug, Clone)]", "to": "#[derive(Debug, Clone, Copy)]" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "skeleton": "differs" }, "mutation": "attributes left out of a struct's sig" },
+    { "id": "st-where", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Slots" }, "edit": { "from": "where T: Copy {", "to": "where T: Clone {" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a where clause in neither stream" },
+    { "id": "st-deps", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Slots" }, "edit": { "from": "slot_count()", "to": "slot_limit()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside a field type skipped" },
+    { "id": "st-deps-equal", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Slots" }, "edit": { "from": "items: [T; slot_count()]", "to": "cells: [T; slot_count()]" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal" }, "mutation": "field names read as deps" },
+    { "id": "st-tuple-body", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Pair" }, "edit": { "from": "pub struct Pair(pub u8, pub u8);", "to": "pub struct Pair(pub u8, pub u16);" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "ordered_field_declaration_list missing from the body field" },
+    { "id": "st-tuple-visibility", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Pair" }, "edit": { "from": "pub struct Pair(", "to": "pub(crate) struct Pair(" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a tuple struct's visibility in neither stream" },
+    { "id": "st-unit", "kind": "struct_item", "file": "src/types.rs", "a": { "kind": "struct_item", "label": "Marker" }, "edit": { "from": "#[derive(Default)]\npub struct Marker;", "to": "#[derive(Default, Debug)]\npub struct Marker;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "body_bytes": "equal" }, "mutation": "a unit struct's `;` read as a body" },
+    { "id": "en-variant", "kind": "enum_item", "file": "src/types.rs", "a": { "kind": "enum_item", "label": "Phase" }, "edit": { "from": "Done { at: u32 }, }", "to": "Done { at: u32 }, Paused, }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "the variant list walked into sig" },
+    { "id": "en-repr", "kind": "enum_item", "file": "src/types.rs", "a": { "kind": "enum_item", "label": "Phase" }, "edit": { "from": "#[repr(u8)]\npub enum Phase", "to": "#[repr(u16)]\npub enum Phase" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "an enum's attributes left out of sig" },
+    { "id": "en-trailing-comma", "kind": "enum_item", "file": "src/types.rs", "a": { "kind": "enum_item", "label": "Phase" }, "edit": { "from": "Done { at: u32 }, }", "to": "Done { at: u32 } }" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "anonymous commas walked into body or counted in body_bytes" },
+    { "id": "en-deps", "kind": "enum_item", "file": "src/types.rs", "a": { "kind": "enum_item", "label": "Code" }, "edit": { "from": "First = first_code()", "to": "First = initial_code()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls in discriminants skipped" },
+    { "id": "en-deps-equal", "kind": "enum_item", "file": "src/types.rs", "a": { "kind": "enum_item", "label": "Code" }, "edit": { "from": "Second = 2", "to": "Second = 3" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "a literal read as a call" },
+    { "id": "un-field-type", "kind": "union_item", "file": "src/types.rs", "a": { "kind": "union_item", "label": "Bits" }, "edit": { "from": "int: u32, float: f32", "to": "int: i32, float: f32" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a union's body walked into sig" },
+    { "id": "un-repr", "kind": "union_item", "file": "src/types.rs", "a": { "kind": "union_item", "label": "Bits" }, "edit": { "from": "#[repr(C)]\npub union Bits", "to": "#[repr(C, packed)]\npub union Bits" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a union's attributes left out of sig" },
+    { "id": "un-deps", "kind": "union_item", "file": "src/types.rs", "a": { "kind": "union_item", "label": "Bits" }, "edit": { "from": "byte_len()", "to": "word_len()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside a union's field types skipped" },
+    { "id": "un-deps-equal", "kind": "union_item", "file": "src/types.rs", "a": { "kind": "union_item", "label": "Bits" }, "edit": { "from": "raw: [u8; byte_len()]", "to": "raw: [u16; byte_len()]" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "types read as deps" },
+    { "id": "ty-type", "kind": "type_item", "file": "src/types.rs", "a": { "kind": "type_item", "label": "Grid" }, "edit": { "from": "pub type Grid = Vec<Vec<u8>>;", "to": "pub type Grid = Vec<Vec<u16>>;" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "the aliased type walked into sig" },
+    { "id": "ty-visibility", "kind": "type_item", "file": "src/types.rs", "a": { "kind": "type_item", "label": "Grid" }, "edit": { "from": "pub type Grid", "to": "pub(crate) type Grid" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "an alias's visibility in neither stream" },
+    { "id": "ty-deps", "kind": "type_item", "file": "src/types.rs", "a": { "kind": "type_item", "label": "Buffer" }, "edit": { "from": "buffer_len()", "to": "frame_len()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside the aliased type skipped" },
+    { "id": "ty-deps-equal", "kind": "type_item", "file": "src/types.rs", "a": { "kind": "type_item", "label": "Buffer" }, "edit": { "from": "[u8; buffer_len()]", "to": "[u16; buffer_len()]" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a constant body hash" },
+    { "id": "co-value", "kind": "const_item", "file": "src/consts.rs", "a": { "kind": "const_item", "label": "MAX_HP" }, "edit": { "from": "pub const MAX_HP:u32 = 100;", "to": "pub const MAX_HP:u32 = 250;" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "a const value walked into sig" },
+    { "id": "co-type", "kind": "const_item", "file": "src/consts.rs", "a": { "kind": "const_item", "label": "MAX_HP" }, "edit": { "from": "pub const MAX_HP:u32", "to": "pub const MAX_HP:u64" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a const's type in neither stream" },
+    { "id": "co-deps", "kind": "const_item", "file": "src/consts.rs", "a": { "kind": "const_item", "label": "LIMIT" }, "edit": { "from": "compute_limit( 4 )", "to": "derive_limit( 4 )" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside a const value skipped" },
+    { "id": "co-deps-equal", "kind": "const_item", "file": "src/consts.rs", "a": { "kind": "const_item", "label": "LIMIT" }, "edit": { "from": "compute_limit( 4 )", "to": "compute_limit( 8 )" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "call arguments read into a deps target" },
+    { "id": "co-deps-deduplicated", "kind": "const_item", "file": "src/consts.rs", "a": { "kind": "const_item", "label": "WAVE_SIZES" }, "edit": { "from": "compute_limit(2), 30", "to": "30" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "deps targets not deduplicated" },
+    { "id": "co-bodiless", "kind": "const_item", "file": "src/consts.rs", "a": { "kind": "const_item", "label": "UNSET" }, "edit": { "from": "pub const UNSET: u8;", "to": "pub const UNSET: u16;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "body_bytes": "equal" }, "mutation": "a bodiless `const X: T;` given a body" },
+    { "id": "sa-value", "kind": "static_item", "file": "src/consts.rs", "a": { "kind": "static_item", "label": "GREETING" }, "edit": { "from": "static GREETING: &str=\"ready\";", "to": "static GREETING: &str=\"steady\";" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "equal", "body_bytes": "differs" }, "mutation": "a static's value walked into sig; body_bytes not reading the literal" },
+    { "id": "sa-mut", "kind": "static_item", "file": "src/consts.rs", "a": { "kind": "static_item", "label": "COUNTER" }, "edit": { "from": "static mut COUNTER: u32 = 0;", "to": "static COUNTER: u32 = 0;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "`mut` in neither stream" },
+    { "id": "sa-deps", "kind": "static_item", "file": "src/consts.rs", "a": { "kind": "static_item", "label": "TABLE" }, "edit": { "from": "make_table()", "to": "build_table()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside a static value skipped" },
+    { "id": "sa-deps-equal", "kind": "static_item", "file": "src/consts.rs", "a": { "kind": "static_item", "label": "COUNTER" }, "edit": { "from": "static mut COUNTER: u32 = 0;", "to": "static mut COUNTER: u32 = 1;" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a constant body hash" },
+    { "id": "sa-bodiless", "kind": "static_item", "file": "src/consts.rs", "a": { "kind": "static_item", "label": "PENDING" }, "edit": { "from": "pub static PENDING: u16;", "to": "pub static PENDING: u32;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "body_bytes": "equal" }, "mutation": "a bodiless `static X: T;` given a body" },
+    { "id": "md-body", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "scoring" }, "edit": { "from": "base_bonus() + 5", "to": "base_bonus() + 6" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "an inline mod's items walked into its sig" },
+    { "id": "md-visibility", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "scoring" }, "edit": { "from": "pub mod scoring {", "to": "mod scoring {" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a mod's visibility in neither stream" },
+    { "id": "md-deps", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "scoring" }, "edit": { "from": "base_bonus()", "to": "extra_bonus()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "calls inside a mod's items skipped" },
+    { "id": "md-inner-attribute", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "scoring" }, "edit": { "from": "#![allow(dead_code)]\n    pub fn bonus", "to": "#![allow(unused)]\n    pub fn bonus" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "an inline mod's `#![..]` read into its sig (the asymmetry with the file module)" },
+    { "id": "md-n5-mods", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "hub" }, "edit": { "from": "    mod zeta;\n    mod alpha;\n", "to": "    mod alpha;\n    mod zeta;\n" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "v2": "n5", "mutation": "no N5: a reordered `mod x;` run changes the body" },
+    { "id": "md-n5-extern-crates", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "hub" }, "edit": { "from": "    extern crate std as zz_std;\n    extern crate core as aa_core;\n", "to": "    extern crate core as aa_core;\n    extern crate std as zz_std;\n" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "v2": "n5", "mutation": "`extern crate` runs left unsorted" },
+    { "id": "md-macro-use", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "hub" }, "edit": { "from": "    mod zeta;\n    mod alpha;\n    #[macro_use]\n    mod gamma;\n", "to": "    #[macro_use]\n    mod gamma;\n    mod zeta;\n    mod alpha;\n" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a `#[macro_use]` member sorted into the run" },
+    { "id": "md-declaration", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "plain" }, "edit": { "from": "pub mod plain;", "to": "mod plain;" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal", "body_bytes": "equal" }, "mutation": "a `mod x;` declaration given a body" },
+    { "id": "md-declaration-copies", "kind": "mod_item", "file": "src/modules.rs", "a": { "kind": "mod_item", "label": "zeta", "mod_path": ["hub"] }, "b": { "kind": "mod_item", "label": "alpha", "mod_path": ["hub"] }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs" }, "mutation": "a declaration's name walked into its sig" },
+    { "id": "ma-rule-body", "kind": "macro_definition", "file": "src/macros.rs", "a": { "kind": "macro_definition", "label": "square" }, "edit": { "from": "{ $x * $x }", "to": "{ $x + $x }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal", "skeleton": "differs" }, "mutation": "macro rules left in sig" },
+    { "id": "ma-rule-pattern", "kind": "macro_definition", "file": "src/macros.rs", "a": { "kind": "macro_definition", "label": "square" }, "edit": { "from": "($x:expr) => { $x * $x }", "to": "($x:tt) => { $x * $x }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a rule's matcher left in sig" },
+    { "id": "ma-export", "kind": "macro_definition", "file": "src/macros.rs", "a": { "kind": "macro_definition", "label": "clamp_to" }, "edit": { "from": "#[macro_export]\nmacro_rules! clamp_to", "to": "#[macro_export(local_inner_macros)]\nmacro_rules! clamp_to" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a macro's attributes left out of sig" },
+    { "id": "ma-call-in-rule", "kind": "macro_definition", "file": "src/macros.rs", "a": { "kind": "macro_definition", "label": "clamp_to" }, "edit": { "from": "clamp_to!($v, 100)", "to": "clamp_to!($v, limit())" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "calls inside a macro's token trees read as deps" },
+    { "id": "fm-inner-attribute", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "#![allow(dead_code)]", "to": "#![allow(unused)]" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "the file's inner attributes walked into its body" },
+    { "id": "fm-inner-attribute-after-comment", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "#![warn(missing_docs)]", "to": "#![deny(missing_docs)]" }, "expect": { "sig": "differs", "body": "equal", "deps": "equal" }, "mutation": "a comment ends the leading inner-attribute run" },
+    { "id": "fm-body", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "pub fn run() { boot_engine();", "to": "pub fn run() { boot_engine(); boot_audio();" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "the file's items walked into its sig; a constant module deps" },
+    { "id": "fm-body-deps-equal", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "fmt::write_marker(); }", "to": "fmt::write_marker(); let _ = 1; }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a constant module body" },
+    { "id": "fm-deps-order", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "{ boot_engine(); fmt::write_marker(); }", "to": "{ fmt::write_marker(); boot_engine(); }" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "module deps in source order" },
+    { "id": "fm-deps-outside-functions", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "first_level()", "to": "opening_level()" }, "expect": { "sig": "equal", "body": "differs", "deps": "differs" }, "mutation": "a module's deps short of the calls in a const value" },
+    { "id": "fm-n5-mods", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "mod zeta_systems;\nmod alpha_systems;\n", "to": "mod alpha_systems;\nmod zeta_systems;\n" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "no N5 at file level" },
+    { "id": "fm-n5-extern-crates", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "extern crate core;\nextern crate alloc;\n", "to": "extern crate alloc;\nextern crate core;\n" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "body_bytes": "equal" }, "mutation": "`extern crate` runs unsorted at file level" },
+    { "id": "fm-macro-use", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "mod alpha_systems;\n#[macro_use]\nmod gamma_macros;\n", "to": "#[macro_use]\nmod gamma_macros;\nmod alpha_systems;\n" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a `#[macro_use]` member sorted into the run" },
+    { "id": "fm-use-order", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "use std::fmt;\nuse std::collections::BTreeMap;", "to": "use std::collections::BTreeMap;\nuse std::fmt;" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal" }, "mutation": "no N4 in the module body" },
+    { "id": "fm-doc-comment", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "//! Entry point of the arena.", "to": "//! Entry of the arena." }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "comments walked into the module; a module quote that is not textual" }
+  ]
+}
