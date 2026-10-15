@@ -11,7 +11,11 @@
 //! seam): its documents, config, code files, manifests and `spec.lock`
 //! read from the commit the caller names (never `HEAD` by name), its code
 //! tree bound from its blobs with nothing reused, judged as the base is;
-//! no working-tree file is read.
+//! no working-tree file is read. `spec verify --staged` (task spec
+//! `rev-rule`) feeds it the git index's listing ([`CommitConfig::of_index`]:
+//! its blob causes (3), not (7)) and gives [`judge_commit`] `HEAD`'s side,
+//! read by [`read_head`] over the index's side ([`IndexShare`]): a (path,
+//! OID) the index shares is neither read nor parsed again.
 //!
 //! - **Rows**: one per lock key, from a lock entry or a marker binding;
 //!   markers sharing a key are one row. Keys come from accept's own
@@ -38,7 +42,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use specengine_code::{HashState, Levels, MOD_KIND, RustParser, hash_bound_items, markers_in};
-use specengine_core::check::{CheckFile, CheckInput, Mode};
+use specengine_core::check::{CheckFile, CheckInput, Mode, canonical_id};
 use specengine_core::lock::{LOCK_FILE, Lock, LockKind, Verified, parse_lock};
 use specengine_core::verify::{
     CodeFact, Compared, Comparison, Judgement, MarkerFact, MarkerRev, NodeFact, RowBinding,
@@ -47,10 +51,9 @@ use specengine_core::verify::{
 use specengine_core::{CodeConfig, norm_input, revision};
 use specengine_store::{CommitEntryKind, CommitFile, CommitListing, VerifyGit, b3_hash};
 
-use crate::code_walk::{CodeTree, MANIFEST, ManifestSeen, tree_of_blobs};
+use crate::code_walk::{CodeTree, MANIFEST, ManifestSeen, RustFile, tree_of_blobs};
 use crate::lock::{Target, build_recipes, is_code_path, is_manifest, relation_of};
 use crate::project::{CONFIG_FILE, ProjectRoot};
-use crate::propose::canonical_id;
 use crate::refs::{CANNOT_VERIFY, Corpus, IdState, NodeKey, UNANCHORED};
 
 /// Run causes, by their place in "Verdict and exit"'s order.
@@ -163,25 +166,38 @@ pub(crate) fn judge_walk(
         },
     };
     let (mut rows, skipped) = judge_side(&current, walked.project)?;
+    mark_pre_existing(&mut rows, base, walked.tree, walked.project)?;
+    Ok(Judged { rows, skipped })
+}
+
+/// Given `base` (a commit's side; unborn: none), each of `rows` is
+/// Pre-existing when the commit gives the same key, state and category;
+/// `tree` is the base's code tree when it reused the current one.
+fn mark_pre_existing(
+    rows: &mut [Row],
+    base: Option<&HeadSide>,
+    tree: &CodeTree,
+    project: &ProjectRoot,
+) -> Result<(), RunCause> {
     if let Some(head) = base
         && let Some(listing) = &head.listing
     {
         let side = Side {
             input: &head.input,
-            tree: head.tree.as_ref().unwrap_or(walked.tree),
+            tree: head.tree.as_ref().unwrap_or(tree),
             lock: &head.lock,
             files: Files::Commit(listing),
         };
-        let (head_rows, _) = judge_side(&side, walked.project)?;
+        let (head_rows, _) = judge_side(&side, project)?;
         let at_head: BTreeMap<RowKey, Judgement> = head_rows
             .into_iter()
             .map(|row| (row.key, row.judgement))
             .collect();
-        for row in &mut rows {
+        for row in rows {
             row.pre_existing = is_pre_existing(&row.key, &row.judgement, &at_head);
         }
     }
-    Ok(Judged { rows, skipped })
+    Ok(())
 }
 
 // ----------------------------------------------------------------- sides
@@ -797,10 +813,17 @@ impl LineStarts {
 /// unborn `HEAD`: no side, every row introduced. Causes: git's (4); a
 /// listed object missing or no blob, `HEAD`'s lock invalid, a file the
 /// parser fails on (7).
+///
+/// Over the index's side (`index`: `spec verify --staged`; `walked` its
+/// side), a `HEAD` file whose (path, OID) the index holds as a regular
+/// file is not asked of git: its bytes are the index side's, so its parse
+/// and binding are reused as equal bytes are; a shared `spec.lock` is the
+/// index side's lock.
 pub(crate) fn read_head(
     walked: &Walked<'_>,
     git: &mut VerifyGit,
     config_path: Option<&str>,
+    index: Option<&IndexShare<'_>>,
 ) -> Result<HeadSide, RunCause> {
     let git_cause = |cause: specengine_core::check::Cause| RunCause::new(CAUSE_GIT, cause.message);
     let Some(listing) = git.list_commit("HEAD").map_err(git_cause)? else {
@@ -835,7 +858,31 @@ pub(crate) fn read_head(
     if let Some(config) = config_path {
         wanted.insert(config);
     }
+    // The index's side: what it shares is given, never read again.
+    let mut given: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut shared_lock = None;
+    if let Some(share) = index {
+        wanted.retain(|path| {
+            if !share.shares(&listing, path) {
+                return true;
+            }
+            if *path == LOCK_FILE {
+                shared_lock = Some(share.side.lock.clone());
+                return false;
+            }
+            match share.bytes(path) {
+                Some(bytes) => {
+                    given.push(((*path).to_owned(), bytes));
+                    false
+                }
+                None => true,
+            }
+        });
+    }
     let mut read = git.read_files(&listing, wanted).map_err(git_cause)?;
+    for (path, bytes) in given {
+        read.insert(path, CommitFile::Bytes(bytes));
+    }
 
     // A partial base judges nothing.
     let mut partial = Vec::new();
@@ -848,16 +895,18 @@ pub(crate) fn read_head(
         return Err(RunCause::new(CAUSE_BASE, first));
     }
 
-    // The lock at HEAD, parsed against this build's recipes.
-    let lock = match read.remove(LOCK_FILE) {
-        None => Lock::empty(build_recipes()),
-        Some(CommitFile::Unreadable(why)) => {
+    // The lock at HEAD, parsed against this build's recipes (the index
+    // side's when it shares it).
+    let lock = match (shared_lock, read.remove(LOCK_FILE)) {
+        (Some(lock), _) => lock,
+        (None, None) => Lock::empty(build_recipes()),
+        (None, Some(CommitFile::Unreadable(why))) => {
             return Err(RunCause::new(
                 CAUSE_BASE,
                 format!("HEAD's {LOCK_FILE} cannot be read: {why}"),
             ));
         }
-        Some(CommitFile::Bytes(bytes)) => {
+        (None, Some(CommitFile::Bytes(bytes))) => {
             let text = std::str::from_utf8(&bytes)
                 .map_err(|_| RunCause::new(CAUSE_BASE, format!("HEAD's {LOCK_FILE}: not UTF-8")))?;
             parse_lock(text, Some(&build_recipes()))
@@ -982,6 +1031,9 @@ pub(crate) struct CommitSide {
     listing: CommitListing,
     input: CheckInput,
     tree: CodeTree,
+    /// Every `Cargo.toml` read, by directory: what [`IndexShare::bytes`]
+    /// gives for a shared one.
+    manifests: BTreeMap<String, ManifestSeen>,
     /// The commit's lock, parsed against this build's recipes (absent:
     /// empty).
     pub lock: Lock,
@@ -993,6 +1045,96 @@ impl CommitSide {
     pub(crate) fn input(&self) -> &CheckInput {
         &self.input
     }
+
+    /// What [`read_head`] reuses of it: its project, `[code]`, documents,
+    /// code tree and lock, as a walk gives them.
+    pub(crate) fn walked<'a>(
+        &'a self,
+        project: &'a ProjectRoot,
+        code: &'a CodeConfig,
+    ) -> Walked<'a> {
+        Walked {
+            project,
+            code,
+            input: &self.input,
+            tree: &self.tree,
+            lock: &self.lock,
+        }
+    }
+}
+
+/// The git index's side ([`read_commit`] over [`CommitConfig::of_index`])
+/// as [`read_head`] reuses it: a `HEAD` file at the same path with the
+/// same OID is given these bytes, never read from git again.
+pub(crate) struct IndexShare<'a> {
+    pub side: &'a CommitSide,
+    /// The index's config bytes, when the config judged is its root
+    /// `specengine.toml` (not `--config`'s).
+    pub config: Option<&'a [u8]>,
+}
+
+/// The stand-in bytes of a shared code file whose content is not UTF-8:
+/// the binding skips it and counts it, as it does `HEAD`'s equal blob.
+const NOT_UTF8: [u8; 1] = [0xFF];
+
+impl IndexShare<'_> {
+    /// `HEAD` (listed as `head`) and the index hold `path` as a regular
+    /// file with the same OID.
+    fn shares(&self, head: &CommitListing, path: &str) -> bool {
+        match (head.entry(path), self.side.listing.entry(path)) {
+            (Some(at_head), Some(staged)) => {
+                at_head.kind == CommitEntryKind::Regular
+                    && staged.kind == CommitEntryKind::Regular
+                    && at_head.oid == staged.oid
+            }
+            _ => false,
+        }
+    }
+
+    /// The index side's bytes of `path`: its config, a document, a code
+    /// file, a manifest; `None` when the side kept none.
+    fn bytes(&self, path: &str) -> Option<Vec<u8>> {
+        if path == CONFIG_FILE
+            && let Some(config) = self.config
+        {
+            return Some(config.to_vec());
+        }
+        let files = &self.side.input.files;
+        if let Ok(at) = files.binary_search_by(|file| file.path.as_str().cmp(path)) {
+            return Some(files[at].bytes.clone());
+        }
+        let tree = &self.side.tree;
+        let text_at = |files: &[RustFile]| {
+            files
+                .binary_search_by(|file| file.path.as_str().cmp(path))
+                .ok()
+                .map(|at| files[at].text.clone().into_bytes())
+        };
+        if let Some(bytes) = text_at(&tree.rust) {
+            return Some(bytes);
+        }
+        if let Ok(at) = tree
+            .ron
+            .binary_search_by(|file| file.path.as_str().cmp(path))
+        {
+            return Some(tree.ron[at].text.clone().into_bytes());
+        }
+        if tree.not_utf8.contains(path) {
+            return Some(NOT_UTF8.to_vec());
+        }
+        // A manifest's directory as `is_manifest` derives it: the root's
+        // is empty, any other ends in `/` (never `xCargo.toml`).
+        let dir = path.strip_suffix(MANIFEST)?;
+        let dir = if dir.is_empty() {
+            dir
+        } else {
+            dir.strip_suffix('/')?
+        };
+        match self.side.manifests.get(dir) {
+            Some(ManifestSeen::Bytes(bytes)) => Some(bytes.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// A commit listed and the `[code]` of its own root config: the first
@@ -1000,6 +1142,14 @@ impl CommitSide {
 pub(crate) struct CommitConfig {
     listing: CommitListing,
     code: CodeConfig,
+}
+
+impl CommitConfig {
+    /// The git index's listing ([`VerifyGit::staged`]) and the `[code]`
+    /// the caller read (the index's config, or `--config`'s).
+    pub(crate) fn of_index(listing: CommitListing, code: CodeConfig) -> Self {
+        Self { listing, code }
+    }
 }
 
 /// The commit `commit` (an OID the caller bound, never `HEAD` by name)
@@ -1012,7 +1162,7 @@ pub(crate) fn commit_config(git: &mut VerifyGit, commit: &str) -> Result<CommitC
         .list_commit(commit)
         .map_err(git_cause)?
         .ok_or_else(|| RunCause::new(CAUSE_GIT, format!("{commit} names no commit")))?;
-    let label = format!("{CONFIG_FILE} at {}", listing.commit());
+    let label = format!("{CONFIG_FILE} at {}", listing.label());
     let config = match git
         .read_files(&listing, [CONFIG_FILE])
         .map_err(git_cause)?
@@ -1054,7 +1204,10 @@ pub(crate) fn commit_config(git: &mut VerifyGit, commit: &str) -> Result<CommitC
 /// code file bound from its blob, nothing reused from the working tree,
 /// which is never read. Causes: git's (4), a listed object missing or no
 /// blob (7), its lock invalid (6), a parser panic (7), a Rust file the
-/// parser gives no tree (3).
+/// parser gives no tree (3). The git index's listing
+/// ([`CommitConfig::of_index`]; the caller gives the project of the
+/// index's config): the same reads, named `in the index`, a blob missing
+/// or no blob and a parser panic (3).
 pub(crate) fn read_commit(
     project: &ProjectRoot,
     git: &mut VerifyGit,
@@ -1081,32 +1234,37 @@ pub(crate) fn read_commit(
     wanted.extend(manifests.iter().map(String::as_str));
     wanted.insert(LOCK_FILE);
     let mut read = git.read_files(&listing, wanted).map_err(git_cause)?;
-    let at = listing.commit().to_owned();
+    // A commit's blob or parse that fails is a partial side (7); the
+    // index's, a file of the tree judged that cannot be read (3).
+    let (at, unread) = if listing.is_index() {
+        (format!("in {}", listing.label()), CAUSE_WALK)
+    } else {
+        (format!("at {}", listing.label()), CAUSE_BASE)
+    };
     if let Some(first) = documents
         .iter()
         .chain(&code_files)
         .chain(&manifests)
         .find_map(|path| match read.get(path) {
-            Some(CommitFile::Unreadable(why)) => Some(format!("`{path}` at {at}: {why}")),
+            Some(CommitFile::Unreadable(why)) => Some(format!("`{path}` {at}: {why}")),
             _ => None,
         })
     {
-        return Err(RunCause::new(CAUSE_BASE, first));
+        return Err(RunCause::new(unread, first));
     }
     let lock = match read.remove(LOCK_FILE) {
         None => Lock::empty(build_recipes()),
         Some(CommitFile::Unreadable(why)) => {
             return Err(RunCause::new(
                 CAUSE_LOCK,
-                format!("{LOCK_FILE} at {at} cannot be read: {why}"),
+                format!("{LOCK_FILE} {at} cannot be read: {why}"),
             ));
         }
         Some(CommitFile::Bytes(bytes)) => {
-            let text = std::str::from_utf8(&bytes).map_err(|_| {
-                RunCause::new(CAUSE_LOCK, format!("{LOCK_FILE} at {at}: not UTF-8"))
-            })?;
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| RunCause::new(CAUSE_LOCK, format!("{LOCK_FILE} {at}: not UTF-8")))?;
             parse_lock(text, Some(&build_recipes()))
-                .map_err(|error| RunCause::new(CAUSE_LOCK, format!("{error} (at {at})")))?
+                .map_err(|error| RunCause::new(CAUSE_LOCK, format!("{error} ({at})")))?
         }
     };
     let scheme = &project.config.scheme;
@@ -1118,12 +1276,7 @@ pub(crate) fn read_commit(
         let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
             specengine_core::parse(path, &bytes, scheme)
         }))
-        .map_err(|_| {
-            RunCause::new(
-                CAUSE_BASE,
-                format!("the spec parser failed on `{path}` at {at}"),
-            )
-        })?;
+        .map_err(|_| RunCause::new(unread, format!("the spec parser failed on `{path}` {at}")))?;
         input
             .files
             .push(CheckFile::parsed(path.clone(), bytes, parsed));
@@ -1149,28 +1302,35 @@ pub(crate) fn read_commit(
     let tree = tree_of_blobs(blobs, &seen, &CodeTree::empty()).map_err(|gap| {
         RunCause::new(
             CAUSE_WALK,
-            format!("the code walk at {at} is incomplete: {gap}"),
+            format!("the code walk {at} is incomplete: {gap}"),
         )
     })?;
     Ok(CommitSide {
         listing,
         input,
         tree,
+        manifests: seen,
         lock,
     })
 }
 
 /// Every row of one commit's side ([`read_commit`]), judged as the base is
 /// (its files the commit's, its blobs the commit's tree's), in key order;
-/// none Pre-existing.
-pub(crate) fn judge_commit(side: &CommitSide, project: &ProjectRoot) -> Result<Judged, RunCause> {
+/// given `base` (`HEAD`'s side, [`read_head`]), each Pre-existing as
+/// [`judge_walk`] marks it, else none.
+pub(crate) fn judge_commit(
+    side: &CommitSide,
+    project: &ProjectRoot,
+    base: Option<&HeadSide>,
+) -> Result<Judged, RunCause> {
     let at = Side {
         input: &side.input,
         tree: &side.tree,
         lock: &side.lock,
         files: Files::Commit(&side.listing),
     };
-    let (rows, skipped) = judge_side(&at, project)?;
+    let (mut rows, skipped) = judge_side(&at, project)?;
+    mark_pre_existing(&mut rows, base, &side.tree, project)?;
     Ok(Judged { rows, skipped })
 }
 
@@ -1363,7 +1523,7 @@ mod tests {
         );
 
         // A base read with the walk reused: Pre-existing judged over it too.
-        let head = read_head(&walked, &mut session, Some("specengine.toml")).expect("HEAD");
+        let head = read_head(&walked, &mut session, Some("specengine.toml"), None).expect("HEAD");
         let with_base = judge_walk(&walked, &session, Some(&head)).expect("judged");
         assert_eq!(row(&with_base, "LAW-BOUND", symbol).0, State::Ok);
 

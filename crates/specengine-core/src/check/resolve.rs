@@ -475,6 +475,33 @@ impl<'a> Resolver<'a> {
     }
 }
 
+/// The stored form of the ID `id` held in the file `path` (a node's
+/// canonical ID, `spec.lock`'s `node`, a queue target): `scope/ID` when a
+/// scope is written; a bare ID of a `scope = "feature"` prefix
+/// ([`feature_scoped`]) in a feature document `slug/ID`; else the ID.
+pub fn canonical_id(
+    resolver: &Resolver<'_>,
+    scheme: &IdScheme,
+    path: &str,
+    id: &str,
+    scope: Option<&str>,
+) -> String {
+    if let Some(slug) = scope {
+        return format!("{slug}/{id}");
+    }
+    match resolver.feature_slug(path) {
+        Some(slug) if feature_scoped(scheme, id) => format!("{slug}/{id}"),
+        _ => id.to_owned(),
+    }
+}
+
+/// `id`'s prefix is configured with `scope = "feature"`.
+pub fn feature_scoped(scheme: &IdScheme, id: &str) -> bool {
+    id.split_once('-')
+        .and_then(|(prefix, _)| scheme.prefix(prefix))
+        .is_some_and(|spec| spec.scope == IdScope::Feature)
+}
+
 /// The slug of `path` when it is `<features>/<slug>.md`, the stem a slug
 /// (judged without the disk: a file the walk lists there is a feature
 /// document).

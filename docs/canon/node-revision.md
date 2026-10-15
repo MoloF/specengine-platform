@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Node revision and meaning hash
@@ -31,11 +31,25 @@ Core `revision(parsed, ord) -> Revision {Written(u32), Unwritten, Unreadable}`, 
 
 ## Raising
 
-ADR-0043 (`architecture.md#layout`, `#apply`), built by slices 4b-1 (approval, shipped 2026-10-14; as built: `docs/canon/proposal-revisions.md`) and 4b-2 (`docs/features/rev-rule.md`: the rule, `spec bump`; until it ships no check reads `spec.lock`).
+ADR-0043 (`architecture.md#layout`, `#apply`), built by slices 4b-1 (approval) and 4b-2 (the rule, `spec bump`; `verify --staged`: `spec-verify.md` "Base").
 
-- **Approval**: `apply_proposal` raises, at step 6, the revision of each node with an ID whose `norm_hash` its change alters, from the file as read at apply, never lowering one; the question and a `Revision:` trailer name it. A meaning approve is refused before the prompt for a node at `REV_MAX`, of a closed class admitting no `rev` or whose raise cannot be written; an unreadable revision refuses any approve. `spec approve --editorial`, the owner's choice, keeps every revision and, in the same commit, sets the new `norm_hash` on that node's `spec.lock` entries that vouched for the old text at that revision (`Lock-mode: editorial`). A proposal whose text changes a revision is refused at creation: approval sets revisions.
-- **The rule**: `spec check --staged` and `--changed`, never plain, give one error per node a `HEAD` lock entry vouches for (at its `HEAD` revision, `spec_hash` = its `HEAD` `norm_hash`) whose `norm_hash` changed with neither a raise nor that refresh in the checked tree; `[check] mode` decides whether it blocks. Unlocked nodes, `@N` pins and commits skipping the hook are not judged.
-- **`spec bump`** only lists nodes changed without a raise, `required` (the rule's) or `suggested`; it writes nothing.
+- **Approval** (`proposal-revisions.md`): `apply_proposal` raises, at step 6, each node whose `norm_hash` its change alters, never lowering one; refused: a meaning approve at `REV_MAX`, of a closed class admitting no `rev` or a raise it cannot write, any at an unreadable revision; `spec approve --editorial` keeps revisions and refreshes the node's vouching `spec.lock` entries in the same commit; a proposal changing a revision is refused at creation.
+- **The rule `rev-not-raised`** (core `check::rev_rule`, pure; store `check.rs`), in `spec check --staged` and `--changed`, never plain. Changed: a node whose canonical ID (`slug/ID` when feature-scoped) is at `HEAD` and in the checked tree, paired by ID, never by path (the k-th holder at `HEAD` with the k-th checked, each by path, then source order), its checked `norm_hash` non-null and unlike `HEAD`'s; a heading rename or a moved section is none. Not raised: the checked revision unreadable or not above `HEAD`'s. An error, always introduced (`[check] mode` decides, debt covers it), when `HEAD`'s `spec.lock` holds an entry vouching for the old text (`lock::vouches`) and the checked lock (absent: none) does not carry the new hash at that revision on every such key. Unlocked nodes, `@N` pins, marker-only bindings: never judged; escapes (`--no-verify`, `observe`, no hook, CI's plain check) show in `spec verify` as `spec_ahead same_revision`, which `spec propose drift` queues.
+- **The finding**, at the heading or `id:` line, subject the canonical ID, `fix` the line apply writes (core `raise::raised_line`: the heading or `rev:` line rewritten, else a `rev:` line inserted after `id:`); a document's says `(rev: 4)`:
+
+```
+error  docs/spec/combat.md:14: rev-not-raised: `R-12` changed at rev 3, which spec.lock vouches for: raise it (rev=4), or have the owner approve it through the queue with --editorial
+```
+
+  No raise can be written at `REV_MAX`, for a document (not its sections) whose closed class admits no `rev`, or where apply cannot write the line (`rev: +3`, a flow front-matter): no `fix`, the message without `raise it (rev=4), or `; `REV_MAX`'s alone reads `rev 999999999, the largest revision, which`.
+- **The locks** (`spec-check-git.md` "The rule's locks"): `HEAD`'s and the checked tree's, read only when `HEAD` holds a `spec.lock`, parsed whole only when a node changed; one that cannot be read is cannot check, exit 2.
+- **`spec bump [--staged] [--json]`** (CLI `bump.rs`; store `bump_staged`, `bump_changed`) writes nothing, not even the data directory. The disk as `check --changed`, or the index, against `HEAD`; a row per changed node not raised, by path, line, ID: `required` (the finding) or `suggested` (no entry vouches, or each was refreshed by hand):
+
+```
+required | R-12 | docs/spec/combat.md:14 | rev 3 -> 4 | 2 lock entries | ## Cost {#R-12 rev=4}
+```
+
+  `rev ?` for an unreadable revision; `rev N` alone and `-` (JSON `to`, `write` null) where no raise can be written: `REV_MAX`, a document of a closed class admitting no `rev`, a line that cannot be written. Then `hint: required: …` (both ways out), `hint: suggested: raising it makes markers naming it lag`; none: `nothing to raise`. JSON `{rows: [{need, id, path, line, rev, to, lock_entries, write}]}`, `cannot` when not empty. Exit 0 when run; 2 on the check's causes (`cannot: <path>: <message>`); `--editorial` a usage error.
 
 ## The recipe
 
@@ -105,7 +119,7 @@ frame("Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMIN
 
 - Index: `nodes.norm_hash` after `own_text`, NULL when null, from the parse the row stores (`INDEX_FORMAT` 8: `crates/specengine-store/README.md`). No read API yet; `spec lock accept` hashes the node's `HEAD` blob itself (`spec-lock-accept.md`).
 - `spec show`: ` | norm b3:<hex>` right before ` | span`, omitted when null; JSON `norm_hash` between `sections` and `span_hash`, a string or `null` (`spec-cli-read.md`). From a fresh parse of the bytes printed, never the stored column: a document's covers its own text and links, its `span_hash` the whole file printed.
-- `spec bundle`'s headers carry neither norm nor span; its text and `bundle_hash` did not change.
+- `spec bundle`'s headers carry neither norm nor span.
 - The same key in MCP `get_node` (`docs/canon/mcp-read.md`), the daemon's show JSON and the UI's provisional `ShownNode.norm_hash`. A proposal's base stays `span_hash`: a `norm_hash` sent as `base` meets the stale-base refusal naming the current `span_hash` (untested).
 
 Determinism: the same bytes under the same `[ids]` give the same input from any root, cwd or creation order; an `[ids]` kind or width change keeps every input.
@@ -114,6 +128,6 @@ Determinism: the same bytes under the same `[ids]` give the same input from any 
 
 - Lone-CR line endings: a lone CR ending a heading line or a front-matter fence changes the parse (the fence needs LF; pulldown-cmark ends no ATX heading at a lone CR: `# Title\rBody\r` is one heading), so such a file hashes unlike its LF form; a CR inside text is plain LF.
 - A `status: superseded-by <the document's own ID>` written with YAML escapes has no verbatim `src_span` and counts as a `supersedes` link.
-- False changes accepted: reflow, comment edits, bullet style, NFC against NFD, an alias prefix rewritten (Phase 3's `--editorial` is the escape); false sameness avoided (indentation kept).
+- False changes accepted: reflow, comment edits, bullet style, NFC against NFD, an alias prefix rewritten (`--editorial` is the escape); false sameness avoided (indentation kept).
 - A project's own front-matter keys never count in v1 (later a `specengine.toml` list, so v2).
 - A reference the scheme cannot parse nulls its document.

@@ -27,6 +27,14 @@
 //! never into the JSON. A plain run has no base: `enforce-introduced` is
 //! judged and shown as `enforce`, with a note.
 //!
+//! With `--staged` or `--changed` the store's run adds the rule
+//! `rev-not-raised` (canon `node-revision`, "Raising"): a node `HEAD`'s
+//! `spec.lock` vouches for, its meaning changed with neither a raise nor
+//! a refresh of those entries in the checked tree's lock, is an error
+//! finding, introduced, judged by `[check] mode`; the locks are read only
+//! then (`HEAD`'s and the index's or the disk's), a lock it must read that
+//! cannot be read a cause. The plain run never reads `spec.lock`.
+//!
 //! Root and config come from discovery (`--root`, `--config`); after it,
 //! every failure is a `cannot` cause of the printed report, exit 2: the
 //! config unreadable, not UTF-8 or invalid anywhere (`ProjectConfig` and the

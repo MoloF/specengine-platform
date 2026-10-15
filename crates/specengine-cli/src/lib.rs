@@ -28,12 +28,14 @@
 //! refresh and a gone node's drop, one function taking the owner's
 //! [`LockConsent`] and extra [`LockTrailer`]s: canon
 //! `spec-lock-accept`, "Steps") and `spec lock regen` ([`lock_regen`]:
-//! canon `spec-lock`, "`spec lock regen`"); `spec verify [--changed]`
-//! ([`verify`]: canon `spec-verify`, "Rows", "Verdict and exit"),
-//! drift between `spec.lock` and the tree, read-only; task spec
+//! canon `spec-lock`, "`spec lock regen`"); `spec verify [--changed |
+//! --staged]` ([`verify`]: canon `spec-verify`, "Rows", "Verdict and
+//! exit"), drift between `spec.lock` and the tree, read-only; task spec
 //! `drift-queue`: `spec propose drift` ([`propose_drift`]), the drift of
 //! `HEAD`'s commit queued as `drift` items for the owner, approved by the
-//! same lock accept.
+//! same lock accept; task spec `rev-rule`: `spec bump` ([`bump`]), the
+//! nodes changed without a raise, read-only (the rule `rev-not-raised`
+//! itself runs inside `spec check --staged` and `--changed`).
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -146,6 +148,7 @@
 
 mod amend;
 mod apply;
+mod bump;
 mod bundle;
 mod cap;
 mod check;
@@ -199,6 +202,7 @@ pub use apply::{
     ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_editorial, approve_with,
     reject,
 };
+pub use bump::{BumpOutcome, BumpRequest, bump};
 pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
     ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
@@ -315,7 +319,9 @@ pub use task::{
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
-pub use verify::{VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow, verify};
+pub use verify::{
+    VerifiedTree, VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow, verify,
+};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -452,6 +458,8 @@ pub enum Outcome {
     Graph(GraphOutcome),
     Bundle(BundleOutcome),
     Check(CheckOutcome),
+    /// `bump`: the nodes changed without a raise.
+    Bump(Box<BumpOutcome>),
     /// `health`: the unapplied amendments of the working tree.
     Health(HealthOutcome),
     /// `refs`: what in the code names a node.
@@ -507,6 +515,7 @@ impl Outcome {
             Self::LockRegen(regen) => regen.exit(),
             Self::Verify(verify) => verify.exit(),
             Self::Check(check) => check.exit(),
+            Self::Bump(bump) => bump.exit(),
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
             Self::Drift(drift) => drift.exit(),
@@ -533,6 +542,7 @@ impl Outcome {
             Self::Graph(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Bundle(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Check(outcome) => (&outcome.messages, None),
+            Self::Bump(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -565,6 +575,7 @@ impl Outcome {
         if matches!(
             self,
             Self::Proposal(_)
+                | Self::Bump(_)
                 | Self::Lock(_)
                 | Self::LockRegen(_)
                 | Self::Verify(_)
@@ -600,6 +611,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Graph(outcome) => graph::render_text(outcome),
         Outcome::Bundle(outcome) => bundle::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
+        Outcome::Bump(outcome) => bump::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Lock(outcome) => lock::render_text(outcome),
@@ -635,6 +647,7 @@ impl serde::Serialize for Outcome {
             Self::Graph(outcome) => outcome.serialize(serializer),
             Self::Bundle(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
+            Self::Bump(outcome) => outcome.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Lock(outcome) => outcome.serialize(serializer),

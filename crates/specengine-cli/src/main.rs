@@ -32,17 +32,17 @@ use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    AmendmentRequest, ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree,
-    CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit,
-    ExportIndexRequest, ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
-    GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest,
-    IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
-    LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest,
-    RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
-    SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
-    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, VerifyRequest, render_json,
-    render_text,
+    AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CheckRequest,
+    CheckedTree, CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env,
+    Exit, ExportIndexRequest, ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress,
+    GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest,
+    InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
+    LockAcceptRequest, LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText,
+    QuestionRequest, RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest,
+    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
+    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest,
+    VerifiedTree, VerifyRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -165,6 +165,12 @@ enum Command {
         #[arg(long)]
         debt: bool,
     },
+    /// List the nodes whose meaning changed against HEAD while their revision is not above HEAD's: `required` when spec.lock vouches for the old text (the check's `rev-not-raised`), else `suggested`, each with the line a raise writes; read-only, exit 0 whatever is listed, 2 when the check against HEAD cannot run.
+    Bump {
+        /// List what `git commit` would record (the git index), not the working tree.
+        #[arg(long)]
+        staged: bool,
+    },
     /// List the unapplied amendments: the working tree's live documents that name a node they amend (`links: {amends: [ID]}`), each with those links; read-only, exit 0 whatever is listed, 2 when it cannot run (no project, a config error, an incomplete walk).
     Health,
     /// List what in the code names REF: the markers (`@implements`, `@verifies`, `@configures`, `@assumes`) and comment mentions under `[code]`, each with its state and binding; read-only, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run (no `[code]`, a config error, an incomplete walk).
@@ -178,6 +184,9 @@ enum Command {
         /// Judge against HEAD too: a finding HEAD already has is pre-existing.
         #[arg(long)]
         changed: bool,
+        /// Judge what `git commit` would record (the git index, its config unless --config) against HEAD: a finding HEAD already has is pre-existing.
+        #[arg(long, conflicts_with = "changed")]
+        staged: bool,
     },
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
@@ -823,11 +832,29 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &RefsRequest { reference },
         )?)),
-        Command::Verify { changed } => Outcome::Verify(Box::new(specengine_cli::verify(
+        Command::Verify { changed, staged } => {
+            // clap refuses `--staged` with `--changed`.
+            let tree = if staged {
+                VerifiedTree::Staged
+            } else if changed {
+                VerifiedTree::Changed
+            } else {
+                VerifiedTree::WorkingTree
+            };
+            Outcome::Verify(Box::new(specengine_cli::verify(
+                env,
+                globals,
+                &VerifyRequest {
+                    tree,
+                    git: process_git(env),
+                },
+            )?))
+        }
+        Command::Bump { staged } => Outcome::Bump(Box::new(specengine_cli::bump(
             env,
             globals,
-            &VerifyRequest {
-                changed,
+            &BumpRequest {
+                staged,
                 git: process_git(env),
             },
         )?)),

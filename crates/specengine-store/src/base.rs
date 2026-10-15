@@ -248,6 +248,12 @@ impl Head {
         Ok(unreadable(why))
     }
 
+    /// `HEAD`'s entry at the root-relative `path` (`spec.lock`, read by
+    /// the rule `rev-not-raised`).
+    pub(crate) fn entry(&self, path: &str) -> Option<&Entry> {
+        entry_at(&self.entries, path.as_bytes())
+    }
+
     /// `HEAD`'s listing by the checked `[paths]` (the index's scope), and
     /// each listed path's OID.
     pub(crate) fn walk(&self, index: &IndexWalk) -> HeadWalk {
@@ -303,6 +309,34 @@ fn entry_at<'e>(entries: &'e [Entry], path: &[u8]) -> Option<&'e Entry> {
         .map(|at| &entries[at])
 }
 
+/// The base's run: its findings, and both sides' files for the rule
+/// `rev-not-raised`, nothing copied.
+#[derive(Debug)]
+pub(crate) struct BaseRun {
+    pub(crate) findings: Vec<Finding>,
+    /// `HEAD`'s files: the first `shared` reused from the checked run (the
+    /// same file at the same path), then those parsed from `HEAD`'s blobs.
+    pub(crate) head: CheckInput,
+    pub(crate) shared: usize,
+    /// The checked run's files `HEAD` did not reuse.
+    pub(crate) rest: Vec<CheckFile>,
+}
+
+impl BaseRun {
+    /// `HEAD`'s files.
+    pub(crate) fn head_files(&self) -> Vec<&CheckFile> {
+        self.head.files.iter().collect()
+    }
+
+    /// The checked run's files: those `HEAD` reused, and the rest.
+    pub(crate) fn checked_files(&self) -> Vec<&CheckFile> {
+        self.head.files[..self.shared]
+            .iter()
+            .chain(&self.rest)
+            .collect()
+    }
+}
+
 /// `HEAD`'s listing under the checked `[paths]`.
 #[derive(Debug)]
 pub(crate) struct HeadWalk {
@@ -345,11 +379,12 @@ impl HeadWalk {
         checked: CheckInput,
         setup: &CheckSetup,
         today: &str,
-    ) -> Result<Vec<Finding>, Vec<Cause>> {
+    ) -> Result<BaseRun, Vec<Cause>> {
         // Both in path order: a merge, no lookup table.
         let mut shared = checked.files;
         shared.sort_unstable_by(|a, b| a.path.cmp(&b.path));
         let mut shared = shared.into_iter().peekable();
+        let mut rest = Vec::new();
         let (_, problems) = split_listing(self.listing);
         let mut input = CheckInput {
             files: Vec::with_capacity(self.listed.len()),
@@ -357,7 +392,9 @@ impl HeadWalk {
         };
         let mut fresh = Vec::new();
         for (path, oid) in self.listed {
-            while shared.next_if(|file| file.path < path).is_some() {}
+            while let Some(file) = shared.next_if(|file| file.path < path) {
+                rest.push(file);
+            }
             if index.oid_of(&path) == Some(oid.as_str())
                 && let Some(file) = shared.next_if(|file| file.path == path)
             {
@@ -366,6 +403,7 @@ impl HeadWalk {
                 fresh.push((path, oid));
             }
         }
+        rest.extend(shared);
         // By OID, so an OID's last use is known: its bytes are moved there,
         // copied before (the engine orders files by path itself).
         fresh.sort_unstable_by(|a, b| a.1.cmp(&b.1));
@@ -390,7 +428,7 @@ impl HeadWalk {
                 index.object(oid).cloned()
             }
         };
-        run_base(input, fresh, take, setup, today)
+        run_base(input, fresh, take, setup, today, rest)
     }
 
     /// The base's findings of `spec check --changed`
@@ -412,7 +450,7 @@ impl HeadWalk {
         checked: CheckInput,
         setup: &CheckSetup,
         today: &str,
-    ) -> Result<Vec<Finding>, Vec<Cause>> {
+    ) -> Result<BaseRun, Vec<Cause>> {
         let partial: Vec<Cause> = self
             .listed
             .iter()
@@ -430,6 +468,7 @@ impl HeadWalk {
         let mut shared = checked.files;
         shared.sort_unstable_by(|a, b| a.path.cmp(&b.path));
         let mut shared = shared.into_iter().peekable();
+        let mut rest = Vec::new();
         let (_, problems) = split_listing(self.listing);
         let mut input = CheckInput {
             files: Vec::with_capacity(self.listed.len()),
@@ -437,7 +476,9 @@ impl HeadWalk {
         };
         let mut fresh = Vec::new();
         for (path, oid) in self.listed {
-            while shared.next_if(|file| file.path < path).is_some() {}
+            while let Some(file) = shared.next_if(|file| file.path < path) {
+                rest.push(file);
+            }
             let same_bytes = |file: &CheckFile| {
                 file.path == path
                     && file.read_error.is_none()
@@ -449,6 +490,7 @@ impl HeadWalk {
                 fresh.push((path, oid));
             }
         }
+        rest.extend(shared);
         // By OID, so an OID's last use is known (see `run_base`).
         fresh.sort_unstable_by(|a, b| a.1.cmp(&b.1));
         let take = |oid: &str, last: bool| {
@@ -458,7 +500,7 @@ impl HeadWalk {
                 objects.get(oid).cloned()
             }
         };
-        run_base(input, fresh, take, setup, today)
+        run_base(input, fresh, take, setup, today, rest)
     }
 }
 
@@ -466,14 +508,17 @@ impl HeadWalk {
 /// each of `fresh` (path, OID), sorted by OID, is parsed from the object
 /// `take` gives for its OID, told whether this is the OID's last use (its
 /// bytes may then be moved out; before, they are copied). Then
-/// `check::run` with an empty baseline, `today`, its causes dropped.
+/// `check::run` with an empty baseline, `today`, its causes dropped; both
+/// sides' files kept for the rule (`rest`: the checked files not reused).
 fn run_base(
     mut input: CheckInput,
     fresh: Vec<(String, String)>,
     mut take: impl FnMut(&str, bool) -> Option<Blob>,
     setup: &CheckSetup,
     today: &str,
-) -> Result<Vec<Finding>, Vec<Cause>> {
+    rest: Vec<CheckFile>,
+) -> Result<BaseRun, Vec<Cause>> {
+    let shared = input.files.len();
     let mut fresh = fresh.into_iter().peekable();
     let scheme = &setup.project.scheme;
     while let Some((path, oid)) = fresh.next() {
@@ -491,7 +536,7 @@ fn run_base(
             }
         }
     }
-    Ok(check::run(
+    let findings = check::run(
         &input,
         scheme,
         &setup.project.paths,
@@ -499,7 +544,13 @@ fn run_base(
         &Baseline::empty(),
         today,
     )
-    .findings)
+    .findings;
+    Ok(BaseRun {
+        findings,
+        head: input,
+        shared,
+        rest,
+    })
 }
 
 /// Why a `HEAD` file whose OID the session read as `blob` would make the
@@ -885,7 +936,9 @@ mod base_partial {
             setup,
         } = prepared;
         BASE_PARSES.with(|parses| parses.set(0));
-        let result = head_walk.findings(&mut index, input, &setup, TODAY);
+        let result = head_walk
+            .findings(&mut index, input, &setup, TODAY)
+            .map(|run| run.findings);
         (result, BASE_PARSES.with(std::cell::Cell::get))
     }
 

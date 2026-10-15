@@ -225,7 +225,7 @@ To apply at 5b's refresh (2026-10-15, from 5a's refresh):
 
 - the pin `nothing_outside_the_binder_reads_an_items_state` (cli `code_refs_walk.rs`) adds CLI `verify_rows.rs`, the cascade (`hash-levels.md` "Rules and edge cases");
 - define the drift `code` fact of a level comparison: the changed level digests, never a fingerprint (`hash-levels.md` Q16);
-- after 5b `module` and `ron` rows are compared by digest, so `proposal-drift.md` "The item"'s `code` wording changes; that file is at its cap (83 B left, about 0 after 4b-2);
+- after 5b `module` and `ron` rows are compared by digest, so `proposal-drift.md` "The item"'s `code` wording changes; that file is at its cap (47 B left after 4b-2);
 - "Why"'s order adds "after 5a-2's TE-1 figures" (`hash-levels-eval.md` Q4).
 
 ## Implementation

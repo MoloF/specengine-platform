@@ -388,8 +388,9 @@ fn the_one_table_covers_every_parser_code() {
     // (docs/features/spec-check-scopes.md AC-08), then pass B's two file
     // link warnings (docs/features/spec-check-links.md AC-07), then
     // increment 4's five rule codes and the warning `parent-cycle`
-    // (docs/features/spec-check-process.md AC-18); a stale entry is no
-    // finding.
+    // (docs/features/spec-check-process.md AC-18), then slice 4b-2's error
+    // `rev-not-raised` (docs/features/rev-rule.md RD-2: `CHECK_CODES` 36);
+    // a stale entry is no finding.
     assert_eq!(
         check::CHECK_CODES,
         [
@@ -428,6 +429,7 @@ fn the_one_table_covers_every_parser_code() {
             "part-empty",
             "text-empty",
             "parent-cycle",
+            "rev-not-raised",
         ]
     );
     // No check code shadows a parser code.

@@ -102,8 +102,8 @@ spec task approve T | changes T --note "..." | cancel T
 
 # code and drift
 spec symbols [--file F] [--unbound]
-spec verify [--changed] [--json]                    # shipped: docs/canon/spec-verify.md; --staged 4b-2, --task/--tests 8a
-spec bump [--editorial ID]                           # bump rev of changed nodes (pre-commit fails without it)
+spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md; --task/--tests 8a
+spec bump [--staged] [--json]                       # read-only: nodes to raise (shipped: docs/canon/node-revision.md)
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md
 spec lock regen                                     # a merge conflicting in spec.lock: docs/canon/spec-lock.md
 spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/gate.md

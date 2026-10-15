@@ -46,6 +46,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+use specengine_core::check::canonical_id;
 use specengine_core::drift::{
     DRIFT_ROWS_MAX, DriftEvidence, DriftLock, DriftMarker, DriftRow, HashedEntry, HashedRow,
     drift_hash_input, drift_summary, raises,
@@ -63,7 +64,6 @@ use crate::corpus::indexed;
 use crate::lock::{NOT_TRACKED, canonical_ids, state_of, without_rev};
 use crate::project::CONFIG_FILE;
 use crate::proposals::{QueueContext, checked_now, escaped_error, open_context, queue_cannot};
-use crate::propose::canonical_id;
 use crate::refs::Corpus;
 use crate::show::classify;
 use crate::task::bound_task;
@@ -292,7 +292,8 @@ fn run_drift(
     }
 
     // 7. The rows, per node.
-    let judged = judge_commit(&side, &context.project).map_err(|cause| run_cause_text(&cause))?;
+    let judged =
+        judge_commit(&side, &context.project, None).map_err(|cause| run_cause_text(&cause))?;
     let mut by_node: BTreeMap<&str, Vec<&Row>> = BTreeMap::new();
     for row in &judged.rows {
         by_node.entry(row.key.node.as_str()).or_default().push(row);

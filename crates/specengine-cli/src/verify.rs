@@ -1,4 +1,4 @@
-//! `spec verify [--changed] [--json]`
+//! `spec verify [--changed | --staged] [--json]`
 //! (canon `spec-verify`, "Rows", "Verdict and exit"; canon
 //! `spec-verify-output`, "Hints"): drift between `spec.lock`
 //! and the tree, one row per lock key, each with a state and a class (Fix,
@@ -24,25 +24,36 @@
 //! the current and `HEAD`'s modes applying. Plain, `enforce-introduced`
 //! has no base and is judged as `enforce`, with a note. The mode shown,
 //! text and JSON, is always the one the verdict used.
+//!
+//! `--staged` (task spec `rev-rule`; `--changed` excluded, a usage error)
+//! judges what a commit records, through the one-commit seam
+//! ([`crate::verify_rows::read_commit`], `judge_commit`) fed the git
+//! index's listing (`GIT_INDEX_FILE` kept, read as `spec check --staged`
+//! reads it): the index's config whole unless `--config` (disk), its
+//! documents, code files, manifests and lock from its blobs; no disk walk,
+//! no `hash-object`, no data-directory refresh. Its base is `HEAD`, read
+//! over the index's side (a shared path and blob neither read nor parsed
+//! again), Pre-existing as `--changed` marks it. An unmerged path is (5)
+//! each; an index blob that cannot be read or parsed (3).
 
 use std::collections::BTreeSet;
 use std::fs;
 
 use serde::Serialize;
-use specengine_core::CodeConfig;
 use specengine_core::check::Mode;
 use specengine_core::drift::raises;
 use specengine_core::lock::{LOCK_FILE, key_problem};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
-use specengine_store::{GitEnv, VerifyGit};
+use specengine_core::{CodeConfig, ProjectConfig};
+use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
 
 use crate::code_walk::read_tree;
 use crate::corpus::indexed;
 use crate::lock::{build_recipes, read_lock};
-use crate::project::{CONFIG_FILE, discover_with_text};
+use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text, locate};
 use crate::verify_rows::{
-    CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, HeadMode, Row, RunCause,
-    Walked, judge_walk, read_head,
+    CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
+    IndexShare, Judged, Row, RunCause, Walked, judge_commit, judge_walk, read_commit, read_head,
 };
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
@@ -51,11 +62,24 @@ use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 const CAUSE_UNMERGED: u8 = 5;
 const CAUSE_DATA: u8 = 8;
 
+/// What `spec verify` judges, and whether against `HEAD`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum VerifiedTree {
+    /// Plain: the working tree, no base.
+    #[default]
+    WorkingTree,
+    /// `--changed`: the working tree, against `HEAD`.
+    Changed,
+    /// `--staged`: what the git index records, against `HEAD`.
+    Staged,
+}
+
 /// `spec verify` options.
 #[derive(Debug, Clone)]
 pub struct VerifyRequest {
-    /// `--changed`: judged against `HEAD` too.
-    pub changed: bool,
+    /// Plain, `--changed` or `--staged`.
+    pub tree: VerifiedTree,
+    /// Git's environment (`--staged`: its `GIT_INDEX_FILE` names the index).
     pub git: GitEnv,
 }
 
@@ -156,6 +180,10 @@ pub fn verify(
     globals: &Globals,
     request: &VerifyRequest,
 ) -> Result<VerifyOutcome, CliError> {
+    if request.tree == VerifiedTree::Staged {
+        return verify_staged(env, globals, request);
+    }
+    let changed = request.tree == VerifiedTree::Changed;
     let (project, text) = discover_with_text(env, globals)?;
     project.slug()?;
     let mut messages = Vec::new();
@@ -237,7 +265,7 @@ pub fn verify(
         None => None,
     };
 
-    let mut base = request.changed.then_some("HEAD");
+    let mut base = changed.then_some("HEAD");
     let mut head_mode = HeadMode::Absent;
     let mut judged = None;
     match (causes.is_empty(), code, tree, lock, input, git) {
@@ -249,7 +277,7 @@ pub fn verify(
                 tree: &tree,
                 lock: &lock,
             };
-            match run(env, globals, &walked, &mut open, request.changed) {
+            match run(env, globals, &walked, &mut open, changed) {
                 Ok((rows, at_head, unborn)) => {
                     if unborn {
                         base = Some("unborn");
@@ -269,17 +297,48 @@ pub fn verify(
         }
         _ => {}
     }
-    // The mode the verdict uses, shown as such whether rows were judged or
-    // a run cause stopped them.
-    let mode = configured.map(|configured| {
-        judged_mode(
-            configured,
-            request.changed,
-            &head_mode,
-            label,
-            &mut messages,
-        )
-    });
+    Ok(concluded(Gathered {
+        configured,
+        has_base: changed,
+        base,
+        head_mode,
+        judged,
+        causes,
+        messages,
+        label,
+    }))
+}
+
+/// What a run gathered before its verdict.
+struct Gathered<'a> {
+    /// `[verify] mode`; `None` when it cannot be read.
+    configured: Option<Mode>,
+    /// `--changed` or `--staged`.
+    has_base: bool,
+    base: Option<&'static str>,
+    head_mode: HeadMode,
+    judged: Option<Judged>,
+    causes: Vec<RunCause>,
+    messages: Vec<Message>,
+    /// The config as named.
+    label: &'a str,
+}
+
+/// The outcome: the mode the verdict uses, shown as such whether rows were
+/// judged or a run cause stopped them; the rows only when no cause.
+fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
+    let Gathered {
+        configured,
+        has_base,
+        base,
+        head_mode,
+        judged,
+        mut causes,
+        mut messages,
+        label,
+    } = gathered;
+    let mode = configured
+        .map(|configured| judged_mode(configured, has_base, &head_mode, label, &mut messages));
 
     causes.sort_by_key(|cause| cause.order);
     let (rows, skipped): (Vec<VerifyRow>, usize) = match judged {
@@ -293,7 +352,7 @@ pub fn verify(
         pre_existing: row.pre_existing,
     });
     let verdict = verdict(mode.unwrap_or(Mode::Observe), !causes.is_empty(), findings);
-    Ok(VerifyOutcome {
+    VerifyOutcome {
         mode,
         base,
         verdict,
@@ -304,7 +363,183 @@ pub fn verify(
             .map(|cause| one_line(&cause.message))
             .collect(),
         messages,
-    })
+    }
+}
+
+/// `spec verify --staged`: discovery on disk (`--config` read there, as
+/// plain's), then every failure a run cause: (4) the index cannot be
+/// listed, (5) each unmerged path; (1), (2) the index's config (or
+/// `--config`'s); the index's side through the one-commit seam, its
+/// causes (3), (4), (6); `HEAD`'s side over it (7).
+fn verify_staged(
+    env: &Env,
+    globals: &Globals,
+    request: &VerifyRequest,
+) -> Result<VerifyOutcome, CliError> {
+    let located = locate(env, globals)?;
+    let given = match &globals.config {
+        Some(_) => Some(discover_with_text(env, globals)?.1),
+        None => None,
+    };
+    let label = located.config_label.as_str();
+    let messages = Vec::new();
+    let mut causes: Vec<RunCause> = Vec::new();
+
+    // (4), (5): the index git names.
+    let mut opened = match VerifyGit::staged(&located.root, &request.git) {
+        Ok(opened) => Some(opened),
+        Err(IndexRefusal::Git(cause)) => {
+            causes.push(RunCause::new(CAUSE_GIT, cause.message));
+            None
+        }
+        Err(IndexRefusal::Unmerged(paths)) => {
+            causes.extend(paths.iter().map(|path| {
+                RunCause::new(
+                    CAUSE_UNMERGED,
+                    if path == LOCK_FILE {
+                        format!("{LOCK_FILE} is unmerged: run spec lock regen")
+                    } else {
+                        format!(
+                            "`{path}` is unmerged in the git index: the conflict is not resolved"
+                        )
+                    },
+                )
+            }));
+            None
+        }
+    };
+
+    // (1), (2): the index's config, whole, unless `--config`.
+    let staged_text = match (&given, &mut opened) {
+        (None, Some((git, listing))) => match staged_config(git, listing, label) {
+            Ok(text) => Some(text),
+            Err(cause) => {
+                causes.push(cause);
+                None
+            }
+        },
+        _ => None,
+    };
+    let mut project = None;
+    let mut code = None;
+    let mut configured = None;
+    if let Some(text) = given.as_deref().or(staged_text.as_deref()) {
+        match ProjectConfig::from_toml(text) {
+            Ok(config) => {
+                project = Some(ProjectRoot {
+                    root: located.root.clone(),
+                    config_label: label.to_owned(),
+                    config,
+                });
+            }
+            Err(error) => causes.push(RunCause::new(CAUSE_CONFIG, error.at(label))),
+        }
+        match CodeConfig::from_toml(text) {
+            Ok(Some(read)) => code = Some(read),
+            Ok(None) => causes.push(RunCause::new(
+                CAUSE_NO_CODE,
+                format!(
+                    "{label} has no [code] table: the code layer is off (add [code] with roots)"
+                ),
+            )),
+            Err(error) => causes.push(RunCause::new(CAUSE_CONFIG, error.at(label))),
+        }
+        match verify_from_toml(text) {
+            Ok(config) => configured = Some(config.mode),
+            Err(error) => causes.push(RunCause::new(CAUSE_CONFIG, error.at(label))),
+        }
+    }
+
+    let mut base = Some("HEAD");
+    let mut head_mode = HeadMode::Absent;
+    let mut judged = None;
+    match (causes.is_empty(), project, code, opened) {
+        (true, Some(project), Some(code), Some((mut git, listing))) => {
+            let config = staged_text.as_deref().map(str::as_bytes);
+            match judge_index(env, globals, &project, code, &mut git, listing, config) {
+                Ok((rows, at_head, unborn)) => {
+                    if unborn {
+                        base = Some("unborn");
+                    }
+                    head_mode = at_head;
+                    judged = Some(rows);
+                }
+                Err(cause) => causes.push(cause),
+            }
+            if let Err(cause) = git.finish() {
+                causes.push(RunCause::new(CAUSE_GIT, cause.message));
+            }
+        }
+        // The session's end is no cause of its own: one is listed already.
+        (.., Some((git, _))) => {
+            let _ = git.finish();
+        }
+        _ => {}
+    }
+    Ok(concluded(Gathered {
+        configured,
+        has_base: true,
+        base,
+        head_mode,
+        judged,
+        causes,
+        messages,
+        label,
+    }))
+}
+
+/// The index's root `specengine.toml`, its text. Causes: git's (4); not
+/// staged, not a regular file or its blob unreadable, not UTF-8 (1).
+fn staged_config(
+    git: &mut VerifyGit,
+    listing: &CommitListing,
+    label: &str,
+) -> Result<String, RunCause> {
+    let mut files = git
+        .read_files(listing, [CONFIG_FILE])
+        .map_err(|cause| RunCause::new(CAUSE_GIT, cause.message))?;
+    match files.remove(CONFIG_FILE) {
+        None => Err(RunCause::new(
+            CAUSE_CONFIG,
+            format!("{label}: not staged in the git index"),
+        )),
+        Some(CommitFile::Unreadable(why)) => Err(RunCause::new(
+            CAUSE_CONFIG,
+            format!("{label} in the index: {why}"),
+        )),
+        Some(CommitFile::Bytes(bytes)) => String::from_utf8(bytes)
+            .map_err(|_| RunCause::new(CAUSE_CONFIG, format!("{label}: the file is not UTF-8"))),
+    }
+}
+
+/// The index's side read through the one-commit seam, `HEAD`'s read over
+/// it, and its rows judged against `HEAD`'s; `config` the index's config
+/// bytes when it is the config judged. `HEAD`'s mode, and whether it is
+/// unborn.
+fn judge_index(
+    env: &Env,
+    globals: &Globals,
+    project: &ProjectRoot,
+    code: CodeConfig,
+    git: &mut VerifyGit,
+    listing: CommitListing,
+    config: Option<&[u8]>,
+) -> Result<(Judged, HeadMode, bool), RunCause> {
+    let side = read_commit(project, git, CommitConfig::of_index(listing, code.clone()))?;
+    let config_path = config_path(env, globals, project);
+    let share = IndexShare {
+        side: &side,
+        config,
+    };
+    let head = read_head(
+        &side.walked(project, &code),
+        git,
+        config_path.as_deref(),
+        Some(&share),
+    )?;
+    let judged = judge_commit(&side, project, Some(&head))?;
+    let unborn = head.is_unborn();
+    Ok((judged, head.mode, unborn))
 }
 
 /// A state as its name.
@@ -322,7 +557,7 @@ fn run(
 ) -> Result<(crate::verify_rows::Judged, HeadMode, bool), RunCause> {
     let head = if changed {
         let config = config_path(env, globals, walked.project);
-        Some(read_head(walked, git, config.as_deref())?)
+        Some(read_head(walked, git, config.as_deref(), None)?)
     } else {
         None
     };
@@ -360,17 +595,17 @@ fn config_path(
     (!parts.is_empty()).then(|| parts.join("/"))
 }
 
-/// The mode judged: with a base the stricter of the configured one and
-/// `HEAD`'s (a note when `HEAD`'s is stricter or unknown); plain,
-/// `enforce-introduced` judged as `enforce`, with a note.
+/// The mode judged: with a base (`--changed`, `--staged`) the stricter of
+/// the configured one and `HEAD`'s (a note when `HEAD`'s is stricter or
+/// unknown); plain, `enforce-introduced` judged as `enforce`, with a note.
 fn judged_mode(
     configured: Mode,
-    changed: bool,
+    has_base: bool,
     head: &HeadMode,
     label: &str,
     messages: &mut Vec<Message>,
 ) -> Mode {
-    if !changed {
+    if !has_base {
         if configured == Mode::EnforceIntroduced {
             messages.push(Message::Note(
                 "mode `enforce-introduced` has no base without --changed: judged as `enforce`"
@@ -595,8 +830,9 @@ pub(crate) fn keyed_binding(
 /// The next step for text changed at the locked revision (accept refuses
 /// it): no proposal raises a revision, approval sets it.
 const SAME_REVISION_STEP: &str = "the node's text changed at its locked revision: raise its \
-     `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock \
-     accept <ID> --editorial`); accept refuses text changed at a revision";
+     `rev` by hand (`spec bump` prints the line while the edit is uncommitted), commit, then \
+     accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`); \
+     accept refuses text changed at a revision";
 
 /// The hint after the others when a row is drift a queue item takes (task
 /// spec `drift-queue`, "report_drift and texts").

@@ -8,7 +8,7 @@ reviewed: 2026-10-10
 
 # spec check: index render, generators, graph warnings
 
-§11.5–6 of `docs/canon/documentation-system.md` over a generator registry, and three warnings over the parse: seven of the 35 `CHECK_CODES` (engine, config, verdict, output: `docs/canon/spec-check.md`). Pure and read-only: the render stays in memory, no generator is run (ADR-0013). Errors where the convention says "fail" (§11.5–6), warnings where recognition is heuristic or the finding is a content discrepancy (owner, Q-A; `#control`).
+§11.5–6 of `docs/canon/documentation-system.md` over a generator registry, and three warnings over the parse: seven of the 36 `CHECK_CODES` (engine, config, verdict, output: `docs/canon/spec-check.md`). Pure and read-only: the render stays in memory, no generator is run (ADR-0013). Errors where the convention says "fail" (§11.5–6), warnings where recognition is heuristic or the finding is a content discrepancy (owner, Q-A; `#control`).
 
 ## API (`specengine_core::check`)
 

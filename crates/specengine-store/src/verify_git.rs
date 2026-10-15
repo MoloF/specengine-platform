@@ -16,6 +16,13 @@
 //! - in the session, the blobs of the paths asked for, each OID once per
 //!   `read_files` call.
 //!
+//! `spec verify --staged` ([`VerifyGit::staged`]) opens the check's index
+//! reader instead ([`Staged::read`]: `ls-files -s -z`, the intent-to-add
+//! detector, an unmerged path refused), the index git names
+//! (`GIT_INDEX_FILE` kept), and lists its stage-0 entries under the root
+//! as a [`CommitListing`] labelled [`INDEX_LABEL`]; then the same session
+//! reads `HEAD` and the blobs.
+//!
 //! Every failure is a [`Cause`] at `.` with a fixed message, never git's
 //! text or an absolute path.
 
@@ -25,8 +32,12 @@ use std::path::Path;
 use specengine_core::WalkScope;
 use specengine_core::check::Cause;
 
-use crate::git::{Blob, Entry, EntryKind, GitEnv, Staged};
+use crate::git::{Blob, Entry, EntryKind, GitEnv, IndexFailure, Staged};
 use crate::source::walk_index;
+
+/// The label of the git index's listing ([`VerifyGit::staged`]), where a
+/// commit's listing has its OID.
+pub const INDEX_LABEL: &str = "the index";
 
 /// The cause of a blob `ls-tree` lists that the object database lacks.
 pub const MISSING_COMMIT_BLOB: &str = "the blob is missing from the git object database";
@@ -61,11 +72,25 @@ pub struct CommitEntry {
     pub oid: String,
 }
 
-/// A commit's tree under the root, listed (`ls-tree -r -z`), byte-sorted.
+/// A commit's tree under the root, listed (`ls-tree -r -z`), byte-sorted;
+/// or the git index's stage-0 entries under the root
+/// ([`VerifyGit::staged`]).
 #[derive(Debug, Clone)]
 pub struct CommitListing {
-    commit: String,
+    /// The commit's full OID, or [`INDEX_LABEL`].
+    label: String,
     entries: Vec<Entry>,
+}
+
+/// Why [`VerifyGit::staged`] lists no index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IndexRefusal {
+    /// The root unreadable, the environment refused, no repository, `git`
+    /// not runnable or failing: one cause at `.`.
+    Git(Cause),
+    /// The root-relative paths with unmerged stages, byte-sorted (lossy
+    /// UTF-8).
+    Unmerged(Vec<String>),
 }
 
 /// One file of a commit read: its bytes, or why they cannot be read.
@@ -78,9 +103,14 @@ pub enum CommitFile {
 }
 
 impl CommitListing {
-    /// The commit's full OID.
-    pub fn commit(&self) -> &str {
-        &self.commit
+    /// The commit's full OID; the index's listing: [`INDEX_LABEL`].
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    /// The listing is the git index's ([`VerifyGit::staged`]).
+    pub fn is_index(&self) -> bool {
+        self.label == INDEX_LABEL
     }
 
     /// The entry at exactly the root-relative `path`.
@@ -133,6 +163,30 @@ impl VerifyGit {
         })
     }
 
+    /// Git for the root over the git index git names (`GIT_INDEX_FILE`
+    /// kept: a hook's `commit -a`, `--only` index too), listed as `spec
+    /// check --staged` lists it ([`Staged::read`]: `ls-files -s -z`,
+    /// intent-to-add entries dropped), and its stage-0 entries under the
+    /// root as a listing labelled [`INDEX_LABEL`]; the session then reads
+    /// `HEAD` ([`VerifyGit::list_commit`]) and any blob. Nothing is
+    /// written; no `hash-object` runs unless asked.
+    pub fn staged(root: &Path, env: &GitEnv) -> Result<(Self, CommitListing), IndexRefusal> {
+        let mut staged = Staged::read_index(root, env).map_err(|failure| match failure {
+            IndexFailure::Cause(cause) => IndexRefusal::Git(cause),
+            IndexFailure::Unmerged(paths) => IndexRefusal::Unmerged(
+                paths
+                    .iter()
+                    .map(|path| String::from_utf8_lossy(path).into_owned())
+                    .collect(),
+            ),
+        })?;
+        let listing = CommitListing {
+            label: INDEX_LABEL.to_owned(),
+            entries: std::mem::take(&mut staged.entries),
+        };
+        Ok((Self { staged }, listing))
+    }
+
     /// Whether the root-relative `path` is unmerged in the git index: a
     /// stage 1, 2 or 3 entry, asked by name in the session.
     pub fn is_unmerged(&mut self, path: &str) -> Result<bool, Cause> {
@@ -173,7 +227,10 @@ impl VerifyGit {
             .staged
             .head_entries(&commit)
             .map_err(|failure| failure.cause())?;
-        Ok(Some(CommitListing { commit, entries }))
+        Ok(Some(CommitListing {
+            label: commit,
+            entries,
+        }))
     }
 
     /// The files at `paths` (root-relative) of `listing`, each blob read

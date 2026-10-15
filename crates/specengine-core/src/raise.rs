@@ -329,6 +329,45 @@ pub fn write_revisions(
     Err(if alone.is_empty() { every() } else { alone })
 }
 
+/// The line a raise of node `ord` to `rev` writes, as an apply writes it
+/// ([`write_revisions`], which must accept it): the span it replaces in
+/// `bytes` and its text. A heading or a `rev:` line rewritten: the whole
+/// line, its ending excluded; a `rev:` line inserted after the `id:` line:
+/// an empty span where it goes, the text with its line ending. `None` when
+/// the raise cannot be written.
+pub fn raised_line(
+    path: &str,
+    bytes: &[u8],
+    parsed: &ParsedFile,
+    scheme: &IdScheme,
+    ord: usize,
+    rev: u32,
+) -> Option<(Span, String)> {
+    write_revisions(path, bytes, parsed, scheme, &[(ord, rev)]).ok()?;
+    let text = std::str::from_utf8(bytes).ok()?;
+    let (range, replacement) = if ord == 0 {
+        document_edit(text, parsed, rev).ok()?
+    } else {
+        section_edit(text, parsed, ord, rev).ok()?
+    };
+    if replacement.ends_with('\n') {
+        return Some((Span::new(range.start, range.start), replacement));
+    }
+    let start = text[..range.start].rfind('\n').map_or(0, |at| at + 1);
+    let mut end = text[range.end..]
+        .find('\n')
+        .map_or(text.len(), |at| range.end + at);
+    if end > range.end && text[..end].ends_with('\r') {
+        end -= 1;
+    }
+    let line = format!(
+        "{}{replacement}{}",
+        &text[start..range.start],
+        &text[range.end..end]
+    );
+    Some((Span::new(start, end), line))
+}
+
 /// [`write_revisions`] of `raises` together: the file written and parsed
 /// again, else why it is refused.
 fn written_checked(

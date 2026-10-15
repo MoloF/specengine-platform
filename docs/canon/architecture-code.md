@@ -55,7 +55,7 @@ Rule: `architecture.md#control`. ADR-0042, ADR-0045, ADR-0050.
 - Only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix. Otherwise `spec propose drift` queues the findings as items that stop nothing (ADR-0045), reads show the same states as `sync` (`#sync-in-reads`) and Health lists them (`#health`).
 - A binding it cannot verify is never `ok`: exit 2 in every mode; a lock of another format or recipe too, until `spec lock rebase` carries it over (`#spec-lock`).
 
-As built (slice 4a): rows, states, the cascade, the base and the run causes in `docs/canon/spec-verify.md`; text, hints and JSON in `docs/canon/spec-verify-output.md`. As built (slice 4c-1): `spec propose drift`, its items, dedup and approve in `docs/canon/proposal-drift.md`; its one-commit judge in `docs/canon/spec-verify.md` "Base".
+As built (slice 4a): rows, states, the cascade, the base and the run causes in `docs/canon/spec-verify.md`; text, hints and JSON in `docs/canon/spec-verify-output.md`. As built (slice 4c-1): `spec propose drift`, its items, dedup and approve in `docs/canon/proposal-drift.md`; its one-commit judge in `docs/canon/spec-verify.md` "Base". As built (slice 4b-2): `verify --staged` in `docs/canon/spec-verify.md` "Base".
 
 <a id="sync-in-reads"></a>
 ## Sync in reads
@@ -65,7 +65,7 @@ Rule: `architecture.md#control`. ADR-0046.
 - `spec bundle` (layers 5 and 9), `show --bindings`, `tree`'s counters, `task show`'s `bindings` and `impact`, and their MCP and HTTP twins, show each binding of their nodes as one row: the lock key, its place, signature, layer and `sync`.
 - `sync` is `spec verify`'s plain state (no base, no Pre-existing) from the same pure judge, over the code index the read refreshes, `spec.lock` and the read's own parse; never stored, so it may be newer than the last `spec verify`. No exit code, status, claim, approval or gate verdict depends on it.
 - A read of nodes never fails on the code layer: a bad `[code]` or a walk gap shows no rows, an invalid or unmerged lock, no git or a git failure shows rows with `sync` unknown; either way one `note: bindings: <cause>`, the spec part and exit unchanged, never `ok`. Without `[code]` such a read is byte-identical to one without a code layer. `impact --symbol` and `--since` take code as input and exit 2 on it, as `spec symbols`.
-- Of the reads, these and `refs`, `symbols`, `unmapped`, `index`, `verify`, `health` (`#health`) walk code; `show` without `--bindings`, `search` and `graph` never do. Git is read only (`rev-parse`, `ls-tree`, `cat-file`, `hash-object` without `-w`), never `status` or `diff`. `impact --since` compares a git revision with the working tree, untracked files included; `spec.lock` plays no part.
+- Of the reads, these and `refs`, `symbols`, `unmapped`, `index`, `verify`, `health` (`#health`) walk code; `show` without `--bindings`, `search` and `graph` never do. Git is read only (`rev-parse`, `ls-tree`, `cat-file`, `hash-object` without `-w`; `verify --staged` also `ls-files -s -z` and the intent-to-add detector's `diff-files --diff-filter=A --ita-invisible-in-index`, as `spec check --staged`), never `status` or `diff`. `impact --since` compares a git revision with the working tree, untracked files included; `spec.lock` plays no part.
 
 <a id="health"></a>
 ## Health's code rows

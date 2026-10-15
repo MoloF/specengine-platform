@@ -57,8 +57,8 @@ use std::io::Read as _;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
-use specengine_core::check::CheckInput;
 use specengine_core::check::resolve::feature_stem;
+use specengine_core::check::{CheckInput, feature_scoped};
 use specengine_core::create::{IdSite, WrittenId, amended_refs, id_sites, written_id};
 use specengine_core::intake::{
     AMENDMENT_KIND, AuthorInput, DECISION_KIND, author_problem, rationale_problem, with_article,
@@ -94,7 +94,7 @@ use crate::proposals::{
 };
 use crate::propose::{
     CheckedUpdate, ProposedText, SectionsFound, SpanRule, checked_span, exists_refusal,
-    feature_scoped, is_path_target, read_text, written_reference,
+    is_path_target, read_text, written_reference,
 };
 use crate::refresh::refresh;
 use crate::review::previewed;

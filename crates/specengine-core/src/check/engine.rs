@@ -19,7 +19,7 @@ use specengine_model::{
 use super::baseline::{Baseline, DebtEntry};
 use super::config::{CheckConfig, DocClass};
 use super::input::{CheckFile, CheckInput, ProblemKind};
-use super::report::{Cause, Debt, Finding, Fix, Report};
+use super::report::{Cause, Debt, Finding, Fix, Report, entry_order, sort_findings};
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
 use super::text::{FileText, Written, front_matter_failed, is_calendar_date, is_date_shaped};
 use super::working_set::worst_w;
@@ -167,6 +167,36 @@ pub fn run(
         stale,
         causes,
     )
+}
+
+/// `report` (a [`run`] under `baseline` and `today`) with `extra` findings
+/// added, as if the run had found them: the baseline matched again over
+/// every finding (an entry matching an added one is no longer stale), the
+/// findings sorted, counted and judged again. No finding: `report` as is.
+pub fn add_findings(
+    mut report: Report,
+    extra: Vec<Finding>,
+    baseline: &Baseline,
+    today: &str,
+) -> Report {
+    if extra.is_empty() {
+        return report;
+    }
+    report.findings.extend(extra);
+    for finding in &mut report.findings {
+        finding.debt = None;
+    }
+    let mut stale = apply_baseline(
+        &mut report.findings,
+        baseline,
+        today,
+        is_calendar_date(today),
+    );
+    stale.sort_by(entry_order);
+    report.stale = stale;
+    sort_findings(&mut report.findings);
+    report.settle(false);
+    report
 }
 
 /// Marks findings matched by a baseline entry; returns the entries that

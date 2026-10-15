@@ -29,7 +29,7 @@
 use std::collections::BTreeMap;
 
 use specengine_core::check::{
-    CANON_LINK, CheckInput, DocClass, Endpoint, NodeAt, Resolver, SpecGraph,
+    CANON_LINK, CheckInput, DocClass, Endpoint, NodeAt, Resolver, SpecGraph, canonical_id,
 };
 use specengine_core::intake::{
     AuthorInput, Interpretation, author_problem, interpretation_text_problem, rationale_problem,
@@ -51,8 +51,8 @@ use crate::proposals::{
     escaped_error, open_context, queue_cannot,
 };
 use crate::propose::{
-    ProposedText, SpanRule, canonical_id, checked_located, is_path_target, located, read_text,
-    resolved_node, written_reference,
+    ProposedText, SpanRule, checked_located, is_path_target, located, read_text, resolved_node,
+    written_reference,
 };
 use crate::review::previewed;
 use crate::task::bound_task;

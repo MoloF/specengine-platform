@@ -31,7 +31,7 @@ One `hint: <state>[ <category>]: <step>` per (state, category) present, in state
 | `code_ahead`, `unlocked`, `broken_binding` but `node_gone` | commit, then `spec lock accept <ID>` on a terminal |
 | `broken_binding node_gone` | commit first (the node is gone only when `HEAD` agrees), then `spec lock accept <old ID>` on a terminal drops its entries |
 | `unlocked key_problem` | names each key's problem; `spec lock accept` cannot lock it, rename what gives it |
-| `spec_ahead same_revision`, `conflict` at R = `rev_L` | "the node's text changed at its locked revision: raise its `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`); accept refuses text changed at a revision" |
+| `spec_ahead same_revision`, `conflict` at R = `rev_L` | "the node's text changed at its locked revision: raise its `rev` by hand (`spec bump` prints the line while the edit is uncommitted), commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`); accept refuses text changed at a revision" |
 | `conflict` at R ≠ `rev_L` | "at a revision the lock does not hold, the marker not raised: check the code against the node, set the marker to its revision, commit, then `spec lock accept <ID>` on a terminal" |
 | `cannot_verify` | its category's step: fix the item's parse error or move the marker; make the binding name one symbol; cite one node (`slug/ID`, `ID#SECTION`); write `rev` as a number; fix what nulls the hash; make the file readable UTF-8 under `[code]`; fix the parse error before the symbol |
 | `predated`, `bad_marker`, other `spec_ahead` | restore, raise or lower the marker (`spec refs <ID>`) |

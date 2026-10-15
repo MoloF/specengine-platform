@@ -39,7 +39,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 
 use specengine_core::check::resolve::feature_stem;
-use specengine_core::check::{CheckInput, Resolver};
+use specengine_core::check::{CheckInput, Resolver, canonical_id, feature_scoped};
 use specengine_core::create::{Sections, SectionsError, add_sections};
 use specengine_core::intake::{AuthorInput, author_problem, rationale_problem};
 use specengine_core::patch::{
@@ -48,7 +48,7 @@ use specengine_core::patch::{
 };
 use specengine_core::proposal::Author;
 use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative};
-use specengine_model::{IdScheme, IdScope, IdScript, ParsedFile, Reference, Span, grammar};
+use specengine_model::{IdScheme, IdScript, ParsedFile, Reference, Span, grammar};
 use specengine_store::{
     GitEnv, NamedBytes, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _, QueueError,
     Source as _, WorkingTree, default_baseline, introduced_findings, load_check, patch_hash,
@@ -888,30 +888,4 @@ fn qualified(scheme: &IdScheme, scope: Option<&str>, id: &str) -> String {
         Some(slug) if feature_scoped(scheme, id) => format!("{slug}/{id}"),
         _ => id.to_owned(),
     }
-}
-
-/// The stored form of the target `id` held in `path`: `scope/ID` as
-/// written; a bare feature-scoped ID in a feature document `slug/ID`; else
-/// the ID.
-pub(crate) fn canonical_id(
-    resolver: &Resolver<'_>,
-    scheme: &IdScheme,
-    path: &str,
-    id: &str,
-    scope: Option<&str>,
-) -> String {
-    if let Some(slug) = scope {
-        return format!("{slug}/{id}");
-    }
-    match resolver.feature_slug(path) {
-        Some(slug) if feature_scoped(scheme, id) => format!("{slug}/{id}"),
-        _ => id.to_owned(),
-    }
-}
-
-/// `id`'s prefix has `scope = "feature"`.
-pub(crate) fn feature_scoped(scheme: &IdScheme, id: &str) -> bool {
-    id.split_once('-')
-        .and_then(|(prefix, _)| scheme.prefix(prefix))
-        .is_some_and(|spec| spec.scope == IdScope::Feature)
 }

@@ -1135,51 +1135,101 @@ fn lock_commit_passes_spec_check_staged() {
 /// naming no node, another node's pre-existing Fix row): under
 /// `enforce-introduced` the lock commit passes (the item applied); under
 /// `enforce` the Fix row fails it: the bytes restored, the item reopened.
+///
+/// docs/features/rev-rule.md TE-5 merged in: the hook running `spec
+/// verify --staged` beside `--changed`, through a drift item's approve
+/// and through a plain `spec lock accept`. With `TUNE-01`'s document
+/// deleted on disk (uncommitted: its markers dangle there, a Fix row
+/// `HEAD` lacks) under `enforce-introduced`, the `--staged` hook judges
+/// only `HEAD` and the staged lock: it passes; the `--changed` hook reads
+/// the disk: it refuses, restored, reopened. Under `enforce` the
+/// pre-existing Fix row refuses both. M: `--staged` reading the disk.
 #[test]
 fn lock_commit_under_spec_verify_hooks() {
-    for (mode, passes) in [("enforce-introduced", true), ("enforce", false)] {
-        let repo = drift_common::ecs_drifted(&format!("da-verify-{mode}"), |repo| {
-            repo.replace(
-                drift_common::STAMINA,
-                "(stamina.current + rate * dt).min(stamina.max)",
-                "(stamina.current + rate * dt * 2.0).min(stamina.max)",
-            );
-            repo.write(
-                "crates/game/src/stray.rs",
-                "// @implements PERK-NOPE\npub fn stray() {}\n",
-            );
-            repo.append("crates/game/src/lib.rs", "pub mod stray;\n");
-            verify_common::set_mode(&repo.root, mode);
-        });
-        let raised = raised(&repo, &[]);
-        let id = item_of(&raised, "PERK-REGEN");
-        let slug = "verify-ecs";
-        let hook_home = repo.scratch.home("hook");
-        repo.hook(
-            "pre-commit",
-            &format!(
-                "HOME='{}' '{}' verify --changed",
-                hook_home.display(),
-                common::SPEC
-            ),
-        );
-        let before = repo.state();
-        let approved = approve_yes(&repo, &id);
-        if passes {
-            approved.done(mode);
-            assert_eq!(
-                proposal(&repo, slug, &id).status,
-                ProposalStatus::Applied,
-                "{mode}"
-            );
+    // (the hook's flag, the mode, TUNE-01's document gone on disk, passes)
+    let cases = [
+        ("--changed", "enforce-introduced", false, true),
+        ("--changed", "enforce", false, false),
+        ("--staged", "enforce-introduced", false, true),
+        ("--staged", "enforce", false, false),
+        ("--staged", "enforce-introduced", true, true),
+        ("--changed", "enforce-introduced", true, false),
+    ];
+    for (flag, mode, gone, passes) in cases {
+        let throughs: &[&str] = if flag == "--changed" && !gone {
+            &["approve"]
         } else {
-            approved.refused(mode);
-            assert_eq!(repo.state(), before, "{mode}: restored");
-            assert_eq!(
-                proposal(&repo, slug, &id).status,
-                ProposalStatus::Open,
-                "{mode}"
+            &["approve", "accept"]
+        };
+        for through in throughs {
+            let context = format!("{flag} {mode} gone={gone} {through}");
+            let label = format!(
+                "da-verify-{}-{mode}-{}-{through}",
+                flag.trim_start_matches('-'),
+                u8::from(gone)
             );
+            let repo = drift_common::ecs_drifted(&label, |repo| {
+                repo.replace(
+                    drift_common::STAMINA,
+                    "(stamina.current + rate * dt).min(stamina.max)",
+                    "(stamina.current + rate * dt * 2.0).min(stamina.max)",
+                );
+                repo.write(
+                    "crates/game/src/stray.rs",
+                    "// @implements PERK-NOPE\npub fn stray() {}\n",
+                );
+                repo.append("crates/game/src/lib.rs", "pub mod stray;\n");
+                verify_common::set_mode(&repo.root, mode);
+            });
+            let slug = "verify-ecs";
+            let id = (*through == "approve").then(|| item_of(&raised(&repo, &[]), "PERK-REGEN"));
+            let hook_home = repo.scratch.home("hook");
+            repo.hook(
+                "pre-commit",
+                &format!(
+                    "HOME='{}' '{}' verify {flag}",
+                    hook_home.display(),
+                    common::SPEC
+                ),
+            );
+            if gone {
+                fs::remove_file(repo.root.join("docs/records/TUNE-01.md"))
+                    .expect("remove TUNE-01's document");
+            }
+            let before = repo.state();
+            match &id {
+                Some(id) => {
+                    let approved = approve_yes(&repo, id);
+                    if passes {
+                        approved.done(&context);
+                        assert_eq!(
+                            proposal(&repo, slug, id).status,
+                            ProposalStatus::Applied,
+                            "{context}"
+                        );
+                    } else {
+                        approved.refused(&context);
+                        assert_eq!(
+                            proposal(&repo, slug, id).status,
+                            ProposalStatus::Open,
+                            "{context}"
+                        );
+                    }
+                }
+                None => {
+                    let attempt = repo.accept("PERK-REGEN", true);
+                    if passes {
+                        attempt.committed(&context);
+                    } else {
+                        attempt.refused(&context);
+                    }
+                }
+            }
+            if passes {
+                assert_eq!(repo.changed(&repo.head()), ["spec.lock"], "{context}");
+            } else {
+                assert_eq!(repo.state(), before, "{context}: restored");
+            }
         }
     }
 }

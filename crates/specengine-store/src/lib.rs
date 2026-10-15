@@ -100,9 +100,10 @@ use specengine_core::check::CheckInput;
 use specengine_model::{IdScheme, Node, ParsedFile};
 
 pub use check::{
-    BASELINE_FILE, CONFIG_FILE, CheckSetup, GivenFile, NamedBytes, StagedCheck,
-    check_changed_with_notes, check_input, check_source, check_staged, check_staged_with_notes,
-    check_tree, check_worktree, default_baseline, load_check, load_config, today_utc,
+    BASELINE_FILE, BumpCheck, CONFIG_FILE, CheckSetup, GivenFile, NamedBytes, StagedCheck,
+    bump_changed, bump_staged, check_changed_with_notes, check_input, check_source, check_staged,
+    check_staged_with_notes, check_tree, check_worktree, default_baseline, load_check, load_config,
+    today_utc,
 };
 pub use error::StoreError;
 pub use git::{GitEnv, same_dir};
@@ -126,8 +127,8 @@ pub use queue::{
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use verify_git::{
-    COMMIT_NOT_A_BLOB, CommitEntry, CommitEntryKind, CommitFile, CommitListing,
-    MISSING_COMMIT_BLOB, VerifyGit,
+    COMMIT_NOT_A_BLOB, CommitEntry, CommitEntryKind, CommitFile, CommitListing, INDEX_LABEL,
+    IndexRefusal, MISSING_COMMIT_BLOB, VerifyGit,
 };
 pub use worktree::{
     ChangedPath, CreateFileError, CreatedFile, GitError, ListedWorktree, Merge, Operation,

@@ -24,13 +24,13 @@
 //! index refresh, no rename pairing, no submodule probed; paths
 //! root-relative and under the root; run only when a stage-0 entry holds
 //! the empty blob, the one an intent-to-add entry holds, at a `.md` path or
-//! at the root's config or baseline: it runs clean filters on racily-clean
-//! entries). An intent-to-add entry whose file is gone from the working
-//! tree is not reported by it and is walked as an empty file (the spec's
-//! fallback). Any other intent-to-add entry, neither `.md` nor TOML
-//! (`git add -N docs/.gitkeep`), stays an empty regular file only when the
-//! detector does not run; when an empty `.md`, config or baseline starts
-//! it, the entry is dropped.
+//! at the root's config, baseline or `spec.lock`: it runs clean filters on
+//! racily-clean entries). An intent-to-add entry whose file is gone from
+//! the working tree is not reported by it and is walked as an empty file
+//! (the spec's fallback). Any other intent-to-add entry, neither `.md` nor
+//! TOML (`git add -N docs/.gitkeep`), stays an empty regular file only when
+//! the detector does not run; when an empty `.md`, config or baseline
+//! starts it, the entry is dropped.
 //!
 //! Every child: `-c core.fsmonitor=false`, the variables of [`GitEnv`]
 //! with the path variables made absolute and `GIT_OPTIONAL_LOCKS=0`,
@@ -72,6 +72,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use specengine_core::DOCUMENT_EXTENSION;
 use specengine_core::check::Cause;
+use specengine_core::lock::LOCK_FILE;
 
 use crate::check::{BASELINE_FILE, CONFIG_FILE};
 
@@ -996,14 +997,26 @@ fn path_bytes(path: &Path) -> Option<Vec<u8>> {
 
 /// A stage-0 entry the intent-to-add detector must rule on: the empty blob
 /// at a path the check may read, a `.md` (a superset of the walk, known
-/// before the config) or the root's config or baseline. Any other empty
-/// blob (`.gitkeep`, an empty `__init__.py`) never starts the detector,
+/// before the config), the root's config or baseline, or the root's
+/// `spec.lock` (read as a lock, an empty blob would refuse every commit;
+/// task spec `rev-rule` Q18). Any other empty blob (`.gitkeep`, an empty
+/// `__init__.py`, an intent-to-add code file) never starts the detector,
 /// which runs clean filters on racily-clean entries.
 fn may_be_intent_to_add(entry: &Entry) -> bool {
     EMPTY_BLOBS.contains(&entry.oid.as_str())
         && (entry.path.ends_with(DOCUMENT_EXTENSION.as_bytes())
             || entry.path == CONFIG_FILE.as_bytes()
-            || entry.path == BASELINE_FILE.as_bytes())
+            || entry.path == BASELINE_FILE.as_bytes()
+            || entry.path == LOCK_FILE.as_bytes())
+}
+
+/// Why [`Staged::read_index`] lists no index.
+#[derive(Debug)]
+pub(crate) enum IndexFailure {
+    /// No repository, `git` failing, the environment refused (at `.`).
+    Cause(Cause),
+    /// The paths under the root with unmerged stages, byte-sorted.
+    Unmerged(BTreeSet<Vec<u8>>),
 }
 
 /// The index git would commit, under the root: its stage-0 entries minus
@@ -1029,13 +1042,31 @@ impl Staged {
     /// runnable or failing (each at `.`), a path under the root with
     /// unmerged stages (one cause per path).
     pub(crate) fn read(root: &Path, env: &GitEnv) -> Result<Self, Vec<Cause>> {
-        let dir = fs::canonicalize(root).map_err(|_| vec![GitFailure::RootGone.cause()])?;
+        Self::read_index(root, env).map_err(|failure| match failure {
+            IndexFailure::Cause(cause) => vec![cause],
+            IndexFailure::Unmerged(paths) => paths
+                .into_iter()
+                .map(|path| Cause {
+                    path: String::from_utf8_lossy(&path).into_owned(),
+                    message: "unmerged in the git index: the conflict is not resolved".to_owned(),
+                })
+                .collect(),
+        })
+    }
+
+    /// [`Staged::read`], its failure told apart: one cause, or the
+    /// unmerged paths (`spec verify --staged` names each as its own cause).
+    pub(crate) fn read_index(root: &Path, env: &GitEnv) -> Result<Self, IndexFailure> {
+        let dir = fs::canonicalize(root)
+            .map_err(|_| IndexFailure::Cause(GitFailure::RootGone.cause()))?;
         let git = Git {
             dir,
-            vars: env.child_vars().map_err(|cause| vec![cause])?,
+            vars: env.child_vars().map_err(IndexFailure::Cause)?,
         };
-        git.check_work_tree().map_err(|cause| vec![cause])?;
-        let records = git.ls_files().map_err(|failure| vec![failure.cause()])?;
+        git.check_work_tree().map_err(IndexFailure::Cause)?;
+        let records = git
+            .ls_files()
+            .map_err(|failure| IndexFailure::Cause(failure.cause()))?;
         let mut unmerged = BTreeSet::new();
         let mut entries = Vec::new();
         for record in records {
@@ -1046,18 +1077,12 @@ impl Staged {
             }
         }
         if !unmerged.is_empty() {
-            return Err(unmerged
-                .into_iter()
-                .map(|path| Cause {
-                    path: String::from_utf8_lossy(&path).into_owned(),
-                    message: "unmerged in the git index: the conflict is not resolved".to_owned(),
-                })
-                .collect());
+            return Err(IndexFailure::Unmerged(unmerged));
         }
         if entries.iter().any(may_be_intent_to_add) {
             let intent = git
                 .intent_to_add()
-                .map_err(|failure| vec![failure.cause()])?;
+                .map_err(|failure| IndexFailure::Cause(failure.cause()))?;
             entries.retain(|entry| !intent.contains(&entry.path));
         }
         entries.sort_by(|a, b| a.path.cmp(&b.path));

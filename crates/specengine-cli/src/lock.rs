@@ -82,7 +82,7 @@ use specengine_code::{
     bind_tree, comment_anchors, grammar_info, hash_bound_items, markers_in,
 };
 use specengine_core::check::resolve::feature_stem;
-use specengine_core::check::{CheckInput, Resolver};
+use specengine_core::check::{CheckInput, Resolver, canonical_id, feature_scoped};
 use specengine_core::lock::{
     AcceptInput, AcceptRefusal, AcceptRow, Change, EntryKey, LOCK_FILE, Lock, LockKind,
     LockRelation, Place as RowPlace, Recipes, Verified, drop_node, key_problem, merge_accept,
@@ -102,7 +102,6 @@ use crate::corpus::indexed;
 use crate::location::prepared_data_dir;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text};
 use crate::proposals::require_root_config;
-use crate::propose::{canonical_id, feature_scoped};
 use crate::refs::{
     AMBIGUOUS, CANNOT_VERIFY, Corpus, IdState, NodeKey, RON_DUPLICATE, RON_NO_VALUE, RON_TOO_DEEP,
     UNANCHORED, code_config, rev_state,

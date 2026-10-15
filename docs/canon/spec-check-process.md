@@ -54,7 +54,7 @@ A rule needs a selector and a requirement; selectors AND, the items of a list OR
 | `text-empty` | 1 | the document ID, else `""` | `no own text: only headings, links or references` |
 | `parent-cycle` | the first member's `parent:` | the members | `` `parent:` forms a cycle through <subject> `` |
 
-`CHECK_CODES` holds 35: the 29 before and the six above (`key-missing` reused). Lines and subjects never depend on a rule's position, so debt (code, path, subject) survives moved lines and reordered rules. Findings of one file equal in code, line, subject and message are one, an error over a warning; messages name no rule. A class contract and a rule requiring the same key give two `key-missing` lines (two messages); one debt entry covers both.
+`CHECK_CODES` holds 36: the 29 before, the six above (`key-missing` reused) and `rev-not-raised` (`node-revision.md` "Raising"). Lines and subjects never depend on a rule's position, so debt (code, path, subject) survives moved lines and reordered rules. Findings of one file equal in code, line, subject and message are one, an error over a warning; messages name no rule. A class contract and a rule requiring the same key give two `key-missing` lines (two messages); one debt entry covers both.
 
 Severity, modes, debt, `(pre-existing)`: as every finding. A warning never blocks, counts in `warnings` and prints only with detail. Under `--staged` and `--changed` the base is judged with the checked `CheckConfig`, rules included (`docs/canon/spec-check-git.md` "The base"): with `enforce-introduced` a commit adding a rule is not blocked by violations `HEAD` already holds; a new one blocks. Rules never read task or queue state (`#control`, ADR-0012).
 

@@ -523,7 +523,9 @@ fn rev_common_status(repo: &LockRepo, id: &str) -> String {
 /// RD-8: after Q7 no proposal raises `rev`: verify's `spec_ahead
 /// same_revision` hint and accept's refusal of text changed at a revision
 /// both say "raise its `rev` by hand, commit, then accept; or
-/// `--editorial`", never "a proposal raising". M: the old step kept.
+/// `--editorial`" (the hint naming `spec bump` after "by hand" since
+/// docs/features/rev-rule.md RD-4), never "a proposal raising".
+/// M: the old step kept.
 #[test]
 fn same_revision_hint_names_a_raise_and_editorial() {
     let step = "raise its `rev` by hand, commit, then accept; or `--editorial`";
@@ -537,7 +539,11 @@ fn same_revision_hint_names_a_raise_and_editorial() {
         .find(|line| line.starts_with("hint: spec_ahead same_revision: "))
         .unwrap_or_else(|| panic!("no same_revision hint: {}", run.text.show()))
         .to_owned();
-    assert!(hint.contains(step), "{hint}");
+    assert!(hint.contains("raise its `rev` by hand"), "{hint}");
+    assert!(
+        hint.contains("commit, then accept; or `--editorial`"),
+        "{hint}"
+    );
     assert!(!hint.contains("a proposal raising"), "{hint}");
     let attempt = repo.accept(PIECE, true);
     let refusal = attempt.refused("text changed at rev 3");

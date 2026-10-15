@@ -1034,8 +1034,10 @@ fn one_unresolved_id_at_two_revisions_is_one_row() {
 /// The two `conflict` steps (iteration 2, the code's exact strings;
 /// reworded by docs/features/rev-discipline.md RD-8: no proposal raises
 /// `rev` after Q7, "raise its `rev` by hand, commit, then accept; or
-/// `--editorial`"; "set the marker to its revision").
-const EDITORIAL_STEP: &str = "the node's text changed at its locked revision: raise its `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`); accept refuses text changed at a revision";
+/// `--editorial`"; "set the marker to its revision"; the editorial one,
+/// shared with `spec_ahead same_revision`, naming `spec bump` since
+/// docs/features/rev-rule.md RD-4).
+const EDITORIAL_STEP: &str = "the node's text changed at its locked revision: raise its `rev` by hand (`spec bump` prints the line while the edit is uncommitted), commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`); accept refuses text changed at a revision";
 const RAISE_STEP: &str = "at a revision the lock does not hold, the marker not raised: check the code against the node, set the marker to its revision, commit, then `spec lock accept <ID>` on a terminal";
 
 /// Iteration 2, the `conflict` hint by R against the entry's revision: R

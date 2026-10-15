@@ -215,12 +215,7 @@ impl Report {
         mut stale: Vec<DebtEntry>,
         mut cannot_check: Vec<Cause>,
     ) -> Self {
-        findings.sort_by(|a, b| {
-            (&a.path, a.line, &a.code, &a.subject, &a.message)
-                .cmp(&(&b.path, b.line, &b.code, &b.subject, &b.message))
-                .then_with(|| a.cmp(b))
-        });
-        findings.dedup();
+        sort_findings(&mut findings);
         stale.sort_by(entry_order);
         cannot_check.sort();
         cannot_check.dedup();
@@ -442,6 +437,17 @@ impl Report {
         // cannot fail.
         serde_json::to_string(self).unwrap_or_default()
     }
+}
+
+/// Findings in the report's order, (path, line, code, subject, message),
+/// each once.
+pub(crate) fn sort_findings(findings: &mut Vec<Finding>) {
+    findings.sort_by(|a, b| {
+        (&a.path, a.line, &a.code, &a.subject, &a.message)
+            .cmp(&(&b.path, b.line, &b.code, &b.subject, &b.message))
+            .then_with(|| a.cmp(b))
+    });
+    findings.dedup();
 }
 
 /// The order of stale and new-debt entries: (path, code, subject, line).

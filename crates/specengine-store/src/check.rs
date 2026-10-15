@@ -16,7 +16,15 @@
 //! against `HEAD` ([`check_changed_with_notes`]) are judged against their
 //! base, `HEAD` (docs/features/spec-cli-introduced.md,
 //! docs/features/spec-cli-changed.md; `crate::base`), and return notes
-//! beside their report.
+//! beside their report. Both add the rule `rev-not-raised`
+//! (docs/canon/node-revision.md "Raising"; core's `check::rev_rule`): when
+//! `HEAD` holds a `spec.lock`, its blob and the checked tree's lock (the
+//! index's blob, or the disk's file) are read before the session ends,
+//! and parsed only when a node with an ID at `HEAD` changed its meaning
+//! hash; an unreadable one, or one of another `norm_recipe` or format, is
+//! a cause naming `HEAD:spec.lock` or `spec.lock`. [`bump_staged`] and
+//! [`bump_changed`] give the same run's rows (`spec bump`). A plain check
+//! never reads the lock.
 
 use std::fs;
 use std::io;
@@ -24,16 +32,18 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use specengine_core::check::rev_rule::{self, BumpRow};
 use specengine_core::check::{
     self, Base, Baseline, Cause, CheckConfig, CheckFile, CheckInput, Mode, Problem, ProblemKind,
     Report,
 };
+use specengine_core::lock::{LOCK_FILE, Lock};
 use specengine_core::{IdSchemeToml, Paths, ProjectConfig};
 use specengine_model::IdScheme;
 
-use crate::base::{Head, HeadWalk, Placed};
+use crate::base::{BaseRun, Head, HeadWalk, Placed};
 use crate::error::StoreError;
-use crate::git::{GitEnv, GitFailure, Staged};
+use crate::git::{Blob, Entry, GitEnv, GitFailure, Staged};
 use crate::source::{GitIndex, IndexWalk, Listing, Source, WorkingTree};
 
 /// The project's config, at its root (the working tree's for discovery,
@@ -93,6 +103,35 @@ impl StagedCheck {
             notes: Vec::new(),
         }
     }
+}
+
+/// `spec bump`'s run: the check against `HEAD` ([`bump_staged`],
+/// [`bump_changed`]) and the rule's rows, by path, line and ID; no row
+/// when the report cannot check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BumpCheck {
+    pub report: Report,
+    pub rows: Vec<BumpRow>,
+}
+
+/// `HEAD`'s `spec.lock` as named in a cause.
+const HEAD_LOCK: &str = "HEAD:spec.lock";
+
+/// One side's `spec.lock`, read for the rule.
+#[derive(Debug)]
+enum LockBlob {
+    Absent,
+    Bytes(Vec<u8>),
+    /// Why its bytes cannot be read.
+    Unreadable(String),
+}
+
+/// `HEAD`'s `spec.lock` and the checked tree's, read when `HEAD` holds
+/// one (none at `HEAD`: nothing is in scope, the checked one unread).
+#[derive(Debug)]
+struct RuleLocks {
+    head: LockBlob,
+    checked: LockBlob,
 }
 
 /// What a check runs with: the whole config, validated, and the baseline.
@@ -391,6 +430,34 @@ pub fn check_staged_with_notes(
     git: &GitEnv,
     today: &str,
 ) -> StagedCheck {
+    staged_run(root, config, baseline, git, today, None)
+}
+
+/// `spec bump --staged`: [`check_staged_with_notes`] with the root's staged
+/// baseline (or none), and the rule's rows (`required` the findings,
+/// `suggested` the other nodes changed without a raise), read whether or
+/// not `HEAD` holds a lock. Nothing is written.
+pub fn bump_staged(root: &Path, config: Option<GivenFile>, git: &GitEnv, today: &str) -> BumpCheck {
+    let mut rows = Vec::new();
+    let checked = staged_run(root, config, None, git, today, Some(&mut rows));
+    if !checked.report.cannot_check.is_empty() {
+        rows.clear();
+    }
+    BumpCheck {
+        report: checked.report,
+        rows,
+    }
+}
+
+/// [`check_staged_with_notes`]; `rows`, when given, takes the rule's rows.
+fn staged_run(
+    root: &Path,
+    config: Option<GivenFile>,
+    baseline: Option<GivenFile>,
+    git: &GitEnv,
+    today: &str,
+    rows: Option<&mut Vec<BumpRow>>,
+) -> StagedCheck {
     let (config, config_path) = match config {
         Some(given) => (Some(given.bytes), Some(given.path)),
         None => (None, None),
@@ -456,7 +523,7 @@ pub fn check_staged_with_notes(
         BASELINE_FILE,
     );
     match read_base(&mut staged, &setup, &config_place, &baseline_place) {
-        Ok((head_walk, head, walk)) => {
+        Ok((head_walk, head, walk, locks)) => {
             let notes = head.notes(&config_place, checked_mode);
             let mut index = GitIndex::from_walk(staged, walk);
             let input = check_input(&index, &setup.project.scheme);
@@ -468,8 +535,8 @@ pub fn check_staged_with_notes(
                 &setup.baseline,
                 today,
             );
-            let findings = match head_walk.findings(&mut index, input, &setup, today) {
-                Ok(findings) => findings,
+            let run = match head_walk.findings(&mut index, input, &setup, today) {
+                Ok(run) => run,
                 Err(mut causes) => {
                     // A partial base judges nothing: the checked run's
                     // causes and the base's, no findings, no notes.
@@ -477,8 +544,12 @@ pub fn check_staged_with_notes(
                     return StagedCheck::bare(Report::cannot(checked_mode, causes));
                 }
             };
+            let report = match with_rule(report, &run, &setup, locks, rows, today) {
+                Ok(report) => report,
+                Err(causes) => return StagedCheck::bare(Report::cannot(checked_mode, causes)),
+            };
             let base = Base {
-                findings,
+                findings: run.findings,
                 baseline: head.baseline,
                 mode: head.mode,
             };
@@ -524,6 +595,38 @@ pub fn check_changed_with_notes(
     git: &GitEnv,
     today: &str,
 ) -> StagedCheck {
+    changed_run(root, config, baseline, git, today, None)
+}
+
+/// `spec bump`: [`check_changed_with_notes`] with the root's baseline on
+/// disk (or none), and the rule's rows, as [`bump_staged`]. Nothing is
+/// written.
+pub fn bump_changed(
+    root: &Path,
+    config: Option<GivenFile>,
+    git: &GitEnv,
+    today: &str,
+) -> BumpCheck {
+    let mut rows = Vec::new();
+    let checked = changed_run(root, config, None, git, today, Some(&mut rows));
+    if !checked.report.cannot_check.is_empty() {
+        rows.clear();
+    }
+    BumpCheck {
+        report: checked.report,
+        rows,
+    }
+}
+
+/// [`check_changed_with_notes`]; `rows`, when given, takes the rule's rows.
+fn changed_run(
+    root: &Path,
+    config: Option<GivenFile>,
+    baseline: Option<GivenFile>,
+    git: &GitEnv,
+    today: &str,
+    rows: Option<&mut Vec<BumpRow>>,
+) -> StagedCheck {
     let (config, config_path) = match config {
         Some(given) => (given.bytes, Some(given.path)),
         None => (NamedBytes::read(CONFIG_FILE, &root.join(CONFIG_FILE)), None),
@@ -558,12 +661,13 @@ pub fn check_changed_with_notes(
         baseline_name,
         BASELINE_FILE,
     );
-    let (head_walk, head) = match read_head(&mut session, &setup, &config_place, &baseline_place) {
-        Ok(read) => read,
-        Err(failure) => {
-            return StagedCheck::bare(Report::cannot(checked_mode, vec![failure.cause()]));
-        }
-    };
+    let (head_walk, head, head_lock) =
+        match read_head(&mut session, &setup, &config_place, &baseline_place) {
+            Ok(read) => read,
+            Err(failure) => {
+                return StagedCheck::bare(Report::cannot(checked_mode, vec![failure.cause()]));
+            }
+        };
     let tree = match WorkingTree::new(root, &setup.project.paths) {
         Ok(tree) => tree,
         Err(error) => {
@@ -579,8 +683,8 @@ pub fn check_changed_with_notes(
         &setup.baseline,
         today,
     );
-    let findings = match head_walk.findings_by_bytes(session.objects, input, &setup, today) {
-        Ok(findings) => findings,
+    let run = match head_walk.findings_by_bytes(session.objects, input, &setup, today) {
+        Ok(run) => run,
         Err(mut causes) => {
             // A partial base judges nothing: the checked run's causes and
             // the base's, no findings, no notes.
@@ -588,9 +692,17 @@ pub fn check_changed_with_notes(
             return StagedCheck::bare(Report::cannot(checked_mode, causes));
         }
     };
+    let locks = head_lock.map(|head| RuleLocks {
+        head,
+        checked: disk_lock(root),
+    });
+    let report = match with_rule(report, &run, &setup, locks, rows, today) {
+        Ok(report) => report,
+        Err(causes) => return StagedCheck::bare(Report::cannot(checked_mode, causes)),
+    };
     let notes = head.notes(&config_place, checked_mode);
     let base = Base {
-        findings,
+        findings: run.findings,
         baseline: head.baseline,
         mode: head.mode,
     };
@@ -619,37 +731,153 @@ fn place(
 
 /// Every git read of a `--changed` check, in the session's order: `HEAD`
 /// probed and listed, `HEAD`'s config and baseline, every blob `HEAD`
-/// lists under the checked `[paths]`; then the session ends.
+/// lists under the checked `[paths]`, `HEAD`'s `spec.lock` (when it holds
+/// one: the rule's); then the session ends.
 fn read_head(
     session: &mut Staged,
     setup: &CheckSetup,
     config: &Placed,
     baseline: &Placed,
-) -> Result<(HeadWalk, Head), GitFailure> {
+) -> Result<(HeadWalk, Head, Option<LockBlob>), GitFailure> {
     let head = Head::read(session, config, baseline, setup.config.mode)?;
     let head_walk = head.walk_by(&setup.project.paths.walk_scope());
     head_walk.read(session)?;
+    let head_lock = match head.entry(LOCK_FILE).cloned() {
+        Some(entry) => Some(lock_blob(session, Some(&entry))?),
+        None => None,
+    };
     session.finish()?;
-    Ok((head_walk, head))
+    Ok((head_walk, head, head_lock))
 }
 
 /// Every git read of a staged check after its config and baseline, in the
 /// session's order: `HEAD` probed and listed, `HEAD`'s config and
 /// baseline, the index's listed blobs, `HEAD`'s listed blobs the index
-/// lacks at their path; then the session ends.
+/// lacks at their path, then, when `HEAD` holds a `spec.lock`, its blob and
+/// the index's (the rule's); then the session ends.
 fn read_base(
     staged: &mut Staged,
     setup: &CheckSetup,
     config: &Placed,
     baseline: &Placed,
-) -> Result<(HeadWalk, Head, IndexWalk), GitFailure> {
+) -> Result<(HeadWalk, Head, IndexWalk, Option<RuleLocks>), GitFailure> {
     let head = Head::read(staged, config, baseline, setup.config.mode)?;
     let walk = IndexWalk::new(&staged.entries, &setup.project.paths);
     walk.read(staged)?;
     let head_walk = head.walk(&walk);
     head_walk.read(staged)?;
+    let locks = match head.entry(LOCK_FILE).cloned() {
+        Some(at_head) => {
+            let staged_lock = staged.entry(LOCK_FILE.as_bytes()).cloned();
+            Some(RuleLocks {
+                head: lock_blob(staged, Some(&at_head))?,
+                checked: lock_blob(staged, staged_lock.as_ref())?,
+            })
+        }
+        None => None,
+    };
     staged.finish()?;
-    Ok((head_walk, head, walk))
+    Ok((head_walk, head, walk, locks))
+}
+
+/// The `spec.lock` at `entry` (none: absent), its blob read through the
+/// session and copied out (another path may share its OID).
+fn lock_blob(session: &mut Staged, entry: Option<&Entry>) -> Result<LockBlob, GitFailure> {
+    let Some(entry) = entry else {
+        return Ok(LockBlob::Absent);
+    };
+    if entry.kind.not_regular().is_some() {
+        return Ok(LockBlob::Unreadable("not a regular file".to_owned()));
+    }
+    Ok(match session.blob(&entry.oid)? {
+        Blob::Bytes(bytes) => LockBlob::Bytes(bytes.clone()),
+        Blob::Missing => {
+            LockBlob::Unreadable("its blob is missing from the git object database".to_owned())
+        }
+        Blob::Foreign => LockBlob::Unreadable("its object is not a blob".to_owned()),
+    })
+}
+
+/// The root's `spec.lock` on disk: absent when there is none.
+fn disk_lock(root: &Path) -> LockBlob {
+    match fs::read(root.join(LOCK_FILE)) {
+        Ok(bytes) => LockBlob::Bytes(bytes),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => LockBlob::Absent,
+        Err(error) => LockBlob::Unreadable(error.to_string()),
+    }
+}
+
+/// The rule `rev-not-raised` (core's `check::rev_rule`) over a run against
+/// `HEAD`: `report` the checked run's, `run` the base's (both sides'
+/// files), `locks` read when `HEAD` holds a `spec.lock`, `rows` (`spec
+/// bump`) given the rows. No lock at `HEAD` and no rows asked: nothing is
+/// judged. No node changed: neither lock is parsed. The report with the
+/// findings added under the checked baseline; `Err`, a lock that cannot be
+/// read: its cause (both, `HEAD`'s first) and the checked run's.
+fn with_rule(
+    report: Report,
+    run: &BaseRun,
+    setup: &CheckSetup,
+    locks: Option<RuleLocks>,
+    rows: Option<&mut Vec<BumpRow>>,
+    today: &str,
+) -> Result<Report, Vec<Cause>> {
+    if locks.is_none() && rows.is_none() {
+        return Ok(report);
+    }
+    let changed = rev_rule::changed_nodes(
+        &run.head_files(),
+        &run.checked_files(),
+        &setup.project.scheme,
+        &setup.project.paths,
+        &|input| crate::b3_hash(input),
+    );
+    if changed.is_empty() {
+        return Ok(report);
+    }
+    let (head_lock, checked_lock) = match locks {
+        None => (None, None),
+        Some(locks) => match (
+            rule_lock(HEAD_LOCK, locks.head),
+            rule_lock(LOCK_FILE, locks.checked),
+        ) {
+            (Ok(head), Ok(checked)) => (head, checked),
+            (head, checked) => {
+                let mut causes: Vec<Cause> = head.err().into_iter().chain(checked.err()).collect();
+                causes.extend(report.cannot_check);
+                return Err(causes);
+            }
+        },
+    };
+    let judged = rev_rule::judge(
+        &changed,
+        head_lock.as_ref(),
+        checked_lock.as_ref(),
+        &setup.project.scheme,
+        &setup.config.classes,
+        rows.is_some(),
+    );
+    if let Some(rows) = rows {
+        *rows = judged.rows;
+    }
+    Ok(check::add_findings(
+        report,
+        judged.findings,
+        &setup.baseline,
+        today,
+    ))
+}
+
+/// One side's lock parsed for the rule ([`rev_rule::rule_lock`]), `name`
+/// naming it in the cause (with the line, when known).
+fn rule_lock(name: &str, blob: LockBlob) -> Result<Option<Lock>, Cause> {
+    match blob {
+        LockBlob::Absent => Ok(None),
+        LockBlob::Unreadable(why) => Err(cause(name, None, format!("cannot be read: {why}"))),
+        LockBlob::Bytes(bytes) => rev_rule::rule_lock(&bytes)
+            .map(Some)
+            .map_err(|error| cause(name, error.line, error.message)),
+    }
 }
 
 /// The mode of a failure before the config is read: `config`'s when it

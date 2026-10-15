@@ -53,7 +53,12 @@
 //!   project's process rules (task spec `spec-check-process`, ADR-0031:
 //!   `key-missing`, `key-empty`, `value-invalid`, `part-missing`,
 //!   `part-empty`, `text-empty`, at the rule's severity) and the
-//!   `parent-cycle` warning.
+//!   `parent-cycle` warning;
+//! - [`rev_rule`] — the error `rev-not-raised` (canon `node-revision`,
+//!   "Raising"; slice 4b-2): a locked node's meaning changed against
+//!   `HEAD` with neither a raise nor a refresh of its lock entries; only a
+//!   run against `HEAD` reads it (the store's `--staged` and `--changed`),
+//!   [`add_findings`] adds its findings to the checked run's report.
 
 pub mod base;
 pub mod baseline;
@@ -67,6 +72,7 @@ mod links;
 mod render;
 pub mod report;
 pub mod resolve;
+pub mod rev_rule;
 mod rules;
 mod rules_toml;
 mod spec_graph;
@@ -82,12 +88,12 @@ pub use config::{
     DEFAULT_GATE, DocClass, Generator, Mode, Shard, ShardKind, bundle_node_from_toml,
     bundle_task_from_toml, check_config_from_toml,
 };
-pub use engine::{PARSER_SEVERITY, parser_severity, run};
+pub use engine::{PARSER_SEVERITY, add_findings, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, render_index_set};
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
-pub use resolve::{Resolution, Resolver};
+pub use resolve::{Resolution, Resolver, canonical_id, feature_scoped};
 pub use spec_graph::{
     CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
 };
@@ -101,9 +107,11 @@ pub use working_set::worst_w;
 /// graph warnings), then part 2 (the error `id-scope`, ADR-0026; the file
 /// link warnings), then increment 4 (the process rules' codes beyond the
 /// reused `key-missing`, at each rule's severity; the warning
-/// `parent-cycle`). A stale baseline entry is no finding: it goes to
-/// [`Report::stale`], labelled `debt-stale` only in the detail lines.
-pub const CHECK_CODES: [&str; 35] = [
+/// `parent-cycle`), then slice 4b-2's `rev-not-raised` (added by the
+/// store's runs against `HEAD` only). A stale baseline entry is no finding:
+/// it goes to [`Report::stale`], labelled `debt-stale` only in the detail
+/// lines.
+pub const CHECK_CODES: [&str; 36] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -139,4 +147,5 @@ pub const CHECK_CODES: [&str; 35] = [
     "part-empty",
     "text-empty",
     "parent-cycle",
+    "rev-not-raised",
 ];
