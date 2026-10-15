@@ -25,7 +25,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft
 - [docs/features/code-tools.md](features/code-tools.md) code-tools: MCP find_symbols, refs, unmapped, check_binding; spec verify --node · crates/specengine-mcp, crates/specengine-cli, plugin, fixtures · draft
 - [docs/features/constant-census.md](features/constant-census.md) constant-census: which string constants carry a record's code (slice 12a) · crates/specengine-eval, crates/specengine-code, fixtures · draft
-- [docs/features/drift-follow-up.md](features/drift-follow-up.md) drift-follow-up (4c-2): rejecting a drift item makes a draft task · crates/specengine-core, crates/specengine-store, crates/specengine-cli, ui, fixtures · draft
 - [docs/features/hash-levels-eval.md](features/hash-levels-eval.md) hash-levels-eval: level and fingerprint figures on fixtures and pilots · crates/specengine-eval, fixtures · draft
 - [docs/features/hash-levels-ron.md](features/hash-levels-ron.md) hash-levels-ron: the value hash of an anchored RON value · crates/specengine-code, fixtures · draft
 - [docs/features/hash-levels.md](features/hash-levels.md) hash-levels: per-level hashes and fingerprints of a bound item · crates/specengine-code, crates/specengine-eval, fixtures · draft

@@ -1647,40 +1647,48 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
-        match (current.status, seen) {
-            (ProposalStatus::Open, _) | (ProposalStatus::Approved, Some(_)) => {}
-            _ => return Err(status_error(current)),
-        }
-        if let Some(seen) = seen {
-            if current.seen() != *seen {
-                return Err(changed(current));
-            }
-            confirms(&current, decision)?;
-        }
-        tx.execute(
-            "UPDATE main.proposals SET status = ?1, decided_by = ?2, decided_at = ?3, \
-             decision_note = ?4, updated_at = ?3, staged = NULL, staged_at = NULL \
-             WHERE id = ?5 AND project = ?6",
-            rusqlite::params![
-                ProposalStatus::Rejected.as_str(),
-                decision.decided_by,
-                now,
-                decision.note,
-                id,
-                project
-            ],
-        )
-        .db()?;
-        log(
-            &tx,
-            &project,
-            EVENT_REJECTED,
-            &with_staged(json!({ "id": id, "reason": decision.note }), decision),
-            now,
-        )?;
+        rejectable(&current, seen, decision)?;
+        write_rejected(&tx, &project, id, decision, None, now)?;
         let stored = existing(&tx, &project, id)?;
         tx.commit().db()?;
         Ok(stored)
+    }
+
+    /// A drift item's rejection with its follow-up task, in one
+    /// `Immediate` transaction (canon `proposal-completion`, "Reject"):
+    /// [`ProposalQueue::reject_from`]'s compare-and-set on `seen`, and
+    /// `task` stored as `draft` as [`Self::create_task`] stores it, under
+    /// the next task ID; `proposal.rejected` gains `task` (its ID), then
+    /// `task.created` is logged. Another kind, or a task the store refuses
+    /// (`targets` empty): [`QueueError::Invalid`]; a refusal or a failure
+    /// leaves neither, and no event. The stored proposal and task.
+    pub fn reject_with_task(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        decision: &Decision,
+        task: &NewTask,
+        now: &str,
+    ) -> Result<(Proposal, Task), QueueError> {
+        check_time(now)?;
+        tasks::new_task_problem(task)?;
+        let project = self.project.clone();
+        let tx = self.write()?;
+        let current = existing(&tx, &project, id)?;
+        if current.kind != ProposalKind::Drift {
+            return Err(QueueError::Invalid(format!(
+                "`{id}` is {}: only a drift item is rejected with a task",
+                current.kind.with_article()
+            )));
+        }
+        rejectable(&current, Some(seen), decision)?;
+        let task_id = tasks::next_task_id(&tx)?;
+        write_rejected(&tx, &project, id, decision, Some(&task_id), now)?;
+        tasks::insert_draft(&tx, &project, &task_id, task, now)?;
+        let stored = existing(&tx, &project, id)?;
+        let made = tasks::existing_task(&tx, &project, &task_id)?;
+        tx.commit().db()?;
+        Ok((stored, made))
     }
 
     /// [`ProposalQueue::applied`] (`decision` `None`: from `approved` only)
@@ -2531,6 +2539,66 @@ fn with_staged(mut payload: Value, decision: &Decision) -> Value {
         object.insert("staged_at".to_owned(), Value::String(at.clone()));
     }
     payload
+}
+
+/// `payload` with `task` added, last, when a follow-up task was made (its
+/// ID): a reject without one logs no `task` key.
+fn with_task(mut payload: Value, task: Option<&str>) -> Value {
+    if let (Some(task), Value::Object(object)) = (task, &mut payload) {
+        object.insert("task".to_owned(), Value::String(task.to_owned()));
+    }
+    payload
+}
+
+/// Whether `current` may be rejected: `open`, or `approved` under a
+/// compare-and-set (`seen` given: the state read, else
+/// [`QueueError::Changed`]; its decision confirming the stage it holds);
+/// else [`QueueError::Status`].
+fn rejectable(
+    current: &Proposal,
+    seen: Option<&Seen>,
+    decision: &Decision,
+) -> Result<(), QueueError> {
+    match (current.status, seen) {
+        (ProposalStatus::Open, _) | (ProposalStatus::Approved, Some(_)) => {}
+        _ => return Err(status_error(current.clone())),
+    }
+    if let Some(seen) = seen {
+        if current.seen() != *seen {
+            return Err(changed(current.clone()));
+        }
+        confirms(current, decision)?;
+    }
+    Ok(())
+}
+
+/// `id` → `rejected` with `decision` (its note the reason, its stage
+/// cleared), logging `proposal.rejected` (`reason`; `staged_at` when it
+/// confirms a stage; `task` when a follow-up task is made).
+fn write_rejected(
+    tx: &Transaction<'_>,
+    project: &str,
+    id: &str,
+    decision: &Decision,
+    task: Option<&str>,
+    now: &str,
+) -> Result<(), QueueError> {
+    tx.execute(
+        "UPDATE main.proposals SET status = ?1, decided_by = ?2, decided_at = ?3, \
+         decision_note = ?4, updated_at = ?3, staged = NULL, staged_at = NULL \
+         WHERE id = ?5 AND project = ?6",
+        rusqlite::params![
+            ProposalStatus::Rejected.as_str(),
+            decision.decided_by,
+            now,
+            decision.note,
+            id,
+            project
+        ],
+    )
+    .db()?;
+    let payload = with_staged(json!({ "id": id, "reason": decision.note }), decision);
+    log(tx, project, EVENT_REJECTED, &with_task(payload, task), now)
 }
 
 /// A decision confirming a stage confirms the one `current` holds (its

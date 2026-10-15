@@ -2,7 +2,9 @@
 //! (`docs/canon/tasks.md` "Commands", "Transitions";
 //! `docs/canon/task-package.md` "Caps"): the `T-NNNN`
 //! identifier and its look-alikes, the `[ids]` clash with it, the pure
-//! state machine [`transition`], and the caps every caller applies. Pure:
+//! state machine [`transition`], the caps every caller applies, and a
+//! drift item's follow-up task's title and goal ([`follow_up_title`],
+//! [`follow_up_goal`]: stack-neutral, the rows passed in as text). Pure:
 //! nothing is read or written here, and no project's prefix, kind, role or
 //! stack word appears (ADR-0008, ADR-0027): `T` is the engine's.
 
@@ -260,6 +262,135 @@ pub fn control_problem(field: &str, value: &str) -> Option<String> {
         .chars()
         .any(char::is_control)
         .then(|| format!("{field}: holds a control character"))
+}
+
+/// The most bytes of the owner's reason a follow-up's goal quotes, its
+/// `…` included; the whole reason stays the item's decision note.
+pub const FOLLOW_UP_REASON_MAX: usize = 1024;
+
+/// What a drift item's follow-up task asks for (`spec reject PR --reason T
+/// --follow-up code|spec`, canon `proposal-completion`, "Reject").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FollowUp {
+    /// The bound code changed to match the spec.
+    Code,
+    /// A spec edit proposed that describes the bound code.
+    Spec,
+}
+
+impl FollowUp {
+    pub const ALL: [Self; 2] = [Self::Code, Self::Spec];
+
+    /// The flag's value: `code`, `spec`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Code => "code",
+            Self::Spec => "spec",
+        }
+    }
+
+    /// The follow-up `written` names exactly (case-sensitive), else none.
+    pub fn parse(written: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|follow_up| follow_up.as_str() == written)
+    }
+}
+
+/// What a follow-up task's title and goal are rendered from: the node as
+/// read now at the item's recorded root, the item, the owner's reason and
+/// the item's stored rows as the CLI's one row formatter prints them
+/// (text: nothing here formats a row).
+#[derive(Debug, Clone, Copy)]
+pub struct FollowUpItem<'a> {
+    pub follow_up: FollowUp,
+    /// The node's canonical ID.
+    pub node: &'a str,
+    /// Its revision now.
+    pub rev: u32,
+    /// Its file, root-relative.
+    pub path: &'a str,
+    /// The drift item's ID.
+    pub item: &'a str,
+    pub reason: &'a str,
+    /// The stored rows' lines, in stored order.
+    pub rows: &'a [String],
+    /// The rows the item counts past its stored ones.
+    pub more: u64,
+}
+
+/// A follow-up task's title, cut at [`TITLE_MAX`] with `…`.
+pub fn follow_up_title(item: &FollowUpItem<'_>) -> String {
+    let (node, id) = (item.node, item.item);
+    let title = match item.follow_up {
+        FollowUp::Code => format!("Bring the code bound to {node} in line with its spec ({id})"),
+        FollowUp::Spec => format!("Propose a spec edit of {node} matching its bound code ({id})"),
+    };
+    cut_with_ellipsis(&title, TITLE_MAX)
+}
+
+/// A follow-up task's goal, one part a line: what to do and who locks
+/// (the markers to the revision now); `Owner's reason: <reason>` (on one
+/// line, cut at [`FOLLOW_UP_REASON_MAX`] with `…`); the stored rows,
+/// indented, from the first, while the goal with its closing line stays
+/// within [`GOAL_MAX`]; `<k> more row(s): spec review PR`, `<k>` the
+/// stored rows left out and the item's `more`, when not 0. Never over
+/// [`GOAL_MAX`]: a goal its sentence and reason alone take past it is cut
+/// with `…`.
+pub fn follow_up_goal(item: &FollowUpItem<'_>) -> String {
+    let (node, rev, path) = (item.node, item.rev, item.path);
+    let head = match item.follow_up {
+        FollowUp::Code => format!(
+            "{node} rev {rev} ({path}) is the spec: change the bound code below to match it and \
+             set its markers to @{rev}; the owner then locks them (`spec lock accept {node}`, or \
+             the approve of a new drift item)."
+        ),
+        FollowUp::Spec => format!(
+            "The bound code below is right: propose an edit of {node} rev {rev} ({path}) \
+             describing it; once applied, set its markers to the new revision, and the owner \
+             accepts the lock."
+        ),
+    };
+    let reason = item.reason.replace("\r\n", " ").replace(['\n', '\r'], " ");
+    let mut goal = format!(
+        "{head}\nOwner's reason: {}",
+        cut_with_ellipsis(&reason, FOLLOW_UP_REASON_MAX)
+    );
+    let total = u64::try_from(item.rows.len())
+        .unwrap_or(u64::MAX)
+        .saturating_add(item.more);
+    let more_line = |left: u64| format!("\n{left} more row(s): spec review {}", item.item);
+    let mut shown: u64 = 0;
+    for row in item.rows {
+        let left = total - shown - 1;
+        let closing = if left > 0 { more_line(left).len() } else { 0 };
+        if goal.len() + 3 + row.len() + closing > GOAL_MAX {
+            break;
+        }
+        goal.push_str("\n  ");
+        goal.push_str(row);
+        shown += 1;
+    }
+    if total > shown {
+        goal.push_str(&more_line(total - shown));
+    }
+    cut_with_ellipsis(&goal, GOAL_MAX)
+}
+
+/// `text` whole when it holds at most `max` bytes, else its longest
+/// prefix on a character boundary followed by `…`, within `max` bytes.
+fn cut_with_ellipsis(text: &str, max: usize) -> String {
+    const ELLIPSIS: char = '\u{2026}';
+    if text.len() <= max {
+        return text.to_owned();
+    }
+    let mut end = max.saturating_sub(ELLIPSIS.len_utf8());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut cut = text[..end].to_owned();
+    cut.push(ELLIPSIS);
+    cut
 }
 
 /// The run outcome `written` names, else why not.

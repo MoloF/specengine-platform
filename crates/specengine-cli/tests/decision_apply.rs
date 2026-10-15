@@ -2297,8 +2297,10 @@ fn a_record_left_by_a_killed_run_names_its_two_ways_out() {
         write(&pair.linked, &path, &record.text);
         pair.git
             .git(&pair.linked, &["add", "--intent-to-add", "--", &path]);
+        // Each printed path a quoted literal pathspec (drift-follow-up RD-4).
+        let word = format!("':(literal){path}'");
         let commit_by_hand =
-            format!("git commit --only --trailer 'Proposal: {id}' -m 'DEC-0024' -- {path}");
+            format!("git commit --only --trailer 'Proposal: {id}' -m 'DEC-0024' -- {word}");
         assert_eq!(
             attempt("left behind"),
             format!(
@@ -2306,7 +2308,7 @@ fn a_record_left_by_a_killed_run_names_its_two_ways_out() {
                  a file; it holds `DEC-0024`'s record as an interrupted apply left it, with an \
                  intent-to-add entry in git's index; two ways out in {}: commit it by hand \
                  (`{commit_by_hand}`), then `spec approve {id}` completes it; or `git rm \
-                 --cached -- {path}`, delete the file, then `spec approve {id}` writes it again; \
+                 --cached -- {word}`, delete the file, then `spec approve {id}` writes it again; \
                  nothing changed",
                 pair.linked.display()
             )

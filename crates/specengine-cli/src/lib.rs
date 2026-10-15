@@ -71,7 +71,8 @@
 //!   `--editorial`; an apply raises
 //!   the revision of each node whose meaning it changes, or keeps it and
 //!   refreshes the vouching `spec.lock` entries in its commit: task spec
-//!   `rev-discipline`), and every
+//!   `rev-discipline`; [`reject_follow_up`] a drift item's reject making a
+//!   draft task, [`FollowUp`]: task spec `drift-follow-up`), and every
 //!   request carries the caller's git environment ([`process_git`]) and,
 //!   where the queue records a time, the clock's `now` ([`utc_now`]);
 //!   [`propose_brief`], [`propose_create_brief`], [`review_brief`]: their
@@ -161,6 +162,7 @@ mod drift;
 mod drift_apply;
 mod events;
 mod export;
+mod follow_up;
 mod gate;
 mod graph;
 mod health;
@@ -200,7 +202,7 @@ use std::path::PathBuf;
 pub use amend::{AmendmentRequest, propose_amendment, propose_amendment_brief};
 pub use apply::{
     ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_editorial, approve_with,
-    reject,
+    reject, reject_follow_up,
 };
 pub use bump::{BumpOutcome, BumpRequest, bump};
 pub use bundle::{
@@ -286,6 +288,9 @@ pub use specengine_core::intake::{
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;
+/// A drift item's follow-up kind (`spec reject PR --follow-up code|spec`;
+/// core's).
+pub use specengine_core::task::FollowUp;
 /// The task's caps and the outcomes a run reports (core's).
 pub use specengine_core::task::{
     AFFECTED_MAX, CHANGED_FILE_MAX, CHANGED_FILES_MAX, CRITERIA_MAX, CRITERION_MAX,

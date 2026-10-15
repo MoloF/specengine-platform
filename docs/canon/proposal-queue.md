@@ -17,7 +17,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 - `spec propose update ID --base HASH --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID]` -> `PR-0001`, `introduced: <n>`, one `<severity>  <path>:<line>: <code>: <message>` per introduced finding. `HASH`: `spec show`'s `span_hash`. Role, model, run: `author_problem`'s grammar, else exit 2; any given -> author `agent`, none -> `human`. Text: UTF-8, <= 1 MiB (`TEXT_MAX_BYTES`), `-` = stdin; `--rationale` <= 4 096 bytes.
 - `spec propose drift [REF…]`: `proposal-drift.md` "Raise".
 - `spec inbox [--all]`, `spec review PR`: `proposal-review.md`.
-- `spec approve PR [--note T]` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T` (empty -> exit 2) -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line and the last of `notes`.
+- `spec approve PR [--note T]` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T [--follow-up code|spec]` (empty -> exit 2; `--follow-up`: a drift item's draft task, `proposal-completion.md` "Reject") -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line and the last of `notes`.
 
 JSON of propose, review, approve, reject: the **review document** (MCP `get_proposal`), its key order, `diff` and `preview`: `proposal-review.md`.
 
@@ -41,7 +41,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `gate.observed`; `specengine-http` streams it.
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `gate.observed`; `specengine-http` streams it.
 
 ## Store
 
@@ -86,6 +86,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | `applied_with(id, commit, decision, now)` | `open -> applied` (`.approved`, `.applied`) or `approved -> applied`, decision kept |
 | `reject_from(id, seen, decision, now)` | `open`/`approved` -> `rejected`, `.rejected`, compare-and-set as above |
 | `reject_orphan` | `reject_from`, for an orphan |
+| `reject_with_task(id, seen, decision, task, now)` | a drift item's `reject_from` and a `draft` task, one transaction (`proposal-completion.md` "Reject") |
 
 Also `events()`, `dump()`, `reserved()`; unconditional ops for store tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
 

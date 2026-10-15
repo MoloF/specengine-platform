@@ -1741,20 +1741,44 @@ fn commit_message(repo: &LockRepo, message: &str, amend: bool) -> String {
 }
 
 /// The item `id` on a branch whose tip `commit` carries `Proposal: <id>`
-/// but is no accept's lock commit (`why`): a reject is refused naming the
-/// commit and `why` (a commit in history, which does not complete it), the
-/// item still `open`; then the approve is never completed by it: it runs
+/// but is no accept's lock commit (`why`): a reject is not refused by it
+/// (docs/features/drift-follow-up.md Q11): asked, declined here, it notes
+/// the commit and `why`, the item still `open` (`drift_follow_up.rs`
+/// rejects such items); then the approve is never completed by it: it runs
 /// its own accept, which `then` judges (`Some(true)`: a new lock commit
 /// on top applies the item; `Some(false)`: nothing to accept, refused, no
 /// commit, `open`).
 fn not_completed_by(repo: &LockRepo, id: &str, commit: &str, why: &str, new_commit: bool) {
-    let rejected = reject_at(repo, &repo.root, id).refused(why);
+    let mut questions = Vec::new();
+    let declined = specengine_cli::reject(
+        &repo.env(&repo.root),
+        &Globals::default(),
+        &specengine_cli::RejectRequest {
+            id: id.to_owned(),
+            reason: Some("Not drift.".to_owned()),
+            now: DECIDED.to_owned(),
+            git: repo.git_env(&repo.root),
+        },
+        &mut |question: &str| {
+            questions.push(question.to_owned());
+            false
+        },
+    )
+    .unwrap_or_else(|error| panic!("{why}: {error}"));
+    assert_eq!(questions.len(), 1, "{why}: asked once");
+    assert_eq!(
+        declined.refusal.as_deref(),
+        Some(format!("`{id}` not rejected: the answer was not `y`; nothing changed").as_str()),
+        "{why}"
+    );
+    let note = format!(
+        "the commit {commit} on `main` carries `Proposal: {id}` but does not complete it \
+         ({why}); rejected all the same"
+    );
     assert!(
-        rejected.starts_with(&format!(
-            "`{id}` has the commit {commit} on `main` with the trailer `Proposal: {id}`, which \
-             does not complete it ({why}): "
-        )),
-        "{why}: {rejected}"
+        declined.document.notes.contains(&note),
+        "{why}: {:?}",
+        declined.document.notes
     );
     assert_eq!(
         proposal(repo, SLUG, id).status,
@@ -1803,8 +1827,9 @@ fn not_completed_by(repo: &LockRepo, id: &str, commit: &str, why: &str, new_comm
 /// makes its own lock commit on top); this run's lock commit without
 /// `Lock-mode`, or with `Lock-mode: regen`, does not (``has no `Lock-mode:
 /// accept` or `editorial` trailer``: the approve finds nothing to accept,
-/// the item stays `open`); a reject is refused naming each. M: the blob
-/// check removed; the `Lock-mode` check removed or taking any value.
+/// the item stays `open`); a reject notes each, no longer refused by it
+/// (drift-follow-up Q11). M: the blob check removed; the `Lock-mode` check
+/// removed or taking any value.
 #[test]
 fn only_an_accepts_lock_commit_completes_a_drift_item() {
     // A commit deleting `spec.lock`, every trailer on it.

@@ -6,8 +6,8 @@
 //! not carry the new hash), else `suggested`; each with `HEAD`'s revision,
 //! the one a raise writes, the lock entries vouching for it and the line
 //! to write, as an apply writes it (neither where an apply refuses the
-//! raise: at the largest revision, a document of a closed class that
-//! admits no `rev`, a line that cannot be written).
+//! raise: an unreadable revision, at the largest revision, a document of a
+//! closed class that admits no `rev`, a line that cannot be written).
 //!
 //! The checked tree is `spec check --changed`'s (the disk), or with
 //! `--staged` `spec check --staged`'s (the git index), against `HEAD`: the

@@ -1240,7 +1240,8 @@ fn ac12_a_killed_run_names_its_two_ways_out() {
         format!("it holds `{id}`'s text as an interrupted apply left it"),
         format!("two ways out in {}", pair.linked.display()),
         format!("git commit --only --trailer 'Proposal: {id}'"),
-        format!("git rm --cached -- {R13}"),
+        // A quoted literal pathspec (drift-follow-up RD-4).
+        format!("git rm --cached -- ':(literal){R13}'"),
         format!("`spec approve {id}` completes it"),
     ] {
         assert!(reason.contains(&part), "{part}: {reason}");

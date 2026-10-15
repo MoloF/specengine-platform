@@ -14,7 +14,7 @@ Phase 2 slice 7 (`docs/features/task-package.md`, ADR-0027): a task is a per-pro
 
 `--root`, `--json` as everywhere; `A` = `propose`'s author flags.
 
-- `spec task new --nodes REF... [--title T] [--goal T] [A]` -> `created T-0001`, `draft`; the nodes resolved as the intake's `node_ids` (ID, `slug/ID`, `.md` path), stored canonical, each once.
+- `spec task new --nodes REF... [--title T] [--goal T] [A]` -> `created T-0001`, `draft`; the nodes resolved as the intake's `node_ids` (ID, `slug/ID`, `.md` path), stored canonical, each once. Also made by `spec reject PR --follow-up code|spec` on a drift item (`proposal-completion.md` "Reject").
 - `spec task show T | --next`: text the brief, `--json` the package (`task-package.md`); `--next` the lowest-numbered `ready` task of this repository; both or neither -> exit 2. None found -> exit 1, JSON exactly `{"id": "T-0099", "reason": "no task T-0099 in this repository"}` (`--next`: `id` `null`, `no ready task in this repository`).
 - `spec task list [--status S]...`: by number, `<id> | <status> | <title or -> | <targets> | <updated_at>[ | stale]`; JSON `{tasks: [{id, status, title, targets, stale, updated_at}], notes}`; a `null` `stale` adds `<id>: <note>`; other repositories' tasks one note (`<n> task(s) of another repository of the project ... not listed`); a corrupt row skipped, a note.
 - Owner only, a terminal's `[y/N]` (stdin no terminal -> exit 2 before anything is read; no `--yes`; no MCP tool: `architecture.md#control`): `approve T` (`approve T-0001 (<title>), freezing <n> node(s) of <worktree> on <branch> at <commit>? [y/N]`), `changes T --note T` (`request changes of T-0001 (<title>)? [y/N]`), `cancel T` (`cancel T-0001 (<status>, <title>)? [y/N]`). Not `y` -> exit 1, no event.
@@ -77,7 +77,7 @@ proposals: + task_id   -- column 41 of 43
 
 Each op one `Immediate` transaction with its event, a compare-and-set on `TaskSeen.revision`: `revision` decimal text from `1`, raised by every change and refresh (two changes within one second never overwrite each other); lost -> exit 1 `` `T-0001` changed since this run read it: it is <status> since <updated_at>; nothing changed ``. Events `task.created`, `.planned`, `.approved`, `.changes_requested`, `.claimed`, `.run_reported`, `.completed`, `.cancelled`, payload `{id}` (+ `run` for claim and report), `.refreshed` `{id, proposal, node}`. The same `events` hold the gate's `gate.observed` (`gate.md` "Event"), naming no task. Corrupt (bad JSON, an unknown state or outcome, a non-decimal `revision`, a bad ID): named (`show` exit 2 naming the column), skipped by `list` with a note.
 
-API: `create_task`, `get_task`, `list_tasks`, `change_task(id, &TaskSeen, &TaskChange, now)`, `binding_problem`, `claimed_elsewhere`; `ProposalQueue::create_with_task`, `create_intake_with_task` (debt: fold into the request types). A schema-4 database refuses older builds (`SchemaTooNew`): restart the daemon and reinstall `specengine-mcp` from one commit.
+API: `create_task`, `reject_with_task` (a follow-up), `get_task`, `list_tasks`, `change_task(id, &TaskSeen, &TaskChange, now)`, `binding_problem`, `claimed_elsewhere`; `ProposalQueue::create_with_task`, `create_intake_with_task` (debt: fold into the request types). A schema-4 database refuses older builds (`SchemaTooNew`): restart the daemon and reinstall `specengine-mcp` from one commit.
 
 ## Backup
 

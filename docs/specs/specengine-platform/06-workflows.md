@@ -119,8 +119,8 @@ spec verify (a project's hook / CI / an agent; never a daemon raising)
   → RULE-STAM-REGEN: code_ahead (ast_hash changed, spec did not) — commit 8263ce2
   → spec propose drift (MCP report_drift): a `drift` item in the owner's queue
        [accept code changes]   → spec approve PR: the node's `spec lock accept`
-       [this changes the rule] → task to an agent: propose a spec edit (4c-2)
-       [reject]                → task: restore behaviour (spec_ahead; 4c-2)
+       [this changes the rule] → spec reject PR --follow-up spec: a draft task, an agent proposes a spec edit
+       [reject]                → spec reject PR --follow-up code: a draft task, the code back to the spec
 ```
 
 `conflict` (both spec and code changed) opens in the diff inspector: spec `git diff <lock.commit>..HEAD` by section, code by the symbol's range.

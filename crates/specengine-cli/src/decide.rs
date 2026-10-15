@@ -82,7 +82,7 @@ use crate::proposals::{
 use crate::propose::is_path_target;
 use crate::refresh::refresh;
 use crate::stage::Staging;
-use crate::{CliError, Env, Exit, Message, escape_controls, one_line};
+use crate::{CliError, Env, Exit, Message, escape_controls, one_line, pathspec_word};
 
 const COMMAND: QueueCommand = QueueCommand::Approve;
 
@@ -643,9 +643,10 @@ pub(crate) fn approve_record(
             }
             Made::Nothing { foreign } => {
                 if let Err(cause) = git.remove_cached(&top_path) {
+                    let word = pathspec_word(&top_path);
                     messages.push(Message::Warning(format!(
                         "cannot drop the index entry of `{path}` in {}: {cause}; `git rm \
-                         --cached -- {top_path}` drops it",
+                         --cached -- {word}` drops it",
                         place.worktree
                     )));
                 }
@@ -1192,16 +1193,17 @@ fn left_behind(
         return None;
     }
     let (id, record_id) = (&proposal.id, &record.id);
+    // The path a quoted literal pathspec in each printed command.
+    let word = pathspec_word(top_path);
     Some(exists(
         path,
         RECORD,
         &format!(
             "it holds `{record_id}`'s record as an interrupted apply left it, with an \
              intent-to-add entry in git's index; two ways out in {}: commit it by hand (`git \
-             commit --only --trailer '{PROPOSAL_TRAILER}: {id}' -m '{record_id}' -- \
-             {top_path}`), then `spec approve {id}` completes it; or `git rm --cached -- \
-             {top_path}`, delete the file, then `spec approve {id}` writes it again; nothing \
-             changed",
+             commit --only --trailer '{PROPOSAL_TRAILER}: {id}' -m '{record_id}' -- {word}`), \
+             then `spec approve {id}` completes it; or `git rm --cached -- {word}`, delete the \
+             file, then `spec approve {id}` writes it again; nothing changed",
             proposal.place.worktree
         ),
     ))

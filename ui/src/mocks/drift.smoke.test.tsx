@@ -161,7 +161,7 @@ describe("ledger-api's drift item (UI-1 of drift-queue)", () => {
     const { status, message } = refused as ClientError;
     expect(status).toBe(409);
     expect(message).toBe(
-      `\`${DRIFT_ITEM}\` changed since it was read (updated ${before.updated_at ?? ""}, read 2026-01-01T00:00:00Z): read it again; nothing changed`,
+      `\`${DRIFT_ITEM}\` changed since it was read: updated at ${before.updated_at ?? ""}, the choice was made on the one of 2026-01-01T00:00:00Z; read it again; nothing staged`,
     );
     expect(message).not.toContain("drift item");
     expect(await client.getProposal(SLUG, DRIFT_ITEM)).toEqual(before);

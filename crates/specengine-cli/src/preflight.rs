@@ -916,6 +916,12 @@ pub(crate) struct TrailerCommit {
     /// Its text at the path is step 5's on its first parent's: what an
     /// apply on top of that parent writes ([`written_on`]).
     pub carries: bool,
+    /// Git could not read it: whether it completes the proposal is unknown
+    /// (`spec reject` of a drift item refuses then, as when the lookup
+    /// fails). Judged for a drift item's commit only ([`drift_commit`]);
+    /// `false` for the other kinds, whose every trailer commit refuses a
+    /// reject.
+    pub unread: bool,
 }
 
 /// The first of `found` that completes the proposal: its own commit (an
@@ -1180,6 +1186,7 @@ fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Trai
         commit,
         not_completing,
         carries: false,
+        unread: false,
     }
 }
 
@@ -1191,49 +1198,58 @@ fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Trai
 /// accept writes (a plain or an editorial accept); the lock's bytes are
 /// its accept's, never compared with anything stored.
 fn drift_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> TrailerCommit {
-    let not_completing = lock_commit_problem(git, proposal, &commit);
+    let (not_completing, unread) = match lock_commit_problem(git, proposal, &commit) {
+        Ok(problem) => (problem, false),
+        Err(why) => (Some(why), true),
+    };
     TrailerCommit {
         commit,
         not_completing,
         carries: false,
+        unread,
     }
 }
 
 /// Why `commit` is no lock commit of the drift item `proposal`'s accept
-/// ([`drift_commit`]); `None`: it is.
-fn lock_commit_problem(git: &WorktreeGit, proposal: &Proposal, commit: &str) -> Option<String> {
+/// ([`drift_commit`]); `Ok(None)`: it is; `Err`: git could not read it
+/// (`cannot be read: …`).
+fn lock_commit_problem(
+    git: &WorktreeGit,
+    proposal: &Proposal,
+    commit: &str,
+) -> Result<Option<String>, String> {
     let path = top_of(proposal, LOCK_FILE);
     let node = &proposal.target_id;
-    let unreadable = |error: &dyn fmt::Display| Some(one_line(&format!("cannot be read: {error}")));
+    let unreadable = |error: &dyn fmt::Display| Err(one_line(&format!("cannot be read: {error}")));
     let parent = match git.parents(commit) {
         Ok(parents) => match parents.as_slice() {
             [parent] => parent.clone(),
-            parents => return Some(format!("has {} parents", parents.len())),
+            parents => return Ok(Some(format!("has {} parents", parents.len()))),
         },
         Err(error) => return unreadable(&error),
     };
     match git.changed_paths(&parent, commit) {
         Ok(changed) if changed == [path.as_str()] => {}
-        Ok(changed) => return Some(format!("changes {}", changed.join(", "))),
+        Ok(changed) => return Ok(Some(format!("changes {}", changed.join(", ")))),
         Err(error) => return unreadable(&error),
     }
     match git.blob_oid(commit, &path) {
         Ok(Some(_)) => {}
-        Ok(None) => return Some(format!("has no {path}")),
+        Ok(None) => return Ok(Some(format!("has no {path}"))),
         Err(error) => return unreadable(&error),
     }
     match git.trailer_values(commit, LOCK_TRAILER) {
         Ok(values) if values.contains(node) => {}
-        Ok(_) => return Some(format!("has no `{LOCK_TRAILER}: {node}` trailer")),
+        Ok(_) => return Ok(Some(format!("has no `{LOCK_TRAILER}: {node}` trailer"))),
         Err(error) => return unreadable(&error),
     }
     let modes = LockMode::TRAILERS;
     match git.trailer_values(commit, LOCK_MODE_TRAILER) {
-        Ok(values) if values.iter().any(|value| modes.contains(&value.as_str())) => None,
-        Ok(_) => Some(format!(
+        Ok(values) if values.iter().any(|value| modes.contains(&value.as_str())) => Ok(None),
+        Ok(_) => Ok(Some(format!(
             "has no `{LOCK_MODE_TRAILER}: {}` trailer",
             modes.join("` or `")
-        )),
+        ))),
         Err(error) => unreadable(&error),
     }
 }
@@ -1262,6 +1278,7 @@ fn file_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Traile
         commit,
         not_completing,
         carries: false,
+        unread: false,
     }
 }
 
@@ -1343,6 +1360,7 @@ fn trailer_commit(
         commit,
         not_completing,
         carries,
+        unread: false,
     }
 }
 

@@ -248,9 +248,13 @@ describe("the other scenarios", () => {
     const read = (await client.getProposal("harbor-sim", "PR-0041")).updated_at ?? "";
     const error = await rejection(client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "No" }, read));
     expect(error.status).toBe(409);
-    expect(error.message).toContain("`PR-0041` changed since it was read");
     const now = await client.getProposal("harbor-sim", "PR-0041");
     expect([now.status, now.staged?.decision, now.staged_at]).toEqual(["open", "reject", "2026-10-05T12:00:00Z"]);
+    // The daemon's words byte for byte (CLI `stage.rs`, the `updated_at` check).
+    expect(now.updated_at).toBe("2026-10-05T12:00:00Z");
+    expect(error.message).toBe(
+      `\`PR-0041\` changed since it was read: updated at 2026-10-05T12:00:00Z, the choice was made on the one of ${read}; read it again; nothing staged`,
+    );
     expect(ids((await client.getInbox("harbor-sim")).proposals)).toContain("PR-0041");
     const staged = await client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "No" }, now.updated_at ?? "");
     expect(staged.staged).toEqual({ decision: "reject", reason: "No" });

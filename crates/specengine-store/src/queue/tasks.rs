@@ -300,33 +300,11 @@ impl SqliteQueue {
     /// snapshot and claim `NULL`, its lists `[]`; logs `task.created`.
     pub fn create_task(&mut self, task: &NewTask, now: &str) -> Result<Task, QueueError> {
         check_time(now)?;
-        if task.targets.is_empty() {
-            return Err(QueueError::Invalid(
-                "a task names at least one node".to_owned(),
-            ));
-        }
+        new_task_problem(task)?;
         let project = self.project.clone();
         let tx = self.write()?;
         let id = next_task_id(&tx)?;
-        tx.execute(
-            &format!(
-                "INSERT INTO main.tasks ({TASK_SELECT}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, \
-                 '[]', '[]', '[]', NULL, NULL, ?8, ?9, ?9, '1')"
-            ),
-            rusqlite::params![
-                id,
-                project,
-                task.git_common_dir,
-                TaskStatus::Draft.as_str(),
-                task.title,
-                task.goal,
-                to_json(&task.targets)?,
-                to_json(&task.author)?,
-                now,
-            ],
-        )
-        .db()?;
-        log(&tx, &project, EVENT_TASK_CREATED, &json!({ "id": id }), now)?;
+        insert_draft(&tx, &project, &id, task, now)?;
         let stored = existing_task(&tx, &project, &id)?;
         tx.commit().db()?;
         Ok(stored)
@@ -565,8 +543,50 @@ fn set_status(
     Ok(())
 }
 
+/// A new task the store refuses: one naming no node
+/// ([`QueueError::Invalid`]).
+pub(crate) fn new_task_problem(task: &NewTask) -> Result<(), QueueError> {
+    if task.targets.is_empty() {
+        return Err(QueueError::Invalid(
+            "a task names at least one node".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// `task` stored as `draft` under `id` in `tx`, `created_at` =
+/// `updated_at` = `now`, its plan, snapshot and claim `NULL`, its lists
+/// `[]`, revision 1; `task.created` logged.
+pub(crate) fn insert_draft(
+    tx: &Transaction<'_>,
+    project: &str,
+    id: &str,
+    task: &NewTask,
+    now: &str,
+) -> Result<(), QueueError> {
+    tx.execute(
+        &format!(
+            "INSERT INTO main.tasks ({TASK_SELECT}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, \
+             '[]', '[]', '[]', NULL, NULL, ?8, ?9, ?9, '1')"
+        ),
+        rusqlite::params![
+            id,
+            project,
+            task.git_common_dir,
+            TaskStatus::Draft.as_str(),
+            task.title,
+            task.goal,
+            to_json(&task.targets)?,
+            to_json(&task.author)?,
+            now,
+        ],
+    )
+    .db()?;
+    log(tx, project, EVENT_TASK_CREATED, &json!({ "id": id }), now)
+}
+
 /// The next task ID: the highest number of any stored task, plus one.
-fn next_task_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
+pub(crate) fn next_task_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
     let mut statement = tx.prepare("SELECT id FROM main.tasks").db()?;
     let mut rows = statement.query([]).db()?;
     let mut highest = 0;
@@ -643,7 +663,11 @@ fn select_task(conn: &Connection, project: &str, id: &str) -> Result<Option<Task
     Ok(Some(decode_task(raw, runs)?))
 }
 
-fn existing_task(tx: &Transaction<'_>, project: &str, id: &str) -> Result<Task, QueueError> {
+pub(crate) fn existing_task(
+    tx: &Transaction<'_>,
+    project: &str,
+    id: &str,
+) -> Result<Task, QueueError> {
     select_task(tx, project, id)?.ok_or_else(|| no_task(id))
 }
 

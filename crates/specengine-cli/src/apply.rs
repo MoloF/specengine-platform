@@ -81,6 +81,10 @@
 //! ([`crate::drift_apply`]): apply's steps 1, 2 and 7 to 10 around it, one
 //! commit of `spec.lock` alone, completed by a lock commit carrying its
 //! `Proposal:` and `Lock:` trailers; its `--editorial` is the accept's.
+//! Its reject is refused only by such a commit completing it (another
+//! `Proposal:` commit is a note); `--follow-up code|spec`
+//! ([`reject_follow_up`], [`crate::follow_up`]) makes a `draft` task with
+//! it, in the same transaction.
 //!
 //! A kind that decides, a question, a discrepancy or a decision (canon
 //! `decision-record`, "Flags", "Steps"; task spec `kind-decision`), is
@@ -101,13 +105,14 @@ use std::path::Path;
 
 use specengine_core::lock::LOCK_FILE;
 use specengine_core::proposal::{
-    CommitFacts, EDITORIAL, Interprets, PROPOSAL_TRAILER, commit_message_raising,
+    Author, CommitFacts, EDITORIAL, Interprets, PROPOSAL_TRAILER, commit_message_raising,
 };
+use specengine_core::task::FollowUp;
 use specengine_model::IdScheme;
 use specengine_store::{
-    ApplyFailure, Decision, GitEnv, IndexWriter as _, KindFamily, Proposal, ProposalQueue as _,
-    ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, TaskRefresh, WorkingTree,
-    WorktreeGit, replace_file, same_repository, span_hash,
+    ApplyFailure, Decision, GitEnv, IndexWriter as _, KindFamily, NewTask, Proposal, ProposalKind,
+    ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, TaskRefresh,
+    WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
 };
 
 use crate::location::open_index;
@@ -126,7 +131,7 @@ use crate::review::stale_note;
 use crate::revisions::{apply_trailers, lock_in_commit, lock_unchanged, restore, restored_clause};
 use crate::stage::{self, Staging};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, pathspec_word};
-use crate::{create, decide, drift_apply};
+use crate::{create, decide, drift_apply, follow_up};
 
 /// `spec approve` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1061,8 +1066,9 @@ pub(crate) fn made_anyway(git: &WorktreeGit, head: &str, proposal: &Proposal) ->
 }
 
 /// The consent question with the lookup's note before it (`unknown`: git
-/// could not tell whether the proposal's commit is on its branch), escaped:
-/// the owner reads it before answering.
+/// could not tell whether the proposal's commit is on its branch; a drift
+/// item's reject: its newest `Proposal:` commit that does not complete
+/// it), escaped: the owner reads it before answering.
 pub(crate) fn noted(unknown: Option<&str>, question: &str) -> String {
     match unknown {
         Some(note) => format!(
@@ -1423,21 +1429,43 @@ fn reindex(env: &Env, context: &QueueContext, proposal: &Proposal, messages: &mu
 /// so), or when git cannot tell (naming the way out); an orphan's lookup
 /// is skipped only when neither the branch nor the base commit is in the
 /// current repository. A kind that decides holding no record is
-/// refused only by such a commit found: its history unread, a note. Decided
-/// by the committer of its [`History`], else of the current repository.
+/// refused only by such a commit found: its history unread, a note. A
+/// `drift` item is refused only by a commit that completes it, or when git
+/// cannot tell; the newest other one is a note, shown above the question
+/// ([`drift_carried`]). Decided by the committer of its [`History`], else
+/// of the current repository.
 pub fn reject(
     env: &Env,
     globals: &Globals,
     request: &RejectRequest,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_reject(env, globals, request, consent).map_err(escaped_error)
+    run_reject(env, globals, request, None, consent).map_err(escaped_error)
+}
+
+/// `spec reject PR --reason T --follow-up code|spec` (task spec
+/// `drift-follow-up`; [`crate::follow_up`]): [`reject`] of a `drift` item
+/// that also makes a `draft` task, in the same transaction
+/// ([`specengine_store::SqliteQueue::reject_with_task`]), its title and
+/// goal shown above the question (` and make a draft task (code)` before
+/// its `?`); the task named in a note on stderr and in `notes`. Another
+/// kind, or `T` in the recorded root's `[ids]`: exit 2; an orphan, a gone
+/// recorded worktree, a gone node: exit 1, nothing written.
+pub fn reject_follow_up(
+    env: &Env,
+    globals: &Globals,
+    request: &RejectRequest,
+    follow_up: FollowUp,
+    consent: Consent<'_>,
+) -> Result<ProposalOutcome, CliError> {
+    run_reject(env, globals, request, Some(follow_up), consent).map_err(escaped_error)
 }
 
 fn run_reject(
     env: &Env,
     globals: &Globals,
     request: &RejectRequest,
+    follow_up: Option<FollowUp>,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Reject;
@@ -1472,6 +1500,10 @@ fn run_reject(
             ));
         }
     };
+    // `--follow-up`: a drift item's only, whatever its state.
+    if follow_up.is_some() && proposal.kind != ProposalKind::Drift {
+        return Err(CliError::spec(follow_up::ONLY_DRIFT));
+    }
     let mut messages = Vec::new();
     // `find` gives another repository's proposal only when it is gone.
     let orphan = !same_repository(&proposal.place.git_common_dir, &context.common_dir);
@@ -1481,7 +1513,20 @@ fn run_reject(
             proposal.place.git_common_dir
         )));
     }
-    let document = with_diff(&proposal, &request.git, &context.data_dir);
+    let mut document = with_diff(&proposal, &request.git, &context.data_dir);
+    // A follow-up's node is read at the recorded root, which must still
+    // be there; its `[ids]` must leave `T` to tasks.
+    let recorded = match follow_up {
+        Some(_) => match follow_up::recorded_for(&request.git, &context, &proposal, orphan)? {
+            Ok(recorded) => Some(recorded),
+            Err(reason) => {
+                return Ok(ProposalOutcome::refused(
+                    COMMAND, document, &reason, messages,
+                ));
+            }
+        },
+        None => None,
+    };
     let rejectable = match proposal.status {
         ProposalStatus::Open | ProposalStatus::Approved => true,
         ProposalStatus::Applied | ProposalStatus::Rejected => false,
@@ -1520,10 +1565,27 @@ fn run_reject(
     // history unread (its branch deleted after a merge), it is rejected,
     // noted.
     // A kind that applies or locks may have a commit; a deciding one only
-    // once its record is issued.
+    // once its record is issued. A drift item: only a commit completing
+    // it refuses; the newest other one is a note, shown above the
+    // question (canon `proposal-completion`, "Reject").
     let applies = proposal.kind.family() != KindFamily::Decides || proposal.record.is_some();
+    let drift = proposal.kind == ProposalKind::Drift;
     let mut unknown = None;
-    let refusal = if applies {
+    let mut carried_notes: Vec<String> = Vec::new();
+    let refusal = if drift {
+        match drift_carried(&request.git, &context, &proposal, orphan) {
+            Ok(note) => {
+                if let Some(note) = &note {
+                    messages.push(Message::Note(note.clone()));
+                    document.notes.push(note.clone());
+                    carried_notes.push(note.clone());
+                }
+                unknown = note;
+                None
+            }
+            Err(reason) => Some(reason),
+        }
+    } else if applies {
         committed(&request.git, &context, &proposal, orphan)
     } else if proposal.kind.family() == KindFamily::Decides {
         match trailer_found(&request.git, &context, &proposal, orphan) {
@@ -1564,13 +1626,32 @@ fn run_reject(
                 context.project.root.display()
             ))
         })?;
+    // A follow-up's step 1: its node now at the recorded root, the task's
+    // title and goal (shown above the question).
+    let planned = match (&recorded, follow_up) {
+        (Some(recorded), Some(kind)) => {
+            match follow_up::planned(env, recorded, &proposal, kind, &reason, &mut messages)? {
+                Ok(planned) => Some((kind, planned)),
+                Err(reason) => {
+                    return Ok(ProposalOutcome::refused(
+                        COMMAND, document, &reason, messages,
+                    ));
+                }
+            }
+        }
+        _ => None,
+    };
     let approved = if proposal.status == ProposalStatus::Approved {
         "approved "
     } else {
         ""
     };
+    let (shown, tail) = match &planned {
+        Some((kind, planned)) => (follow_up::shown(planned), follow_up::question_tail(*kind)),
+        None => (String::new(), String::new()),
+    };
     let question = format!(
-        "{}reject {approved}{id} ({} in {} on {} in {}{})? [y/N]",
+        "{shown}{}reject {approved}{id} ({} in {} on {} in {}{}){tail}? [y/N]",
         staging.preface(None),
         proposal.target_id,
         top_path(&proposal),
@@ -1586,8 +1667,23 @@ fn run_reject(
             messages,
         ));
     }
-    // Its commit may have landed while the owner was asked.
-    if applies && let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
+    // Its commit may have landed while the owner was asked; a drift item's
+    // note only when it differs from the one shown.
+    if drift {
+        match drift_carried(&request.git, &context, &proposal, orphan) {
+            Ok(Some(note)) if !carried_notes.contains(&note) => {
+                messages.push(Message::Note(note.clone()));
+                document.notes.push(note.clone());
+                carried_notes.push(note);
+            }
+            Ok(_) => {}
+            Err(reason) => {
+                return Ok(ProposalOutcome::refused(
+                    COMMAND, document, &reason, messages,
+                ));
+            }
+        }
+    } else if applies && let Some(reason) = committed(&request.git, &context, &proposal, orphan) {
         return Ok(ProposalOutcome::refused(
             COMMAND, document, &reason, messages,
         ));
@@ -1598,13 +1694,39 @@ fn run_reject(
         staged_at: staging.staged_at(),
     };
     // A compare-and-set on the state read (its stage too): another run's
-    // change since refuses (exit 1).
-    let rejected = context
-        .queue
-        .reject_from(&id, &proposal.seen(), &decision, now);
+    // change since refuses (exit 1). A follow-up's task in the same
+    // transaction: neither, or both.
+    let rejected = match &planned {
+        Some((_, planned)) => context
+            .queue
+            .reject_with_task(
+                &id,
+                &proposal.seen(),
+                &decision,
+                &NewTask {
+                    git_common_dir: proposal.place.git_common_dir.clone(),
+                    title: Some(planned.title.clone()),
+                    goal: Some(planned.goal.clone()),
+                    targets: vec![planned.node.clone()],
+                    author: Author::human(),
+                },
+                now,
+            )
+            .map(|(rejected, task)| (rejected, Some(task.id))),
+        None => context
+            .queue
+            .reject_from(&id, &proposal.seen(), &decision, now)
+            .map(|rejected| (rejected, None)),
+    };
     match rejected {
-        Ok(rejected) => {
-            let document = with_diff(&rejected, &request.git, &context.data_dir);
+        Ok((rejected, task)) => {
+            let mut document = with_diff(&rejected, &request.git, &context.data_dir);
+            document.notes.extend(carried_notes);
+            if let Some(task) = task {
+                let note = follow_up::created_note(&task, &id);
+                messages.push(Message::Note(note.clone()));
+                document.notes.push(note);
+            }
             Ok(ProposalOutcome::done(COMMAND, document, messages))
         }
         Err(error) => {
@@ -1632,15 +1754,71 @@ fn committed(
     proposal: &Proposal,
     orphan: bool,
 ) -> Option<String> {
-    let id = &proposal.id;
     match trailer_found(git_env, context, proposal, orphan) {
         Ok(found) => carried(proposal, orphan, &found),
-        Err(error) if orphan => Some(format!(
-            "cannot tell whether `{id}` has its commit in this repository: {error}"
-        )),
-        Err(error) => Some(format!(
-            "cannot tell whether `{id}` has its commit in history: {error}"
-        )),
+        Err(error) => Some(cannot_tell(proposal, orphan, &error.to_string())),
+    }
+}
+
+/// `cannot tell whether `PR` has its commit in history: <why>` (`in this
+/// repository` for an `orphan`).
+fn cannot_tell(proposal: &Proposal, orphan: bool, why: &str) -> String {
+    let place = if orphan {
+        "in this repository"
+    } else {
+        "in history"
+    };
+    format!(
+        "cannot tell whether `{}` has its commit {place}: {why}",
+        proposal.id
+    )
+}
+
+/// Why `spec reject` refuses the `drift` item (canon `proposal-completion`,
+/// "Reject"; the `Proposal:` commits judged by completion's predicate):
+/// one completes it ([`carried`]), one cannot be read, or the lookup
+/// cannot be made ([`committed`]'s words). Else the one note naming the
+/// newest commit carrying its trailer, none completing it, `None`
+/// without one: ``the commit <sha> on `<branch>` carries `Proposal:
+/// PR`<more> but does not complete it (<why>); rejected all the same``,
+/// `<more>` [`older_too`]'s, as [`carried`] counts them.
+fn drift_carried(
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    orphan: bool,
+) -> Result<Option<String>, String> {
+    let (id, branch) = (&proposal.id, &proposal.place.branch);
+    let found = trailer_found(git_env, context, proposal, orphan)
+        .map_err(|error| cannot_tell(proposal, orphan, &error.to_string()))?;
+    if let Some(reason) = completing(&found).and_then(|_| carried(proposal, orphan, &found)) {
+        return Err(reason);
+    }
+    if let Some(unread) = found.iter().find(|commit| commit.unread) {
+        let why = format!(
+            "the commit {} on `{branch}` {}",
+            unread.commit,
+            unread.not_completing.as_deref().unwrap_or_default()
+        );
+        return Err(cannot_tell(proposal, orphan, &why));
+    }
+    Ok(found.first().map(|newest| {
+        one_line(&format!(
+            "the commit {} on `{branch}` carries `{PROPOSAL_TRAILER}: {id}`{} but does not \
+             complete it ({}); rejected all the same",
+            newest.commit,
+            older_too(&found),
+            newest.not_completing.as_deref().unwrap_or_default()
+        ))
+    }))
+}
+
+/// ` (<k> older one(s) too)` after the newest of `found` (newest first),
+/// `k` the others; empty when there are none.
+fn older_too(found: &[TrailerCommit]) -> String {
+    match found.len() {
+        0 | 1 => String::new(),
+        count => format!(" ({} older one(s) too)", count - 1),
     }
 }
 
@@ -1681,10 +1859,7 @@ fn carried(proposal: &Proposal, orphan: bool, found: &[TrailerCommit]) -> Option
     } else {
         let newest = found.first()?;
         let why = newest.not_completing.as_deref().unwrap_or_default();
-        let more = match found.len() {
-            1 => String::new(),
-            count => format!(" ({} older one(s) too)", count - 1),
-        };
+        let more = older_too(found);
         format!(
             "`{id}` has the commit {} on `{branch}` with the trailer `{PROPOSAL_TRAILER}: \
              {id}`{more}, which does not complete it ({why}): a proposal with a commit in \

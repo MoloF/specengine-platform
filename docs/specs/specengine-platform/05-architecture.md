@@ -177,8 +177,8 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 | spec_hash ≠ lock | ast_hash ≠ lock | sync | Action |
 |---|---|---|---|
 | no | no | `ok` | — |
-| yes | no | `spec_ahead` | a `drift` item (`docs/canon/proposal-drift.md`): approve, `--editorial` for `same_revision`, or reject; a "bring code to spec" task: 4c-2 |
-| no | yes | `code_ahead` | a `drift` item: approve accepts the code (lock) or reject (task to revert/fix: 4c-2). If the meaning changed too, the agent proposes a spec edit |
+| yes | no | `spec_ahead` | a `drift` item (`docs/canon/proposal-drift.md`): approve, `--editorial` for `same_revision`, or reject; a "bring code to spec" task: `reject --follow-up code` (`docs/canon/proposal-completion.md` "Reject") |
+| no | yes | `code_ahead` | a `drift` item: approve accepts the code (lock) or reject (`--follow-up code`: a task to fix the code; `--follow-up spec`: a task to propose a spec edit) |
 | yes | yes | `conflict` | UI: spec-section and symbol-span diffs since `lock.commit`, side by side |
 | — | symbol not found | `broken_binding` | marker removed or symbol renamed; a `drift` item, its approve locking what accept finds |
 | node accepted, no bindings | | `unbound` | visible on the "what's left" panel |

@@ -218,7 +218,8 @@ fn run_new(
         let ours = same_repository(&proposal.place.git_common_dir, &context.common_dir);
         let open = proposal.status == ProposalStatus::Open;
         // The sheet holds the kinds that decide alone; a drift item is
-        // decided on a terminal (task spec `drift-queue`, "Round").
+        // decided on a terminal (canon `proposal-drift`, "Review, stage,
+        // round").
         let family = proposal.kind.family();
         if family != KindFamily::Decides {
             if ours && open {

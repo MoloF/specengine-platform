@@ -29,8 +29,8 @@
 //! the working tree is not reported by it and is walked as an empty file
 //! (the spec's fallback). Any other intent-to-add entry, neither `.md` nor
 //! TOML (`git add -N docs/.gitkeep`), stays an empty regular file only when
-//! the detector does not run; when an empty `.md`, config or baseline
-//! starts it, the entry is dropped.
+//! the detector does not run; when an empty `.md`, config, baseline or
+//! `spec.lock` starts it, the entry is dropped.
 //!
 //! Every child: `-c core.fsmonitor=false`, the variables of [`GitEnv`]
 //! with the path variables made absolute and `GIT_OPTIONAL_LOCKS=0`,

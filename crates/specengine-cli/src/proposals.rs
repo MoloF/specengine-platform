@@ -882,8 +882,9 @@ fn drift_text(out: &mut String, drift: Option<&ProposalDrift>) {
 }
 
 /// A stored drift row as `spec verify` prints a row ([`FindingLine`]); a
-/// keyless row's binding is not stored: `-`.
-fn drift_row_line(row: &DriftRow) -> String {
+/// keyless row's binding is not stored: `-`. The one row formatter of a
+/// stored item: `spec review`'s, and a follow-up task's goal.
+pub(crate) fn drift_row_line(row: &DriftRow) -> String {
     let binding = keyed_binding(
         row.kind.as_deref(),
         row.symbol.as_deref(),

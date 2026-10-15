@@ -34,7 +34,7 @@ use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CheckRequest,
     CheckedTree, CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env,
-    Exit, ExportIndexRequest, ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress,
+    Exit, ExportIndexRequest, ExportStateRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress,
     GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest,
     InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
     LockAcceptRequest, LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText,
@@ -232,13 +232,16 @@ enum Command {
         #[arg(long)]
         editorial: bool,
     },
-    /// Reject an open or approved proposal, never one whose `Proposal:` commit is on its branch; asks for consent on the terminal.
+    /// Reject an open or approved proposal, never one whose `Proposal:` commit is on its branch (a drift item: one completing it); asks for consent on the terminal.
     Reject {
         #[arg(value_name = "PR")]
         id: String,
         /// Why the proposal is rejected (non-empty, at most 4096 bytes); left out, a reject staged from the UI gives it.
         #[arg(long, value_name = "T")]
         reason: Option<String>,
+        /// A drift item only: also make a draft task, `code` (change the bound code to match the spec) or `spec` (propose a spec edit describing the code); `spec task approve` makes it ready.
+        #[arg(long = "follow-up", value_name = "KIND", value_parser = PossibleValuesParser::new(FollowUp::ALL.map(FollowUp::as_str)))]
+        follow_up: Option<String>,
     },
     /// Restore a dump written by `export state` into the project's empty queue, rows as stored; asks for consent on the terminal.
     ImportState {
@@ -1194,20 +1197,31 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &mut consent,
             )?))
         }
-        Command::Reject { id, reason } => {
+        Command::Reject {
+            id,
+            reason,
+            follow_up,
+        } => {
             require_terminal("reject")?;
+            // Clap's possible values already refuse another one (exit 2).
+            let follow_up = follow_up.as_deref().and_then(FollowUp::parse);
             let mut consent = ask;
-            Outcome::Proposal(Box::new(specengine_cli::reject(
-                env,
-                globals,
-                &RejectRequest {
-                    id,
-                    reason,
-                    now: now(),
-                    git: process_git(env),
-                },
-                &mut consent,
-            )?))
+            let request = RejectRequest {
+                id,
+                reason,
+                now: now(),
+                git: process_git(env),
+            };
+            Outcome::Proposal(Box::new(match follow_up {
+                Some(follow_up) => specengine_cli::reject_follow_up(
+                    env,
+                    globals,
+                    &request,
+                    follow_up,
+                    &mut consent,
+                )?,
+                None => specengine_cli::reject(env, globals, &request, &mut consent)?,
+            }))
         }
         Command::ImportState { file } => {
             require_terminal("import-state")?;

@@ -517,6 +517,17 @@ pub(crate) fn resolved_node(
     input: &CheckInput,
     written: &str,
 ) -> Result<Result<(String, String), String>, CliError> {
+    Ok(resolved_at(project, input, written)?.map(|(id, path, _)| (id, path)))
+}
+
+/// [`resolved_node`] with the node's position in its holder's parse (0
+/// its document): what reads its revision (a drift item's follow-up, task
+/// spec `drift-follow-up`).
+pub(crate) fn resolved_at(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    written: &str,
+) -> Result<Result<(String, String, usize), String>, CliError> {
     let written = written.trim();
     let scheme = &project.config.scheme;
     let reference = match written_reference(written, scheme)? {
@@ -525,7 +536,7 @@ pub(crate) fn resolved_node(
     };
     let resolver = Resolver::new(input, scheme, &project.config.paths);
     let (written, reference, at) = match named(input, &resolver, scheme, written, reference)? {
-        Ok(Named::Document { path }) => return Ok(Ok((path.clone(), path))),
+        Ok(Named::Document { path }) => return Ok(Ok((path.clone(), path, 0))),
         Ok(Named::Id {
             written,
             reference,
@@ -548,9 +559,10 @@ pub(crate) fn resolved_node(
             "`{path}` could not be read: its nodes cannot be named"
         )));
     };
-    if let Err(reason) = node_position(&resolver, scheme, parsed, &path, written, &reference) {
-        return Ok(Err(reason));
-    }
+    let ord = match node_position(&resolver, scheme, parsed, &path, written, &reference) {
+        Ok(ord) => ord,
+        Err(reason) => return Ok(Err(reason)),
+    };
     let id = canonical_id(
         &resolver,
         scheme,
@@ -558,7 +570,7 @@ pub(crate) fn resolved_node(
         &reference.id,
         reference.scope.as_deref(),
     );
-    Ok(Ok((id, path)))
+    Ok(Ok((id, path, ord)))
 }
 
 /// Steps 1–4 of `propose update` over the index this call refreshed

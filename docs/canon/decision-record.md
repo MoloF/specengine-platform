@@ -47,7 +47,7 @@ By the `Proposal:` trailer, as an update's (`proposal-completion.md` "Completion
 
 ## Killed run
 
-A run killed between steps 8 and 9 leaves the item `approved` with its record, the file and its intent-to-add entry. A new approve refuses at step 4 `exists`; when the file's bytes are the held `record_text` and the entry intent-to-add, the refusal names **two ways out**: commit it by hand (``git commit --only --trailer 'Proposal: PR' -m '<ID>' -- <path>``), then `spec approve PR` completes it; or `git rm --cached -- <path>`, delete the file, then `spec approve PR` writes it again.
+A run killed between steps 8 and 9 leaves the item `approved` with its record, the file and its intent-to-add entry. A new approve refuses at step 4 `exists`; when the file's bytes are the held `record_text` and the entry intent-to-add, the refusal names **two ways out**: commit it by hand (``git commit --only --trailer 'Proposal: PR' -m '<ID>' -- <path>``), then `spec approve PR` completes it; or `git rm --cached -- <path>`, delete the file, then `spec approve PR` writes it again. Each `<path>` printed `':(literal)<top path>'` (CLI `pathspec_word`), as is step 9's failed-cleanup warning ``cannot drop the index entry of `<path>` in <worktree>: <error>; `git rm --cached -- <path>` drops it``.
 
 ## Reject
 

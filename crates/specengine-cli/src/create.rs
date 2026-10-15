@@ -101,7 +101,9 @@ use crate::review::previewed;
 use crate::show::latin_fix;
 use crate::stage::Staging;
 use crate::task::bound_task;
-use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, store_error};
+use crate::{
+    CliError, Env, Exit, Globals, Message, escape_controls, one_line, pathspec_word, store_error,
+};
 
 /// What a create refuses as its writer.
 const CREATE: &str = "a create";
@@ -1150,15 +1152,17 @@ fn left_behind(
         return None;
     }
     let id = &proposal.id;
+    // The path a quoted literal pathspec in each printed command.
+    let word = pathspec_word(top_path);
     Some(exists(
         path,
         &proposal.kind.with_article(),
         &format!(
             "it holds `{id}`'s text as an interrupted apply left it, with an intent-to-add entry \
              in git's index; two ways out in {}: commit it by hand (`git commit --only --trailer \
-             '{PROPOSAL_TRAILER}: {id}' -m '{COMMIT_SUBJECT} {id}' -- {top_path}`), then `spec \
-             approve {id}` completes it; or `git rm --cached -- {top_path}`, delete the file, \
-             then `spec approve {id}` writes it again; nothing changed",
+             '{PROPOSAL_TRAILER}: {id}' -m '{COMMIT_SUBJECT} {id}' -- {word}`), then `spec \
+             approve {id}` completes it; or `git rm --cached -- {word}`, delete the file, then \
+             `spec approve {id}` writes it again; nothing changed",
             proposal.place.worktree
         ),
     ))
@@ -1405,9 +1409,10 @@ pub(crate) fn approve_file(
             }
             Made::Nothing { foreign } => {
                 if let Err(cause) = git.remove_cached(&top_path) {
+                    let word = pathspec_word(&top_path);
                     messages.push(Message::Warning(format!(
                         "cannot drop the index entry of `{path}` in {}: {cause}; `git rm \
-                         --cached -- {top_path}` drops it",
+                         --cached -- {word}` drops it",
                         place.worktree
                     )));
                 }

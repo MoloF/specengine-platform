@@ -93,7 +93,7 @@ spec propose drift [REF…] [--task T]     # shipped: docs/canon/proposal-drift.
 spec inbox [--all]                       # to come: --severity, --task
 spec review PR-ID                        # to come: interactive edit/changes/defer
 spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF] [--editorial]  # a terminal's [y/N]; no flag: the staged choice
-spec reject PR-ID --reason ...          # --reason optional when a reject is staged (decision-staging)
+spec reject PR-ID --reason ... [--follow-up code|spec]  # --reason optional when a reject is staged (decision-staging); --follow-up: a drift item's draft task (proposal-completion.md)
 
 # tasks: shipped (+ an agent's plan, claim, report, complete), docs/canon/tasks.md
 spec task new --nodes REF… [--title ...]   # --contour: later

@@ -21,6 +21,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped
 - [docs/features/decision-apply.md](features/decision-apply.md) shipped
 - [docs/features/decision-staging.md](features/decision-staging.md) shipped
+- [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped
 - [docs/features/health-left.md](features/health-left.md) shipped
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped

@@ -230,7 +230,7 @@ export class MockClient implements SpecEngineClient {
       current = this.store(entry, index, stored, { ...current, staged: ELSEWHERE, staged_at: this.stamp(), updated_at: this.stamp() });
     }
     if (current.updated_at !== updatedAt) {
-      throw this.refusal(`\`${id}\` changed since it was read (updated ${current.updated_at}, read ${updatedAt}): read it again; nothing changed`);
+      throw this.refusal(`\`${id}\` changed since it was read: updated at ${current.updated_at}, the choice was made on the one of ${updatedAt}; read it again; nothing staged`);
     }
     if (current.drift !== null) {
       throw this.refusal(`${id} is a drift item, decided on a terminal only; nothing staged`);
