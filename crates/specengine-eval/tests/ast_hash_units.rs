@@ -1241,10 +1241,19 @@ fn ast_hash_fixture_keeps_its_expected_json_and_today_s_qpaths() {
         .output()
         .expect("git runs");
     assert!(committed.status.success());
+    // docs/features/hash-levels-eval.md TE-2 adds the `levels` pins; every
+    // other pin stays as committed.
+    let without_levels = |bytes: &[u8]| -> Value {
+        let mut pins: Value = serde_json::from_slice(bytes).expect("expected.json is JSON");
+        pins.as_object_mut()
+            .expect("expected.json is an object")
+            .remove("levels");
+        pins
+    };
     assert_eq!(
-        fs::read(root.join("fixtures/ast-hash/expected.json")).unwrap(),
-        committed.stdout,
-        "fixtures/ast-hash/expected.json must stay as committed"
+        without_levels(&fs::read(root.join("fixtures/ast-hash/expected.json")).unwrap()),
+        without_levels(&committed.stdout),
+        "fixtures/ast-hash/expected.json must stay as committed but its `levels`"
     );
     let scratch = Scratch::new("ast-hash");
     let out = scratch.join("out");

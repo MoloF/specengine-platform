@@ -1,9 +1,12 @@
 //! Measurement `ast-hash`: stability of the 05 §5.2 recipe under (a) default
 //! rustfmt, (b) contrasting rustfmt, (c) comment stripping, with parse-error
 //! and `qpath` by-products (target units from `cargo metadata`, layout
-//! fallback: [`targets`]). Per-file detail goes to `--out`, aggregates to stdout.
+//! fallback: [`targets`]); the v3 levels and fingerprints under the same
+//! perturbations, a neighbour's edit and a rename ([`levels`]). Per-file
+//! detail goes to `--out`, aggregates to stdout.
 
 mod fmt;
+mod levels;
 #[cfg(feature = "syn")]
 mod syn_cmp;
 mod targets;
@@ -16,7 +19,9 @@ use std::time::Instant;
 use serde::Serialize;
 use specengine_code::comments::strip_comments;
 use specengine_code::qpath::{self, Ambiguity, FileRole, TargetSource, UnitKind};
-use specengine_code::{Digest, FileAnalysis, ItemRecord, RustParser};
+use specengine_code::{
+    Digest, FileAnalysis, ItemRecord, LevelState, RustParser, item_levels, module_levels,
+};
 
 use crate::harness::{self, Corpus, percent, stability_percent};
 
@@ -40,6 +45,8 @@ pub struct AstHashResult {
     pub path_attrs: usize,
     /// `null` unless built with feature `syn`.
     pub syn: Option<SynSummary>,
+    /// The v3 levels and fingerprints (5a-2, [`levels`]).
+    pub levels: levels::LevelsResult,
     pub detail: Detail,
 }
 
@@ -151,13 +158,34 @@ struct ItemKey {
 struct Analyzed {
     analysis: FileAnalysis,
     keys: Vec<ItemKey>,
+    /// The levels of `analysis.items`, in their order ([`item_levels`]).
+    levels: Vec<LevelState>,
+    /// The file's module ([`module_levels`]).
+    module: LevelState,
 }
 
+/// One parse: the items and their v2 hashes, then their levels and the
+/// module's over the same tree.
 fn analyze(parser: &mut RustParser, text: &str) -> Result<Analyzed, String> {
-    let analysis = specengine_code::analyze_file(parser, text)
-        .ok_or_else(|| "tree-sitter cancelled a parse".to_owned())?;
+    let tree = parser.parse(text).ok_or_else(cancelled)?;
+    let analysis = specengine_code::analyze_tree(&tree, text);
+    let every: Vec<usize> = (0..analysis.items.len()).collect();
+    let levels = item_levels(&tree, text, &every)
+        .into_iter()
+        .flatten()
+        .collect();
+    let module = module_levels(&tree, text);
     let keys = keys_of(&analysis.items);
-    Ok(Analyzed { analysis, keys })
+    Ok(Analyzed {
+        analysis,
+        keys,
+        levels,
+        module,
+    })
+}
+
+fn cancelled() -> String {
+    "tree-sitter cancelled a parse".to_owned()
 }
 
 fn keys_of(items: &[ItemRecord]) -> Vec<ItemKey> {
@@ -262,13 +290,14 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
         }
     }
 
-    // 2. Originals, timed (the reference for the syn time ratio).
-    let started = Instant::now();
-    let originals = files
-        .iter()
-        .map(|file| analyze(&mut parser, &file.text))
-        .collect::<Result<Vec<_>, _>>()?;
-    let hash_us = started.elapsed().as_micros();
+    // 2. Originals, each parsed once: parse + v2 hash timed (the reference
+    // for the syn time ratio), then the levels and their cost.
+    let levels::Originals {
+        analyzed: originals,
+        hash_us,
+        spots,
+        cost,
+    } = levels::originals(&mut parser, &files)?;
 
     // 3. Perturbed texts, on copies in memory; `None` = the file stays as it is.
     // rustfmt runs where cargo does, outside the corpus; nowhere to run it
@@ -341,6 +370,7 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
     let mut perturbed_hashes: Vec<BTreeMap<&'static str, Vec<String>>> =
         files.iter().map(|_| BTreeMap::new()).collect();
     let mut files_changed: BTreeMap<Perturbation, usize> = BTreeMap::new();
+    let mut level_passes = levels::Passes::default();
     for (perturbation, texts) in &perturbed {
         let name = perturbation.as_str();
         let mut stat = Stability::default();
@@ -355,6 +385,7 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
                 None => None,
             };
             let after = after.as_ref().unwrap_or(original);
+            level_passes.keyed(*perturbation, file, original, after);
             let after_by_key: HashMap<&ItemKey, &ItemRecord> =
                 after.keys.iter().zip(&after.analysis.items).collect();
             let mut per_item = Vec::with_capacity(original.analysis.items.len());
@@ -401,6 +432,14 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
         files_changed.insert(*perturbation, changed_files);
         stability.insert(name, stat);
     }
+
+    // 4b. Levels: a neighbour's edit (two passes) and a rename, per file.
+    let unique_bodies = levels::body_counts(&originals);
+    for ((file, original), file_spots) in files.iter().zip(&originals).zip(&spots) {
+        level_passes.neighbour(&mut parser, file, original, file_spots)?;
+        level_passes.rename(&mut parser, file, original, file_spots, &unique_bodies)?;
+    }
+    let levels = level_passes.result(&originals, cost, rustfmt.is_some());
 
     // 5. qpath: package roots, target tables, file roles, `#[path]` targets,
     // duplicates.
@@ -604,6 +643,10 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
     };
     write_json(&out_dir.join("manifest.json"), &manifest)?;
     write_json(&out_dir.join("unstable.json"), &unstable)?;
+    write_json(
+        &out_dir.join("levels-unstable.json"),
+        &level_passes.unstable,
+    )?;
 
     let result = AstHashResult {
         files: files.len(),
@@ -626,6 +669,7 @@ pub fn run(corpus: &Corpus, run_end: Option<Instant>) -> Result<AstHashResult, S
         qpath_ambiguous_pct: percent(ambiguous, items),
         path_attrs,
         syn,
+        levels,
         detail: Detail {
             files_skipped,
             orphan_error_regions,
@@ -696,6 +740,7 @@ fn summarize(result: &AstHashResult, label: &str, out_dir: &Path) {
         ),
         None => eprintln!("  syn: not built (feature `syn`)"),
     }
+    levels::summarize(&result.levels);
     if !result.detail.rustfmt.rejected_options.is_empty() {
         eprintln!(
             "  rustfmt rejected options: {}",

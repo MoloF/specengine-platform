@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-16
 ---
 
 # specengine-eval — the permanent measurement harness
@@ -20,8 +20,8 @@ specengine-eval <ast-hash|ron|census|import|parse|index|check|layout|w|bevy-dete
 
 | Subcommand | Measures | Fixture (no `--pilot`) | Detail under `--out/<m>/<label>/` |
 |---|---|---|---|
-| `ast-hash` | stability of `specengine-hash/v2` under default rustfmt, contrasting rustfmt (effectively `max_width = 60`) and comment stripping; parse errors, `cannot_verify`, `qpath` ambiguity, units, target sources; `syn` 3 comparison (`null` without the feature) | `fixtures/ast-hash` | hash manifest (`unit`, `targets`) |
-| `ron` | `.ron` markers by the own lexer: parse-clean share, rejected categories, comment ranges, anchors (`ambiguous` apart), level lists, empty IDs, colliding groups; keeps the removed grammar path's fields (`false` / `null`, `recommendation` `lexer`) | `fixtures/ron` | `files.json`, `markers.json`, `rejected.json` (≤ 20 samples per category) |
+| `ast-hash` | v2 stability under default and contrasting rustfmt and comment stripping; parse errors, `cannot_verify`, `qpath` ambiguity, units, target sources; `syn` 3 comparison (`null` without the feature); `result.levels` (`docs/canon/code-hash-eval.md`) | `fixtures/ast-hash` | `manifest.json` (`unit`, `targets`), `unstable.json`, `levels-unstable.json` |
+| `ron` | `.ron` markers by the own lexer: parse-clean share, rejected categories, comment ranges, anchors (`ambiguous` apart), level lists, empty IDs, colliding groups; `result.value_hash` (`code-hash-eval.md`) | `fixtures/ron` | `files.json`, `markers.json`, `rejected.json` (≤ 20 samples per category) |
 | `census` | `specengine-import` dry-run counts; convention from `--config` | `fixtures/corpus-mini` | `labels`, `records`, `documents`, `rows_without_id`, `broken_links`, `diagnostics` (`.json`) |
 | `import` | `specengine-import`'s "before" report (its README); config as `census` | `fixtures/import-one` | ten files (its README) |
 | `parse` | `specengine-core` over the census's documents (its `--config` and walk): `files` (walked), `unreadable`, `panics` (caught per file), `not_utf8`, `front_matter.present`, `diagnostics.<code>` (every code, zeros too), `sections.{parsed, census_id_sections, differ}` (`differ`: per-file symmetric difference of heading lines), `heading_attrs_not_section` (anchors), `references.{inline, declared, homoglyph, alias}` (`inline`: ID references only; `homoglyph`: non-alias ones), `tokens_est.{total, max_node}` | `fixtures/corpus-mini` | `files`, `diagnostics`, `sections_differ`, `panics`, `problems` (`.json`) |

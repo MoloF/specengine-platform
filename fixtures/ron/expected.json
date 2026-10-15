@@ -1,5 +1,5 @@
 {
-  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (AC-07 of docs/features/phase-0-spikes.md; binding rules in 05 \u00a75.3, output shape in crates/specengine-eval/README.md). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file. `ambiguous.ron` (docs/features/layer-a-identity.md AC-10, AC-11) adds level lists (one declared `[sig]`, one declared out of order, one `unknown`, one `unclosed`), an empty ID and five markers under colliding siblings (`ambiguous`, never `anchored`); `levels` in a row is the effective list (`null` when invalid), `levels_state` its state.",
+  "_comment": "Expected `result` of `specengine-eval ron` on this fixture (AC-07 of docs/features/phase-0-spikes.md; binding rules in 05 §5.3, output shape in crates/specengine-eval/README.md). The `tree-sitter-ron` comparison path was removed after the spike verdict (`lexer`): every `grammar` value and `agree_pct` / `files_agreeing_pct` stay in the shape as null. `anchors` lists every marker of the fixture with the path the lexer must resolve it to; `comments` counts the comments per file. `ambiguous.ron` (docs/features/layer-a-identity.md AC-10, AC-11) adds level lists (one declared `[sig]`, one declared out of order, one `unknown`, one `unclosed`), an empty ID and five markers under colliding siblings (`ambiguous`, never `anchored`); `levels` in a row is the effective list (`null` when invalid), `levels_state` its state.",
   "files": 3,
   "files_with_comments": 3,
   "parse_clean": { "lexer": 3, "grammar": null },
@@ -31,8 +31,8 @@
     {"path": "ambiguous.ron", "line": 6, "relation": "implements", "id": "BAD", "rev": 1, "anchor": "root.volume", "depth": 1, "levels": null, "levels_state": "unknown", "ambiguous": false},
     {"path": "ambiguous.ron", "line": 8, "relation": "implements", "id": "OPEN", "rev": 1, "anchor": "root.pan", "depth": 1, "levels": null, "levels_state": "unclosed", "ambiguous": false},
     {"path": "ambiguous.ron", "line": 10, "relation": "implements", "id": "", "rev": null, "anchor": "root.gain", "depth": 1, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false},
-    {"path": "ambiguous.ron", "line": 13, "relation": "implements", "id": "LONG-A", "rev": 1, "anchor": "root.tables{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\u2026}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
-    {"path": "ambiguous.ron", "line": 15, "relation": "implements", "id": "LONG-B", "rev": 1, "anchor": "root.tables{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\u2026}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "ambiguous.ron", "line": 13, "relation": "implements", "id": "LONG-A", "rev": 1, "anchor": "root.tables{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk…}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
+    {"path": "ambiguous.ron", "line": 15, "relation": "implements", "id": "LONG-B", "rev": 1, "anchor": "root.tables{\"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk…}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
     {"path": "ambiguous.ron", "line": 18, "relation": "implements", "id": "FIRE", "rev": 1, "anchor": "root.tables{\"fire ice\"}", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
     {"path": "ambiguous.ron", "line": 20, "relation": "implements", "id": "WATER", "rev": 1, "anchor": "root.tables{\"water\"}", "depth": 2, "levels": ["sig", "body"], "levels_state": "declared", "ambiguous": false},
     {"path": "ambiguous.ron", "line": 24, "relation": "implements", "id": "RATE", "rev": 1, "anchor": "root.twice.rate", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": true},
@@ -42,5 +42,14 @@
     {"path": "config.ron", "line": 14, "relation": "implements", "id": "X", "rev": 1, "anchor": "root.waves[2]", "depth": 2, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false},
     {"path": "config.ron", "line": 19, "relation": "implements", "id": "X", "rev": 1, "anchor": "unanchored", "depth": null, "levels": ["sig", "body"], "levels_state": "default", "ambiguous": false}
   ],
-  "comments": { "ambiguous.ron": 13, "config.ron": 6, "extensions.ron": 2 }
+  "comments": { "ambiguous.ron": 13, "config.ron": 6, "extensions.ron": 2 },
+  "value_hash": {
+    "_comment": "docs/features/hash-levels-eval.md (5a-2) TE-2: the expected `result.value_hash`, by hand from the binding rules (docs/canon/code-identity.md) over the 21 comments above; checked by crates/specengine-eval/tests/hash_levels_eval.rs. `anchored`: the 15 comments whose anchor is a path, marked or not: the 8 path-anchored markers of `anchors` and the 7 plain own-line comments before each file's root value (2 + 3 + 2), which anchor `root`; the 5 ambiguous markers and the unanchored one get no entry. No file is refused, so all 15 are `hashed`; the CRLF copy keeps every value. `bound`: the 8 path-anchored markers, whatever their ID or level list (L7), each value unchanged with the 7 plain comments stripped. `anchored` differs from the 8 markers alone, so `markers only` is red here. Refused files and the `null` of a corpus without markers: fixtures/hash-levels/ron/, same test file.",
+    "anchored": 15,
+    "hashed": 15,
+    "cannot_verify": 0,
+    "crlf_stable_pct": 100.0,
+    "bound": 8,
+    "bound_stable_pct": 100.0
+  }
 }

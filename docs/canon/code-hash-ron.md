@@ -8,7 +8,7 @@ reviewed: 2026-10-16
 
 # Code hash: the RON value
 
-The hash of the value a RON comment anchors (`code-identity.md` "RON binding"): what judges a `ron` binding from 5b-1 on (`lock-levels.md` "Format 2"), in place of format 1's `file_blob`. v3's header, `put` and CR rule (`code-hash.md` "Levels"), its own tag. Nothing records it yet; 5a-2 measures it. A recorded digest changes only with `LEVEL_RECIPE` and a rebase of every lock (ADR-0050).
+The hash of the value a RON comment anchors (`code-identity.md` "RON binding"): what judges a `ron` binding from 5b-1 on (`lock-levels.md` "Format 2"), in place of format 1's `file_blob`. v3's header, `put` and CR rule (`code-hash.md` "Levels"), its own tag. Nothing records it yet; `code-hash-eval.md` measures it. A recorded digest changes only with `LEVEL_RECIPE` and a rebase of every lock (ADR-0050).
 
 ## Entry point
 
@@ -52,5 +52,5 @@ Example:
 - Nested anchored values overlap: O(n × depth), capped by `MAX_DEPTH`.
 - One rejection refuses every value of the file (08 AC-14, by design).
 - The key-comment choices above, like every stream byte, freeze with 5b-1's first lock.
-- The pilots hold no RON marker: bound values are proven on fixtures (`fixtures/hash-levels/ron/`); 5a-2 measures every `Path`-anchored comment.
+- The pilots hold no RON marker: bound values are proven on fixtures (`fixtures/hash-levels/ron/`); `code-hash-eval.md` measures every `Path`-anchored comment.
 - `analyze`'s own RON limits apply (`crates/specengine-code/README.md` "Known limits and open minors").

@@ -109,7 +109,7 @@ Same header, own tag. Evidence for following (5c), never a judge: verify compare
 ## Measured
 
 - v2, `specengine-eval ast-hash`, both pilots (11 852 + 7 599 items): 100.0 % stable under default rustfmt, a contrasting rustfmt (`max_width = 60`) and comment stripping with `///`; broken items never share a hash; v1 (no N1-N4) 84.9-85.4 % under the contrasting format. A comment, whitespace or neighbour edit keeps an item's hash.
-- v3, a developer run (release, this repository, 325 kLOC): `bind_tree` plus every item's and module's levels ≈ 4.9 ms/kLOC (1.61 s; v2's `analyze_tree` 0.56 s). 5a-2 reports the official figures.
+- v3, a developer run (release, this repository, 325 kLOC): `bind_tree` plus every item's and module's levels ≈ 4.9 ms/kLOC (1.61 s; v2's `analyze_tree` 0.56 s). 5a-2's method and figures: `code-hash-eval.md` "Measured".
 
 ## Known limits
 

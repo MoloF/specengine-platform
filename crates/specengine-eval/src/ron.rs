@@ -7,16 +7,17 @@
 //! (`lexer`): its build linked a second tree-sitter runtime. The envelope keeps
 //! its shape — every grammar-side field is `null`, `grammar.note` says why.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::Serialize;
-use specengine_code::Levels;
-use specengine_code::ron::{self, Anchor, Rejected, RonAnalysis};
+use specengine_code::ron::{self, Anchor, Rejected, RonAnalysis, RonValues};
+use specengine_code::{Digest, Levels};
 
-use crate::harness::{self, Corpus, percent};
+use crate::harness::{self, Corpus, percent, stability_percent};
 
 /// Fixture directory (relative to `fixtures/`) used without `--pilot`.
 pub const FIXTURE: &str = "ron";
@@ -41,7 +42,32 @@ pub struct RonResult {
     pub nested_marker_resolves: ByApproach<Option<bool>>,
     /// Always `lexer`: the Phase 0 verdict (05 §9 "AST" row).
     pub recommendation: &'static str,
+    /// The RON value hash (5a-2, [`ron::value_hashes`]).
+    pub value_hash: ValueHash,
     pub detail: Detail,
+}
+
+/// `result.value_hash`, as `docs/features/hash-levels-eval.md`
+/// "`ron`: `result.value_hash`" defines it: over every comment anchored to
+/// a path, marked or not, then over the markers.
+#[derive(Serialize, Default)]
+pub struct ValueHash {
+    /// Comments whose anchor is a path ([`ron::comment_anchors`]).
+    pub anchored: usize,
+    /// Those with a value hash.
+    pub hashed: usize,
+    /// Those of files [`ron::analyze`] rejects: every value refused.
+    pub cannot_verify: usize,
+    /// Of `hashed`, those whose hash an in-memory CRLF copy keeps, matched
+    /// by comment order.
+    pub crlf_stable_pct: f64,
+    /// Markers whose comment has a value hash, in the original and in a
+    /// copy stripped of every comment that holds no marker (paired in
+    /// source order).
+    pub bound: usize,
+    /// Of `bound`, those whose hash the stripped copy keeps; `null` when none
+    /// is bound.
+    pub bound_stable_pct: Option<f64>,
 }
 
 /// The removed comparison grammar: kept so the envelope's shape is stable.
@@ -303,6 +329,7 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
     let markers_total = marker_rows.len();
     // Every nested marker is counted by the lexer's own depth, so it resolves.
     let nested_lexer = (nested > 0).then_some(true);
+    let value_hash = value_hash(&files);
 
     // 5. Per-file detail to --out.
     let file_rows: Vec<FileRow> = files
@@ -359,6 +386,7 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
         },
         nested_marker_resolves: ByApproach::lexer(nested_lexer),
         recommendation: "lexer",
+        value_hash,
         detail: Detail {
             files_skipped,
             bytes,
@@ -375,6 +403,127 @@ pub fn run(corpus: &Corpus) -> Result<RonResult, String> {
     // 6. Human summary.
     summarize(&result, &corpus.label, &out_dir);
     Ok(result)
+}
+
+/// `result.value_hash`: each file's values ([`ron::value_hashes`]) beside
+/// its anchors ([`ron::comment_anchors`]); a CRLF copy of each file with a
+/// value hashed; a copy stripped of every comment holding no marker, of each
+/// file with a marker bound.
+fn value_hash(files: &[Analyzed]) -> ValueHash {
+    let mut out = ValueHash::default();
+    let mut crlf_equal = 0;
+    let mut bound_equal = 0;
+    for file in files {
+        let anchored = ron::comment_anchors(&file.text)
+            .iter()
+            .filter(|comment| matches!(comment.anchor, Anchor::Path { .. }))
+            .count();
+        out.anchored += anchored;
+        let entries = match ron::value_hashes(&file.text) {
+            RonValues::Hashed(entries) => entries,
+            RonValues::CannotVerify(_) => {
+                out.cannot_verify += anchored;
+                continue;
+            }
+        };
+        if entries.is_empty() {
+            continue;
+        }
+        out.hashed += entries.len();
+        let crlf = digests(ron::value_hashes(&crlf_copy(&file.text)));
+        crlf_equal += entries
+            .iter()
+            .zip(&crlf)
+            .filter(|((_, before), after)| before == *after)
+            .count();
+
+        let by_comment: HashMap<&Range<usize>, Digest> = entries
+            .iter()
+            .map(|(range, digest)| (range, *digest))
+            .collect();
+        let before: Vec<Option<Digest>> = file
+            .lexer
+            .markers
+            .iter()
+            .map(|marker| by_comment.get(&marker.comment).copied())
+            .collect();
+        if before.iter().all(Option::is_none) {
+            continue;
+        }
+        let marked: HashSet<&Range<usize>> = file
+            .lexer
+            .markers
+            .iter()
+            .map(|marker| &marker.comment)
+            .collect();
+        let stripped = strip_unmarked(&file.text, &file.lexer.comments, &marked);
+        let stripped_markers = ron::analyze(&stripped).markers;
+        let stripped_values: HashMap<Range<usize>, Digest> = match ron::value_hashes(&stripped) {
+            RonValues::Hashed(entries) => entries.into_iter().collect(),
+            RonValues::CannotVerify(_) => HashMap::new(),
+        };
+        // Bound: a value hash for the marker's comment in the original and in
+        // the stripped copy, the markers paired in source order.
+        for (index, before) in before.iter().enumerate() {
+            let after = stripped_markers
+                .get(index)
+                .and_then(|marker| stripped_values.get(&marker.comment));
+            let (Some(before), Some(after)) = (before, after) else {
+                continue;
+            };
+            out.bound += 1;
+            if before == after {
+                bound_equal += 1;
+            }
+        }
+    }
+    out.crlf_stable_pct = stability_percent(crlf_equal, out.hashed);
+    out.bound_stable_pct = (out.bound > 0).then(|| percent(bound_equal, out.bound));
+    out
+}
+
+/// The digests of a file's values in comment order; none when refused.
+fn digests(values: RonValues) -> Vec<Digest> {
+    match values {
+        RonValues::Hashed(entries) => entries.into_iter().map(|(_, digest)| digest).collect(),
+        RonValues::CannotVerify(_) => Vec::new(),
+    }
+}
+
+/// `text` with every LF not after a CR made a CRLF.
+fn crlf_copy(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + text.len() / 16);
+    let mut previous = '\0';
+    for character in text.chars() {
+        if character == '\n' && previous != '\r' {
+            out.push('\r');
+        }
+        out.push(character);
+        previous = character;
+    }
+    out
+}
+
+/// `text` with each of `comments` (in source order) outside `kept` replaced
+/// by a single space, as Rust's `strip_comments` does.
+fn strip_unmarked(text: &str, comments: &[Range<usize>], kept: &HashSet<&Range<usize>>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut position = 0;
+    for comment in comments {
+        if kept.contains(comment) || comment.start < position {
+            continue;
+        }
+        let (Some(before), Some(_)) =
+            (text.get(position..comment.start), text.get(comment.clone()))
+        else {
+            continue;
+        };
+        out.push_str(before);
+        out.push(' ');
+        position = comment.end;
+    }
+    out.push_str(text.get(position..).unwrap_or_default());
+    out
 }
 
 #[derive(Default)]
@@ -482,6 +631,18 @@ fn summarize(result: &RonResult, label: &str, out_dir: &Path) {
         result.markers.levels.invalid,
         result.markers.id_empty,
         result.detail.colliding_groups
+    );
+    let value_hash = &result.value_hash;
+    eprintln!(
+        "  value hash: {} anchored, {} hashed, {} cannot_verify, CRLF-stable {:.1} %; {} markers bound, stable {}",
+        value_hash.anchored,
+        value_hash.hashed,
+        value_hash.cannot_verify,
+        value_hash.crlf_stable_pct,
+        value_hash.bound,
+        value_hash
+            .bound_stable_pct
+            .map_or("n/a".to_owned(), |pct| format!("{pct:.1} %"))
     );
     eprintln!(
         "  recommendation: {} (lexer {} ms)",

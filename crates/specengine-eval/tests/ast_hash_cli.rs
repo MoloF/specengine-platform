@@ -346,13 +346,20 @@ fn fixture_run_is_deterministic() {
     let second = run(&["ast-hash", "--out", scratch.join("two").to_str().unwrap()]);
     let mut a = envelope(&first)["result"].clone();
     let mut b = envelope(&second)["result"].clone();
-    // The only timings in `result`: `detail.hash_ms` and, with the feature, `syn.time_ratio`.
+    // The only timings in `result`: `detail.hash_ms`, `levels.cost`
+    // (docs/features/hash-levels-eval.md, its rules) and, with the feature,
+    // `syn.time_ratio`.
     for value in [&mut a, &mut b] {
         value["detail"]
             .as_object_mut()
             .unwrap()
             .remove("hash_ms")
             .expect("detail.hash_ms present");
+        value["levels"]
+            .as_object_mut()
+            .expect("levels present")
+            .remove("cost")
+            .expect("levels.cost present");
         if let Some(syn) = value["syn"].as_object_mut() {
             syn.remove("time_ratio").expect("syn.time_ratio present");
         }

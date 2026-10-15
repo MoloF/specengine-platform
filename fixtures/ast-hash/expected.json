@@ -12,5 +12,39 @@
   "path_attrs": 1,
   "orphan_error_regions": 0,
   "qpath_ambiguity": { "path_attribute": 2 },
-  "syn": { "files_failed": 1 }
+  "syn": { "files_failed": 1 },
+  "levels": {
+    "_comment": "docs/features/hash-levels-eval.md (5a-2) TE-2: the expected `result.levels`, derived by hand from the spec's Data over the 69 items and 8 files above, never read back from a run; checked by crates/specengine-eval/tests/hash_levels_eval.rs, whose L-tags name the readings. Items: 66 with levels, 3 without (`broken_one`, `broken_two`, `tilde`); files: 6 with module levels, 2 without (`broken.rs`, `macro_error.rs`). An item index runs over every item in analysis order, broken ones too, and the neighbour edit and the rename touch broken items as any other (L1); every count covers items with levels; a percentage is one decimal over the items compared (66 hashed; 52 checked; 6 hashed files) (L2). `quote` kept: 50 of 66 under comment stripping (the first item under a leading `//!` block, every item of comments.rs), 10 of 52 checked under the neighbour edit (an edited item starting on the next non-blank line rewrites the `after` line), 16 of 59 renamed (L6). `body_bytes` by hand: 16 items at or above 64, 6 at or above 96, 3 at or above 124 (`summarize` 209, `weight_or_default` 201, `all_have_weight` 127; nearest below: `heavy_labels` 123), 2 at or above 160, none at 256; no two items of one kind at or above 64 share a `body`, so every `body_twins` is 0 and the 3 non-trivial items are `followable`. Skeleton groups: lib.rs's six plain `pub mod x;`, `inner` and `deepest`, `intact_before` and `intact_after`; the quotes of each group all differ. Not pinned, checked by rule in the test: `stable_pct.fmt_default.quote` and `stable_pct.fmt_contrast.quote` (rustfmt's version decides them; below 100.0, since any rustfmt rewrites unformatted.rs's `pub struct   Config{`) and `cost` (a timing).",
+    "hashed": 66,
+    "cannot_verify": 3,
+    "modules": { "hashed": 6, "cannot_verify": 2 },
+    "stable_pct": {
+      "fmt_default": { "sig": 100.0, "body": 100.0, "deps": 100.0, "skeleton": 100.0, "body_bytes": 100.0 },
+      "fmt_contrast": { "sig": 100.0, "body": 100.0, "deps": 100.0, "skeleton": 100.0, "body_bytes": 100.0 },
+      "comments": { "sig": 100.0, "body": 100.0, "deps": 100.0, "skeleton": 100.0, "body_bytes": 100.0, "quote": 75.8 },
+      "neighbour": { "sig": 100.0, "body": 100.0, "deps": 100.0, "skeleton": 100.0, "body_bytes": 100.0, "quote": 19.2 }
+    },
+    "module_stable_pct": {
+      "fmt_default": { "sig": 100.0, "body": 100.0, "deps": 100.0 },
+      "fmt_contrast": { "sig": 100.0, "body": 100.0, "deps": 100.0 },
+      "comments": { "sig": 100.0, "body": 100.0, "deps": 100.0 }
+    },
+    "neighbour": { "edited": 66, "edited_changed": 66, "checked": 52 },
+    "trivial": { "items": 63, "pct": 95.5 },
+    "body_groups": { "groups": 0, "items": 0 },
+    "skeleton_groups_in_file": { "groups": 3, "items": 10 },
+    "quote_separates": 3,
+    "trivial_at": {
+      "64": { "items": 50, "body_twins": 0 },
+      "96": { "items": 60, "body_twins": 0 },
+      "124": { "items": 63, "body_twins": 0 },
+      "160": { "items": 64, "body_twins": 0 },
+      "256": { "items": 66, "body_twins": 0 }
+    },
+    "rename": {
+      "renamed": 59,
+      "kept": { "sig": 59, "body": 59, "deps": 59, "skeleton": 59, "body_bytes": 59, "quote": 16 },
+      "followable": 3
+    }
+  }
 }

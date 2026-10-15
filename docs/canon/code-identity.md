@@ -61,7 +61,9 @@ Two siblings of one struct or map whose segments render alike (cut at the cap, w
 
 `ast-hash` stdout: `detail.qpath_units` (items per unit kind: `primary`, `shared`, `unrooted` always, each Cargo kind met), `detail.targets_from` `{metadata, layout}` (package dirs). `--out` `manifest.json` files: `unit` (`"primary"`, `"bin:tool"`, `"shared:tests/common"`, `null` if unrooted), `targets` (`metadata | layout`, `null` outside a package).
 
-`ron` stdout: `markers.ambiguous` (`{grammar: null, lexer}`; `nested` counts `Path` only), `markers.id_empty`, `markers.levels` `{default, declared, invalid}`, `detail.levels_invalid` `{<category>: n}`, `detail.colliding_groups`. `markers.json` rows: `levels` (the effective list, `["sig","body"]` for the default; `null` only when invalid), `levels_state` (`default`, `declared`, a category), `ambiguous` (`lexer` keeps the path text).
+`ron` stdout: `markers.ambiguous` (`{grammar: null, lexer}`; `nested` counts `Path` only), `markers.id_empty`, `markers.levels` `{default, declared, invalid}`, `detail.levels_invalid` `{<category>: n}`, `detail.colliding_groups`. `markers.json` rows: `levels` (the effective list, `["sig","body"]` for the default; `null` only when invalid), `levels_state` (`default`, `declared`, a category), `ambiguous` (`lexer` keeps the path text). The removed grammar path's fields stay: `false` / `null`, `recommendation` `lexer`.
+
+v3 levels, fingerprints and the RON value hash (`result.levels`, `result.value_hash`, `levels-unstable.json`): `code-hash-eval.md`.
 
 ## API
 
