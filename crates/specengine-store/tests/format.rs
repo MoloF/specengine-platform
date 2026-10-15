@@ -585,7 +585,8 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .expect("user_version");
     assert_eq!(version, QUEUE_SCHEMA_VERSION);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
+    // Queue schema 8 since docs/features/drift-queue.md "Queue schema 8".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     conn.execute(
         "UPDATE proposals SET id = 'PR-9999' WHERE id = 'PR-0002'",
         [],

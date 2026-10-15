@@ -225,15 +225,21 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
  * discrepancy fills the eleven keys after `updated_at` instead of an update's texts, `diff` and
  * `preview`; a decided one its record's five after `linked`; `task_id`, after `choice`, the task it
  * was raised for; `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after
- * them, an interpretation's decision and texts (47 keys).
+ * them, an interpretation's decision and texts; `drift`, after `revisions`, a drift item's evidence
+ * (48 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
  * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
- * `docs/features/kind-interpretation.md` "Data"; `docs/features/rev-discipline.md` "Review document, stage, queue".
+ * `docs/features/kind-interpretation.md` "Data"; `docs/features/rev-discipline.md` "Review document, stage, queue";
+ * `docs/features/drift-queue.md` "Review, inbox, round, stage".
  */
 export interface Proposal {
   id: string | null;
   project: string | null;
+  /**
+   * The queue's kind, plain text (ADR-0031), `drift` among them
+   * (`docs/features/drift-queue.md` "The item"): what the card offers follows the keys, never the kind.
+   */
   kind: string | null;
   status: ProposalStatus | null;
   target_id: string | null;
@@ -259,6 +265,12 @@ export interface Proposal {
    * sent: the UI never works out a revision.
    */
   revisions: RevisionChange[] | null;
+  /**
+   * A drift item's evidence as stored when it was raised; null on every other kind. A drift item is
+   * decided on a terminal only, never staged: its `preview`, `diff`, `conflict`, `base_text`,
+   * `new_text` and `revisions` are null.
+   */
+  drift: DriftEvidence | null;
   decided_by: string | null;
   decided_at: string | null;
   decision_note: string | null;
@@ -321,6 +333,20 @@ export interface RevisionChange {
 }
 
 /**
+ * A drift item's evidence, the review document's `drift`, keys in this order: `hash` its
+ * `drift_hash` (`b3:` and 64 hex digits; an item raised again with another hash has new evidence),
+ * `rows` the first 64 of its node's non-`ok` rows of `spec verify --json` at the commit judged, by
+ * key, `more` how many rows are past them. A row stays untyped until Phase 4's drift screen: shown
+ * as sent. Sources: `docs/features/drift-queue.md` "Review, inbox, round, stage";
+ * `docs/features/drift-queue.md` "The item".
+ */
+export interface DriftEvidence {
+  hash: string;
+  rows: unknown[];
+  more: number;
+}
+
+/**
  * What a proposal carrying an accepted decision into a rule holds, keys in this order: `decision`
  * the decision document's `id:`, `how` the decision was applied and `why` interpretation was
  * needed, the agent's texts raw (never blank, at most 2 048 bytes each).
@@ -334,9 +360,10 @@ export interface Interpretation {
 
 /**
  * One line of the owner's queue, `spec inbox --json`: `rationale` an update's first line (at most
- * 80 characters), `severity` and `summary` (its first line) a question's or a discrepancy's;
- * `staged_at` after `record_id` (12 keys). Sources: `docs/canon/proposal-queue.md` "Commands";
- * `docs/features/daemon-read.md` "Data"; `docs/canon/decision-staging.md` "Documents".
+ * 80 characters), `severity` and `summary` (its first line) a question's or a discrepancy's, a
+ * drift item's its rows' states; `staged_at` after `record_id` (12 keys). Sources:
+ * `docs/canon/proposal-queue.md` "Commands"; `docs/features/daemon-read.md` "Data";
+ * `docs/canon/decision-staging.md` "Documents"; `docs/features/drift-queue.md` "Review, inbox, round, stage".
  */
 export interface InboxEntry {
   id: string;

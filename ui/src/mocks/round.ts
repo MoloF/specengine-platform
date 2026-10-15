@@ -26,6 +26,12 @@ const DECIDING = new Set(["question", "discrepancy", "decision"]);
 /** The change proposals a round notes, never lists; an amendment among them (`docs/features/kind-amendment.md` "Rules and edge cases", Round). */
 const CHANGES = new Set(["update", "create", "interpretation", "amendment"]);
 
+/**
+ * The kind a round notes, never lists, and refuses an answer on: a drift item, decided on a terminal
+ * only (`docs/features/drift-queue.md` "Review, inbox, round, stage").
+ */
+const DRIFT = "drift";
+
 /** A task state that no longer waits on anything. */
 const SETTLED_TASK = new Set(["done", "cancelled"]);
 
@@ -161,6 +167,10 @@ export function roundSheetOf(project: MockProject, tasks: MockTasks, limit: numb
   if (changes.length > 0) {
     notes.push(`${String(changes.length)} open change proposal(s) not on this sheet: ${named(changes)}; spec inbox lists them`);
   }
+  const drifts = reviews.filter((review) => review.status === "open" && review.kind === DRIFT).map((review) => review.id);
+  if (drifts.length > 0) {
+    notes.push(`${String(drifts.length)} open drift item(s) not on this sheet: ${named(drifts)}; spec review <ID>, then spec approve or spec reject`);
+  }
   const characters = items.reduce((sum, item) => sum + itemChars(item), 0);
   return { project: project.project.slug, items, more, minutes: Math.ceil(characters / 1000), notes };
 }
@@ -220,6 +230,10 @@ function queueFlaw(review: StoredReview | undefined, id: string, read: string): 
   }
   if (CHANGES.has(review.kind)) {
     return `\`${id}\` is a change proposal (${review.kind}): \`spec approve ${id}\` decides it`;
+  }
+  // The CLI's words byte for byte, before the `updated_at` check as the round orders them.
+  if (review.kind === DRIFT) {
+    return `${id} is a drift item, decided on a terminal only; nothing staged`;
   }
   if (!DECIDING.has(review.kind)) {
     return `\`${id}\` is no question, discrepancy or decision (${review.kind})`;

@@ -70,10 +70,10 @@ use specengine_core::record::{record_form, record_id, record_number};
 use specengine_core::{Paths, is_clean_relative, is_under};
 use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape};
 use specengine_store::{
-    CreateFileError, Decision, GitEnv, IndexWriter as _, NamedBytes, NewProposal, Proposal,
-    ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation, SpecIndex as _,
-    WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings, load_check,
-    load_config, patch_hash,
+    CreateFileError, Decision, GitEnv, IndexWriter as _, KindFamily, NamedBytes, NewProposal,
+    Proposal, ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation,
+    SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings,
+    load_check, load_config, patch_hash,
 };
 
 use crate::amend::{Amended, amended_step, text_problem};
@@ -1098,7 +1098,7 @@ pub(crate) fn prepare_file(
 pub(crate) fn deciding_kinds() -> String {
     let names: Vec<&str> = ProposalKind::ALL
         .into_iter()
-        .filter(|kind| kind.decides())
+        .filter(|kind| kind.family() == KindFamily::Decides)
         .map(ProposalKind::as_str)
         .collect();
     let quoted: Vec<String> = names.iter().map(|name| format!("`{name}`")).collect();

@@ -15,6 +15,7 @@ import { formatAge, formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
+import { DriftSection, TerminalDecision } from "./DriftItem";
 import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
@@ -170,8 +171,12 @@ function ReviewBody({
   const preview = previewLabel(review.preview);
   const author = review.author;
   const diagnostics = review.diagnostics ?? [];
+  // A drift item (its `drift` key, never its kind): its evidence first; no options, no section diff.
+  const drift = review.drift;
   return (
     <>
+      {drift !== null && <DriftSection drift={drift} commit={review.base_commit} />}
+
       {review.evidence.length > 0 && (
         <Section title="Evidence">
           <ul className="evidence-list">
@@ -194,38 +199,41 @@ function ReviewBody({
         </Section>
       )}
 
-      <Section title="Options">
-        {review.options.length === 0 ? (
-          <p className="muted">No options attached.</p>
-        ) : (
-          <ol className="option-list">
-            {review.options.map((choice, index) => {
-              const recommended = index === review.recommendation;
-              return (
-                <li key={`${String(index)}-${choice.label}`} className={recommended ? "option option-recommended" : "option"}>
-                  <p className="option-label">
-                    {/* Agent text, as the round sheet writes a slot: controls as `\u{..}`, isolated. */}
-                    <span>
-                      <bdi>{shownSlot(choice.label)}</bdi>
-                    </span>
-                    {recommended && (
-                      <span className="recommended-mark">
-                        <Icon name="recommended" />
-                        Recommended
+      {/* A drift item has no options to choose: decided on a terminal, its section left out. */}
+      {drift === null && (
+        <Section title="Options">
+          {review.options.length === 0 ? (
+            <p className="muted">No options attached.</p>
+          ) : (
+            <ol className="option-list">
+              {review.options.map((choice, index) => {
+                const recommended = index === review.recommendation;
+                return (
+                  <li key={`${String(index)}-${choice.label}`} className={recommended ? "option option-recommended" : "option"}>
+                    <p className="option-label">
+                      {/* Agent text, as the round sheet writes a slot: controls as `\u{..}`, isolated. */}
+                      <span>
+                        <bdi>{shownSlot(choice.label)}</bdi>
                       </span>
-                    )}
-                  </p>
-                  <Prose className="option-effect" source={choice.effect} links={null} project={project} baseLevel={3} frontMatter={false} />
-                  <div className="option-price">
-                    <p className="price-label">Price:</p>
-                    <Prose source={choice.price} links={null} project={project} baseLevel={3} frontMatter={false} />
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </Section>
+                      {recommended && (
+                        <span className="recommended-mark">
+                          <Icon name="recommended" />
+                          Recommended
+                        </span>
+                      )}
+                    </p>
+                    <Prose className="option-effect" source={choice.effect} links={null} project={project} baseLevel={3} frontMatter={false} />
+                    <div className="option-price">
+                      <p className="price-label">Price:</p>
+                      <Prose source={choice.price} links={null} project={project} baseLevel={3} frontMatter={false} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Section>
+      )}
 
       {review.working_answer !== null && (
         <Section title="Working answer">
@@ -371,16 +379,19 @@ function ReviewBody({
         </Section>
       )}
 
-      <Section title="Section diff">
-        <DiffView diff={review.diff} />
-        {preview !== null && <p className="muted">Apply preview: {preview}.</p>}
-        {review.conflict !== null && (
-          <>
-            <p className="target-label">Conflict at apply</p>
-            <pre className="node-text">{review.conflict}</pre>
-          </>
-        )}
-      </Section>
+      {/* A drift item changes no spec text: no diff, preview or conflict to show (the key decides, never the kind). */}
+      {drift === null && (
+        <Section title="Section diff">
+          <DiffView diff={review.diff} />
+          {preview !== null && <p className="muted">Apply preview: {preview}.</p>}
+          {review.conflict !== null && (
+            <>
+              <p className="target-label">Conflict at apply</p>
+              <pre className="node-text">{review.conflict}</pre>
+            </>
+          )}
+        </Section>
+      )}
 
       {/* As the review document lists them after `conflict`; null: no section (the key decides, never the kind). */}
       {review.revisions !== null && (
@@ -435,7 +446,9 @@ function ReviewBody({
  * One proposal: its inbox entry at once, then its review document (`getProposal`): loading, the
  * daemon's error with Retry, the exit-1 document's notes, or every section it sends. A decision
  * needs the document (its options and `updated_at`); until it is read the buttons do nothing. A
- * staged choice shows under the decisions, with its terminal command and Unstage.
+ * staged choice shows under the decisions, with its terminal command and Unstage. A drift item
+ * (the document's `drift`) offers no decision to stage: its terminal commands stand in their place,
+ * and it has no options or section diff to show.
  */
 export function ProposalCard({
   project,
@@ -552,25 +565,29 @@ export function ProposalCard({
             </dd>
           </div>
         </dl>
-        <div className="decision-bar" role="group" aria-label={`Decide ${id}`}>
-          {DECISION_KEYS.map(([kind, key]) => (
-            <button
-              key={kind}
-              type="button"
-              className={kind === "accept" ? "button button-primary" : kind === "reject" ? "button button-danger" : "button"}
-              aria-keyshortcuts={key}
-              aria-disabled={deciding || !ready}
-              onClick={() => {
-                if (!deciding && ready) {
-                  onDecide(kind);
-                }
-              }}
-            >
-              <span>{WORDING[kind].verb}</span>
-              <kbd aria-hidden="true">{key}</kbd>
-            </button>
-          ))}
-        </div>
+        {reviewed !== undefined && reviewed.drift !== null ? (
+          <TerminalDecision id={id} worktree={reviewed.worktree} />
+        ) : (
+          <div className="decision-bar" role="group" aria-label={`Decide ${id}`}>
+            {DECISION_KEYS.map(([kind, key]) => (
+              <button
+                key={kind}
+                type="button"
+                className={kind === "accept" ? "button button-primary" : kind === "reject" ? "button button-danger" : "button"}
+                aria-keyshortcuts={key}
+                aria-disabled={deciding || !ready}
+                onClick={() => {
+                  if (!deciding && ready) {
+                    onDecide(kind);
+                  }
+                }}
+              >
+                <span>{WORDING[kind].verb}</span>
+                <kbd aria-hidden="true">{key}</kbd>
+              </button>
+            ))}
+          </div>
+        )}
         {reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null && (
           <Suspense
             fallback={

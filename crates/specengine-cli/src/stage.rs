@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 use specengine_core::proposal::EDITORIAL;
 use specengine_core::record::refused_char;
 use specengine_store::{
-    GitEnv, Proposal, ProposalQueue as _, ProposalStatus, QueueError, Stage, StagedChoice,
-    same_repository,
+    GitEnv, KindFamily, Proposal, ProposalQueue as _, ProposalStatus, QueueError, Stage,
+    StagedChoice, same_repository,
 };
 
 use crate::apply::{ApproveFlags, ApproveRequest, editorial_refusal, flag_on_apply};
@@ -289,7 +289,7 @@ pub(crate) fn stage_with(
     let mut messages = Vec::new();
     let run = preview_run(env, &request.git, context, &proposal, &mut messages);
     if let Stage::Approve { span_hash, .. } = &mut stage
-        && proposal.kind.applies()
+        && proposal.kind.family() == KindFamily::Applies
         && !proposal.new_file()
     {
         span_hash.clone_from(&run.span);
@@ -462,6 +462,16 @@ fn checked(
         (StageCause::Usage, reason)
     };
     let refused = |reason: String| (StageCause::Refused, reason);
+    // A kind that locks is decided on a terminal only (task spec
+    // `drift-queue`, "Review, inbox, round, stage"): refused before any
+    // preview is run; the store refuses its stage too.
+    if proposal.kind.family() == KindFamily::Locks {
+        return Err(refused(format!(
+            "{} is a {} item, decided on a terminal only; nothing staged",
+            proposal.id,
+            proposal.kind.as_str()
+        )));
+    }
     match body {
         StageBody::Reject { reason, .. } => {
             if reason.trim().is_empty() {
@@ -498,7 +508,7 @@ fn checked(
             if let Some(reason) = editorial_refusal(proposal, editorial) {
                 return Err((StageCause::Usage, reason));
             }
-            if proposal.kind.applies() {
+            if proposal.kind.family() != KindFamily::Decides {
                 if let Some(reason) = flag_on_apply(proposal, &flags) {
                     return Err((StageCause::Usage, reason));
                 }

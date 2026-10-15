@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Tasks: commands, transitions, place, store
@@ -57,9 +57,9 @@ ADR-0032. `new` records the repository (its git common dir). `approve` records t
 
 ## Task-bound proposals
 
-`--task T` (MCP: `task_id` on `propose_change`, `ask_question`, `report_discrepancy`, `report_decision`): a task of this repository, neither `done` nor `cancelled`; once claimed, raised in the claimed worktree. Else exit 1 `--task: <reason>` (another repository; closed; ``is claimed in the worktree <w>: a proposal bound to it is raised there, not in <here>``); not a task ID exit 1; a look-alike or `T` in `[ids]` exit 2. Checked once the place is bound and again in the inserting transaction (`QueueError::TaskRefused`). `task_id` never changes; a discrepancy's linked update takes it in the same transaction. Review document: `task_id` (`null` unbound) after `choice` (the order: `proposal-review.md`), text line `task_id: <T or ->`; inbox entries none (12 keys).
+`--task T` (MCP: `task_id` on `propose_change`, `ask_question`, `report_discrepancy`, `report_decision`, `report_drift`; `spec propose drift`: `proposal-drift.md`): a task of this repository, neither `done` nor `cancelled`; once claimed, raised in the claimed worktree. Else exit 1 `--task: <reason>` (another repository; closed; ``is claimed in the worktree <w>: a proposal bound to it is raised there, not in <here>``); not a task ID exit 1; a look-alike or `T` in `[ids]` exit 2. Checked once the place is bound and again in the inserting transaction (`QueueError::TaskRefused`). `task_id` never changes; a discrepancy's linked update takes it in the same transaction. Review document: `task_id` (`null` unbound) after `choice` (the order: `proposal-review.md`), text line `task_id: <T or ->`; inbox entries none (12 keys).
 
-**Refresh**: WHEN `spec approve` applies a task-bound `update`, `interpretation` or section-form `create` (step 10: `proposal-apply.md`; a completion: `proposal-completion.md`) whose worktree, branch and `root_rel` are the task's compared place THEN, in the transaction recording `applied` (`applied_refreshing`), each snapshot node of that file enclosing or inside the target whose pre-apply `span_hash` is its snapshot hash takes the applied text and hash: one `task.refreshed` each, `updated_at` and `revision` raised, note ``T-0001: its snapshot of <IDs> refreshed by `PR-0001` ``. A node the apply left byte for byte takes nothing, no event. Nothing refreshes for a new file (a file-form create, an amendment), an unbound proposal, another place, a `done` or `cancelled` task. Nested spans: editing a section by hand changes its enclosing document's span too, so that document stays stale.
+**Refresh**: WHEN `spec approve` applies a task-bound `update`, `interpretation` or section-form `create` (step 10: `proposal-apply.md`; a completion: `proposal-completion.md`) whose worktree, branch and `root_rel` are the task's compared place THEN, in the transaction recording `applied` (`applied_refreshing`), each snapshot node of that file enclosing or inside the target whose pre-apply `span_hash` is its snapshot hash takes the applied text and hash: one `task.refreshed` each, `updated_at` and `revision` raised, note ``T-0001: its snapshot of <IDs> refreshed by `PR-0001` ``. A node the apply left byte for byte takes nothing, no event. Nothing refreshes for a new file (a file-form create, an amendment), a drift item (no spec file written), an unbound proposal, another place, a `done` or `cancelled` task. Nested spans: editing a section by hand changes its enclosing document's span too, so that document stays stale.
 
 ## Store
 
@@ -81,8 +81,8 @@ API: `create_task`, `get_task`, `list_tasks`, `change_task(id, &TaskSeen, &TaskC
 
 ## Backup
 
-`STATE_FORMAT` 2; commands, import steps: `queue-backup.md`; export bounds: `queue-export.md`. Header `{"format":2,"queue_schema":7,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), events by `seq`. A schema 1-6 database exports unmigrated as format 2, schema 7 (1-3 without tasks or runs).
+`STATE_FORMAT` 2; commands, import steps: `queue-backup.md`; export bounds: `queue-export.md`. Header `{"format":2,"queue_schema":8,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), events by `seq`. A schema 1-7 database exports unmigrated as format 2, schema 8 (1-3 without tasks or runs).
 
-Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`) or 2 (seven keys, schemas 4-7; a schema-6 dump's open approve stages restored in schema 7's shape, `proposal-revisions.md` "Stage and UI"). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven; a task ID not as the queue writes it; a task, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four).
+Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`) or 2 (seven keys, schemas 4-8; a schema-6 dump's open approve stages restored in schema 7's shape, `proposal-revisions.md` "Stage and UI"). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven; a task ID not as the queue writes it; a task, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four).
 
 Count lines `wrote <D>: <p> proposal(s), <t> task(s), <r> run(s), <e> event(s)`, `restored <p> proposal(s), <t> task(s), <r> run(s), <e> event(s) into <db>`; prompt `restore <p> proposal(s), <t> task(s), <r> run(s) and <e> event(s) of <slug> from <FILE> into <db>? [y/N]`; the occupied refusal names the four counts; `--json` `{path|db, proposals, tasks, runs, events}`. `QueueCounts`, `StoredQueue` + `tasks`, `runs` (`StoredTask {columns: [_; 17]}`, `StoredRun {run, columns}`): a task alone makes a queue occupied.

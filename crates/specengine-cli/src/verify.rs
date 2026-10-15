@@ -31,6 +31,7 @@ use std::fs;
 use serde::Serialize;
 use specengine_core::CodeConfig;
 use specengine_core::check::Mode;
+use specengine_core::drift::raises;
 use specengine_core::lock::{LOCK_FILE, key_problem};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
 use specengine_store::{GitEnv, VerifyGit};
@@ -40,15 +41,14 @@ use crate::corpus::indexed;
 use crate::lock::{build_recipes, read_lock};
 use crate::project::{CONFIG_FILE, discover_with_text};
 use crate::verify_rows::{
-    CAUSE_GIT, CAUSE_WALK, HeadMode, Row, RunCause, Walked, judge_walk, read_head,
+    CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, HeadMode, Row, RunCause,
+    Walked, judge_walk, read_head,
 };
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
-/// The run causes of "Verdict and exit", by place.
-const CAUSE_CONFIG: u8 = 1;
-const CAUSE_NO_CODE: u8 = 2;
+/// The run causes of "Verdict and exit", by place (the others are the
+/// judge's, `verify_rows`).
 const CAUSE_UNMERGED: u8 = 5;
-const CAUSE_LOCK: u8 = 6;
 const CAUSE_DATA: u8 = 8;
 
 /// `spec verify` options.
@@ -408,8 +408,9 @@ fn unprefixed(error: &CliError) -> String {
         .to_owned()
 }
 
-/// A judged row as shown.
-fn shown(row: &Row) -> VerifyRow {
+/// A judged row as shown (a drift item stores it too, task spec
+/// `drift-queue`, "The item").
+pub(crate) fn shown(row: &Row) -> VerifyRow {
     let (kind, symbol, item_kind, keyless) = match &row.key.binding {
         RowBinding::Keyed {
             kind,
@@ -512,39 +513,83 @@ fn counts(outcome: &VerifyOutcome) -> Counts {
     }
 }
 
-/// `<class> | <state>[ <category>][ <detail>] | <node> | <relation> |
-/// <file> | <kind> <symbol>[ <item_kind>]`, `pre-existing ` before the
-/// class.
+/// A row's line ([`FindingLine`]); its binding a keyless row's words, else
+/// [`keyed_binding`], else empty.
 fn row_line(row: &VerifyRow) -> String {
-    let mut state = row.state.as_str().to_owned();
-    for part in [&row.category, &row.detail].into_iter().flatten() {
-        state.push(' ');
-        state.push_str(part);
-    }
-    let binding = match (&row.keyless, row.kind, &row.symbol) {
-        (Some((word, category)), ..) => format!("{word} {category}"),
-        (None, Some(kind), Some(symbol)) => {
-            let mut binding = format!("{kind} {}", one_line(symbol));
-            if let Some(item_kind) = &row.item_kind {
-                binding.push(' ');
-                binding.push_str(&one_line(item_kind));
-            }
-            binding
-        }
-        _ => String::new(),
+    let binding = match &row.keyless {
+        Some((word, category)) => format!("{word} {category}"),
+        None => keyed_binding(row.kind, row.symbol.as_deref(), row.item_kind.as_deref())
+            .unwrap_or_default(),
     };
-    format!(
-        "{}{} | {state} | {} | {} | {} | {binding}",
-        if row.pre_existing {
-            "pre-existing "
-        } else {
-            ""
-        },
-        row.class.unwrap_or("ok"),
-        one_line(&row.node),
-        row.relation,
-        one_line(&row.file),
-    )
+    FindingLine {
+        pre_existing: row.pre_existing,
+        class: row.class.unwrap_or("ok"),
+        state: row.state.as_str(),
+        category: row.category.as_deref(),
+        detail: row.detail.as_deref(),
+        node: &row.node,
+        relation: row.relation,
+        file: &row.file,
+        binding: &binding,
+    }
+    .render()
+}
+
+/// One row as `spec verify` prints it (a drift item's review prints its
+/// stored rows so): `<class> | <state>[ <category>][ <detail>] | <node> |
+/// <relation> | <file> | <binding>`, `pre-existing ` before the class;
+/// each part on one line.
+pub(crate) struct FindingLine<'a> {
+    pub pre_existing: bool,
+    pub class: &'a str,
+    pub state: &'a str,
+    pub category: Option<&'a str>,
+    pub detail: Option<&'a str>,
+    pub node: &'a str,
+    pub relation: &'a str,
+    pub file: &'a str,
+    /// `<kind> <symbol>[ <item_kind>]` ([`keyed_binding`]), or what the
+    /// caller shows without one.
+    pub binding: &'a str,
+}
+
+impl FindingLine<'_> {
+    pub(crate) fn render(&self) -> String {
+        let mut state = one_line(self.state);
+        for part in [self.category, self.detail].into_iter().flatten() {
+            state.push(' ');
+            state.push_str(&one_line(part));
+        }
+        format!(
+            "{}{} | {state} | {} | {} | {} | {}",
+            if self.pre_existing {
+                "pre-existing "
+            } else {
+                ""
+            },
+            one_line(self.class),
+            one_line(self.node),
+            one_line(self.relation),
+            one_line(self.file),
+            one_line(self.binding),
+        )
+    }
+}
+
+/// A keyed row's binding: `<kind> <symbol>[ <item_kind>]`; `None` without
+/// a kind or a symbol.
+pub(crate) fn keyed_binding(
+    kind: Option<&str>,
+    symbol: Option<&str>,
+    item_kind: Option<&str>,
+) -> Option<String> {
+    let (kind, symbol) = (kind?, symbol?);
+    let mut binding = format!("{kind} {}", one_line(symbol));
+    if let Some(item_kind) = item_kind {
+        binding.push(' ');
+        binding.push_str(&one_line(item_kind));
+    }
+    Some(binding)
 }
 
 /// The next step for text changed at the locked revision (accept refuses
@@ -553,9 +598,28 @@ const SAME_REVISION_STEP: &str = "the node's text changed at its locked revision
      `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock \
      accept <ID> --editorial`); accept refuses text changed at a revision";
 
+/// The hint after the others when a row is drift a queue item takes (task
+/// spec `drift-queue`, "report_drift and texts").
+const DRIFT_HINT: &str = "hint: drift: commit first; spec propose drift queues HEAD's drift for \
+     the owner";
+
+/// One hint per state and category present (`unlocked key_problem` apart):
+/// the next step, as accept takes it; then, once, the drift hint when a row
+/// raises an item in a sweep (`drift::raises`, no node named).
+fn hints(rows: &[VerifyRow]) -> Vec<String> {
+    let mut hints = state_hints(rows);
+    let drifting = rows
+        .iter()
+        .any(|row| raises(row.state, row.detail.as_deref(), false));
+    if drifting {
+        hints.push(DRIFT_HINT.to_owned());
+    }
+    hints
+}
+
 /// One hint per state and category present (`unlocked key_problem` apart):
 /// the next step, as accept takes it.
-fn hints(rows: &[VerifyRow]) -> Vec<String> {
+fn state_hints(rows: &[VerifyRow]) -> Vec<String> {
     let mut present: BTreeSet<(State, Option<String>)> = BTreeSet::new();
     let mut key_problems: BTreeSet<String> = BTreeSet::new();
     // Conflict rows at the entry's revision, and at another.

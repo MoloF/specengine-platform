@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Proposal kind: amendment
@@ -31,7 +31,7 @@ Phase 2 (2026-10-09, 06 s7): a separate document amending live nodes, raised as 
 
 ## Row
 
-No column or schema step of its own (44 columns, `STATE_FORMAT` 2, `fixtures/daemon-keys.json` unchanged by it). `ProposalKind`: `ALL` 7; `Amendment` `applies()` true, `decides()` false; `adds_nodes()` (create, amendment: new IDs reserved while live, `target_ids` the target and new IDs) and `amends()` (amendment: a new file only, its text naming live nodes), each an exhaustive match; `Proposal::new_file()` = `adds_nodes()` and no base. Store `create` stores it; a base -> `Invalid` `an amendment is a new file: it is written against no base`; `create_intake` -> `Invalid`. The columns are a file-form create's (`proposal-kinds.md` "Queue row"), `target_ids` never an amended ID; corrupt, named: a create's rules, plus a base column (`an amendment is a new file: it holds no base`). The amended IDs live only in `new_text`, read when needed under the reading root's scheme, as written (`amended_ids`). `reserved()` -> `Reservation {id, by, kind, status}`, `QueueError::Reserved {id, by, kind}`: refusals say `a live create` or `a live amendment`.
+No column or schema step of its own (`STATE_FORMAT` 2, `fixtures/daemon-keys.json` unchanged by it). `ProposalKind`: `Amendment` `family()` `Applies`; `adds_nodes()` (create, amendment: new IDs reserved while live, `target_ids` the target and new IDs) and `amends()` (amendment: a new file only, its text naming live nodes), each an exhaustive match; `Proposal::new_file()` = `adds_nodes()` and no base. Store `create` stores it; a base -> `Invalid` `an amendment is a new file: it is written against no base`; `create_intake` -> `Invalid`. The columns are a file-form create's (`proposal-kinds.md` "Queue row"), `target_ids` never an amended ID; corrupt, named: a create's rules, plus a base column (`an amendment is a new file: it holds no base`). The amended IDs live only in `new_text`, read when needed under the reading root's scheme, as written (`amended_ids`). `reserved()` -> `Reservation {id, by, kind, status}`, `QueueError::Reserved {id, by, kind}`: refusals say `a live create` or `a live amendment`.
 
 Review document: a new file's (`kind` `amendment`, base `null`, `diff` `@@ -0,0 +1,<n> @@`, `preview`). Inbox: `PR-0001 | amendment | open | docs/features/regen-delay.md | ...`.
 

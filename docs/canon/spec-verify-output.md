@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # `spec verify`'s output: rows, hints, summary, JSON
@@ -36,7 +36,7 @@ One `hint: <state>[ <category>]: <step>` per (state, category) present, in state
 | `cannot_verify` | its category's step: fix the item's parse error or move the marker; make the binding name one symbol; cite one node (`slug/ID`, `ID#SECTION`); write `rev` as a number; fix what nulls the hash; make the file readable UTF-8 under `[code]`; fix the parse error before the symbol |
 | `predated`, `bad_marker`, other `spec_ahead` | restore, raise or lower the marker (`spec refs <ID>`) |
 
-`conflict` rows of both kinds give one line, the two steps joined by `; `, R = `rev_L`'s first. A run cause gives no hint. The drift hint (`spec propose drift`) is 4c's (`docs/features/drift-queue.md`).
+`conflict` rows of both kinds give one line, the two steps joined by `; `, R = `rev_L`'s first. A run cause gives no hint. Then once, last, when a row would raise a drift item in a sweep (core `drift::raises(state, detail, false)`: `code_ahead`, `spec_ahead`, `conflict`, `broken_binding`): `hint: drift: commit first; spec propose drift queues HEAD's drift for the owner` (`proposal-drift.md`).
 
 ## JSON
 

@@ -46,6 +46,11 @@ pub const DISCREPANCY_KIND: &str = "discrepancy";
 /// `kind-decision`).
 pub const DECISION_KIND: &str = "decision";
 
+/// The kind of a node's lock drift queued for the owner (task spec
+/// `drift-queue`, ADR-0045): its evidence computed from a commit, never
+/// typed; approving it runs `spec lock accept` for its node.
+pub const DRIFT_KIND: &str = "drift";
+
 /// The most `node_ids` of one item.
 pub const NODE_IDS_MAX: usize = 16;
 /// The most bytes of a question's or a decision's `text` and a

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -78,4 +78,4 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 45 key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 46 key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs` (a drift item served, its stage 409), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").

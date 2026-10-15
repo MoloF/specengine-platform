@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Proposal apply: consent and steps
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`) and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`; a `drift` item `spec.lock` alone, by its node's lock accept: `proposal-drift.md` "Approve") and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
 
 ## Consent
 
@@ -22,7 +22,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 
 ## Apply steps
 
-`approve_with(…, &ApproveRequest, &ApproveFlags, consent)` (a decision flag on an update: exit 2): `applied` -> exit 1 `` `PR` is already applied: commit <sha> ``; `rejected` -> exit 1. Then the trailer lookup (`proposal-completion.md` "Completion"); its own commit completes it. Else, in the recorded worktree only:
+`approve_with(…, &ApproveRequest, &ApproveFlags, consent)` (a decision flag on a kind that does not decide: exit 2, `flag_on_apply`, a drift item's naming ``spec approve PR runs the lock accept for <ID>``): `applied` -> exit 1 `` `PR` is already applied: commit <sha> ``; `rejected` -> exit 1. Then the trailer lookup (`proposal-completion.md` "Completion"); its own commit completes it. A drift item then takes `run_approve`'s drift branch (`drift_apply`): apply's steps 1, 2, 7-10 around its node's `lock_accept`. Else, in the recorded worktree only:
 
 1. Consent (above).
 2. **Place**: the worktree exists, top and common dir as recorded, `HEAD` on the recorded branch with a commit, no merge, rebase, cherry-pick, revert, bisect or sequencer state; else exit 2 (`a <operation> is in progress in <w>: finish or abort it first`, …).

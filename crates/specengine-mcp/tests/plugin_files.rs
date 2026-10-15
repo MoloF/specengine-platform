@@ -170,6 +170,14 @@ const PINS: &[(&str, &str)] = &[
         "0.7.2",
         "2e04bbb043c3c996eead31f4fe397362a34c170931836dd51dc3d8186b1c88c3",
     ),
+    // docs/features/drift-queue.md "report_drift and texts" (0.7.2 ->
+    // 0.8.0, MINOR: a newly named tool, as canon `plugin-files` "Version"
+    // makes it; the spec's "a PATCH" is the owner's to settle):
+    // `ask-owner` names `report_drift`.
+    (
+        "0.8.0",
+        "eb767178bc0f75e8f26db54271a47fa961a80efa8cefcb62fdb6624253b1fc2c",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
@@ -1250,9 +1258,9 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of rev-discipline: 0.7.2, after spec-lock's 0.7.1.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.7.2"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.7.1");
+    // The pin of drift-queue: 0.8.0, after rev-discipline's 0.7.2.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.8.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.7.2");
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

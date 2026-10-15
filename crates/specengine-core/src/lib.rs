@@ -63,6 +63,9 @@
 //!   (`docs/canon/spec-lock-accept.md` "Steps", "A gone node"), and `spec
 //!   lock regen`'s merge of a conflict's stages; pure, no hash computed, no
 //!   path read;
+//! - [`drift`] — the pure half of a `drift` queue item (task spec
+//!   `drift-queue`, ADR-0045): its stored rows, the bytes of its
+//!   `drift_hash`, which rows raise one and its summary;
 //! - [`verify`] — the pure half of `spec verify`
 //!   (`docs/canon/spec-verify.md` "The `[verify]` table", "States",
 //!   "Verdict and exit"): the `[verify]` table read apart from the reads,
@@ -74,6 +77,7 @@
 pub mod check;
 pub mod code_toml;
 pub mod create;
+pub mod drift;
 mod front_matter;
 pub mod gate;
 mod glob;

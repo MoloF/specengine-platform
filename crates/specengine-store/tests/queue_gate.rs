@@ -609,9 +609,8 @@ fn the_record_is_one_event_with_its_four_keys_in_order() {
 
 #[test]
 fn the_record_goes_only_into_schema_six() {
-    // docs/features/rev-discipline.md "Review document, stage, queue":
-    // queue schema 7.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 7, "this build's queue schema");
+    // docs/features/drift-queue.md "Queue schema 8": queue schema 8.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 8, "this build's queue schema");
     let repos = Repos::new("qg-record-4");
     drop(repos.queue(PROJECT));
     // A queue at schema 6 (as a build before rev-discipline left it).

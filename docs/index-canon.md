@@ -36,6 +36,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/proposal-completion.md](canon/proposal-completion.md) Proposal completion and reject · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/proposal-create-apply.md](canon/proposal-create-apply.md) Proposal kinds: applying a create · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/proposal-decision.md](canon/proposal-decision.md) Proposal kind: decision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · tier 2
+- [docs/canon/proposal-drift.md](canon/proposal-drift.md) Proposal kind drift: lock drift in the owner's queue · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-interpretation.md](canon/proposal-interpretation.md) Proposal kind: interpretation · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2

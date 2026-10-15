@@ -52,7 +52,7 @@ use specengine_store::{WorktreeGit, b3_hash, replace_file};
 
 use crate::preflight::StepFailure;
 use crate::project::CONFIG_FILE;
-use crate::{Message, one_line};
+use crate::{Message, one_line, pathspec_word};
 
 /// Step 8's refusal when the lock changed after step 3.
 const LOCK_CHANGED: &str = "spec.lock changed while being applied; nothing written";
@@ -531,14 +531,6 @@ pub(crate) fn restore(
             Restored::Failed
         }
     }
-}
-
-/// `top_path` (from the worktree's top) as one shell word of a printed git
-/// command: a literal pathspec, as step 9's commit passes it (no glob, no
-/// magic), single-quoted with an embedded `'` written `'\''`, so the pasted
-/// command names exactly that file whatever its name holds.
-pub(crate) fn pathspec_word(top_path: &str) -> String {
-    format!("':(literal){}'", top_path.replace('\'', r"'\''"))
 }
 
 /// The refusal's clause for the files a failed editorial apply put back

@@ -13,8 +13,8 @@ use common::git::Sandbox;
 use common::{Scratch, copy_dir, data_dir, fixture};
 use lock_common::{CLOCK, DECIDER, LockRepo, at, blocks, node_blocks, value};
 use specengine_cli::{
-    Exit, Globals, LockAcceptRequest, LockOutcome, LockPrompt, LockTrailer, Outcome, lock_accept,
-    render_text,
+    Exit, Globals, LockAcceptRequest, LockOutcome, LockPrompt, LockTrailer, LockWritten, Outcome,
+    lock_accept, render_text,
 };
 use specengine_store::{ProposalFilter, ProposalQueue as _, SqliteQueue};
 
@@ -206,7 +206,7 @@ fn editorial_ignores_dirty_code() {
 
 /// TE-8: the lock commit's trailers, parsed by `git interpret-trailers
 /// --parse`: `Lock`, `Lock-mode`, `Decided-by`, then a caller's own
-/// (slice 4c's `Proposal:`), in that order; the subject `spec: lock <ID>`.
+/// (canon `proposal-drift`'s `Proposal:`), in that order; the subject `spec: lock <ID>`.
 #[test]
 fn lock_commit_trailers_parse() {
     let repo = LockRepo::code_a("lock-trailers");
@@ -230,6 +230,8 @@ fn lock_commit_trailers_parse() {
             editorial: false,
             now: CLOCK.to_owned(),
             git: repo.git_env(&repo.root),
+            proposal: None,
+            branch: None,
         },
         &mut consent,
         &[LockTrailer {
@@ -462,6 +464,87 @@ fn a_commit_without_the_lock_trailer_fails_the_accept() {
         !stdout_of(outcome).contains("committed"),
         "{}",
         stdout_of(outcome)
+    );
+}
+
+/// docs/features/drift-queue.md RD-6, step 10's fifth check ("Accept's
+/// seams": each caller trailer present with its value): an accept naming
+/// a proposal (`PR-0012`, its branch `main`) asks ` for PR-0012` and
+/// commits `Proposal: PR-0012` after `Decided-by:`; a `commit-msg` hook
+/// that drops that line leaves a commit failing the check: exit 1 naming
+/// the commit and the trailer, the commit kept, what was written
+/// `Unverified` (never `Committed`). M: no fifth check.
+#[test]
+fn dropped_proposal_trailer_fails_step_10() {
+    let request = |repo: &LockRepo| LockAcceptRequest {
+        reference: "PIECE-COUNTER".to_owned(),
+        editorial: false,
+        now: CLOCK.to_owned(),
+        git: repo.git_env(&repo.root),
+        proposal: Some("PR-0012".to_owned()),
+        branch: Some("main".to_owned()),
+    };
+    // Kept: verified, `Proposal:` last.
+    let repo = LockRepo::code_a("lock-fifth-kept");
+    let head = repo.head();
+    let mut questions = Vec::new();
+    let mut consent = |prompt: &LockPrompt<'_>| {
+        questions.push(prompt.question.to_owned());
+        true
+    };
+    let outcome = lock_accept(
+        &repo.env(&repo.root),
+        &Globals::default(),
+        &request(&repo),
+        &mut consent,
+        &[],
+    )
+    .expect("an answer");
+    assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
+    assert_eq!(outcome.written, LockWritten::Committed);
+    assert_eq!(
+        questions,
+        [format!(
+            "lock PIECE-COUNTER rev 3 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped) for \
+             PR-0012{}",
+            at(&head, "main", &repo.root)
+        )]
+    );
+    let commit = outcome.commit.expect("a commit");
+    assert_eq!(
+        trailers(&repo, &commit),
+        format!(
+            "Lock: PIECE-COUNTER\nLock-mode: accept\nDecided-by: {DECIDER}\nProposal: PR-0012\n"
+        )
+    );
+
+    // Dropped by a hook: the fifth check fails.
+    let repo = LockRepo::code_a("lock-fifth-dropped");
+    repo.hook(
+        "commit-msg",
+        "grep -v '^Proposal: ' \"$1\" > \"$1.tmp\" && mv \"$1.tmp\" \"$1\"",
+    );
+    let head = repo.head();
+    let mut consent = |_: &LockPrompt<'_>| true;
+    let outcome = lock_accept(
+        &repo.env(&repo.root),
+        &Globals::default(),
+        &request(&repo),
+        &mut consent,
+        &[],
+    )
+    .expect("an answer");
+    let after = repo.head();
+    assert_ne!(after, head, "the scenario: git made the commit");
+    assert!(!repo.message(&after).contains("Proposal:"));
+    assert_eq!(outcome.exit(), Exit::NotFound, "{outcome:?}");
+    assert_eq!(outcome.written, LockWritten::Unverified);
+    assert_eq!(outcome.commit.as_deref(), Some(after.as_str()));
+    let refusal = outcome.refusal.clone().unwrap_or_default();
+    assert!(refusal.contains(&after), "names the commit: {refusal}");
+    assert!(
+        refusal.contains("Proposal: PR-0012"),
+        "names the trailer: {refusal}"
     );
 }
 

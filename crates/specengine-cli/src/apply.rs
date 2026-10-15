@@ -29,8 +29,9 @@
 //!     when the hold was reopened meanwhile: the commit is this run's), the
 //!     index updated (failure: a warning); else it stays `approved`, exit 1
 //!     naming the commit (the branch did not move: the commit `HEAD` names
-//!     now; neither moved, an editorial apply's text and lock named, left
-//!     written and staged, with the git commands that put them back).
+//!     now; neither moved, an editorial apply's text and lock named, which
+//!     stay as the commit left them, with the git commands that put them
+//!     back).
 //!
 //! Every refusal at steps 2–10 logs one `proposal.apply_failed`. Only a
 //! run that wrote `approved` at its own step 7 reopens, and only while the
@@ -75,6 +76,12 @@
 //! and the two labelled texts, `Interprets: <ID>` its last trailer; a
 //! completion matches `Proposal:` only, the decision not checked again.
 //!
+//! A `drift` item (task spec `drift-queue`, "Approve") is
+//! approved by its node's lock accept, the same [`crate::lock_accept`]
+//! ([`crate::drift_apply`]): apply's steps 1, 2 and 7 to 10 around it, one
+//! commit of `spec.lock` alone, completed by a lock commit carrying its
+//! `Proposal:` and `Lock:` trailers; its `--editorial` is the accept's.
+//!
 //! A kind that decides, a question, a discrepancy or a decision (canon
 //! `decision-record`, "Flags", "Steps"; task spec `kind-decision`), is
 //! approved into a decision record, one new file and one commit where it
@@ -98,9 +105,9 @@ use specengine_core::proposal::{
 };
 use specengine_model::IdScheme;
 use specengine_store::{
-    ApplyFailure, Decision, GitEnv, IndexWriter as _, Proposal, ProposalQueue as _, ProposalStatus,
-    QueueError, RefreshEntry, Seen, Source as _, TaskRefresh, WorkingTree, WorktreeGit,
-    replace_file, same_repository, span_hash,
+    ApplyFailure, Decision, GitEnv, IndexWriter as _, KindFamily, Proposal, ProposalQueue as _,
+    ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, TaskRefresh, WorkingTree,
+    WorktreeGit, replace_file, same_repository, span_hash,
 };
 
 use crate::location::open_index;
@@ -116,12 +123,10 @@ use crate::proposals::{
     with_diff, written_id,
 };
 use crate::review::stale_note;
-use crate::revisions::{
-    apply_trailers, lock_in_commit, lock_unchanged, pathspec_word, restore, restored_clause,
-};
+use crate::revisions::{apply_trailers, lock_in_commit, lock_unchanged, restore, restored_clause};
 use crate::stage::{self, Staging};
-use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
-use crate::{create, decide};
+use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, pathspec_word};
+use crate::{create, decide, drift_apply};
 
 /// `spec approve` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -300,7 +305,7 @@ fn run_approve(
     if let Some(reason) = editorial_refusal(&proposal, editorial) {
         return Err(CliError::spec(reason));
     }
-    if proposal.kind.decides() {
+    if proposal.kind.family() == KindFamily::Decides {
         return decide::approve_record(
             env,
             request,
@@ -347,6 +352,20 @@ fn run_approve(
             messages.push(Message::Note(note.clone()));
             unknown = Some(note);
         }
+    }
+    // A drift item: its node's lock accept, around apply's steps (task
+    // spec `drift-queue`, "Approve").
+    if proposal.kind.family() == KindFamily::Locks {
+        return drift_apply::approve_drift(
+            env,
+            request,
+            &mut context,
+            &proposal,
+            editorial,
+            unknown.as_deref(),
+            consent,
+            messages,
+        );
     }
 
     // Until step 7 writes `approved`, this run holds nothing: a refusal
@@ -800,7 +819,9 @@ fn run_approve(
 /// decides, a new file) has no revision to keep; exit 2's reason. `None`
 /// when not given or it goes.
 pub(crate) fn editorial_refusal(proposal: &Proposal, editorial: bool) -> Option<String> {
-    if !editorial || !(proposal.kind.decides() || proposal.new_file()) {
+    // "Writes no existing node": a deciding kind or a new file (a drift
+    // item's `--editorial` is its accept's).
+    if !editorial || !(proposal.kind.family() == KindFamily::Decides || proposal.new_file()) {
         return None;
     }
     let id = &proposal.id;
@@ -824,9 +845,17 @@ pub(crate) fn flag_on_apply(proposal: &Proposal, flags: &ApproveFlags) -> Option
         (None, Some(_)) => "--answer",
         (None, None) => "--canon",
     };
+    let approve = match proposal.kind.family() {
+        KindFamily::Locks => format!(
+            "spec approve {id} runs the lock accept for {}",
+            proposal.target_id
+        ),
+        KindFamily::Applies | KindFamily::Decides => {
+            format!("`spec approve {id}` applies it as proposed")
+        }
+    };
     Some(format!(
-        "`{flag}` decides {}; `{id}` is {}: `spec approve {id}` applies it as proposed; nothing \
-         changed",
+        "`{flag}` decides {}; `{id}` is {}: {approve}; nothing changed",
         create::deciding_kinds(),
         proposal.kind.with_article()
     ))
@@ -846,7 +875,7 @@ pub(crate) fn verify(
 }
 
 /// [`verify`]; `left`: the clause closing the refusal when neither the
-/// branch nor `HEAD` moved, the files left written and staged (an
+/// branch nor `HEAD` moved, the files staying as the commit left them (an
 /// editorial apply's text and lock: their names and the way back).
 pub(crate) fn verify_leaving(
     git: &WorktreeGit,
@@ -1100,7 +1129,7 @@ pub(crate) fn complete(
                 proposal,
                 None,
                 failure,
-                (!proposal.kind.decides()).then_some(Preview::Unavailable),
+                (proposal.kind.family() == KindFamily::Applies).then_some(Preview::Unavailable),
                 messages,
             );
         };
@@ -1175,7 +1204,10 @@ pub(crate) fn complete(
         "`{id}` completed by its commit {commit} on `{}`; no new commit",
         proposal.place.branch
     )));
-    reindex(env, context, &applied, &mut messages);
+    // A drift item's commit changes no spec file: nothing to index.
+    if proposal.kind.family() != KindFamily::Locks {
+        reindex(env, context, &applied, &mut messages);
+    }
     let document = with_diff(&applied, &request.git, &context.data_dir);
     Ok(ProposalOutcome::done(COMMAND, document, messages))
 }
@@ -1233,7 +1265,7 @@ pub(crate) fn task_refresh(
     before: &[u8],
     after: &[u8],
 ) -> Option<TaskRefresh> {
-    if proposal.new_file() || !proposal.kind.applies() {
+    if proposal.new_file() || proposal.kind.family() != KindFamily::Applies {
         return None;
     }
     let task = context
@@ -1316,6 +1348,9 @@ fn completion_refresh(
     commit: &str,
 ) -> Option<TaskRefresh> {
     proposal.task_id.as_ref()?;
+    if proposal.kind.family() != KindFamily::Applies {
+        return None;
+    }
     let git = match history(git_env, context, proposal).ok()? {
         History::Recorded(git) => git,
         History::Current(git) => git.clone(),
@@ -1484,11 +1519,13 @@ fn run_reject(
     // record's commit is there: neither approve nor reject takes it); its
     // history unread (its branch deleted after a merge), it is rejected,
     // noted.
-    let applies = proposal.kind.applies() || proposal.record.is_some();
+    // A kind that applies or locks may have a commit; a deciding one only
+    // once its record is issued.
+    let applies = proposal.kind.family() != KindFamily::Decides || proposal.record.is_some();
     let mut unknown = None;
     let refusal = if applies {
         committed(&request.git, &context, &proposal, orphan)
-    } else if proposal.kind.decides() {
+    } else if proposal.kind.family() == KindFamily::Decides {
         match trailer_found(&request.git, &context, &proposal, orphan) {
             Ok(found) => carried(&proposal, orphan, &found),
             Err(error) => {

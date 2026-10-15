@@ -1,8 +1,8 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7; a higher version is a
-//! newer build's: refused),
+//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8; a higher version is
+//! a newer build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
@@ -27,6 +27,13 @@
 //!   `kind-decision`) decides: a question's columns, its decision the
 //!   working answer, a proposed patch its linked update (no new column, no
 //!   schema step); the dedup takes a question and a decision as one family.
+//! - **Drift** (task spec `drift-queue`, "The item", "Dedup"): a `drift`
+//!   item's evidence lives in the two columns step 8 adds, `drift` (its
+//!   rows) and `drift_hash`, set on that kind only (else the row is
+//!   corrupt, named); [`ProposalQueue::create_drift`] alone stores one,
+//!   its dedup keyed on the repository, the branch and the node, read
+//!   inside the inserting transaction. It is approved without a record and
+//!   never staged.
 //! - **Records** (`docs/canon/decision-record.md` "Queue and documents"): a deciding kind is
 //!   approved only with its decision record ([`DecisionRecord`], the five
 //!   columns step 3 adds), by [`ProposalQueue::approve_record_from`], which
@@ -115,13 +122,15 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension, Row, Transaction, Trans
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specengine_core::check::Finding;
+use specengine_core::drift::{DriftEvidence, StoredJson, is_drift_hash};
 pub use specengine_core::intake::Interpretation;
 use specengine_core::intake::{
-    AMENDMENT_KIND, CREATE_KIND, DECISION_KIND, DISCREPANCY_KIND, Evidence, GapType,
+    AMENDMENT_KIND, CREATE_KIND, DECISION_KIND, DISCREPANCY_KIND, DRIFT_KIND, Evidence, GapType,
     INTERPRETATION_KIND, IntakeOption, IntakeSeverity, QUESTION_KIND, UPDATE_KIND,
     normalized_summary, with_article,
 };
 use specengine_core::is_clean_relative;
+use specengine_core::lock::LOCK_FILE;
 use specengine_core::proposal::{
     Author, author_field_problem, is_utc_timestamp, patch_hash_input, proposal_id, proposal_number,
 };
@@ -148,7 +157,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 7;
+pub const QUEUE_SCHEMA_VERSION: i64 = 8;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -231,6 +240,13 @@ const STEP_6: &str = "
 ALTER TABLE proposals ADD COLUMN interpretation TEXT;
 ";
 
+/// Step 7 → 8: a `drift` item's evidence and its hash (task spec
+/// `drift-queue`, "Queue schema 8"), appended in this order.
+const STEP_8: &str = "
+ALTER TABLE proposals ADD COLUMN drift TEXT;
+ALTER TABLE proposals ADD COLUMN drift_hash TEXT;
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -246,7 +262,8 @@ const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_co
      rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
      created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
      price_of_other, evidence, options, recommendation, distinct_from, linked, record_id, \
-     record_path, record_title, record_text, choice, task_id, staged, staged_at, interpretation";
+     record_path, record_title, record_text, choice, task_id, staged, staged_at, interpretation, \
+     drift, drift_hash";
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -262,11 +279,12 @@ pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
 
-/// What a proposal does: `update`, `create`, `interpretation` and
-/// `amendment` apply (a file written and committed); the intake kinds
-/// `question`, `discrepancy` and `decision` decide (an approval writes a
-/// decision record), or are settled by a rejection whose reason is the
-/// answer.
+/// What a proposal does ([`ProposalKind::family`]): `update`, `create`,
+/// `interpretation` and `amendment` apply (a file written and committed);
+/// the intake kinds `question`, `discrepancy` and `decision` decide (an
+/// approval writes a decision record), or are settled by a rejection whose
+/// reason is the answer; a `drift` locks (its approval runs `spec lock
+/// accept` for its node: task spec `drift-queue`, ADR-0045).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProposalKind {
@@ -290,10 +308,28 @@ pub enum ProposalKind {
     /// [ID, ...]}` to live nodes, never writing them: applied as a create's
     /// new file (task spec `kind-amendment`).
     Amendment,
+    /// A node's lock drift at a commit, its evidence computed, never typed
+    /// (task spec `drift-queue`): approved by the lock accept of its node,
+    /// one commit of `spec.lock` alone.
+    Drift,
+}
+
+/// What approving a kind does, every kind in exactly one family
+/// ([`ProposalKind::family`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KindFamily {
+    /// A file written and committed: `update`, `create`, `interpretation`,
+    /// `amendment`.
+    Applies,
+    /// A decision record written: `question`, `discrepancy`, `decision`.
+    Decides,
+    /// `spec.lock` written by the lock accept of its node, its own commit:
+    /// `drift`.
+    Locks,
 }
 
 impl ProposalKind {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Update,
         Self::Question,
         Self::Discrepancy,
@@ -301,6 +337,7 @@ impl ProposalKind {
         Self::Interpretation,
         Self::Decision,
         Self::Amendment,
+        Self::Drift,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -312,6 +349,7 @@ impl ProposalKind {
             Self::Interpretation => INTERPRETATION_KIND,
             Self::Decision => DECISION_KIND,
             Self::Amendment => AMENDMENT_KIND,
+            Self::Drift => DRIFT_KIND,
         }
     }
 
@@ -325,14 +363,20 @@ impl ProposalKind {
         with_article(self.as_str())
     }
 
-    /// An `update` and an `interpretation` replace a node's span; a
-    /// `create` writes a new file or a span with new sections; an
-    /// `amendment` writes its new file: each is applied as one commit.
-    pub const fn applies(self) -> bool {
-        matches!(
-            self,
-            Self::Update | Self::Create | Self::Interpretation | Self::Amendment
-        )
+    /// Its family, every kind listed (so a new one must be judged here):
+    /// an `update` and an `interpretation` replace a node's span, a
+    /// `create` writes a new file or a span with new sections, an
+    /// `amendment` writes its new file, each applied as one commit; a
+    /// `question`, a `discrepancy` and a `decision` write a decision
+    /// record; a `drift` writes `spec.lock` through its node's accept.
+    pub const fn family(self) -> KindFamily {
+        match self {
+            Self::Update | Self::Create | Self::Interpretation | Self::Amendment => {
+                KindFamily::Applies
+            }
+            Self::Question | Self::Discrepancy | Self::Decision => KindFamily::Decides,
+            Self::Drift => KindFamily::Locks,
+        }
     }
 
     /// A kind that adds nodes, every kind listed (so a new one must be
@@ -347,7 +391,8 @@ impl ProposalKind {
             | Self::Question
             | Self::Discrepancy
             | Self::Interpretation
-            | Self::Decision => false,
+            | Self::Decision
+            | Self::Drift => false,
         }
     }
 
@@ -364,25 +409,22 @@ impl ProposalKind {
             | Self::Discrepancy
             | Self::Create
             | Self::Interpretation
-            | Self::Decision => false,
+            | Self::Decision
+            | Self::Drift => false,
         }
-    }
-
-    /// A question, a discrepancy or a decision: its approval writes a
-    /// decision record.
-    pub const fn decides(self) -> bool {
-        matches!(self, Self::Question | Self::Discrepancy | Self::Decision)
     }
 
     /// The fields a deciding kind's row holds, every kind listed (so a new
     /// one must be judged here): a question's (a `question`, a `decision`)
-    /// or a discrepancy's; `None` for a kind that applies. It is also the
-    /// queue's dedup family.
+    /// or a discrepancy's; `None` for a kind that applies or locks. It is
+    /// also the queue's dedup family.
     pub(crate) const fn intake_shape(self) -> Option<IntakeShape> {
         match self {
             Self::Question | Self::Decision => Some(IntakeShape::Question),
             Self::Discrepancy => Some(IntakeShape::Discrepancy),
-            Self::Update | Self::Create | Self::Interpretation | Self::Amendment => None,
+            Self::Update | Self::Create | Self::Interpretation | Self::Amendment | Self::Drift => {
+                None
+            }
         }
     }
 }
@@ -612,6 +654,66 @@ pub struct NewIntake {
     pub intake: Intake,
 }
 
+/// A `drift` item's own fields (task spec `drift-queue`, "The item"): its
+/// severity and summary in the intake's columns, its evidence and hash in
+/// step 8's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DriftItem {
+    /// `high` when one of its rows is class `fix`, else `normal`.
+    pub severity: IntakeSeverity,
+    /// Its rows' distinct `state[ category]` by key, `, `-joined.
+    pub summary: String,
+    /// The `drift` column: its first rows and how many more.
+    pub evidence: DriftEvidence,
+    /// The `drift` column's rows as stored: each row's keys in their
+    /// stored order, a later build's kept (a review's `drift.rows`).
+    pub stored_rows: Vec<StoredJson>,
+    /// The `drift_hash` column: `b3:` + 64 hex over every non-`ok` row.
+    pub hash: String,
+}
+
+/// What [`ProposalQueue::create_drift`] stores for one node unless the
+/// dedup finds it: a `drift` item `open`, its `target_path` `spec.lock`,
+/// its `target_ids` `[target_id]`, `diagnostics` `[]`, every other column
+/// `NULL`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewDrift {
+    /// The node: its canonical ID, or a gone ID with entries in the lock.
+    pub target_id: String,
+    /// Root-relative: [`LOCK_FILE`] (another path is refused).
+    pub target_path: String,
+    /// `base_commit`: the commit judged.
+    pub place: Place,
+    pub author: Author,
+    /// The task it is raised for (`T-NNNN`), checked as
+    /// [`ProposalQueue::create_with_task`] checks it.
+    pub task_id: Option<String>,
+    pub severity: IntakeSeverity,
+    pub summary: String,
+    /// The `drift` column's compact JSON, as stored.
+    pub evidence: String,
+    pub hash: String,
+}
+
+/// What [`ProposalQueue::create_drift`] did for one [`NewDrift`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DriftResult {
+    /// Stored: the item, and the newest `applied` item of the key whose
+    /// `drift_hash` is equal (its lock commit undone), with its commit.
+    Created {
+        proposal: Box<Proposal>,
+        reverted: Option<(String, Option<String>)>,
+    },
+    /// Nothing stored: a live (`open`, `approved`) item of the key, or the
+    /// newest `rejected` one with an equal `drift_hash` (settled).
+    Hit {
+        id: String,
+        status: ProposalStatus,
+        /// Its `drift_hash` equals the new one.
+        same: bool,
+    },
+}
+
 /// A stored item the dedup found: of the same family (a question and a
 /// decision are one) and project, sharing a target.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -730,6 +832,9 @@ pub struct Proposal {
     /// An interpretation's decision, `how` and `why`; `None` for any other
     /// kind.
     pub interpretation: Option<Interpretation>,
+    /// A `drift` item's severity, summary, evidence and hash; `None` for
+    /// any other kind.
+    pub drift: Option<DriftItem>,
 }
 
 impl Proposal {
@@ -1074,6 +1179,24 @@ pub trait ProposalQueue {
         task: Option<&str>,
         now: &str,
     ) -> Result<IntakeResult, QueueError>;
+    /// A raise's items (task spec `drift-queue`, "Dedup"), in one
+    /// `Immediate` transaction: each task named checked as
+    /// [`Self::create_with_task`] checks it; then per item, keyed on
+    /// (`git_common_dir`, `branch`, `target_id`) among the project's drift
+    /// items read under the write lock: a live one (`open`, `approved`) is
+    /// a hit; else the newest `rejected` one with an equal `drift_hash` a
+    /// hit (settled); else stored `open` under the next ID, logging
+    /// `proposal.created` (an `applied` one never settles: its equal
+    /// evidence is named as reverted). Results in the order given (the
+    /// caller gives node byte order, so the IDs follow it). An item off its
+    /// shape (another target path's or a blank summary, evidence that does
+    /// not parse, a hash not `b3:` and 64 hex): [`QueueError::Invalid`],
+    /// nothing written.
+    fn create_drift(
+        &mut self,
+        items: &[NewDrift],
+        now: &str,
+    ) -> Result<Vec<DriftResult>, QueueError>;
     /// The project's proposal `id`; `Ok(None)` when there is none.
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError>;
     /// The project's proposals `filter` admits, by ID number.
@@ -1576,7 +1699,7 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
-        if current.kind.decides() && current.record.is_none() {
+        if current.kind.family() == KindFamily::Decides && current.record.is_none() {
             return Err(QueueError::Invalid(format!(
                 "`{id}` is a {} without its decision record: it is applied only after the \
                  record's step 7",
@@ -1672,7 +1795,7 @@ impl SqliteQueue {
         let project = self.project.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
-        if !current.kind.decides() {
+        if current.kind.family() != KindFamily::Decides {
             return Err(QueueError::Invalid(format!(
                 "`{id}` is {}: its approval writes no decision record",
                 current.kind.with_article()
@@ -1817,8 +1940,9 @@ enum Hold<'a> {
 /// 3 → 4 the tasks, their runs and a proposal's task, 4 → 5 a proposal's
 /// stage, 5 → 6 an interpretation's column, 6 → 7 an approve stage's
 /// `editorial` (no column: every open approve stage rewritten with
-/// `"editorial":null`, task spec `rev-discipline`; 0 → 7 runs all seven; a
-/// schema-5 DB opens as 7, every `interpretation` `NULL`);
+/// `"editorial":null`, task spec `rev-discipline`), 7 → 8 a drift item's
+/// two columns (task spec `drift-queue`; 0 → 8 runs all eight; a schema-5
+/// DB opens as 8, every `interpretation`, `drift`, `drift_hash` `NULL`);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -1864,6 +1988,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 6 {
         stage::upgrade_stages(&tx)?;
         version = 7;
+    }
+    if version == 7 {
+        tx.execute_batch(STEP_8).db()?;
+        version = 8;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -1982,9 +2110,10 @@ impl RawRow {
         // An update's texts; the intake kinds store them NULL, a new file
         // its base.
         let base_columns = [take(), take()];
+        let applies = kind.family() == KindFamily::Applies;
         let mut update_text = |column: &str| {
             let value = take();
-            if kind.applies() {
+            if applies {
                 required(value, column)
             } else {
                 Ok(String::new())
@@ -2029,9 +2158,7 @@ impl RawRow {
                     "it is NULL while the base's other column is set",
                 ));
             }
-            [hash, text] if kind.applies() => {
-                [required(hash, "base_hash")?, required(text, "base_text")?]
-            }
+            [hash, text] if applies => [required(hash, "base_hash")?, required(text, "base_text")?],
             _ => [String::new(), String::new()],
         };
         let author_text = required(take(), "author")?;
@@ -2068,6 +2195,7 @@ impl RawRow {
         let task_id = take();
         let staged_columns = [take(), take()];
         let interpretation = decode_interpretation(&id, kind, take())?;
+        let drift_columns = [take(), take()];
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
@@ -2079,6 +2207,19 @@ impl RawRow {
             columns.decode_create(&id, kind, &target_id, new_file, linked.as_deref())?
         } else {
             Vec::new()
+        };
+        let drift = match decode_drift(&id, kind, drift_columns)? {
+            Some((evidence, stored_rows, hash)) => {
+                let (severity, summary) = columns.decode_drift(&id, kind, &target_id, &linked)?;
+                Some(DriftItem {
+                    severity,
+                    summary,
+                    evidence,
+                    stored_rows,
+                    hash,
+                })
+            }
+            None => None,
         };
         let intake = match kind.intake_shape() {
             None => None,
@@ -2122,8 +2263,52 @@ impl RawRow {
             task_id,
             staged,
             interpretation,
+            drift,
         })
     }
+}
+
+/// The `drift` and `drift_hash` columns of a row: both set iff the kind is
+/// [`ProposalKind::Drift`] (its family [`KindFamily::Locks`]), `drift` of
+/// its shape ([`DriftEvidence::parse_stored`]: a row missing a key is off
+/// it, a row's later keys are none of its defects), `drift_hash` `b3:` and
+/// 64 lowercase hex; else the row is corrupt, named. `Some`: the evidence,
+/// its rows as stored, the hash.
+fn decode_drift(
+    id: &str,
+    kind: ProposalKind,
+    columns: [Option<String>; 2],
+) -> Result<Option<(DriftEvidence, Vec<StoredJson>, String)>, UnreadableRow> {
+    // The first column bears its kind's name.
+    const NAMES: [&str; 2] = [DRIFT_KIND, "drift_hash"];
+    if kind.family() != KindFamily::Locks {
+        if let Some(at) = columns.iter().position(Option::is_some) {
+            return Err(corrupt(
+                id,
+                NAMES[at],
+                format!("{} holds no drift", kind.with_article()),
+            ));
+        }
+        return Ok(None);
+    }
+    let [Some(text), Some(hash)] = columns else {
+        let at = columns.iter().position(Option::is_none).unwrap_or(0);
+        return Err(corrupt(
+            id,
+            NAMES[at],
+            format!("it is NULL on {}", kind.with_article()),
+        ));
+    };
+    let (evidence, stored_rows) =
+        DriftEvidence::parse_stored(&text).map_err(|why| corrupt(id, NAMES[0], why))?;
+    if !is_drift_hash(&hash) {
+        return Err(corrupt(
+            id,
+            NAMES[1],
+            format!("{hash:?} is not `b3:` and 64 lowercase hex digits"),
+        ));
+    }
+    Ok(Some((evidence, stored_rows, hash)))
 }
 
 /// The `interpretation` column of a row: set (compact JSON
@@ -2184,7 +2369,7 @@ fn decode_record(
     intake: Option<&Intake>,
     columns: [Option<String>; 5],
 ) -> Result<Option<DecisionRecord>, UnreadableRow> {
-    if !kind.decides() {
+    if kind.family() != KindFamily::Decides {
         if let Some(at) = columns.iter().position(Option::is_some) {
             return Err(corrupt(
                 id,
@@ -2481,6 +2666,66 @@ impl IntakeColumns {
         Ok(new_ids_of(&targets, new_file))
     }
 
+    /// A `drift` item's intake columns: `target_ids` the JSON list of its
+    /// `target_id` alone, `severity` and `summary` set, every other intake
+    /// column and `linked` `NULL`; else the row is corrupt, named.
+    fn decode_drift(
+        &self,
+        id: &str,
+        kind: ProposalKind,
+        target_id: &str,
+        linked: &Option<String>,
+    ) -> Result<(IntakeSeverity, String), UnreadableRow> {
+        let others = [
+            ("gap_type", &self.gap_type),
+            ("working_answer", &self.working_answer),
+            ("price_of_other", &self.price_of_other),
+            ("evidence", &self.evidence),
+            ("options", &self.options),
+            ("recommendation", &self.recommendation),
+            ("distinct_from", &self.distinct_from),
+        ];
+        let article = kind.with_article();
+        if let Some((column, _)) = others.iter().find(|(_, value)| value.is_some()) {
+            return Err(corrupt(
+                id,
+                column,
+                format!("{article} holds no such field"),
+            ));
+        }
+        if linked.is_some() {
+            return Err(corrupt(
+                id,
+                "linked",
+                format!("{article} is linked to nothing"),
+            ));
+        }
+        let text = self
+            .target_ids
+            .as_deref()
+            .ok_or_else(|| corrupt(id, "target_ids", format!("it is NULL on {article}")))?;
+        let targets: Vec<String> =
+            serde_json::from_str(text).map_err(|error| corrupt(id, "target_ids", error))?;
+        if targets != [target_id] {
+            return Err(corrupt(
+                id,
+                "target_ids",
+                "it is not the list of the row's `target_id` alone",
+            ));
+        }
+        let severity_text = self
+            .severity
+            .as_deref()
+            .ok_or_else(|| corrupt(id, "severity", "it is NULL"))?;
+        let severity = IntakeSeverity::parse(severity_text)
+            .ok_or_else(|| corrupt(id, "severity", format!("`{severity_text}` is no severity")))?;
+        let summary = self
+            .summary
+            .clone()
+            .ok_or_else(|| corrupt(id, "summary", "it is NULL"))?;
+        Ok((severity, summary))
+    }
+
     /// The fields of a deciding kind's row, of its `shape` (a `question`'s
     /// and a `decision`'s, or a `discrepancy`'s): a column its kind
     /// holds none of set ([`IntakeShape::null_columns`]) or a required one
@@ -2618,7 +2863,7 @@ fn existing(tx: &Transaction<'_>, project: &str, id: &str) -> Result<Proposal, Q
 /// A deciding kind refuses an approval without its decision record
 /// ([`ProposalQueue::approve_record_from`] approves it), nothing written.
 fn approved_without_record(proposal: &Proposal) -> Result<(), QueueError> {
-    if proposal.kind.applies() {
+    if proposal.kind.family() != KindFamily::Decides {
         return Ok(());
     }
     Err(QueueError::Invalid(format!(
@@ -2724,7 +2969,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22, NULL, NULL, ?23)"
+             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -2765,11 +3010,20 @@ fn insert_update(
 /// or repeated.
 fn new_proposal_problem(proposal: &NewProposal) -> Option<String> {
     let kind = proposal.kind;
-    if !kind.applies() {
-        return Some(format!(
-            "`create` stores a proposal that applies, not {}: `create_intake` stores it",
-            kind.with_article()
-        ));
+    match kind.family() {
+        KindFamily::Applies => {}
+        KindFamily::Decides => {
+            return Some(format!(
+                "`create` stores a proposal that applies, not {}: `create_intake` stores it",
+                kind.with_article()
+            ));
+        }
+        KindFamily::Locks => {
+            return Some(format!(
+                "`create` stores a proposal that applies, not {}: `create_drift` stores it",
+                kind.with_article()
+            ));
+        }
     }
     let interprets = kind == ProposalKind::Interpretation;
     match (&proposal.interpretation, interprets) {
@@ -2942,7 +3196,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25, NULL, NULL, NULL)"
+             ?25, NULL, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -2970,6 +3224,132 @@ fn insert_intake(
             recommendation,
             distinct_from,
             task,
+        ],
+    )
+    .db()?;
+    Ok(id)
+}
+
+/// Why `item` is no item [`ProposalQueue::create_drift`] stores: a target
+/// that is empty or holds a control character, a target path other than
+/// [`LOCK_FILE`], a blank summary, evidence off its shape, a hash not `b3:`
+/// and 64 hex, an author field outside its grammar; `None`: it is.
+fn new_drift_problem(item: &NewDrift) -> Option<String> {
+    if item.target_id.is_empty() || item.target_id.chars().any(char::is_control) {
+        return Some(format!(
+            "a drift item's target {:?} is empty or holds a control character",
+            item.target_id
+        ));
+    }
+    if item.target_path != LOCK_FILE {
+        return Some(format!(
+            "a drift item's target path {:?} is not `{LOCK_FILE}`",
+            item.target_path
+        ));
+    }
+    if item.summary.trim().is_empty() {
+        return Some("a drift item's summary is blank".to_owned());
+    }
+    if let Err(why) = DriftEvidence::parse(&item.evidence) {
+        return Some(format!("a drift item's evidence: {why}"));
+    }
+    if !is_drift_hash(&item.hash) {
+        return Some(format!(
+            "a drift item's hash {:?} is not `b3:` and 64 lowercase hex digits",
+            item.hash
+        ));
+    }
+    let author = &item.author;
+    [&author.role, &author.model, &author.run]
+        .into_iter()
+        .flatten()
+        .find_map(|field| author_field_problem(field))
+        .map(|problem| format!("a drift item's author: {problem}"))
+}
+
+/// One drift item of a key, not decoded: `id`, state, `drift_hash`,
+/// `applied_commit`.
+type DriftRow = (String, ProposalStatus, Option<String>, Option<String>);
+
+/// The project's drift items of one key (repository, branch, node), by ID
+/// number ([`DriftRow`]). A row whose state does not read is left out.
+fn drift_rows(
+    tx: &Transaction<'_>,
+    project: &str,
+    item: &NewDrift,
+) -> Result<Vec<DriftRow>, QueueError> {
+    let mut statement = tx
+        .prepare(&format!(
+            "SELECT id, status, drift_hash, applied_commit FROM main.proposals \
+             WHERE project = ?1 AND kind = ?2 AND git_common_dir = ?3 AND branch = ?4 \
+             AND target_id = ?5 {ID_ORDER}"
+        ))
+        .db()?;
+    let rows: Vec<[Option<String>; 4]> = statement
+        .query_map(
+            rusqlite::params![
+                project,
+                ProposalKind::Drift.as_str(),
+                item.place.git_common_dir,
+                item.place.branch,
+                item.target_id
+            ],
+            |row| Ok([row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?]),
+        )
+        .db()?
+        .collect::<rusqlite::Result<_>>()
+        .db()?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|[id, status, hash, commit]| {
+            let status = status.as_deref().and_then(ProposalStatus::parse)?;
+            Some((id?, status, hash, commit))
+        })
+        .collect())
+}
+
+/// Inserts a `drift` item as `open` under the next ID: `target_ids` its
+/// target alone, `diagnostics` `[]`, its severity, summary, evidence and
+/// hash, its task; every other column `NULL`. Its ID.
+fn insert_drift(
+    tx: &Transaction<'_>,
+    project: &str,
+    item: &NewDrift,
+    now: &str,
+) -> Result<String, QueueError> {
+    let author = to_json(&item.author)?;
+    let diagnostics = to_json(&Vec::<ProposalFinding>::new())?;
+    let target_ids = to_json(&[item.target_id.as_str()])?;
+    let id = next_id(tx)?;
+    let place = &item.place;
+    tx.execute(
+        &format!(
+            "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
+             ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
+             ?15, ?16, NULL, ?17, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
+             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20)"
+        ),
+        rusqlite::params![
+            id,
+            project,
+            ProposalKind::Drift.as_str(),
+            ProposalStatus::Open.as_str(),
+            item.target_id,
+            item.target_path,
+            place.git_common_dir,
+            place.worktree,
+            place.root_rel,
+            place.branch,
+            place.base_commit,
+            author,
+            diagnostics,
+            now,
+            target_ids,
+            item.severity.as_str(),
+            item.summary,
+            item.task_id,
+            item.evidence,
+            item.hash,
         ],
     )
     .db()?;
@@ -3148,10 +3528,10 @@ impl ProposalQueue for SqliteQueue {
         now: &str,
     ) -> Result<IntakeResult, QueueError> {
         check_time(now)?;
-        if !intake.kind.decides() {
+        if intake.kind.family() != KindFamily::Decides {
             let deciding: Vec<&str> = ProposalKind::ALL
                 .into_iter()
-                .filter(|kind| kind.decides())
+                .filter(|kind| kind.family() == KindFamily::Decides)
                 .map(ProposalKind::as_str)
                 .collect();
             return Err(QueueError::Invalid(format!(
@@ -3226,6 +3606,70 @@ impl ProposalQueue for SqliteQueue {
             created: Some(created),
             linked,
         })
+    }
+
+    fn create_drift(
+        &mut self,
+        items: &[NewDrift],
+        now: &str,
+    ) -> Result<Vec<DriftResult>, QueueError> {
+        check_time(now)?;
+        if let Some(problem) = items.iter().find_map(new_drift_problem) {
+            return Err(QueueError::Invalid(problem));
+        }
+        let project = self.project.clone();
+        let tx = self.write()?;
+        let mut tasks: Vec<(&str, &Place)> = Vec::new();
+        for item in items {
+            if let Some(task) = item.task_id.as_deref()
+                && !tasks.iter().any(|(seen, _)| *seen == task)
+            {
+                tasks.push((task, &item.place));
+            }
+        }
+        for (task, place) in tasks {
+            tasks::check_binding(&tx, &project, task, place)?;
+        }
+        // The dedup reads under the write lock it inserts under: a raise
+        // racing this one waits, then finds what this one stored.
+        let mut results = Vec::with_capacity(items.len());
+        for item in items {
+            let rows = drift_rows(&tx, &project, item)?;
+            let live = rows.iter().rev().find(|(_, status, ..)| {
+                matches!(status, ProposalStatus::Open | ProposalStatus::Approved)
+            });
+            if let Some((id, status, hash, _)) = live {
+                results.push(DriftResult::Hit {
+                    id: id.clone(),
+                    status: *status,
+                    same: hash.as_deref() == Some(item.hash.as_str()),
+                });
+                continue;
+            }
+            let equal = |status: ProposalStatus| {
+                rows.iter().rev().find(|(_, found, hash, _)| {
+                    *found == status && hash.as_deref() == Some(item.hash.as_str())
+                })
+            };
+            if let Some((id, status, ..)) = equal(ProposalStatus::Rejected) {
+                results.push(DriftResult::Hit {
+                    id: id.clone(),
+                    status: *status,
+                    same: true,
+                });
+                continue;
+            }
+            let reverted = equal(ProposalStatus::Applied)
+                .map(|(id, _, _, commit)| (id.clone(), commit.clone()));
+            let id = insert_drift(&tx, &project, item, now)?;
+            log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
+            results.push(DriftResult::Created {
+                proposal: Box::new(existing(&tx, &project, &id)?),
+                reverted,
+            });
+        }
+        tx.commit().db()?;
+        Ok(results)
     }
 
     fn reserved(&self) -> Result<Vec<Reservation>, QueueError> {

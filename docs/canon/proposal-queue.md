@@ -3,18 +3,19 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Proposal queue: commands, states, store
 
-An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`; inbox, review document, preview: `proposal-review.md`; completion, reject: `proposal-completion.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Code: core `patch` (`locate`, `span_bytes`, `splice`, `check_structure`, `update{,_refusal}`, `PatchCheck::introduced`), `proposal` (`PR-NNNN`, look-alikes, `prefix_clash`, `Author`, `commit_message{,_interpreting,_raising}`, trailers, `TEXT_MAX_BYTES`); store `introduced_findings`. Not yet: re-targeting, `has_open_proposal`.
+An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`, `drift`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`; inbox, review document, preview: `proposal-review.md`; completion, reject: `proposal-completion.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal check, prompt and clock. `--task`: `tasks.md`. Code: core `patch` (`locate`, `span_bytes`, `splice`, `check_structure`, `update{,_refusal}`, `PatchCheck::introduced`), `proposal` (`PR-NNNN`, look-alikes, `prefix_clash`, `Author`, `commit_message{,_interpreting,_raising}`, trailers, `TEXT_MAX_BYTES`); store `introduced_findings`. Not yet: re-targeting, `has_open_proposal`.
 
 ## Commands
 
 `--root`, `--json` as everywhere (CLI README); `--config` but the root's own `specengine.toml` -> exit 2. Outputs uncut by `OUTPUT_CAP_CHARS` but `--brief`'s.
 
 - `spec propose update ID --base HASH --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID]` -> `PR-0001`, `introduced: <n>`, one `<severity>  <path>:<line>: <code>: <message>` per introduced finding. `HASH`: `spec show`'s `span_hash`. Role, model, run: `author_problem`'s grammar, else exit 2; any given -> author `agent`, none -> `human`. Text: UTF-8, <= 1 MiB (`TEXT_MAX_BYTES`), `-` = stdin; `--rationale` <= 4 096 bytes.
+- `spec propose drift [REF…]`: `proposal-drift.md` "Raise".
 - `spec inbox [--all]`, `spec review PR`: `proposal-review.md`.
 - `spec approve PR [--note T]` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T` (empty -> exit 2) -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line and the last of `notes`.
 
@@ -55,7 +56,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON `{type: human|agent, role, model, run}`; `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION`; higher -> exit 2, nothing changed), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns. The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 8; higher -> exit 2, nothing changed; a migrated queue refuses older builds, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 46). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -66,6 +67,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 5 | `staged`, `staged_at` | 43 | `decision-staging.md` "Queue" |
 | 6 | `interpretation` | 44 | `proposal-interpretation.md` "Row and review" |
 | 7 | no column: open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
+| 8 | `drift`, `drift_hash` | 46 | `proposal-drift.md` "The item" |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, CLI, MCP and `specengine-http` (stages) write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
@@ -74,7 +76,8 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 | Op | Does |
 |---|---|
-| `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a never-applying kind -> `Invalid`; a reserved new ID -> `Reserved` |
+| `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a kind whose `family()` is not `Applies` -> `Invalid`; a reserved new ID -> `Reserved` |
+| `create_drift(&[NewDrift], now)` | a raise's drift items, deduplicated (`proposal-drift.md` "Dedup") |
 | `get`, `list(&ProposalFilter {git_common_dir, statuses})` | by ID number; a corrupt row fails, named |
 | `list_readable` | `list` skipping a corrupt row into `ProposalList.unreadable` (`UnreadableRow {id, column, reason}`) |
 | `approve_from(id, seen, decision, now)` | step 7: `open -> approved` (event), or `approved` kept with the decision replaced, no event, when `now` is later than `seen.updated_at` (else `Invalid`); state not `seen` -> `Changed`, nothing written |

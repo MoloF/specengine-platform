@@ -1,14 +1,14 @@
 //! docs/features/kind-amendment.md, the store's half (AC-T1 over AC-R1,
 //! AC-R2's reservation, AC-R8's stage, AC-R13's dump): the kind
-//! `ProposalKind::Amendment` as "Names" (`ALL` 7, `applies()`,
-//! `decides()`, `adds_nodes()`, `with_article()`), its row a file-form
+//! `ProposalKind::Amendment` as "Names" (`ALL` 8 since drift-queue,
+//! `family()`, `adds_nodes()`, `with_article()`), its row a file-form
 //! create's with `kind` `amendment` (no base, `target_ids` the file and its
 //! own new IDs, never an amended one: the store never sees those), its new
 //! IDs reserved as a create's, `create` refusing a base (`Invalid`) and
 //! `create_intake` refusing the kind, the rows "Data" names corrupt (a
 //! create's rules plus a base, `base_hash`; a stored `span_hash`), the
 //! stage a new file takes (approve without `span_hash`, no decision flag),
-//! and the queue's schema (6, 44 columns) unchanged by it.
+//! and the queue's schema (8, 46 columns since drift-queue) unchanged by it.
 //!
 //! Through the public API only; the one raw read (`user_version`) uses the
 //! system's `sqlite3` client.
@@ -27,7 +27,7 @@ use common::Scratch;
 use specengine_core::intake::{AMENDMENT_KIND, CREATE_KIND, IntakeSeverity, with_article};
 use specengine_core::proposal::Author;
 use specengine_store::{
-    Decision, Intake, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, ProposalFilter,
+    Decision, Intake, KindFamily, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, ProposalFilter,
     ProposalKind, ProposalQueue as _, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueError,
     Reservation, SqliteQueue, Stage, StoredQueue, patch_hash,
 };
@@ -149,7 +149,7 @@ fn sqlite3(db: &Path, sql: &str) -> String {
 /// AC-R1, "Names" (W26, W34): `amendment` is core's constant, the seventh
 /// of `ALL` (appended), applies and never decides, adds nodes; its article
 /// `an amendment`; `adds_nodes()` true for `create` and `amendment` only,
-/// false for the other five. M: `adds_nodes()` false for it.
+/// false for the other six. M: `adds_nodes()` false for it.
 #[test]
 fn ac_r1_the_kind_is_named_appended_applies_and_adds_nodes() {
     assert_eq!(AMENDMENT_KIND, "amendment");
@@ -157,10 +157,14 @@ fn ac_r1_the_kind_is_named_appended_applies_and_adds_nodes() {
     assert_eq!(kind.as_str(), AMENDMENT_KIND);
     assert_eq!(ProposalKind::parse(AMENDMENT_KIND), Some(kind));
     assert_eq!(ProposalKind::parse("Amendment"), None);
-    assert_eq!(ProposalKind::ALL.len(), 7);
-    assert_eq!(ProposalKind::ALL[6], kind, "appended last");
-    assert!(kind.applies(), "an amendment applies (a file committed)");
-    assert!(!kind.decides(), "an amendment never decides");
+    // Eight since docs/features/drift-queue.md appends `drift` after it.
+    assert_eq!(ProposalKind::ALL.len(), 8);
+    assert_eq!(ProposalKind::ALL[6], kind, "appended after the decision");
+    assert_eq!(
+        kind.family(),
+        KindFamily::Applies,
+        "an amendment applies (a file committed), never decides"
+    );
     assert!(kind.adds_nodes(), "W34: an amendment adds nodes");
     assert_eq!(kind.with_article(), "an amendment");
     assert_eq!(with_article(AMENDMENT_KIND), "an amendment");
@@ -633,8 +637,10 @@ fn ac_r8_an_amendment_stages_an_approve_without_a_span_hash() {
 /// reservation of the open one restored. M: export skipping the kind.
 #[test]
 fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
+    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
+    // schema 8" (an amendment still adds none).
+    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     let scratch = Scratch::new("qa-schema");
     let db = scratch.db("q");
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
@@ -652,10 +658,10 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "44"
+        "46"
     );
     assert_eq!(
         sqlite3(&db, "SELECT kind, status FROM proposals ORDER BY id;"),

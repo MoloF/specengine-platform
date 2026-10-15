@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
@@ -89,6 +89,7 @@ spec propose update ID --base HASH --text-file F|- --rationale T
 spec propose create TARGET [--base HASH] ...  # docs/canon/proposal-kinds.md
 spec propose interpretation ID --decision REF ...  # proposal-interpretation.md
 spec propose question|discrepancy …     # shipped: docs/canon/agent-intake.md
+spec propose drift [REF…] [--task T]     # shipped: docs/canon/proposal-drift.md
 spec inbox [--all]                       # to come: --severity, --task
 spec review PR-ID                        # to come: interactive edit/changes/defer
 spec approve PR-ID [--note ...] [--option N | --answer T] [--canon REF] [--editorial]  # a terminal's [y/N]; no flag: the staged choice

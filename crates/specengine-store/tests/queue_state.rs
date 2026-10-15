@@ -243,7 +243,8 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
             TASK_COLUMNS.len(),
             RUN_COLUMNS.len()
         ),
-        (44, 17, 11)
+        // 46 since docs/features/drift-queue.md "Queue schema 8".
+        (46, 17, 11)
     );
     // docs/features/task-package.md iteration 2: the task's compare-and-set
     // key, its last column.
@@ -315,18 +316,18 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
     assert_eq!(reopened.stored_rows().unwrap(), state);
 }
 
-/// A `user_version` above this build's (6,
-/// docs/features/kind-interpretation.md "Data"): `open_existing` refuses it as
+/// A `user_version` above this build's (8,
+/// `docs/features/drift-queue.md` "Queue schema 8"): `open_existing` refuses it as
 /// `SchemaTooNew`.
 #[test]
 fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 7);
-    sqlite3(&db, "PRAGMA user_version = 8");
+    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 8);
+    sqlite3(&db, "PRAGMA user_version = 9");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 8 }) => {}
+        Err(QueueError::SchemaTooNew { found: 9 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # ui -- the web UI
@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial` (`proposal-revisions.md`); projects `harbor-sim`, `ledger-api`, stages kept to a reload.
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (the first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial` (`proposal-revisions.md`); projects `harbor-sim`, `ledger-api` (PR-0010 a drift item: `proposal-drift.md`), stages kept to a reload.
 3. The slice's checks: its spec's "Owner's manual check".
 
 ## Roles here

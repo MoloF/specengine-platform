@@ -100,6 +100,21 @@ pub(crate) struct CodeTree {
     pub manifests: BTreeMap<String, ManifestSeen>,
 }
 
+impl CodeTree {
+    /// No file: a commit's tree bound from its blobs with nothing to reuse
+    /// ([`tree_of_blobs`]'s `reuse`).
+    pub(crate) fn empty() -> Self {
+        Self {
+            rust: Vec::new(),
+            ron: Vec::new(),
+            names: Names::default(),
+            skipped: 0,
+            not_utf8: BTreeSet::new(),
+            manifests: BTreeMap::new(),
+        }
+    }
+}
+
 /// What a directory's `Cargo.toml` was to the naming.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ManifestSeen {

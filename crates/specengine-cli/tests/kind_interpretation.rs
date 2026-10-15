@@ -986,8 +986,9 @@ fn ac_r6_a_decision_flag_on_an_interpretation_is_exit_2() {
 
 // ------------------------------------------------------------------ AC-R7
 
-/// AC-R7: the review document's 47 keys (46 until
-/// docs/features/rev-discipline.md added `revisions`), `interpretation` after
+/// AC-R7: the review document's 48 keys (46 until
+/// docs/features/rev-discipline.md added `revisions` and
+/// docs/features/drift-queue.md `drift`), `interpretation` after
 /// `staged_at` ("Data"'s object; `null` on an update); its text block;
 /// kept by `--brief` (the texts dropped); the inbox line `PR-0001 |
 /// interpretation | open | RULE-STAM-REGEN | t1 | <created_at> | <the
@@ -1000,10 +1001,11 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let update = pair.propose_edit(&pair.linked, "EDGE-STAM-ZERO", ZERO.0, ZERO.1);
     let raw = review_json(&pair, &pair.main, &id);
     let keys = task_common::keys(&raw);
-    // 47 since docs/features/rev-discipline.md added `revisions`.
-    assert_eq!(keys.len(), 47, "{keys:?}");
+    // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
+    // docs/features/drift-queue.md added `drift` after it.
+    assert_eq!(keys.len(), 48, "{keys:?}");
     assert_eq!(
-        keys[43..],
+        keys[44..],
         ["staged", "staged_at", "interpretation", "notes"],
         "{keys:?}"
     );
@@ -1054,7 +1056,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let brief_value = json_of(&brief_json);
     assert_eq!(brief_value["interpretation"], value["interpretation"]);
     assert_eq!(brief_value["new_text"], Value::Null);
-    assert_eq!(task_common::keys(&brief_json).len(), 47);
+    assert_eq!(task_common::keys(&brief_json).len(), 48);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1487,7 +1489,7 @@ fn spec_c_a_decision_is_told_by_its_class_not_an_ids_kind() {
 // ----------------------------------------------------------------- AC-R13
 
 /// AC-R13: `export state` with an interpretation: header `{"format":2,
-/// "queue_schema":7,…}`, its row's `interpretation` the stored JSON text;
+/// "queue_schema":8,…}`, its row's `interpretation` the stored JSON text;
 /// imported into a fresh `HOME`, the export byte-identical, the row read
 /// equal. A schema-5 dump whose row carries `interpretation` is refused
 /// naming its line. M: import refuses schema 5 (`stage_confirm.rs` holds
@@ -1535,14 +1537,14 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
     );
     let row: Value = serde_json::from_str(lines[1]).expect("a row");
     let row = row["proposals"].as_object().expect("a proposals row");
-    assert_eq!(row.len(), 44);
+    assert_eq!(row.len(), 46);
     assert_eq!(row["kind"], json!("interpretation"));
     assert_eq!(
         row["interpretation"],
@@ -1568,7 +1570,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
 
     // A schema-5 dump cannot carry the column.
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    v5[0] = v5[0].replacen("\"queue_schema\":7,", "\"queue_schema\":5,", 1);
+    v5[0] = v5[0].replacen("\"queue_schema\":8,", "\"queue_schema\":5,", 1);
     let file = dumps.join("v5-with-44.jsonl");
     std::fs::write(&file, format!("{}\n", v5.join("\n"))).unwrap();
     let home = pair.scratch.home("v5");

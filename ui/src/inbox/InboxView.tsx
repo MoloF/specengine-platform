@@ -145,10 +145,15 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   /**
    * Opens a decision on the selected proposal once its review document is read (the options come
    * from it, and the `updated_at` a stage is sent against); nothing while a dialog is open or a
-   * stage pending.
+   * stage pending. A drift item opens none: decided on a terminal only, it is never staged
+   * (`docs/features/drift-queue.md` "Review, inbox, round, stage"); its key only says so.
    */
   function openDialog(kind: DecisionKind) {
     if (selected === null || reviewed === null || reviewed.updated_at === null || openDecision.current !== null || deciding.current || decide.isPending) {
+      return;
+    }
+    if (reviewed.drift !== null) {
+      announce(`${selected.id} is a drift item, decided on a terminal only; nothing is staged here. Its card lists the commands.`);
       return;
     }
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;

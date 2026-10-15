@@ -1629,6 +1629,198 @@ fn spec_and_code_changed_is_conflict() {
     ));
 }
 
+// -------------------------------------------------------------- drift hint
+
+/// docs/features/drift-queue.md RD-18 (`docs/features/drift-queue.md`
+/// "report_drift and texts"): when a row is `code_ahead`, `spec_ahead`,
+/// `conflict` or `broken_binding`, verify prints once, after every other
+/// hint, `hint: drift: commit first; spec propose drift queues HEAD's
+/// drift for the owner`; a tree whose findings are none of those (the
+/// golden lock with `PIECE-COUNTER`'s lagging marker raised to its
+/// revision: only `cannot_verify`, `bad_marker`, `predated`, `unlocked`
+/// left) prints no such hint. M: the hint missing, or printed before
+/// another hint.
+#[test]
+fn drift_hint_follows_the_other_hints() {
+    const DRIFT_HINT: &str =
+        "hint: drift: commit first; spec propose drift queues HEAD's drift for the owner";
+    for (label, edit) in [
+        ("verify-drift-hint-golden", None),
+        (
+            "verify-drift-hint-code",
+            Some(("CAP: u32 = 10;", "CAP: u32 = 12;")),
+        ),
+    ] {
+        let (_repo, run) = scenario(label, |repo| {
+            if let Some((from, to)) = edit {
+                repo.replace(COUNTER, from, to);
+            }
+        });
+        let hints: Vec<&str> = run
+            .lines()
+            .into_iter()
+            .filter(|line| line.starts_with("hint: "))
+            .collect();
+        assert_eq!(
+            hints.iter().filter(|line| **line == DRIFT_HINT).count(),
+            1,
+            "{label}: once:\n{}",
+            run.text.show()
+        );
+        assert_eq!(hints.last(), Some(&DRIFT_HINT), "{label}: after the others");
+        assert!(hints.len() > 1, "{label}: other hints too");
+    }
+    // No drifting state: no drift hint.
+    let (_repo, run) = scenario("verify-drift-hint-none", |repo| {
+        repo.replace(
+            COUNTER,
+            "@implements PIECE-COUNTER@2",
+            "@implements PIECE-COUNTER@3",
+        );
+    });
+    let drifting = run.rows_where(|row| {
+        ["code_ahead", "spec_ahead", "conflict", "broken_binding"]
+            .contains(&row["state"].as_str().unwrap_or_default())
+    });
+    assert!(drifting.is_empty(), "the scenario: {drifting:?}");
+    assert!(
+        !run.lines().contains(&DRIFT_HINT),
+        "no drift hint:\n{}",
+        run.text.show()
+    );
+}
+
+/// RD-18 (iteration 2: the hint's condition is `drift::raises(state,
+/// detail, false)`, its text unchanged), per state: over the tree with no
+/// drifting state (`PIECE-COUNTER`'s marker raised to its revision), each
+/// trigger state alone (`code_ahead`: `CAP` changed; `spec_ahead`:
+/// `LAW-BOUND`'s text changed at its revision; `conflict`: both, which
+/// leaves `LAW-BOUND`'s other bindings `spec_ahead`, and alone on
+/// verify-ecs, `PERK-REGEN`'s text and its one system changed;
+/// `broken_binding`: `data/limits.ron` deleted) prints the hint once,
+/// last; the tree itself, whose rows hold every non-trigger state
+/// (`cannot_verify`, `bad_marker`, `predated`, `unlocked`, `ok`), prints
+/// none. M: the condition as `raises(…, true)` (a named raise: `unlocked`
+/// rows hint too); a trigger state dropped from it.
+#[test]
+fn drift_hint_for_each_trigger_state_alone() {
+    const DRIFT_HINT: &str =
+        "hint: drift: commit first; spec propose drift queues HEAD's drift for the owner";
+    const TRIGGERS: [&str; 4] = ["code_ahead", "spec_ahead", "conflict", "broken_binding"];
+    let none = |repo: &LockRepo| {
+        repo.replace(
+            COUNTER,
+            "@implements PIECE-COUNTER@2",
+            "@implements PIECE-COUNTER@3",
+        );
+    };
+    let cap = |repo: &LockRepo| repo.replace(COUNTER, "CAP: u32 = 10;", "CAP: u32 = 12;");
+    let text = |repo: &LockRepo| {
+        repo.replace(
+            COUNTER_MD,
+            "The count never exceeds the cap.",
+            "The count never exceeds the cap, ever.",
+        );
+    };
+    let states = |run: &Verify| -> std::collections::BTreeSet<String> {
+        run.rows()
+            .into_iter()
+            .map(|row| row["state"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    };
+    let (_repo, base) = scenario("verify-hint-each-none", none);
+    let present = states(&base);
+    for state in ["cannot_verify", "bad_marker", "predated", "unlocked", "ok"] {
+        assert!(present.contains(state), "{state} in the base: {present:?}");
+    }
+    assert!(
+        TRIGGERS.iter().all(|state| !present.contains(*state)),
+        "{present:?}"
+    );
+    assert!(!base.lines().contains(&DRIFT_HINT), "{}", base.text.show());
+    /// A trigger state and the edit that makes it.
+    type Edit<'a> = (&'a str, &'a dyn Fn(&LockRepo));
+    let edits: [Edit<'_>; 4] = [
+        ("code_ahead", &cap),
+        ("spec_ahead", &text),
+        ("conflict", &|repo: &LockRepo| {
+            cap(repo);
+            text(repo);
+        }),
+        ("broken_binding", &|repo: &LockRepo| {
+            fs::remove_file(repo.root.join(LIMITS)).expect("remove");
+        }),
+    ];
+    for (trigger, edit) in edits {
+        let (_repo, run) = scenario(&format!("verify-hint-each-{trigger}"), |repo| {
+            none(repo);
+            edit(repo);
+        });
+        let triggered: Vec<String> = states(&run)
+            .into_iter()
+            .filter(|state| TRIGGERS.contains(&state.as_str()))
+            .collect();
+        // code-a's `LAW-BOUND` binds four items: its text and `CAP`
+        // changed leave the other three `spec_ahead` (`conflict` alone is
+        // the ECS case below).
+        let want: &[&str] = if trigger == "conflict" {
+            &["conflict", "spec_ahead"]
+        } else {
+            &[trigger]
+        };
+        assert_eq!(triggered, want, "{trigger}");
+        let hints: Vec<&str> = run
+            .lines()
+            .into_iter()
+            .filter(|line| line.starts_with("hint: "))
+            .collect();
+        assert_eq!(
+            hints.iter().filter(|line| **line == DRIFT_HINT).count(),
+            1,
+            "{trigger}: once:\n{}",
+            run.text.show()
+        );
+        assert_eq!(hints.last(), Some(&DRIFT_HINT), "{trigger}: last");
+    }
+    // `conflict` alone, the second genre: verify-ecs (an ECS game crate,
+    // its four nodes accepted), `PERK-REGEN`'s text changed at its
+    // revision and its one system's body changed.
+    let repo = verify_common::ecs("verify-hint-each-ecs-conflict");
+    repo.replace(
+        verify_common::STAMINA_MD,
+        "while the runner rests.",
+        "while the runner rests, always.",
+    );
+    repo.replace(
+        verify_common::STAMINA,
+        "(stamina.current + rate * dt).min(stamina.max)",
+        "(stamina.current + rate * dt * 2.0).min(stamina.max)",
+    );
+    let run = verify(&repo, &[]);
+    let triggered: Vec<String> = states(&run)
+        .into_iter()
+        .filter(|state| TRIGGERS.contains(&state.as_str()))
+        .collect();
+    assert_eq!(
+        triggered,
+        ["conflict"],
+        "conflict alone: {}",
+        run.text.show()
+    );
+    let hints: Vec<&str> = run
+        .lines()
+        .into_iter()
+        .filter(|line| line.starts_with("hint: "))
+        .collect();
+    assert_eq!(
+        hints.iter().filter(|line| **line == DRIFT_HINT).count(),
+        1,
+        "{}",
+        run.text.show()
+    );
+    assert_eq!(hints.last(), Some(&DRIFT_HINT), "conflict alone: last");
+}
+
 // -------------------------------------------------------------------- queue
 
 /// RD-2: a `queue` ID (`PR-7`) and an `other_project` ID (`other:GOAL-01`)

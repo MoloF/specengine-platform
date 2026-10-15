@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Round routes and screen
@@ -40,7 +40,7 @@ Each answer is refused alone, by its first refusal; the rest are staged in round
 
 1. an ID in two or more entries by its Latin form (a look-alike equal to another entry's ID too): each ``answered at positions 2 and 5: give one answer per item``, 10 named, then ` and <k> more`; never last-wins;
 2. a look-alike ID, naming its Latin form; `no proposal`;
-3. `queue_checked`, shared with the text route (`round.md` "Answers", its words): another repository; an orphan's approve; applied, rejected, held; a change proposal; a path-only question's approve without `canon` (with one, `stage_with` judges); apply steps 2-3 read-only, the bare ``not applied (step <n>): <reason>`` plus this route's `; a reject still settles it` (the text route's: ``; `reject: <reason>` still settles it``); a corrupt row named: the store's own text;
+3. `queue_checked`, shared with the text route (`round.md` "Answers", its words): another repository; an orphan's approve; applied, rejected, held; a change proposal; a drift item (`proposal-drift.md`); a path-only question's approve without `canon` (with one, `stage_with` judges); apply steps 2-3 read-only, the bare ``not applied (step <n>): <reason>`` plus this route's `; a reject still settles it` (the text route's: ``; `reject: <reason>` still settles it``); a corrupt row named: the store's own text;
 4. `stage_with`'s (`decision-staging.md` "The stage"): changed since read, flags, a blank reason, caps, characters.
 
 `round_stage` (a text, steps 2-4) stays for a later paste. No handler walks a round or decides: `tests/door.rs` bans `round_answer`, `RoundTerminal`, `WalkOutcome`, `AnswerOutcome` in http `src`; `tests/no_domain.rs` exempts `answers`, a `LINK_TYPES` name, only as a whole `/`-segment of a route-path literal.

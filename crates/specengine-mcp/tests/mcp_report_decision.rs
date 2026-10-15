@@ -1,7 +1,7 @@
 //! docs/features/kind-decision.md over MCP, the real binary over stdio
 //! (AC-R10, AC-T3, "Data" MCP and `INSTRUCTIONS`):
 //!
-//! - `tools/list` (both eras): the fourteen of `TOOLS`; `report_decision`
+//! - `tools/list` (both eras): the fifteen of `TOOLS`; `report_decision`
 //!   takes exactly "Data"'s arguments (`node_ids`, `text`,
 //!   `working_answer`, `price_of_other`, `author_role` required; no field
 //!   named `decision`, no `options`), its annotations, `_meta` and output
@@ -199,7 +199,8 @@ fn keys(value: &Value) -> Vec<String> {
     names
 }
 
-/// AC-R10: fourteen tools in both eras; `report_decision`'s input schema
+/// AC-R10: fifteen tools in both eras (drift-queue's `report_drift`);
+/// `report_decision`'s input schema
 /// is "Data"'s, no field named `decision`; annotations, `_meta` and the
 /// output schema `report_discrepancy`'s; the description and
 /// `INSTRUCTIONS` within their caps, holding "Data"'s lines. M:
@@ -219,7 +220,7 @@ fn ac_r10_report_decision_is_listed_as_data_says() {
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: fourteen tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: fifteen tools");
         let decision = tool(&list, "report_decision");
         let discrepancy = tool(&list, "report_discrepancy");
         assert_eq!(

@@ -8,7 +8,9 @@
 //! (canon `decision-record`, "Queue and documents"); a create's
 //! `target_ids` its target then its new IDs (task spec `proposal-kinds`); a
 //! staged one's state `open (staged)`, its JSON entry's `staged_at` set
-//! (canon `decision-staging`, "Documents").
+//! (canon `decision-staging`, "Documents"); a drift item's last column its
+//! summary, its JSON entry's `severity` and `summary` its own (task spec
+//! `drift-queue`, "Review, inbox, round, stage").
 //! Proposals of another repository of the same slug (the database is the
 //! slug's) are never listed: those of an existing one are counted in a
 //! note; those of a repository that no longer exists (orphans) are named
@@ -21,7 +23,8 @@
 
 use serde::Serialize;
 use specengine_store::{
-    GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, same_repository,
+    GitEnv, KindFamily, Proposal, ProposalFilter, ProposalKind, ProposalQueue as _, ProposalStatus,
+    same_repository,
 };
 
 use crate::proposals::{escaped_error, open_context, queue_cannot, repository_gone};
@@ -172,6 +175,8 @@ fn run_inbox(
 /// One proposal's line.
 fn entry(proposal: &Proposal) -> InboxEntry {
     let intake = proposal.intake.as_ref();
+    let drift = proposal.drift.as_ref();
+    let applies = proposal.kind.family() == KindFamily::Applies;
     InboxEntry {
         id: proposal.id.clone(),
         kind: proposal.kind.as_str().to_owned(),
@@ -180,9 +185,14 @@ fn entry(proposal: &Proposal) -> InboxEntry {
         target_ids: proposal.target_ids(),
         branch: proposal.place.branch.clone(),
         created_at: proposal.created_at.clone(),
-        rationale: intake.is_none().then(|| first_line(&proposal.rationale)),
-        severity: intake.map(|intake| intake.severity.as_str().to_owned()),
-        summary: intake.map(|intake| first_line(&intake.summary)),
+        rationale: applies.then(|| first_line(&proposal.rationale)),
+        severity: intake
+            .map(|intake| intake.severity)
+            .or(drift.map(|drift| drift.severity))
+            .map(|severity| severity.as_str().to_owned()),
+        summary: intake
+            .map(|intake| first_line(&intake.summary))
+            .or(drift.map(|drift| first_line(&drift.summary))),
         record_id: proposal.record.as_ref().map(|record| record.id.clone()),
         staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
     }
@@ -210,7 +220,10 @@ pub(crate) fn render_text(outcome: &InboxOutcome) -> String {
 fn raw_text(outcome: &InboxOutcome) -> String {
     let mut out = String::new();
     for entry in &outcome.proposals {
+        // A drift item's summary alone: its rows' states.
+        let drift = entry.kind == ProposalKind::Drift.as_str();
         let mut last = match (&entry.severity, &entry.summary) {
+            (_, Some(summary)) if drift => summary.clone(),
             (Some(severity), Some(summary)) => format!("{severity}: {summary}"),
             _ => entry.rationale.clone().unwrap_or_default(),
         };

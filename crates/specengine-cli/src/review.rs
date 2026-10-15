@@ -10,7 +10,10 @@
 //! current repository when the recorded worktree is not there; a lookup git
 //! cannot make is a note too. A question or a discrepancy (canon
 //! `agent-intake`, "Review document") never applies: no diff, no preview,
-//! no step run. A create's new file (task spec `proposal-kinds`) is
+//! no step run; nor does a drift item (task spec `drift-queue`): its
+//! `preview` `null`, its rows in `drift`, an open or approved one noting
+//! that its approve shows the rows before asking. A create's new file (task
+//! spec `proposal-kinds`) is
 //! previewed by its own steps 2–6 ([`crate::create`]): `applies` or
 //! `unavailable`; its diff is from an empty base.
 //! `--brief` ([`review_brief`], MCP `get_proposal`): the same document,
@@ -32,7 +35,7 @@
 //! unreadable current revision makes it `unavailable`).
 
 use specengine_core::raise::RevisionRow;
-use specengine_store::{GitEnv, Proposal, ProposalStatus, Stage};
+use specengine_store::{GitEnv, KindFamily, Proposal, ProposalStatus, Stage};
 
 use crate::create::prepare_file;
 use crate::interpret::{canon_note, recorded_canon_note};
@@ -131,7 +134,7 @@ fn run_review(
 /// one node's span (no new file, no new ID) and carries no decision (task
 /// spec `kind-interpretation`, W7's subject).
 fn plain_update(proposal: &Proposal) -> bool {
-    proposal.kind.applies()
+    proposal.kind.family() == KindFamily::Applies
         && !proposal.new_file()
         && proposal.new_ids.is_empty()
         && proposal.interpretation.is_none()
@@ -179,12 +182,19 @@ pub(crate) fn preview_run(
     messages: &mut Vec<Message>,
 ) -> PreviewRun {
     let mut run = PreviewRun::default();
-    if !proposal.kind.applies()
-        || !matches!(
-            proposal.status,
-            ProposalStatus::Open | ProposalStatus::Approved
-        )
-    {
+    let live = matches!(
+        proposal.status,
+        ProposalStatus::Open | ProposalStatus::Approved
+    );
+    // A drift item has no preview, no walk (task spec `drift-queue` Q-A):
+    // its approve shows the rows before asking.
+    if live && proposal.kind.family() == KindFamily::Locks {
+        run.notes.push(format!(
+            "spec approve {} shows the rows before asking",
+            proposal.id
+        ));
+    }
+    if proposal.kind.family() != KindFamily::Applies || !live {
         return run;
     }
     // Its branch read in the current repository when the recorded worktree

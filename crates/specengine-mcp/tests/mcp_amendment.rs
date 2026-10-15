@@ -8,7 +8,7 @@
 //!   `HOME` with the clock the server stamped); `base` absent alike; a
 //!   refusal (an unknown amended ID, an ID target) is the twin's error
 //!   result; `get_proposal` is `spec review --brief`'s twin, the review's
-//!   47 keys, `kind` `amendment`.
+//!   48 keys (drift-queue's `drift` the 48th), `kind` `amendment`.
 //! - The form: a `base` string is -32602 `base: an amendment is a new
 //!   file: null or absent`; `decision`, `how`, `why` -32602 `<field>: only
 //!   an interpretation takes it`; nothing stored.
@@ -264,8 +264,9 @@ fn ac_r11_propose_change_amends_as_its_twin() {
                 let document = &review["structuredContent"];
                 assert_eq!(
                     document.as_object().map(serde_json::Map::len),
-                    Some(47),
-                    "{label}: the review's 47 keys (docs/features/rev-discipline.md)"
+                    Some(48),
+                    "{label}: the review's 48 keys (docs/features/rev-discipline.md, \
+                     docs/features/drift-queue.md)"
                 );
                 assert_eq!(document["kind"], json!(AMENDMENT_KIND));
                 assert_eq!(document["preview"], json!("applies"));

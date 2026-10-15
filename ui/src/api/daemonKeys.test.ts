@@ -8,6 +8,7 @@ import type {
   CheckFinding,
   CheckReport,
   DebtEntry,
+  DriftEvidence,
   FollowedType,
   GraphEdge,
   GraphNode,
@@ -65,8 +66,12 @@ import type {
 // health document, an amendment, and the link `spec show --links` already sent), and
 // rev-discipline's one (UI-4, TE-3 of docs/features/rev-discipline.md: `RevisionRow`, a `revisions`
 // entry, the provisional `RevisionChange`), with the review document's `revisions` after `conflict`
-// (47 keys) and the stage's `editorial` after `canon` (7 keys). While that file is absent the
-// comparison is skipped, saying so; once it exists it names all forty-five.
+// (47 keys) and the stage's `editorial` after `canon` (7 keys), and drift-queue's one (UI-1, TE-11 of
+// docs/features/drift-queue.md: `DriftEvidence`, a drift item's evidence, the forty-sixth and last
+// set), with the review document's `drift` after `revisions` (48 keys), both written into the file by
+// its TE-11. A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a
+// listed key the file already names fails. While that file is absent the comparison is skipped,
+// saying so; once it exists it names all forty-six, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -91,7 +96,8 @@ const KEYS = {
   // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`,
   // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`,
   // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`,
-  // docs/features/rev-discipline.md "Review document, stage, queue" `revisions` after `conflict`.
+  // docs/features/rev-discipline.md "Review document, stage, queue" `revisions` after `conflict`,
+  // docs/features/drift-queue.md "Review, inbox, round, stage" `drift` after `revisions`.
   Proposal: {
     id: true,
     project: true,
@@ -113,6 +119,7 @@ const KEYS = {
     preview: true,
     conflict: true,
     revisions: true,
+    drift: true,
     decided_by: true,
     decided_at: true,
     decision_note: true,
@@ -351,6 +358,8 @@ const KEYS = {
   // docs/features/rev-discipline.md "Review document, stage, queue": a `revisions` entry, keys in its
   // order. The file names the set `RevisionRow`; the provisional type is `RevisionChange`.
   RevisionRow: { id: true, rev: true, to: true, lock_entries: true, refused: true } satisfies Record<keyof RevisionChange, true>,
+  // docs/features/drift-queue.md "Review, inbox, round, stage": the review's `drift`, `{"hash","rows","more"}`.
+  DriftEvidence: { hash: true, rows: true, more: true } satisfies Record<keyof DriftEvidence, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -362,6 +371,7 @@ const CITED: Record<Named, string> = {
   Proposal:
     "id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, " +
     "revisions, " +
+    "drift, " +
     "decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
     "target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked, " +
     "record_id, record_path, record_title, record_text, choice, " +
@@ -413,6 +423,7 @@ const CITED: Record<Named, string> = {
   UnappliedAmendment: "path, id, title, class, status, links",
   ShownLink: "type, origin, at, name, written, path, line, state, reason",
   RevisionRow: "id, rev, to, lock_entries, refused",
+  DriftEvidence: "hash, rows, more",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -468,8 +479,14 @@ const REV_DISCIPLINE: readonly Named[] = ["RevisionRow"];
 /** The forty-four types the fixture named before rev-discipline. */
 const BEFORE_REV_DISCIPLINE: readonly Named[] = [...BEFORE_HEALTH_LEFT, ...HEALTH_LEFT];
 
+/** The forty-five types the fixture named before drift-queue. */
+const BEFORE_DRIFT_QUEUE: readonly Named[] = [...BEFORE_REV_DISCIPLINE, ...REV_DISCIPLINE];
+
+/** drift-queue's one: a drift item's evidence (docs/features/drift-queue.md "Review, inbox, round, stage", TE-11). */
+const DRIFT_QUEUE: readonly Named[] = ["DriftEvidence"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_REV_DISCIPLINE, ...REV_DISCIPLINE];
+const ALL: readonly Named[] = [...BEFORE_DRIFT_QUEUE, ...DRIFT_QUEUE];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -487,19 +504,75 @@ function served(name: Named): string[] {
   return Object.keys(KEYS[name]).filter((key) => !NEVER_SERVED.some(([type, never]) => type === name && never === key));
 }
 
+/**
+ * The keys the types carry ahead of `fixtures/daemon-keys.json`: a slice's keys while its daemon
+ * side is built alongside and the Rust test has not yet regenerated the file. While the file lacks
+ * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
+ * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
+ * that the file names"): the list is emptied in the change that regenerates the file. Empty since
+ * drift-queue's TE-11 wrote its review `drift` and `DriftEvidence` set
+ * (`docs/features/drift-queue.md` "Review, inbox, round, stage").
+ */
+const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
+
+function isAhead(name: Named, key: string): boolean {
+  return AHEAD_OF_FIXTURE.some(([type, ahead]) => type === name && ahead === key);
+}
+
+/** An interface's keys in the order `provisional.ts` declares them (its own lines, two-space indented). */
+function declaredKeys(type: string): string[] {
+  const start = source.indexOf(`export interface ${type} {`);
+  const end = source.indexOf("\n}\n", start);
+  if (start < 0 || end < 0) {
+    return [];
+  }
+  return Array.from(source.slice(start, end).matchAll(/^ {2}(\w+)\??:/gm), (match) => match[1] ?? "");
+}
+
 describe("the daemon's document types (AC-09)", () => {
   it.each(NAMES)("%s has exactly the cited keys, in order", (name) => {
     // An optional key is cited with its `?` (W-1: omitted when unset, never null).
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 12 inbox-entry keys, 47 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline)", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 47]);
+  it("counts 4 project keys, 12 inbox-entry keys, 48 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue)", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 48]);
+  });
+
+  it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
+    const review = Object.keys(KEYS.Proposal);
+    expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
+    expect(DRIFT_QUEUE.map((name) => served(name))).toEqual([["hash", "rows", "more"]]);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("drift");
+    expect(ALL.at(-1)).toBe("DriftEvidence");
+  });
+
+  it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
+    expect(declaredKeys("Proposal")).toEqual(Object.keys(KEYS.Proposal));
+    expect(declaredKeys("DriftEvidence")).toEqual(Object.keys(KEYS.DriftEvidence));
+    expect(source).toMatch(/^  drift: DriftEvidence \| null;$/m);
+    // Untyped rows until Phase 4's drift screen, a count past them.
+    expect(source).toMatch(/^export interface DriftEvidence \{\n  hash: string;\n  rows: unknown\[\];\n  more: number;\n\}$/m);
+  });
+
+  it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
+    for (const type of ["DriftEvidence", "Proposal"]) {
+      const at = source.indexOf(`export interface ${type} `);
+      expect([type, at > 0]).toEqual([type, true]);
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/drift-queue.md` "Review, inbox, round, stage"');
+    }
+  });
+
+  it("lists ahead of the fixture only keys their types serve, none since drift-queue's TE-11 wrote its keys into the file", () => {
+    for (const [name, key] of AHEAD_OF_FIXTURE) {
+      expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
+    }
+    expect(AHEAD_OF_FIXTURE).toEqual([]);
   });
 
   it("gives the review document its revisions right after conflict, and the approve stage its editorial right after canon (UI-4 of rev-discipline)", () => {
     const review = Object.keys(KEYS.Proposal);
-    expect(review.slice(review.indexOf("preview"), review.indexOf("preview") + 4)).toEqual(["preview", "conflict", "revisions", "decided_by"]);
+    expect(review.slice(review.indexOf("preview"), review.indexOf("preview") + 3)).toEqual(["preview", "conflict", "revisions"]);
     expect(Object.keys(KEYS.StagedApprove)).toEqual(["decision", "option", "answer", "canon", "editorial", "note", "span_hash"]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("revisions");
     expect(Object.keys(KEYS.StagedReject)).not.toContain("editorial");
@@ -507,7 +580,7 @@ describe("the daemon's document types (AC-09)", () => {
 
   it("counts rev-discipline's one: a revisions entry's 5 keys, in the spec's order (UI-4, TE-3 of rev-discipline)", () => {
     expect(REV_DISCIPLINE.map((name) => served(name))).toEqual([["id", "rev", "to", "lock_entries", "refused"]]);
-    expect(ALL.at(-1)).toBe("RevisionRow");
+    expect(BEFORE_DRIFT_QUEUE.at(-1)).toBe("RevisionRow");
   });
 
   it('RevisionRow is the provisional RevisionChange, which cites `docs/features/rev-discipline.md` "Review document, stage, queue"', () => {
@@ -547,8 +620,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
     expect(BEFORE_REV_DISCIPLINE).toHaveLength(44);
-    expect(ALL).toHaveLength(45);
-    expect(new Set(ALL).size).toBe(45);
+    expect(BEFORE_DRIFT_QUEUE).toHaveLength(45);
+    expect(ALL).toHaveLength(46);
+    expect(new Set(ALL).size).toBe(46);
   });
 
   it("counts health-left's three: 3 document keys, 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
@@ -661,20 +735,50 @@ function keySets(parsed: unknown): Record<string, string[]> {
 describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key sets equal fixtures/daemon-keys.json (AC-09)", () => {
   const sets = written === undefined ? {} : keySets(written);
 
-  it("names exactly the forty-five types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one", () => {
-    expect(Object.keys(sets).sort()).toEqual([...ALL].sort());
+  /** The type's keys the file is compared with: the served ones, less a key ahead of the file it does not name yet. */
+  function compared(name: Named): string[] {
+    const file = sets[name] ?? [];
+    return served(name).filter((key) => file.includes(key) || !isAhead(name, key));
+  }
+
+  /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
+  const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
+
+  it("names exactly the forty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one", () => {
+    expect(Object.keys(sets).sort()).toEqual([...expected].sort());
+    // None is ahead of the file today: it names all forty-six, in the slices' order.
+    expect(expected).toEqual(ALL);
+    expect(Object.keys(sets)).toEqual([...ALL]);
+    expect(Object.keys(sets)).toHaveLength(46);
+  });
+
+  it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => (sets[name] ?? []).includes(key)).map(([name, key]) => `${name}.${key}`)).toEqual([]);
   });
 
   it.each(NAMES)("%s: the daemon's keys are the type's", (name) => {
-    expect([...(sets[name] ?? [])].sort()).toEqual(served(name).sort());
+    expect([...(sets[name] ?? [])].sort()).toEqual(compared(name).sort());
   });
 
-  it("names rev-discipline's keys where the types put them: revisions after conflict, editorial after canon, a revisions entry's five in order, last (UI-4, TE-3)", () => {
+  it("names rev-discipline's keys where the types put them: revisions after conflict, editorial after canon, a revisions entry's five in order, the forty-fifth set, before drift-queue's (UI-4, TE-3)", () => {
     const review = sets.Proposal ?? [];
-    expect(review.slice(review.indexOf("conflict") - 1, review.indexOf("conflict") + 3)).toEqual(["preview", "conflict", "revisions", "decided_by"]);
+    expect(review.slice(review.indexOf("conflict") - 1, review.indexOf("conflict") + 2)).toEqual(["preview", "conflict", "revisions"]);
     expect(sets.StagedApprove).toEqual(served("StagedApprove"));
     expect(sets.RevisionRow).toEqual(served("RevisionRow"));
-    expect(Object.keys(sets).at(-1)).toBe("RevisionRow");
+    expect(Object.keys(sets).indexOf("RevisionRow")).toBe(BEFORE_REV_DISCIPLINE.length);
+    expect(Object.keys(sets).indexOf("RevisionRow")).toBe(44);
+    expect(Object.keys(sets).at(-2)).toBe("RevisionRow");
+  });
+
+  it("names drift-queue's keys where the types put them: the review's 48, drift after revisions, before decided_by; DriftEvidence's three in order, the forty-sixth and last set (UI-1, TE-11)", () => {
+    const review = sets.Proposal ?? [];
+    expect(review).toEqual(served("Proposal"));
+    expect(review).toHaveLength(48);
+    expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
+    expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
+    expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);
+    expect(Object.keys(sets).at(-1)).toBe("DriftEvidence");
+    expect(sets.InboxEntry).not.toContain("drift");
   });
 
   it("names health-left's keys in the document's order: the health document's three, an amendment's six (AC-T2)", () => {

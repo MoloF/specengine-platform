@@ -1052,6 +1052,17 @@ textarea.field {
   white-space: pre-wrap;
 }
 
+/* A drift item's stored rows as sent (docs/features/drift-queue.md "Review, inbox, round, stage"):
+   compact JSON, one per line, wrapped anywhere; untyped until Phase 4's drift screen. */
+.drift-rows {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-s);
+  overflow-wrap: anywhere;
+}
+
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;

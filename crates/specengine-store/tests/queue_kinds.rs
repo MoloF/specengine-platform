@@ -24,7 +24,7 @@ use common::Scratch;
 use specengine_core::intake::CREATE_KIND;
 use specengine_core::proposal::Author;
 use specengine_store::{
-    Decision, NewProposal, PROPOSAL_COLUMNS, Place, ProposalFilter, ProposalKind,
+    Decision, KindFamily, NewProposal, PROPOSAL_COLUMNS, Place, ProposalFilter, ProposalKind,
     ProposalQueue as _, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueError, Reservation, SqliteQueue,
     StoredQueue, patch_hash,
 };
@@ -157,7 +157,7 @@ fn sqlite3(db: &Path, sql: &str) -> String {
 fn create_rows_store_both_forms() {
     assert_eq!(ProposalKind::Create.as_str(), CREATE_KIND);
     assert_eq!(ProposalKind::parse(CREATE_KIND), Some(ProposalKind::Create));
-    assert!(ProposalKind::Create.applies() && !ProposalKind::Create.decides());
+    assert_eq!(ProposalKind::Create.family(), KindFamily::Applies);
     let scratch = Scratch::new("qk-rows");
     let mut queue = SqliteQueue::open(scratch.db("q"), PROJECT).expect("open");
     let file = queue
@@ -613,14 +613,17 @@ fn a_corrupt_create_row_names_its_column() {
 /// AC-14, the store half: creates change no schema: `QUEUE_SCHEMA_VERSION`
 /// as the queue stands (6 since docs/features/kind-interpretation.md, which
 /// adds `interpretation`, after decision-staging's 5 and its `staged`,
-/// `staged_at`), `user_version` 6 after a create, `proposals` 44 columns,
+/// `staged_at`; 8 since docs/features/drift-queue.md), `user_version` 8
+/// after a create, `proposals` 46 columns,
 /// the dump's header and column list as before; a create's row restores
 /// into a fresh queue and dumps the same (the name, cited by
 /// docs/features/proposal-kinds.md, kept). M: a column or a schema bump.
 #[test]
 fn ac14_creates_keep_schema_3_and_40_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
+    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
+    // schema 8".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);
     let scratch = Scratch::new("qk-schema");
     let db = scratch.db("q");
@@ -637,10 +640,10 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "44"
+        "46"
     );
     assert_eq!(
         sqlite3(

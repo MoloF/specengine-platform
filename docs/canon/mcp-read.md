@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-15
 ---
 
 # MCP read tools and resources
@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the four read tools, the four queue tools (`agent-intake.md`), the five task tools (`task-package.md` "MCP") and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output`, `probe_sleep` and a paragraph of `instructions`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the four read tools, the five queue tools (`agent-intake.md`), the five task tools (`task-package.md` "MCP") and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output`, `probe_sleep` and a paragraph of `instructions`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search): the fourteen tools (the queue's and the tasks': only the queue written), REF forms, the flag map (`--kind` `kinds`, ROOT `root`, `--links` `with ["links"]`), the change kinds (`update|create|interpretation|amendment`), the cut ("with a tail on narrowing them"), the resources, determinism, "reads refresh SpecEngine's index in its data directory; nothing under the project root is written"; 1 885 B (1 747 less the tasks line, 2 042 with `probes`; BLAKE3 pins: `mcp_decision.rs`). Each description <= 2 048, ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search): the fifteen tools (the queue's and the tasks': only the queue written), REF forms, the flag map (`--kind` `kinds`, ROOT `root`, `--links` `with ["links"]`), the change kinds (`update|create|interpretation|amendment`), the cut ("with a tail on narrowing"), the resources, determinism, "reads refresh SpecEngine's index outside the project root; no tool writes under it"; 1 886 B (1 748 less the tasks line, 2 043 with `probes`; BLAKE3 pins: `mcp_decision.rs`). Each description <= 2 048, ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 

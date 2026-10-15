@@ -1803,23 +1803,28 @@ fn ac_r9_tasks_list_it_bound_or_by_the_nodes_it_amends() {
 
 // ----------------------------------------------------------------- AC-R10
 
-/// AC-R10: the review document is a new file's: 47 keys (46 until
-/// docs/features/rev-discipline.md added `revisions`, `null` here; the
+/// AC-R10: the review document is a new file's: 48 keys (46 until
+/// docs/features/rev-discipline.md added `revisions` and
+/// docs/features/drift-queue.md `drift`, both `null` here; the
 /// name keeps the count AC-R10 cites it by), the fixture's `Proposal` set
 /// in order, `diff` `@@ -0,0 +1,13 @@`, `preview` `applies`; `--brief`
 /// keeps the keys (texts and diff dropped); the inbox entry the fixture's
-/// `InboxEntry` keys; `fixtures/daemon-keys.json` holds 45 sets (41 until
-/// docs/features/health-left.md added its three, AC-T2, and
-/// docs/features/rev-discipline.md its `RevisionRow`, TE-3; the amendment
-/// adds none). M: a key added.
+/// `InboxEntry` keys; `fixtures/daemon-keys.json` holds 46 sets (41 until
+/// docs/features/health-left.md added its three, AC-T2,
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3, and
+/// docs/features/drift-queue.md its `DriftEvidence`; the amendment adds
+/// none). M: a key added.
 #[test]
 fn ac_r10_the_review_is_a_new_files_46_keys() {
     let pair = Pair::new("ka-r10", "spec-a");
     let id = amended(&pair, &pair.linked, PATH, TEXT);
     let raw = review_raw(&pair, &id);
     let keys = task_common::keys(&raw);
-    // 47 since docs/features/rev-discipline.md added `revisions`.
-    assert_eq!(keys.len(), 47, "{keys:?}");
+    // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
+    // docs/features/drift-queue.md added `drift` after it.
+    assert_eq!(keys.len(), 48, "{keys:?}");
+    let revisions = keys.iter().position(|key| key == "revisions");
+    assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
     let fixture: Value = serde_json::from_str(&read_text(
         &common::repository_root(),
         "fixtures/daemon-keys.json",
@@ -1828,9 +1833,16 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        45,
-        "no set added by the amendment: 41, health-left's three and \
-         rev-discipline's `RevisionRow`"
+        46,
+        "no set added by the amendment: 41, health-left's three, \
+         rev-discipline's `RevisionRow` and drift-queue's `DriftEvidence`"
+    );
+    // drift-queue's one: `{hash, rows, more}` as stored
+    // (`docs/features/drift-queue.md` "Review, inbox, round, stage").
+    assert_eq!(
+        sets.get("DriftEvidence"),
+        Some(&json!(["hash", "rows", "more"])),
+        "the drift set"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1860,6 +1872,8 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     // A new file: no existing node written, `revisions` null
     // (docs/features/rev-discipline.md "Review document, stage, queue").
     assert_eq!(review["revisions"], Value::Null);
+    // Not a drift item: `drift` null.
+    assert_eq!(review["drift"], Value::Null);
 
     let brief = review_brief(
         &pair.env(&pair.main),
@@ -1901,8 +1915,8 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
 
 // ----------------------------------------------------------------- AC-R13
 
-/// AC-R13: an applied and an open amendment export `"queue_schema":7`
-/// (format 2, 44 columns a row, `kind` `amendment`); imported into a fresh
+/// AC-R13: an applied and an open amendment export `"queue_schema":8`
+/// (format 2, 46 columns a row since drift-queue, `kind` `amendment`); imported into a fresh
 /// data directory and exported again, byte for byte; the open one's ID
 /// still reserved. M: export skipping the kind.
 #[test]
@@ -1941,7 +1955,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1952,7 +1966,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     {
         let row: Value = serde_json::from_str(line).expect("a row");
         let row = row["proposals"].as_object().expect("a proposals row");
-        assert_eq!(row.len(), 44);
+        assert_eq!(row.len(), 46);
         assert_eq!(row["id"], json!(id));
         assert_eq!(row["kind"], json!(AMENDMENT_KIND));
         assert_eq!(row["status"], json!(status));

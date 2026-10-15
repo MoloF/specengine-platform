@@ -656,7 +656,8 @@ fn unwritten_to_written_one_is_refused() {
 
 // ------------------------------------------------------------------ RD-6
 
-/// RD-6: the review document has 47 keys, `revisions` right after
+/// RD-6: the review document has 48 keys (47 before drift-queue's
+/// `drift`, right after `revisions`), `revisions` right after
 /// `conflict`; an update's `revisions` lists each node whose meaning it
 /// changes with its revision now, a meaning approve's, and the lock
 /// entries an editorial one refreshes (0 without a lock), each entry
@@ -673,7 +674,10 @@ fn review_document_every_key_present() {
         .keys()
         .map(String::as_str)
         .collect();
-    assert_eq!(keys.len(), 47, "{keys:?}");
+    // 48 since docs/features/drift-queue.md added `drift` after
+    // `revisions` (`null` on an update).
+    assert_eq!(keys.len(), 48, "{keys:?}");
+    assert_eq!(value["drift"], Value::Null);
     let json_text = serde_json::to_string(&value).unwrap();
     let printed = rev_common::printed(
         &specengine_cli::review(
@@ -689,8 +693,12 @@ fn review_document_every_key_present() {
     .1;
     let conflict = printed.find("\"conflict\":").unwrap();
     let revisions = printed.find("\"revisions\":").unwrap();
+    let drift = printed.find("\"drift\":").unwrap();
     let decided_by = printed.find("\"decided_by\":").unwrap();
-    assert!(conflict < revisions && revisions < decided_by, "{printed}");
+    assert!(
+        conflict < revisions && revisions < drift && drift < decided_by,
+        "{printed}"
+    );
     assert_eq!(
         value["revisions"],
         json!([
@@ -716,7 +724,8 @@ fn review_document_every_key_present() {
         .collect();
     let at = lines.iter().position(|key| *key == "revisions").unwrap();
     assert_eq!(lines[at - 1], "conflict", "{text}");
-    assert_eq!(lines.len(), 47, "{text}");
+    assert_eq!(lines[at + 1], "drift", "{text}");
+    assert_eq!(lines.len(), 48, "{text}");
     assert!(!json_text.is_empty());
 }
 

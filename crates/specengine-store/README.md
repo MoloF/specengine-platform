@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # specengine-store -- the spec index
@@ -21,7 +21,7 @@ No `rusqlite` type in a public signature (`architecture.md#distribution`).
 - `spec check`, no database (`spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` -> `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) -> `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`: `BASELINE_FILE` if an entry exists, `None` if the root is unlistable; `check_input(&dyn Source, &IdScheme)` (a parser panic -> a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)`; `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}`, `check_changed_with_notes` (against `HEAD`: `spec-check-git.md`), `check_staged` (the report). `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 8`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 - `b3_hash(&[u8]) -> String`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`, `norm_hash`.
-- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons; `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): methods named in those canons and `spec-lock.md`, also `{,is_}intent_to_add`, `remove_cached`; `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"); the file writes, `span_hash`, `same_repository`, `introduced_findings`: those canons.
+- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons (`ProposalKind::family() -> KindFamily`, `create_drift`: `proposal-drift.md`); `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): methods named in those canons and `spec-lock.md`, also `{,is_}intent_to_add`, `remove_cached`; `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"); the file writes, `span_hash`, `same_repository`, `introduced_findings`: those canons.
 
 ## Rows
 

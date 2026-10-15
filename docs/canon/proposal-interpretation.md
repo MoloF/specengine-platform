@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Proposal kind: interpretation
@@ -35,11 +35,11 @@ Stored: the document's `id:`, canonical; an id-less decision document by its pat
 
 ## Row and review
 
-`ProposalKind::Interpretation`: `applies()` true, `decides()` false; `create` stores it, `create_intake` -> `Invalid`. `NewProposal`, `Proposal` `.interpretation: Option<Interpretation {decision, how, why}>`, set iff that kind, nothing blank, `how`, `why` within the cap, else `Invalid`.
+`ProposalKind::Interpretation`: `family()` `Applies`; `create` stores it, `create_intake` -> `Invalid`. `NewProposal`, `Proposal` `.interpretation: Option<Interpretation {decision, how, why}>`, set iff that kind, nothing blank, `how`, `why` within the cap, else `Invalid`.
 
-Queue step 6, one `Immediate` transaction: `ALTER TABLE proposals ADD COLUMN interpretation TEXT`; `PROPOSAL_COLUMNS` 44 (every schema: `proposal-queue.md` "Store"). Schema 5 opens as 6, the column NULL; a newer one -> exit 2 (`schema version <n>, this build knows <m>`). A migrated queue refuses older builds (`SchemaTooNew`): `spec`, `specengine-mcp` and the daemon come from one build. The row: an update's columns plus `interpretation`, compact JSON, keys in order: `{"decision":"DEC-0023","how":"...","why":"..."}`. Corrupt, named (`get`, `list` fail; inbox skips it, a note): the column on another kind or NULL on this one; another shape (a key missing, extra, reordered, not a string); a blank value; a text over the cap.
+Queue step 6, one `Immediate` transaction: `ALTER TABLE proposals ADD COLUMN interpretation TEXT`; 44 columns (every schema: `proposal-queue.md` "Store"). Schema 5 opens as 6, the column NULL; a newer one -> exit 2 (`schema version <n>, this build knows <m>`). A migrated queue refuses older builds (`SchemaTooNew`): `spec`, `specengine-mcp` and the daemon come from one build. The row: an update's columns plus `interpretation`, compact JSON, keys in order: `{"decision":"DEC-0023","how":"...","why":"..."}`. Corrupt, named (`get`, `list` fail; inbox skips it, a note): the column on another kind or NULL on this one; another shape (a key missing, extra, reordered, not a string); a blank value; a text over the cap.
 
-**Review document**, 47 keys (`revisions`: `proposal-revisions.md`): `interpretation` after `staged_at`, before `notes`, the object or `null`, kept by `--brief` (MCP `get_proposal`, `mirror.rs`). Text, escaped (`escape_controls`; JSON and the commit raw):
+**Review document**, 48 keys (`proposal-review.md`): `interpretation` after `staged_at`, before `notes`, the object or `null`, kept by `--brief` (MCP `get_proposal`, `mirror.rs`). Text, escaped (`escape_controls`; JSON and the commit raw):
 
 ```
 interpretation:
@@ -86,7 +86,7 @@ Never a refusal (ADR-0012). `spec propose update` (MCP `propose_change` kind `up
 - **Stage** (`decision-staging.md`): an approve with `span_hash`; `option`, `answer`, `canon` a usage refusal (HTTP 400). No new route.
 - **Round**: never on the sheet; counted among open change proposals; its `round answer` line -> ``is a change proposal (interpretation): `spec approve PR` decides it``; `--staged` notes it unasked.
 - **Task-bound**: refreshes its task's snapshot as an update (`tasks.md`); the package lists it in `open_proposals`, no assumption.
-- **Backup** (`queue-backup.md`): format 2, 44 columns.
+- **Backup** (`queue-backup.md`): format 2, every column.
 - **MCP** `propose_change` (`agent-intake.md` "Tools"): `decision`, `how`, `why` nullable strings, no enum (the `mcp_stage` guard admits a `decision` input there only); `kind` `interpretation` = `propose_interpretation_brief`; a field missing -> -32602 `<field>: required with kind interpretation`, `base` null -> `base: an interpretation is written against its node's span_hash (get_node); null or absent only with kind create, for a new file`; one given on another kind -> `<field>: only an interpretation takes it`.
 - **Plugin** 0.4.0 (`plugin.md`): `propose-spec-change` "Carrying an accepted decision into a rule"; `spec-author` names the kind.
 

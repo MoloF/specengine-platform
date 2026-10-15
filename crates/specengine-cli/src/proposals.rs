@@ -32,7 +32,11 @@
 //!   new file's base `null`, its diff from an empty base. An interpretation
 //!   (task spec `kind-interpretation`) is an update's document, its
 //!   `interpretation` (after `staged_at`) the object `{decision, how, why}`;
-//!   `null` on any other kind.
+//!   `null` on any other kind. A drift item (task spec `drift-queue`,
+//!   "Review, inbox, round, stage") holds `drift` (after `revisions`), its
+//!   stored `{hash, rows, more}`, `null` on any other kind; its texts,
+//!   `diff`, `conflict`, `revisions` and `preview` `null`; its severity and
+//!   summary in the intake's keys.
 //! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts
 //!   (`record_text` too), `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
 //!   (the rest counted in a note), the text cut at [`OUTPUT_CAP_CHARS`].
@@ -49,20 +53,22 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use specengine_core::drift::{DriftRow, StoredJson};
 use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity, Interpretation};
 use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
 use specengine_core::raise::RevisionRow;
 use specengine_store::{
-    Choice, GitEnv, Proposal, ProposalFinding, ProposalQueue as _, QueueError, SqliteQueue, Stage,
-    WorktreeGit, same_repository,
+    Choice, GitEnv, KindFamily, Proposal, ProposalFinding, ProposalQueue as _, QueueError,
+    SqliteQueue, Stage, WorktreeGit, same_repository,
 };
 
 use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
 use crate::location::prepared_data_dir;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover};
 use crate::revisions::rows_text as revisions_text;
+use crate::verify::{FindingLine, keyed_binding};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// Which command answered with a review document.
@@ -100,6 +106,20 @@ impl Preview {
     }
 }
 
+/// A drift item's evidence in the review document (task spec
+/// `drift-queue`): its `drift_hash`, its rows as stored (`spec verify
+/// --json`'s, key for key and in order, a later build's keys kept) and how
+/// many more it has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProposalDrift {
+    pub hash: String,
+    pub rows: Vec<StoredJson>,
+    pub more: u64,
+    /// The rows read: what the text prints.
+    #[serde(skip)]
+    pub read: Vec<DriftRow>,
+}
+
 /// The review document: every key, in this order, absent = `null`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct ProposalDocument {
@@ -133,6 +153,8 @@ pub struct ProposalDocument {
     /// raise with `to` `null`; `null` when the kind writes no existing node
     /// or the preview conflicts or is unavailable.
     pub revisions: Option<Vec<RevisionRow>>,
+    /// A drift item's evidence as stored; `null` on any other kind.
+    pub drift: Option<ProposalDrift>,
     pub decided_by: Option<String>,
     pub decided_at: Option<String>,
     pub decision_note: Option<String>,
@@ -186,12 +208,13 @@ impl ProposalDocument {
     /// `notes` left for the caller. An update's texts, hashes and rationale;
     /// an intake kind's fields instead (those `null`).
     pub fn of(proposal: &Proposal) -> Self {
-        let applies = proposal.kind.applies();
+        let applies = proposal.kind.family() == KindFamily::Applies;
         let text = |value: &str| applies.then(|| value.to_owned());
         // A new file has no base.
         let based = applies && !proposal.new_file();
         let base = |value: &str| based.then(|| value.to_owned());
         let intake = proposal.intake.as_ref();
+        let drift = proposal.drift.as_ref();
         Self {
             id: Some(proposal.id.clone()),
             project: Some(proposal.project.clone()),
@@ -213,6 +236,12 @@ impl ProposalDocument {
             preview: None,
             conflict: None,
             revisions: None,
+            drift: drift.map(|drift| ProposalDrift {
+                hash: drift.hash.clone(),
+                rows: drift.stored_rows.clone(),
+                more: drift.evidence.more,
+                read: drift.evidence.rows.clone(),
+            }),
             decided_by: proposal.decided_by.clone(),
             decided_at: proposal.decided_at.clone(),
             decision_note: proposal.decision_note.clone(),
@@ -220,9 +249,13 @@ impl ProposalDocument {
             created_at: Some(proposal.created_at.clone()),
             updated_at: Some(proposal.updated_at.clone()),
             target_ids: proposal.target_ids(),
-            severity: intake.map(|intake| intake.severity),
+            severity: intake
+                .map(|intake| intake.severity)
+                .or(drift.map(|drift| drift.severity)),
             gap_type: intake.and_then(|intake| intake.gap_type),
-            summary: intake.map(|intake| intake.summary.clone()),
+            summary: intake
+                .map(|intake| intake.summary.clone())
+                .or(drift.map(|drift| drift.summary.clone())),
             working_answer: intake.and_then(|intake| intake.working_answer.clone()),
             price_of_other: intake.and_then(|intake| intake.price_of_other.clone()),
             evidence: intake
@@ -565,8 +598,8 @@ pub(crate) fn fill_diff(
     git_env: &GitEnv,
     scratch: &Path,
 ) {
-    // The intake kinds have no texts: no diff.
-    if !proposal.kind.applies() {
+    // The intake kinds and a drift item have no texts: no diff.
+    if proposal.kind.family() != KindFamily::Applies {
         return;
     }
     let hunks = WorktreeGit::new(scratch, git_env).and_then(|git| {
@@ -757,6 +790,7 @@ fn review_text(document: &ProposalDocument) -> String {
     block(&mut out, "conflict", document.conflict.as_deref());
     let revisions = document.revisions.as_deref().map(revisions_text);
     line(&mut out, "revisions", revisions.as_deref());
+    drift_text(&mut out, document.drift.as_ref());
     line(&mut out, "decided_by", document.decided_by.as_deref());
     line(&mut out, "decided_at", document.decided_at.as_deref());
     block(&mut out, "decision_note", document.decision_note.as_deref());
@@ -826,6 +860,48 @@ fn review_text(document: &ProposalDocument) -> String {
     interpretation_text(&mut out, document.interpretation.as_ref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
+}
+
+/// The review text's `drift` (task spec `drift-queue`): `drift: <n>
+/// row(s)` (every finding of the item, the stored ones and those past
+/// them), then each stored row in `spec verify`'s form, indented, and `…
+/// and <k> more` past them; `drift: -` when null.
+fn drift_text(out: &mut String, drift: Option<&ProposalDrift>) {
+    let Some(drift) = drift else {
+        out.push_str("drift: -\n");
+        return;
+    };
+    let total = drift.read.len() as u64 + drift.more;
+    out.push_str(&format!("drift: {total} row(s)\n"));
+    for row in &drift.read {
+        out.push_str(&format!("  {}\n", drift_row_line(row)));
+    }
+    if drift.more > 0 {
+        out.push_str(&format!("  … and {} more\n", drift.more));
+    }
+}
+
+/// A stored drift row as `spec verify` prints a row ([`FindingLine`]); a
+/// keyless row's binding is not stored: `-`.
+fn drift_row_line(row: &DriftRow) -> String {
+    let binding = keyed_binding(
+        row.kind.as_deref(),
+        row.symbol.as_deref(),
+        row.item_kind.as_deref(),
+    )
+    .unwrap_or_else(|| "-".to_owned());
+    FindingLine {
+        pre_existing: row.pre_existing,
+        class: row.class.as_deref().unwrap_or("ok"),
+        state: &row.state,
+        category: row.category.as_deref(),
+        detail: row.detail.as_deref(),
+        node: &row.node,
+        relation: &row.relation,
+        file: &row.file,
+        binding: &binding,
+    }
+    .render()
 }
 
 /// The review text's `interpretation` (task spec `kind-interpretation`,

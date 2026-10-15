@@ -63,8 +63,8 @@ use specengine_core::round::{
 };
 use specengine_model::IdScheme;
 use specengine_store::{
-    GitEnv, Intake, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, Stage,
-    StagedChoice, Task, same_repository,
+    GitEnv, Intake, KindFamily, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus,
+    Stage, StagedChoice, Task, same_repository,
 };
 
 use crate::apply::{ApproveRequest, RejectRequest, approve, reject};
@@ -212,14 +212,20 @@ fn run_new(
         })
         .map_err(queue_cannot)?;
     let mut items = Vec::new();
-    let (mut held, mut changes, mut others, mut orphans) =
-        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut held, mut changes, mut drifts, mut others, mut orphans) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
     for proposal in listed.proposals {
         let ours = same_repository(&proposal.place.git_common_dir, &context.common_dir);
         let open = proposal.status == ProposalStatus::Open;
-        if !proposal.kind.decides() {
+        // The sheet holds the kinds that decide alone; a drift item is
+        // decided on a terminal (task spec `drift-queue`, "Round").
+        let family = proposal.kind.family();
+        if family != KindFamily::Decides {
             if ours && open {
-                changes.push(proposal.id);
+                match family {
+                    KindFamily::Locks => drifts.push(proposal.id),
+                    KindFamily::Applies | KindFamily::Decides => changes.push(proposal.id),
+                }
             }
         } else if !ours {
             if repository_gone(&proposal) {
@@ -264,6 +270,14 @@ fn run_new(
             "{} open change proposal(s) not on this sheet: {}; spec inbox lists them",
             changes.len(),
             named(&changes)
+        ));
+    }
+    if !drifts.is_empty() {
+        sheet_notes.push(format!(
+            "{} open drift item(s) not on this sheet: {}; spec review <ID>, then spec approve or \
+             spec reject",
+            drifts.len(),
+            named(&drifts)
         ));
     }
     if !others.is_empty() {
@@ -1321,7 +1335,7 @@ fn staged_now(
             continue;
         }
         let ours = same_repository(&proposal.place.git_common_dir, &context.common_dir);
-        if !proposal.kind.decides() {
+        if proposal.kind.family() != KindFamily::Decides {
             if ours {
                 changes.push(proposal.id);
             }
@@ -1597,11 +1611,22 @@ fn queue_checked(
     if let Some(reason) = status {
         return Err(Unfit::Refused(reason));
     }
-    if !proposal.kind.decides() {
-        return Err(Unfit::Refused(format!(
-            "`{id}` is a change proposal ({}): `spec approve {id}` decides it",
-            proposal.kind.as_str()
-        )));
+    match proposal.kind.family() {
+        KindFamily::Decides => {}
+        KindFamily::Applies => {
+            return Err(Unfit::Refused(format!(
+                "`{id}` is a change proposal ({}): `spec approve {id}` decides it",
+                proposal.kind.as_str()
+            )));
+        }
+        // Decided on a terminal only, never staged (task spec
+        // `drift-queue`, "Review, inbox, round, stage").
+        KindFamily::Locks => {
+            return Err(Unfit::Refused(format!(
+                "{id} is a {} item, decided on a terminal only; nothing staged",
+                proposal.kind.as_str()
+            )));
+        }
     }
     let Some(intake) = proposal.intake.as_ref() else {
         return Err(Unfit::Refused(format!(

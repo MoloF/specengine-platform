@@ -254,7 +254,7 @@ export function link(fields: Omit<MockLink, "reason" | "to" | "state"> & Partial
 /**
  * A queued proposal: its whole review document in the review JSON's key order, omitted keys null
  * or empty as it gives them (an update's `target_ids` its `[target_id]`; `task_id` null, unbound;
- * nothing staged; no interpretation).
+ * nothing staged; no interpretation; no drift evidence).
  */
 export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | "created_at"> & Partial<StoredReview>): MockProposal {
   const { id, project, kind, created_at, ...given } = fields;
@@ -280,6 +280,7 @@ export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | 
       preview: null,
       conflict: null,
       revisions: null,
+      drift: null,
       decided_by: null,
       decided_at: null,
       decision_note: null,
@@ -365,6 +366,7 @@ export function noReview(id: string): Proposal {
     preview: null,
     conflict: null,
     revisions: null,
+    drift: null,
     decided_by: null,
     decided_at: null,
     decision_note: null,

@@ -64,6 +64,8 @@ fn valid_args(tool: &str) -> Value {
             ],
             "recommendation": 0, "author_role": "writer"
         }),
+        // docs/features/drift-queue.md: a sweep.
+        "report_drift" => json!({"author_role": "writer"}),
         // docs/features/task-package.md: the task tools.
         "get_task" => json!({"task_id": "T-0001"}),
         "claim_task" => json!({"task_id": "T-0001", "role": "developer", "worktree": "."}),

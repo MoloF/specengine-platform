@@ -209,16 +209,18 @@ fn task_events(queue: &SqliteQueue) -> Vec<(String, serde_json::Value)> {
 
 /// Schema 4: `tasks` and `runs` as `PRAGMA table_info` gives them (names
 /// in [`TASK_COLUMNS`] and [`RUN_COLUMNS`] order, `run` the one `INTEGER`,
-/// the key `id`, `(task_id, run)`), both `STRICT`; `proposals` 44 columns
-/// (schema 6, docs/features/kind-interpretation.md), `task_id` the 41st,
-/// before `staged`, `staged_at`, `interpretation`. M: a column moved or retyped.
+/// the key `id`, `(task_id, run)`), both `STRICT`; `proposals` 46 columns
+/// (schema 8, docs/features/drift-queue.md), `task_id` the 41st, before
+/// `staged`, `staged_at`, `interpretation`, `drift`, `drift_hash`. M: a
+/// column moved or retyped.
 #[test]
 fn schema_4_makes_the_tasks_and_runs_tables() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
+    // Schema 8 since docs/features/drift-queue.md "Queue schema 8".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     let scratch = Scratch::new("qt-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     let info = |table: &str| {
         sqlite3(
             &db,
@@ -256,12 +258,18 @@ fn schema_4_makes_the_tasks_and_runs_tables() {
     );
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "44"
+        "46"
     );
     assert_eq!(PROPOSAL_COLUMNS[40], "task_id");
     assert_eq!(
         PROPOSAL_COLUMNS[41..],
-        ["staged", "staged_at", "interpretation"]
+        [
+            "staged",
+            "staged_at",
+            "interpretation",
+            "drift",
+            "drift_hash"
+        ]
     );
     // Iteration 2: the task's compare-and-set key, `revision`, its last
     // column, `TEXT` (decimal from `1`), 17 in all.
@@ -310,10 +318,10 @@ fn schema_1_to_3_databases_step_to_4() {
             kept.to_string()
         );
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8", "from {version}");
         assert_eq!(
             sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-            "44"
+            "46"
         );
         let kept_row = queue.get(&made.id).expect("get").expect("kept");
         assert_eq!(kept_row.task_id, None, "from {version}");
@@ -325,7 +333,7 @@ fn schema_1_to_3_databases_step_to_4() {
         assert_eq!(task.id, "T-0001", "from {version}");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     }
 }
 

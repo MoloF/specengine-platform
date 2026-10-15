@@ -26,8 +26,8 @@ use serde_json::Value;
 use specengine_core::proposal::{EDITORIAL, is_utc_timestamp};
 
 use super::{
-    Proposal, ProposalKind, ProposalStatus, QueueError, Seen, SqliteQueue, UnreadableRow, changed,
-    check_time, corrupt, existing, log_text, status_error,
+    KindFamily, Proposal, ProposalKind, ProposalStatus, QueueError, Seen, SqliteQueue,
+    UnreadableRow, changed, check_time, corrupt, existing, log_text, status_error,
 };
 use crate::error::Db;
 
@@ -177,12 +177,20 @@ impl Stage {
     }
 
     /// Why a proposal of `kind` (`new_file`: a new file, a create's or an
-    /// amendment's) cannot hold this stage: a decision flag of a kind that
-    /// takes none (a kind that applies takes none; a question or a decision
-    /// no `--option`; a discrepancy no `--answer`), a span hash or
-    /// `editorial` on a kind that has no span (a deciding kind, a new file:
-    /// it writes no existing node), a blank reason; `None`: it can.
+    /// amendment's) cannot hold this stage: any stage on a kind that locks
+    /// (a `drift` item is decided on a terminal only, task spec
+    /// `drift-queue`), a decision flag of a kind that takes none (a kind
+    /// that applies takes none; a question or a decision no `--option`; a
+    /// discrepancy no `--answer`), a span hash or `editorial` on a kind that
+    /// has no span (a deciding kind, a new file: it writes no existing
+    /// node), a blank reason; `None`: it can.
     pub fn problem(&self, kind: ProposalKind, new_file: bool) -> Option<String> {
+        if kind.family() == KindFamily::Locks {
+            return Some(format!(
+                "{} is decided on a terminal only: it holds no stage",
+                kind.with_article()
+            ));
+        }
         match self {
             Self::Reject { reason } => reason
                 .trim()
@@ -199,7 +207,7 @@ impl Stage {
                 // Keyed on what the kind does: one that applies takes no
                 // decision flag; a deciding kind is judged by name, every
                 // kind listed, so a new one must be judged here.
-                let flag = if kind.applies() {
+                let flag = if kind.family() == KindFamily::Applies {
                     if option.is_some() {
                         Some("option")
                     } else if answer.is_some() {
@@ -216,11 +224,12 @@ impl Stage {
                             option.is_some().then_some("option")
                         }
                         ProposalKind::Discrepancy => answer.is_some().then_some("answer"),
-                        // Judged above: they apply.
+                        // Judged above: they apply, or hold no stage.
                         ProposalKind::Update
                         | ProposalKind::Create
                         | ProposalKind::Interpretation
-                        | ProposalKind::Amendment => None,
+                        | ProposalKind::Amendment
+                        | ProposalKind::Drift => None,
                     }
                 };
                 if let Some(flag) = flag {
@@ -229,7 +238,8 @@ impl Stage {
                         kind.with_article()
                     ));
                 }
-                let spanless = kind.decides() || new_file;
+                // "Writes no existing node": a deciding kind or a new file.
+                let spanless = kind.family() == KindFamily::Decides || new_file;
                 if spanless && *editorial {
                     return Some(format!(
                         "a staged `{EDITORIAL}` on {}, which writes no existing node",

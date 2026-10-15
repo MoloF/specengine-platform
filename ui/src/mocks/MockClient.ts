@@ -214,20 +214,26 @@ export class MockClient implements SpecEngineClient {
    * Stages a choice as the daemon does (`docs/canon/decision-staging.md` "The stage", "Daemon"):
    * on an open proposal read at its current `updated_at` only, the flags checked against its
    * options (`--editorial` only on a change that writes an existing node), replacing any staged
-   * choice; nothing applied. The `conflict` scenario: the first stage
-   * of each proposal finds one staged meanwhile by another page, so it is refused 409 with the
-   * current document's reason, and the next one, on the new `updated_at`, is taken.
+   * choice; nothing applied. A drift item takes none: decided on a terminal only, it is refused 409
+   * in the daemon's words, after the `updated_at` check as the daemon orders them
+   * (`docs/features/drift-queue.md` "Review, inbox, round, stage"). The `conflict` scenario: the
+   * first stage of each proposal finds one staged meanwhile by another page, so it is refused 409
+   * with the current document's reason, and the next one, on the new `updated_at`, is taken; a
+   * drift item holds no stage, so none is found on it.
    */
   async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> {
     await this.wait();
     const { stored, index, entry } = this.openProposal(project, id);
     let current = stored.review;
-    if (this.scenario === "conflict" && !this.stagedElsewhere.has(`${project}/${id}`)) {
+    if (this.scenario === "conflict" && current.drift === null && !this.stagedElsewhere.has(`${project}/${id}`)) {
       this.stagedElsewhere.add(`${project}/${id}`);
       current = this.store(entry, index, stored, { ...current, staged: ELSEWHERE, staged_at: this.stamp(), updated_at: this.stamp() });
     }
     if (current.updated_at !== updatedAt) {
       throw this.refusal(`\`${id}\` changed since it was read (updated ${current.updated_at}, read ${updatedAt}): read it again; nothing changed`);
+    }
+    if (current.drift !== null) {
+      throw this.refusal(`${id} is a drift item, decided on a terminal only; nothing staged`);
     }
     if (stage.decision === "approve") {
       this.checkApprove(current, stage);
@@ -277,7 +283,8 @@ export class MockClient implements SpecEngineClient {
       this.roundConflicted.add(project);
       const index = entry.proposals.findIndex(({ review }) => review.id === first.id);
       const stored = entry.proposals[index];
-      if (stored !== undefined && stored.review.status === "open") {
+      // A drift item holds no stage: none is found staged on it meanwhile.
+      if (stored !== undefined && stored.review.status === "open" && stored.review.drift === null) {
         this.store(entry, index, stored, { ...stored.review, staged: ELSEWHERE, staged_at: this.stamp(), updated_at: this.stamp() });
       }
     }

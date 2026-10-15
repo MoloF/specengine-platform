@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-15
 ---
 
 # Proposal kind: decision
@@ -32,7 +32,7 @@ No flag form: the patch's four fields (text <= 1 MiB) have none, and one shape k
 
 ## Row and dedup
 
-No column or schema step (queue 6, 44 columns, `STATE_FORMAT` 2). `ProposalKind::Decision`: `ALL` 6, `applies()` false, `decides()` true; `create` -> `Invalid`, `create_intake` stores it. `intake_shape()`, exhaustive over every kind, gives a deciding kind's `IntakeShape`: `Question` for `question` and `decision` (`summary` = `text`, `working_answer`, `price_of_other`; `gap_type`, `evidence`, `options`, `recommendation` NULL), `Discrepancy` (`price_of_other` NULL). The shape is also the queue's dedup family: step 7 compares the rows whose kind shares the item's shape, so a decision and a question of equal normalised text on a shared target hit each other, a discrepancy neither. Corpus dedup unchanged. Reading such a row, `create_intake`'s shape refusals: `agent-intake.md` "Stored".
+No column or schema step of its own (`STATE_FORMAT` 2). `ProposalKind::Decision`: `family()` `Decides`; `create` -> `Invalid`, `create_intake` stores it. `intake_shape()`, exhaustive over every kind, gives a deciding kind's `IntakeShape`: `Question` for `question` and `decision` (`summary` = `text`, `working_answer`, `price_of_other`; `gap_type`, `evidence`, `options`, `recommendation` NULL), `Discrepancy` (`price_of_other` NULL). The shape is also the queue's dedup family: step 7 compares the rows whose kind shares the item's shape, so a decision and a question of equal normalised text on a shared target hit each other, a discrepancy neither. Corpus dedup unchanged. Reading such a row, `create_intake`'s shape refusals: `agent-intake.md` "Stored".
 
 Review document: `"kind": "decision"`, a question's keys, none added (46). Inbox `PR-0001 | decision | open | RULE-STAM-REGEN | <branch> | <created_at> | normal: Does regeneration wait for rest?`.
 
@@ -45,9 +45,9 @@ Review document: `"kind": "decision"`, a question's keys, none added (46). Inbox
 ## Elsewhere
 
 - **Stage** (`decision-staging.md`): a question's: approve with no flag or an `answer`; `option` a usage refusal (HTTP 400), a stored `option` stage or choice on the row corrupt; `span_hash` null.
-- **Round** (`round.md`, `round-sheet.md`): `decides()`, so on the sheet as a question: `## PR-0005 - decision, normal`, `Working answer:`, `Another answer costs:`; `ok`, own text, `reject:`; a number refused (no options). JSON `kind` `decision`, `options` `[]`. The empty sheet keeps `No open questions or discrepancies.`
+- **Round** (`round.md`, `round-sheet.md`): `Decides`, so on the sheet as a question: `## PR-0005 - decision, normal`, `Working answer:`, `Another answer costs:`; `ok`, own text, `reject:`; a number refused (no options). JSON `kind` `decision`, `options` `[]`. The empty sheet keeps `No open questions or discrepancies.`
 - **Task** (`task-package.md` "Package"): `--task`, `task_id` bind it; `open_proposals` lists it, `assumptions` its `working_answer` (by the item's fields).
-- **Kind lists** from `decides()` (`deciding_kinds()`): `create` of the record prefix: `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored ``; a decision flag on an applying kind: `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``.
+- **Kind lists** from `family()` `Decides` (`deciding_kinds()`): `create` of the record prefix: `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored ``; a decision flag on an applying kind: `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``.
 - **Backup** (`queue-backup.md`): rows as stored; a decision, its update and record round-trip byte-identical. An older build reads a `decision` row as corrupt by its kind, named (ADR-0017): `spec`, the daemon and `specengine-mcp` from one build.
 - **MCP texts** (`mcp-read.md` "Texts"): `INSTRUCTIONS`' queue line `- ask_question, report_discrepancy, report_decision = spec propose question|discrepancy|decision: hits are what is decided or asked; stored only if distinct_from names each; work on your working answer.`; `ask_question`'s description (2 041 B) counts a queued decision among hits and related.
 - **Plugin** 0.5.0 (`plugin.md`): `ask-owner`'s third record, "A decision, `report_decision`", told apart from an accepted decision hit; `spec-author` sends a decision taken in the work with the rule's new text as its patch.

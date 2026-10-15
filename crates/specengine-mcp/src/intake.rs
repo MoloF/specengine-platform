@@ -1,13 +1,15 @@
 //! The queue tools (`docs/canon/agent-intake.md` "Tools"): `propose_change`,
-//! `ask_question`, `report_discrepancy`, `report_decision` and
-//! `get_proposal`, each one call into the CLI library with a `spec` twin
+//! `ask_question`, `report_discrepancy`, `report_decision`, `report_drift`
+//! and `get_proposal`, each one call into the CLI library with a `spec` twin
 //! (`propose update|create|interpretation|amendment … --brief`, `propose
 //! question`, `propose discrepancy`, `propose decision`, `review --brief`;
 //! the kind `create` and a nullable `base`: task spec `proposal-kinds`; the
 //! kind `interpretation` and its nullable `decision`, `how`, `why`: task
 //! spec `kind-interpretation`; `report_decision`: task spec
 //! `kind-decision`, no field of it named `decision`; the kind `amendment`,
-//! its `base` null or absent: task spec `kind-amendment`), answering
+//! its `base` null or absent: task spec `kind-amendment`; `report_drift`,
+//! `spec propose drift`: task spec `drift-queue`, no field for rows or
+//! hashes: its evidence is computed from the commit, never typed), answering
 //! what the CLI answers (`read.rs`'s mapping). They write only the proposal
 //! queue in SpecEngine's data directory, as the CLI does: nothing under the
 //! project root, no commit, no state change (no approve, reject, import or
@@ -27,15 +29,17 @@ use serde_json::Value;
 use specengine_cli::{
     AMENDMENT_KIND, ANSWER_MAX, AUTHOR_FIELD_MAX, AmendmentRequest, CREATE_KIND, CreateRequest,
     DISTINCT_MAX, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTAKE_MATCHES_MAX, INTERPRETATION_FIELDS,
-    INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption, IntakeSeverity, InterpretRequest,
-    LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN,
-    OUTPUT_CAP_CHARS, Outcome, ProposeRequest, ProposedPatch, ProposedText, QuestionRequest,
-    RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, UPDATE_KIND,
-    process_git, utc_now, with_article,
+    DriftRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTAKE_MATCHES_MAX,
+    INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
+    IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX,
+    OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome, ProposeRequest, ProposedPatch,
+    ProposedText, QuestionRequest, RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX,
+    TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now, with_article,
 };
 
-use crate::mirror::{self, IntakeDocument, ReviewDocument, input_schema, output_schema};
+use crate::mirror::{
+    self, DriftDocument, IntakeDocument, ReviewDocument, input_schema, output_schema,
+};
 use crate::read::{DESCRIPTION_LIMIT, DETERMINISM, holds, holds_number, result_size_meta};
 use crate::server::SpecEngineServer;
 
@@ -163,6 +167,28 @@ with `spec reject PR --reason <answer>`. A refusal names the field. ",
     queue_tail!()
 );
 
+const DRIFT_DESCRIPTION: &str = concat!(
+    "Queues the lock drift of HEAD's commit for the owner: the same as `spec propose drift \
+[REF]... --author-role ROLE [--task T]`. The commit is judged as spec verify judges one \
+(uncommitted edits never); one item per node whose spec.lock pair no longer holds \
+(code_ahead, spec_ahead, conflict, broken_binding; a named node also when never locked), its \
+evidence computed, never typed. content is the command's output, structuredContent its --json \
+document {commit, branch, judged, created, hits, notes}.
+
+node_ids: 1 to 16 IDs (or slug/ID, ID#SECTION, .md paths) at HEAD, or a gone ID with \
+spec.lock entries; absent: every drifting node. A node only the working tree has is refused: \
+commit it first.
+author_role (required), author_model, run: who raises it.
+task_id: as propose_change.
+
+A hit stores nothing: an open or approved item of the node and branch (queued; its evidence \
+the same or changed), or a rejected one with the same evidence (settled). The owner decides \
+on a terminal: `spec approve PR` runs the node's `spec lock accept` (one commit of spec.lock \
+alone), or `spec reject PR --reason R`. A refusal: an error result with the reason and the \
+document. ",
+    queue_tail!()
+);
+
 const PROPOSAL_DESCRIPTION: &str = concat!(
     "One proposal of the current repository's queue: the same as `spec review PR --brief`. \
 content is the command's output (key: value lines), structuredContent its --json document: \
@@ -188,6 +214,15 @@ const _: () = assert!(QUESTION_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(DISCREPANCY_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(DECISION_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(PROPOSAL_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(DRIFT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(DRIFT_DESCRIPTION.is_ascii());
+const _: () = assert!(holds(DRIFT_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds_number(
+    DRIFT_DESCRIPTION,
+    "1 to ",
+    NODE_IDS_MAX,
+    " IDs"
+));
 const _: () = assert!(CHANGE_DESCRIPTION.is_ascii());
 const _: () = assert!(QUESTION_DESCRIPTION.is_ascii());
 const _: () = assert!(DISCREPANCY_DESCRIPTION.is_ascii());
@@ -571,6 +606,26 @@ pub(crate) struct DecisionArgs {
     pub task_id: Option<String>,
 }
 
+/// `report_drift` arguments (task spec `drift-queue`, "report_drift and
+/// texts"): no field for rows, hashes or any evidence; the place is the
+/// server's root.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DriftArgs {
+    /// The nodes to judge at HEAD (IDs, `slug/ID`, `ID#SECTION`,
+    /// root-relative `.md` paths, or a gone ID with lock entries), 1 to
+    /// 16; absent: every drifting node.
+    pub node_ids: Option<Vec<String>>,
+    /// The task it is raised for.
+    pub task_id: Option<String>,
+    /// The raising agent's role.
+    pub author_role: String,
+    /// The raising agent's model.
+    pub author_model: Option<String>,
+    /// The raising agent's run.
+    pub run: Option<String>,
+}
+
 /// `get_proposal` arguments.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -882,6 +937,47 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("report_decision"))
+    }
+
+    /// `spec propose drift`.
+    #[tool(
+        description = DRIFT_DESCRIPTION,
+        input_schema = input_schema::<DriftArgs>(),
+        output_schema = output_schema::<DriftDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn report_drift(
+        &self,
+        Parameters(args): Parameters<DriftArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Absent is a sweep; given, one node at least (a form error).
+        if args.node_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Err(ErrorData::invalid_params(
+                format!("node_ids: 1 to {NODE_IDS_MAX} nodes, or absent for every drifting node"),
+                None,
+            ));
+        }
+        Ok(self
+            .call(move |env, globals| {
+                let request = DriftRequest {
+                    references: args.node_ids.unwrap_or_default(),
+                    author_role: Some(args.author_role),
+                    author_model: args.author_model,
+                    run: args.run,
+                    now: utc_now(),
+                    git: process_git(env),
+                };
+                specengine_cli::propose_drift(env, globals, &request, args.task_id.as_deref())
+                    .map(|outcome| Outcome::Drift(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("report_drift"))
     }
 
     /// `spec review PR --brief`.

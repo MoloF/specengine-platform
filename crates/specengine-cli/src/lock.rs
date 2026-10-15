@@ -5,7 +5,13 @@
 //! "`spec.lock` writers"). One library function, [`lock_accept`], is the
 //! accept, the editorial refresh and a gone node's drop; it takes the
 //! owner's [`LockConsent`] and extra trailers, so a `drift` item's approve
-//! (that canon's opening) runs this same accept with its `Proposal:`.
+//! (canon `proposal-drift`) runs this same accept: its request names the
+//! item ([`LockAcceptRequest::proposal`]: each question says ` for
+//! PR-0012`, the commit carries `Proposal: PR-0012` after `Decided-by:`,
+//! the refusals name `spec approve PR-0012`) and the branch its place was
+//! checked on ([`LockAcceptRequest::branch`]: another one refuses, exit 1),
+//! and its outcome says what was written ([`LockOutcome::written`]), never
+//! read from a text.
 //!
 //! In order (`main` refuses a stdin that is no terminal before anything is
 //! read):
@@ -42,7 +48,9 @@
 //!    `spec approve` verifies its own, and more: one parent, the old
 //!    `HEAD`; only `spec.lock` changed; a `Lock:` trailer naming the node;
 //!    its `spec.lock` the bytes the owner confirmed (a commit without it
-//!    fails that check). Success is only a verified commit. A commit made
+//!    fails that check); each trailer of the caller's (and `Proposal:`)
+//!    present with its value (a hook dropping one fails it). Success is
+//!    only a verified commit. A commit made
 //!    that fails a check: exit 1 naming the commit, what is wrong and `git
 //!    reset --soft <commit>^` (history never rewritten); one that cannot be
 //!    read, or a branch that cannot: exit 1, unverified. After a commit git
@@ -55,7 +63,9 @@
 //!    as written, exit 1; an unmoved branch: the bytes restored, exit 1.
 //!    Bytes are restored only while the file still holds what this run
 //!    wrote; else they and the lock's index entry are left as they are,
-//!    and so said.
+//!    and so said. A git command a warning or a refusal prints names its
+//!    path as a quoted literal pathspec ([`crate::pathspec_word`]), the
+//!    worktree it runs in named.
 //!
 //! Writes the data directory (the index refresh, the commit message's
 //! scratch file), `spec.lock` and one commit; no queue row or event.
@@ -78,6 +88,7 @@ use specengine_core::lock::{
     LockRelation, Place as RowPlace, Recipes, Verified, drop_node, key_problem, merge_accept,
     parse_lock, refresh_editorial, render_lock,
 };
+use specengine_core::proposal::{EDITORIAL, LOCK_MODE_TRAILER, LOCK_TRAILER, PROPOSAL_TRAILER};
 use specengine_core::{
     CodeConfig, DOCUMENT_EXTENSION, NORM_RECIPE, Revision, is_under, norm_input, revision,
 };
@@ -96,15 +107,15 @@ use crate::refs::{
     AMBIGUOUS, CANNOT_VERIFY, Corpus, IdState, NodeKey, RON_DUPLICATE, RON_NO_VALUE, RON_TOO_DEEP,
     UNANCHORED, code_config, rev_state,
 };
+use crate::revisions::Restored;
 use crate::show::classify;
-use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
+use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, pathspec_word};
 
 /// Why a written `@rev` is ignored (the note's end).
 const REV_IGNORED: &str = "`spec lock accept` locks the node's revision at HEAD";
 
-/// The commit's trailers of its own.
-const LOCK_TRAILER: &str = "Lock";
-const MODE_TRAILER: &str = "Lock-mode";
+/// The commit's trailer naming the committer who decided (the others are
+/// core's: `Lock:`, `Lock-mode:`, `Proposal:`).
 const DECIDED_BY_TRAILER: &str = "Decided-by";
 
 /// Step 9's refusal (the spec's words).
@@ -115,7 +126,7 @@ const MODIFIED: &str = "modified";
 const STAGED: &str = "staged";
 const UNTRACKED: &str = "untracked";
 const DELETED: &str = "deleted";
-const NOT_TRACKED: &str = "not tracked";
+pub(crate) const NOT_TRACKED: &str = "not tracked";
 
 /// `spec lock accept` options.
 #[derive(Debug, Clone)]
@@ -129,10 +140,19 @@ pub struct LockAcceptRequest {
     /// `verified_at`.
     pub now: String,
     pub git: GitEnv,
+    /// The `drift` item whose approve runs this accept (`PR-…`, canon
+    /// `proposal-drift`): each question gains ` for <it>` before ` at
+    /// <commit>`, the commit `Proposal: <it>` after `Decided-by:` (checked
+    /// at step 10 as a caller's trailer), the refusals name `spec approve
+    /// <it>`; `None`: `spec lock accept`.
+    pub proposal: Option<String>,
+    /// The branch the item's place was checked on: step 3 refuses another
+    /// (exit 1, nothing written); `None`: any.
+    pub branch: Option<String>,
 }
 
-/// A trailer after the lock commit's own three (a `drift` item's approve,
-/// slice 4c: `Proposal: PR-…`).
+/// A trailer after the lock commit's own (canon `proposal-drift`: a
+/// caller's own, checked at step 10 with its value).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockTrailer {
     pub key: String,
@@ -162,13 +182,38 @@ pub enum LockMode {
 }
 
 impl LockMode {
+    /// Every `Lock-mode:` value an accept's commit carries (a drift item's
+    /// completion takes these alone).
+    pub(crate) const TRAILERS: [&'static str; 2] =
+        [Self::Accept.trailer(), Self::Editorial.trailer()];
+
     /// The `Lock-mode:` trailer's value.
-    fn trailer(self) -> &'static str {
+    const fn trailer(self) -> &'static str {
         match self {
             Self::Accept | Self::Gone => "accept",
-            Self::Editorial => "editorial",
+            Self::Editorial => EDITORIAL,
         }
     }
+}
+
+/// What a run left written (a `drift` item's approve maps it, never a
+/// text): nothing, a verified commit, the bytes put back, a commit made but
+/// not verified, or the bytes left as written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LockWritten {
+    /// Nothing written: refused, not confirmed, or the write failed.
+    #[default]
+    None,
+    /// A verified commit (exit 0).
+    Committed,
+    /// Written, its commit failed or kept nothing on the branch, and its
+    /// bytes put back (`Restored::Back`).
+    Restored,
+    /// A commit made that fails a check or cannot be verified.
+    Unverified,
+    /// Written and not put back (changed meanwhile, a restore step failed,
+    /// or nothing tells whether a commit was made).
+    Left,
 }
 
 /// One row: `<change> | <relation> | <file> | <kind> <symbol>[
@@ -215,6 +260,14 @@ pub struct LockOutcome {
     /// consent prompt showed it.
     #[serde(skip)]
     pub report: Option<String>,
+    /// What the run left written (not in `--json`: its eight keys stay).
+    #[serde(skip)]
+    pub written: LockWritten,
+    /// Step 7: nothing to change, and why (every binding locked as it is,
+    /// none lockable, every entry at R holding its hash): no question asked
+    /// (not in `--json`).
+    #[serde(skip)]
+    pub nothing: Option<String>,
 }
 
 impl LockOutcome {
@@ -230,6 +283,8 @@ impl LockOutcome {
             refusal: None,
             messages: Vec::new(),
             report: None,
+            written: LockWritten::None,
+            nothing: None,
         }
     }
 
@@ -416,8 +471,33 @@ pub fn lock_accept(
         return Ok(outcome.refused(&reason));
     }
 
-    // Git and the lock.
+    // Git and the lock; a drift item's approve on the branch its place was
+    // checked on.
     let repo = Repo::open(&project, &request.git)?;
+    if let Some(branch) = &request.branch
+        && *branch != repo.branch
+    {
+        let whose = request
+            .proposal
+            .as_deref()
+            .map_or_else(|| "the caller's".to_owned(), |id| format!("{id}'s"));
+        let reason =
+            format!("HEAD left `{branch}` after {whose} place was checked; nothing written");
+        return Ok(outcome.refused(&reason));
+    }
+    // `Proposal:` after `Decided-by:`, then the caller's: each checked at
+    // step 10 with its value.
+    let trailers: Vec<LockTrailer> = request
+        .proposal
+        .iter()
+        .map(|id| LockTrailer {
+            key: PROPOSAL_TRAILER.to_owned(),
+            value: id.clone(),
+        })
+        .chain(trailers.iter().cloned())
+        .collect();
+    let trailers = trailers.as_slice();
+    let proposal = request.proposal.as_deref();
     let recipes = build_recipes();
     let read = read_lock(&project.root, &recipes)?;
     let gone_id = without_rev(written);
@@ -431,15 +511,19 @@ pub fn lock_accept(
             return Ok(outcome.refused(&dirty_reason(&held)));
         }
         if request.editorial {
+            let plain = match proposal {
+                Some(id) => format!("spec approve {id}"),
+                None => format!("spec lock accept {gone_id}"),
+            };
             let reason = format!(
-                "`{gone_id}`: no node has this ID any more; `spec lock accept {gone_id}` without \
-                 --editorial drops its entries"
+                "`{gone_id}`: no node has this ID any more; `{plain}` without --editorial drops \
+                 its entries"
             );
             return Ok(outcome.refused(&reason));
         }
         outcome.mode = LockMode::Gone;
         return drop_gone(
-            env, &project, &repo, read, gone_id, outcome, consent, trailers,
+            env, &project, &repo, read, gone_id, proposal, outcome, consent, trailers,
         );
     }
     let nodes = match named {
@@ -467,7 +551,7 @@ pub fn lock_accept(
     };
     if request.editorial {
         editorial(
-            env, &project, &repo, read, &node, outcome, consent, trailers,
+            env, &project, &repo, read, &node, proposal, outcome, consent, trailers,
         )
     } else {
         accept(
@@ -499,7 +583,7 @@ struct NodeAt {
 
 /// `written` without a trailing `@rev` (1 to 9 digits), which `REF`'s read
 /// ignores: the canonical ID a gone node's entries carry.
-fn without_rev(written: &str) -> &str {
+pub(crate) fn without_rev(written: &str) -> &str {
     match written.rsplit_once('@') {
         Some((id, rev))
             if !id.is_empty()
@@ -572,7 +656,11 @@ fn head_holders(
 }
 
 /// Every canonical ID a node of the corpus has.
-fn canonical_ids(input: &CheckInput, scheme: &IdScheme, project: &ProjectRoot) -> BTreeSet<String> {
+pub(crate) fn canonical_ids(
+    input: &CheckInput,
+    scheme: &IdScheme,
+    project: &ProjectRoot,
+) -> BTreeSet<String> {
     let resolver = Resolver::new(input, scheme, &project.config.paths);
     let mut ids = BTreeSet::new();
     for file in &input.files {
@@ -840,16 +928,21 @@ fn accept(
             locked,
             current,
         }) => {
+            // A drift item's approve names its own way (canon
+            // `proposal-drift`).
+            let editorial = match &request.proposal {
+                Some(id) => format!("spec approve {id} --editorial"),
+                None => format!("spec lock accept {} --editorial", node.canonical),
+            };
             let reason = format!(
                 "`{}` rev {rev}: its text changed since spec.lock vouched for it at this revision \
                  ({} {} `{}`: spec_hash {locked}, now {current}): raise its `rev` by hand, commit, \
-                 then accept; or `--editorial` for an editorial change (`spec lock accept {} \
-                 --editorial`); nothing written",
+                 then accept; or `--editorial` for an editorial change (`{editorial}`); nothing \
+                 written",
                 node.canonical,
                 key.relation.as_str(),
                 key.kind.as_str(),
                 key.symbol,
-                node.canonical
             );
             return Ok(outcome.refused(&reason));
         }
@@ -859,30 +952,31 @@ fn accept(
         let rows = rows_text(&outcome.rows);
         outcome.report = Some(rows);
         if merge.count(Change::Unchanged) > 0 {
+            outcome.nothing = Some("every lockable binding is locked as it is".to_owned());
             outcome.unchanged = true;
             return Ok(outcome);
         }
-        let reason = if any_marker {
+        let why = if any_marker {
             format!(
-                "none of `{}`'s bindings can be locked (the rows say why); nothing written",
+                "none of `{}`'s bindings can be locked (the rows say why)",
                 node.canonical
             )
         } else {
-            format!(
-                "no marker names `{}` in the [code] tree; nothing written",
-                node.canonical
-            )
+            format!("no marker names `{}` in the [code] tree", node.canonical)
         };
+        let reason = format!("{why}; nothing written");
+        outcome.nothing = Some(why);
         return Ok(outcome.refused(&reason));
     }
     let question = format!(
-        "lock {} rev {rev} (accept: {} new, {} refreshed, {} kept, {} dropped) at {} on {} in {}? \
-         [y/N]",
+        "lock {} rev {rev} (accept: {} new, {} refreshed, {} kept, {} dropped){} at {} on {} in \
+         {}? [y/N]",
         node.canonical,
         merge.count(Change::New),
         merge.count(Change::Refreshed),
         merge.count(Change::Kept),
         merge.count(Change::Dropped),
+        for_item(request.proposal.as_deref()),
         repo.head,
         repo.branch,
         repo.worktree
@@ -1312,7 +1406,7 @@ fn dirty_inputs(
 }
 
 /// A status entry's state: untracked, deleted, staged, else modified.
-fn state_of(entry: &specengine_store::StatusEntry) -> &'static str {
+pub(crate) fn state_of(entry: &specengine_store::StatusEntry) -> &'static str {
     match (entry.index, entry.worktree) {
         ('?', _) | (_, '?') => UNTRACKED,
         (_, 'D') | ('D', _) => DELETED,
@@ -1398,6 +1492,12 @@ fn dirty_reason(dirty: &[(String, &'static str)]) -> String {
 
 // -------------------------------------------------------------- editorial
 
+/// ` for PR-0012` when a drift item's approve runs the accept, before ` at
+/// <commit>` in each question; else nothing.
+fn for_item(proposal: Option<&str>) -> String {
+    proposal.map(|id| format!(" for {id}")).unwrap_or_default()
+}
+
 /// `--editorial`: `spec_hash` set on the node's entries at its revision.
 #[allow(clippy::too_many_arguments)]
 fn editorial(
@@ -1406,6 +1506,7 @@ fn editorial(
     repo: &Repo,
     read: ReadLock,
     node: &NodeAt,
+    proposal: Option<&str>,
     mut outcome: LockOutcome,
     consent: LockConsent<'_>,
     trailers: &[LockTrailer],
@@ -1428,10 +1529,14 @@ fn editorial(
     outcome.rev = Some(rev);
     let refreshed = refresh_editorial(&read.lock, &node.canonical, rev, &spec_hash, None);
     if refreshed.at_rev.is_empty() {
+        let plain = match proposal {
+            Some(id) => format!("spec approve {id}"),
+            None => format!("spec lock accept {}", node.canonical),
+        };
         let reason = format!(
             "`{}` has no entry at rev {rev} (its revision was raised, or it was never locked): \
-             `spec lock accept {}` locks it; nothing written",
-            node.canonical, node.canonical
+             `{plain}` locks it; nothing written",
+            node.canonical
         );
         return Ok(outcome.refused(&reason));
     }
@@ -1452,12 +1557,19 @@ fn editorial(
     let count = refreshed.refreshed();
     if count == 0 {
         outcome.report = Some(rows_text(&outcome.rows));
+        outcome.nothing = Some(format!(
+            "every entry at rev {rev} holds the node's spec_hash"
+        ));
         outcome.unchanged = true;
         return Ok(outcome);
     }
     let question = format!(
-        "lock {} rev {rev} (editorial: spec_hash of {count} entries) at {} on {} in {}? [y/N]",
-        node.canonical, repo.head, repo.branch, repo.worktree
+        "lock {} rev {rev} (editorial: spec_hash of {count} entries){} at {} on {} in {}? [y/N]",
+        node.canonical,
+        for_item(proposal),
+        repo.head,
+        repo.branch,
+        repo.worktree
     );
     let message_node = node.canonical.clone();
     write_and_commit(
@@ -1484,6 +1596,7 @@ fn drop_gone(
     repo: &Repo,
     read: ReadLock,
     written: &str,
+    proposal: Option<&str>,
     mut outcome: LockOutcome,
     consent: LockConsent<'_>,
     trailers: &[LockTrailer],
@@ -1508,8 +1621,9 @@ fn drop_gone(
         })
         .collect();
     let question = format!(
-        "lock {written} (gone: {} dropped) at {} on {} in {}? [y/N]",
+        "lock {written} (gone: {} dropped){} at {} on {} in {}? [y/N]",
         dropped.len(),
+        for_item(proposal),
         repo.head,
         repo.branch,
         repo.worktree
@@ -1613,8 +1727,8 @@ fn write_and_commit(
 
     // The commit.
     let mut message = format!(
-        "spec: lock {node}\n\n{LOCK_TRAILER}: {node}\n{MODE_TRAILER}: {}\n{DECIDED_BY_TRAILER}: \
-         {decided_by}\n",
+        "spec: lock {node}\n\n{LOCK_TRAILER}: {node}\n{LOCK_MODE_TRAILER}: {}\n\
+         {DECIDED_BY_TRAILER}: {decided_by}\n",
         outcome.mode.trailer()
     );
     for trailer in trailers {
@@ -1637,7 +1751,8 @@ fn write_and_commit(
     let old = repo.head.as_str();
     let branch = repo.branch.as_str();
     let tip = || repo.git.commit_of(&format!("refs/heads/{branch}"));
-    let check = |commit: &str| check_lock_commit(repo, commit, &top_path, node, &rendered);
+    let check =
+        |commit: &str| check_lock_commit(repo, commit, &top_path, node, &rendered, trailers);
     let undo =
         |commit: &str| format!("`git reset --soft {commit}^` undoes it, its changes kept staged");
     let undo_back = Undo {
@@ -1648,25 +1763,42 @@ fn write_and_commit(
         top_path: &top_path,
         rendered: rendered.as_bytes(),
     };
+    // What was written, for a caller mapping it (a drift item's approve);
+    // each branch below sets it.
     match committed {
         Ok(()) => match tip() {
             Ok(Some(commit)) if commit != old => {
                 outcome.commit = Some(commit.clone());
                 match check(&commit) {
-                    Check::Ours => Ok(outcome),
+                    Check::Ours => {
+                        outcome.written = LockWritten::Committed;
+                        Ok(outcome)
+                    }
                     // Made, and not the lock alone: never rewritten here.
-                    Check::NotAlone(wrong) => Ok(outcome.refused(&format!(
-                        "the lock commit {commit} on `{branch}` is not this run's {LOCK_FILE} \
-                         alone ({}); it stays as git made it: {}",
-                        wrong.join("; "),
-                        undo(&commit)
-                    ))),
-                    Check::Unverified(why) => Ok(outcome.refused(&format!(
-                        "the lock commit {commit} on `{branch}` was made but cannot be verified \
-                         ({}); it stays as git made it: if it is not the lock alone, {}",
-                        why.join("; "),
-                        undo(&commit)
-                    ))),
+                    Check::NotAlone(wrong) => {
+                        outcome.written = LockWritten::Unverified;
+                        Ok(outcome.refused(&format!(
+                            "the lock commit {commit} on `{branch}` is not this run's \
+                             {LOCK_FILE} alone ({}); it stays as git made it: {}",
+                            wrong.join("; "),
+                            undo(&commit)
+                        )))
+                    }
+                    Check::Unverified(why) => {
+                        outcome.written = LockWritten::Unverified;
+                        Ok(outcome.refused(&format!(
+                            "the lock commit {commit} on `{branch}` was made but cannot be \
+                             verified ({}); it stays as git made it: if it is not the lock \
+                             alone, {}",
+                            why.join("; "),
+                            undo(&commit)
+                        )))
+                    }
+                    // This run's, a caller's trailer dropped by a hook.
+                    Check::Untrailed(missing) => {
+                        outcome.written = LockWritten::Unverified;
+                        Ok(outcome.refused(&untrailed(&commit, branch, &missing, &undo(&commit))))
+                    }
                 }
             }
             Ok(Some(_)) => {
@@ -1674,28 +1806,36 @@ fn write_and_commit(
                 if let Ok(Some(head)) = repo.git.head()
                     && head != old
                 {
+                    outcome.written = LockWritten::Unverified;
                     return Ok(outcome.refused(&format!(
                         "git reported the commit of {LOCK_FILE} made, yet `{branch}` did not move \
                          from {old} and HEAD is {head}: the commit is unverified and {LOCK_FILE} \
                          is left as written"
                     )));
                 }
+                // Neither moved (a hook reset it): the bytes put back.
                 let restored = undo_back.restore(true, &mut outcome);
                 Ok(outcome.refused(&format!(
                     "git reported the commit of {LOCK_FILE} made, yet `{branch}` did not move from \
                      {old}: {restored}; nothing committed"
                 )))
             }
-            Ok(None) => Ok(outcome.refused(&format!(
-                "git reported the commit of {LOCK_FILE} made, yet `{branch}` names no commit now: \
-                 it is unverified{}",
-                head_hint(repo)
-            ))),
-            Err(error) => Ok(outcome.refused(&format!(
-                "git reported the commit of {LOCK_FILE} made, but `{branch}` cannot be read \
-                 ({error}): it is unverified{}",
-                head_hint(repo)
-            ))),
+            Ok(None) => {
+                outcome.written = LockWritten::Unverified;
+                Ok(outcome.refused(&format!(
+                    "git reported the commit of {LOCK_FILE} made, yet `{branch}` names no commit \
+                     now: it is unverified{}",
+                    head_hint(repo)
+                )))
+            }
+            Err(error) => {
+                outcome.written = LockWritten::Unverified;
+                Ok(outcome.refused(&format!(
+                    "git reported the commit of {LOCK_FILE} made, but `{branch}` cannot be read \
+                     ({error}): it is unverified{}",
+                    head_hint(repo)
+                )))
+            }
         },
         Err(error) => match tip() {
             Ok(Some(commit)) if commit != old => match check(&commit) {
@@ -1706,6 +1846,7 @@ fn write_and_commit(
                         "the commit reported a failure, yet {commit} is this lock commit: {error}"
                     )));
                     outcome.commit = Some(commit);
+                    outcome.written = LockWritten::Committed;
                     Ok(outcome)
                 }
                 Check::NotAlone(wrong) => {
@@ -1717,11 +1858,25 @@ fn write_and_commit(
                         wrong.join("; ")
                     )))
                 }
-                Check::Unverified(why) => Ok(outcome.refused(&format!(
-                    "the commit of {LOCK_FILE} failed ({error}); `{branch}` moved to {commit}, \
-                     which cannot be verified ({}): {LOCK_FILE} is left as written",
-                    why.join("; ")
-                ))),
+                Check::Unverified(why) => {
+                    outcome.written = LockWritten::Unverified;
+                    Ok(outcome.refused(&format!(
+                        "the commit of {LOCK_FILE} failed ({error}); `{branch}` moved to {commit}, \
+                         which cannot be verified ({}): {LOCK_FILE} is left as written",
+                        why.join("; ")
+                    )))
+                }
+                // Git made this run's commit anyway, a caller's trailer
+                // dropped: nothing put back, as when the commit succeeds.
+                Check::Untrailed(missing) => {
+                    let reason = format!(
+                        "the commit of {LOCK_FILE} failed ({error}); {}",
+                        untrailed(&commit, branch, &missing, &undo(&commit))
+                    );
+                    outcome.commit = Some(commit);
+                    outcome.written = LockWritten::Unverified;
+                    Ok(outcome.refused(&reason))
+                }
             },
             Ok(Some(_)) => {
                 // The branch did not move: no commit of this run is on it.
@@ -1731,18 +1886,34 @@ fn write_and_commit(
                 )))
             }
             // The commit may have been made: nothing is restored.
-            Ok(None) => Ok(outcome.refused(&format!(
-                "the commit of {LOCK_FILE} failed ({error}), yet `{branch}` names no commit now: \
-                 it is unverified and {LOCK_FILE} is left as written{}",
-                head_hint(repo)
-            ))),
-            Err(read) => Ok(outcome.refused(&format!(
-                "the commit of {LOCK_FILE} failed ({error}), and `{branch}` cannot be read \
-                 ({read}): it is unverified and {LOCK_FILE} is left as written{}",
-                head_hint(repo)
-            ))),
+            Ok(None) => {
+                outcome.written = LockWritten::Unverified;
+                Ok(outcome.refused(&format!(
+                    "the commit of {LOCK_FILE} failed ({error}), yet `{branch}` names no commit \
+                     now: it is unverified and {LOCK_FILE} is left as written{}",
+                    head_hint(repo)
+                )))
+            }
+            Err(read) => {
+                outcome.written = LockWritten::Unverified;
+                Ok(outcome.refused(&format!(
+                    "the commit of {LOCK_FILE} failed ({error}), and `{branch}` cannot be read \
+                     ({read}): it is unverified and {LOCK_FILE} is left as written{}",
+                    head_hint(repo)
+                )))
+            }
         },
     }
+}
+
+/// Why this run's lock commit is unverified though the four checks hold: a
+/// caller's trailer is not on it; the commit stays as git made it.
+fn untrailed(commit: &str, branch: &str, missing: &[String], undo: &str) -> String {
+    format!(
+        "the lock commit {commit} on `{branch}` is this run's {LOCK_FILE}, yet {}: it is \
+         unverified and stays as git made it: {undo}",
+        missing.join("; ")
+    )
 }
 
 /// `; HEAD names <commit>` when `HEAD` can be read: what an unverified
@@ -1756,25 +1927,35 @@ fn head_hint(repo: &Repo) -> String {
 
 /// What step 10 found a commit to be.
 enum Check {
-    /// This run's lock commit: all four checks hold.
+    /// This run's lock commit: every check holds.
     Ours,
-    /// Some check fails: the reasons.
+    /// One of the four "is it ours" checks fails: the reasons (a caller's
+    /// trailer missing too, if so).
     NotAlone(Vec<String>),
-    /// No check fails, but one could not be read: the reasons.
+    /// No check fails, but one could not be read: the reasons (a caller's
+    /// trailer missing too, if so).
     Unverified(Vec<String>),
+    /// The four hold, read: this run's lock commit, yet a caller's trailer
+    /// is missing or holds another value (a hook dropped or rewrote it):
+    /// the reasons. Never put back; unverified.
+    Untrailed(Vec<String>),
 }
 
 /// `commit` against this run's lock commit (`spec approve`'s three checks
-/// and one more): its parents the old `HEAD` alone, `spec.lock` the only
-/// path it changes, a `Lock:` trailer naming the node, and its `spec.lock`
+/// and two more): its parents the old `HEAD` alone, `spec.lock` the only
+/// path it changes, a `Lock:` trailer naming the node, its `spec.lock`
 /// blob the bytes the owner confirmed (a hook that rewrote and staged the
-/// lock, a concurrent accept of the node, fail it).
+/// lock, a concurrent accept of the node, fail it); then, apart from these
+/// four, each of `trailers` (the caller's, `Proposal:` of a drift item's
+/// approve) present with its value (a hook dropping one fails it, the
+/// commit still this run's: [`Check::Untrailed`]).
 fn check_lock_commit(
     repo: &Repo,
     commit: &str,
     top_path: &str,
     node: &str,
     rendered: &str,
+    trailers: &[LockTrailer],
 ) -> Check {
     let mut wrong = Vec::new();
     let mut unread = Vec::new();
@@ -1821,10 +2002,25 @@ fn check_lock_commit(
         },
         Err(error) => unread.push(format!("its {top_path} cannot be read: {error}")),
     }
+    // The caller's trailers, apart: a missing one never makes the commit
+    // another run's.
+    let mut untrailed = Vec::new();
+    for trailer in trailers {
+        let (key, value) = (one_line(&trailer.key), one_line(&trailer.value));
+        match repo.git.trailer_values(commit, &key) {
+            Ok(values) if values.contains(&value) => {}
+            Ok(_) => untrailed.push(format!("it has no `{key}: {value}` trailer")),
+            Err(error) => unread.push(format!("its trailers cannot be read: {error}")),
+        }
+    }
     if !wrong.is_empty() {
+        wrong.extend(untrailed);
         Check::NotAlone(wrong)
     } else if !unread.is_empty() {
+        unread.extend(untrailed);
         Check::Unverified(unread)
+    } else if !untrailed.is_empty() {
+        Check::Untrailed(untrailed)
     } else {
         Check::Ours
     }
@@ -1847,22 +2043,27 @@ impl Undo<'_> {
     /// index entry set back to `HEAD`'s too, which a `commit --only` that
     /// left no commit on the branch updated), or a first lock's file and
     /// index entry removed. A file someone changed meanwhile is never
-    /// touched. The refusal's clause.
+    /// touched. Sets [`LockOutcome::written`] (`Restored::Back`: restored;
+    /// else left); the refusal's clause. Each git command it prints names
+    /// its path as a quoted literal pathspec, a warning the worktree too.
     fn restore(&self, index: bool, outcome: &mut LockOutcome) -> String {
         let top_path = self.top_path;
+        let word = pathspec_word(top_path);
+        let worktree = &self.repo.worktree;
         let now = fs::read(self.path).ok();
         if now.as_deref() != Some(self.rendered) {
+            outcome.written = LockWritten::Left;
             // The index entry this run made stays too: a first lock's
             // intent-to-add entry, or the confirmed bytes a `commit --only`
             // that left no commit staged.
             let entry = match (self.created, index) {
                 (Some(_), _) => format!(
                     ", and so is its intent-to-add entry in the index (`git rm --cached -- \
-                     {top_path}` drops it)"
+                     {word}` drops it)"
                 ),
                 (None, true) => format!(
                     ", and so is its index entry, which holds the bytes confirmed (`git reset -q \
-                     -- {top_path}` sets it back to HEAD's)"
+                     -- {word}` sets it back to HEAD's)"
                 ),
                 (None, false) => String::new(),
             };
@@ -1876,8 +2077,8 @@ impl Undo<'_> {
                 if let Err(error) = self.repo.git.remove_cached(top_path) {
                     failed = true;
                     outcome.messages.push(Message::Warning(format!(
-                        "cannot drop the index entry of {LOCK_FILE}: {error}; `git rm --cached -- \
-                         {top_path}` drops it"
+                        "cannot drop the index entry of {LOCK_FILE} in {worktree}: {error}; `git \
+                         rm --cached -- {word}` drops it"
                     )));
                 }
                 for left in created.remove() {
@@ -1889,20 +2090,29 @@ impl Undo<'_> {
                 if let Err(error) = replace_file(self.path, bytes) {
                     failed = true;
                     outcome.messages.push(Message::Warning(format!(
-                        "cannot restore {LOCK_FILE}: {error}; `git checkout -- {top_path}` \
-                         restores it"
+                        "cannot restore {LOCK_FILE} in {worktree}: {error}; `git checkout -- \
+                         {word}` restores it"
                     )));
                 }
                 if index && let Err(error) = self.repo.git.reset_path(top_path) {
                     failed = true;
                     outcome.messages.push(Message::Warning(format!(
-                        "cannot set the index entry of {LOCK_FILE} back to HEAD's: {error}; `git \
-                         reset -q -- {top_path}` does"
+                        "cannot set the index entry of {LOCK_FILE} in {worktree} back to HEAD's: \
+                         {error}; `git reset -q -- {word}` does"
                     )));
                 }
             }
             (None, None) => {}
         }
+        let restored = if failed {
+            Restored::Failed
+        } else {
+            Restored::Back
+        };
+        outcome.written = match restored {
+            Restored::Back => LockWritten::Restored,
+            Restored::Left | Restored::Failed => LockWritten::Left,
+        };
         if failed {
             "it is not restored (see the warning)".to_owned()
         } else {

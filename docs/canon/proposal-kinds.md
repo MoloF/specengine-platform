@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-15
 ---
 
 # Proposal kinds: create
@@ -28,7 +28,7 @@ In order; the first refusal answers, exit 1 unless named; nothing stored or rese
    - an `aliases_from` prefix -> `` `QST-033` (line N) is written with a legacy `aliases_from` prefix: a new ID is written with its canonical prefix, `Q-033` ``;
    - a look-alike or mixed script -> exit 2 `line N: <the Latin fix>` (core `fix`, ADR-0009);
    - a number not as core `record_id` writes it (`record_form`) -> `` `R-7` (line N): its prefix's numbers are written as `R-07` `` (past `width` passes: `id-width` is a finding);
-   - the `[decision_records]` prefix -> `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored `` (`deciding_kinds()`, by `decides()`);
+   - the `[decision_records]` prefix -> `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored `` (`deciding_kinds()`: `family()` `Decides`);
    - twice -> `` `X` is defined twice in the text (lines a and b) ``;
    - taken: defined or aliased in the recorded root's index, refreshed now -> `` `X` is defined in `<path>` (`id: Y` | no `id:`) `` (`is an alias in`); else held by a live create or amendment -> `` `X` is reserved by `PR-0001` (open), a live create `` (the holder's kind); a number shape adds ``; the next free is `Z` ``.
    An `immutable_text` prefix may be created in a new file; its sections are no section-form target (Creation 1).
@@ -43,11 +43,11 @@ A live (`open`, `approved`) create or amendment (`adds_nodes()`) of the project,
 
 ## Queue row
 
-No schema bump of its own (now 6, 44 columns). File form: `target_id` the text's `id:` canonical, else the path; `target_path` the path; `target_ids` the new IDs in text order when `target_id` heads them, else `[path, new IDs]`; `base_hash`, `base_text` `NULL`; `new_text` the file; `patch_hash` `b3_hash(target_id LF LF new_text)`. Section form: an update's columns, `target_ids` `[target_id, new IDs]` (an id-less feature document: `[<path>, <slug>/AC-08]`). Both: place, `rationale`, `author`, `diagnostics` as an update's; intake and record columns `NULL`.
+No schema bump of its own (`proposal-queue.md` "Store"). File form: `target_id` the text's `id:` canonical, else the path; `target_path` the path; `target_ids` the new IDs in text order when `target_id` heads them, else `[path, new IDs]`; `base_hash`, `base_text` `NULL`; `new_text` the file; `patch_hash` `b3_hash(target_id LF LF new_text)`. Section form: an update's columns, `target_ids` `[target_id, new IDs]` (an id-less feature document: `[<path>, <slug>/AC-08]`). Both: place, `rationale`, `author`, `diagnostics` as an update's; intake and record columns `NULL`.
 
 New IDs of a row: `target_ids` but the first, plus the first with no base when it is an ID. Corrupt, named: `target_ids` `NULL` or not a JSON list of IDs headed by `target_id`; the base set in part; `new_text`, `rationale` `NULL`; an intake or record column set. An older build reads it as corrupt by its `kind` (ADR-0017).
 
-Store: `ProposalKind::Create` (`applies()`, `adds_nodes()` true; `decides()`, `amends()` false; each an exhaustive match; `proposal_genre.rs` refuses `==` on `Create` or `Amendment`); `NewProposal {base_hash?, base_text?, new_ids}`; `Proposal::new_file()` (`adds_nodes()`, no base), `target_ids()`. `create` -> `Invalid`: an update without its base or with new IDs, a base in part, an empty base hash, a new ID empty or repeated, a new file's `target_id` neither its path nor its first new ID.
+Store: `ProposalKind::Create` (`family()` `Applies`, `adds_nodes()` true, `amends()` false; each an exhaustive match, `family() -> KindFamily {Applies, Decides, Locks}` too: `proposal-drift.md`; `proposal_genre.rs` refuses `==` on `Create` or `Amendment`); `NewProposal {base_hash?, base_text?, new_ids}`; `Proposal::new_file()` (`adds_nodes()`, no base), `target_ids()`. `create` -> `Invalid`: an update without its base or with new IDs, a base in part, an empty base hash, a new ID empty or repeated, a new file's `target_id` neither its path nor its first new ID.
 
 **Review document**: an update's keys; a new file: `base_hash`, `base_text` `null`, `diff` against an empty base (`--- base <path>`, `+++ proposed <path>`, `@@ -0,0 +1,<n> @@`), `preview` `applies` or `unavailable`. **Inbox** `<id> | create | <status> | <target_id> | ...`. Backup (`queue-backup.md`), events unchanged.
 

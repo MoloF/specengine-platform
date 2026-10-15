@@ -336,7 +336,8 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         );
         assert!(reply.cors_headers().is_empty(), "{reply:?}");
         let document = reply.json();
-        assert_eq!(document.as_object().unwrap().len(), 47, "{document}");
+        // 48 keys since docs/features/drift-queue.md added `drift`.
+        assert_eq!(document.as_object().unwrap().len(), 48, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -1110,19 +1111,21 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    sqlite3(&db(&s.home), "PRAGMA user_version = 8;");
+    // This build's queue schema is 8 (docs/features/drift-queue.md "Queue
+    // schema 8"): 9 is newer.
+    sqlite3(&db(&s.home), "PRAGMA user_version = 9;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
     );
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
-    assert!(message.contains('8') && message.contains('7'), "{message}");
+    assert!(message.contains('9') && message.contains('8'), "{message}");
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "8",
+        "9",
         "left alone"
     );
     assert_eq!(
@@ -1259,7 +1262,8 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     let reply = stage_now(&server, &id, "\"decision\":\"approve\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
-    assert_eq!(document.as_object().unwrap().len(), 47, "{document}");
+    // 48 keys since docs/features/drift-queue.md added `drift`.
+    assert_eq!(document.as_object().unwrap().len(), 48, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
@@ -1372,7 +1376,8 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     let reply = stage_now(&server, &id, "\"decision\":\"approve\",\"note\":\"keep\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
-    assert_eq!(document.as_object().unwrap().len(), 47, "{document}");
+    // 48 keys since docs/features/drift-queue.md added `drift`.
+    assert_eq!(document.as_object().unwrap().len(), 48, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));

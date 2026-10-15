@@ -62,7 +62,10 @@
 //! completes it with one parent, adding exactly its record's path, the blob
 //! there its stored `record_text` byte for byte, never rendered again
 //! ([`record_commit`]); a create's new file (task spec `proposal-kinds`)
-//! alike, its blob the stored `new_text` ([`file_commit`]).
+//! alike, its blob the stored `new_text` ([`file_commit`]); a drift item's
+//! (task spec `drift-queue`) with one parent, changing only the recorded
+//! root's `spec.lock`, its `Lock:` trailer naming the item's node, either
+//! `Lock-mode` ([`drift_commit`]).
 //!
 //! Git runs `-C <worktree>` (a [`History::Current`] lookup: `-C` the
 //! current project root), stdin null, without the caller's local `GIT_*`
@@ -81,17 +84,18 @@ use specengine_core::lock::LOCK_FILE;
 use specengine_core::patch::{
     HolderError, is_section, locate, one_holder, span_bytes, splice, update_refusal, update_text,
 };
-use specengine_core::proposal::PROPOSAL_TRAILER;
+use specengine_core::proposal::{LOCK_MODE_TRAILER, LOCK_TRAILER, PROPOSAL_TRAILER};
 use specengine_model::node::Node;
 use specengine_model::{IdScheme, ParsedFile, grammar};
 use specengine_store::{
-    GitEnv, GitError, Merge, Place, Proposal, Source as _, SpecIndex as _, WorkingTree,
+    GitEnv, GitError, KindFamily, Merge, Place, Proposal, Source as _, SpecIndex as _, WorkingTree,
     WorktreeGit, same_repository, span_hash, update_file,
 };
 
 use crate::create::{Corpus, canonical_in};
 use crate::interpret::{Decided, decision_step};
 use crate::location::{OpenIndex, open_index};
+use crate::lock::LockMode;
 use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
 use crate::proposals::{Preview, QueueContext, top_of, top_path};
 use crate::propose::is_path_target;
@@ -865,6 +869,16 @@ fn applied_before(proposal: &Proposal, found: &[TrailerCommit]) -> Option<StepFa
 /// What completes a proposal by its commit, for a refusal naming one that
 /// does not (steps 5 and 10, `spec reject`).
 pub(crate) fn completes_when(proposal: &Proposal) -> String {
+    if proposal.kind.family() == KindFamily::Locks {
+        return format!(
+            "a commit on `{}` with the trailers `{PROPOSAL_TRAILER}: {id}` and `{LOCK_TRAILER}: \
+             {}`, one parent, changing only `{}` completes it (`spec approve {id}`)",
+            proposal.place.branch,
+            proposal.target_id,
+            top_of(proposal, LOCK_FILE),
+            id = proposal.id
+        );
+    }
     if proposal.new_file() {
         return format!(
             "a commit on `{}` with the trailer `{PROPOSAL_TRAILER}: {id}`, one parent, adding \
@@ -1131,14 +1145,13 @@ fn trailer_commits(
     .map_err(failed)?;
     Ok(found
         .into_iter()
-        .map(|commit| {
-            if proposal.kind.decides() {
-                record_commit(git, proposal, commit)
-            } else if proposal.new_file() {
-                file_commit(git, proposal, commit)
-            } else {
-                trailer_commit(git, scratch, proposal, config_now, commit)
-            }
+        .map(|commit| match proposal.kind.family() {
+            KindFamily::Decides => record_commit(git, proposal, commit),
+            // Before `trailer_commit`: its target path is `spec.lock`, which
+            // that judge would pass and then parse as Markdown.
+            KindFamily::Locks => drift_commit(git, proposal, commit),
+            KindFamily::Applies if proposal.new_file() => file_commit(git, proposal, commit),
+            KindFamily::Applies => trailer_commit(git, scratch, proposal, config_now, commit),
         })
         .collect())
 }
@@ -1167,6 +1180,61 @@ fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Trai
         commit,
         not_completing,
         carries: false,
+    }
+}
+
+/// One trailer commit of a drift item judged (task spec `drift-queue`,
+/// "Approve"): it completes it as accept's step 10 would take it
+/// (`check_lock_commit`): one parent, changing only the recorded root's
+/// `spec.lock` and holding it (a commit deleting it is none of accept's),
+/// its `Lock:` trailer naming the item's node, a `Lock-mode` trailer
+/// accept writes (a plain or an editorial accept); the lock's bytes are
+/// its accept's, never compared with anything stored.
+fn drift_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> TrailerCommit {
+    let not_completing = lock_commit_problem(git, proposal, &commit);
+    TrailerCommit {
+        commit,
+        not_completing,
+        carries: false,
+    }
+}
+
+/// Why `commit` is no lock commit of the drift item `proposal`'s accept
+/// ([`drift_commit`]); `None`: it is.
+fn lock_commit_problem(git: &WorktreeGit, proposal: &Proposal, commit: &str) -> Option<String> {
+    let path = top_of(proposal, LOCK_FILE);
+    let node = &proposal.target_id;
+    let unreadable = |error: &dyn fmt::Display| Some(one_line(&format!("cannot be read: {error}")));
+    let parent = match git.parents(commit) {
+        Ok(parents) => match parents.as_slice() {
+            [parent] => parent.clone(),
+            parents => return Some(format!("has {} parents", parents.len())),
+        },
+        Err(error) => return unreadable(&error),
+    };
+    match git.changed_paths(&parent, commit) {
+        Ok(changed) if changed == [path.as_str()] => {}
+        Ok(changed) => return Some(format!("changes {}", changed.join(", "))),
+        Err(error) => return unreadable(&error),
+    }
+    match git.blob_oid(commit, &path) {
+        Ok(Some(_)) => {}
+        Ok(None) => return Some(format!("has no {path}")),
+        Err(error) => return unreadable(&error),
+    }
+    match git.trailer_values(commit, LOCK_TRAILER) {
+        Ok(values) if values.contains(node) => {}
+        Ok(_) => return Some(format!("has no `{LOCK_TRAILER}: {node}` trailer")),
+        Err(error) => return unreadable(&error),
+    }
+    let modes = LockMode::TRAILERS;
+    match git.trailer_values(commit, LOCK_MODE_TRAILER) {
+        Ok(values) if values.iter().any(|value| modes.contains(&value.as_str())) => None,
+        Ok(_) => Some(format!(
+            "has no `{LOCK_MODE_TRAILER}: {}` trailer",
+            modes.join("` or `")
+        )),
+        Err(error) => unreadable(&error),
     }
 }
 

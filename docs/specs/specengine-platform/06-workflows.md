@@ -115,12 +115,12 @@ Discrepancies, questions and proposals **block nothing**. The guarantee "nothing
 ## 4. The machine found drift
 
 ```
-spec verify (pre-push / CI / daemon on FileChanged)
+spec verify (a project's hook / CI / an agent; never a daemon raising)
   → RULE-STAM-REGEN: code_ahead (ast_hash changed, spec did not) — commit 8263ce2
-  → to the owner's queue: "Code changed after verification"
-       [accept code changes]   → the owner's `spec lock accept`
-       [this changes the rule] → task to an agent: propose a spec edit
-       [reject]                → task: restore behaviour (spec_ahead)
+  → spec propose drift (MCP report_drift): a `drift` item in the owner's queue
+       [accept code changes]   → spec approve PR: the node's `spec lock accept`
+       [this changes the rule] → task to an agent: propose a spec edit (4c-2)
+       [reject]                → task: restore behaviour (spec_ahead; 4c-2)
 ```
 
 `conflict` (both spec and code changed) opens in the diff inspector: spec `git diff <lock.commit>..HEAD` by section, code by the symbol's range.

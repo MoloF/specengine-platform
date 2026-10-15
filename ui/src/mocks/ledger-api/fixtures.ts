@@ -1,4 +1,4 @@
-import { frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
+import { fakeHex, frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
 import { nodeKinds, specStatuses } from "./kinds";
 
 // ledger-api: an invented payments service, with a node vocabulary disjoint from harbor-sim's:
@@ -29,6 +29,60 @@ const ENDPOINT_DIFF = [
   "+- Answers 201 with the refund, 200 with the same refund on a repeated key,",
   "+  422 when the amount exceeds the captured rest.",
 ].join("\n");
+
+/** The drift item's node: the refund service, at revision 5 in the file and in its lock entries. */
+export const DRIFT_NODE = "SVC-REFUNDS";
+
+/** The drift item, after ledger-api's last proposal. */
+export const DRIFT_ITEM = "PR-0010";
+
+/** The commit its drift was judged at, the `HEAD` the raise read. */
+const DRIFT_COMMIT = "7e2c9a4f1b6d3e8a0c5f2b7d4e9a1c6f3b8d0e5a";
+
+/** The commit `spec lock accept` last locked the node's bindings in. */
+const LOCKED_COMMIT = "a0cea48d2f61b9e07c3a5d8f14b26e9c7d0a3f51";
+
+/**
+ * Its rows as `spec verify --json` writes them (`docs/canon/spec-verify-output.md` "JSON"), by key,
+ * each Pre-existing: a function the lock vouches for is gone from the ledger module (Fix), and the
+ * refund function changed under an unchanged node (Check). The UI shows them as sent, untyped.
+ */
+const DRIFT_ROWS = [
+  {
+    node: DRIFT_NODE,
+    relation: "implements",
+    file: "src/refunds/ledger.rs",
+    kind: "item",
+    symbol: "refunds::ledger::write_refund_entry",
+    item_kind: "function_item",
+    state: "broken_binding",
+    category: "symbol_gone",
+    detail: null,
+    class: "fix",
+    pre_existing: true,
+    markers: [],
+    node_rev: 5,
+    lock: { rev: 5, commit: LOCKED_COMMIT, verified_at: "2026-10-09" },
+    compared: null,
+  },
+  {
+    node: DRIFT_NODE,
+    relation: "implements",
+    file: "src/refunds/service.rs",
+    kind: "item",
+    symbol: "refunds::service::refund_payment",
+    item_kind: "function_item",
+    state: "code_ahead",
+    category: "code_changed",
+    detail: null,
+    class: "check",
+    pre_existing: true,
+    markers: [{ line: 41, rev: 5 }],
+    node_rev: 5,
+    lock: { rev: 5, commit: LOCKED_COMMIT, verified_at: "2026-10-09" },
+    compared: "ast",
+  },
+];
 
 function ledgerCorpus(): MockCorpus {
   const documents = [
@@ -248,6 +302,26 @@ export function ledgerApi(now: number): MockProject {
         working_answer: "Keys are kept for 7 days.",
         author: agent("requirement-analyst", "R-0399"),
         created_at: at(3 * 24 * 60),
+      }),
+      // A drift item (docs/features/drift-queue.md "The item"): the node's lock drift queued for the
+      // owner, its evidence computed at the commit judged, never typed; `target_path` the lock,
+      // `summary` its rows' distinct states by key, `severity` high for a Fix row; no texts, diff,
+      // preview or revisions, the review's note instead. Decided on a terminal only, never staged.
+      proposal({
+        id: DRIFT_ITEM,
+        project: SLUG,
+        kind: "drift",
+        severity: "high",
+        target_id: DRIFT_NODE,
+        target_path: "spec.lock",
+        target_ids: [DRIFT_NODE],
+        worktree: "/work/ledger-api",
+        base_commit: DRIFT_COMMIT,
+        summary: "broken_binding symbol_gone, code_ahead code_changed",
+        drift: { hash: `b3:${fakeHex(`specengine-drift/v1\n${JSON.stringify(DRIFT_ROWS)}`, 64)}`, rows: DRIFT_ROWS, more: 0 },
+        notes: [`spec approve ${DRIFT_ITEM} shows the rows before asking`],
+        author: agent("rust-developer", "R-0431"),
+        created_at: at(10),
       }),
     ],
   };

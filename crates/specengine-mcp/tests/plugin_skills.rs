@@ -8,8 +8,9 @@
 //!
 //! - AC-06: every backticked `^[a-z][a-z0-9]*(_[a-z0-9]+)+$` in a skill is
 //!   a tool or a property name anywhere in an input or output schema; all
-//!   fourteen tools (eight, docs/features/task-package.md's five and
-//!   docs/features/kind-decision.md's `report_decision`) backticked in
+//!   fifteen tools (eight, docs/features/task-package.md's five,
+//!   docs/features/kind-decision.md's `report_decision` and
+//!   docs/features/drift-queue.md's `report_drift`) backticked in
 //!   some skill; no `mcp__`. M: `get_bundle`;
 //!   `node_id`; `get_proposal` gone everywhere;
 //!   `mcp__plugin_specengine_specengine__search`.
@@ -81,6 +82,8 @@ const NAMES: [(&str, &[&str]); 6] = [
             "working_answer",
             // docs/features/decision-apply.md "Data", "Plugin".
             "record_id",
+            // docs/features/drift-queue.md "report_drift and texts".
+            "report_drift",
         ],
     ),
     ("propose-spec-change", &["propose_change", "span_hash"]),
@@ -327,7 +330,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's fourteen tools"
+        "the default build's fifteen tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1140,7 +1143,7 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.7.2");
+    assert_eq!(manifest["version"], "0.8.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1220,7 +1223,7 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.7.2");
+    assert_eq!(manifest["version"], "0.8.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1323,8 +1326,9 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.7.2",
-        "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2"
+        manifest["version"], "0.8.0",
+        "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
+         drift-queue: 0.8.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();

@@ -10,7 +10,7 @@ adrs: [ADR-0047]
 
 ## Why
 
-Health's row 6 (06 s7: drift) reads "Not measured yet". `spec verify` (4a) shows drift only to whoever runs it, 4c-1 queues it only when raised (`drift-queue.md`); Health is where the owner looks without asking. ADR-0047 lets it list plain verify's findings, read-only, never a verdict (`architecture-code.md#health`, `#verify`).
+Health's row 6 (06 s7: drift) reads "Not measured yet". `spec verify` (4a) shows drift only to whoever runs it, 4c-1 queues it only when raised (`docs/canon/proposal-drift.md`); Health is where the owner looks without asking. ADR-0047 lets it list plain verify's findings, read-only, never a verdict (`architecture-code.md#health`, `#verify`).
 
 Slice 9 split (Q1): 9a `health-code.md` (rows 4-5, the rule table, the document's row shape), 9b this. **In scope:** the `drift` key of `spec health [--json]` and its route; verify's judge run in-process over 9a's walk; 8b's non-`verified` `tested` entries if 8b has shipped; Health's row 6, provisional types, mocks.
 

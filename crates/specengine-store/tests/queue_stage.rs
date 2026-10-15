@@ -7,8 +7,9 @@
 //!   (docs/features/kind-interpretation.md adds `interpretation` last),
 //!   `proposals` holding the 44 columns of `PROPOSAL_COLUMNS` (`PRAGMA
 //!   table_info`), `staged`, `staged_at` before it; a schema-4 database is
-//!   read unstepped (44 columns, the three `None`) and opens as 6, its rows
-//!   kept, all `NULL`; schema 7 is refused, left alone. M: the columns without the version bump.
+//!   read unstepped (46 columns since drift-queue, the five `None`) and
+//!   opens as 8, its rows kept, all `NULL`; schema 9 is refused, left
+//!   alone. M: the columns without the version bump.
 //! - The ops: `stage_from` sets both (`updated_at` = `now`) and logs one
 //!   `proposal.staged` `{id, staged, staged_at}` (the payload's bytes), a
 //!   second replaces; `unstage_from` clears both and logs one
@@ -251,23 +252,34 @@ fn three(db: &Path) -> SqliteQueue {
 
 // -------------------------------------------------------------- schema
 
-/// AC-02: schema 6, its 44 columns; a schema-4 database read unstepped,
-/// then opened as 6 with its rows and all three `NULL`; schema 7 refused.
+/// AC-02 (now schema 8, its 46 columns: drift-queue): a schema-4 database
+/// read unstepped, then opened as 8 with its rows and all five `NULL`;
+/// schema 9 refused.
 #[test]
 fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 7);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
+    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
+    // schema 8".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(
         PROPOSAL_COLUMNS[40..],
-        ["task_id", "staged", "staged_at", "interpretation"]
+        [
+            "task_id",
+            "staged",
+            "staged_at",
+            "interpretation",
+            "drift",
+            "drift_hash"
+        ]
     );
     assert_eq!(proposal_columns(4), Some(&PROPOSAL_COLUMNS[..41]));
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
-    assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
     // Schema 7 adds no column (docs/features/rev-discipline.md "Review
     // document, stage, queue").
-    assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(8), None);
+    assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
+    assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(9), None);
 
     let scratch = Scratch::new("qst-schema");
     let db = scratch.db("q");
@@ -286,7 +298,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         .expect("a task");
     let made = queue.stored_rows().expect("rows");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     assert_eq!(
         sqlite3(
             &db,
@@ -297,13 +309,15 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
             .map(|name| format!("{name} TEXT"))
             .collect::<Vec<_>>()
             .join(","),
-        "`PRAGMA table_info` is PROPOSAL_COLUMNS, `staged`, `staged_at`, `interpretation` TEXT last"
+        "`PRAGMA table_info` is PROPOSAL_COLUMNS, `staged`, `staged_at`, `interpretation`, `drift`, `drift_hash` TEXT last"
     );
 
-    // The database as task-package's build left it: schema 4, 41 columns.
+    // The database as task-package's build left it: schema 4, 41 columns
+    // (step 8's two dropped too).
     sqlite3(
         &db,
-        "ALTER TABLE proposals DROP COLUMN interpretation; ALTER TABLE proposals DROP COLUMN \
+        "ALTER TABLE proposals DROP COLUMN drift_hash; ALTER TABLE proposals DROP COLUMN drift; \
+         ALTER TABLE proposals DROP COLUMN interpretation; ALTER TABLE proposals DROP COLUMN \
          staged_at; ALTER TABLE proposals DROP COLUMN staged; PRAGMA user_version = 4;",
     );
     assert_eq!(
@@ -320,12 +334,12 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         "4",
         "a read steps nothing"
     );
-    assert_eq!(unstepped, made, "read at 44 columns, the three None");
+    assert_eq!(unstepped, made, "read at 46 columns, the five None");
     assert_eq!(unstepped.tasks.len(), 1, "its task read at schema 4");
     assert_eq!(unstepped.tasks[0].id(), Some(task.id.as_str()));
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     assert_eq!(
         sqlite3(
             &db,
@@ -349,21 +363,21 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8", "stepped once");
 
-    // Schema 7: refused by a read and an open, left alone.
-    sqlite3(&db, "PRAGMA user_version = 8;");
+    // Schema 9: refused by a read and an open, left alone.
+    sqlite3(&db, "PRAGMA user_version = 9;");
     let dumped = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(QueueError::SchemaTooNew { found: 8 }) => {}
-            other => panic!("expected SchemaTooNew 8, got {other:?}"),
+            Err(QueueError::SchemaTooNew { found: 9 }) => {}
+            other => panic!("expected SchemaTooNew 9, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), dumped);
 }
 
@@ -995,8 +1009,8 @@ fn ac12_dump_restore_dump_keeps_the_stages_byte_for_byte() {
         3,
         "the three stages read raw"
     );
-    // Each proposal line of the dump ends with its stage's two columns and
-    // a `NULL` `interpretation`.
+    // Each proposal line of the dump ends with its stage's two columns, a
+    // `NULL` `interpretation` and step 8's `NULL` `drift`, `drift_hash`.
     let lines: Vec<&str> = dump
         .lines()
         .filter(|line| line.starts_with("proposals\t"))
@@ -1008,7 +1022,7 @@ fn ac12_dump_restore_dump_keeps_the_stages_byte_for_byte() {
         approve_stage(Some(1), None, None),
     ]) {
         let tail = format!(
-            ",{},\"{T1}\",null]",
+            ",{},\"{T1}\",null,null,null]",
             serde_json::Value::String(stage.to_json())
         );
         assert!(line.ends_with(&tail), "{line} ends with {tail}");
@@ -1049,7 +1063,7 @@ fn ac12_stored_rows_reads_the_tasks_of_a_schema_6_queue() {
         )
         .expect("a task");
     let state: StoredQueue = queue.stored_rows().expect("rows");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     assert_eq!(state.tasks.len(), 1, "the schema-6 queue's task: {state:?}");
     assert_eq!(state.tasks[0].id(), Some(task.id.as_str()));
     let mut fresh = SqliteQueue::open(scratch.db("fresh"), PROJECT).expect("open");
@@ -1104,12 +1118,16 @@ fn schema_7_rewrites_open_approve_stages() {
                         \"canon\":null,\"note\":null,\"span_hash\":null}";
     let corrupt = "{\"decision\":\"approve\",\"option\":null}";
     let quote = |text: &str| text.replace('\'', "''");
+    // A genuine schema-6 database: step 8's two columns
+    // (docs/features/drift-queue.md "Queue schema 8") dropped as well.
     sqlite3(
         &db,
         &format!(
             "UPDATE proposals SET staged = '{}' WHERE id = 'PR-0001'; \
              UPDATE proposals SET staged = '{}' WHERE id = 'PR-0002'; \
              UPDATE proposals SET staged = '{}', staged_at = '{T1}' WHERE id = 'PR-0004'; \
+             ALTER TABLE proposals DROP COLUMN drift_hash; \
+             ALTER TABLE proposals DROP COLUMN drift; \
              PRAGMA user_version = 6;",
             quote(six_update),
             quote(six_question),
@@ -1122,7 +1140,8 @@ fn schema_7_rewrites_open_approve_stages() {
     let seq = last_seq(&db);
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("a schema-6 queue opens");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "7");
+    // Stepped 6 -> 7 -> 8: this build's schema.
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
     let seven_update = "{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
                         \"editorial\":null,\"note\":\"keep \\\"it\\\"\",\"span_hash\":\"b3:aa\"}";
     let seven_question = "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\

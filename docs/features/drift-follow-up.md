@@ -10,7 +10,7 @@ adrs: [ADR-0045]
 
 ## Why
 
-ADR-0045 gives a drift item three outcomes. 4c-1 (`drift-queue.md`) ships approve (the lock takes the code) and a plain reject. The other two, "bring the code back to the spec" and "change the spec to match the code", need a task, made ready only by the owner (ADR-0012). After 4b-1 the commonest item, `spec_ahead marker_behind` on each binding of a node whose meaning change was applied, cannot be accepted (`spec-lock.md` "Lockability"): without a follow-up its task is written by hand. Never cut (Q19).
+ADR-0045 gives a drift item three outcomes. 4c-1 (`drift-queue.md`, shipped 2026-10-15; canon `docs/canon/proposal-drift.md`) ships approve (the lock takes the code) and a plain reject. The other two, "bring the code back to the spec" and "change the spec to match the code", need a task, made ready only by the owner (ADR-0012). After 4b-1 the commonest item, `spec_ahead marker_behind` on each binding of a node whose meaning change was applied, cannot be accepted (`spec-lock.md` "Lockability"): without a follow-up its task is written by hand. Never cut (Q19).
 
 **In scope:** `spec reject PR --reason T --follow-up code|spec` on a `drift` item; store `reject_with_task`; core's title and goal; `proposal.rejected` gains `task`.
 
@@ -20,13 +20,13 @@ ADR-0045 gives a drift item three outcomes. 4c-1 (`drift-queue.md`) ships approv
 - **An agent** sees the task once `ready` (`claim_task`); its goal names node, revision, file and rows. `code`: it changes the code, sets the markers, the owner then accepts the lock. `spec`: it raises `propose_change`.
 - **Crates**: core pure (the texts), store (`reject_with_task`), CLI (`reject`'s flag). No MCP tool (the owner's terminal), no HTTP or UI change, no schema step, no new crate or dependency.
 - **Unchanged**: plain `spec reject`, other kinds' reject, task states, `spec task new`. **Writes**: the queue (the row, the task, two events) and the index.
-- **Overridden live-spec lines**, fixed at shipping (SW-2): 05:180 ("a task is created/updated": a draft task, by this follow-up), 06:122-123 (the task outcomes), 07:95 (`spec reject … [--follow-up code|spec]`).
+- **Overridden live-spec lines**, fixed at shipping (SW-2): 05:180-181 ("4c-2": a draft task, by this follow-up), 06:122-123 (the task outcomes, "4c-2"), 07:96 (`spec reject … [--follow-up code|spec]`).
 
 ## Data
 
 ### reject --follow-up
 
-WA-8, Q7. `spec reject PR --reason T [--follow-up code|spec]`. The flag on another kind, staged or not: exit 2 `--follow-up: only a drift item has a follow-up`; another value: exit 2. With it, after plain reject's checks (`proposal-completion.md` "Reject"; its lock commit looked up before and after the prompt: `drift-queue.md` "Approve", completion):
+WA-8, Q7. `spec reject PR --reason T [--follow-up code|spec]`. The flag on another kind, staged or not: exit 2 `--follow-up: only a drift item has a follow-up`; another value: exit 2. With it, after plain reject's checks (`proposal-completion.md` "Reject"; its lock commit looked up before and after the prompt: `proposal-drift.md` "Approve", completion):
 
 1. The node resolved now, in the recorded root's refreshed index; gone: exit 1 `--follow-up: R-12 names no node now; reject without it`.
 2. Ask `reject PR-0012 (R-12 in spec.lock on main in <worktree>) and make a draft task (code)? [y/N]`.
@@ -66,7 +66,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec, split from `drift-queue.md` 2026-10-13. SW-3 -- `export index`, `check` clean.
-- [ ] SW-2 -- at shipping: canon `proposal-drift.md` (a follow-up section beside 4c-1's), `proposal-completion.md` "Reject" (the flag, the event's `task`), `tasks.md`; the overridden lines; the core, store, CLI READMEs; `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping: canon `proposal-drift.md` (a follow-up section beside 4c-1's; ~0.5 KB left under its cap at 4c-1: the rest in `proposal-completion.md` "Reject"), `proposal-completion.md` "Reject" (the flag, the event's `task`), `tasks.md`; the overridden lines; the core, store, CLI READMEs; `CLAUDE.md` State.
 
 ## Out of scope
 
@@ -79,11 +79,11 @@ Follow-ups for other kinds; a follow-up without a reject; a `follow_up` stage ke
 
 ## Dependencies and ordering
 
-- **Needs**: 4c-1 `drift-queue` (the kind, the item, its stored rows, plain reject with the lock commit lookup).
+- **Needs**: 4c-1 `drift-queue`, shipped 2026-10-15 (the kind, the item, its stored rows, plain reject with the lock commit lookup: `proposal-drift.md`).
 - **Order**: 4c-1 -> 4c-2. **Independent**: 4b-2, 5b, 5c, 8b, 9b.
 
 ## Implementation
 
 Not started. Criteria from `drift-queue.md` (2026-10-13), old -> new: RD-11 -> RD-1 (plus the lock commit test), RD-16's follow-up half -> RD-2 (plus the cap), RD-3 new; TE-6's follow-ups -> TE-1; SW-4's follow-up canon -> SW-2.
 
-Carry-over from 4c-1 (its Q-D, 2026-10-14; code, the code-reviewer checks): CLI `create.rs` (~1159-1160, ~1409) and `decide.rs` (~647) print four raw pathspecs (one `git commit … -- <path>`, three `git rm --cached`; the worktree already named); quote each by `pathspec_word` (beside `one_line` in CLI `lib.rs` once 4c-1 ships).
+Carry-overs from 4c-1 (code, the code-reviewer checks): its Q-D, CLI `create.rs` (~1159-1160, ~1410) and `decide.rs` (~648, ~1201-1202) print six raw pathspecs (two `git commit … -- <path>`, four `git rm --cached`; the worktree already named): quote each by `pathspec_word` (CLI `lib.rs`, beside `one_line`); the UI mock's stale-stage text (`MockClient.ts` ~233, ``changed since it was read (updated X, read Y): read it again; nothing changed``) to the daemon's words (CLI `stage.rs` ~268, ``changed since it was read: updated at X, the choice was made on the one of Y; read it again; nothing staged``), the ui-developer's.

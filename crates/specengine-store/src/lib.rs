@@ -108,20 +108,20 @@ pub use error::StoreError;
 pub use git::{GitEnv, same_dir};
 pub use index::{DbSettings, SqliteIndex};
 pub use queue::{
-    APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, EVENT_APPLIED,
-    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED, EVENT_GATE_OBSERVED,
-    EVENT_REJECTED, EVENT_STAGED, EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED,
+    APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, DriftItem, DriftResult,
+    EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED,
+    EVENT_GATE_OBSERVED, EVENT_REJECTED, EVENT_STAGED, EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED,
     EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED, EVENT_TASK_COMPLETED, EVENT_TASK_CREATED,
     EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED, EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event,
-    EventsAfter, GateObserved, GateQueue, Intake, IntakeResult, Interpretation, NewIntake,
-    NewProposal, NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding,
-    ProposalKind, ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts,
-    QueueError, QueueMatch, RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation,
-    Restore, Run, Seen, SnapshotEntry, SqliteQueue, Stage, StagedChoice, StoredEvent, StoredNote,
-    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange,
-    TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableRow, UnreadableTask, binding_problem,
-    claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
-    task_event,
+    EventsAfter, GateObserved, GateQueue, Intake, IntakeResult, Interpretation, KindFamily,
+    NewDrift, NewIntake, NewProposal, NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter,
+    ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
+    QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch, RUN_COLUMNS, RecordApproval,
+    RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen, SnapshotEntry, SqliteQueue, Stage,
+    StagedChoice, StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun, StoredTask,
+    TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen, TaskSnapshot,
+    UnreadableRow, UnreadableTask, binding_problem, claimed_elsewhere, open_for_gate, patch_hash,
+    proposal_columns, record_gate_observed, task_event,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};

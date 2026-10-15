@@ -11,8 +11,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest, ProposedText,
-    QuestionRequest, ReviewRequest, SearchRequest, ShowRequest, TaskClaimRequest,
+    DriftRequest, Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest,
+    ProposedText, QuestionRequest, ReviewRequest, SearchRequest, ShowRequest, TaskClaimRequest,
     TaskCompleteRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest,
     render_json, render_text,
 };
@@ -22,22 +22,26 @@ use super::{Finished, Home, Server, result, stateless_meta, with_meta};
 /// The four read tools, in `tools/list` order.
 pub const READ_TOOLS: [&str; 4] = ["get_context_bundle", "get_node", "get_tree", "search"];
 
-/// The queue tools of task spec `agent-intake`, in `tools/list` order, and
-/// docs/features/kind-decision.md's `report_decision`.
-pub const QUEUE_TOOLS: [&str; 5] = [
+/// The queue tools of task spec `agent-intake`, in `tools/list` order,
+/// docs/features/kind-decision.md's `report_decision` and
+/// docs/features/drift-queue.md's `report_drift`.
+pub const QUEUE_TOOLS: [&str; 6] = [
     "ask_question",
     "get_proposal",
     "propose_change",
     "report_decision",
     "report_discrepancy",
+    "report_drift",
 ];
 
-/// The four queue tools that write the queue.
-pub const WRITE_TOOLS: [&str; 4] = [
+/// The queue tools that write the queue: four, and
+/// docs/features/drift-queue.md's `report_drift`.
+pub const WRITE_TOOLS: [&str; 5] = [
     "ask_question",
     "propose_change",
     "report_decision",
     "report_discrepancy",
+    "report_drift",
 ];
 
 /// The task tools of docs/features/task-package.md ("Description and
@@ -53,8 +57,9 @@ pub const TASK_TOOLS: [&str; 5] = [
 
 /// Every tool of the default build, in `tools/list` order (by name):
 /// thirteen since docs/features/task-package.md, fourteen since
-/// docs/features/kind-decision.md (`report_decision`).
-pub const TOOLS: [&str; 14] = [
+/// docs/features/kind-decision.md (`report_decision`), fifteen since
+/// docs/features/drift-queue.md (`report_drift`).
+pub const TOOLS: [&str; 15] = [
     "ask_question",
     "claim_task",
     "complete_task",
@@ -66,6 +71,7 @@ pub const TOOLS: [&str; 14] = [
     "propose_change",
     "report_decision",
     "report_discrepancy",
+    "report_drift",
     "report_run",
     "search",
     "submit_plan",
@@ -350,6 +356,22 @@ pub fn queue_library(
             )
             .map(|outcome| Outcome::Intake(Box::new(outcome)))
         }
+        // docs/features/drift-queue.md: `spec propose drift [REF…]`, no
+        // evidence typed.
+        "report_drift" => specengine_cli::propose_drift(
+            env,
+            globals,
+            &DriftRequest {
+                references: strings(&args["node_ids"]),
+                author_role: optional_text(args, "author_role"),
+                author_model: optional_text(args, "author_model"),
+                run: optional_text(args, "run"),
+                now: now.to_owned(),
+                git: git.clone(),
+            },
+            task,
+        )
+        .map(|outcome| Outcome::Drift(Box::new(outcome))),
         // docs/features/kind-decision.md: `spec propose decision --input -`.
         "report_decision" => {
             let mut input = args.clone();

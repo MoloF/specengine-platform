@@ -33,12 +33,12 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveRequest, BundleRequest, CheckRequest, CheckedTree,
-    CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, Env, Exit, ExportIndexRequest,
-    ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
-    GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest, IndexRequest,
-    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest, LockPrompt,
-    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
-    RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
+    CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit,
+    ExportIndexRequest, ExportStateRequest, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
+    GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest, InboxRequest,
+    IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
+    LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest,
+    RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
     SearchRequest, Serve, ServeRequest, ShowRequest, TEXT_MAX_BYTES, TaskClaimRequest,
     TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
     TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, VerifyRequest, render_json,
@@ -184,7 +184,7 @@ enum Command {
         #[command(subcommand)]
         what: Export,
     },
-    /// Propose a change to one node or a new one, ask the owner a question, report a discrepancy or raise a decision taken during work; no file is touched until the owner approves a change.
+    /// Propose a change to one node or a new one, ask the owner a question, report a discrepancy, raise a decision taken during work or queue HEAD's lock drift; no file is touched until the owner approves a change.
     Propose {
         #[command(subcommand)]
         kind: Propose,
@@ -219,7 +219,7 @@ enum Command {
         /// A question, a discrepancy or a decision: the section its record governs (ID, ID#SECTION or path#anchor), instead of its first ID.
         #[arg(long, value_name = "REF")]
         canon: Option<String>,
-        /// An editorial change (wording, no meaning): keep every revision the change would raise, and set the new spec hash on the spec.lock entries that vouched for the old text, in the same commit.
+        /// An editorial change (wording, no meaning): keep every revision the change would raise, and set the new spec hash on the spec.lock entries that vouched for the old text, in the same commit; a drift item: its node's `spec lock accept --editorial`.
         #[arg(long)]
         editorial: bool,
     },
@@ -607,6 +607,24 @@ enum Propose {
         #[arg(long = "author-model", value_name = "M")]
         author_model: Option<String>,
         /// The deciding agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
+    },
+    /// Queue the lock drift of HEAD's commit for the owner, one item per node whose spec.lock pair no longer holds (spec verify's findings), its evidence computed from the commit, never typed; approving one runs the node's `spec lock accept`. Exit 0 whatever was stored, 1 refused, 2 when it cannot run.
+    Drift {
+        /// The nodes to judge, each an ID, `slug/ID`, `ID#SECTION` or a root-relative `.md` path at HEAD, or a gone ID with spec.lock entries (at most 16); none: every drifting node. A named node is queued also when never locked.
+        #[arg(value_name = "REF")]
+        references: Vec<String>,
+        /// The raising agent's role (any of the three: an agent's item).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The raising agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The raising agent's run.
         #[arg(long, value_name = "ID")]
         run: Option<String>,
         /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
@@ -1076,6 +1094,28 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 task.as_deref(),
             )?))
         }
+        Command::Propose {
+            kind:
+                Propose::Drift {
+                    references,
+                    author_role,
+                    author_model,
+                    run,
+                    task,
+                },
+        } => Outcome::Drift(Box::new(specengine_cli::propose_drift(
+            env,
+            globals,
+            &DriftRequest {
+                references,
+                author_role,
+                author_model,
+                run,
+                now: now(),
+                git: process_git(env),
+            },
+            task.as_deref(),
+        )?)),
         Command::Inbox { all } => Outcome::Inbox(specengine_cli::inbox(
             env,
             globals,
@@ -1198,6 +1238,8 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     editorial,
                     now: now(),
                     git: process_git(env),
+                    proposal: None,
+                    branch: None,
                 },
                 &mut consent,
                 &[],

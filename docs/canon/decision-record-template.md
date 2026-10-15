@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-15
 ---
 
 # Decision records: config, template, flags
@@ -43,7 +43,7 @@ Slots are replaced in **one left-to-right pass**; a value is never scanned again
 
 ## Flags
 
-`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on an applying kind -> exit 2 naming the deciding kinds by `decides()` (`create::deciding_kinds`): `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``. Then, after the terminal check, no event (a stage too: `decision-staging.md`), `first_checks` judges by the item's fields, never its kind: one without options (a question, a decision) takes the working answer or `--answer`, one with options (a discrepancy) `--option`:
+`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on a kind that does not decide -> exit 2 naming the deciding kinds by `family()` (`create::deciding_kinds`; a drift item: `proposal-drift.md` "Approve"): `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``. Then, after the terminal check, no event (a stage too: `decision-staging.md`), `first_checks` judges by the item's fields, never its kind: one without options (a question, a decision) takes the working answer or `--answer`, one with options (a discrepancy) `--option`:
 
 - exit 2: `--option` on one without options (`` `--option` names a discrepancy's option, and `PR-0001` is a decision: its working answer, or `--answer T`, answers it; nothing changed ``, the kind with its article); `--answer` on a discrepancy; an open discrepancy without `--option` (naming the range, `0-2`); no ID target and no `--canon`; `--canon` not `ID`, `ID#SECTION` or `path#anchor` (core `parse_canon`); a blank `--answer`;
 - exit 1: `--option` past the options (naming `0-2`); `--answer` over 2 048 bytes, `--canon` over 512; an escaped character in any free-text source, named (``options[1].label: holds U+202E: a decision record never carries it; nothing changed``).

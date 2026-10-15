@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-15
 ---
 
 # Decision records: a deciding item approved
 
-Phase 2 slice 5 (`decision-apply`), `kind-decision`: `spec approve` on a `question`, `discrepancy` or `decision` (`ProposalKind::decides()`; a decision: `proposal-decision.md`) makes the owner's choice an accepted decision record in the project's own shape: one new file and one `spec: apply PR-...` commit in the recorded worktree (ADR-0004, ADR-0005, ADR-0032), the queue and the data directory; nothing else. `reject --reason` still settles one with an answer and no record ("Reject"). The engine names no prefix, directory or heading (ADR-0008): the project's table and template do. Config, template, flags: `decision-record-template.md`; updates, consent: `proposal-apply.md`; completion: `proposal-completion.md`; intake: `agent-intake.md`. Code: core `record` (`DecisionRecords`, `Template`, `Slot`, `Choice`, `record_{id,form,title,defect}`, `is_escaped`, caps); store `queue.rs`, `worktree.rs`; CLI `decide.rs`, `apply.rs` (dispatch, reject), `preflight.rs` (completion).
+Phase 2 slice 5 (`decision-apply`), `kind-decision`: `spec approve` on a `question`, `discrepancy` or `decision` (`ProposalKind::family()` `Decides`; a decision: `proposal-decision.md`) makes the owner's choice an accepted decision record in the project's own shape: one new file and one `spec: apply PR-...` commit in the recorded worktree (ADR-0004, ADR-0005, ADR-0032), the queue and the data directory; nothing else. `reject --reason` still settles one with an answer and no record ("Reject"). The engine names no prefix, directory or heading (ADR-0008): the project's table and template do. Config, template, flags: `decision-record-template.md`; updates, consent: `proposal-apply.md`; completion: `proposal-completion.md`; intake: `agent-intake.md`. Code: core `record` (`DecisionRecords`, `Template`, `Slot`, `Choice`, `record_{id,form,title,defect}`, `is_escaped`, caps); store `queue.rs`, `worktree.rs`; CLI `decide.rs`, `apply.rs` (dispatch, reject), `preflight.rs` (completion).
 
 ## Config
 

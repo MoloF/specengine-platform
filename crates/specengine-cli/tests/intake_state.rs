@@ -39,13 +39,15 @@ use specengine_cli::{
 use specengine_store::{PROPOSAL_COLUMNS, ProposalQueue as _, ProposalStatus, SqliteQueue};
 
 /// The eleven columns of queue schema 2, the five of schema 3, the
-/// `task_id` of schema 4, the stage of schema 5 and the `interpretation` of
-/// schema 6, as the dump writes an unbound update's.
+/// `task_id` of schema 4, the stage of schema 5, the `interpretation` of
+/// schema 6 and the `drift`, `drift_hash` of schema 8 (drift-queue), as the
+/// dump writes an unbound update's.
 const NULL_TAIL: &str = ",\"target_ids\":null,\"severity\":null,\"gap_type\":null,\
 \"summary\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":null,\
 \"options\":null,\"recommendation\":null,\"distinct_from\":null,\"linked\":null,\
 \"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\
-\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null}}";
+\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\
+\"drift\":null,\"drift_hash\":null}}";
 
 fn env_at(home: &Path, cwd: &Path) -> Env {
     Env {
@@ -247,10 +249,11 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":2,\"queue_schema\":7,\"project\":\"lantern-keep\",\"proposals\":5,\
+        "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":5,\
          \"tasks\":0,\"runs\":0,\"events\":6}"
     );
-    assert_eq!(PROPOSAL_COLUMNS.len(), 44);
+    // 46 since docs/features/drift-queue.md "Queue schema 8".
+    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     for row in &rows[1..6] {
         assert_columns(row, &PROPOSAL_COLUMNS);
         let value: Value = serde_json::from_str(row).unwrap();
@@ -330,7 +333,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":7,")
+        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":8,")
             && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,"),
         "{}",
         v3_lines[0]
@@ -338,7 +341,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":2,\"queue_schema\":7,",
+            "\"format\":2,\"queue_schema\":8,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
@@ -418,7 +421,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     let exported = export_ok(&pair, &pair.home, &dumps.join("from-v1.jsonl"));
     assert_eq!(
         exported, v3,
-        "a version-1 DB exports as format 2, queue_schema 6"
+        "a version-1 DB exports as format 2, queue_schema 8"
     );
     assert_eq!(
         sql(&db, "PRAGMA user_version;"),
@@ -428,12 +431,12 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
 
     let inbox = pair.inbox(&pair.main, false).expect("inbox");
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "7");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "8");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),
         PROPOSAL_COLUMNS,
-        "steps 2 to 6 append the twenty in order"
+        "steps 2 to 8 append the twenty-two in order"
     );
     assert_eq!(
         sql(

@@ -62,7 +62,9 @@ use specengine_cli::{
     StageRequest, export_state, import_state, propose_decision, propose_decision_with_task,
     render_json, render_text, round_answer, round_new, stage,
 };
-use specengine_store::{Choice, ProposalKind, ProposalQueue as _, ProposalStatus, Stage};
+use specengine_store::{
+    Choice, KindFamily, ProposalKind, ProposalQueue as _, ProposalStatus, Stage,
+};
 use task_common::Tasks;
 
 const STAMINA: &str = "docs/spec/movement/stamina.md";
@@ -1776,12 +1778,13 @@ fn edge_a_path_only_decision_needs_canon() {
 
 // ------------------------------------------------------------ iteration 2
 
-/// The deciding kinds as `decides()` names them, as a refusal lists them:
+/// The deciding kinds as `family()` names them (`KindFamily::Decides`,
+/// docs/features/drift-queue.md "Kind family"), as a refusal lists them:
 /// `` a `question`, `discrepancy` or `decision` ``.
 fn deciding_kinds() -> String {
     let names: Vec<String> = ProposalKind::ALL
         .into_iter()
-        .filter(|kind| kind.decides())
+        .filter(|kind| kind.family() == KindFamily::Decides)
         .map(|kind| format!("`{}`", kind.as_str()))
         .collect();
     let (last, rest) = names.split_last().expect("a deciding kind");

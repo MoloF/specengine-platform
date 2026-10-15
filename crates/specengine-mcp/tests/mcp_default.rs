@@ -9,7 +9,7 @@
 //! an `outputSchema`, `_meta["anthropic/maxResultSizeChars"]` =
 //! `MAX_RESULT_CHARS` and a description of at most 2 048 characters holding
 //! the determinism sentence; `instructions` are at most 2 048 bytes, name
-//! all fourteen and mention neither `review_proposal` nor a probe. The probe
+//! all fifteen and mention neither `review_proposal` nor a probe. The probe
 //! tools are absent (Phase 0 behaviour kept), and `probes` is no default
 //! feature of the manifest.
 //!

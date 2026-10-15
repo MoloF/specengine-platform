@@ -386,10 +386,12 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
 #[cfg(not(feature = "probes"))]
 fn ac17_the_instructions_name_create_within_their_budget() {
     // 171 and 1 885 since docs/features/kind-amendment.md names
-    // `amendment` (+10) and drops get_tree's ": the node tree" (-15).
+    // `amendment` (+10) and drops get_tree's ": the node tree" (-15); 1 886
+    // since docs/features/drift-queue.md (its `report_drift` line, words
+    // trimmed elsewhere).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1885);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1886);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -416,8 +418,9 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     let discover = result(&session.request("server/discover", json!({}))).clone();
     let sent = discover["instructions"].as_str().expect("instructions");
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
-    // 2 042 since docs/features/kind-amendment.md.
-    assert_eq!(sent.len(), 2042);
+    // 2 042 since docs/features/kind-amendment.md; 2 043 since
+    // docs/features/drift-queue.md.
+    assert_eq!(sent.len(), 2043);
     assert!(sent.len() <= 2048);
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());

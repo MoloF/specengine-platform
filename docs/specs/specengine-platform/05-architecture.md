@@ -177,15 +177,15 @@ Triviality threshold (limpet): a body shorter than ~124 bytes of buffer is **not
 | spec_hash ≠ lock | ast_hash ≠ lock | sync | Action |
 |---|---|---|---|
 | no | no | `ok` | — |
-| yes | no | `spec_ahead` | a "bring code to spec" task is created/updated |
-| no | yes | `code_ahead` | into the owner's queue: "accept code changes" (update lock) or "reject" (task to revert/fix). If the meaning changed too, the agent proposes a spec edit |
+| yes | no | `spec_ahead` | a `drift` item (`docs/canon/proposal-drift.md`): approve, `--editorial` for `same_revision`, or reject; a "bring code to spec" task: 4c-2 |
+| no | yes | `code_ahead` | a `drift` item: approve accepts the code (lock) or reject (task to revert/fix: 4c-2). If the meaning changed too, the agent proposes a spec edit |
 | yes | yes | `conflict` | UI: spec-section and symbol-span diffs since `lock.commit`, side by side |
-| — | symbol not found | `broken_binding` | marker removed or symbol renamed; a rebind proposal |
+| — | symbol not found | `broken_binding` | marker removed or symbol renamed; a `drift` item, its approve locking what accept finds |
 | node accepted, no bindings | | `unbound` | visible on the "what's left" panel |
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
 | unparseable / symbol ambiguous | | `cannot_verify` | **never counted as `ok`**; shown separately |
 
-`spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — a Fix finding blocks, only under the project's own `[verify] mode` (ADR-0042), **2** — the run cannot be trusted, no verdict (`docs/canon/spec-verify.md` "Verdict and exit"; the backlog: `spec propose drift`, 4c-1). Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
+`spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — a Fix finding blocks, only under the project's own `[verify] mode` (ADR-0042), **2** — the run cannot be trusted, no verdict (`docs/canon/spec-verify.md` "Verdict and exit"; the backlog: `spec propose drift`, `docs/canon/proposal-drift.md`). Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
 
 Git as the truth gives "since verification" diffs for free: the old spec text and the old code come from the commit recorded in the lock.
 

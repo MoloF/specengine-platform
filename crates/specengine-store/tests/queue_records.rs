@@ -442,7 +442,14 @@ fn a_corrupt_record_row_names_its_column() {
     );
     assert_eq!(
         &PROPOSAL_COLUMNS[40..],
-        ["task_id", "staged", "staged_at", "interpretation"]
+        [
+            "task_id",
+            "staged",
+            "staged_at",
+            "interpretation",
+            "drift",
+            "drift_hash"
+        ]
     );
     let cases: Vec<CorruptCase<'_>> = vec![
         (

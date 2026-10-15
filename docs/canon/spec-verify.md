@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-13
+reviewed: 2026-10-15
 ---
 
 # `spec verify`: drift between `spec.lock` and the tree
@@ -52,6 +52,8 @@ Level 1, the blob OID: on disk one `git hash-object --no-filters --stdin-paths` 
 ## Base
 
 `--changed` reads `HEAD` through `VerifyGit` on the check's base reader (`rev-parse`, `ls-tree -r -z`, one `cat-file --batch`; the caller's `GitEnv`, `GIT_OPTIONAL_LOCKS=0`): the documents `spec check --changed` reads (`spec-check-git.md` "The changed check"); `.rs`, `.ron` under the code roots; every `Cargo.toml` under a root or in a directory at or above one; `spec.lock` (absent: no E); the config, for its mode. Judged with the current config, scheme and `[code]`; a file's binding is reused when its bytes and every manifest are equal, else bound from `HEAD`'s blob. **Pre-existing**: `HEAD` gives the same key, state and category. Unborn `HEAD`: every row introduced, base `unborn`. Mode: the stricter of the current and `HEAD`'s (a `note:` when `HEAD`'s is stricter or unknown). A merge or rebase in progress: still `HEAD`. **Unmerged**: every run, plain too, asks the session for `:1:` to `:3:./spec.lock`, stages only an unmerged path has (delete/modify too).
+
+**One commit** (CLI `verify_rows.rs`, the seam 4b-2's `--staged` shares): `commit_config(git, oid)` lists a commit the caller bound (never `HEAD` by name) and reads its own config's `[code]` (none: cause 2); `read_commit` reads its side alone, the base's files (`list_commit`, `read_files`, `Files::Commit`), every document parsed and every code file bound from its blob, nothing reused (`tree_of_blobs` over `CodeTree::empty()`), the working tree never read; `judge_commit` judges it as the base is, in key order, no row Pre-existing. `spec propose drift` judges its `base_commit` so (`proposal-drift.md` "Raise").
 
 ## Verdict and exit
 

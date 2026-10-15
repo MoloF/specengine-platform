@@ -20,7 +20,7 @@ adrs: [ADR-0043]
 - **The owner** reads the line to write from `spec bump`, raises by hand and commits, or sends the change through the queue with `--editorial` (4b-1).
 - **This repository** (WA-10): no `spec.lock`, nothing in scope: output byte-identical, `CHECK_CODES` 35 -> 36; hook, CI unchanged; `verify --staged` not wired (no `[code]`).
 - **Crates** (WA-13): core the rule (pure), bump's rows, `canonical_id` moved from CLI `propose.rs` (the rule runs in store's check, which cannot call the CLI; accept and verify then call core's), 4b-1's vouching predicate reused; store the two lock blobs in check's git session, a `VerifyGit` constructor over the index (`Staged::read`; `open` is `Staged::head_only`); CLI `spec bump`, `VerifyRequest`'s `changed: bool` three states as check's `CheckedTree`, `read_head` over any listing. `INDEX_FORMAT` stays 8. MCP, HTTP, UI, plugin no code; no new crate or dependency.
-- **Later slices**: 5b's rebase commit and format-1 `HEAD` lock (Q9; `lock-levels.md` Q8); 6b's `--node` refuses `--staged` (`code-tools.md` "spec verify --node"); 8b's `[[tested]]` blocks vouch like entries; 4c's lock-only approve stays silent (`drift-queue.md` "Approve").
+- **Later slices**: 5b's rebase commit and format-1 `HEAD` lock (Q9; `lock-levels.md` Q8); 6b's `--node` refuses `--staged` (`code-tools.md` "spec verify --node"); 8b's `[[tested]]` blocks vouch like entries; 4c's lock-only approve stays silent (`docs/canon/proposal-drift.md` "Approve").
 - **Overridden live-spec lines**, fixed at shipping: 05:103 (`bump` writing revisions, `bump --editorial`), 07:104 ("--staged 4b-2"), 07:105 (`spec bump [--editorial ID]`), 08:44 (`spec bump`), 08:82 (Q4).
 
 ## Data
@@ -60,7 +60,7 @@ WA-9, Q13. `spec verify --staged [--json]` (+ `--root`, `--config`): 4a's judge 
 ## Rules and edge cases
 
 - WHEN one commit is checked from two roots, another cwd or creation order, findings and rows SHALL be byte-identical. Genre-neutral: canonical IDs and the lock only.
-- WHEN a commit changes only `spec.lock`, the rule SHALL parse neither lock and find nothing (`drift-queue.md` "Approve" relies on it).
+- WHEN a commit changes only `spec.lock`, the rule SHALL parse neither lock and find nothing (`docs/canon/proposal-drift.md` "Approve" relies on it).
 - WHEN `HEAD`'s lock is format 1 and the checked one format 2 (5b's rebase, an approval after it), the rule SHALL read both (Q9; `lock-levels.md` Q8).
 - WHEN a hook runs `spec verify --staged` on accept's lock commit, a spec edit dirty on disk SHALL not count: only `HEAD` plus the staged lock is judged.
 - Escapes (`--no-verify`, `observe`, no hook, CI's plain check) and regen dropping one of two refreshes show in verify as `spec_ahead same_revision`.

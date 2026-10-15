@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-15
 ---
 
 # Question rounds
@@ -12,11 +12,12 @@ ADR-0038 under ADR-0035 (`docs/canon/architecture.md#apply`): a batch front end 
 
 ## Selection
 
-`spec round new [--limit N] [--json]`, read-only. Items: `open` proposals whose kind `decides()` (question, discrepancy, decision) of the current repository (`spec inbox`'s scope, `proposal-queue.md` "Place, IDs, repositories"); a staged one is listed with its stage. The rest are `notes` (text: closing `note:` lines), IDs named up to 10, then ` and <k> more`:
+`spec round new [--limit N] [--json]`, read-only. Items: `open` proposals whose kind's `family()` is `Decides` (question, discrepancy, decision) of the current repository (`spec inbox`'s scope, `proposal-queue.md` "Place, IDs, repositories"); a staged one is listed with its stage. The rest are `notes` (text: closing `note:` lines), IDs named up to 10, then ` and <k> more`:
 
 - ``<n> more item(s) not on this sheet: spec round new --limit <m>`` (`m` the total, at most 200), first;
 - ``<n> held item(s) not on this sheet (approved: an apply in progress or stopped): <IDs>; spec approve <ID> completes each``;
 - ``<n> open change proposal(s) not on this sheet: <IDs>; spec inbox lists them`` (applying kinds);
+- ``<n> open drift item(s) not on this sheet: <IDs>; spec review <ID>, then spec approve or spec reject`` (`proposal-drift.md`);
 - ``<n> item(s) of another repository of the project `<slug>` not on this sheet: <IDs>; run `spec round new` there`` (open or held);
 - ``<n> item(s) of a repository that no longer exists not on this sheet: <IDs>; spec reject <ID> --reason ... takes one out``;
 - a corrupt row as `spec inbox` words it + `; not listed` (a task's: `; not counted among the waiting tasks`).
@@ -66,7 +67,7 @@ The file: regular (else `<file>: not a regular file: give the filled sheet or a 
 
 - One line per answer; `ok` never takes a recommendation. A blank slot is no answer; two or more other lines for one ID (`?` too; a refused malformed line for the ID its Latin form names) refuse every one: `answered on lines 4 and 9: give one answer per item`, at most 10 lines named (`2, 3, ..., 11 and <k> more`; the project lines' refusal alike).
 - Caps and characters of a stage (`decision-staging.md` "The stage"): `the answer: <n> bytes; at most 2048`, `the reason: <n> bytes; at most 4096`, `holds U+202E: an answer never carries it`; never cut.
-- Then against the queue now, each refused alone: `no proposal`; another repository's, an orphan's (only `reject:` passes) as `spec approve` words them; `` `PR` is applied: commit <sha> ``, `is rejected`, `is held (...)`; ``is a change proposal (update): `spec approve PR` decides it``; for an approve, only path targets (``needs --canon: `spec approve PR --canon REF` ``) and apply steps 2 and 3 read-only (`record_ready`: the place, `[decision_records]`, its template, its prefix among `[ids]`): ``not applied (step 3): <reason>; `reject: <reason>` still settles it`` (`queue_checked`'s bare reason + this tail); a corrupt row, its own error.
+- Then against the queue now, each refused alone: `no proposal`; another repository's, an orphan's (only `reject:` passes) as `spec approve` words them; `` `PR` is applied: commit <sha> ``, `is rejected`, `is held (...)`; ``is a change proposal (update): `spec approve PR` decides it``; ``PR is a drift item, decided on a terminal only; nothing staged``; for an approve, only path targets (``needs --canon: `spec approve PR --canon REF` ``) and apply steps 2 and 3 read-only (`record_ready`: the place, `[decision_records]`, its template, its prefix among `[ids]`): ``not applied (step 3): <reason>; `reject: <reason>` still settles it`` (`queue_checked`'s bare reason + this tail); a corrupt row, its own error.
 
 ## Run
 

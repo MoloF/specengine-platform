@@ -30,7 +30,10 @@
 //! `spec-lock-accept`, "Steps") and `spec lock regen` ([`lock_regen`]:
 //! canon `spec-lock`, "`spec lock regen`"); `spec verify [--changed]`
 //! ([`verify`]: canon `spec-verify`, "Rows", "Verdict and exit"),
-//! drift between `spec.lock` and the tree, read-only.
+//! drift between `spec.lock` and the tree, read-only; task spec
+//! `drift-queue`: `spec propose drift` ([`propose_drift`]), the drift of
+//! `HEAD`'s commit queued as `drift` items for the owner, approved by the
+//! same lock accept.
 //!
 //! Every command lives here, below `main`: MCP stdio and the Phase 2 daemon
 //! bridge call the same functions. `main.rs` only parses the arguments,
@@ -151,6 +154,8 @@ mod corpus;
 mod create;
 mod decide;
 mod documents;
+mod drift;
+mod drift_apply;
 mod events;
 mod export;
 mod gate;
@@ -206,6 +211,9 @@ pub use create::{
     propose_create_with_task,
 };
 pub use documents::{DocumentEntry, documents};
+pub use drift::{
+    DriftCreated, DriftDocument, DriftHit, DriftJudged, DriftOutcome, DriftRequest, propose_drift,
+};
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use gate::{
@@ -231,13 +239,13 @@ pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir};
 pub use lock::{
     LockAcceptRequest, LockConsent, LockMode, LockOutcome, LockPrompt, LockRow, LockTrailer,
-    lock_accept,
+    LockWritten, lock_accept,
 };
 pub use lock_regen::{LockRegenRequest, RegenOutcome, RegenRow, lock_regen};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
-pub use proposals::{Preview, ProposalDocument, ProposalOutcome, QueueCommand};
+pub use proposals::{Preview, ProposalDocument, ProposalDrift, ProposalOutcome, QueueCommand};
 pub use propose::{
     ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief, propose_brief_with_task,
     propose_with_task,
@@ -266,8 +274,8 @@ pub use specengine_core::ProjectConfig;
 /// kind's name with its article.
 pub use specengine_core::intake::{
     AMENDMENT_KIND, ANSWER_MAX, CREATE_KIND, DECISION_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX,
-    DecisionInput, DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType,
-    INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
+    DRIFT_KIND, DecisionInput, DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence,
+    GapType, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
     IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT, LOCATION_MAX, NODE_IDS_MAX,
     OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, RATIONALE_MAX, SUMMARY_MAX,
     UPDATE_KIND, with_article,
@@ -459,6 +467,8 @@ pub enum Outcome {
     Proposal(Box<ProposalOutcome>),
     /// `propose question`, `propose discrepancy`: the intake document.
     Intake(Box<IntakeOutcome>),
+    /// `propose drift`: the drift document.
+    Drift(Box<DriftOutcome>),
     /// [`stage`], [`unstage`] (no command; the daemon's): the review
     /// document, and why nothing was stored.
     Stage(Box<StageOutcome>),
@@ -499,6 +509,7 @@ impl Outcome {
             Self::Check(check) => check.exit(),
             Self::Proposal(proposal) => proposal.exit(),
             Self::Intake(intake) => intake.exit(),
+            Self::Drift(drift) => drift.exit(),
             Self::Stage(stage) => stage.exit(),
             Self::StateImport(import) => import.exit(),
             Self::Task(task) => task.exit(),
@@ -530,6 +541,7 @@ impl Outcome {
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Drift(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Stage(outcome) => (
                 &outcome.proposal.messages,
                 outcome.proposal.refusal.as_deref(),
@@ -557,6 +569,7 @@ impl Outcome {
                 | Self::LockRegen(_)
                 | Self::Verify(_)
                 | Self::Intake(_)
+                | Self::Drift(_)
                 | Self::Stage(_)
                 | Self::Inbox(_)
                 | Self::StateExport(_)
@@ -595,6 +608,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
+        Outcome::Drift(outcome) => drift::render_text(outcome),
         Outcome::Stage(outcome) => proposals::render_text(&outcome.proposal),
         Outcome::Inbox(outcome) => inbox::render_text(outcome),
         Outcome::StateExport(outcome) => state::render_export_text(outcome),
@@ -629,6 +643,7 @@ impl serde::Serialize for Outcome {
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),
+            Self::Drift(outcome) => outcome.serialize(serializer),
             Self::Stage(outcome) => outcome.serialize(serializer),
             Self::Inbox(outcome) => outcome.serialize(serializer),
             Self::StateExport(outcome) => outcome.serialize(serializer),
@@ -684,6 +699,15 @@ pub(crate) fn store_error(error: specengine_store::StoreError) -> CliError {
 /// A header or table field on one line: line breaks become spaces.
 pub(crate) fn one_line(text: &str) -> String {
     text.replace("\r\n", " ").replace(['\n', '\r'], " ")
+}
+
+/// `top_path` (from the worktree's top) as one shell word of a printed git
+/// command: a literal pathspec, as a commit passes it (no glob, no magic),
+/// single-quoted with an embedded `'` written `'\''`, so the pasted command
+/// names exactly that file whatever its name holds (an editorial apply's
+/// restore, `spec lock accept`'s `Undo`).
+pub(crate) fn pathspec_word(top_path: &str) -> String {
+    format!("':(literal){}'", top_path.replace('\'', r"'\''"))
 }
 
 /// `text` for a terminal: every C0 control character but LF, TAB and the

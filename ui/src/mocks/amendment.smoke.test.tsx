@@ -131,8 +131,8 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     // Kinds are raw strings: spelled only in mocks and tests (ADR-0031).
     expect(reviews.filter((review) => review.kind === "amendment").map((review) => review.id)).toEqual([AMENDMENT]);
     const review = await client.getProposal(SLUG, AMENDMENT);
-    // A new file's review document: the 47 keys of any review.
-    expect(Object.keys(review)).toHaveLength(47);
+    // A new file's review document: the 48 keys of any review.
+    expect(Object.keys(review)).toHaveLength(48);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,
@@ -152,6 +152,8 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
       conflict: null,
       // A new file writes no existing node: no revision to raise (docs/features/rev-discipline.md "Review document, stage, queue").
       revisions: null,
+      // No drift evidence: not a drift item (docs/features/drift-queue.md "Review, inbox, round, stage").
+      drift: null,
       decided_by: null,
       decided_at: null,
       decision_note: null,

@@ -81,7 +81,7 @@ verify --node LAW-BOUND: observed [observe]: 0 fix, 1 check (0 pre-existing), 0 
 
 ### INSTRUCTIONS
 
-WA-17. Today 1 885 B, 2 042 with `probes`, against `TEXT_LIMIT` 2 048 (`server.rs`'s asserts). 6b's text, measured (SW refinement): **1 928 B, 2 004 with `probes`: 44 B left.**
+WA-17. Today, after 4c-1's `report_drift` line and its word trims (`docs/canon/mcp-read.md` "Tools", "Texts"), 1 886 B, 2 043 with `probes`, against `TEXT_LIMIT` 2 048 (`server.rs`'s asserts). 6b's text, measured before 4c-1 (SW refinement): 1 928 B, 2 004 with `probes`, 44 B left; **re-measure it over 4c-1's text**.
 
 - The reads become two lines (`spec ` and two glosses dropped; the flag map keeps `with ["links"]`):
 
@@ -141,7 +141,7 @@ spec-writer:
 
 ## Risks
 
-`INSTRUCTIONS` keeps 44 B after 6b; 4c-1's `report_drift` line (~108 B), 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~190: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity, described). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
+`INSTRUCTIONS` keeps 44 B after 6b as measured before 4c-1, whose `report_drift` line (108 B) shipped by trims (5 B left, 2 043 with `probes`); 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~80: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity, described). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
 
 ## Out of scope
 

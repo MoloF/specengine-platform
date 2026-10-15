@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Proposal apply: revisions and the editorial approve
@@ -51,7 +51,7 @@ The trailer lookup (`proposal-completion.md` "Completion") completes, and reject
 
 ## Review
 
-The review document's `revisions` after `conflict` (47 keys): `null` when the kind writes no existing node or the preview `conflicts` or is `unavailable`; else per node whose `norm_hash` changes, file order, `{id, rev, to, lock_entries, refused}` (core `RevisionRow`): `to` the meaning approve's, `null` when refused; `lock_entries` the vouching entries of the worktree's `spec.lock` an editorial approve refreshes (0 without one; unreadable: `null`, note `lock_entries unknown: <why>`); `refused` `null`, else the step-6 reason as printed after `(step 6): `. Text `revisions: R-12 3 -> 4 (2 lock entries), ADR-0007 1 -> refused (0 lock entries)`, `1 lock entry` for one, `none` for `[]`; notes `lock_entries unknown` first, then per refused node `meaning approve not applicable (step 6): <refused>`. MCP `get_proposal`'s schema: `RevisionShape`. `fixtures/daemon-keys.json`: `RevisionRow`.
+The review document's `revisions` after `conflict` (`proposal-review.md`): `null` when the kind writes no existing node or the preview `conflicts` or is `unavailable`; else per node whose `norm_hash` changes, file order, `{id, rev, to, lock_entries, refused}` (core `RevisionRow`): `to` the meaning approve's, `null` when refused; `lock_entries` the vouching entries of the worktree's `spec.lock` an editorial approve refreshes (0 without one; unreadable: `null`, note `lock_entries unknown: <why>`); `refused` `null`, else the step-6 reason as printed after `(step 6): `. Text `revisions: R-12 3 -> 4 (2 lock entries), ADR-0007 1 -> refused (0 lock entries)`, `1 lock entry` for one, `none` for `[]`; notes `lock_entries unknown` first, then per refused node `meaning approve not applicable (step 6): <refused>`. MCP `get_proposal`'s schema: `RevisionShape`. `fixtures/daemon-keys.json`: `RevisionRow`.
 
 ## Stage and UI
 
@@ -64,7 +64,6 @@ UI: Accept in the decision dialog offers "Editorial: keep the revision" only whe
 - A `read_classes` failure or a parser panic in the raise makes the preview `unavailable` too.
 - `write_revisions` runs k+1 write passes on a failure; a failure between raises that each pass alone, beside one failing alone, is not reported (a meaning approve refuses anyway).
 - `git merge-file`: a heading rename meeting an earlier raise of that line, or a raised heading directly followed by a body line the next proposal edits (adjacency), conflicts at step 5.
-- The Q16 and restore commands are worktree-top-relative: run in `<worktree>` (named); pasted below the top they name nothing and fail harmlessly (later: `:(top,literal)`). `one_line` turns a newline in a path into a space in the step-10 reason, the printed command then naming another path (a control character in a spec path is not refused).
+- The Q16 and restore commands (`spec lock accept`'s too) are worktree-top-relative: run in `<worktree>` (named); pasted below the top they name nothing and fail harmlessly (later: `:(top,literal)`). `one_line` turns a newline in a path into a space in the step-10 reason, the printed command then naming another path (a control character in a spec path is not refused).
 - Step 8's restore finds the text changed or fails only through a race: untested.
-- `spec lock`'s own undo messages print raw pathspecs (4c-1).
 - Two branches' refreshes of one entry meet in `spec lock regen`, which may drop one: verify then shows `spec_ahead same_revision`.

@@ -345,15 +345,16 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     let before = specengine_mcp::INSTRUCTIONS.replacen(tasks_line, "", 1);
     // 1 747 since docs/features/kind-amendment.md names `amendment` in the
     // `propose_change` line (+10) and drops get_tree's ": the node tree"
-    // (-15).
-    assert_eq!(before.len(), 1747);
+    // (-15); 1 748 since docs/features/drift-queue.md adds the
+    // `report_drift` line (109 with its LF) and trims words elsewhere.
+    assert_eq!(before.len(), 1748);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "15142f63116f4e78aa5164f82ae48c7ac42be626293a507189f4d54902dc6568"
+        "a85fedfd05fbc7fb7d3f0baeccda018c155b8d1b6c6cf5ee7e3f3b0694a1db0a"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1885);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1886);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "2e89ff1208d7e6227c2e547004a5daf0dd474f9f62601a5d9466b3f463766bf0"
+        "bcc30d1dedced94ad32d18bf167e6723e97a663a936a3e7311fcd119e13edc07"
     );
 }

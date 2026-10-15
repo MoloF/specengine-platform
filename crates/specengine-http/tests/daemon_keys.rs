@@ -79,6 +79,14 @@
 //! the update of `EDGE-STAM-ZERO` and the interpretation of
 //! `RULE-STAM-REGEN`, each changing its node's meaning. M: `editorial`
 //! dropped from the stage; `refused` dropped from the entry.
+//!
+//! TE-11 of docs/features/drift-queue.md, its Rust half ("Review, inbox,
+//! round, stage"): `Proposal` holds `drift` after `revisions` (48 keys,
+//! `null` on every other kind; the drift items' reviews served with the
+//! same keys); one set more, 46 in all, last: `DriftEvidence`
+//! (`{hash, rows, more}`) from the reviews of the drift items raised by
+//! `spec propose drift` on `fixtures/code-a` with its golden lock and
+//! `CAP` edited. M: `drift` dropped from the review document.
 
 mod common;
 mod task_state;
@@ -335,7 +343,12 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         }
     });
 
-    let server = Server::serve(&home, &cwd, &[&a, &observed, &cannot, &amended]);
+    // drift-queue: fixtures/code-a with its golden lock committed, `CAP`
+    // edited and committed, its drift raised (a drift item's review has a
+    // `drift` object).
+    let code = drift_repo(&scratch, &home);
+
+    let server = Server::serve(&home, &cwd, &[&a, &observed, &cannot, &amended, &code.0]);
     let p = "/api/projects/lantern-keep";
     // decision-staging: each proposal staged, as a same-origin page stages,
     // before the inbox and the reviews are read.
@@ -385,6 +398,17 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .text()
             .to_owned(),
     ];
+    let drift_reviews: Vec<String> = code
+        .1
+        .iter()
+        .map(|id| {
+            server
+                .get(&format!("/api/projects/code-a/proposals/{id}"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .collect();
     // rev-discipline: the entries of the reviews whose `revisions` is an
     // array (the update's and the interpretation's; the question's and the
     // discrepancy's are `null`).
@@ -550,7 +574,12 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "Proposal",
             one_key_set(
                 "Proposal",
-                &[reviews.clone(), interpretations.clone()].concat(),
+                &[
+                    reviews.clone(),
+                    interpretations.clone(),
+                    drift_reviews.clone(),
+                ]
+                .concat(),
                 keys_of,
             ),
         ),
@@ -717,7 +746,53 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "RevisionRow",
             one_key_set("RevisionRow", &revision_rows, keys_of),
         ),
+        (
+            "DriftEvidence",
+            one_key_set("DriftEvidence", &objects(&drift_reviews, "drift"), keys_of),
+        ),
     ]
+}
+
+/// drift-queue, TE-11
+/// (`docs/features/drift-queue.md` "Review, inbox, round, stage"):
+/// `fixtures/code-a` as a repository, the golden lock
+/// (`fixtures/spec-lock/code-a.lock`) committed, `CAP` edited and committed;
+/// `spec propose drift` raised there with `HOME` `home`: the root and the
+/// IDs it created (the fixture's own `PIECE-COUNTER` and `LAW-BOUND`).
+fn drift_repo(scratch: &Scratch, home: &std::path::Path) -> (std::path::PathBuf, Vec<String>) {
+    let root = scratch.repo("code-a", "code", "main");
+    let git = scratch.git();
+    fs::copy(
+        common::fixture("spec-lock").join("code-a.lock"),
+        root.join("spec.lock"),
+    )
+    .expect("the golden lock");
+    git.run(&root, &["add", "-A"]);
+    git.run(&root, &["commit", "-q", "-m", "the lock"]);
+    common::replace(
+        &root,
+        "crates/tally/src/counter.rs",
+        "CAP: u32 = 10;",
+        "CAP: u32 = 12;",
+    );
+    git.run(&root, &["commit", "-q", "-a", "-m", "the cap"]);
+    let run = run_product(
+        &spec_bin(),
+        home,
+        &root,
+        &["propose", "drift", "--json"],
+        b"",
+    );
+    run.code(0);
+    let document = run.json();
+    let ids: Vec<String> = document["created"]
+        .as_array()
+        .expect("created")
+        .iter()
+        .map(|created| created["id"].as_str().expect("an ID").to_owned())
+        .collect();
+    assert_eq!(ids, ["PR-0001", "PR-0002"], "{document}");
+    (root, ids)
 }
 
 /// health-left's amendments, written into a copy of A: a spec draft and
@@ -841,18 +916,19 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // gains `task_id` after `choice`; decision-staging `staged`,
     // `staged_at` after it, before `notes`; docs/features/kind-interpretation.md
     // `interpretation` after `staged_at`: 46 keys; docs/features/rev-discipline.md
-    // `revisions` after `conflict`: 47.
+    // `revisions` after `conflict`: 47; docs/features/drift-queue.md `drift`
+    // after `revisions`: 48.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 47, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 48, "{:?}", sets[2].1);
     let conflict = sets[2].1.iter().position(|key| key == "conflict");
     assert_eq!(
-        sets[2].1[conflict.expect("conflict") + 1],
-        "revisions",
+        sets[2].1[conflict.expect("conflict") + 1..conflict.expect("conflict") + 3],
+        ["revisions", "drift"],
         "{:?}",
         sets[2].1
     );
     assert_eq!(
-        sets[2].1[41..],
+        sets[2].1[42..],
         [
             "choice",
             "task_id",
@@ -867,8 +943,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        45,
-        "{names:?} (health-left: 41 -> 44; rev-discipline: 45)"
+        46,
+        "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1001,6 +1077,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // "Review document, stage, queue" ("5 keys", `refused` last).
     assert_eq!(sets[44].0, "RevisionRow");
     assert_eq!(sets[44].1, ["id", "rev", "to", "lock_entries", "refused"]);
+    // drift-queue's one, last:
+    // `docs/features/drift-queue.md` "Review, inbox, round, stage"
+    // (`{hash, rows, more}` as stored, rows untyped).
+    assert_eq!(sets[45].0, "DriftEvidence");
+    assert_eq!(sets[45].1, ["hash", "rows", "more"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1021,9 +1102,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 45 sets (41 until
-/// docs/features/health-left.md added its three, AC-T2, and
-/// docs/features/rev-discipline.md its `RevisionRow`, TE-3); a decision
+/// unchanged, no new key): the fixture holds 46 sets (41 until
+/// docs/features/health-left.md added its three, AC-T2,
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3, and
+/// docs/features/drift-queue.md its `DriftEvidence`, TE-11); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1037,9 +1119,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        45,
-        "45 sets: 41, health-left's three (docs/features/health-left.md AC-T2) and \
-         rev-discipline's `RevisionRow` (TE-3)"
+        46,
+        "46 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+         rev-discipline's `RevisionRow` (TE-3) and drift-queue's `DriftEvidence`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1049,7 +1131,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
             .map(|key| key.as_str().expect("a key").to_owned())
             .collect()
     };
-    assert_eq!(set("Proposal").len(), 47);
+    // 48 since docs/features/drift-queue.md added `drift`.
+    assert_eq!(set("Proposal").len(), 48);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -1152,9 +1235,10 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 45 sets
-/// (41 until docs/features/health-left.md added its three, AC-T2, and
-/// docs/features/rev-discipline.md its `RevisionRow`, TE-3); "Data"'s
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 46 sets
+/// (41 until docs/features/health-left.md added its three, AC-T2,
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3, and
+/// docs/features/drift-queue.md its `DriftEvidence`, TE-11); "Data"'s
 /// amendment raised through `spec propose amendment` is
 /// served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -1171,9 +1255,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        45,
-        "45 sets: 41, health-left's three (docs/features/health-left.md AC-T2) and \
-         rev-discipline's `RevisionRow` (TE-3)"
+        46,
+        "46 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+         rev-discipline's `RevisionRow` (TE-3) and drift-queue's `DriftEvidence`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1183,7 +1267,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
             .map(|key| key.as_str().expect("a key").to_owned())
             .collect()
     };
-    assert_eq!(set("Proposal").len(), 47);
+    // 48 since docs/features/drift-queue.md added `drift`.
+    assert_eq!(set("Proposal").len(), 48);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

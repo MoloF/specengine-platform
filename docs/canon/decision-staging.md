@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-14
+reviewed: 2026-10-15
 ---
 
 # Decision staging: UI prepares, terminal confirms
@@ -28,7 +28,7 @@ ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), b
 
 An approve's absent flags are `null`; `editorial` `true` or `null` (`proposal-revisions.md` "Stage and UI"). `span_hash`: an `update`'s, `interpretation`'s or section-form `create`'s target span hash as apply step 5 reads it (steps 2-6 run read-only, as `spec review`); `null` for a new file (`create`, `amendment`), a deciding kind, and when steps 2-4 cannot read the target or the proposal's own commit is on its branch. `staged_at`: UTC `YYYY-MM-DDTHH:MM:SSZ`.
 
-Checked as the terminal checks its flags, before anything is stored: the ID and repository (`proposal-queue.md` "Place, IDs, repositories"; another existing repository refused; an orphan takes only a reject, and may be unstaged); state `open` (an applied one's naming its commit); then the `updated_at` the caller read (``` `PR-0004` changed since it was read: updated at <t1>, the choice was made on the one of <t2>; read it again; nothing staged ```); the decision flags (`decide.rs` first checks, `decision-record.md` "Flags"; a decision flag on an applying kind, `editorial` on a kind writing no existing node, a question whose only target is a path, no `--canon`: a usage refusal); a blank reason; the caps, `note`, `reason` 4 096 bytes (``--note: <n> bytes; at most 4096; nothing changed``; `spec approve --note`, `spec reject --reason` alike, exit 1), `answer` 2 048, `canon` 512; a character the queue escapes (U+202E, U+0007), named.
+Checked as the terminal checks its flags, before anything is stored: the ID and repository (`proposal-queue.md` "Place, IDs, repositories"; another existing repository refused; an orphan takes only a reject, and may be unstaged); state `open` (an applied one's naming its commit); then the `updated_at` the caller read (``` `PR-0004` changed since it was read: updated at <t1>, the choice was made on the one of <t2>; read it again; nothing staged ```); a drift item, never staged (`proposal-drift.md` "Review, stage, round"); the decision flags (`decide.rs` first checks, `decision-record.md` "Flags"; a decision flag on an applying kind, `editorial` on a kind writing no existing node, a question whose only target is a path, no `--canon`: a usage refusal); a blank reason; the caps, `note`, `reason` 4 096 bytes (``--note: <n> bytes; at most 4096; nothing changed``; `spec approve --note`, `spec reject --reason` alike, exit 1), `answer` 2 048, `canon` 512; a character the queue escapes (U+202E, U+0007), named.
 
 ## Queue
 
@@ -38,7 +38,7 @@ Queue schema 5 adds TEXT `staged`, `staged_at` (`proposal-queue.md` "Store"): bo
 
 Events `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}`, `proposal.unstaged` `{"id":"PR-0004"}`: seven proposal events, `QUEUE_EVENT_TYPES` 16 (the two after `.apply_failed`). `.approved`, `.rejected` add `"staged_at"` when they confirm a stage.
 
-**Corrupt row**, named (`get`, `list` fail; `inbox` skips it, a note): another shape (a key missing, extra or reordered, a wrong type; an answer on a discrepancy; `option` or `canon` on a kind taking none; `span_hash` or `editorial` on a deciding kind or a new file; a blank reason); one column NULL alone; a stage on a state but `open`.
+**Corrupt row**, named (`get`, `list` fail; `inbox` skips it, a note): a stage on a drift item; another shape (a key missing, extra or reordered, a wrong type; an answer on a discrepancy; `option` or `canon` on a kind taking none; `span_hash` or `editorial` on a deciding kind or a new file; a blank reason); one column NULL alone; a stage on a state but `open`.
 
 **Gap** (the compare-and-set key `updated_at` has 1 s resolution): a stage made in the same second as the UI's read replaces another without a 409; its event still raises the alert ("UI"). The terminal compares the stage itself.
 

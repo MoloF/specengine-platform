@@ -858,15 +858,16 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     // Released: a verdict again.
     assert_refused(&verdict(&pair, &main, "src/a.rs"), "released");
 
-    // A queue of a newer schema.
-    pair.sql("PRAGMA user_version = 8;");
+    // A queue of a newer schema (this build's is 8 since
+    // docs/features/drift-queue.md "Queue schema 8").
+    pair.sql("PRAGMA user_version = 9;");
     let ran = spec_path(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         "Reinstall spec and the plugin from one commit.",
-        "schema 8",
+        "schema 9",
     );
-    pair.sql("PRAGMA user_version = 7;");
+    pair.sql("PRAGMA user_version = 8;");
 
     // The root outside git.
     let loose = pair.scratch.copy("spec-a", "no-git");

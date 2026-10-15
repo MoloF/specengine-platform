@@ -359,6 +359,10 @@ impl LockRepo {
                 editorial,
                 now: now.to_owned(),
                 git,
+                // A plain accept: no queue item, no recorded branch
+                // (docs/features/drift-queue.md "Accept's seams").
+                proposal: None,
+                branch: None,
             },
             consent,
             &[],

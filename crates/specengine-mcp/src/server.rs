@@ -32,40 +32,44 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// Server `instructions` (07 §1.1): Claude Code truncates them at 2 048
 /// characters and defers tool definitions behind tool search, so this is the
 /// server's most important text. ASCII only, so bytes equal characters.
+/// Task spec `drift-queue` adds the `report_drift` line (108 bytes and its
+/// LF) and trims words elsewhere, the meaning kept, so the probes build's
+/// text (with its 157-byte paragraph) stays within the limit.
 pub const INSTRUCTIONS: &str = concat!(
     "\
-SpecEngine keeps a project's specification as Markdown files in git next to the code. \
-Each tool is a spec command: content is what `spec <command> 2>&1` prints, \
-structuredContent its --json document.
+SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
+command: content its `2>&1` output, structuredContent its --json document.
 
 Reads:
 - get_tree(root?, depth?, kinds?, archive?) = spec tree.
-- get_node(id, with?, archive?) = spec show: a node's text; with [\"links\"] its links.
+- get_node(id, with?, archive?) = spec show: a node; with [\"links\"] its links.
 - search(query, kinds?, limit?, archive?) = spec search.
-- get_context_bundle(node_ids, budget?) = spec bundle: nodes' context within a budget.
+- get_context_bundle(node_ids, budget?) = spec bundle: nodes' context in a budget.
 - get_proposal(proposal_id) = spec review --brief.
-Queue (writes only the proposal queue; the owner decides on a terminal):
+Queue (writes only the queue; the owner decides on a terminal):
 - propose_change = spec propose update|create|interpretation|amendment: a node's new text \
 against its span_hash; create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each; work on your working answer.
+- report_drift = spec propose drift: queues HEAD's lock drift for the owner; evidence \
+computed, never typed.
 ",
     tasks_line!(),
     "
 
-REF: an ID, an alias, slug/ID, ID#SECTION or a root-relative .md path. Hints use the \
-command's flags: --kind is kinds, ROOT is root, --links is with [\"links\"]. Answers are \
-cut at 40000 characters, with a tail on narrowing them. A REF naming nothing, or \
-a call that cannot run (no specengine.toml: run `spec init`), is an error result with \
-the reason. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.
+REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use CLI flags: --kind \
+is kinds, ROOT is root, --links is with [\"links\"]. Answers are cut at 40000 characters, with \
+a tail on narrowing. A REF naming nothing or a call that cannot run (no specengine.toml: \
+`spec init`) is an error result with the reason. Resources: spec://<slug>/tree, \
+spec://<slug>/node/<REF, percent-encoded>.
 
 Rules:
 - Deterministic: one state, one result; no LLM inside.
-- Reads refresh SpecEngine's index in its data directory; nothing under the project \
-root is written. Spec files change only when the owner approves a change.
+- Reads refresh SpecEngine's index outside the project root; no tool writes under it. Spec \
+files change only when the owner approves.
 - Nothing is blocked by a discrepancy.
-- IDs are Latin only; a look-alike ID is refused with its Latin fix."
+- IDs are Latin only; a look-alike is refused with its Latin fix."
 );
 
 /// Appended to [`INSTRUCTIONS`] when the measurement tools are built in

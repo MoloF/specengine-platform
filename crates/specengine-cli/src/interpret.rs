@@ -38,7 +38,8 @@ use specengine_core::proposal::{Author, ProposalIdError, look_alike_message, par
 use specengine_core::record::{ACCEPTED, REJECTED};
 use specengine_model::{CanonTarget, grammar};
 use specengine_store::{
-    GitEnv, Proposal, ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, SqliteQueue,
+    GitEnv, KindFamily, Proposal, ProposalKind, ProposalQueue as _, ProposalStatus, QueueError,
+    SqliteQueue,
 };
 
 use crate::corpus::indexed;
@@ -330,7 +331,7 @@ fn queue_named(queue: Option<&SqliteQueue>, id: &str) -> Result<String, CliError
         (Some(record), ProposalStatus::Applied) => {
             format!("`{id}` is recorded as {}: name it", record.id)
         }
-        _ if !proposal.kind.decides() => format!(
+        _ if proposal.kind.family() != KindFamily::Decides => format!(
             "`{id}` is {}: it records no decision",
             proposal.kind.with_article()
         ),

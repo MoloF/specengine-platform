@@ -6,6 +6,13 @@
 //! tree in ([`judge_walk`]); a commit's side is read by [`read_head`],
 //! which takes the walk to reuse.
 //!
+//! One commit alone ([`read_commit`], [`judge_commit`]; task spec
+//! `drift-queue`, `spec propose drift`, and `spec verify --staged`'s
+//! seam): its documents, config, code files, manifests and `spec.lock`
+//! read from the commit the caller names (never `HEAD` by name), its code
+//! tree bound from its blobs with nothing reused, judged as the base is;
+//! no working-tree file is read.
+//!
 //! - **Rows**: one per lock key, from a lock entry or a marker binding;
 //!   markers sharing a key are one row. Keys come from accept's own
 //!   builder ([`Target::key`]): the canonical cited ID, never an alias; an
@@ -20,7 +27,9 @@
 //!   (on disk one `hash-object` for every such file; at a commit its
 //!   tree's OID); equal: unchanged, nothing parsed; else a `module` or
 //!   `ron` changed, an item's file re-parsed from the walk's text and its
-//!   whole item hashed (`hash_bound_items`). The judge gets the outcome.
+//!   whole item hashed (`hash_bound_items`). The judge gets the outcome;
+//!   the row keeps the current fact a change was found by (an item's
+//!   digest, a `module`'s or `ron`'s blob), and the node's H.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -40,13 +49,16 @@ use specengine_store::{CommitEntryKind, CommitFile, CommitListing, VerifyGit, b3
 
 use crate::code_walk::{CodeTree, MANIFEST, ManifestSeen, tree_of_blobs};
 use crate::lock::{Target, build_recipes, is_code_path, is_manifest, relation_of};
-use crate::project::ProjectRoot;
+use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::propose::canonical_id;
 use crate::refs::{CANNOT_VERIFY, Corpus, IdState, NodeKey, UNANCHORED};
 
 /// Run causes, by their place in "Verdict and exit"'s order.
+pub(crate) const CAUSE_CONFIG: u8 = 1;
+pub(crate) const CAUSE_NO_CODE: u8 = 2;
 pub(crate) const CAUSE_WALK: u8 = 3;
 pub(crate) const CAUSE_GIT: u8 = 4;
+pub(crate) const CAUSE_LOCK: u8 = 6;
 pub(crate) const CAUSE_BASE: u8 = 7;
 
 /// A cause that stops the run (exit 2), with its place in the order.
@@ -114,9 +126,16 @@ pub(crate) struct Row {
     pub markers: Vec<MarkerFact>,
     /// R; `None` unknown or no node.
     pub node_rev: Option<u32>,
+    /// H, the node's `norm_hash` of the side's bytes; `None` null or no
+    /// node.
+    pub norm_hash: Option<String>,
     pub entry: Option<Verified>,
     /// The row names one node.
     pub resolved: bool,
+    /// The cascade's current fact when it found a change: an item compared
+    /// changed by its hash, its digest (`b3:`); a `module` or `ron` row
+    /// changed by its blob, the blob's OID; else `None`.
+    pub code: Option<String>,
 }
 
 /// The rows of a walk, in key order, and the markers skipped.
@@ -319,34 +338,37 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
                         code: CodeFact::Unbound(unbound(side, &key, &keyless_broken)),
                         key,
                     };
-                    rows.push(judged(facts, None, false));
+                    rows.push(judged(facts, None, None, None, false));
                     continue;
                 }
             },
         };
-        let (node_fact, node_rev) = match node {
+        let (node_fact, node_rev, norm_hash) = match node {
             NodeRef::Found(at) => {
                 let (rev, hash) = spec_side
                     .entry(at)
                     .or_insert_with(|| node_side(&corpus, at))
                     .clone();
-                (NodeFact::Found { rev, hash }, rev)
+                let norm_hash = hash.clone();
+                (NodeFact::Found { rev, hash }, rev, norm_hash)
             }
-            NodeRef::Ambiguous => (NodeFact::Ambiguous, None),
-            NodeRef::Homoglyph => (NodeFact::Homoglyph, None),
-            NodeRef::Dangling => (NodeFact::Dangling, None),
+            NodeRef::Ambiguous => (NodeFact::Ambiguous, None, None),
+            NodeRef::Homoglyph => (NodeFact::Homoglyph, None, None),
+            NodeRef::Dangling => (NodeFact::Dangling, None, None),
         };
         let resolved = matches!(node, NodeRef::Found(_));
+        let mut current = None;
         let code_fact = match &row.code {
             Some(CodeRef::Ambiguous(reason)) => CodeFact::Ambiguous((*reason).to_owned()),
             Some(CodeRef::Unanchored(category)) => CodeFact::Unanchored((*category).to_owned()),
             Some(CodeRef::ItemError(category)) => CodeFact::ItemError((*category).to_owned()),
-            Some(CodeRef::Bound { .. }) => CodeFact::Bound(
-                comparisons
-                    .get(&key)
-                    .cloned()
-                    .unwrap_or(Comparison::NotHashed),
-            ),
+            Some(CodeRef::Bound { .. }) => CodeFact::Bound(match comparisons.get(&key) {
+                Some((comparison, fact)) => {
+                    current.clone_from(fact);
+                    comparison.clone()
+                }
+                None => Comparison::NotHashed,
+            }),
             None => CodeFact::Unbound(unbound(side, &key, &keyless_broken)),
         };
         let facts = RowFacts {
@@ -356,14 +378,20 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             markers: row.markers,
             code: code_fact,
         };
-        rows.push(judged(facts, node_rev, resolved));
+        rows.push(judged(facts, node_rev, norm_hash, current, resolved));
     }
     rows.sort_by(|a, b| a.key.cmp(&b.key));
     Ok((rows, skipped))
 }
 
 /// A row judged.
-fn judged(facts: RowFacts, node_rev: Option<u32>, resolved: bool) -> Row {
+fn judged(
+    facts: RowFacts,
+    node_rev: Option<u32>,
+    norm_hash: Option<String>,
+    code: Option<String>,
+    resolved: bool,
+) -> Row {
     let judgement = judge_row(&facts);
     Row {
         key: facts.key,
@@ -371,8 +399,10 @@ fn judged(facts: RowFacts, node_rev: Option<u32>, resolved: bool) -> Row {
         pre_existing: false,
         markers: facts.markers,
         node_rev,
+        norm_hash,
         entry: facts.entry,
         resolved,
+        code,
     }
 }
 
@@ -637,11 +667,12 @@ fn first_category(state: &HashState) -> String {
 type Compare<'a> = (&'a RowKey, &'a Verified, Option<(usize, usize)>);
 
 /// The cascade: each bound row with an entry compared with it, by the
-/// file's blob, then for a changed item by its whole hash.
+/// file's blob, then for a changed item by its whole hash; with each, the
+/// current fact a change was found by (the blob's OID, the item's digest).
 fn cascade(
     side: &Side<'_>,
     building: &BTreeMap<RowKey, Building>,
-) -> Result<BTreeMap<RowKey, Comparison>, RunCause> {
+) -> Result<BTreeMap<RowKey, (Comparison, Option<String>)>, RunCause> {
     let compared: Vec<Compare<'_>> = building
         .iter()
         .filter_map(|(key, row)| match (&row.code, &row.entry) {
@@ -667,16 +698,19 @@ fn cascade(
     let mut to_hash: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     for (key, entry, item) in &compared {
         let Some(blob) = blobs.get(key.file.as_str()) else {
-            out.insert((*key).clone(), Comparison::NotHashed);
+            out.insert((*key).clone(), (Comparison::NotHashed, None));
             continue;
         };
         if *blob == entry.file_blob {
-            out.insert((*key).clone(), Comparison::Equal(Compared::Blob));
+            out.insert((*key).clone(), (Comparison::Equal(Compared::Blob), None));
             continue;
         }
         match item {
             None => {
-                out.insert((*key).clone(), Comparison::Changed(Compared::Blob));
+                out.insert(
+                    (*key).clone(),
+                    (Comparison::Changed(Compared::Blob), Some(blob.clone())),
+                );
             }
             Some((file, index)) => {
                 to_hash.entry(*file).or_default().insert(*index);
@@ -716,15 +750,15 @@ fn cascade(
             Some(Some(HashState::Hashed(digest))) => {
                 let now = format!("b3:{}", digest.to_hex());
                 if Some(&now) == entry.ast_hash.as_ref() {
-                    Comparison::Equal(Compared::Ast)
+                    (Comparison::Equal(Compared::Ast), None)
                 } else {
-                    Comparison::Changed(Compared::Ast)
+                    (Comparison::Changed(Compared::Ast), Some(now))
                 }
             }
             Some(Some(state @ HashState::CannotVerify { .. })) => {
-                Comparison::CannotVerify(first_category(state))
+                (Comparison::CannotVerify(first_category(state)), None)
             }
-            _ => Comparison::NotHashed,
+            _ => (Comparison::NotHashed, None),
         };
         out.insert(key.clone(), comparison);
     }
@@ -937,6 +971,207 @@ pub(crate) fn read_head(
         lock,
         mode,
     })
+}
+
+// ------------------------------------------------------------ one commit
+
+/// One commit's side, read alone ([`read_commit`]): its listing, its
+/// documents parsed, its code tree bound from its blobs (under its own
+/// `[code]`) and its lock.
+pub(crate) struct CommitSide {
+    listing: CommitListing,
+    input: CheckInput,
+    tree: CodeTree,
+    /// The commit's lock, parsed against this build's recipes (absent:
+    /// empty).
+    pub lock: Lock,
+}
+
+impl CommitSide {
+    /// The commit's documents, parsed from its blobs: what a REF resolves
+    /// over at the commit.
+    pub(crate) fn input(&self) -> &CheckInput {
+        &self.input
+    }
+}
+
+/// A commit listed and the `[code]` of its own root config: the first
+/// half of [`read_commit`].
+pub(crate) struct CommitConfig {
+    listing: CommitListing,
+    code: CodeConfig,
+}
+
+/// The commit `commit` (an OID the caller bound, never `HEAD` by name)
+/// listed through `git`'s session, and its root config's `[code]` (none:
+/// cause 2; invalid, unreadable or absent: cause 1). Causes: git's (4), a
+/// commit it does not name.
+pub(crate) fn commit_config(git: &mut VerifyGit, commit: &str) -> Result<CommitConfig, RunCause> {
+    let git_cause = |cause: specengine_core::check::Cause| RunCause::new(CAUSE_GIT, cause.message);
+    let listing = git
+        .list_commit(commit)
+        .map_err(git_cause)?
+        .ok_or_else(|| RunCause::new(CAUSE_GIT, format!("{commit} names no commit")))?;
+    let label = format!("{CONFIG_FILE} at {}", listing.commit());
+    let config = match git
+        .read_files(&listing, [CONFIG_FILE])
+        .map_err(git_cause)?
+        .remove(CONFIG_FILE)
+    {
+        Some(CommitFile::Bytes(bytes)) => String::from_utf8(bytes)
+            .map_err(|_| RunCause::new(CAUSE_CONFIG, format!("{label}: not UTF-8")))?,
+        Some(CommitFile::Unreadable(why)) => {
+            return Err(RunCause::new(CAUSE_CONFIG, format!("{label}: {why}")));
+        }
+        None => {
+            return Err(RunCause::new(
+                CAUSE_CONFIG,
+                format!("{label}: no such file in the commit"),
+            ));
+        }
+    };
+    let code = match CodeConfig::from_toml(&config) {
+        Ok(Some(code)) => code,
+        Ok(None) => {
+            return Err(RunCause::new(
+                CAUSE_NO_CODE,
+                format!(
+                    "{label} has no [code] table: the code layer is off (add [code] with roots)"
+                ),
+            ));
+        }
+        Err(error) => return Err(RunCause::new(CAUSE_CONFIG, error.at(&label))),
+    };
+    Ok(CommitConfig { listing, code })
+}
+
+/// The side of a commit ([`commit_config`]) read through `git`'s session
+/// alone: its documents as `spec check --changed`'s base lists them under
+/// the project's `[paths]` (the caller checks the config committed and
+/// clean, so the project's scheme and paths are the commit's), the `.rs`
+/// and `.ron` files under its code roots, every `Cargo.toml` under a root
+/// or at or above one and its `spec.lock`; each document parsed and each
+/// code file bound from its blob, nothing reused from the working tree,
+/// which is never read. Causes: git's (4), a listed object missing or no
+/// blob (7), its lock invalid (6), a parser panic (7), a Rust file the
+/// parser gives no tree (3).
+pub(crate) fn read_commit(
+    project: &ProjectRoot,
+    git: &mut VerifyGit,
+    config: CommitConfig,
+) -> Result<CommitSide, RunCause> {
+    let git_cause = |cause: specengine_core::check::Cause| RunCause::new(CAUSE_GIT, cause.message);
+    let CommitConfig { listing, code } = config;
+    let documents = listing.documents(&project.config.paths.walk_scope());
+    let mut code_files: Vec<String> = Vec::new();
+    let mut manifests: Vec<String> = Vec::new();
+    for (path, entry) in listing.entries() {
+        if entry.kind != CommitEntryKind::Regular {
+            continue;
+        }
+        if is_code_path(&code, path) {
+            code_files.push(path.to_owned());
+        } else if is_manifest(&code, path) {
+            manifests.push(path.to_owned());
+        }
+    }
+    let mut wanted: BTreeSet<&str> = BTreeSet::new();
+    wanted.extend(documents.iter().map(String::as_str));
+    wanted.extend(code_files.iter().map(String::as_str));
+    wanted.extend(manifests.iter().map(String::as_str));
+    wanted.insert(LOCK_FILE);
+    let mut read = git.read_files(&listing, wanted).map_err(git_cause)?;
+    let at = listing.commit().to_owned();
+    if let Some(first) = documents
+        .iter()
+        .chain(&code_files)
+        .chain(&manifests)
+        .find_map(|path| match read.get(path) {
+            Some(CommitFile::Unreadable(why)) => Some(format!("`{path}` at {at}: {why}")),
+            _ => None,
+        })
+    {
+        return Err(RunCause::new(CAUSE_BASE, first));
+    }
+    let lock = match read.remove(LOCK_FILE) {
+        None => Lock::empty(build_recipes()),
+        Some(CommitFile::Unreadable(why)) => {
+            return Err(RunCause::new(
+                CAUSE_LOCK,
+                format!("{LOCK_FILE} at {at} cannot be read: {why}"),
+            ));
+        }
+        Some(CommitFile::Bytes(bytes)) => {
+            let text = std::str::from_utf8(&bytes).map_err(|_| {
+                RunCause::new(CAUSE_LOCK, format!("{LOCK_FILE} at {at}: not UTF-8"))
+            })?;
+            parse_lock(text, Some(&build_recipes()))
+                .map_err(|error| RunCause::new(CAUSE_LOCK, format!("{error} (at {at})")))?
+        }
+    };
+    let scheme = &project.config.scheme;
+    let mut input = CheckInput::default();
+    for path in &documents {
+        let Some(CommitFile::Bytes(bytes)) = read.remove(path) else {
+            continue;
+        };
+        let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
+            specengine_core::parse(path, &bytes, scheme)
+        }))
+        .map_err(|_| {
+            RunCause::new(
+                CAUSE_BASE,
+                format!("the spec parser failed on `{path}` at {at}"),
+            )
+        })?;
+        input
+            .files
+            .push(CheckFile::parsed(path.clone(), bytes, parsed));
+    }
+    let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for path in &code_files {
+        if let Some(CommitFile::Bytes(bytes)) = read.remove(path) {
+            blobs.insert(path.clone(), bytes);
+        }
+    }
+    let mut seen: BTreeMap<String, ManifestSeen> = BTreeMap::new();
+    for path in &manifests {
+        let dir = path
+            .strip_suffix(MANIFEST)
+            .map(|dir| dir.strip_suffix('/').unwrap_or(dir))
+            .unwrap_or_default();
+        let manifest = match read.remove(path) {
+            Some(CommitFile::Bytes(bytes)) => ManifestSeen::Bytes(bytes),
+            _ => ManifestSeen::Unreadable,
+        };
+        seen.insert(dir.to_owned(), manifest);
+    }
+    let tree = tree_of_blobs(blobs, &seen, &CodeTree::empty()).map_err(|gap| {
+        RunCause::new(
+            CAUSE_WALK,
+            format!("the code walk at {at} is incomplete: {gap}"),
+        )
+    })?;
+    Ok(CommitSide {
+        listing,
+        input,
+        tree,
+        lock,
+    })
+}
+
+/// Every row of one commit's side ([`read_commit`]), judged as the base is
+/// (its files the commit's, its blobs the commit's tree's), in key order;
+/// none Pre-existing.
+pub(crate) fn judge_commit(side: &CommitSide, project: &ProjectRoot) -> Result<Judged, RunCause> {
+    let at = Side {
+        input: &side.input,
+        tree: &side.tree,
+        lock: &side.lock,
+        files: Files::Commit(&side.listing),
+    };
+    let (rows, skipped) = judge_side(&at, project)?;
+    Ok(Judged { rows, skipped })
 }
 
 #[cfg(test)]

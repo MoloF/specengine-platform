@@ -24,11 +24,12 @@ use serde_json::{Value, json};
 const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 
 /// `tools/list` of the measurement build: the four read tools (task spec
-/// `mcp-read`), the four queue tools (task spec `agent-intake`) and
-/// `report_decision` (docs/features/kind-decision.md), the five task tools
+/// `mcp-read`), the four queue tools (task spec `agent-intake`),
+/// `report_decision` (docs/features/kind-decision.md) and `report_drift`
+/// (docs/features/drift-queue.md), the five task tools
 /// (docs/features/task-package.md), the consent demo and the two probes,
 /// in wire order.
-const PROBES_BUILD_TOOLS: [&str; 17] = [
+const PROBES_BUILD_TOOLS: [&str; 18] = [
     "ask_question",
     "claim_task",
     "complete_task",
@@ -42,6 +43,7 @@ const PROBES_BUILD_TOOLS: [&str; 17] = [
     "propose_change",
     "report_decision",
     "report_discrepancy",
+    "report_drift",
     "report_run",
     "review_proposal",
     "search",

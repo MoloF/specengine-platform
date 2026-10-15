@@ -425,6 +425,9 @@ pub(crate) struct ReviewDocument {
     /// `rev-discipline`); `null` when the kind writes no existing node or
     /// the preview conflicts or is unavailable.
     pub revisions: Option<Vec<RevisionShape>>,
+    /// A drift item's evidence as stored (task spec `drift-queue`); `null`
+    /// on any other kind.
+    pub drift: Option<DriftShape>,
     pub decided_by: Option<String>,
     pub decided_at: Option<String>,
     pub decision_note: Option<String>,
@@ -487,6 +490,17 @@ pub(crate) struct RevisionShape {
     pub to: Option<u32>,
     pub lock_entries: Option<u64>,
     pub refused: Option<String>,
+}
+
+/// A drift item's evidence (task spec `drift-queue`, "The item"): its
+/// `drift_hash`, its first rows as `spec verify --json` writes them
+/// (untyped until Phase 4's drift screen) and how many more.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct DriftShape {
+    pub hash: String,
+    pub rows: Vec<JsonObject>,
+    pub more: u64,
 }
 
 /// A staged choice (`docs/canon/decision-staging.md` "The stage"): one of
@@ -679,6 +693,48 @@ pub(crate) struct IntakeDocument {
     pub linked: Option<String>,
     pub diagnostics: Vec<ProposalFinding>,
     pub notes: Vec<String>,
+}
+
+/// The drift document: `spec propose drift --json` (task spec
+/// `drift-queue`, "Output").
+#[derive(JsonSchema)]
+pub(crate) struct DriftDocument {
+    /// The commit judged; `null` when refused before the place was read.
+    pub commit: Option<String>,
+    pub branch: Option<String>,
+    /// `null` when refused before judging.
+    pub judged: Option<DriftJudged>,
+    pub created: Vec<DriftCreated>,
+    pub hits: Vec<DriftHit>,
+    pub notes: Vec<String>,
+}
+
+/// The rows (of the nodes judged, `ok` ones too) and the nodes judged.
+#[derive(JsonSchema)]
+pub(crate) struct DriftJudged {
+    pub rows: u64,
+    pub nodes: u64,
+}
+
+/// An item stored.
+#[derive(JsonSchema)]
+pub(crate) struct DriftCreated {
+    pub id: String,
+    pub node: String,
+    pub severity: IntakeSeverity,
+    /// Its rows' distinct states and categories.
+    pub summary: String,
+}
+
+/// An item found instead of a new one: queued (`open`, `approved`) or
+/// settled (`rejected`, the same evidence).
+#[derive(JsonSchema)]
+pub(crate) struct DriftHit {
+    pub id: String,
+    pub node: String,
+    pub status: ProposalState,
+    /// Its evidence equals the evidence judged now.
+    pub same: bool,
 }
 
 /// A hit or related item.

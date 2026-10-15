@@ -297,6 +297,29 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 ],
             )
         }
+        // docs/features/drift-queue.md "report_drift and texts": spec-a has
+        // no `[code]`, so a raise is an error result (exit 2), nothing
+        // stored; a field for evidence or a missing role are bad
+        // arguments (an empty `node_ids` is -32602: `mcp_drift.rs`).
+        "report_drift" => (
+            vec![
+                json!({"author_role": "writer"}),
+                json!({"node_ids": ["RULE-STAM-REGEN"], "author_role": "writer",
+                    "author_model": "m-1", "run": "r-1"}),
+                json!({"node_ids": ["RULE-STAM-REGEN"], "task_id": "T-0001",
+                    "author_role": "writer"}),
+                // Seventeen: the command's own exit 2, an error result.
+                json!({"node_ids": ["A-1", "A-2", "A-3", "A-4", "A-5", "A-6", "A-7", "A-8",
+                    "A-9", "A-10", "A-11", "A-12", "A-13", "A-14", "A-15", "A-16", "A-17"],
+                    "author_role": "writer"}),
+            ],
+            vec![
+                json!({"node_ids": "RULE-STAM-REGEN", "author_role": "writer"}),
+                json!({"author_role": "writer", "rows": []}),
+                json!({"author_role": "writer", "drift_hash": "b3:00"}),
+                json!({"node_ids": ["RULE-STAM-REGEN"]}),
+            ],
+        ),
         "get_proposal" => (
             vec![
                 json!({"proposal_id": "PR-0001"}),

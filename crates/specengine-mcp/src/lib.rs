@@ -12,9 +12,11 @@
 //! `get_context_bundle`, each one call into the CLI library (`spec tree`,
 //! `show`, `search`, `bundle`), answering what the CLI answers; the queue
 //! tools `propose_change`, `ask_question`, `report_discrepancy`,
-//! `report_decision` (writing only the proposal queue in the data
-//! directory, as `spec propose` does; the last: task spec `kind-decision`)
-//! and `get_proposal` (`spec review --brief`;
+//! `report_decision`, `report_drift` (writing only the proposal queue in
+//! the data directory, as `spec propose` does; `report_decision`: task spec
+//! `kind-decision`; `report_drift`: task spec `drift-queue`, its evidence
+//! computed from `HEAD`'s commit, never typed) and `get_proposal` (`spec
+//! review --brief`;
 //! `docs/canon/agent-intake.md` "Tools"); the task tools `get_task`,
 //! `claim_task`, `submit_plan`, `report_run`, `complete_task` (`spec task
 //! show|claim|plan|report|complete`; `docs/canon/task-package.md` "MCP");

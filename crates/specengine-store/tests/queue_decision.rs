@@ -39,7 +39,7 @@ use specengine_core::intake::{
 use specengine_core::proposal::Author;
 use specengine_core::record::Choice;
 use specengine_store::{
-    Decision, Intake, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, ProposalFilter,
+    Decision, Intake, KindFamily, NewIntake, NewProposal, PROPOSAL_COLUMNS, Place, ProposalFilter,
     ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries,
     SqliteQueue, Stage, StoredQueue, patch_hash,
 };
@@ -222,25 +222,23 @@ fn row<'a>(state: &'a StoredQueue, id: &str) -> &'a [Option<String>] {
 #[test]
 fn ac_r1_a_decision_decides_and_never_applies() {
     assert_eq!(DECISION_KIND, "decision");
-    // Seven since docs/features/kind-amendment.md appends `amendment`.
-    assert_eq!(ProposalKind::ALL.len(), 7);
+    // Eight since docs/features/drift-queue.md appends `drift` (seven
+    // since docs/features/kind-amendment.md appended `amendment`).
+    assert_eq!(ProposalKind::ALL.len(), 8);
     assert_eq!(ProposalKind::ALL[5], ProposalKind::Decision);
     let kind = ProposalKind::Decision;
     assert_eq!(kind.as_str(), DECISION_KIND);
     assert_eq!(ProposalKind::parse(DECISION_KIND), Some(kind));
     assert_eq!(kind.with_article(), "a decision");
-    assert!(!kind.applies(), "a decision never applies");
-    assert!(kind.decides(), "a decision decides");
+    // docs/features/drift-queue.md "Kind family": `applies()`/`decides()`
+    // gave way to one exhaustive `family()`.
+    assert_eq!(kind.family(), KindFamily::Decides, "a decision decides");
     let deciding: Vec<&str> = ProposalKind::ALL
         .into_iter()
-        .filter(|kind| kind.decides())
+        .filter(|kind| kind.family() == KindFamily::Decides)
         .map(ProposalKind::as_str)
         .collect();
     assert_eq!(deciding, ["question", "discrepancy", "decision"]);
-    // Every kind either applies or decides, never both.
-    for kind in ProposalKind::ALL {
-        assert_ne!(kind.applies(), kind.decides(), "{kind:?}");
-    }
 }
 
 /// AC-R1: `create` refuses a decision (`Invalid` naming the kind and
