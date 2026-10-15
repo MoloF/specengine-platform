@@ -25,9 +25,9 @@ No targets at all (a virtual root, a target-less layout): rules 2–4 give `Unro
 
 **Primary target**, by root: the lib (any kind but `bin`, `example`, `test`, `bench`, `custom-build`), else the bin rooted at `src/main.rs` whatever its name, else the sole bin.
 
-**Rendering** `<package>::<unit>::<module…>::<owner>::<name>`: `<package>` the package dir relative to the corpus (`.` for the root); `<unit>` omitted for the primary target, else Cargo's `kind:name` verbatim (`bin:tool`) or `shared:<dir>`. A unit holds a `:`, a module segment never, so module paths stay suffixes. Items: `<k>_item` for `function`, `struct`, `enum`, `union`, `trait`, `impl` (+ methods), `const`, `static`, `type`, `mod`; `macro_definition`. An impl is `impl Type` / `impl <Type as Trait>`, its methods `Type::method`, `<Type as Trait>::method`; inline `mod {}` extends the path; `mod x;` is not followed (layer C).
+**Rendering** `<package>::<unit>::<module…>::<owner>::<name>[ #<discriminator>]`, the discriminator only on in-file twins (`symbol-names.md` "Discriminator"): `<package>` the package dir relative to the corpus (`.` for the root); `<unit>` omitted for the primary target, else Cargo's `kind:name` verbatim (`bin:tool`) or `shared:<dir>`. A unit holds a `:`, a module segment never, so module paths stay suffixes. Items: `<k>_item` for `function`, `struct`, `enum`, `union`, `trait`, `impl` (+ methods), `const`, `static`, `type`, `mod`; `macro_definition`. An impl is `impl Type` / `impl <Type as Trait>`, its methods `Type::method`, `<Type as Trait>::method`; inline `mod {}` extends the path; `mod x;` is not followed (layer C).
 
-**Ambiguity**, one reason per item, the first that applies: `path_attribute` (the file is a `#[path]` target) > `unrooted` > `duplicate` (an equal rendered `qpath`: adjacent impls, `cfg` twins). Shared items: `duplicate` yes (analysed once, only real twins collide), `path_attribute` no (named by location).
+**Ambiguity**, one reason per item, the first that applies: `path_attribute` (the file is a `#[path]` target) > `unrooted` > `duplicate` (an item of another file renders the same undiscriminated `qpath`; in-file twins are named apart: `symbol-names.md` "Ambiguity"). Shared items: `duplicate` yes (analysed once, only real twins collide), `path_attribute` no (named by location).
 
 ## Marker grammar
 
@@ -59,7 +59,7 @@ Two siblings of one struct or map whose segments render alike (cut at the cap, w
 
 ## Eval outputs
 
-`ast-hash` stdout: `detail.qpath_units` (items per unit kind: `primary`, `shared`, `unrooted` always, each Cargo kind met), `detail.targets_from` `{metadata, layout}` (package dirs). `--out` `manifest.json` files: `unit` (`"primary"`, `"bin:tool"`, `"shared:tests/common"`, `null` if unrooted), `targets` (`metadata | layout`, `null` outside a package).
+`ast-hash` stdout: `detail.qpath_units` (items per unit kind: `primary`, `shared`, `unrooted` always, each Cargo kind met), `detail.targets_from` `{metadata, layout}` (package dirs). `--out` `manifest.json` files: `unit` (`"primary"`, `"bin:tool"`, `"shared:tests/common"`, `null` if unrooted), `targets` (`metadata | layout`, `null` outside a package). `ast-hash`'s `duplicate` keys items by undiscriminated `qpath` (`ast_hash/mod.rs`), so it counts in-file twins too.
 
 `ron` stdout: `markers.ambiguous` (`{grammar: null, lexer}`; `nested` counts `Path` only), `markers.id_empty`, `markers.levels` `{default, declared, invalid}`, `detail.levels_invalid` `{<category>: n}`, `detail.colliding_groups`. `markers.json` rows: `levels` (the effective list, `["sig","body"]` for the default; `null` only when invalid), `levels_state` (`default`, `declared`, a category), `ambiguous` (`lexer` keeps the path text). The removed grammar path's fields stay: `false` / `null`, `recommendation` `lexer`.
 
@@ -71,7 +71,7 @@ v3 levels, fingerprints and the RON value hash (`result.levels`, `result.value_h
 
 ## Measured
 
-Pilots (read-only): A 0.2 % of 11 852 items ambiguous — `duplicate` 29 in 11 groups, each within one file; `path_attribute` 0. B 0.0 % — 2 of 7 599, 1 group within one file. Both all `metadata`, 0 unrooted. Phase 0, without units: 16.5–32.2 %.
+Pilots (read-only): A 0.2 % of 11 852 items ambiguous by the eval's count — `duplicate` 29 in 11 groups, each within one file, which `spec refs` now names apart; `path_attribute` 0. B 0.0 % — 2 of 7 599, 1 group within one file. Both all `metadata`, 0 unrooted. Phase 0, without units: 16.5–32.2 %.
 
 ## Known limits
 
@@ -86,4 +86,4 @@ Pilots (read-only): A 0.2 % of 11 852 items ambiguous — `duplicate` 29 in 11 g
 ## Open
 
 - A process-group kill.
-- Phase 3: `symbols` and `markers` rows, the impl `disambiguator`.
+- Phase 3: `symbols` and `markers` rows (6a-2).

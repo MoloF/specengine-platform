@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-16
 ---
 
 # `spec verify`: drift between `spec.lock` and the tree
@@ -30,7 +30,7 @@ Per row: R, H the node's revision and `norm_hash` (`norm_input` + `b3_hash` over
 | State | Category (detail) | When | Class |
 |---|---|---|---|
 | `cannot_verify` | `item_error` (the hash's first `ErrorCategory`) | the bound item `has_error()` (`code-bindings.md` "Rust binding" rule 7); E's item now broken beside a keyless `cannot_verify` marker of its node and relation (accept's kept entry); RON `nesting_too_deep` | Cannot |
-| | `ambiguous_symbol` (`path_attribute`, `unrooted`, `duplicate`); `ambiguous_id` | an ambiguous qpath or RON path; an ID naming several nodes | |
+| | `ambiguous_symbol` (`path_attribute`, `unrooted`, `duplicate`); `ambiguous_id` | an ambiguous qpath or RON path (`duplicate`: another file renders the same undiscriminated qpath; in-file twins are rows of their own, `symbol-names.md`); an ID naming several nodes | |
 | | `rev_unknown`; `hash_null` | R unreadable; H null (`node-revision.md` "Null") | |
 | | `unreadable` (`unreadable`, `not_utf8`, `outside_code`) | E's file: metadata unreadable; not UTF-8; on disk but no file the walk reads | |
 | | `hidden_by_error` | E's symbol missing from a file with an orphan parse error | |

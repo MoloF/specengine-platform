@@ -50,9 +50,12 @@ use std::ops::Range;
 use tree_sitter::{Node, Tree};
 
 use crate::grammar::RustParser;
-use crate::hash::{ErrorCategory, HashState, hash_item, is_comment};
+use crate::hash::{
+    ErrorCategory, HashState, hash_item, is_comment, item_has_error, name_node,
+    previous_code_sibling,
+};
 use crate::items::{FileAnalysis, Hashing, MOD_KIND, analyze_with_nodes};
-use crate::levels::{FileLevels, LevelState};
+use crate::levels::{FileLevels, LevelState, body_nodes};
 
 /// Kinds a comment inside of which is `in_macro`: a macro call (its token
 /// tree included) and a `macro_rules!` definition (its rules included). A
@@ -256,6 +259,140 @@ pub fn item_levels(tree: &Tree, source: &str, items: &[usize]) -> Vec<Option<Lev
         .iter()
         .map(|&index| nodes.get(index).map(|node| levels.item(*node)))
         .collect()
+}
+
+/// The byte cap of a display signature ([`item_signatures`]), `…` included.
+pub const SIGNATURE_CAP_BYTES: usize = 512;
+
+/// What a cut signature ends with.
+const ELLIPSIS: char = '…';
+
+/// A `;` ending an item without a body.
+const SEMICOLON: &str = ";";
+
+/// Delimiters a signature keeps no space after, and before.
+const NO_SPACE_AFTER: [char; 2] = ['(', '['];
+const NO_SPACE_BEFORE: [char; 3] = [')', ']', ','];
+
+/// The display signatures of the items at `items`
+/// (`docs/features/symbol-discriminator.md` "Signature"), the twin of
+/// [`item_levels`]: indexes into the [`RustBinding::analysis`] that
+/// [`bind_tree`] gives for the same `tree` and `source`, in the order
+/// asked; `None` for an index past its items and for a broken item (a
+/// parse error on it or on an attached attribute). One item walk per call;
+/// never reads an item's hash state; the text is never hashed or compared.
+///
+/// The text runs from the item's first token (its outer attributes and
+/// the comments before it are siblings, never in it) up to its body
+/// ([`crate::levels::body_nodes`] over [`crate::levels::BODY_FIELDS`]),
+/// exclusive, an `=` right before the body dropped (`const CAP: u32`,
+/// `type Id`); a `macro_rules!` definition's up to and including its
+/// name; an item without a body is whole, a final `;` dropped. Comments
+/// are dropped, each as whitespace; each whitespace run (CR included)
+/// becomes one space, none after `(` or `[` and none before `)`, `]` or
+/// `,`; trimmed. Over [`SIGNATURE_CAP_BYTES`] it is cut at a char boundary
+/// and `…` appended, the whole within the cap.
+#[must_use]
+pub fn item_signatures(tree: &Tree, source: &str, items: &[usize]) -> Vec<Option<String>> {
+    let (_, nodes) = analyze_with_nodes(tree, source, Hashing::ErrorsOnly);
+    items
+        .iter()
+        .map(|&index| {
+            let node = nodes.get(index)?;
+            if item_has_error(*node) {
+                return None;
+            }
+            Some(signature(*node, source))
+        })
+        .collect()
+}
+
+/// The display signature of an error-free `item` ([`item_signatures`]).
+fn signature(item: Node<'_>, source: &str) -> String {
+    let mut cursor = item.walk();
+    let children: Vec<Node<'_>> = item.children(&mut cursor).collect();
+    let start = children
+        .iter()
+        .find(|child| !is_comment(**child))
+        .map_or(item.start_byte(), Node::start_byte);
+    let end = if item.kind() == MACRO_DEFINITION_KIND {
+        name_node(item).map_or(item.end_byte(), |name| name.end_byte())
+    } else if let Some(body) = body_nodes(item).first() {
+        match previous_code_sibling(*body) {
+            Some(sign) if !sign.is_named() && sign.kind() == INITIALIZER_SIGN => sign.start_byte(),
+            _ => body.start_byte(),
+        }
+    } else {
+        match children.iter().rev().find(|child| !is_comment(**child)) {
+            Some(last) if !last.is_named() && last.kind() == SEMICOLON => last.start_byte(),
+            _ => item.end_byte(),
+        }
+    };
+    let end = end.max(start);
+    // The comments inside the span, in source order.
+    let mut comments = Vec::new();
+    let mut stack = vec![item];
+    while let Some(node) = stack.pop() {
+        if node.start_byte() >= end || node.end_byte() <= start {
+            continue;
+        }
+        if is_comment(node) {
+            comments.push(node.byte_range());
+            continue;
+        }
+        let mut cursor = node.walk();
+        let inner: Vec<Node<'_>> = node.children(&mut cursor).collect();
+        stack.extend(inner.into_iter().rev());
+    }
+    let mut text = String::new();
+    let mut space = false;
+    let mut at = start;
+    let mut comments = comments.into_iter().peekable();
+    while at < end {
+        if let Some(comment) = comments.next_if(|comment| comment.start <= at) {
+            at = at.max(comment.end);
+            space = true;
+            continue;
+        }
+        let limit = comments
+            .peek()
+            .map_or(end, |comment| comment.start.min(end));
+        let Some(run) = source.get(at..limit) else {
+            break;
+        };
+        for c in run.chars() {
+            if c.is_whitespace() {
+                space = true;
+                continue;
+            }
+            if space
+                && !text.is_empty()
+                && !text.ends_with(NO_SPACE_AFTER)
+                && !NO_SPACE_BEFORE.contains(&c)
+            {
+                text.push(' ');
+            }
+            space = false;
+            text.push(c);
+        }
+        at = limit;
+    }
+    cap_signature(text)
+}
+
+/// `text` cut to [`SIGNATURE_CAP_BYTES`] at a char boundary, `…` appended,
+/// when it is longer.
+fn cap_signature(mut text: String) -> String {
+    if text.len() <= SIGNATURE_CAP_BYTES {
+        return text;
+    }
+    let mut cut = SIGNATURE_CAP_BYTES - ELLIPSIS.len_utf8();
+    while !text.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    text.truncate(cut);
+    text.push(ELLIPSIS);
+    text
 }
 
 /// The node a comment or token hangs under, as the rules need it.

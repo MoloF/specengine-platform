@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-16
 ---
 
 # `spec refs` output: rows, JSON, exits
@@ -22,7 +22,7 @@ refs: markers 2, mentions 1; code files 8 (.rs 7, .ron 1), skipped 0
 
 - Header: search's first four fields + ` | rev <R>` (`rev 1 (none written)`, `rev unknown`); blocks apart by an empty line.
 - Marker: `<relation> | <path>:<line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <binding>[ | <note>]`, 1-based, the column in bytes at the `@`; levels `default`, `[a, b]`, `invalid:<category>`. Mention: `mention | <path>:<line>:<column> | <reference as written> | <id_state>[ <fix>] | <binding>`.
-- Binding: `item <qpath> <kind>[ ambiguous <reason>]`, `module <qpath>[ ambiguous <reason>]`, `ron <path>#<field path>[ ambiguous duplicate]`, `unanchored <category>`, `cannot_verify <category>`, `file` (mentions only).
+- Binding: `item <qpath> <kind>[ ambiguous <reason>]`, `module <qpath>[ ambiguous <reason>]`, `ron <path>#<field path>[ ambiguous duplicate]`, `unanchored <category>`, `cannot_verify <category>`, `file` (mentions only). An in-file twin's `qpath` ends ` #<value>` (`item crates/tally::counter::impl Tally #1 impl_item`; JSON `qpath` too): `symbol-names.md` "Discriminator".
 
 ## JSON
 

@@ -545,11 +545,13 @@ fn check_is_the_same_with_and_without_the_code() {
 
 // ------------------------------------------------------------------ TE-6
 
-/// The new modules of the slice.
-const NEW_MODULES: [&str; 5] = [
+/// The new modules of the slice, and `items.rs` since
+/// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3).
+const NEW_MODULES: [&str; 6] = [
     "crates/specengine-core/src/code_toml.rs",
     "crates/specengine-code/src/bind.rs",
     "crates/specengine-code/src/naming.rs",
+    "crates/specengine-code/src/items.rs",
     "crates/specengine-cli/src/code_walk.rs",
     "crates/specengine-cli/src/refs.rs",
 ];

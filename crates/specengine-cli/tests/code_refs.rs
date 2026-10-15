@@ -568,7 +568,10 @@ fn section_marker_compares_the_section_rev() {
 }
 
 /// RD-4. M: `>=` for `current` makes `LAW-BOUND@3` (the section is at 2)
-/// `current`.
+/// `current`. docs/features/symbol-discriminator.md TE-1: the first of the
+/// two adjacent `impl Tally` blocks is `impl Tally #1`, no longer
+/// `ambiguous duplicate` (M: a unique qpath discriminated turns the golden
+/// rows of `code_a_refs_match_expected_json` red).
 #[test]
 fn newer_marker_is_predated() {
     let scratch = Scratch::new("refs-predated");
@@ -579,7 +582,7 @@ fn newer_marker_is_predated() {
     assert_eq!(
         row_under(&text.stdout, "crates/tally/src/counter.rs:22:17"),
         [
-            "implements | crates/tally/src/counter.rs:22:17 | LAW-BOUND@3 | resolved | predated | default | item crates/tally::counter::impl Tally impl_item ambiguous duplicate"
+            "implements | crates/tally/src/counter.rs:22:17 | LAW-BOUND@3 | resolved | predated | default | item crates/tally::counter::impl Tally #1 impl_item"
         ]
     );
     let value = json_run.json();

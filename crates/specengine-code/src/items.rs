@@ -13,7 +13,7 @@ use std::ops::Range;
 use tree_sitter::{Node, Tree};
 
 use crate::grammar::RustParser;
-use crate::hash::{HashState, attached_attributes, hash_item, item_has_error};
+use crate::hash::{HashState, attached_attributes, hash_item, is_comment, item_has_error};
 
 /// Item kinds collected at file and module level.
 pub const ITEM_KINDS: &[&str] = &[
@@ -50,6 +50,14 @@ pub struct ItemRecord {
     pub mod_path: Vec<String>,
     /// Label of the enclosing `impl` or `trait` for methods.
     pub owner: Option<String>,
+    /// The predicates of the `#[cfg(..)]` chain, outermost first: the
+    /// enclosing inline mods', `impl`'s or `trait`'s, then the item's own,
+    /// each attribute's in source order. A predicate is the tokens inside
+    /// `cfg(..)` joined with no whitespace, comments dropped, a string
+    /// literal kept verbatim; an empty one is not recorded. The first rule
+    /// of an in-file twin's discriminator
+    /// (`docs/features/symbol-discriminator.md` "Discriminator").
+    pub cfg: Vec<String>,
     pub byte_range: Range<usize>,
     /// 1-based start line.
     pub line: usize,
@@ -146,6 +154,9 @@ pub(crate) fn analyze_with_nodes<'tree>(
 struct Scope {
     mod_path: Vec<String>,
     owner: Option<String>,
+    /// The `cfg` predicates of the enclosing inline mods, `impl` or
+    /// `trait`, outermost first.
+    cfg: Vec<String>,
 }
 
 /// One open container of the walk: its remaining children and its scope.
@@ -181,6 +192,7 @@ fn collect<'tree>(
         Scope {
             mod_path: Vec::new(),
             owner: None,
+            cfg: Vec::new(),
         },
     )];
     while let Some(level) = stack.last_mut() {
@@ -205,6 +217,7 @@ fn collect<'tree>(
         let record = make_record(child, source, scope, hashing);
         let label = record.label.clone();
         let name = record.name.clone();
+        let cfg = record.cfg.clone();
         out.items.push(record);
         nodes.push(child);
         let body = match kind {
@@ -217,6 +230,7 @@ fn collect<'tree>(
                         Scope {
                             mod_path,
                             owner: None,
+                            cfg,
                         },
                     ))
                 }
@@ -236,6 +250,7 @@ fn collect<'tree>(
                     Scope {
                         mod_path: scope.mod_path.clone(),
                         owner: Some(label),
+                        cfg,
                     },
                 )
             }),
@@ -266,12 +281,15 @@ fn make_record(node: Node, source: &[u8], scope: &Scope, hashing: Hashing) -> It
         Hashing::ErrorsOnly if has_error => hash_item(node, source),
         Hashing::ErrorsOnly => HashState::NotHashed,
     };
+    let mut cfg = scope.cfg.clone();
+    cfg.extend(cfg_predicates(node, source));
     ItemRecord {
         kind: kind.to_owned(),
         name,
         label,
         mod_path: scope.mod_path.clone(),
         owner: scope.owner.clone(),
+        cfg,
         byte_range: node.byte_range(),
         line: node.start_position().row + 1,
         has_error,
@@ -291,6 +309,73 @@ fn impl_label(node: Node, source: &[u8]) -> String {
 fn field_text_compact(node: Node, field: &str, source: &[u8]) -> Option<String> {
     let text = node.child_by_field_name(field)?.utf8_text(source).ok()?;
     Some(text.chars().filter(|c| !c.is_whitespace()).collect())
+}
+
+/// The attribute name of a `#[cfg(..)]`.
+const CFG: &str = "cfg";
+
+/// The delimiter that opens a `cfg`'s predicate.
+const OPEN_PAREN: &str = "(";
+
+/// String literals, whose text a predicate keeps verbatim.
+const STRING_KINDS: [&str; 2] = ["string_literal", "raw_string_literal"];
+
+/// The predicates of the item's own attached `#[cfg(..)]` attributes, in
+/// source order, read structurally: `attribute_item` → `attribute` → path
+/// `identifier` "cfg" + `arguments` token tree opened by `(`. A predicate is
+/// the concatenation of the tree's tokens between its delimiters, with no
+/// whitespace between them and comments (by kind) dropped; a string
+/// literal's text is kept verbatim, its inner spaces included, but a CR
+/// right before an LF, so an LF and a CRLF checkout read alike. An empty
+/// predicate is skipped. Its bytes become lock keys once a twin is locked.
+fn cfg_predicates(item: Node, source: &[u8]) -> Vec<String> {
+    attached_attributes(item)
+        .into_iter()
+        .filter_map(|attribute_item| {
+            let attribute = attribute_item
+                .named_child(0)
+                .filter(|n| n.kind() == "attribute")?;
+            let path = attribute.named_child(0)?;
+            if path.kind() != "identifier" || path.utf8_text(source).ok()? != CFG {
+                return None;
+            }
+            let arguments = attribute.child_by_field_name("arguments")?;
+            if arguments.child(0)?.kind() != OPEN_PAREN {
+                return None;
+            }
+            // The tokens between the delimiters, in source order.
+            let mut predicate = String::new();
+            let mut cursor = arguments.walk();
+            let mut inner: Vec<Node> = arguments.children(&mut cursor).skip(1).collect();
+            inner.pop();
+            let mut stack: Vec<Node> = inner.into_iter().rev().collect();
+            while let Some(node) = stack.pop() {
+                if is_comment(node) {
+                    continue;
+                }
+                if STRING_KINDS.contains(&node.kind()) {
+                    let text = node.utf8_text(source).unwrap_or_default();
+                    let mut chars = text.chars().peekable();
+                    while let Some(c) = chars.next() {
+                        if c != '\r' || chars.peek() != Some(&'\n') {
+                            predicate.push(c);
+                        }
+                    }
+                    continue;
+                }
+                if node.child_count() == 0 {
+                    // A token: no whitespace in it (a `MISSING` one is empty).
+                    let text = node.utf8_text(source).unwrap_or_default();
+                    predicate.extend(text.chars().filter(|c| !c.is_whitespace()));
+                    continue;
+                }
+                let mut cursor = node.walk();
+                let children: Vec<Node> = node.children(&mut cursor).collect();
+                stack.extend(children.into_iter().rev());
+            }
+            (!predicate.is_empty()).then_some(predicate)
+        })
+        .collect()
 }
 
 /// The string of an attached `#[path = "..."]` attribute, read structurally:

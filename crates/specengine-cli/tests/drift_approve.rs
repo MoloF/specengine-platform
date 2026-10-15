@@ -29,8 +29,9 @@ use drift_common::{
 use lock_common::{Attempt, DECIDER, LockRepo, at, node_blocks, value};
 use serde_json::{Value, json};
 use specengine_cli::{
-    ApproveFlags, Exit, Globals, InboxRequest, LockAcceptRequest, LockPrompt, Outcome, StageBody,
-    StageCause, StageRequest, inbox, lock_accept, render_text, stage,
+    ApproveFlags, Exit, Globals, INBOX_RATIONALE_CHARS, InboxRequest, LockAcceptRequest,
+    LockPrompt, Outcome, StageBody, StageCause, StageRequest, inbox, lock_accept, render_text,
+    stage,
 };
 use specengine_store::{ProposalQueue as _, ProposalStatus};
 use verify_common::golden;
@@ -892,8 +893,11 @@ fn drift_with_nothing_to_accept_is_not_applied() {
 /// PR-0001 shows the rows before asking`; `diff`, `conflict`,
 /// `base_text`, `new_text`, `revisions` `null`; the text `drift: <n>
 /// row(s)` with the rows indented; the inbox line `PR-0001 | drift | open
-/// | LAW-BOUND | main | <created_at> | <summary>`. No walk of the code: a
-/// review with the code unreadable answers alike. M: a preview computed.
+/// | LAW-BOUND | main | <created_at> | <summary>`, the summary's first line
+/// cut at the inbox's [`INBOX_RATIONALE_CHARS`] (one less and `…`): since
+/// docs/features/symbol-discriminator.md LAW-BOUND's summary holds the two
+/// `impl Tally` rows and runs past it. No walk of the code: a review with
+/// the code unreadable answers alike. M: a preview computed.
 #[test]
 fn drift_review_has_no_preview() {
     let repo = drifted("da-review", cap_changed);
@@ -958,12 +962,17 @@ fn drift_review_has_no_preview() {
     )
     .expect("inbox");
     let printed = render_text(&Outcome::Inbox(listed));
+    let first = item.summary.lines().next().unwrap_or_default();
+    let shown = if first.chars().count() <= INBOX_RATIONALE_CHARS {
+        first.to_owned()
+    } else {
+        let mut cut: String = first.chars().take(INBOX_RATIONALE_CHARS - 1).collect();
+        cut.push('\u{2026}');
+        cut
+    };
     assert!(
         printed.lines().any(|line| line
-            == format!(
-                "PR-0001 | drift | open | LAW-BOUND | main | {RAISED} | {}",
-                item.summary
-            )),
+            == format!("PR-0001 | drift | open | LAW-BOUND | main | {RAISED} | {shown}")),
         "{printed}"
     );
     // No walk: the bound code unreadable, the review alike.

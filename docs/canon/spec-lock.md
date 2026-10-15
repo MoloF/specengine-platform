@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-16
 ---
 
 # `spec.lock`: the file, its entries, `spec lock regen`
@@ -68,7 +68,7 @@ A binding `spec refs` lists under the node (`code-bindings.md` "ID state", "Revi
 | `rev_state` | `current`, `unversioned` | `spec_ahead`, `predated`, `bad_rev`, `rev_unknown` |
 | binding | `item` with a v2 digest; `module`, `ron` by `file_blob` alone | `ambiguous <reason>`, `unanchored`, `cannot_verify` |
 
-One key from several markers is lockable only if every marker allows it; the first refusal in marker order names the row. A `[sig]` marker gets the whole item's hash (levels: slice 5).
+In-file twins are lockable, each by its discriminated key; a cross-file `duplicate` never (`symbol-names.md` "Frozen names"). One key from several markers is lockable only if every marker allows it; the first refusal in marker order names the row. A `[sig]` marker gets the whole item's hash (levels: slice 5).
 
 ## `spec lock regen`
 

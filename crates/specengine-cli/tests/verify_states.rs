@@ -245,15 +245,18 @@ fn golden_lock_verifies_ok_but_bad_levels() {
         "{}",
         run.text.show()
     );
-    // The fixture's deliberate problems: 38 rows, exit 2 in observe.
+    // The fixture's deliberate problems: 39 rows, exit 2 in observe. Since
+    // docs/features/symbol-discriminator.md (TE-1) the two adjacent
+    // `impl Tally` blocks are two keys: one `cannot` row became two `fix`
+    // rows (`predated`, `bad_marker bad_rev`).
     assert_eq!(
         run.json["counts"],
-        json!({"rows": 38, "ok": 9, "fix": 17, "check": 5, "cannot": 7, "pre_existing": 0, "skipped": 2})
+        json!({"rows": 39, "ok": 9, "fix": 19, "check": 5, "cannot": 6, "pre_existing": 0, "skipped": 2})
     );
     assert_eq!(run.code(), 2, "{}", run.text.show());
     assert_eq!(
         run.summary(),
-        "verify: cannot-verify [observe]: 17 fix, 5 check, 7 cannot, 9 ok; 9 by blob, 0 by ast; 2 skipped"
+        "verify: cannot-verify [observe]: 19 fix, 5 check, 6 cannot, 9 ok; 9 by blob, 0 by ast; 2 skipped"
     );
 }
 
@@ -357,32 +360,34 @@ fn ron_nested_too_deep_cannot_verify() {
     );
 }
 
+/// The two files of a cross-file pair: one module path,
+/// `crates/tally::pair` (`docs/canon/symbol-names.md` "Ambiguity":
+/// `src/x.rs` beside `src/x/mod.rs`).
+const PAIR_FILES: [&str; 2] = ["crates/tally/src/pair.rs", "crates/tally/src/pair/mod.rs"];
+
+/// Each file of the pair: one marked `fn twin`.
+const PAIR_SOURCE: &str = "// @implements LAW-STEP\npub fn twin() {}\n";
+
 /// TE-1 `cannot_verify ambiguous_symbol` (`path_attribute`, `unrooted`,
-/// `duplicate`, a RON duplicate too), all in the fixture: shown, never
-/// resolved, listed in `delta.bindings.ambiguous`. M: an ambiguity ignored
-/// (the row judged as bound).
+/// `duplicate`, a RON duplicate too): shown, never resolved, listed in
+/// `delta.bindings.ambiguous`. The fixture holds all but the item
+/// `duplicate`, which since docs/features/symbol-discriminator.md (TE-1)
+/// is a cross-file pair only (written here: [`PAIR_FILES`]); the adjacent
+/// `impl Tally` blocks are [`adjacent_impls_are_two_rows`]. M: an
+/// ambiguity ignored (the row judged as bound).
 #[test]
 fn ambiguous_symbols_cannot_verify() {
-    let repo = golden("verify-ambiguous");
-    let run = verify(&repo, &[]);
+    let (_repo, run) = scenario("verify-ambiguous", |repo| {
+        for file in PAIR_FILES {
+            repo.write(file, PAIR_SOURCE);
+        }
+    });
     let cases = [
         (
             module("GOAL-01", "implements", "tools/loose.rs", "."),
             "unrooted",
             vec![(2, None)],
             1,
-        ),
-        (
-            item(
-                "LAW-BOUND",
-                "implements",
-                COUNTER,
-                "crates/tally::counter::impl Tally",
-                "impl_item",
-            ),
-            "duplicate",
-            vec![(22, Some(3)), (45, None)],
-            2,
         ),
         (
             item(
@@ -395,6 +400,30 @@ fn ambiguous_symbols_cannot_verify() {
             "path_attribute",
             vec![(3, Some(1))],
             2,
+        ),
+        (
+            item(
+                "LAW-STEP",
+                "implements",
+                PAIR_FILES[0],
+                "crates/tally::pair::twin",
+                "function_item",
+            ),
+            "duplicate",
+            vec![(1, None)],
+            1,
+        ),
+        (
+            item(
+                "LAW-STEP",
+                "implements",
+                PAIR_FILES[1],
+                "crates/tally::pair::twin",
+                "function_item",
+            ),
+            "duplicate",
+            vec![(1, None)],
+            1,
         ),
         (
             ron("LAW-STEP", "configures", LIMITS, "root.step"),
@@ -442,6 +471,62 @@ fn ambiguous_symbols_cannot_verify() {
         .collect();
     assert_eq!(ambiguous, expected);
     has_hint(&run, "cannot_verify ambiguous_symbol");
+}
+
+/// docs/features/symbol-discriminator.md TE-1: the two adjacent
+/// `impl Tally` blocks of `counter.rs`, one `cannot_verify ambiguous_symbol
+/// duplicate` row before, are two keys, `impl Tally #1` (its marker
+/// `LAW-BOUND@3` above the node's rev 2: `predated`) and `impl Tally #2`
+/// (`LAW-BOUND@3a`: `bad_marker bad_rev`); neither is listed as ambiguous,
+/// and no row keys the undiscriminated `impl Tally`. M: in-file twins kept
+/// ambiguous.
+#[test]
+fn adjacent_impls_are_two_rows() {
+    let repo = golden("verify-adjacent-impls");
+    let run = verify(&repo, &[]);
+    let first = item(
+        "LAW-BOUND",
+        "implements",
+        COUNTER,
+        "crates/tally::counter::impl Tally #1",
+        "impl_item",
+    );
+    let second = item(
+        "LAW-BOUND",
+        "implements",
+        COUNTER,
+        "crates/tally::counter::impl Tally #2",
+        "impl_item",
+    );
+    assert_row(
+        &run,
+        first,
+        &says("predated", None, None, &[(22, Some(3))], Some(2)),
+        None,
+    );
+    assert_row(
+        &run,
+        second,
+        &says("bad_marker", Some("bad_rev"), None, &[(45, None)], Some(2)),
+        None,
+    );
+    assert!(
+        run.rows_where(|row| row["symbol"] == "crates/tally::counter::impl Tally")
+            .is_empty(),
+        "{}",
+        run.text.show()
+    );
+    let ambiguous = run.json["delta"]["bindings"]["ambiguous"]
+        .as_array()
+        .expect("ambiguous")
+        .clone();
+    assert!(
+        ambiguous.iter().all(|key| !key["symbol"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("crates/tally::counter::impl Tally")),
+        "{ambiguous:?}"
+    );
 }
 
 /// TE-1 `cannot_verify ambiguous_id`: a bare feature-scoped ID two
@@ -1922,7 +2007,9 @@ fn crlf_tree_verifies_as_lf() {
             None,
         );
     }
-    assert_eq!(base.json["counts"]["rows"], 38);
+    // 39 since docs/features/symbol-discriminator.md (TE-1): the adjacent
+    // `impl Tally` blocks are two keys.
+    assert_eq!(base.json["counts"]["rows"], 39);
     assert_eq!(base.json["cascade"], json!({"by_blob": 9, "by_ast": 0}));
 
     // Scenarios over CRLF: a comment edit, a body edit, a text edit at the

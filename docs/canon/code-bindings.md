@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-code, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-16
 ---
 
 # Code bindings: `[code]`, markers bound to code, `spec refs`
@@ -46,7 +46,7 @@ exclude = ["**/target/**", "crates/*/tests/fixtures/**"] # optional
 
 Categories, the first that applies: `in_macro` (a macro call or `macro_rules!` body: `foo! { // m`); `in_body` (a function body, block, `const`/`static` initializer: `let x = 1; // m`); `no_item` (followed, past what rule 2 crosses, by `}` or the file's end: a trailing comment on an impl's last associated `type`/`const`); `not_an_item`, everything else (`use`, `extern crate`, an item-position macro call, a field, a variant, an associated `const`/`type`, `#![..]`, an attribute's arguments `#[cfg(any( // m`, `#[derive(Debug)] // m` above `struct S;`). Strict first: fields and variants bind nothing yet.
 
-A bound item gives its `qpath`, `kind()`, node's first line (attributes excluded) and one ambiguity, the first that applies: `path_attribute` (its file a `#[path]` target outside shared units), `unrooted`, `duplicate` (another item of the tree renders alike); shown, never resolved. A module: `<package>[::<unit>][::<module>…]`, the unit omitted for the primary target (`src/lib.rs` -> `crates/tally`, `tests/bounds.rs` -> `crates/tally::test:bounds`); an unrooted file's is its package alone; ambiguous by `path_attribute` or `unrooted`, an inline `mod`'s by its item's (`duplicate` too). RON anchors as built (`code-identity.md` "RON binding", "RON ambiguity"): `ron <path>#<field path>`, `ambiguous duplicate`, `unanchored no_value`, `cannot_verify nesting_too_deep`. Linear (one explicit-stack walk, one lookup per comment); LF and CRLF alike.
+A bound item gives its `qpath`, `kind()`, node's first line (attributes excluded) and one ambiguity, the first that applies: `path_attribute` (its file a `#[path]` target outside shared units), `unrooted`, `duplicate` (an item of another file renders the same undiscriminated qpath; in-file twins are named apart, `<qpath> #<value>`: `symbol-names.md`); shown, never resolved. A module: `<package>[::<unit>][::<module>…]`, the unit omitted for the primary target (`src/lib.rs` -> `crates/tally`, `tests/bounds.rs` -> `crates/tally::test:bounds`); an unrooted file's is its package alone; ambiguous by `path_attribute` or `unrooted`; an inline `mod`'s module takes its item's discriminated qpath and ambiguity (`duplicate` too). RON anchors as built (`code-identity.md` "RON binding", "RON ambiguity"): `ron <path>#<field path>`, `ambiguous duplicate`, `unanchored no_value`, `cannot_verify nesting_too_deep`. Linear (one explicit-stack walk, one lookup per comment); LF and CRLF alike.
 
 ## ID state
 

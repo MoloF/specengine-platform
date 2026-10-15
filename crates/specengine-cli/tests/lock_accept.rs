@@ -344,7 +344,9 @@ new | configures | data/limits.ron | ron root\n";
 /// and PREM-001 as a row, in key order: `item` with a v2 digest, `module`,
 /// `ron` locked (`new`); `spec_ahead`, `predated`, `bad_rev`,
 /// `ambiguous <reason>`, `unanchored`, `cannot_verify` not (hand-derived
-/// from `fixtures/code-a/expected.json` and "Lockability").
+/// from `fixtures/code-a/expected.json` and "Lockability"). Since
+/// docs/features/symbol-discriminator.md (TE-1) the two adjacent
+/// `impl Tally` blocks are two keys, `#1` `predated` and `#2` `bad_rev`.
 #[test]
 fn every_row_of_code_a_is_judged_by_lockability() {
     let cases: [(&str, &str, &str); 5] = [
@@ -363,7 +365,8 @@ new | configures | data/limits.ron | ron root
             "LAW-BOUND",
             "lock LAW-BOUND rev 2 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped)",
             "new | implements | crates/tally/src/counter.rs | item crates/tally::counter::<Tally as fmt::Display>::fmt function_item
-not locked | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally impl_item | predated
+not locked | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally #1 impl_item | predated
+not locked | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally #2 impl_item | bad_rev
 not locked | implements | crates/tally/src/counter.rs | unanchored not_an_item | unanchored
 not locked | implements | crates/tally/src/extra/moved.rs | item crates/tally::extra::moved::shift function_item | spec_ahead
 new | verifies | crates/tally/tests/bounds.rs | item crates/tally::test:bounds::stops_at_cap function_item

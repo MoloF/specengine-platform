@@ -170,7 +170,10 @@ pub enum Ambiguity {
     PathAttribute,
     /// The file is outside every recognised target layout.
     Unrooted,
-    /// Another item resolves to the same `qpath` (adjacent impls, `cfg`-gated twins).
+    /// An item of another file renders the same undiscriminated `qpath`
+    /// (`src/x.rs` beside `src/x/mod.rs`); twins within one file (adjacent
+    /// impls, `cfg`-gated twins) are named apart instead
+    /// ([`crate::naming`]).
     Duplicate,
 }
 
@@ -219,8 +222,9 @@ impl fmt::Display for QPath {
 /// collides with the type it implements; its methods are `Type::method` and
 /// `<Type as Trait>::method`
 /// (`docs/canon/code-identity.md` "Units and `qpath`"). Two adjacent inherent
-/// impls of one type do collide, and that is reported as
-/// [`Ambiguity::Duplicate`].
+/// impls of one type do collide here: [`crate::naming`] names such in-file
+/// twins apart with a discriminator, and reports [`Ambiguity::Duplicate`]
+/// only for an item of another file rendering the same path.
 #[must_use]
 pub fn qpath(package: &str, role: &FileRole, item: &ItemRecord) -> QPath {
     let (unit, mut module) = match role {

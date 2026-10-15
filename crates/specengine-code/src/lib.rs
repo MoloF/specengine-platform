@@ -43,7 +43,8 @@
 //!   `ast_hash`: `docs/canon/spec-lock.md` "Entry"), the binding itself
 //!   hashing none;
 //! - [`naming`] — a tree's items and modules named at once: `qpath` and
-//!   ambiguity (`path_attribute`, `unrooted`, `duplicate`).
+//!   ambiguity (`path_attribute`, `unrooted`, `duplicate`: an item of
+//!   another file renders the same `qpath`).
 //!
 //! Phase 3 slice 5a-1 `hash-levels` (`crates/specengine-code/README.md`
 //! "Hash recipe"):
@@ -62,6 +63,16 @@
 //! - [`ron::value_hashes`] — the value hash of every RON comment anchored to
 //!   a path, keyed by the comment's range ([`RonValues`]), or the file's
 //!   refusal when [`ron::analyze`] rejects it.
+//!
+//! Phase 3 slice 6a-1 `symbol-discriminator`
+//! (`docs/features/symbol-discriminator.md`):
+//!
+//! - [`naming`] — in-file twins named apart, `<qpath> #<discriminator>`
+//!   (their `cfg` chain, [`ItemRecord::cfg`], else their ordinal), in two
+//!   halves: per file ([`name_file`]) and tree-wide ([`tree_passes`] over
+//!   [`path_targets`]);
+//! - [`item_signatures`] — the display signature of chosen bound items,
+//!   at most [`SIGNATURE_CAP_BYTES`], never hashed.
 
 pub mod bevy;
 pub mod bind;
@@ -77,8 +88,8 @@ pub mod ron;
 
 pub use bevy::{BevyAnalysis, detect, detect_file};
 pub use bind::{
-    Binding, BoundComment, RustBinding, Unanchored, bind_file, bind_tree, hash_bound_items,
-    item_levels,
+    Binding, BoundComment, RustBinding, SIGNATURE_CAP_BYTES, Unanchored, bind_file, bind_tree,
+    hash_bound_items, item_levels, item_signatures,
 };
 pub use grammar::{GrammarInfo, RustParser, grammar_info};
 pub use hash::{Digest, ErrorCategory, HashState, RECIPE, hash_item, normalize, recipe_header};
@@ -88,7 +99,10 @@ pub use levels::{
     body_nodes, call_targets, level_header, module_levels,
 };
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
-pub use naming::{Name, NamedFile, Names, ROOT_PACKAGE, name_files};
+pub use naming::{
+    DISCRIMINATOR_SEPARATOR, FileNames, Name, NamedFile, Names, ROOT_PACKAGE, name_file,
+    name_files, path_targets, tree_passes,
+};
 pub use qpath::{
     Ambiguity, FileRole, PackageTargets, QPath, Target, TargetIndex, TargetSource, Unit, UnitKind,
     layout_targets,
