@@ -192,7 +192,7 @@ WA-n: the analysis' (2026-10-10), checked against `scan.rs`, `load.rs`, eval's `
 
 ## Dependencies and ordering
 
-- **Needs**: 6a `symbol-index` (hard: rows, start bytes, discriminator, `code_packages`, `symbols`), on `code-refs` (shipped). Soft: 8a (runner, `libc`; else 11a builds both); 6b (MCP mirror); 10a (the second to ship edits `NOT_BUILT_KEYS`, `EXEMPT` from the other's state).
+- **Needs**: 6a `symbol-index` (hard: rows, start bytes, discriminator, `code_packages`, `symbols`), on `code-refs` (shipped). Soft: 8a (runner, `libc`; else 11a builds both); 6b-1 `code-tools` (MCP mirror); 10a (the second to ship edits `NOT_BUILT_KEYS`, `EXEMPT` from the other's state).
 - **Order**: ADR-0049, this spec -> binary and real protocol tests -> CLI spawn on fakes -> tables -> display, lookup -> TE-6. 11b after TE-6's trigger; 11c after 10b; moniker locking after 5b/5c, own ADR. **Independent**: 4a, 5a, 6b, 9a, 9b, 10b.
 
 ## Implementation

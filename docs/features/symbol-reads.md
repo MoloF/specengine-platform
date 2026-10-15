@@ -2,7 +2,7 @@
 class: spec
 status: draft
 scope: [crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures]
-ref: Phase 3 slice 6a-3, split from symbol-index 2026-10-15 (its Q23, decided under the owner's pre-approval, review open; WA-8, WA-11..WA-13; Q4, Q7, Q18, Q27); 05 s5.1 (:158); 07 s1.2; 08 s2
+ref: Phase 3 slice 6a-3, split from symbol-index 2026-10-15 (its Q23, decided under the owner's pre-approval, review open; WA-8, WA-11..WA-13; Q4, Q7, Q18, Q27; Q35 from `code-tools.md` 2026-10-16); 05 s5.1 (:158); 07 s1.2; 08 s2
 adrs: []
 ---
 
@@ -10,15 +10,15 @@ adrs: []
 
 ## Why
 
-6a-2 (`symbol-index.md`) stores every item, marker and mention beside the md index, but no command asks it which item sits at a name or `path:line`, what binds a node, or where code has no spec (05 s5.1; :158's suffix index): agents still read files. This slice answers the three on the CLI, the ground 6b mirrors in MCP (`code-tools.md`) and 7b's `--symbol` reuses (`impact.md`).
+6a-2 (`symbol-index.md`) stores every item, marker and mention beside the md index, but no command asks it which item sits at a name or `path:line`, what binds a node, or where code has no spec (05 s5.1; :158's suffix index): agents still read files. This slice answers the three on the CLI, the ground 6b-1 mirrors in MCP (`code-tools.md`) and 7b's `--symbol` reuses (`impact.md`).
 
-Split from 6a-2 (its Q23) so the reads neither wait on nor share iterations with its seeded incremental-equals-rebuild property test (its TE-2). Order (08 s2): after 6a-2, before 6b; 7a needs only 6a-2. No ADR: 6a-2's apply (ADR-0008, ADR-0020; ADR-0046: `architecture-code.md#sync-in-reads` already lists `symbols`, `unmapped`; ADR-0047: `#health`'s mapping rule reused, health never reads this index).
+Split from 6a-2 (its Q23) so the reads neither wait on nor share iterations with its seeded incremental-equals-rebuild property test (its TE-2). Order (08 s2): after 6a-2, right before 6b-1 (`code-tools.md` Q28); 7a needs only 6a-2. No ADR: 6a-2's apply (ADR-0008, ADR-0020; ADR-0046: `architecture-code.md#sync-in-reads` already lists `symbols`, `unmapped`; ADR-0047: `#health`'s mapping rule reused, health never reads this index).
 
 ## Description and interactions
 
-- **Who sees it**: the owner and agents through Bash: `spec symbols` (a query, a node, a file or a line) and `spec unmapped` (coverage per directory and file); 6b mirrors both (`code-tools.md` `find_symbols`, `unmapped`); 7b's `--symbol` takes the lookup's best tier and `unmapped`'s containment (`impact.md`).
+- **Who sees it**: the owner and agents through Bash: `spec symbols` (a query, a node, a file or a line) and `spec unmapped` (coverage per directory and file); 6b-1 mirrors both (`code-tools.md` `find_symbols`, `unmapped`); 7b's `--symbol` takes the lookup's best tier and `unmapped`'s containment (`impact.md`).
 - **Freshness**: each refreshes the md index, then the code index, as `refs` (`symbol-index.md` "Description and interactions", **Freshness**); a walk gap exits 2 (`symbol-index.md` "spec refs and spec index").
-- **Crates**: store, the tier lookups and the containment as queries over 6a-2's tables, comparing strings only; `specengine-code` `naming.rs`, `query_name` (Q27); CLI, the two commands (new modules join `code_refs_walk.rs` `NEW_MODULES`), `Corpus::judge` once per stored ID, `OUTPUT_CAP_CHARS`. No table, column, `INDEX_FORMAT` or `CODE_INDEX_FORMAT` change (6a-2 creates every table: its Q23); no new dependency; MCP, HTTP, UI untouched (6b, Phase 4).
+- **Crates**: store, the tier lookups and the containment as queries over 6a-2's tables, comparing strings only; `specengine-code` `naming.rs`, `query_name` (Q27); CLI, the two commands (new modules join `code_refs_walk.rs` `NEW_MODULES`), `Corpus::judge` once per stored ID, `OUTPUT_CAP_CHARS`. No table, column, `INDEX_FORMAT` or `CODE_INDEX_FORMAT` change (6a-2 creates every table: its Q23); no new dependency; MCP, HTTP, UI untouched (6b-1, Phase 4). **For 6b-1** (Q35): `symbols`, `unmapped` exported from the CLI library with their request and outcome types as `refs` is, the form an enum (QUERY terms and limit, node, file, `at` raw: one `PATH:LINE` parser, in the CLI), the limit bounds as constants (as `SEARCH_LIMIT_*`), so MCP calls them without clap.
 
 ## Data
 
@@ -38,8 +38,8 @@ symbols: 1 of 1; code files <f> (.rs <r>, .ron <o>), skipped <s>
 ```
 
 - Target: `<qpath> | <item_kind> | <path>:<start>-<end> | layer <l> | mentions <n>[ | ambiguous <reason>][ | <tier>]`; module `<qpath> | module | <path>`, RON `<path>#<field path> | ron | <path>:<line>`, no `sig`; `sig -` when NULL. Bindings: its direct markers by line, `<relation> | <line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <node or ->[ | <note>]`, `levels`, `note` as refs prints them (`spec-cli-refs.md` "Rows").
-- JSON, every key present: `{form, query, node, path, line, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}]}], total, omitted, code}`.
-- Exit 0 answered, zero rows too; 1 `--node` REF names nothing; 2, stdout empty: usage, discovery, config, no `[code]` (`code-bindings.md` "The `[code]` table"'s text), PATH not a walked code file, a bad LINE, a walk gap. Cap `OUTPUT_CAP_CHARS`, then `[truncated: <k> symbols not shown]`.
+- JSON, every key present, typed as Q35: `{form, query, node, path, line, reason, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}]}], total, omitted, code}`.
+- Exit 0 answered, zero rows too; 1 `--node` REF names nothing (an outcome with `reason`, its document kept, as `refs`; never a `CliError`: Q35); 2, stdout empty: usage, discovery, config, no `[code]` (`code-bindings.md` "The `[code]` table"'s text), PATH not a walked code file, a bad LINE, a walk gap. Cap `OUTPUT_CAP_CHARS`, then `[truncated: <k> symbols not shown]`.
 
 ### spec unmapped
 
@@ -55,7 +55,7 @@ crates/tally (total) | units 16 | mapped 7 | 43.8 % | mentioned 3
 unmapped: code files <f> (.rs <r>, .ron <o>), skipped <s>
 ```
 
-JSON `{path, rows: [{path, dir, units, mapped, percent, mentioned}], total, unmapped: [{qpath, item_kind, path, line}], notes, omitted, code}`. Exits and cap as `symbols`, no exit 1.
+JSON `{path, rows: [{path, dir, units, mapped, percent, mentioned}], total, unmapped: [{qpath, item_kind, path, line}], notes, omitted, code}`, typed as Q35. Exits and cap as `symbols`, no exit 1.
 
 ## Rules and edge cases
 
@@ -69,7 +69,7 @@ JSON `{path, rows: [{path, dir, units, mapped, percent, mentioned}], total, unma
 rust-developer:
 
 - [ ] RD-1 -- lookup (Q27). M: string split -> `trait_owner_with_a_path_is_one_segment`; a scan -> `symbol_lookup_uses_the_suffix_index` (`EXPLAIN QUERY PLAN`), `symbol_lookup_cost_is_sublinear` (10k vs 100k, best of three); rowid order -> `lookup_order_is_independent_of_insertion_order`.
-- [ ] RD-2 -- `symbols`. M: two forms -> `symbols_takes_exactly_one_form`; outermost first -> `at_line_lists_innermost_first`; exit 0 without `[code]` -> `symbols_without_code_table_is_exit_2`; a key dropped (`levels`, `note` too) -> `symbols_json_every_key_present`.
+- [ ] RD-2 -- `symbols`. M: two forms -> `symbols_takes_exactly_one_form`; outermost first -> `at_line_lists_innermost_first`; exit 0 without `[code]` -> `symbols_without_code_table_is_exit_2`; a key dropped (`levels`, `note` too) -> `symbols_json_every_key_present`; a Q35 type changed (`percent` a string, `tier` set outside QUERY) -> `symbol_reads_json_types_are_pinned`; REF naming nothing as a `CliError` -> `symbols_node_naming_nothing_keeps_its_document`.
 - [ ] RD-3 -- `unmapped`. M: no containment -> `module_marker_maps_its_items`; mentions map -> `mentions_never_map`; percents averaged -> `unmapped_counts_items`; any `id_state` maps -> `dangling_marker_never_maps`.
 - [ ] RD-4 -- M: rowid order -> `symbols_and_unmapped_are_byte_identical_across_roots_and_order`.
 
@@ -88,7 +88,7 @@ spec-writer:
 
 ## Out of scope
 
-The tables, the refresh, `spec index`, `refs` from the index, names for 6b, AC-10 (6a-2 `symbol-index.md`); MCP `find_symbols`, `unmapped` (6b `code-tools.md`); 7b's `--symbol` (`impact.md`); `--unbound` (Q4); fuzzy search, references, call graphs; HTTP, UI (Q8).
+The tables, the refresh, `spec index`, `refs` from the index, names for 6b-2, AC-10 (6a-2 `symbol-index.md`); MCP `find_symbols`, `unmapped` (6b-1 `code-tools.md`); 7b's `--symbol` (`impact.md`); `--unbound` (Q4); fuzzy search, references, call graphs; HTTP, UI (Q8).
 
 ## Open
 
@@ -98,8 +98,9 @@ The tables, the refresh, `spec index`, `refs` from the index, names for 6b, AC-1
 | 7 coverage | containment; a RON file one unit; mentions apart |
 | 18 `unmapped` | only resolved, alias or ambiguous-holder markers count as mapping, as health row 5 (else: a gone-node marker covers) |
 | 27 `query_name` | in `specengine-code` `naming.rs`, the one `::` reader (else: a `::` split in the store or CLI, against "Rules") |
+| 35 JSON types, for 6b-1 | pinned before 6b-1's mirrors (`code-tools.md` Q35): `percent` a number, null for `-`; `unmapped`'s `total` a row object as `rows`' items; `omitted` `{symbols}` and `{rows, unmapped}`; `target` one of `item`, `module`, `ron`; `tier` null outside QUERY; `reason` null but at exit 1; the exports of "Crates" (else: string-typed mirrors and a schema change inside 6b-1) |
 
-Q-numbers are shared with `symbol-index.md` (its Q23: this split) and `symbol-discriminator.md`. Q4, Q7 decided 2026-10-10 and Q18 2026-10-13, as rows of `symbol-index.md`; Q27 decided 2026-10-15 (the refresh against shipped 4b-1, 4c-1 and the 5a drafts); all under the owner's pre-approval, review open. WA-n: the 2026-10-10 analysis' working answers (`symbol-index.md`); "SW refinement": the spec-writer's.
+Q-numbers are shared with `symbol-index.md` (its Q23: this split), `symbol-discriminator.md` and `code-tools.md` (Q35, decided 2026-10-16 under the owner's pre-approval, review open). Q4, Q7 decided 2026-10-10 and Q18 2026-10-13, as rows of `symbol-index.md`; Q27 decided 2026-10-15 (the refresh against shipped 4b-1, 4c-1 and the 5a drafts); all under the owner's pre-approval, review open. WA-n: the 2026-10-10 analysis' working answers (`symbol-index.md`); "SW refinement": the spec-writer's.
 
 ## Implementation
 

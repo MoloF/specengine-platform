@@ -12,7 +12,7 @@ adrs: []
 
 Neither an agent nor the owner can ask which items hold a framework role (for Bevy: component, resource, message, event, entity event, reflect, system, observer, plugin) or in which group, a Bevy schedule, a system is registered: they open files, and the cost grows with the project. The detector (`specengine-code` `bevy`) reads systems, observers and plugins, but only the eval calls it (`crates/specengine-code/README.md`); derives and `.add_message::<T>()` are read nowhere (05:128).
 
-Slice 10 is split (Q9): **10a** (this) runs the detector, extended with derives and `add_message`, on each code file into 6a's index behind the opt-in `[code] frameworks = ["bevy"]`, shows roles in `spec symbols` (so 6b's `find_symbols`) and counts them in `spec index`; **10b** (`bevy-dump.md`) adds the project's own schedule dump as annotation. Layer A only: always fresh, no project action. No ADR: ADR-0008 (a neutral key, the words data), ADR-0020 (a role never binds), ADR-0031 (roles are code facts, never node kinds) applied; ADR-0048 is 10b's.
+Slice 10 is split (Q9): **10a** (this) runs the detector, extended with derives and `add_message`, on each code file into 6a's index behind the opt-in `[code] frameworks = ["bevy"]`, shows roles in `spec symbols` (so 6b-1's `find_symbols`) and counts them in `spec index`; **10b** (`bevy-dump.md`) adds the project's own schedule dump as annotation. Layer A only: always fresh, no project action. No ADR: ADR-0008 (a neutral key, the words data), ADR-0020 (a role never binds), ADR-0031 (roles are code facts, never node kinds) applied; ADR-0048 is 10b's.
 
 ## Description and interactions
 
@@ -112,7 +112,7 @@ rust-developer, M: mutation -> the test turning red:
 - [ ] RD-3 -- storage, key. M: a link stored or a cross-file pass -> TE-2 and `renaming_a_system_unlinks_its_registration`; `frameworks` outside `code_fp` -> `frameworks_change_rederives_roles`; detector run without the opt-in -> `no_roles_without_frameworks`; `CODE_INDEX_FORMAT` kept -> 6a's `analyzer_format_change_rederives_every_code_file`; table outside `FORMAT_TABLES` -> 6a's `format_change_recreates_code_tables_and_keeps_queue_rows`.
 - [ ] RD-4 -- config. M: `bevy` kept in `NOT_BUILT_KEYS` -> `code_table_unknown_key_is_refused` (new case `bevy = true`, the unknown-key text) and the stack-word scan (`EXEMPT` 4); unknown framework accepted -> `unknown_framework_is_exit_2_naming_the_line`; bad shape accepted -> `frameworks_shape_is_exit_2_naming_the_line`; a value list in the core -> the stack-word scan; `spec check` failing on the key -> `code_table_unknown_key_is_refused`'s name-check half.
 - [ ] RD-5 -- links. M: first candidate taken -> `subject_naming_two_items_is_ambiguous_on_each`; closure linked by name -> `closure_registration_sits_on_its_enclosing_fn`; own package not first -> `own_package_link_wins`; an `unlinked` row on a symbol -> `unlinked_rows_are_counted_only`.
-- [ ] RD-6 -- output. M: `[]` without the opt-in -> `roles_are_null_without_frameworks`; a key dropped -> 6a's `symbols_json_every_key_present`; file order -> `role_rows_sort_by_content`; words an enum in the mirror -> 6b's `code_mirrors_keep_kinds_free`; rows counted, not symbols -> `role_counts_count_symbols`.
+- [ ] RD-6 -- output. M: `[]` without the opt-in -> `roles_are_null_without_frameworks`; a key dropped -> 6a's `symbols_json_every_key_present`; file order -> `role_rows_sort_by_content`; words an enum in the mirror -> 6b-1's `code_mirrors_keep_kinds_free`; rows counted, not symbols -> `role_counts_count_symbols`.
 - [ ] RD-7 -- annotation only. M: a role maps a unit or alters a row -> `roles_change_no_refs_unmapped_verify_or_lock_output` (byte-identical with `frameworks` on and off).
 - [ ] RD-8 -- genre. M: a `"component"` literal in a core, store, CLI or MCP module -> `new_modules_hold_no_fixture_prefix_kind_path_or_stack_word` (`NEW_MODULES` extended to this slice's modules); in MCP -> `mcp_genre.rs`.
 - [ ] RD-9 -- detector intact. M: a shipped registration changed -> `bevy_detector.rs`; the eval printing the new facts -> eval `bevy_cli.rs` on `bevy-mini`, byte-identical.
@@ -160,7 +160,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 
 ## Dependencies and ordering
 
-- **Needs**: 1 `code-refs` (shipped: `[code]`, the walk); 6a `symbol-index` (hard: tables, `CodeAnalyzer`, tiers, `code_fp`); 5a-1 `hash-levels` first (both edit `specengine-code` `lib.rs`). Soft: 6b `code-tools` (`find_symbols` inherits roles; whichever ships second carries the mirror keys).
+- **Needs**: 1 `code-refs` (shipped: `[code]`, the walk); 6a `symbol-index` (hard: tables, `CodeAnalyzer`, tiers, `code_fp`); 5a-1 `hash-levels` first (both edit `specengine-code` `lib.rs`). Soft: 6b-1 `code-tools` (`find_symbols` inherits roles; whichever ships second carries the mirror keys).
 - **Order**: 5a-1, 6a -> 10a -> 10b (`bevy-dump.md`, its `not_dumped` reads 10a's rows), built right before 12 `machine-bindings`; 10a before 11 `layer-c`, which refines text-only roles. 6c only if TE-7 breaks AC-10.
 
 ## Implementation

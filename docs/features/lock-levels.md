@@ -14,7 +14,7 @@ Format 1 (`docs/canon/spec-lock.md` "Entry") keeps one v2 `ast_hash` per item an
 
 Delivered: `format = 2` (levels, every level's digest, 5a's fingerprints; no `ast_hash`) written by accept, `--editorial`, regen and the editorial approve; verify judging every kind by levels; drift evidence over levels; format 1 still read where only its spec side is needed, refused elsewhere by one text naming `spec lock rebase` (Q10, Q11). Slice 5b is split (Q21): **5b-1** (this) and **5b-2** `lock-rebase.md` (`spec lock rebase`, the base rule for its commit), back to back; "5b" in other drafts names both.
 
-Order (Q9, 08 s2): after 5a-1, 5a-1b, 6a-2 and the whole of 5a-2's TE-1, fingerprint figures included (`hash-levels-eval.md` TE-1, Q4; `symbol-index.md` Q11). Implementation may start on fixtures once 5a-1b ships; shipping waits for TE-1, as the bytes freeze at the first format-2 lock. 4a to 4c-2 have shipped; 4b-1, 4b-2 and 4c-1 read the lock ("Readers"). Then 5b-2; before 5c, 6b, 7a, 7b, 8b.
+Order (Q9, 08 s2): after 5a-1, 5a-1b, 6a-2 and the whole of 5a-2's TE-1, fingerprint figures included (`hash-levels-eval.md` TE-1, Q4; `symbol-index.md` Q11). Implementation may start on fixtures once 5a-1b ships; shipping waits for TE-1, as the bytes freeze at the first format-2 lock. 4a to 4c-2 have shipped; 4b-1, 4b-2 and 4c-1 read the lock ("Readers"). Then 5b-2; before 5c, 6b-2, 7a, 7b, 8b; 6b-1 goes first, needing nothing of it (2026-10-16, `code-tools.md` Q28).
 
 ## Description and interactions
 

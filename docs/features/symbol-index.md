@@ -12,17 +12,17 @@ adrs: []
 
 Every code read re-parses the tree (`docs/canon/code-bindings.md` "The walk", "Known limits"); nothing cheaply says which item sits at `path:line`, which node binds it, where code has no spec, or a signature (05 s5.1): agents read files, and a task's cost grows with the project.
 
-Slice 6 is split (Q1): 6a, 6b `code-tools`, 6c `code-index-speed`; 6a again (Q12): 6a-1 `symbol-discriminator.md` (shipped 2026-10-16: the discriminator, the signature entry, canon `symbol-names.md`) and **6a-2** (this): slice 1's per-file results and 5a-1's level digests stored beside the md index, row for row equal to a fresh rebuild, serving `refs`, 6a-3's reads, 7a and AC-10's code half; 6a-2 again (Q23): this, every table, the refresh, `spec index`, `refs` from the index, names for 6b, AC-10; **6a-3** `symbol-reads.md`, lookup tiers, `spec symbols`, `spec unmapped`. On shipped slices 1-4c-1; after 5a-1 (`item_levels`, `LevelState`, `level_header()`), 5a-2 (its code; its pilot `cost` plans 6c whenever it comes, never a gate: `hash-levels-eval.md` Q4) and 6a-1 (the discriminator, `item_signatures`, `name_files`' halves: its Q21); listed before 5b (08 s2), though neither needs the other (Q11's reasons are 6a-1's). "6a" in other drafts names all its parts.
+Slice 6 is split (Q1): 6a, 6b (6b-1 `code-tools`, 6b-2 `verify-node`: `code-tools.md` Q28), 6c `code-index-speed`; 6a again (Q12): 6a-1 `symbol-discriminator.md` (shipped 2026-10-16: the discriminator, the signature entry, canon `symbol-names.md`) and **6a-2** (this): slice 1's per-file results and 5a-1's level digests stored beside the md index, row for row equal to a fresh rebuild, serving `refs`, 6a-3's reads, 7a and AC-10's code half; 6a-2 again (Q23): this, every table, the refresh, `spec index`, `refs` from the index, names for 6b, AC-10; **6a-3** `symbol-reads.md`, lookup tiers, `spec symbols`, `spec unmapped`. On shipped slices 1-4c-1; after 5a-1 (`item_levels`, `LevelState`, `level_header()`), 5a-2 (its code; its pilot `cost` plans 6c whenever it comes, never a gate: `hash-levels-eval.md` Q4) and 6a-1 (the discriminator, `item_signatures`, `name_files`' halves: its Q21); listed before 5b (08 s2), though neither needs the other (Q11's reasons are 6a-1's). "6a" in other drafts names all its parts.
 
 No ADR: ADR-0001, -0003, -0008, -0016, -0020 and -0046..-0050 applied (`architecture-code.md#sync-in-reads`: these four reads walk code; `#health`: never this index; C joins rows by file and start byte; digests move only with `LEVEL_RECIPE`, in `code_fp`). Only Q2's cargo runner would need one.
 
 ## Description and interactions
 
-- **Freshness** (WA-6): `refs`, `index` (and 6a-3's `symbols`, `unmapped`) refresh the md index, then the code index, a call of its own, never inside CLI `refresh.rs` `refresh` or `corpus.rs` `indexed`, which `verify` (`--changed`; 4b-2's `--staged`), `lock accept`, 4c-1's `spec propose drift` and a drift item's approve, `show` and 9a/9b's Health rows use, keeping their fresh `read_tree` or a commit's blobs (`#health`; `spec-verify.md` "Cascade", "Base": `read_commit`, `tree_of_blobs` over `CodeTree::empty()`): the index holds the working tree only. 4b-2's `spec bump` reads no code. `show` without `--bindings`, `search`, `graph` never walk code. No MCP tool or daemon route refreshes code here: 6b, 7a add theirs.
+- **Freshness** (WA-6): `refs`, `index` (and 6a-3's `symbols`, `unmapped`) refresh the md index, then the code index, a call of its own, never inside CLI `refresh.rs` `refresh` or `corpus.rs` `indexed`, which `verify` (`--changed`; 4b-2's `--staged`), `lock accept`, 4c-1's `spec propose drift` and a drift item's approve, `show` and 9a/9b's Health rows use, keeping their fresh `read_tree` or a commit's blobs (`#health`; `spec-verify.md` "Cascade", "Base": `read_commit`, `tree_of_blobs` over `CodeTree::empty()`): the index holds the working tree only. 4b-2's `spec bump` reads no code. `show` without `--bindings`, `search`, `graph` never walk code. No MCP tool or daemon route refreshes code here: 6b-1, 6b-2, 7a add theirs (6b-2's `verify --node` the one verify that refreshes: `verify-node.md`).
 - **Crates** (WA-5, WA-22): the store owns compare, apply and the cross-file pass behind its trait `CodeAnalyzer` (list, packages, fingerprint, analyze; plain rows), implemented in the CLI library over `code_walk.rs` and `specengine-code`, which the store may not depend on (`build_graph.rs` `core_and_store_have_no_tree_sitter`); the eval via its CLI edge, MCP and the daemon via the CLI. No `rusqlite` type public; no new dependency (6c aside).
 - **Seams** (built; SW refinement): one listing, `code_walk.rs` `list`/`walk`, for `read_tree` and the refresh; one parse per re-derived `.rs` file for `bind_tree`, `name_files`' per-file half (shipped by 6a-1, its Q21), `item_levels`, `item_signatures` (each one collect walk over that tree), later 10a's detector; `comment_anchors` once per `.ron` file. The store pass recomputes `name_files`' tree-wide halves (`tree_passes`) over stored rows as set operations: `path_targets` as `declared_by`, `duplicate` as `twin_files`, which counts every file, unrooted and `#[path]` targets included, as `mark_duplicates` does (`docs/canon/symbol-names.md` "Ambiguity"). `name_file`'s result depends on the package table (`role`, `shared`, the module), so its cache key includes it (`targets_fp`: "Cache key and cross-file pass"). `code_fp`'s `[ids]` part is the md writer's `fingerprint` (store `write.rs`), re-checked in the transaction as there. Reused: `Corpus::judge` (`refs.rs`) once per stored ID, `OUTPUT_CAP_CHARS`.
 - **Oracle**: `refs.rs` `collect_rust`/`collect_ron` over a `CodeTree` stay as RD-8's (9a lifts them).
-- **6b's partial tree** (Q17): the store answers per file its module qpath and each item's qpath and ambiguity, so `verify --node` (`code-tools.md`) walks no tree.
+- **6b-2's partial tree** (Q17): the store answers per file its module qpath and each item's qpath and ambiguity, so `verify --node` (`verify-node.md`) walks no tree; it calls the refresh as one named CLI-library function (working name `refresh_code`).
 
 ## Data
 
@@ -100,7 +100,7 @@ rust-developer:
 - [ ] RD-12 -- harness. M: no edit before the one-file timing -> `one_file_parsed` 1; vacuous timings -> `items` = stored symbols; the first file edited -> the largest `.rs` is; Q25's fields: a cargo stub answering another table -> `roles_differ_counts_a_changed_role` (as `ast_hash_units.rs`), `differ` `null` with no answer; `twins`, `signatures` off -> `fixtures/code-index/expected.json`'s counts.
 - [ ] RD-13 -- seams. M: a second listing -> `index_and_walk_list_alike` (over `code_refs_walk.rs`'s cases); a second parse -> `one_parse_per_rederived_file`; an item's `state` read -> `nothing_outside_the_binder_reads_an_items_state`, which gains the analyzer (it hashes through `item_levels(`) (the pin names per file the entry it must call: `hash_bound_items(` for `lock.rs`, `item_levels(` for the analyzer; 5b's files: `lock-levels.md` Q16).
 - [ ] RD-14 -- a bad `[code]` (Q15). M: the md index held back -> `bad_code_table_still_writes_the_md_index` (exit 2, cause named, md rows fresh).
-- [ ] RD-15 -- names for 6b (Q17). M: names from a tree walk -> `stored_names_equal_the_walks_for_one_file`.
+- [ ] RD-15 -- names for 6b-2 (Q17). M: names from a tree walk -> `stored_names_equal_the_walks_for_one_file`.
 
 test-engineer:
 
@@ -110,7 +110,7 @@ test-engineer:
 - [ ] TE-4 -- determinism (two roots, cwd, reverse creation, CRLF): `refs` (`symbols`, `unmapped`: `symbol-reads.md` TE-2).
 - [ ] TE-5 -- read-only in a temp git repo: porcelain empty; code files' size, mtime, BLAKE3 kept.
 - [ ] TE-6 -- genre: on `spec-c` `refs` exits 2 naming `[code]`; `index` exits 0, no `code` line, JSON `code` `null`; the "Rules" scan (`symbols`, `unmapped`: `symbol-reads.md` TE-3).
-- [ ] TE-7 -- build graph: store, core unchanged; `specengine-code` keeps three dependencies; CLI gains nothing outside 6c; MCP `TOOLS` 14.
+- [ ] TE-7 -- build graph: store, core unchanged; `specengine-code` keeps three dependencies; CLI gains nothing outside 6c; MCP `TOOLS` 15.
 - [ ] TE-8 -- pilots A and B, manual, run by the owner (`#[ignore]`, release and dev, foreground, `--timeout`, a scratch HOME, the child given `PATH`, the label's variables and `SPECENGINE_CARGO` as an absolute toolchain path, `rustup which cargo`: rustup's proxy finds no toolchain under a scratch HOME, and `roles` would compare layout with layout). Recorded in "Implementation", counts only: AC-10's figures; `twins`; `signatures`; mentions per root (`spec index`'s `code` line; `unmapped`: `symbol-reads.md` TE-4); `roles` (Q2's outcome, counted only with `roles.metadata` > 0); read-only proof (`git --no-optional-locks status`, a (path, kind, size, mtime) listing, before and after).
 
 spec-writer:
@@ -132,7 +132,7 @@ spec-writer:
 Bundle layers, read `sync` (7a); `delta.symbols`, `get_impact --since` (7b; Q6); the Bevy layer (10a `bevy-roles.md`, 10b `bevy-dump.md`: role rows beside these, `layer` stays `a`); layers B, C; module and RON digests (Q14); `verify` on the index; MCP and daemon refresh; HTTP, UI (Q8); a watcher; fuzzy search, references, call graphs; pruning.
 
 - **6a-3 `symbol-reads`** (Q23): lookup tiers, `spec symbols`, `spec unmapped`, over this slice's tables.
-- **6b `code-tools`**: MCP `find_symbols`, `refs`, `unmapped`, `check_binding` (`spec verify --node`), `TOOLS` 18, skills. MCP `INSTRUCTIONS` has 5 B under its 2 048 B probes assert, which 7a keeps too (`bundle-bindings.md` RD-11): 6b rewords the text, never a line per tool.
+- **6b**, split 2026-10-16 (`code-tools.md` Q28): 6b-1 `code-tools.md`, MCP `find_symbols`, `refs`, `unmapped`, `TOOLS` 18, `read-spec`, after 6a-3; 6b-2 `verify-node.md`, `spec verify --node` (on Q17's read and this slice's refresh), `check_binding`, `TOOLS` 19, `implement`, after 5c. MCP `INSTRUCTIONS` has 5 B under its 2 048 B probes assert, which 7a keeps too (`bundle-bindings.md` RD-11): 6b-1 rewords the text (80 B left), 6b-2 adds a clause (34 B), never a line per tool.
 - **6c `code-index-speed`** (if AC-10 fails): `rayon =1.12.0` in the CLI (`specengine-code`'s three dependencies are pinned: `build_graph.rs`), rows ordered by path before insert.
 - **`[code] crates`** (WA-15, Q2): TE-8's `roles` (Q25) compares each pilot file's role under `layout_targets` and `cargo metadata`. All equal: `crates` stays refused as "not built" (core `code_toml.rs` `NOT_BUILT_KEYS`; `project_toml.rs` only name-checks `code`), and no planned slice builds it (`layer-c.md` Q11). A difference, recorded in "Implementation", makes its own slice (no file yet): `crates = "layout" | "cargo-metadata"` (default `layout`, in `code_fp`), `code-targets.md` "Target table"'s hardened runner in one CLI module holding every Cargo literal, cached by manifest BLAKE3; a cargo failure exits 2, never a layout fallback. Reads spawning cargo need a decision: only `spec resolve` runs `cargo metadata` (`architecture-code.md#code-identity`).
 
@@ -140,10 +140,10 @@ Bundle layers, read `sync` (7a); `delta.symbols`, `get_impact --since` (7b; Q6);
 
 | Q | Answer (else: the other answer's cost) |
 |---|---|
-| 1 slice 6 | 6a (6a-1, 6a-2: Q12), 6b `code-tools`, 6c `code-index-speed` if AC-10 fails |
+| 1 slice 6 | 6a (6a-1, 6a-2: Q12), 6b (6b-1 `code-tools`, 6b-2 `verify-node`: `code-tools.md` Q28), 6c `code-index-speed` if AC-10 fails |
 | 2 `crates` | built only if pilot layout and metadata roles differ, as its own slice |
 | 3 equal qpaths | a discriminator in the qpath (6a-1) |
-| 5 `check_binding` | `spec verify --node REF [--symbol QPATH]` (6b) |
+| 5 `check_binding` | `spec verify --node REF [--symbol QPATH]` (6b-2 `verify-node.md`) |
 | 6 `delta.symbols` | slice 7b `impact` |
 | 8 HTTP route | Phase 4 |
 | 9 signature | no attributes, no fields (6a-1) |
@@ -154,7 +154,7 @@ Bundle layers, read `sync` (7a); `delta.symbols`, `get_impact --since` (7b; Q6);
 | 14 module and RON digests | not stored; reads parse the bound files whose blob differs (else: a whole-file walk per file per refresh) |
 | 15 bad `[code]` in `spec index` | write the md index, then exit 2 naming the code cause (else: the md index held hostage) |
 | 16 analyzer stamp | a CLI `code_format_history.txt`: `<CODE_INDEX_FORMAT> <code-a dump hash>` (else: unbumped rules, stale rows) |
-| 17 6b's partial tree | 6a-2 exposes per-file stored names (qpath, module, ambiguity) (else: `verify --node` walks the tree) |
+| 17 6b-2's partial tree | 6a-2 exposes per-file stored names (qpath, module, ambiguity) (else: `verify --node` walks the tree) |
 | 21 `name_files`' halves | 6a-1 ships them (`symbol-discriminator.md` Q21) (else: `naming.rs` is rewritten twice and this slice grows) |
 | 23 split (owner) | 6a-2 (this): every table, `INDEX_FORMAT` 9, the refresh, `index`, `refs` from the index, names for 6b, AC-10; 6a-3 `symbol-reads.md`: lookup tiers, `spec symbols`, `spec unmapped`; 6b after 6a-3, 7a after 6a-2 (else: one L slice with a seeded property test and two commands; a third iteration likely) |
 | 24 fixture | a new `fixtures/code-index/`; `code-a` stays as 6a-1 leaves it (else: every code-a golden of slices 1-4c-1 and 6a-1 is re-pinned here) |

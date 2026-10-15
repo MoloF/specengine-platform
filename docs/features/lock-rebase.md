@@ -12,7 +12,7 @@ adrs: [ADR-0050]
 
 Nothing can carry a lock across a change of format or recipe (WA-1): accept, verify and the drift raise exit 2 on another `code_recipe` and, after 5b-1 (`lock-levels.md`), on format 1, naming this command; regen needs one format and recipe set; a hand edit is forbidden (ADR-0041). A grammar bump strands every lock (`spec-lock.md` "Known limits"), and ADR-0042's "until … re-accepted" cannot happen as built. 5b-1 is itself such a change.
 
-Delivered: `spec lock rebase`, the first migration writer (ADR-0050; `architecture-code.md#spec-lock`), re-deriving each entry from its own `file_blob`; and the base rule that lets a project's verify hook pass its commit (Q14). Order (Q9, Q21): right after 5b-1, back to back, under its gate (5a-2's whole TE-1); before 5c, 6b, 7a, 7b, 8b (8b rebases its `[[tested]]` blocks on this: `tested-evidence.md` "Rebase").
+Delivered: `spec lock rebase`, the first migration writer (ADR-0050; `architecture-code.md#spec-lock`), re-deriving each entry from its own `file_blob`; and the base rule that lets a project's verify hook pass its commit (Q14). Order (Q9, Q21): right after 5b-1, back to back, under its gate (5a-2's whole TE-1); before 5c, 6b-2, 7a, 7b, 8b (8b rebases its `[[tested]]` blocks on this: `tested-evidence.md` "Rebase").
 
 ## Description and interactions
 

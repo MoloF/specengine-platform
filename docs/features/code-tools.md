@@ -1,26 +1,26 @@
 ---
 class: spec
 status: draft
-scope: [crates/specengine-mcp, crates/specengine-cli, plugin, fixtures]
-ref: Phase 3 plan 2026-10-10, slice 6b of symbol-index (WA-16..WA-20; Q1, Q4-Q8 decided under the owner's pre-approval, review open); 05 s5.3; 07 s1.2; 08 s2, AC-3
+scope: [crates/specengine-mcp, crates/specengine-cli, plugin]
+ref: Phase 3 plan 2026-10-10, slice 6b of symbol-index (WA-16..WA-20; Q1, Q4-Q8 decided under the owner's pre-approval, review open); refreshed and split 2026-10-16 against HEAD 6c75456 (6b-1; S1-S18; Q28-Q35 decided under the owner's pre-approval, review open); 05 s5.3; 07 s1.2; 08 s2, AC-3
 adrs: []
 ---
 
-# code-tools: MCP find_symbols, refs, unmapped, check_binding; spec verify --node
+# code-tools (6b-1): MCP find_symbols, refs, unmapped
 
 ## Why
 
-An agent asks which item sits at a name or `path:line` and what binds it, what binds a node, where code has no spec, whether a node's bindings still hold. 6a (`symbol-index.md`) and shipped `spec refs` (`docs/canon/code-bindings.md`) answer the first three on the CLI, 4a (`spec-verify.md`) judges the whole tree only; MCP has none (07 s1.2): agents run Bash or read files.
+An agent asks which item sits at a name or `PATH:LINE` and what binds it, what binds a node, where code has no spec. 6a-2 (`symbol-index.md`: `refs` from the code index) and 6a-3 (`symbol-reads.md`: `spec symbols`, `spec unmapped`) answer on the CLI; MCP has none (07 s1.2): agents run Bash or read files.
 
-Delivered: four read tools, twins of `spec symbols`, `refs`, `unmapped` and the new `spec verify --node REF [--symbol QPATH]` (Q5); verify's report kept at exit 2 in MCP (WA-18); skills naming them; `TOOLS` 18, a MINOR plugin version. Slice 6 split (Q1): 6a, 6b, 6c if AC-10 fails. No ADR: ADR-0004/0005, ADR-0012/0042, ADR-0008 applied ("Rules").
+Delivered: three read tools, twins of `spec symbols`, `spec refs` and `spec unmapped`; the `read-spec` skill naming them; `TOOLS` 18, plugin 0.9.0. Slice 6 split (Q1): 6a, 6b, 6c if AC-10 fails; 6b again (Q28): 6b-1 (this) right after 6a-3, over shipped CLI reads; 6b-2 `verify-node.md` (`spec verify --node`, `check_binding`, `implement`, 0.10.0) after 5c. No ADR: ADR-0004/0005 (one door), ADR-0008 (genre), ADR-0046 (`architecture-code.md#sync-in-reads`: `refs`, `symbols`, `unmapped` and their MCP twins walk code) applied.
 
 ## Description and interactions
 
-- **An agent**: before an edit `find_symbols {at}` or `{query}` for an item and its markers, `refs {id}` for what binds a node; before handing in `check_binding {node}` per target (4a's plain rows). **The owner**: `spec verify --node`, `spec unmapped`.
-- **Crates**: CLI the `--node` selection and row keys over 4a's command; MCP `code.rs` (new: the four tools over the CLI library), `mirror.rs`, `server.rs` (`INSTRUCTIONS`, the exit-2 rule); `plugin/` skills, version, `PINS`. MCP `[dependencies]` stay 7 (`build_graph.rs`); store, core, model unchanged.
-- **Freshness**: each tool refreshes the md, then 6a's code index (`symbol-index.md` WA-6); `verify --node` uses the index only to pick files, then reads, parses, hashes them afresh (05:162).
-- **Unchanged**: `spec check`, hook, gate, CI, `INDEX_FORMAT`, queue schema, HTTP (Q8; `daemon-keys`), UI, other tools, verify but for the row keys. **Writes**: the data directory only; never `spec.lock`, a queue row, an event, a file under the root.
-- **Overridden lines**, fixed at shipping (SW-2): 07:30-37 (`find_symbols` `node_id`, `path:line`, "Bevy layer"; `refs` "tests, records"; `check_binding {node_id, qpath}`); `docs/canon/spec-verify.md` (its command line, "Rows"); `mcp-read.md` "Parity" (exit 2), "Texts"; `plugin-files.md` "Content" ("all thirteen named", stale at fourteen).
+- **An agent**: before an edit `find_symbols {at}` or `{query}` for an item and its markers, `refs {id}` for what binds a node, `unmapped {path}` for where code has no spec. **The owner**: the same commands on the CLI.
+- **Crates**: MCP `code.rs` (new: the `code_tools` router, argument types, descriptions and their asserts; one CLI library call each through `read.rs`' `call` and `Answer`, unchanged), `mirror.rs` (the three documents), `server.rs` (`INSTRUCTIONS`, the router joined); `plugin/` (`read-spec`, version, `PINS`). CLI: no behaviour; the entries are 6a-2's (`refs`, `RefsRequest`, `RefsOutcome`, `lib.rs`) and 6a-3's (`symbol-reads.md` Q35), an export it lacks added in `lib.rs` only. MCP `[dependencies]` stay 7 (`build_graph.rs`); store, core, model unchanged.
+- **Freshness**: each call refreshes the md index, then the code index, inside the CLI read (`symbol-index.md` "Description and interactions", **Freshness**); MCP keeps nothing between calls (`mcp-read.md` "No project, discovery, state").
+- **Unchanged**: `spec check`, hook, gate, CI, `INDEX_FORMAT`, queue schema, HTTP (Q8; `daemon-keys`), UI, the other tools, verify. **Writes**: the data directory only (the refresh); never `spec.lock`, a queue row, an event or a file under the root.
+- **Overridden lines**, fixed at shipping (SW-2): 07:26 (the shipped list), :30, :32, :33 (`find_symbols` `node_id`, `path:line`, "Bevy layer"; `refs` `node_id`, "tests, records"); `mcp-read.md` "Binary" (the tool sets served), "Tools" **Texts** (the count, the figures); `plugin-files.md` "Changing it" **Content** ("all fifteen named"), **Version** (0.8.0); the MCP README's opening and `server.rs` row; 6a-2's canon **Freshness** ("no MCP tool … refreshes code": these three do, through the CLI).
 
 ## Data
 
@@ -31,147 +31,118 @@ WA-17, WA-20. **Every MCP tool's argument names are its CLI flag names, a positi
 | Tool | Input (`?` nullable) | ≙ `spec … --json` |
 |---|---|---|
 | `find_symbols` | `query?`, `node?`, `file?`, `at?` (`PATH:LINE`), `limit?` | `symbols QUERY \| --node REF \| --file PATH \| --at PATH:LINE [--limit N]` (`symbol-reads.md` "spec symbols") |
-| `refs` | `id` | `refs REF` (`code-bindings.md` "`spec refs`") |
+| `refs` | `id` | `refs REF` (`docs/canon/spec-cli-refs.md`; command, order, cap: `code-bindings.md` "`spec refs`") |
 | `unmapped` | `path?` | `unmapped [PATH]` (`symbol-reads.md` "spec unmapped") |
-| `check_binding` | `node`, `symbol?` | `verify --node REF [--symbol QPATH]` ("spec verify --node") |
 
-- **Input schemas**, flat (`mcp-read.md` "Schemas"): strings, `limit` as `search`'s, optionals `[T, "null"]`, `additionalProperties: false`, no root `anyOf`/`oneOf`/`allOf`, no `$ref`: `check_binding` `{"node": string, "symbol": [string, null]}`, `required: ["node"]`. `find_symbols`' four forms are four nullable keys; `query` passes as one positional (6a joins positionals with a space).
-- **Form errors**, per surface as `get_task`'s (`task-package.md` "MCP"; SW refinement): not exactly one form -> error result ``spec: find_symbols takes exactly one of `query`, `node`, `file` and `at` ``; `limit` without `query` -> ``spec: find_symbols takes `limit` with `query` only``. The CLI's (6a): usage, exit 2.
-- **Output mirrors** (`mirror.rs`): every key `required`, absent `null`; enums: `relation`, `id_state`, `rev_state`, `levels_state`, binding `kind`, `form`, `tier`, `ambiguity`, `state`, `class`, `verdict`, `compared`, `base`, `anchor` (5c: `exact`, `moved`, `ambiguous`, `lost`; 2026-10-12, `anchor-states.md`); free strings: `item_kind`, `layer`, `category`, `detail` (5a, 5c add), node kinds.
+- **Input schemas**, flat (`mcp-read.md` "Tools", **Schemas**): strings, `limit` an integer as `search`'s, optionals `[T, "null"]`, `additionalProperties: false`, no root `anyOf`/`oneOf`/`allOf`, no `$ref`. `find_symbols`' four forms are four nullable keys; `query` passes as one positional (6a-3 joins positionals with a space), `at` raw to the CLI's one `PATH:LINE` parser (Q35): MCP never splits a qpath or `PATH:LINE`.
+- **Form errors**, per surface as `get_task`'s (`task-package.md` "MCP"; SW refinement): not exactly one form -> error result ``spec: find_symbols takes exactly one of `query`, `node`, `file` and `at` ``; `limit` without `query` -> ``spec: find_symbols takes `limit` with `query` only``; no `structuredContent`. The CLI's (6a-3): usage, exit 2.
+- **Output mirrors** (`mirror.rs`; S16), every key `required`, absent `null`, typed as 6a-3 pins them (Q35). `refs`: `spec-cli-refs.md` "JSON" (markers with `levels`, `levels_state`, `binding {kind, qpath, item_kind, line, ambiguity, category}`; `code`; `omitted {markers, mentions}`). `find_symbols`: `{form, query, node, path, line, reason, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}]}], total, omitted {symbols}, code}`. `unmapped`: `{path, rows: [{path, dir, units, mapped, percent, mentioned}], total (a row), unmapped: [{qpath, item_kind, path, line}], notes, omitted {rows, unmapped}, code}`. Enums, the CLI's closed ones: `form`, `target`, `tier`, `relation`, `id_state`, `rev_state`, `levels_state`, binding `kind`, `ambiguity`; free strings: `item_kind`, `layer`, `category`, `levels` items, node kinds (10a's role keys join free: `bevy-roles.md`).
 
 ### Results and exits
 
-`content` = `spec <…> 2>&1`, `structuredContent` = the `--json` document (`mcp-read.md` "Parity"); MCP never re-sorts or re-cuts.
+`content` = `spec <…> 2>&1`, `structuredContent` = the `--json` document (`mcp-read.md` "Tools", **Parity**); MCP never re-sorts or re-cuts.
 
-| Exit | `find_symbols`, `refs`, `unmapped` | `check_binding` |
-|---|---|---|
-| 0 | success, zero rows too | `clean`, `observed`: success |
-| 1 | `find_symbols {node}`, `refs`: REF names nothing -> `isError`, text, the exit-1 document | `blocked` (`enforce*` and a Fix row) -> `isError`, text, document |
-| 2 | `isError`, the `CliError` line(s), no `structuredContent`: usage, discovery, config, no `[code]` (`code-refs.md`'s sentence), a walk gap, a bad PATH or LINE | a report with `cannot:` lines -> `isError`, text **and document** (WA-18); usage, discovery, REF: as the left column |
-
-WA-18: MCP takes the CLI's own exception (`--json` "none for 2 (`check`: its report)", CLI README "Exit codes and streams"): a report outcome, here verify's, keeps its document at exit 2; precedent: the daemon's `answered` (`crates/specengine-http/README.md`).
-
-### spec verify --node
-
-WA-16, Q5. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--config`), plain only: with `--changed` (4b-2's `--staged`, `rev-rule.md`; 8a's `--task`, `--tests` alike), or `--symbol` alone: usage, exit 2. Order: config, `[verify]`, REF, the md and code index refresh, selection, lock, files, judge.
-
-- **REF**: `spec show`'s resolver; naming nothing, a look-alike, `project:`: exit 2, stdout empty, show's `spec: <reason>` (SW refinement: ADR-0042 keeps exit 1 for Fix alone); several holders: one `warning:`, all of them.
-- **Rows**: plain `spec verify`'s rows (4a "Command and rows", "States") that `spec refs REF` lists under REF's holders: holding a marker listed there (`code-bindings.md` "ID state": `resolved`, `alias`, each `ambiguous`, `homoglyph` under its fix's node), or a lock entry whose `node` is a holder's ID; never sections' or parents'. `--symbol`: then rows whose `symbol` is QPATH byte for byte (`ron` also `<file>#<symbol>`); no tiers (SW refinement: qpaths come from `find_symbols`, `refs`; a gone symbol still matches its lock row; 2026-10-12, `anchor-states.md`: so does a moved row whose `anchor.from` symbol is QPATH, anchors paired before the filter). Zero rows: exit 0, `clean`, `note: verify: <REF> has no binding[ on <QPATH>]`.
-- **Files**: the rows' (markers' from the refreshed index, entries' from `spec.lock`); only they are read, blob-hashed, parsed, hashed. A walk gap anywhere stays 4a's run cause. Judge, classes, mode (`enforce-introduced` as `enforce`, 4a's note), verdict, exits: 4a's; `counts`, `cascade`, `delta` over the selected rows; `base` null, `pre_existing` false, `skipped` 0.
-- **Text**: 4a's row lines, `ok` rows too (class `-`), hints, the summary `verify --node <REF>[ --symbol <QPATH>]: ` + 4a's after `verify: `; cut at `OUTPUT_CAP_CHARS`, then `[truncated: <k> rows not shown; narrow with --symbol QPATH]`.
-- **JSON**: 4a's, rows the printed ones; `node` (holders' IDs), `symbol` after `base`; `omitted` `{rows}` last; the three null without `--node`.
-
-**Row keys**, every verify (SW refinement: `--node` rows equal a full run's): `ast_hash` after `compared`, the item's v2 hash on disk for an `item` row whose item exists error-free, else null: level 1 equal: E's `ast_hash` (same bytes and recipe; nothing hashed, 4a's cascade unchanged); else `hash_item` over this run's parse; never the index's level columns (05:162). 2026-10-12, `lock-levels.md` "Level-aware verify": format 2 has no `ast_hash`; 5b's row key `levels` (`{lock, markers, changed}`) follows `compared`, and this key, the JSON below and RD-6 are restated over the level digests before 6b's code. Each `markers` item `{line, rev, id_state, rev_state}` (`code-bindings.md`).
-
-```
-check | code_ahead code_changed | LAW-BOUND | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally #1 impl_item
-- | ok | LAW-BOUND | configures | data/limits.ron | ron root.cap
-verify --node LAW-BOUND: observed [observe]: 0 fix, 1 check (0 pre-existing), 0 cannot, 1 ok; 1 by blob, 1 by ast; 0 skipped
-```
-
-```json
-{"mode":"observe","base":null,"node":["LAW-BOUND"],"symbol":null,"verdict":"observed",
- "counts":{"rows":2,"ok":1,"fix":0,"check":1,"cannot":0,"pre_existing":0,"skipped":0},"cascade":{"by_blob":1,"by_ast":1},
- "rows":[{"node":"LAW-BOUND","relation":"implements","file":"crates/tally/src/counter.rs","kind":"item",
-   "symbol":"crates/tally::counter::impl Tally #1","item_kind":"impl_item","state":"code_ahead","category":"code_changed",
-   "detail":null,"class":"check","pre_existing":false,"markers":[{"line":21,"rev":3,"id_state":"resolved","rev_state":"current"}],
-   "node_rev":3,"lock":{"rev":3,"commit":"<40 hex>","verified_at":"2026-10-10"},"compared":"ast","ast_hash":"<64 hex>"},{…}],
- "delta":{…},"cannot":[],"notes":[],"omitted":null}
-```
+| Exit | `find_symbols`, `refs`, `unmapped` |
+|---|---|
+| 0 | success, zero rows too |
+| 1 | `find_symbols {node}`, `refs {id}`: REF names nothing -> `isError`, the text, the exit-1 document (`reason`; an outcome in 6a-3, never a `CliError`: Q35) |
+| 2 | `isError`, the `CliError` line(s), no `structuredContent`: usage, discovery, config, no `[code]` (`code-bindings.md` "The `[code]` table"'s text), a walk gap (`spec: the code walk is incomplete: <gap>`; `code-bindings.md` "The walk"), PATH not a walked code file, a bad LINE |
 
 ### INSTRUCTIONS
 
-WA-17. Today, after 4c-1's `report_drift` line and its word trims (`docs/canon/mcp-read.md` "Tools", "Texts"), 1 886 B, 2 043 with `probes`, against `TEXT_LIMIT` 2 048 (`server.rs`'s asserts). 6b's text, measured before 4c-1 (SW refinement): 1 928 B, 2 004 with `probes`, 44 B left; **re-measure it over 4c-1's text**.
+WA-17, Q31 (S4). Today (4c-1's text, `server.rs`): 1 886 B, 1 748 less the tasks line, 2 043 with `probes`, against `TEXT_LIMIT` 2 048: 5 B left. Measured 2026-10-16 over `server.rs` as it stands:
 
-- The reads become two lines (`spec ` and two glosses dropped; the flag map keeps `with ["links"]`):
+- The reads become two lines, the second the code tools (`spec ` and two glosses dropped; the REF paragraph's flag map keeps `with ["links"]`):
 
 ```
 Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = bundle; get_proposal(proposal_id) = review --brief.
-- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node: its bindings vs spec.lock.
+- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) = unmapped.
 ```
 
-- `a project's specification as Markdown files in git` -> `a project's spec as Markdown in git`; `Hints use the command's flags:` -> `Hints use flags:`; the probes paragraph -> `Probes build: review_proposal, probe_output, probe_sleep (owner's checks).`
-- Kept: the queue and tasks lines, REF, the cut, resources, the four rules. BLAKE3 pins (`mcp_decision.rs`, `mcp_path.rs`, `mcp_create.rs`) re-pinned.
+- `Hints use CLI flags:` -> `Hints use flags:`; the probes paragraph (157 B with its blank line) -> `Probes build: review_proposal, probe_output, probe_sleep (owner's checks).` (76 B with it).
+- Kept: the opening, the queue and tasks lines, REF, the cut, the resources, the four rules.
+- **Result: 1 892 B, 1 755 less the tasks line, 1 968 with `probes`: 80 B left.** 6b-2 adds `; check_binding(node, symbol?) = verify --node` to the code line (46 B; `verify-node.md` "INSTRUCTIONS"): 34 B left, then 7a (about 33 B), and 7b (46 B) cuts about 45 B elsewhere (`impact.md` "INSTRUCTIONS").
+- Re-pinned (S5): `mcp_tasks.rs` (`INSTRUCTIONS.len()`), `mcp_path.rs` and `mcp_decision.rs` (length and BLAKE3 less the tasks line, and of the whole text), `mcp_create.rs` (the paragraph's bytes, the probes total), `server.rs`' doc comment; `mcp-read.md` **Texts** at shipping.
 
-**Descriptions**: each ≤ 2 048 B, ASCII, with the determinism sentence, its CLI twin and the `[code]` need; asserts tie stated numbers to CLI constants (6a's `limit` 1/200/20, `OUTPUT_CAP_CHARS`); no stack word or kind (`mcp_genre`). `check_binding`'s: plain verify of one node, nothing written, a report kept at exit 2.
+**Descriptions**: each ≤ 2 048 B, ASCII, with the determinism sentence, its CLI twin and the `[code]` need; compile-time asserts tie each stated number to its CLI constant (6a-3's exported `limit` bounds 1/200/20, Q35; `OUTPUT_CAP_CHARS`); no `STACK_WORDS` word or kind (`mcp_genre`, `common/read.rs`).
 
 ### Plugin
 
-WA-19. Bodies only: `read-spec` names `find_symbols`, `refs`, `unmapped` (after the bundle, before files); `implement` names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged (1 170 of 1 200 B); bodies ≤ 4 096 B (both ~2 280); all eighteen tools backticked (`plugin-files.md` "Content"); the next MINOR (0.8.0 if first), a `PINS` line.
+WA-19. Bodies only: `read-spec` names `find_symbols`, `refs`, `unmapped` (after the bundle, before files: an item at a line, what binds a node, where code has no spec). Descriptions unchanged (1 170 of 1 200 B); the body ≤ 4 096 B (2 598 B now, front-matter included); all eighteen tools backticked across the texts (`plugin-files.md` **Content**); 0.9.0 (MINOR: newly named tools), a `PINS` line.
+
+### Fixtures
+
+Q33. No new fixture. Parity, forms and exits over scratch copies of 6a-2's `fixtures/code-index/` (twins, the tiers with a quoted `#2`, a RON anchor, an `unmapped` row of `-`: `percent` null); the single door over `fixtures/code-a/` with `fixtures/spec-lock/code-a.lock` as it stands (the three read no lock: S15); genre over `fixtures/spec-c`.
 
 ## Rules and edge cases
 
-- WHEN `check_binding` and `spec verify --json` run on one state, its rows SHALL equal verify's filtered by "Rows" (TE-3).
+- WHEN a code tool and its `spec … --json` twin run on one state, its `content` and `structuredContent` SHALL equal the CLI's text and document (RD-3).
 - WHEN a tool runs from two roots, another cwd, in reverse creation order or on CRLF copies, its result SHALL be byte-identical, holding no root, `HOME` or date.
-- Single door (08 AC-3): no tool writes `spec.lock`, a queue row, an event or a file under the root, or exposes `index`, `lock accept`, `propose drift`.
-- ADR-0012, ADR-0042: no status, claim, approval, task transition or gate reads a `check_binding` result.
-- Genre (`architecture.md#universal`): no stack, kind, fixture or Rust word in MCP sources and texts; qpaths, `item_kind` are data.
+- Single door (08 AC-3; S14): no code tool writes `spec.lock`, a queue row, an event or a file under the root, or exposes `index`, `lock accept`, `propose drift` (`report_drift` alone queues drift).
+- Genre (`architecture.md#universal`): no stack, kind, fixture or Rust word in MCP sources and texts; qpaths, `item_kind` are data; `query_name` stays the one reader of `::` (`symbol-reads.md` "Rules and edge cases").
 
 ## Acceptance criteria
 
-rust-developer, M: mutation -> the test turning red:
+rust-developer (M = the mutation that must turn the named test red):
 
-- [ ] RD-1 -- `tools/list`, both eras: the eighteen; `TOOLS` 18, `CODE_TOOLS` 4 (`tests/common/read.rs`); annotations, `_meta`. M: a tool without a door call -> `mcp_door`'s coverage; a description over 2 048 B or without the sentence -> `mcp_default`.
-- [ ] RD-2 -- forms. M: zero or two forms reaching the CLI, or `limit` with `node` -> `find_symbols_takes_exactly_one_form`; `--node` with `--changed` -> `verify_node_is_plain_only`; `--symbol` alone -> `verify_symbol_needs_node`.
-- [ ] RD-3 -- parity per tool and exit on `code-a`. M: an MCP-side sort or cut, or exit 1 as success -> `code_tools_equal_the_cli`.
-- [ ] RD-4 -- schemas. M: a nested or `oneOf` input -> `mcp_read`'s flat-schema test; a CLI key without its mirror -> the schema walker; `item_kind` an enum -> `code_mirrors_keep_kinds_free`.
-- [ ] RD-5 -- `--node`. M: own states or filter -> `check_binding_equals_the_verify_rows`; sections taken -> `verify_node_lists_the_node_not_its_sections`; a homoglyph marker dropped -> `verify_node_follows_refs_listing`; counts over all rows -> `verify_node_counts_its_rows_only`; REF naming nothing at exit 1 -> `verify_node_naming_nothing_is_exit_2`; tiers on QPATH -> `verify_symbol_is_byte_exact`.
-- [ ] RD-6 -- row keys. M: the index's level digests read (their columns tampered; 2026-10-13, `symbol-index.md` Q11) -> `check_binding_levels_are_fresh`; a blob-equal row hashed -> 4a's `blob_equal_entries_are_not_hashed`; a key dropped -> `verify_json_every_key_present`.
-- [ ] RD-7 -- WA-18. M: the exit-2 document dropped -> `check_binding_cannot_verify_keeps_its_rows`; a document at a usage exit 2 -> `check_binding_usage_has_no_document`; another tool's exit-2 document kept -> `mcp_read`'s exit-2 test.
-- [ ] RD-8 -- `INSTRUCTIONS`. M: a tool unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`'s asserts; text changed, pin kept -> `mcp_decision.rs`.
-- [ ] RD-9 -- size: text + `structuredContent` ≤ `MAX_RESULT_CHARS` per tool. M: `unmapped` JSON uncut -> `mcp_size`; `--node` uncut -> `verify_node_cut_names_narrowing`.
-- [ ] RD-10 -- read-only. M: a write under the root or a queue row -> `mcp_door`; a task transition reading a result -> `no_task_transition_reads_a_finding`.
-- [ ] RD-11 -- graph. M: a store or `rusqlite` edge in MCP -> `build_graph.rs` (7); an HTTP route -> `fixtures/daemon-keys.json`'s test.
-- [ ] RD-12 -- plugin. M: a tool unnamed -> `plugin_skills.rs`; version unchanged -> `plugin_files.rs`; descriptions over 1 200 B -> `plugin_skills.rs`.
+- [ ] RD-1 -- `tools/list`, both eras: the eighteen; `TOOLS` 18 (S1), `CODE_TOOLS` 3 (`tests/common/read.rs`); the read annotations, `_meta`. M: a tool without a door call -> `mcp_door`'s coverage; a description over 2 048 B, non-ASCII or without the sentence -> `mcp_default`; a stated limit not the CLI's constant -> a compile-time assert.
+- [ ] RD-2 -- forms. M: zero or two forms reaching the CLI, or `limit` with `node` -> `find_symbols_takes_exactly_one_form`; `at` split in MCP -> `find_symbols_bad_at_is_the_clis_error` (a bad LINE answers the CLI's exit-2 line).
+- [ ] RD-3 -- parity per tool and exit over `fixtures/code-index/` (Q33). M: an MCP-side sort or cut, or exit 1 as success -> `code_tools_equal_the_cli`.
+- [ ] RD-4 -- schemas. M: a nested or `oneOf` input -> `mcp_read`'s flat-schema test; a CLI key without its mirror -> the schema walker; `item_kind` an enum -> `code_mirrors_keep_kinds_free`; `percent` a string -> the walker over a `-` row (Q35).
+- [ ] RD-5 -- `INSTRUCTIONS` (Q31). M: a tool unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`' asserts; the text changed, a pin kept -> `mcp_decision.rs`, `mcp_path.rs`, `mcp_tasks.rs` (1 892), `mcp_create.rs` (76 B, 1 968).
+- [ ] RD-6 -- size: text + `structuredContent` ≤ `MAX_RESULT_CHARS` per tool. M: `unmapped` JSON uncut -> `mcp_size`.
+- [ ] RD-7 -- read-only, the three code tools (S14). M: a write under the root or a queue row -> `mcp_door`.
+- [ ] RD-8 -- graph. M: a store or `rusqlite` edge in MCP -> `build_graph.rs` (7); an HTTP route -> `fixtures/daemon-keys.json`'s test.
+- [ ] RD-9 -- plugin. M: a tool unnamed -> `plugin_skills.rs`; the version unchanged -> `plugin_files.rs`; descriptions over 1 200 B -> `plugin_skills.rs`.
 
 test-engineer:
 
-- [ ] TE-1 -- `mcp_code.rs` over scratch `code-a` copies, both eras: forms, exits; determinism (two roots, reverse creation, CRLF); session (an edited `.rs` shows in the next `find_symbols`, no `spec index`); quiet (broken, non-UTF-8 `.rs`: stdout JSON-RPC only); genre (`spec-c`: an error result naming `[code]`); `mcp_index`; `mcp_size` maxima recorded.
-- [ ] TE-2 -- single door: a temp git repo with `code-a` and slice 3's golden `spec.lock`; every tool valid and invalid; then `git status --porcelain=v1 -z --untracked-files=all`, `.git/index` mtime, `spec.lock` bytes, queue rows unchanged.
-- [ ] TE-3 -- `check_binding` over 4a's TE-1 scenarios: per scenario and node, rows equal `spec verify --json`'s filtered; each state and category met once.
-- [ ] TE-4 -- cost: 1k unrelated code files, warm index: `verify --node` against plain verify, latency recorded ([A] well below; else 6c).
-- [ ] TE-5 -- pilots, manual (`#[ignore]`, release, `--timeout`, foreground, scratch `HOME`, read-only): latency per tool, `unmapped` totals; no pilot name or path committed.
+- [ ] TE-1 -- `mcp_code.rs` over scratch `fixtures/code-index/` copies, both eras: forms, exits 0, 1, 2; determinism (two roots, reverse creation, CRLF); session (an edited `.rs` shows in the next `find_symbols`, no `spec index`); quiet (broken, non-UTF-8 `.rs`: stdout JSON-RPC only); genre (`spec-c`: an error result naming `[code]`); `mcp_index`; `mcp_size` maxima recorded.
+- [ ] TE-2 -- single door: a temp git repo with `fixtures/code-a/` and `fixtures/spec-lock/code-a.lock` as it stands (S15); every code tool, valid and invalid; then `git status --porcelain=v1 -z --untracked-files=all`, `.git/index` mtime, `spec.lock` bytes, queue rows unchanged.
+- [ ] TE-3 -- pilots, manual (`#[ignore]`, release, `--timeout`, foreground, scratch `HOME`, read-only): warm latency per tool against `mcp-read.md` "Latency"'s 1 s, `unmapped` totals; no pilot name or path committed.
 
 spec-writer:
 
-- [x] SW-1 -- this spec; dated notes in `symbol-index.md`, `spec-verify.md`, 08 s2; `export index`, `check` clean.
-- [ ] SW-2 -- at shipping: Tier 2 `docs/canon/mcp-code.md` (≤ 12 288 B; `mcp-read.md`, at 12 276: a pointer row, "Parity", "Texts" reworded in place); MCP README; the `spec-verify` canon (`--node`, `--symbol`, row keys); `plugin-files.md`, `plugin.md` "Skills"; 07:30-37, 08:44; `CLAUDE.md` State.
-- [x] SW-3 -- no ADR.
+- [x] SW-1 -- this spec; refreshed and split 2026-10-16 (Q28): `verify-node.md`; 08 s2 reordered; `symbol-index`, `symbol-reads` (Q35), `lock-levels`, `lock-rebase`, `anchor-states`, `bundle-bindings`, `impact`, `bevy-roles`, `bevy-dump`, `layer-c` pointers follow.
+- [ ] SW-2 -- at shipping (Q32), bytes measured 2026-10-16: a Tier 2 `docs/canon/mcp-code.md` (the three tools, forms, exits, mirrors; about 3 KB of 12 288; 6b-2 adds `check_binding`), its line in `docs/index-canon.md` (7 978 of 10 240, + ≈ 150); `mcp-read.md` (12 255 of 12 288, **room first**: **Texts**' 368 B list of what `INSTRUCTIONS` names cut to a clause pointing at `server.rs`, ≈ 260 B freed; then "Binary" one clause naming `mcp-code.md`, **Texts** count-free with 6b-1's figures); the MCP README (10 235 of 10 240, **room first**: the opening's 685 B of tool lists to one pointer at `mcp-read.md` "Binary", the `server.rs` row's figures to `mcp-read.md` **Texts**; then a `code.rs` row); `plugin-files.md` (4 611: eighteen, 0.9.0, its `PINS` BLAKE3), `plugin.md` "Skills" `read-spec` (9 459); 07 s1.2 :26, :30-:33; 6a-2's canon **Freshness**; 08 s2; `CLAUDE.md` State (5 726).
+- [x] SW-3 -- no ADR; `export index`, `check` clean.
 
 ## Risks
 
-`INSTRUCTIONS` keeps 44 B after 6b as measured before 4c-1, whose `report_drift` line (108 B) shipped by trims (5 B left, 2 043 with `probes`); 7a's `--bindings` flag (~33 B), 7b's `get_impact` (46 B) want ~80: each re-measures after 6b, cutting the probes paragraph (76 B) or argument lists, never a rule. `check_binding`'s exit 1 under `enforce*` is `isError` (parity, described). Drafts 3, 4a, 6a under it: a change to verify's rows or 6a's JSON reopens "spec verify --node" and the mirrors. Each call refreshes the code index (6a's `noop_ms`) against MCP's 1 s (`mcp-read.md` "Latency").
+- **Doc room**: the MCP README has 5 B, `mcp-read.md` 33 B; adding before trimming turns `spec check` red (SW-2 orders it).
+- **`INSTRUCTIONS`**: 80 B left, 34 after 6b-2; 7b still cuts about 45 B. The 76 B probes paragraph drops words of the owner's AC-16 checklist (the probe tools' descriptions keep them).
+- **Latency**: each call refreshes the code index (6a-2's `noop_ms` ≤ 200) against MCP's 1 s warm (`mcp-read.md` "Latency"); TE-3 records it, a breach plans 6c.
+- **Upstream JSON**: a 6a-3 key or type changed after this ships reopens the mirrors (Q35 pins them first); 10a's role keys join `find_symbols`' mirror, whichever ships second (`bevy-roles.md`).
+- **Genre**: MCP texts hold no `STACK_WORDS` word (`common/read.rs`).
 
 ## Out of scope
 
-HTTP routes, UI (Q8, Phase 4); `delta.symbols`, `get_impact` (7b, Q6); `with: ["bindings"]`, bindings in reads (7a); `--unbound` (Q4); fuzzy search, references, call graphs (LSP's); spec-side referrers in `refs` (`get_node` with links); `verify --node --changed`, a base; writing markers or binding code (07's former `bind_code_symbol`); the Bevy layer (10a `bevy-roles.md`, 10b `bevy-dump.md`, 2026-10-10: `find_symbols`' mirror gains `roles`, then `instances`, `flags`, `dumps`, free strings; whichever of 6b, 10a/10b ships second carries them); code resources.
+`check_binding`, `spec verify --node`, the `implement` skill (6b-2 `verify-node.md`); HTTP routes, UI (Q8, Phase 4); `delta.symbols`, `get_impact` (7b, Q6); `with: ["bindings"]`, bindings in reads (7a); `--unbound` (Q4); fuzzy search, references, call graphs (LSP's); spec-side referrers in `refs` (`get_node` with links); writing markers or binding code (07's former `bind_code_symbol`); the Bevy layer (10a `bevy-roles.md`, 10b `bevy-dump.md`: `find_symbols`' mirror gains their keys, free strings, whichever ships second); code resources.
 
 ## Open
 
-| Q | Working answer (owner pre-approved, review open) | The other answer costs |
-|---|---|---|
-| Q1 split | 6a, then 6b; 6c only if AC-10 fails | tools re-walk the tree per call |
-| Q4 unbound | none; `unmapped {path}` lists a file's items | `unbound` overloaded |
-| Q5 `check_binding` | twin of `spec verify --node REF [--symbol QPATH]` | a judge of its own drifts |
-| Q6 `delta.symbols` | 7b `impact` | a git reader here |
-| Q7 coverage | 6a's containment; mentions apart | path classes break genre |
-| Q8 HTTP | none now | keys before Phase 4 screens |
-| SW `INSTRUCTIONS` | 6b's text; **4c-1, 7a, 7b re-measure after 6b** and make their own room | 6b cuts for drafts that may change |
-| Names (2026-10-10) | CLI flag names, REF `id`, every tool; 7b amended | 07's `node_id`, `qpath`: two vocabularies |
-| SW REF | naming nothing: exit 2 | exit 1 breaks ADR-0042's Fix-only exit 1 |
+| Q | Answer (else: the other answer's cost) |
+|---|---|
+| 1 slice 6 | 6a, then 6b; 6c only if AC-10 fails (else: tools re-walk the tree per call) |
+| 4 unbound | none; `unmapped {path}` lists a file's items (else: `unbound` overloaded) |
+| 6 `delta.symbols` | 7b `impact` (else: a git reader here) |
+| 7 coverage | 6a-3's containment; mentions apart (else: path classes break genre) |
+| 8 HTTP | none now (else: keys before Phase 4 screens) |
+| Names (2026-10-10) | CLI flag names, REF `id`, every tool; 7b amended (else: 07's `node_id`, `qpath`: two vocabularies) |
+| 28 split (owner) | 6b-1 (this): `find_symbols`, `refs`, `unmapped`, `read-spec`, 0.9.0, right after 6a-3; 6b-2 `verify-node.md`: `--node`/`--symbol`, `check_binding`, `implement`, 0.10.0, after 5c (else: one L slice after 5c, the reads waiting on 5b-1's pilot gate, 12 RD in one review) |
+| 31 `INSTRUCTIONS` | the two reads lines, no gloss on the code line, `Hints use flags:`, the 76 B probes paragraph: 80 B left, 34 after 6b-2 (else: 7 B left, 7a's and 7b's lines cut from elsewhere) |
+| 32 canon home | a new Tier 2 `docs/canon/mcp-code.md`; `mcp-read.md` one clause in "Binary" once room is made; 6b-2's `--node` in `spec-verify-node.md` (else: `mcp-read.md` over its cap) |
+| 33 fixtures | the reads over 6a-2's `fixtures/code-index/` (twins, tiers, RON, `-`); `code-a` for the door (else: no twin, tier or `-` reaches the mirror tests) |
+| 35 6a-3's JSON | 6a-3 pins, before these mirrors: `percent` a number (null for `-`), `total` a row object, `omitted` `{symbols}` / `{rows, unmapped}`, `target`'s values, `tier` null outside `query`; its exports and exit-1 outcome (`symbol-reads.md` Q35) (else: string-typed mirrors and a schema change inside 6b-1) |
 
-WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.
-
-## Working answers
-
-[P] checked, [A] assumed. WA-16 [P/A] `check_binding` = `verify --node` (4a's judge, rows restricted). WA-17 [P] the mirror rules (`mcp-read.md` "Parity", "Schemas", "Texts"). WA-18 [P/A] MCP drops every exit-2 document; 4a prints its report at exit 2. WA-19 [P] `plugin.json` 0.7.0; a newly named tool: MINOR. WA-20 [P] no HTTP route.
+Q1, Q4-Q8 (2026-10-10) and Q28-Q35 (2026-10-16) decided under the owner's pre-approval, review open; numbers shared with `verify-node.md`, where Q5, Q29, Q30, Q34 live (Q28, Q31-Q33 in both), and with `symbol-reads.md` (Q35). S-n: the 2026-10-16 refresh's stale points; WA-n: the 2026-10-10 analysis' working answers; "SW refinement": the spec-writer's.
 
 ## Dependencies and ordering
 
-- **Needs**: 1 `code-refs` (shipped); 3 `spec-lock` (the reader); 4a `spec-verify` (the judge, the command, its JSON); 6a-2 `symbol-index` (index, `refs` from it), 6a-3 `symbol-reads` (`symbols`, `unmapped`; Q23 of `symbol-index.md`).
-- **Order**: 6a and 4a -> 6b -> the `INSTRUCTIONS` lines of 4c-1, 7a, 7b; 6b after 5b and 5c (2026-10-13, `symbol-index.md` Q11), its row keys over the level digests. **Independent**: 8a, 9a, 9b. **Later**: Phase 4 (HTTP, UI).
+- **Needs**: 6a-2 `symbol-index` (`refs` from the index, its refresh and gap exit, `fixtures/code-index/`; its TE-7 at `TOOLS` 15); 6a-3 `symbol-reads` (`symbols`, `unmapped`, its Q35 exports and types); 4c-1's `INSTRUCTIONS` (shipped).
+- **Order** (Q28, 08 s2): 6a-2 -> 6a-3 -> 6b-1 (this) -> 5b-1 -> 5b-2 -> 5c -> 6b-2 -> 6c -> 7a; nothing from 5b or 5c. **Independent**: 8a, 9a, 9b. **Later**: Phase 4 (HTTP, UI).
 
 ## Implementation
 
-Not started. To record: modules, `INSTRUCTIONS` bytes, `mcp_size` maxima, TE-4's and TE-5's figures, deviations with reasons.
+Not started. Split 2026-10-16 (Q28): RD-1..RD-4 kept (RD-1 at 18 and 3; RD-2 without verify's flags; RD-3 over `code-index`; RD-4 a `percent` case); old RD-8 -> RD-5 (`mcp_tasks.rs` added); old RD-9's `unmapped` half -> RD-6; old RD-10 -> RD-7, scoped (S14); old RD-11, RD-12 -> RD-8, RD-9 (0.9.0); old RD-5, RD-6, RD-7, RD-9's `--node` half, RD-10's task half, TE-3, TE-4 -> `verify-node.md`; TE-1, TE-2 without `check_binding`; old TE-5 -> TE-3. To record: modules, `INSTRUCTIONS` bytes, `mcp_size` maxima, TE-3's figures, deviations with reasons.

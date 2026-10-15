@@ -88,7 +88,7 @@ Q13. `spec verify --changed --json`: "Since"'s `{added, removed, changed, rename
 
 ### INSTRUCTIONS
 
-WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included (6 B of room today; 6b spends first): the reads lines reworded, none dropped. 2026-10-10: 6b leaves 44 B (`code-tools.md` "INSTRUCTIONS"); in its reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B); re-measured after 6b.
+WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included: the reads lines reworded, none dropped. 2026-10-16: 5 B of room today (1 886 B, 2 043 with `probes`); 6b-1 and 6b-2 spend first and leave 34 B (1 938, 2 014; `code-tools.md`, `verify-node.md` "INSTRUCTIONS"), 7a about 33 B of it; in the reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B): about 45 B cut elsewhere, never a rule, re-measured after 7a.
 
 ## Rules and edge cases
 
@@ -127,7 +127,7 @@ spec-writer:
 
 ## Risks
 
-`INSTRUCTIONS` has 6 B left in the `probes` build, 44 B after 6b: `get_impact`'s 46 B need a further cut, re-measured after 6b. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
+`INSTRUCTIONS` has 5 B left in the `probes` build, 34 B after 6b-2 and about 1 B after 7a: `get_impact`'s 46 B need a cut of about 45 B, re-measured after 7a. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
 
 ## Out of scope
 
@@ -153,7 +153,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 ## Dependencies and ordering
 
 - **Needs**: 7a (rows, sync, refresh, degrade) and through it 1, 3, 4a, 6a; 4a's `HEAD` base reader, generalised here.
-- **Order**: 7a -> 7b; 6b, if built first, takes its `INSTRUCTIONS` share before this. **Independent**: 4b, 4c, 8a, 8b. **Later**: 5c (`renamed`), Phase 4 (the graph's impact mode).
+- **Order**: 7a -> 7b; 6b-1 and 6b-2 ship before 7a (08 s2, 2026-10-16) and take their `INSTRUCTIONS` shares first. **Independent**: 4b, 4c, 8a, 8b. **Later**: 5c (`renamed`), Phase 4 (the graph's impact mode).
 
 ## Implementation
 

@@ -166,7 +166,7 @@ WA-n: the analysis' working answers (2026-10-10), below; "SW refinement": the sp
 
 ## Dependencies and ordering
 
-- **Needs**: 1 `code-refs` (built, unshipped) -> 3 `spec-lock` (the reader) -> 4a `spec-verify` (judge, row key, blob call) -> 6a `symbol-index` (tables, refresh, signature); [6b optional, spends `INSTRUCTIONS` room first] -> 7a -> 7b.
+- **Needs**: 1 `code-refs` (built, unshipped) -> 3 `spec-lock` (the reader) -> 4a `spec-verify` (judge, row key, blob call) -> 6a `symbol-index` (tables, refresh, signature); [6b-1, 6b-2 first (08 s2, 2026-10-16), leaving `INSTRUCTIONS` 34 B: `code-tools.md`, `verify-node.md`] -> 7a -> 7b.
 - **Order**: this spec and ADR-0046 now, code after 6a, 5b and 5c (2026-10-13, `symbol-index.md` Q11); 6c first if AC-10's no-op timing (`noop_ms` ≤ 200) fails. **Independent**: 4b, 4c, 8a. **Later**: Phase 4. **Either side**: 8b (`tested` here, by the later).
 
 ## Implementation
