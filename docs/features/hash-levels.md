@@ -16,9 +16,9 @@ Slice 5 is split (Q1): 5a, 5b `lock-levels`, 5c `anchor-states`; 5a again (Q10, 
 
 ## Description and interactions
 
-- **Nobody sees it yet**: no command, MCP tool, lock field or UI changes. 5a-2 measures it, 5b records it (`lock-levels.md` "Format 2"), 5c matches on it, 6a-2 stores it (`symbol-index.md` Q11), 6a-1 cuts signatures with `body_nodes`. 4c-1's drift items see it only through 5b: a stored row gains `levels` after `compared` (core `drift.rs` `DriftRow` reads past a later key, `StoredJson` keeps it: `proposal-drift-item.md` "The item", **Store**); `drift_hash`'s `lock_code` becomes format 2's code fields as rendered (`lock-levels.md` Q7), its `code` fact 5b's.
+- **Nobody sees it yet**: no command, MCP tool, lock field or UI changes. 5a-2 measures it, 5b records it (`lock-levels.md` "Format 2"), 5c matches on it, 6a-2 stores it (`symbol-index.md` Q11), 6a-1 cuts signatures with `body_nodes`. 4c-1's drift items see it only through 5b: a stored row gains `levels` after `compared` (core `drift.rs` `DriftRow` reads past a later key, `StoredJson` keeps it: `proposal-drift-item.md` "The item", **Store**); `drift_hash`'s `lock_code` becomes format 2's levels and digests, no fingerprint, its `code` fact the changed levels' (`lock-levels.md` Q12, Q13).
 - **Genre** (WA-14, ADR-0008): all language knowledge (tree-sitter-rust kinds and fields, N5, the RON lexer) stays in `specengine-code`; core will see only digests, lock keys and `body_bytes`. No Bevy special case: one-line `build` fns fall under the threshold.
-- **Beside v2** (WA-4): `RECIPE`, `recipe_header()`, `hash_item`, `hash_node`, `hash_bound_items` and every v2 byte stay: format-1 locks name v2 (`spec-lock.md` "The file"); accept (CLI `lock.rs`), 4a's cascade (CLI `verify_rows.rs` `cascade`, which also serves `--changed`'s base, 4c-1's drift raise through `judge_commit` and 4b-2's `--staged`) and 5b's rebase cross-check call them; until 5b an open drift item's `drift_hash` holds v2 digests (`code`, `lock_code`: `proposal-drift-item.md` "The item"). `ItemRecord`, `FileAnalysis`, `HashState`, `Anchor` unchanged. v2's private walk (`hash.rs` `normalize_nested`) is shared only with its v2 setting byte-pinned (`hash_v2.rs`), else v3 walks on its own.
+- **Beside v2** (WA-4): `RECIPE`, `recipe_header()`, `hash_item`, `hash_node`, `hash_bound_items` and every v2 byte stay: format-1 locks name v2 (`spec-lock.md` "The file"); accept (CLI `lock.rs`), 4a's cascade (CLI `verify_rows.rs` `cascade`, which also serves `--changed`'s base, 4c-1's drift raise through `judge_commit` and 4b-2's `--staged`) and 5b-2's rebase cross-check (`lock-rebase.md`) call them; until 5b an open drift item's `drift_hash` holds v2 digests (`code`, `lock_code`: `proposal-drift-item.md` "The item"). `ItemRecord`, `FileAnalysis`, `HashState`, `Anchor` unchanged. v2's private walk (`hash.rs` `normalize_nested`) is shared only with its v2 setting byte-pinned (`hash_v2.rs`), else v3 walks on its own.
 - **Callers hold indexes and text, never a node** (Q6): `analyze_with_nodes` is `pub(crate)`; the CLI walk keeps a Rust file's text and `RustBinding`, a RON file's text and `CommentAnchor`s, no `Tree` (cli `code_walk.rs` `RustFile`, `RonFile`); verify's cascade (`verify_rows.rs` `cascade`) and accept (from `HEAD`'s blobs) re-parse and hash by index (`hash_bound_items`); a commit's side (4c-1's `read_commit`, 4b-2's index side) holds the same `RustFile`, `RonFile`, bound from blobs by `tree_of_blobs`. "Entry points" take that shape.
 - **Crates**: code (module `levels`, its body-field table exported as data; the twin in `bind.rs`; `grammar` re-exports `NODE_TYPES`; `lib.rs` exports and a module-doc paragraph for 5a); eval tests (the grammar pin, which reads JSON); `fixtures/hash-levels/`. The RON value range and hash in `ron`: 5a-1b (`hash-levels-ron.md`, Q12). Core, store, CLI untouched; no new dependency.
 - **Overridden**: 05 s5.2 names the `body` field of three kinds only; "The body field" covers every collected kind.
@@ -101,7 +101,7 @@ WA-5. Same `level_header()`, own tag.
 
 - WHEN the same bytes are hashed by two parser instances, in two runs or in reverse file order, the system SHALL give the same digests: no path, line, offset or time enters a stream.
 - Trap 1: comments by `is_comment`, never `is_extra()`; kinds by `kind()`, never `kind_id()`. Walks use an explicit stack, linear in the input; one item's levels and fingerprints come from one pass over several sinks where they can (AC-10, "Risks").
-- No `.state` is read. The pin `nothing_outside_the_binder_reads_an_items_state` (cli `code_refs_walk.rs`) still asks cli `lock.rs` for `hash_bound_items(`; 5b widens it to `item_levels(` and to CLI `verify_rows.rs`, the cascade, `hash_bound_items`' other caller, unpinned today (it reads an item's `.state` only under `has_error`, for the error category).
+- No `.state` is read. The pin `nothing_outside_the_binder_reads_an_items_state` (cli `code_refs_walk.rs`) still asks cli `lock.rs` for `hash_bound_items(`; 5b widens it (`lock-levels.md` Q16) to `item_levels(` and to CLI `verify_rows.rs`, the cascade, `hash_bound_items`' other caller, unpinned today (it reads an item's `.state` only under `has_error`, for the error category).
 - Code comments cite `crates/specengine-code/README.md` "Hash recipe" (kept as the pointer at shipping), never this spec's headings (compacted at shipping); "05 §5.2" joins `doc_pointers.rs` `STALE` only when that section is pointer-only (after 5c, 6a).
 
 ## Acceptance criteria
@@ -144,7 +144,7 @@ spec-writer:
 
 CLI, lock, verify, ADR; the RON value hash (5a-1b, `hash-levels-ron.md`); the eval reports and pilot figures (5a-2, `hash-levels-eval.md`). `--deep`, a `qpath` discriminator, the suffix index (slice 6); per-branch ratios (Phase 4); following RON or a RON shape level; ast-grep user anchors; MCP `check_binding`; UI; level 2 (Q5); a stateless item view (code-refs' carry-over, settled as `NotHashed` plus `hash_bound_items`: `spec-lock.md` feature "Implementation").
 
-- **5b `lock-levels`** (`lock-levels.md`, ADR-0050): lock format 2 recording these digests, level-aware verify, `spec lock rebase`.
+- **5b-1 `lock-levels`** (`lock-levels.md`, ADR-0050): lock format 2 recording these digests, level-aware verify; **5b-2 `lock-rebase`** (`lock-rebase.md`): `spec lock rebase`.
 - **5c `anchor-states`** (`anchor-states.md`): a moved binding paired with its old entry by `body`, then `skeleton` in its file, then `quote`, never stored; trivial bodies and RON never followed.
 
 ## Open
@@ -152,7 +152,7 @@ CLI, lock, verify, ADR; the RON value hash (5a-1b, `hash-levels-ron.md`); the ev
 | Point | Answer | The other answer's cost |
 |---|---|---|
 | Q1 slice 5 | split: 5a `hash-levels`, 5b `lock-levels`, 5c `anchor-states` | — |
-| Q2 format-1 and old-recipe locks | `spec lock rebase` in 5b, ADR-0050 (`lock-levels.md`) | — |
+| Q2 format-1 and old-recipe locks | `spec lock rebase` in 5b-2, ADR-0050 (`lock-rebase.md`) | — |
 | Q3 triviality | `body_bytes < 124` blocks a follow everywhere (AC-15 as written) | — |
 | Q4 a lost marker | not followed: the marker is the identity (ADR-0020); `broken_binding marker_gone` | — |
 | Q5 level 2 (05 s5.3 step 2) | never built; done: 05 s5.3 reads "dropped" since 4a shipped | — |

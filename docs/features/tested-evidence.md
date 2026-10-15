@@ -18,7 +18,7 @@ Delivered: one `[[tested]]` block per node in `spec.lock`, pinned by `rev`, `spe
 
 - **Boundary.** 8a: config, selection, runner, verdicts, event, the single `[y/N]`. 8b: the block and format 3, the write and its commit, the per-node state, `tested` in plain verify, blocks under accept, `--editorial`, a gone node, regen and rebase, 8a's `lock` and `lock_commit`. 4c-1 unchanged: its approve runs accept's function and inherits; stale evidence never becomes a drift item (that would amend ADR-0045). 7a reads, 9b Health: "Surfaces".
 - **The owner** answers 8a's one question, now naming the lock commit. **An agent** reads `tested`; it never writes evidence: no MCP tool, route, hook, CI step or role (ADR-0044); `report_run` changes nothing (07:38).
-- **Crates.** Core `lock.rs`: the block in `Lock`, `parse_lock`/`render_lock` for format 3, `bound_bytes` (the canonical input; core has no BLAKE3), `tested_state`, blocks in `merge_accept`, `drop_node`, `refresh_editorial`, `merge_stages` and the rebase. CLI: the write after the run, `write_and_commit`/`check_lock_commit` taking a set of nodes (5b gave them a subject), `LockMode` `tests`, hashing with store's `b3_hash`, `tested` output. Store nothing new; model, MCP, HTTP, UI only as mirrors with 7a or 9b. No new crate or dependency.
+- **Crates.** Core `lock.rs`: the block in `Lock`, `parse_lock`/`render_lock` for format 3, `bound_bytes` (the canonical input; core has no BLAKE3), `tested_state`, blocks in `merge_accept`, `drop_node`, `refresh_editorial`, `merge_stages` and the rebase. CLI: the write after the run, `write_and_commit`/`check_lock_commit` taking a set of nodes (5b-2 gave them a subject, `lock-rebase.md`), `LockMode` `tests`, hashing with store's `b3_hash`, `tested` output. Store nothing new; model, MCP, HTTP, UI only as mirrors with 7a or 9b. No new crate or dependency.
 - **Order** (2026-10-12): after 4a, 8a and 5b (levels, `spec lock rebase`); soft after 4b-1 (shipped 2026-10-14; 8b changes `refresh_editorial`, which 4b-1 runs inside the apply commit filtered to vouching entries, `rev-discipline.md` Q10: 8b wires vouching blocks into the editorial apply and adds 4b-1's RD-2 test `editorial_apply_refreshes_tested`) and 4b-2 (its rule reads blocks: `rev-rule.md`); 4c-1, 7a, 9b on either side, the later adding its part.
 - **4a is not edited** (being implemented): at 8b's shipping plain `spec verify` gains a `tested` key and section ("Plain verify"), null under `--changed`, no exit effect; 4a's code and goldens change then.
 
@@ -53,7 +53,7 @@ verified_at = "2026-10-12"
 
 - No `verified_by`: `"owner"` stays binding-only.
 - **Bytes** (`render_lock`): blocks after every `[[binding]]`, by `node` bytes, an empty line before each, keys as above; strings escaped as `spec-lock.md` "The file"; `tests` one inline table per line, two spaces in, a trailing comma, `]` alone.
-- **Reader** (`parse_lock`): format 2's rules for the rest; a block under format 2: `spec.lock:<line>: [[tested]] needs format 3`; format 3 without one: `spec.lock: format 3 holds no [[tested]] block`; above 3: `spec.lock: format <n> is newer than this build's 3`; an unknown, missing or repeated key, a duplicate `node`, a bad `tests` (empty, unsorted, duplicate, another key, a `file` failing the key rules): `spec.lock:<line>: <message>`; exit 2 as any lock error. Format 1 is rebase's alone (5b) and holds no block.
+- **Reader** (`parse_lock`): format 2's rules for the rest; a block under format 2: `spec.lock:<line>: [[tested]] needs format 3`; format 3 without one: `spec.lock: format 3 holds no [[tested]] block`; above 3: `spec.lock: format <n> is newer than this build's 3`; an unknown, missing or repeated key, a duplicate `node`, a bad `tests` (empty, unsorted, duplicate, another key, a `file` failing the key rules): `spec.lock:<line>: <message>`; exit 2 as any lock error. Format 1 holds no block (read only with no candidate: `lock-levels.md` "Readers").
 
 ### Bound hash
 
@@ -168,7 +168,7 @@ test-engineer:
 - [ ] TE-1 -- AC-8 end to end with 8a's fake runners (8a's TE-2 "`spec.lock` untouched" becomes this): `report_run` alone -> no block; a pass -> a block, one commit passing the four checks, plain verify `verified`; the text edited, no raise -> `stale spec_changed`; raised, markers lagging -> `unverifiable spec_ahead`; the implementation, the test or a bound RON value edited, a `@verifies` added -> `stale code_changed`; a comment elsewhere, rustfmt, a sibling RON value -> `verified`; a failing run -> the block removed. Each step names its mutation.
 - [ ] TE-2 -- two roots, another cwd, reverse creation order, `core.autocrlf=true`, a SHA-256 repository: identical lock bytes, stdout, JSON.
 - [ ] TE-3 -- a hook refusing the commit -> bytes restored, exit 1, `lock_commit` null, the event written; `HEAD` moving during the run -> nothing written; text changed at R -> exit 1, nothing run. After each, `git status --porcelain=v1 -z --untracked-files=all`, `HEAD`, refs, index unchanged.
-- [ ] TE-4 -- blocks present under accept, `--editorial`, a gone node, regen (format 2 against 3), and a rebase of a simulated grammar bump (5b's TE-5 pattern) giving `rebased`, `entry_dropped`, `unproven`; a drift approve if 4c-1 has shipped, 4b-1's editorial apply if 4b-1 has.
+- [ ] TE-4 -- blocks present under accept, `--editorial`, a gone node, regen (format 2 against 3), and a rebase of a simulated grammar bump (`lock-rebase.md` TE-3's pattern) giving `rebased`, `entry_dropped`, `unproven`; a drift approve if 4c-1 has shipped, 4b-1's editorial apply if 4b-1 has.
 - [ ] TE-5 -- reads and Health show verify's state (whichever ships second); `daemon-keys.json` updated.
 - [ ] TE-6 -- the genre scan green; no pilot run (pilots have 0 bound tests).
 
@@ -176,7 +176,7 @@ spec-writer:
 
 - [x] SW-1 -- this spec, no ADR (WA-1).
 - [x] SW-2 -- 2026-10-12, pointing here: `verify-tests.md` (":21", "Event", "Output", "Out of scope"), `bundle-bindings.md` (sync, "Out of scope", Q10, "Order"), `health-drift.md` (`drift`, "Text"), `drift-queue.md` ("Out of scope", "Order"), `rev-discipline.md` (editorial refresh, the rule, RD-1, RD-4), `lock-levels.md` ("Out of scope"), 08:41. `spec-verify.md` untouched: "Plain verify" here.
-- [ ] SW-3 -- at shipping: `spec-lock.md` ("The file", "Entry", a `[[tested]]` section, regen, "Known limits"), `spec-lock-accept.md` (step 6, `--editorial`, "A gone node", "Exits"), 4a's verify canon (`tested`), 5b's rebase canon (blocks), `architecture-code.md#spec-lock`, "Tests as evidence"; 05:75, :194, :196-207; 06:140; 07:38; 08:77; the core and CLI READMEs; `CLAUDE.md` State.
+- [ ] SW-3 -- at shipping: `spec-lock.md` ("The file", "Entry", a `[[tested]]` section, regen, "Known limits"), `spec-lock-accept.md` (step 6, `--editorial`, "A gone node", "Exits"), 4a's verify canon (`tested`), `spec-lock-rebase.md` (blocks; `lock-rebase.md` Q19), `architecture-code.md#spec-lock`, "Tests as evidence"; 05:75, :194, :196-207; 06:140; 07:38; 08:77; the core and CLI READMEs; `CLAUDE.md` State.
 - [x] SW-4 -- `export index`, `check` clean.
 
 ## Risks

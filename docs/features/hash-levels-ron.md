@@ -16,7 +16,7 @@ Split from 5a-1 (`hash-levels.md` Q12) so a third iteration on one slice cannot 
 
 ## Description and interactions
 
-- **Nobody sees it yet**: no command, MCP tool, lock field or UI. 5a-2 measures it (`hash-levels-eval.md` "`ron`: `result.value_hash`"), 5b records and judges it (`lock-levels.md` "Format 2", "Level-aware verify" step 3, "`spec lock rebase`" **Location**).
+- **Nobody sees it yet**: no command, MCP tool, lock field or UI. 5a-2 measures it (`hash-levels-eval.md` "`ron`: `result.value_hash`"), 5b records and judges it (`lock-levels.md` "Format 2", "Level-aware verify" step 3; `lock-rebase.md` "`spec lock rebase`" **Location**).
 - **Genre** (ADR-0008): the RON lexer and structure walk stay in `specengine-code` `ron`; core sees digests only.
 - **Anchors unchanged** (Q15): `analyze`, `comment_anchors`, `Anchor`, `RonMarker`, `CommentAnchor`, `RonAnalysis` keep their shape and results. A caller pairs a value hash with an anchor by the comment's range: the CLI already holds `CommentAnchor`s (cli `code_walk.rs` `RonFile`).
 - **Crates**: code (`ron/structure.rs` carries the value ranges, internal; `ron::value_hashes` and `RonValues` in `ron/mod.rs`; `lib.rs` export); `fixtures/hash-levels/` (`.ron` inputs). Core, store, CLI, eval untouched; no new dependency.

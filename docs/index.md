@@ -32,7 +32,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/health-drift.md](features/health-drift.md) health-drift: Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/features/impact.md](features/impact.md) impact: the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
 - [docs/features/layer-c.md](features/layer-c.md) layer-c: rust-analyzer in its own executable, monikers as advisory index data · crates/specengine-ra, crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-core, crates/specengine-eval · draft
-- [docs/features/lock-levels.md](features/lock-levels.md) lock-levels: spec.lock format 2, level-aware verify, spec lock rebase · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-code, fixtures · draft
+- [docs/features/lock-levels.md](features/lock-levels.md) lock-levels (5b-1): spec.lock format 2 and level-aware verify · crates/specengine-core, crates/specengine-cli, fixtures · draft
+- [docs/features/lock-rebase.md](features/lock-rebase.md) lock-rebase (5b-2): spec lock rebase · crates/specengine-core, crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/symbol-discriminator.md](features/symbol-discriminator.md) symbol-discriminator: in-file twins named apart, display signatures · crates/specengine-code, crates/specengine-cli, fixtures · draft
 - [docs/features/symbol-index.md](features/symbol-index.md) symbol-index: stored code rows, refs from them, AC-10 · crates/specengine-store, crates/specengine-code, crates/specengine-cli, crates/specengine-eval, fixtures · draft
