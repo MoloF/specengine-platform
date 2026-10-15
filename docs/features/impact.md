@@ -20,7 +20,7 @@ Delivered: `spec impact` and MCP `get_impact` over 7a's rows and sync (`bundle-b
 
 - **An agent** asks what a node, a symbol or its branch's code change reaches: nodes, bound symbols with their `sync`, the tests to run, the open tasks to warn. **The owner** runs it on a branch (`--since main`).
 - **Crates**: core the pure seeds and order, the walk reused; store the revision reader (4a's `HEAD` base reader at any commit: `rev-parse`, `ls-tree -r -z`, one `cat-file --batch`, one `hash-object --no-filters --stdin-paths`, under `GitEnv::child_vars`) and tasks by node; CLI `impact`, verify's delta; MCP `get_impact`. No new crate or dependency; MCP's stay exactly 7 (`build_graph.rs`), no git library.
-- **Reused, unchanged**: `spec graph --impact`'s walk, table and JSON (`spec-cli-graph.md`); 6a's lookup (`symbol-index.md` "Lookup") and `unmapped`'s containment; 7a's row, order, sync and refresh.
+- **Reused, unchanged**: `spec graph --impact`'s walk, table and JSON (`spec-cli-graph.md`); 6a-3's lookup and `unmapped`'s containment (`symbol-reads.md` "Lookup", "spec unmapped"); 7a's row, order, sync and refresh.
 - **Unchanged**: `spec check`, gate, hook, CI, `INDEX_FORMAT`, queue schema, every other read. **Writes**: the data directory only; the queue is read, never written.
 - **Overridden lines**, fixed at shipping (SW-2): 05:160 (`delta.symbols`), 07:31 (`node_id | qpath` -> `id | symbol`, 2026-10-10), 07:82-83, 08:44, 08:131.
 
@@ -35,7 +35,7 @@ Q8, WA-10. `spec impact REF | --symbol QPATH | --since REV [--depth N] [--json]`
 Seeds at distance 0, then `spec graph --impact`'s breadth-first walk (`depends_on`, `derived_from`, `verifies`, `uses_term` in; `constrains` out), each node once, `--depth N` as graph's.
 
 - **REF**: its holders; `nodes` equal `spec graph REF --impact --json`'s.
-- **`--symbol QPATH`**: 6a's lookup at its best non-empty tier (`exact`, `suffix`, `name`), every symbol there; each reaches the nodes bound by containment (a marker on it, an enclosing item or inline mod, its file module; `symbol-index.md` "spec unmapped"), any relation. None: exit 1 ``spec: --symbol `<q>` names no symbol``.
+- **`--symbol QPATH`**: 6a's lookup at its best non-empty tier (`exact`, `suffix`, `name`), every symbol there; each reaches the nodes bound by containment (a marker on it, an enclosing item or inline mod, its file module; `symbol-reads.md` "spec unmapped"), any relation. None: exit 1 ``spec: --symbol `<q>` names no symbol``.
 - **`--since REV`**: "Since"; a changed or removed symbol reaches the nodes REV's markers bound by containment, a changed or added one those the disk's markers bind.
 
 ### Since

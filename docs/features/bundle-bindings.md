@@ -33,7 +33,7 @@ WA-6, Q2. One object in every read (and 7b's): the lock key (`docs/canon/spec-ve
 
 ```json
 {"node":"LAW-BOUND","relation":"implements","file":"crates/tally/src/counter.rs","kind":"item",
- "symbol":"crates/tally::counter::impl Tally #1","item_kind":"impl_item","line":22,"end_line":30,
+ "symbol":"crates/tally::counter::impl Tally #1","item_kind":"impl_item","line":22,"end_line":38,
  "signature":"impl Tally","layer":"a","sync":"code_ahead","category":"code_changed","detail":null}
 ```
 

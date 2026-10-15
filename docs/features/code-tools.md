@@ -30,9 +30,9 @@ WA-17, WA-20. **Every MCP tool's argument names are its CLI flag names, a positi
 
 | Tool | Input (`?` nullable) | ≙ `spec … --json` |
 |---|---|---|
-| `find_symbols` | `query?`, `node?`, `file?`, `at?` (`PATH:LINE`), `limit?` | `symbols QUERY \| --node REF \| --file PATH \| --at PATH:LINE [--limit N]` (`symbol-index.md` "spec symbols") |
+| `find_symbols` | `query?`, `node?`, `file?`, `at?` (`PATH:LINE`), `limit?` | `symbols QUERY \| --node REF \| --file PATH \| --at PATH:LINE [--limit N]` (`symbol-reads.md` "spec symbols") |
 | `refs` | `id` | `refs REF` (`code-bindings.md` "`spec refs`") |
-| `unmapped` | `path?` | `unmapped [PATH]` (`symbol-index.md` "spec unmapped") |
+| `unmapped` | `path?` | `unmapped [PATH]` (`symbol-reads.md` "spec unmapped") |
 | `check_binding` | `node`, `symbol?` | `verify --node REF [--symbol QPATH]` ("spec verify --node") |
 
 - **Input schemas**, flat (`mcp-read.md` "Schemas"): strings, `limit` as `search`'s, optionals `[T, "null"]`, `additionalProperties: false`, no root `anyOf`/`oneOf`/`allOf`, no `$ref`: `check_binding` `{"node": string, "symbol": [string, null]}`, `required: ["node"]`. `find_symbols`' four forms are four nullable keys; `query` passes as one positional (6a joins positionals with a space).
@@ -169,7 +169,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 
 ## Dependencies and ordering
 
-- **Needs**: 1 `code-refs` (shipped); 3 `spec-lock` (the reader); 4a `spec-verify` (the judge, the command, its JSON); 6a `symbol-index` (index, `symbols`, `unmapped`, `refs` from it).
+- **Needs**: 1 `code-refs` (shipped); 3 `spec-lock` (the reader); 4a `spec-verify` (the judge, the command, its JSON); 6a-2 `symbol-index` (index, `refs` from it), 6a-3 `symbol-reads` (`symbols`, `unmapped`; Q23 of `symbol-index.md`).
 - **Order**: 6a and 4a -> 6b -> the `INSTRUCTIONS` lines of 4c-1, 7a, 7b; 6b after 5b and 5c (2026-10-13, `symbol-index.md` Q11), its row keys over the level digests. **Independent**: 8a, 9a, 9b. **Later**: Phase 4 (HTTP, UI).
 
 ## Implementation

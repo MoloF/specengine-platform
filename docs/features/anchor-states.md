@@ -12,7 +12,7 @@ adrs: []
 
 Today (4a, `docs/canon/spec-verify.md` "States") a function renamed or moved together with its marker gives two rows: the old key `broken_binding symbol_gone|file_gone` (Fix) and the new key `unlocked` (Check). So under `enforce-introduced` a pure rename exits 1 ("Verdict and exit"); 4c-1 raises a `high` drift item (`docs/canon/proposal-drift.md` "Raise"); Health row 6 lists both; the agent gets a Fix ("broken by the change", ADR-0042) for a refactor that broke nothing; the owner cannot tell a rename from a deletion plus new code. A manifest change renames qpaths with no code edit (`code-identity.md` "Known limits": adding a lib renames `main.rs` items), and every bound item of that file breaks.
 
-Delivered: a read-only pairing inside verify's judge. A lock entry whose key no marker gives any more is paired with a marker binding of the same node and relation that has no entry; equal digests, unique both ways, and the two become one row at the new key, judged against the old entry by 5b's levels: a rename only `ok`, a rename with edits `code_ahead code_changed <levels>` or `conflict`, a `[path]` binding `code_changed path`. The anchor answers "where is it", `sync` "does it still match" (05:149). No writer, no new `state`, nothing stored, no ADR: it relies on ADR-0020 (the marker is the identity, `architecture.md` :74), ADR-0018, ADR-0042 (nothing unverified is `ok`), ADR-0046 (never stored, `architecture-code.md#sync-in-reads`); ADR-0041, ADR-0050 stand (5c writes nothing); ADR-0012 is helped (fewer Fix rows). Following code with no marker would amend ADR-0020: 12b's ground (08:41). After 4a, 5a-1, 5a-2, 5b; before 6a, 6b, 7a.
+Delivered: a read-only pairing inside verify's judge. A lock entry whose key no marker gives any more is paired with a marker binding of the same node and relation that has no entry; equal digests, unique both ways, and the two become one row at the new key, judged against the old entry by 5b's levels: a rename only `ok`, a rename with edits `code_ahead code_changed <levels>` or `conflict`, a `[path]` binding `code_changed path`. The anchor answers "where is it", `sync` "does it still match" (05:149). No writer, no new `state`, nothing stored, no ADR: it relies on ADR-0020 (the marker is the identity, `architecture.md` :74), ADR-0018, ADR-0042 (nothing unverified is `ok`), ADR-0046 (never stored, `architecture-code.md#sync-in-reads`); ADR-0041, ADR-0050 stand (5c writes nothing); ADR-0012 is helped (fewer Fix rows). Following code with no marker would amend ADR-0020: 12b's ground (08:41). After 4a, 5a-1, 5a-2, 6a-1, 5b (08 s2); before 6b, 7a.
 
 ## Description and interactions
 
@@ -122,6 +122,8 @@ test-engineer:
 | twins, equal quotes, both renamed | two `broken_binding` `ambiguous`, 2 candidates each; two `unlocked` |
 | a contested candidate (two entries, one binding) | two `broken_binding` `ambiguous`, 1 candidate; one `unlocked` |
 | a marker moved, the old item stays | `broken_binding marker_gone` `lost`; `unlocked` |
+| a locked impl gaining an in-file twin (6a-1: `impl Tally` -> `impl Tally #1`) | one `ok`, `moved`, paired by `body` |
+| an ordinal shift: an unmarked twin inserted above two locked twins of one node | never paired: the old `#1` `broken_binding marker_gone` `lost`, the old `#2` compared with the twin now there; `#3` `unlocked` |
 | a RON path renamed | `broken_binding symbol_gone` `lost`; `unlocked` |
 | a `//!` file renamed | `ok`, `moved`, kind `module` |
 | a `[path]` binding moved | `code_ahead code_changed path`, `moved` |
@@ -149,7 +151,7 @@ spec-writer:
 
 ## Out of scope
 
-Following a lost marker (`marker_gone`, `hash-levels.md` Q4) or code without a marker (12b); ID renames (`node_gone`: accept drops the gone node); RON (never followed, `hash-levels.md` "RON value"); storing anchors; the pairing in accept or rebase rows; evidence following a move (8b); `--deep`; per-branch ratios; UI.
+Following a lost marker (`marker_gone`, `hash-levels.md` Q4) or code without a marker (12b); ID renames (`node_gone`: accept drops the gone node); RON (never followed, `hash-levels-ron.md` "RON value"); storing anchors; the pairing in accept or rebase rows; evidence following a move (8b); `--deep`; per-branch ratios; UI.
 
 ## Open
 

@@ -50,7 +50,7 @@ Kind `drift`: `target_id` the node's canonical ID (or the gone ID); `target_path
 ## Review, stage, round
 
 - **Inbox**: `PR-0012 | drift | open | R-12 | main | <created_at> | conflict, code_ahead code_changed` (the summary alone); JSON `severity`, `summary` set.
-- **Review** (`proposal-review.md`, its text form too): `drift` `{hash, rows, more}`, `rows` the column's as stored (core `StoredJson`: each row's keys in stored order, later keys kept; MCP `get_proposal` sorts keys); texts, `diff`, `conflict`, `revisions` `null`; **preview** `null`, no walk, an open or approved item noting ``spec approve PR-0012 shows the rows before asking``.
+- **Review** (`proposal-review.md`, its text form too): `drift` `{hash, rows, more}`, `rows` the column's as stored (core `StoredJson`: each row's keys in stored order, later keys kept, in `--json` and HTTP; MCP `get_proposal` keeps content and later keys, its keys sorted: it parses into `serde_json::Value`); texts, `diff`, `conflict`, `revisions` `null`; **preview** `null`, no walk, an open or approved item noting ``spec approve PR-0012 shows the rows before asking``.
 - **Stage**: never. CLI `stage.rs` `checked` refuses before any preview (`StageCause::Refused`, HTTP 409) ``PR-0012 is a drift item, decided on a terminal only; nothing staged``; store `Stage::problem` too (`Invalid`).
 - **Round**: off the sheet (`Decides` only); note ``<n> open drift item(s) not on this sheet: <IDs>; spec review <ID>, then spec approve or spec reject``; `round answer` on one: the stage's refusal.
 
@@ -69,7 +69,7 @@ Kind `drift`: `target_id` the node's canonical ID (or the gone ID); `target_path
 
 The commit is accept's, `Proposal: PR-0012` after `Decided-by:` (its fifth check: `spec-lock-accept.md` "The lock commit"); no spec file, revision or index entry is written. `--editorial` is accept's: every entry at R.
 
-**Completion**, before the place: CLI `preflight.rs` `drift_commit`, ahead of `trailer_commit` (which would parse the lock as Markdown). A `Proposal: PR-0012` commit in `base_commit..<branch>` completes the item when it has one parent, changes only `<root_rel>/spec.lock`, holds it, carries `Lock: R-12` and `Lock-mode: accept` or `editorial`; else why (`has N parents`, `changes a, b`, `has no <path>`, a missing trailer). Hint: ``a commit on `<branch>` with the trailers `Proposal: PR-0012` and `Lock: R-12`, one parent, changing only `<path>` completes it (`spec approve PR-0012`)``. A plain `spec reject` is refused while one exists (`proposal-completion.md` "Reject").
+**Completion**, before the place: CLI `preflight.rs` `drift_commit`, ahead of `trailer_commit` (which would parse the lock as Markdown). A `Proposal: PR-0012` commit in `base_commit..<branch>` completes the item when it has one parent, changes only `<root_rel>/spec.lock`, holds it, carries `Lock: R-12` and `Lock-mode: accept` or `editorial`; else why (`has N parents`, `changes a, b`, `has no <path>`, a missing trailer). Such a commit never blocks the approve (other kinds refuse at step 5), which runs its own accept: after one deleting `spec.lock`, a new lock commit applies the item; after one with no `Lock-mode` or `Lock-mode: regen`, nothing to accept now, still `open` (`drift_approve.rs` `only_an_accepts_lock_commit_completes_a_drift_item`). Hint: ``a commit on `<branch>` with the trailers `Proposal: PR-0012` and `Lock: R-12`, one parent, changing only `<path>` completes it (`spec approve PR-0012`)``. A plain `spec reject` is refused while one exists (`proposal-completion.md` "Reject").
 
 ## UI
 

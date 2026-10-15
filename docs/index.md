@@ -25,8 +25,9 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft
 - [docs/features/code-tools.md](features/code-tools.md) code-tools: MCP find_symbols, refs, unmapped, check_binding; spec verify --node · crates/specengine-mcp, crates/specengine-cli, plugin, fixtures · draft
 - [docs/features/constant-census.md](features/constant-census.md) constant-census: which string constants carry a record's code (slice 12a) · crates/specengine-eval, crates/specengine-code, fixtures · draft
-- [docs/features/drift-follow-up.md](features/drift-follow-up.md) drift-follow-up (4c-2): rejecting a drift item makes a draft task · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft
+- [docs/features/drift-follow-up.md](features/drift-follow-up.md) drift-follow-up (4c-2): rejecting a drift item makes a draft task · crates/specengine-core, crates/specengine-store, crates/specengine-cli, ui, fixtures · draft
 - [docs/features/hash-levels-eval.md](features/hash-levels-eval.md) hash-levels-eval: level and fingerprint figures on fixtures and pilots · crates/specengine-eval, fixtures · draft
+- [docs/features/hash-levels-ron.md](features/hash-levels-ron.md) hash-levels-ron: the value hash of an anchored RON value · crates/specengine-code, fixtures · draft
 - [docs/features/hash-levels.md](features/hash-levels.md) hash-levels: per-level hashes and fingerprints of a bound item · crates/specengine-code, crates/specengine-eval, fixtures · draft
 - [docs/features/health-code.md](features/health-code.md) health-code: Health shows code assuming a decision and nodes no code binds · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/features/health-drift.md](features/health-drift.md) health-drift: Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
@@ -36,7 +37,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/rev-rule.md](features/rev-rule.md) rev-rule (4b-2): a locked node's meaning change without a raise fails the staged check · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/symbol-discriminator.md](features/symbol-discriminator.md) symbol-discriminator: in-file twins named apart, display signatures · crates/specengine-code, crates/specengine-cli, fixtures · draft
-- [docs/features/symbol-index.md](features/symbol-index.md) symbol-index: stored code rows, symbol lookup, coverage · crates/specengine-store, crates/specengine-code, crates/specengine-cli, crates/specengine-eval, fixtures · draft
+- [docs/features/symbol-index.md](features/symbol-index.md) symbol-index: stored code rows, refs from them, AC-10 · crates/specengine-store, crates/specengine-code, crates/specengine-cli, crates/specengine-eval, fixtures · draft
+- [docs/features/symbol-reads.md](features/symbol-reads.md) symbol-reads: symbol lookup, spec symbols, spec unmapped · crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-tests.md](features/verify-tests.md) verify-tests: bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
