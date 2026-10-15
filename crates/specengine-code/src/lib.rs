@@ -56,6 +56,12 @@
 //!   ([`BODY_FIELDS`], [`body_nodes`]) and the calls `deps` hashes
 //!   ([`call_targets`]); [`item_levels`] the twin of [`hash_bound_items`]
 //!   for chosen bound items. Nothing records these digests yet.
+//!
+//! Phase 3 slice 5a-1b `hash-levels-ron` (the same section):
+//!
+//! - [`ron::value_hashes`] — the value hash of every RON comment anchored to
+//!   a path, keyed by the comment's range ([`RonValues`]), or the file's
+//!   refusal when [`ron::analyze`] rejects it.
 
 pub mod bevy;
 pub mod bind;
@@ -87,4 +93,7 @@ pub use qpath::{
     Ambiguity, FileRole, PackageTargets, QPath, Target, TargetIndex, TargetSource, Unit, UnitKind,
     layout_targets,
 };
-pub use ron::{Anchor, CommentAnchor, Rejected, RonAnalysis, RonMarker, comment_anchors};
+pub use ron::{
+    Anchor, CommentAnchor, Rejected, RonAnalysis, RonMarker, RonValues, comment_anchors,
+    value_hashes,
+};

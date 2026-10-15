@@ -33,6 +33,21 @@
 //! sibling has a marker; decided when the container closes. Both markers
 //! stay, never merged. [`RonAnalysis::colliding_groups`] counts such sibling
 //! groups, marked or not.
+//!
+//! **Value hash** ([`value_hashes`]; `crates/specengine-code/README.md`
+//! "Hash recipe"): the anchored value's own tokens under the v3 level
+//! header, so a comment, a sibling or the file's line endings never move it:
+//!
+//! ```text
+//! value_hash = BLAKE3(level_header ‖ put("ron") ‖ put(cr(text(t)))...)
+//! ```
+//!
+//! for each token `t` of the value, its first through its last (a container
+//! through its closer, a struct name included); comments dropped, a `,`
+//! whose next non-comment token is a closer dropped; `cr` drops a CR right
+//! before an LF. A value's `sig` and `body` are this digest, its `deps` the
+//! empty set's; it has no fingerprint. A file [`analyze`] rejects has no
+//! value hash at all.
 
 pub mod lexer;
 mod structure;
@@ -41,6 +56,11 @@ use std::collections::BTreeSet;
 use std::ops::Range;
 
 pub use structure::MAX_DEPTH;
+
+use crate::hash::{Digest, put};
+use crate::levels::{Stream, cr_rule};
+use lexer::{LexError, Token, TokenKind};
+use structure::StructureError;
 
 /// Source bytes of a field name or a map key kept in a path segment.
 pub const MAX_SEGMENT_BYTES: usize = 128;
@@ -187,10 +207,9 @@ impl RonAnalysis {
         colliding_groups: usize,
     ) -> Self {
         rejected.sort_by_key(|r| (r.offset, r.category));
-        let categories: BTreeSet<&'static str> = rejected.iter().map(|r| r.category).collect();
         Self {
             has_error: !rejected.is_empty(),
-            error_categories: categories.into_iter().collect(),
+            error_categories: categories(&rejected),
             rejected,
             comments,
             markers,
@@ -206,6 +225,43 @@ impl RonAnalysis {
             .iter()
             .any(|m| matches!(m.anchor, Anchor::Path { depth, .. } if depth >= 2))
     }
+}
+
+/// Categories of `rejected`, sorted, deduplicated: [`RonAnalysis::error_categories`].
+fn categories(rejected: &[Rejected]) -> Vec<&'static str> {
+    let categories: BTreeSet<&'static str> = rejected.iter().map(|r| r.category).collect();
+    categories.into_iter().collect()
+}
+
+/// The lexer's and the structure walk's rejections, unsorted.
+fn rejections(lex_errors: &[LexError], structure_errors: &[StructureError]) -> Vec<Rejected> {
+    lex_errors
+        .iter()
+        .map(|e| Rejected {
+            category: e.kind.as_str(),
+            offset: e.offset,
+        })
+        .chain(structure_errors.iter().map(|e| Rejected {
+            category: e.kind.as_str(),
+            offset: e.offset,
+        }))
+        .collect()
+}
+
+/// The value hash of every comment a value is anchored to, or the file's
+/// refusal ([`value_hashes`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RonValues {
+    /// One entry per comment whose anchor is [`Anchor::Path`], marked or
+    /// not, in source order: the comment's byte range, as
+    /// [`CommentAnchor::comment`] gives it, and its value's hash. An
+    /// `Ambiguous`, `Unanchored` or `CannotVerify` anchor has no entry.
+    Hashed(Vec<(Range<usize>, Digest)>),
+    /// [`analyze`] rejects the file (a lexer or a structure error,
+    /// `nesting_too_deep` included): no value of it is hashed, since an error
+    /// can shift a value's range. The detail is the first of its
+    /// [`RonAnalysis::error_categories`].
+    CannotVerify(&'static str),
 }
 
 /// One segment of a path; rendered by [`render_path`].
@@ -306,18 +362,7 @@ pub fn analyze(source: &str) -> RonAnalysis {
         })
         .collect();
     let walked = structure::walk(source, &tokens, raw_markers);
-    let structure_errors = walked.errors;
-    let rejected = lex_errors
-        .iter()
-        .map(|e| Rejected {
-            category: e.kind.as_str(),
-            offset: e.offset,
-        })
-        .chain(structure_errors.iter().map(|e| Rejected {
-            category: e.kind.as_str(),
-            offset: e.offset,
-        }))
-        .collect();
+    let rejected = rejections(&lex_errors, &walked.errors);
     RonAnalysis::assemble(rejected, comments, walked.markers, walked.colliding_groups)
 }
 
@@ -327,13 +372,7 @@ pub fn analyze(source: &str) -> RonAnalysis {
 #[must_use]
 pub fn comment_anchors(source: &str) -> Vec<CommentAnchor> {
     let (tokens, _) = lexer::lex(source);
-    let probes: Vec<(usize, Marker)> = tokens
-        .iter()
-        .enumerate()
-        .filter(|(_, t)| t.kind.is_comment())
-        .map(|(index, _)| (index, probe()))
-        .collect();
-    structure::walk(source, &tokens, probes)
+    structure::walk(source, &tokens, probes(&tokens))
         .markers
         .into_iter()
         .map(|resolved| CommentAnchor {
@@ -343,8 +382,75 @@ pub fn comment_anchors(source: &str) -> Vec<CommentAnchor> {
         .collect()
 }
 
-/// A marker standing for a whole comment in [`comment_anchors`]; its
-/// fields are never read.
+/// The value hash of every comment of `source` anchored to a path, keyed by
+/// the comment's range as [`comment_anchors`] gives it, in source order; or
+/// the file's refusal when [`analyze`] rejects it (the module docs, "Value
+/// hash"). One lex and one structure walk for the file; each value anchored
+/// to is hashed once, however many comments name it.
+#[must_use]
+pub fn value_hashes(source: &str) -> RonValues {
+    let (tokens, lex_errors) = lexer::lex(source);
+    let walked = structure::walk(source, &tokens, probes(&tokens));
+    if let Some(first) = categories(&rejections(&lex_errors, &walked.errors)).first() {
+        return RonValues::CannotVerify(first);
+    }
+    let mut digests: Vec<Option<Digest>> = vec![None; walked.spans.len()];
+    let mut hashed = Vec::new();
+    for (resolved, value) in walked.markers.iter().zip(&walked.values) {
+        // A path anchor always names a value that ended in a file without a
+        // rejection; the guards only keep a broken invariant from panicking.
+        let Some(id) = *value else { continue };
+        let (Some(Some(span)), Some(digest)) = (walked.spans.get(id), digests.get_mut(id)) else {
+            continue;
+        };
+        let digest = *digest.get_or_insert_with(|| value_digest(source, &tokens, span));
+        hashed.push((resolved.comment.clone(), digest));
+    }
+    RonValues::Hashed(hashed)
+}
+
+/// `level_header() ‖ put("ron") ‖ put(text)` for each token of `span`, the
+/// CR rule applied: comments dropped, a `,` whose next non-comment token is
+/// a closer dropped (the file's next token, past the span's end).
+fn value_digest(source: &str, tokens: &[Token], span: &Range<usize>) -> Digest {
+    let mut stream = Stream::tagged("ron");
+    let text = |token: &Token| cr_rule(source.as_bytes().get(token.range.clone()).unwrap_or(&[]));
+    let mut held: Option<&Token> = None;
+    let code = |t: &&Token| !t.kind.is_comment();
+    for token in tokens.get(span.clone()).unwrap_or(&[]).iter().filter(code) {
+        if let Some(comma) = held.take()
+            && !matches!(token.kind, TokenKind::Close(_))
+        {
+            put(&mut stream, &text(comma));
+        }
+        if token.kind == TokenKind::Comma {
+            held = Some(token);
+        } else {
+            put(&mut stream, &text(token));
+        }
+    }
+    if let Some(comma) = held {
+        let next = tokens.get(span.end..).unwrap_or(&[]).iter().find(code);
+        if !next.is_some_and(|t| matches!(t.kind, TokenKind::Close(_))) {
+            put(&mut stream, &text(comma));
+        }
+    }
+    stream.finish()
+}
+
+/// One probe per comment token, by index: the markers of [`comment_anchors`]
+/// and [`value_hashes`].
+fn probes(tokens: &[Token]) -> Vec<(usize, Marker)> {
+    tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.kind.is_comment())
+        .map(|(index, _)| (index, probe()))
+        .collect()
+}
+
+/// A marker standing for a whole comment in [`comment_anchors`] and
+/// [`value_hashes`]; its fields are never read.
 fn probe() -> Marker {
     Marker {
         relation: Relation::Implements,

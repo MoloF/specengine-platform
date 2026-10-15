@@ -348,5 +348,130 @@
     { "id": "fm-macro-use", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "mod alpha_systems;\n#[macro_use]\nmod gamma_macros;\n", "to": "#[macro_use]\nmod gamma_macros;\nmod alpha_systems;\n" }, "expect": { "sig": "equal", "body": "differs", "deps": "equal" }, "mutation": "a `#[macro_use]` member sorted into the run" },
     { "id": "fm-use-order", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "use std::fmt;\nuse std::collections::BTreeMap;", "to": "use std::collections::BTreeMap;\nuse std::fmt;" }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal" }, "mutation": "no N4 in the module body" },
     { "id": "fm-doc-comment", "kind": "source_file", "file": "src/file_module.rs", "a": { "module": true }, "edit": { "from": "//! Entry point of the arena.", "to": "//! Entry of the arena." }, "expect": { "sig": "equal", "body": "equal", "deps": "equal", "skeleton": "equal", "quote": "differs", "body_bytes": "equal" }, "mutation": "comments walked into the module; a module quote that is not textual" }
-  ]
+  ],
+  "ron": {
+    "_comment": "docs/features/hash-levels-ron.md (5a-1b) TE-1 over every .ron file of ron/, read by crates/specengine-eval/tests/hash_levels_ron_fixture.rs. A RON value hash is one digest per comment whose anchor is a path (`ron::value_hashes`, keyed by the comment's byte range). No digest is stored here. `files` lists, per file, either the comments that get an entry, in source order, each with its path and its value's canonical rendering (the value's tokens after the recipe's drops, one space apart, LF line ends: `/* v */ <canonical>` must hash alike), and the comments that get none, with their anchor; or the refusal: `detail` is the first of `categories` (RonAnalysis::error_categories), and `path_comments` lists the comments with a path anchor, which the refusal covers. `pairs` relate the value of comment `a` in `file` to that of comment `b` (default `a`) in the text after `edit` (its `from` occurs exactly once; without `edit`, `a` and `b` are two comments of one text); each names its mutation and holds on LF and on the in-memory CRLF copy of both sides. A comment is named by its whole text, a line comment without its line end. Every form of `forms` has an equal and a differs pair; `root` is an extra form. (L1) and the like name the test-engineer's readings, recorded at shipping in the spec's Implementation section.",
+    "forms": ["scalar", "multiline-string", "struct", "named-struct", "tuple", "list", "map", "nested"],
+    "files": {
+      "ron/anchors.ron": {
+        "state": "hashed",
+        "values": [
+          { "comment": "// own line before the root", "path": "root", "canonical": "Config ( a : 1 , dup : 2 , dup : 3 , b : 4 , player : Player ( speed : 2 ) , pos : ( 10 , 20 ) )" },
+          { "comment": "// a", "path": "root.a", "canonical": "1" },
+          { "comment": "// b trailing", "path": "root.b", "canonical": "4" },
+          { "comment": "// player opener", "path": "root.player", "canonical": "Player ( speed : 2 )" },
+          { "comment": "// player closer", "path": "root.player", "canonical": "Player ( speed : 2 )" },
+          { "comment": "/* lead-x */", "path": "root.pos.0", "canonical": "10" },
+          { "comment": "/* lead-y */", "path": "root.pos.1", "canonical": "20" }
+        ],
+        "no_entry": [
+          { "comment": "// dup-first", "anchor": "ambiguous" },
+          { "comment": "// dup-second", "anchor": "ambiguous" },
+          { "comment": "// before closer", "anchor": "unanchored" }
+        ]
+      },
+      "ron/broken_lexer.ron": {
+        "state": "cannot_verify",
+        "detail": "unterminated_block_comment",
+        "categories": ["unterminated_block_comment"],
+        "path_comments": ["// lexer error only: a block comment never closed at the end", "// speed", "// waves"]
+      },
+      "ron/broken_stray.ron": {
+        "state": "cannot_verify",
+        "detail": "expected_separator",
+        "categories": ["expected_separator", "expected_value", "stray_token"],
+        "path_comments": ["// lexer and structure errors: a stray token", "// speed", "// bad", "// after"]
+      },
+      "ron/broken_structure.ron": {
+        "state": "cannot_verify",
+        "detail": "expected_separator",
+        "categories": ["expected_separator"],
+        "path_comments": ["// structure error only: a missing separator", "// speed", "// after"]
+      },
+      "ron/values.ron": {
+        "state": "hashed",
+        "values": [
+          { "comment": "// root", "path": "root", "canonical": "Settings ( amount : 3 , ratio : -0.5e-3 , title : \"plain \\\"quoted\\\" text\" , glyph : 'x' , mode : Fast , enabled : true , banner : \"first line\nsecond line\nthird line\" , help : r#\"usage: \"spawn\"\n  --fast\"# , offset : ( x : 1 , y : -2 ) , player : Player ( name : \"hero\" , speed : 4.5 ) , pos : ( 10 , 20 , 30 ) , spawn : Some ( ( 1 , 2 ) ) , nothing : ( ) , waves : [ 1 , 2 , 3 ] , loot : { \"gold\" : 10 , \"gems\" : 2 } , arena : Arena ( size : ( w : 10 , h : 20 ) , waves : [ Wave ( count : 3 , kinds : [ Grunt , Archer ] ) , Wave ( count : 5 , kinds : [ Grunt ] ) ] , table : { ( 0 , 0 ) : [ Floor , Wall ] , ( 0 , 1 ) : [ ] } ) )" },
+          { "comment": "// scalar-int", "path": "root.amount", "canonical": "3" },
+          { "comment": "// scalar-float", "path": "root.ratio", "canonical": "-0.5e-3" },
+          { "comment": "// scalar-string", "path": "root.title", "canonical": "\"plain \\\"quoted\\\" text\"" },
+          { "comment": "// scalar-char", "path": "root.glyph", "canonical": "'x'" },
+          { "comment": "// scalar-ident", "path": "root.mode", "canonical": "Fast" },
+          { "comment": "// scalar-bool", "path": "root.enabled", "canonical": "true" },
+          { "comment": "// multiline-string", "path": "root.banner", "canonical": "\"first line\nsecond line\nthird line\"" },
+          { "comment": "// multiline-raw-string", "path": "root.help", "canonical": "r#\"usage: \"spawn\"\n  --fast\"#" },
+          { "comment": "// struct", "path": "root.offset", "canonical": "( x : 1 , y : -2 )" },
+          { "comment": "// named-struct", "path": "root.player", "canonical": "Player ( name : \"hero\" , speed : 4.5 )" },
+          { "comment": "// tuple-plain", "path": "root.pos", "canonical": "( 10 , 20 , 30 )" },
+          { "comment": "// tuple-struct", "path": "root.spawn", "canonical": "Some ( ( 1 , 2 ) )" },
+          { "comment": "// unit", "path": "root.nothing", "canonical": "( )" },
+          { "comment": "// list", "path": "root.waves", "canonical": "[ 1 , 2 , 3 ]" },
+          { "comment": "// map", "path": "root.loot", "canonical": "{ \"gold\" : 10 , \"gems\" : 2 }" },
+          { "comment": "// nested-arena", "path": "root.arena", "canonical": "Arena ( size : ( w : 10 , h : 20 ) , waves : [ Wave ( count : 3 , kinds : [ Grunt , Archer ] ) , Wave ( count : 5 , kinds : [ Grunt ] ) ] , table : { ( 0 , 0 ) : [ Floor , Wall ] , ( 0 , 1 ) : [ ] } )" },
+          { "comment": "// nested-size", "path": "root.arena.size", "canonical": "( w : 10 , h : 20 )" },
+          { "comment": "// nested-waves", "path": "root.arena.waves", "canonical": "[ Wave ( count : 3 , kinds : [ Grunt , Archer ] ) , Wave ( count : 5 , kinds : [ Grunt ] ) ]" },
+          { "comment": "// nested-table", "path": "root.arena.table", "canonical": "{ ( 0 , 0 ) : [ Floor , Wall ] , ( 0 , 1 ) : [ ] }" }
+        ],
+        "no_entry": []
+      }
+    },
+    "pairs": [
+      { "id": "root-attribute-removed", "form": "root", "file": "ron/values.ron", "a": "// root", "edit": { "from": "#![enable(implicit_some)]\n", "to": "" }, "expect": "equal", "mutation": "the root's stream starts before its first token: an extension attribute hashed (L2)" },
+      { "id": "root-anchor-comment-text", "form": "root", "file": "ron/values.ron", "a": "// root", "b": "// root @implements CFG-1@1", "edit": { "from": "// root\n", "to": "// root @implements CFG-1@1\n" }, "expect": "equal", "mutation": "the anchoring comment's text hashed" },
+      { "id": "root-differs-deep", "form": "root", "file": "ron/values.ron", "a": "// root", "edit": { "from": "kinds: [Grunt]", "to": "kinds: [Grunt, Grunt]" }, "expect": "differs", "mutation": "a container hashed shallowly: its children's tokens left out" },
+      { "id": "scalar-int-sibling-edit", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-int", "edit": { "from": "ratio: -0.5e-3,", "to": "ratio: -0.25e-3," }, "expect": "equal", "mutation": "the value's range runs past its last token into the next sibling" },
+      { "id": "scalar-int-differs", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-int", "edit": { "from": "amount: 3,", "to": "amount: 4," }, "expect": "differs", "mutation": "a constant digest: the value's tokens never hashed" },
+      { "id": "scalar-float-layout", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-float", "edit": { "from": "ratio: -0.5e-3,", "to": "ratio:\n        -0.5e-3 ," }, "expect": "equal", "mutation": "whitespace or the value's raw source bytes hashed" },
+      { "id": "scalar-float-differs", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-float", "edit": { "from": "-0.5e-3", "to": "-0.5e-4" }, "expect": "differs", "mutation": "a number hashed by its token kind, not its text" },
+      { "id": "scalar-string-leading-comment", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-string", "edit": { "from": "title: \"plain", "to": "title: /* lead */ \"plain" }, "expect": "equal", "mutation": "a comment before the value's first token hashed: the range starts at the entry" },
+      { "id": "scalar-string-field-renamed", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-string", "edit": { "from": "title:", "to": "caption:" }, "expect": "equal", "mutation": "the entry's name and `:` hashed with its value (L1)" },
+      { "id": "scalar-string-differs", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-string", "edit": { "from": "text\",", "to": "Text\"," }, "expect": "differs", "mutation": "a string hashed by its kind or length, not its text" },
+      { "id": "scalar-char-differs", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-char", "edit": { "from": "'x'", "to": "'y'" }, "expect": "differs", "mutation": "a char hashed by its token kind" },
+      { "id": "scalar-ident-differs", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-ident", "edit": { "from": "mode: Fast,", "to": "mode: Slow," }, "expect": "differs", "mutation": "an identifier hashed by its token kind" },
+      { "id": "scalar-bool-differs", "form": "scalar", "file": "ron/values.ron", "a": "// scalar-bool", "edit": { "from": "enabled: true", "to": "enabled: false" }, "expect": "differs", "mutation": "an identifier hashed by its token kind" },
+      { "id": "multiline-layout", "form": "multiline-string", "file": "ron/values.ron", "a": "// multiline-string", "edit": { "from": "banner: \"first", "to": "banner:\n        \"first" }, "expect": "equal", "mutation": "the bytes before the value's first token hashed" },
+      { "id": "multiline-inner-space", "form": "multiline-string", "file": "ron/values.ron", "a": "// multiline-string", "edit": { "from": "second line", "to": "second  line" }, "expect": "differs", "mutation": "whitespace inside a string token collapsed: text not verbatim" },
+      { "id": "multiline-line-end-space", "form": "multiline-string", "file": "ron/values.ron", "a": "// multiline-string", "edit": { "from": "first line\n", "to": "first line \n" }, "expect": "differs", "mutation": "a string's line ends trimmed beyond the CR rule" },
+      { "id": "multiline-raw-indent", "form": "multiline-string", "file": "ron/values.ron", "a": "// multiline-raw-string", "edit": { "from": "  --fast\"#", "to": "    --fast\"#" }, "expect": "differs", "mutation": "indentation inside a raw string dropped" },
+      { "id": "multiline-raw-layout", "form": "multiline-string", "file": "ron/values.ron", "a": "// multiline-raw-string", "edit": { "from": "help: r#\"", "to": "help:\n        r#\"" }, "expect": "equal", "mutation": "the bytes before the value's first token hashed" },
+      { "id": "struct-trailing-comma", "form": "struct", "file": "ron/values.ron", "a": "// struct", "edit": { "from": "offset: (x: 1, y: -2),", "to": "offset: (x: 1, y: -2,)," }, "expect": "equal", "mutation": "a trailing comma kept" },
+      { "id": "struct-field-order", "form": "struct", "file": "ron/values.ron", "a": "// struct", "edit": { "from": "(x: 1, y: -2)", "to": "(y: -2, x: 1)" }, "expect": "differs", "mutation": "an order-insensitive stream: tokens or fields sorted" },
+      { "id": "struct-inner-comment", "form": "struct", "file": "ron/values.ron", "a": "// struct", "edit": { "from": "(x: 1, y: -2)", "to": "(x: 1, /* y */ y: -2)" }, "expect": "equal", "mutation": "comments inside the value hashed" },
+      { "id": "named-struct-no-trailing-comma", "form": "named-struct", "file": "ron/values.ron", "a": "// named-struct", "edit": { "from": "speed: 4.5,\n    ),", "to": "speed: 4.5\n    )," }, "expect": "equal", "mutation": "a trailing comma kept" },
+      { "id": "named-struct-one-line", "form": "named-struct", "file": "ron/values.ron", "a": "// named-struct", "edit": { "from": "Player(\n        name: \"hero\",\n        speed: 4.5,\n    )", "to": "Player(name: \"hero\", speed: 4.5)" }, "expect": "equal", "mutation": "layout hashed" },
+      { "id": "named-struct-name", "form": "named-struct", "file": "ron/values.ron", "a": "// named-struct", "edit": { "from": "Player(", "to": "Hero(" }, "expect": "differs", "mutation": "the struct name left out: the range starts at the opener" },
+      { "id": "named-struct-field-name", "form": "named-struct", "file": "ron/values.ron", "a": "// named-struct", "edit": { "from": "name: \"hero\"", "to": "label: \"hero\"" }, "expect": "differs", "mutation": "field names inside a value dropped: values only" },
+      { "id": "tuple-inner-comment", "form": "tuple", "file": "ron/values.ron", "a": "// tuple-plain", "edit": { "from": "(10, 20, 30)", "to": "(10, /* y */ 20, 30)" }, "expect": "equal", "mutation": "comments inside the value hashed" },
+      { "id": "tuple-last-element", "form": "tuple", "file": "ron/values.ron", "a": "// tuple-plain", "edit": { "from": "20, 30)", "to": "20, 31)" }, "expect": "differs", "mutation": "the range ends before the value's last tokens" },
+      { "id": "tuple-struct-commas", "form": "tuple", "file": "ron/values.ron", "a": "// tuple-struct", "edit": { "from": "Some((1, 2))", "to": "Some((1, 2,),)" }, "expect": "equal", "mutation": "a trailing comma kept before nested closers" },
+      { "id": "tuple-struct-differs", "form": "tuple", "file": "ron/values.ron", "a": "// tuple-struct", "edit": { "from": "Some((1, 2))", "to": "Some((1, 3))" }, "expect": "differs", "mutation": "a tuple struct hashed by its name only" },
+      { "id": "unit-space", "form": "tuple", "file": "ron/values.ron", "a": "// unit", "edit": { "from": "nothing: (),", "to": "nothing: ( )," }, "expect": "equal", "mutation": "whitespace hashed" },
+      { "id": "unit-differs", "form": "tuple", "file": "ron/values.ron", "a": "// unit", "edit": { "from": "nothing: (),", "to": "nothing: (0)," }, "expect": "differs", "mutation": "an empty container hashed alike to a filled one" },
+      { "id": "list-multiline", "form": "list", "file": "ron/values.ron", "a": "// list", "edit": { "from": "waves: [1, 2, 3],", "to": "waves: [\n        1,\n        2,\n        3,\n    ]," }, "expect": "equal", "mutation": "layout or a trailing comma hashed" },
+      { "id": "list-order", "form": "list", "file": "ron/values.ron", "a": "// list", "edit": { "from": "waves: [1, 2, 3],", "to": "waves: [1, 3, 2]," }, "expect": "differs", "mutation": "an order-insensitive stream" },
+      { "id": "list-anchor-comment-text", "form": "list", "file": "ron/values.ron", "a": "// list", "b": "// list of waves", "edit": { "from": "// list\n", "to": "// list of waves\n" }, "expect": "equal", "mutation": "the anchoring comment hashed" },
+      { "id": "map-inner-comment", "form": "map", "file": "ron/values.ron", "a": "// map", "edit": { "from": "\"gold\": 10,\n        \"gems\": 2,", "to": "\"gold\": 10,\n        // rare\n        \"gems\": 2," }, "expect": "equal", "mutation": "comments inside the value hashed" },
+      { "id": "map-trailing-comma", "form": "map", "file": "ron/values.ron", "a": "// map", "edit": { "from": "\"gems\": 2,\n    },", "to": "\"gems\": 2\n    }," }, "expect": "equal", "mutation": "a trailing comma kept" },
+      { "id": "map-value", "form": "map", "file": "ron/values.ron", "a": "// map", "edit": { "from": "\"gems\": 2", "to": "\"gems\": 3" }, "expect": "differs", "mutation": "an entry's value left out of the map's stream" },
+      { "id": "map-key", "form": "map", "file": "ron/values.ron", "a": "// map", "edit": { "from": "\"gold\": 10", "to": "\"Gold\": 10" }, "expect": "differs", "mutation": "map keys left out of the map's stream" },
+      { "id": "map-entry-order", "form": "map", "file": "ron/values.ron", "a": "// map", "edit": { "from": "\"gold\": 10,\n        \"gems\": 2,", "to": "\"gems\": 2,\n        \"gold\": 10," }, "expect": "differs", "mutation": "entries sorted: an order-insensitive map" },
+      { "id": "nested-deep-trailing-comma", "form": "nested", "file": "ron/values.ron", "a": "// nested-arena", "edit": { "from": "(0, 1): [],\n        },", "to": "(0, 1): []\n        }," }, "expect": "equal", "mutation": "a trailing comma kept in a nested container" },
+      { "id": "nested-table-deep-trailing-comma", "form": "nested", "file": "ron/values.ron", "a": "// nested-table", "edit": { "from": "(0, 1): [],\n        },", "to": "(0, 1): []\n        }," }, "expect": "equal", "mutation": "a trailing comma kept" },
+      { "id": "nested-deep-element", "form": "nested", "file": "ron/values.ron", "a": "// nested-arena", "edit": { "from": "kinds: [Grunt]", "to": "kinds: [Grunt, Grunt]" }, "expect": "differs", "mutation": "a container hashed shallowly: its children's tokens left out" },
+      { "id": "nested-waves-deep-element", "form": "nested", "file": "ron/values.ron", "a": "// nested-waves", "edit": { "from": "kinds: [Grunt]", "to": "kinds: [Grunt, Grunt]" }, "expect": "differs", "mutation": "a container hashed shallowly" },
+      { "id": "nested-size-beside-deep-edit", "form": "nested", "file": "ron/values.ron", "a": "// nested-size", "edit": { "from": "kinds: [Grunt]", "to": "kinds: [Grunt, Grunt]" }, "expect": "equal", "mutation": "a following sibling's tokens in the range" },
+      { "id": "nested-table-beside-deep-edit", "form": "nested", "file": "ron/values.ron", "a": "// nested-table", "edit": { "from": "kinds: [Grunt]", "to": "kinds: [Grunt, Grunt]" }, "expect": "equal", "mutation": "a preceding sibling's tokens in the range" },
+      { "id": "nested-size-differs", "form": "nested", "file": "ron/values.ron", "a": "// nested-size", "edit": { "from": "w: 10", "to": "w: 11" }, "expect": "differs", "mutation": "a nested struct hashed by its names only" },
+      { "id": "nested-arena-size-edit", "form": "nested", "file": "ron/values.ron", "a": "// nested-arena", "edit": { "from": "w: 10", "to": "w: 11" }, "expect": "differs", "mutation": "a container hashed shallowly" },
+      { "id": "nested-inner-comments", "form": "nested", "file": "ron/values.ron", "a": "// nested-arena", "edit": { "from": "// nested-waves\n", "to": "// nested-waves\n        // more waves\n" }, "expect": "equal", "mutation": "comments inside the value hashed" },
+      { "id": "nested-key-tuple", "form": "nested", "file": "ron/values.ron", "a": "// nested-table", "edit": { "from": "(0, 1): []", "to": "(1, 0): []" }, "expect": "differs", "mutation": "a map's tuple keys left out" },
+      { "id": "opener-anchor-body", "form": "named-struct", "file": "ron/anchors.ron", "a": "// player opener", "edit": { "from": "speed: 2,", "to": "speed: 3," }, "expect": "differs", "mutation": "a comment trailing an opener hashes less than the container's value" },
+      { "id": "opener-anchor-name", "form": "named-struct", "file": "ron/anchors.ron", "a": "// player opener", "edit": { "from": "player: Player(", "to": "player: Hero(" }, "expect": "differs", "mutation": "the struct name left out of a value whose comment trails its opener (L8)" },
+      { "id": "opener-and-closer-anchor-one-value", "form": "named-struct", "file": "ron/anchors.ron", "a": "// player opener", "b": "// player closer", "expect": "equal", "mutation": "two comments on one value hash different ranges (L9)" },
+      { "id": "trailing-anchor-sibling", "form": "scalar", "file": "ron/anchors.ron", "a": "// b trailing", "edit": { "from": "a: 1,", "to": "a: 5," }, "expect": "equal", "mutation": "a preceding sibling's tokens in the range" },
+      { "id": "lead-x-sibling", "form": "scalar", "file": "ron/anchors.ron", "a": "/* lead-x */", "edit": { "from": "/* lead-y */ 20", "to": "/* lead-y */ 21" }, "expect": "equal", "mutation": "a following element's tokens in the range" },
+      { "id": "lead-x-differs", "form": "scalar", "file": "ron/anchors.ron", "a": "/* lead-x */", "edit": { "from": "/* lead-x */ 10", "to": "/* lead-x */ 11" }, "expect": "differs", "mutation": "a leading comment hashes a value other than the one it leads" },
+      { "id": "root-ambiguous-child-edit", "form": "root", "file": "ron/anchors.ron", "a": "// own line before the root", "edit": { "from": "dup: 3,", "to": "dup: 4," }, "expect": "differs", "mutation": "an ambiguous child's tokens left out of its parent's stream" }
+    ]
+  }
 }

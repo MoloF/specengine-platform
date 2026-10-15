@@ -51,7 +51,7 @@ Own lexer (05 §9). The field path is the `qpath`: `data/movement.ron#root.stami
 4. **own line** — no token before it on its line → the value starting at the next token; extension attributes before the root are transparent (`#![enable(..)] // m` → `root`);
 5. otherwise **`unanchored`**: own line before a closer or `,`; after a map key or a `:` (a `//` under `speed:`, or a block comment whose value starts below its `*/` line); between a type name and its `(`; after trailing content.
 
-A multi-line block comment trails by its `/*` line and leads by its `*/` line; LF and CRLF alike. Fallback: when error recovery consumes the token a block comment leads, it binds to the value it trails (`a: 1 /* m */ 2` → `root.a`). Past `MAX_DEPTH = 512` open containers the container is skipped through its closer (`nesting_too_deep`), its markers `cannot_verify`. Cost linear in tokens.
+A multi-line block comment trails by its `/*` line and leads by its `*/` line; LF and CRLF alike. Fallback: when error recovery consumes the token a block comment leads, it binds to the value it trails (`a: 1 /* m */ 2` → `root.a`). Past `MAX_DEPTH = 512` open containers the container is skipped through its closer (`nesting_too_deep`), its markers `cannot_verify`. Cost linear in tokens. A bound value's hash: `code-hash-ron.md`.
 
 ## RON ambiguity
 
@@ -84,4 +84,4 @@ Pilots (read-only): A 0.2 % of 11 852 items ambiguous — `duplicate` 29 in 11 g
 ## Open
 
 - A process-group kill.
-- Phase 3: `symbols` and `markers` rows, level meaning in RON, the impl `disambiguator`.
+- Phase 3: `symbols` and `markers` rows, the impl `disambiguator`.

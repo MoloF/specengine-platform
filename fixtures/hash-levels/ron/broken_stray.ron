@@ -1,0 +1,9 @@
+// lexer and structure errors: a stray token
+Config(
+    // speed
+    speed: 4.5,
+    // bad
+    bad: @,
+    // after
+    after: 1,
+)

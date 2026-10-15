@@ -1,0 +1,9 @@
+// structure error only: a missing separator
+Config(
+    // speed
+    speed: 4.5
+    // waves
+    waves: [1, 2, 3],
+    // after
+    after: 1,
+)

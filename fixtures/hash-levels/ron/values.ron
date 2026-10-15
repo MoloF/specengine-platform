@@ -1,0 +1,58 @@
+#![enable(implicit_some)]
+// root
+Settings(
+    // scalar-int
+    amount: 3,
+    // scalar-float
+    ratio: -0.5e-3,
+    // scalar-string
+    title: "plain \"quoted\" text",
+    // scalar-char
+    glyph: 'x',
+    // scalar-ident
+    mode: Fast,
+    // scalar-bool
+    enabled: true,
+    // multiline-string
+    banner: "first line
+second line
+third line",
+    // multiline-raw-string
+    help: r#"usage: "spawn"
+  --fast"#,
+    // struct
+    offset: (x: 1, y: -2),
+    // named-struct
+    player: Player(
+        name: "hero",
+        speed: 4.5,
+    ),
+    // tuple-plain
+    pos: (10, 20, 30),
+    // tuple-struct
+    spawn: Some((1, 2)),
+    // unit
+    nothing: (),
+    // list
+    waves: [1, 2, 3],
+    // map
+    loot: {
+        "gold": 10,
+        "gems": 2,
+    },
+    // nested-arena
+    arena: Arena(
+        // nested-size
+        size: (w: 10, h: 20),
+        // nested-waves
+        waves: [
+            Wave(count: 3, kinds: [Grunt, Archer]),
+            Wave(count: 5, kinds: [Grunt]),
+        ],
+        // nested-table
+        table: {
+            (0, 0): [Floor, Wall],
+            (0, 1): [],
+        },
+    ),
+)

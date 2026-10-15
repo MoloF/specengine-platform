@@ -78,6 +78,14 @@
 //! wholesale, marked or not, with no pairwise comparison and no path per
 //! value.
 //!
+//! Value spans ([`super::value_hashes`]). Beside its path segment, each open
+//! entry, element and the root value has a slot; a comment resolved to that
+//! path takes the slot's id, and the slot records the token span of its
+//! value once the value is consumed through its end: an entry's value after
+//! its `:` (a map key is not the entry's value), a struct name included, a
+//! container through its closer. The span leaves the walk only through the
+//! slot's id, so the anchors and their types are untouched.
+//!
 //! Cost: linear in the tokens. Per entry the walk reads at most
 //! [`MAX_SEGMENT_BYTES`] of a field name or a map key (the key's extent is
 //! looked for no further) and looks that bounded text up once in its
@@ -139,6 +147,13 @@ pub(super) struct StructureError {
 pub(super) struct Walked {
     /// Resolved markers, in source order.
     pub markers: Vec<RonMarker>,
+    /// For each of `markers`, the value its anchor names: an index into
+    /// `spans`; `None` for an anchor that is no path.
+    pub values: Vec<Option<usize>>,
+    /// The token span of every value a marker resolved to, by index: its
+    /// first token through its last (`None`: the value never ended, which
+    /// a structure error reports).
+    pub spans: Vec<Option<Range<usize>>>,
     /// Structural errors met on the way.
     pub errors: Vec<StructureError>,
     /// Sibling groups sharing a segment text.
@@ -170,6 +185,8 @@ pub(super) fn walk(source: &str, tokens: &[Token], markers: Vec<(usize, Marker)>
         open_entries: Vec::new(),
         groups: Vec::new(),
         colliding_groups: 0,
+        slots: Vec::new(),
+        spans: Vec::new(),
     };
     walker.file();
     // Every container is closed now: a group is flagged when it or an
@@ -181,21 +198,25 @@ pub(super) fn walk(source: &str, tokens: &[Token], markers: Vec<(usize, Marker)>
                 .parent
                 .is_some_and(|parent| parent < index && flagged[parent]);
     }
-    let mut resolved: Vec<RonMarker> = walker
+    let mut resolved: Vec<(RonMarker, Option<usize>)> = walker
         .resolved
         .into_iter()
-        .map(|(mut marker, group)| {
+        .map(|(mut marker, group, value)| {
             if group.is_some_and(|group| flagged[group])
                 && let Anchor::Path { path, depth } = marker.anchor
             {
                 marker.anchor = Anchor::Ambiguous { path, depth };
             }
-            marker
+            let value = value.filter(|_| matches!(marker.anchor, Anchor::Path { .. }));
+            (marker, value)
         })
         .collect();
-    resolved.sort_by_key(|m| (m.comment.start, m.marker.offset));
+    resolved.sort_by_key(|(m, _)| (m.comment.start, m.marker.offset));
+    let (markers, values) = resolved.into_iter().unzip();
     Walked {
-        markers: resolved,
+        markers,
+        values,
+        spans: walker.spans,
         errors: walker.errors,
         colliding_groups: walker.colliding_groups,
     }
@@ -229,10 +250,22 @@ struct Pending {
     /// `end_line`: the comment binds to the value the walk begins there, if
     /// one does.
     leads: bool,
-    /// Set on a leading comment that trails a value: its anchor (and the
-    /// innermost entry it lies under) when no value begins at the next token
-    /// after all.
-    fallback: Option<(Anchor, GroupId)>,
+    /// Set on a leading comment that trails a value: its anchor (with the
+    /// innermost entry it lies under and the value it names) when no value
+    /// begins at the next token after all.
+    fallback: Option<(Anchor, GroupId, Option<usize>)>,
+}
+
+/// An open entry, element or the root value, beside its path segment.
+#[derive(Default)]
+struct Slot {
+    /// Its index into [`Walker::spans`], given when a comment first
+    /// resolves to its path.
+    id: Option<usize>,
+    /// Token indices of its value, first through last, once the value is
+    /// consumed through its end: an entry's value after its `:` (a map key
+    /// is not the entry's value), an element, the root value.
+    span: Option<Range<usize>>,
 }
 
 /// Token kinds a value can begin with ([`Walker::value`]); extension
@@ -264,8 +297,9 @@ struct Walker<'a> {
     next_marker: usize,
     /// Markers of the comments crossed since the last consumed token.
     pending: Vec<Pending>,
-    /// Resolved markers with the innermost entry their anchor lies under.
-    resolved: Vec<(RonMarker, GroupId)>,
+    /// Resolved markers with the innermost entry their anchor lies under and
+    /// the value a path anchor names (an index into `spans`).
+    resolved: Vec<(RonMarker, GroupId, Option<usize>)>,
     errors: Vec<StructureError>,
     /// One set per open struct body or map: segment text → its group.
     sibling_sets: Vec<HashMap<String, usize>>,
@@ -273,6 +307,12 @@ struct Walker<'a> {
     open_entries: Vec<usize>,
     groups: Vec<Group>,
     colliding_groups: usize,
+    /// One slot per open entry, element or the root value, outermost first:
+    /// the path's segments and these open and close together.
+    slots: Vec<Slot>,
+    /// The token span of every value a comment resolved to, by slot id;
+    /// written when the slot closes.
+    spans: Vec<Option<Range<usize>>>,
 }
 
 impl Walker<'_> {
@@ -283,13 +323,15 @@ impl Walker<'_> {
             self.pos += 1;
         }
         let mut path = Vec::new();
+        self.slots.push(Slot::default());
         match self.peek() {
             None => self.error(StructureErrorKind::EmptyFile, self.source.len()),
             Some(_) => {
                 self.anchor_pending(&path);
-                if self.value(&mut path)
-                    && let Some(end) = self.last
-                {
+                let first = self.pos;
+                let closed = self.value(&mut path);
+                self.value_parsed(first, closed);
+                if closed && let Some(end) = self.last {
                     self.claim_trailing(&path, end);
                 }
             }
@@ -301,6 +343,7 @@ impl Walker<'_> {
             self.bump();
         }
         self.settle_pending(Anchor::Unanchored);
+        self.close_slot();
     }
 
     /// The value at the next token. `true` when one was consumed through its
@@ -458,6 +501,7 @@ impl Walker<'_> {
                     let segment = segment_text(self.source, range.start, range.end);
                     self.enter_entry(&segment);
                     path.push(Segment::Field(segment));
+                    self.slots.push(Slot::default());
                     self.anchor_pending(path);
                     self.bump();
                     if self.peek().is_some_and(|t| t.kind == TokenKind::Colon) {
@@ -467,9 +511,12 @@ impl Walker<'_> {
                         self.error(StructureErrorKind::ExpectedColon, at);
                     }
                     self.anchor_leading(path);
+                    let first = self.pos;
                     let has_value = self.value(path);
+                    self.value_parsed(first, has_value);
                     self.separator(path, Delim::Paren, has_value);
                     path.pop();
+                    self.close_slot();
                     self.open_entries.pop();
                 }
                 _ => {
@@ -510,10 +557,14 @@ impl Walker<'_> {
                     } else {
                         Segment::Index(index)
                     });
+                    self.slots.push(Slot::default());
                     self.anchor_pending(path);
+                    let first = self.pos;
                     let has_value = self.value(path);
+                    self.value_parsed(first, has_value);
                     self.separator(path, delim, has_value);
                     path.pop();
+                    self.close_slot();
                     index += 1;
                 }
             }
@@ -561,9 +612,11 @@ impl Walker<'_> {
                     let segment = segment_text(self.source, start, key_end);
                     self.enter_entry(&segment);
                     path.push(Segment::Key(segment));
+                    self.slots.push(Slot::default());
                     self.anchor_pending(path);
                     // The key is not the entry's end: a comment trailing it
-                    // is followed by `:` and stays `unanchored`.
+                    // is followed by `:` and stays `unanchored`. Nor is it the
+                    // entry's value: its span is not recorded.
                     self.value(path);
                     if self.peek().is_some_and(|t| t.kind == TokenKind::Colon) {
                         self.bump();
@@ -572,9 +625,12 @@ impl Walker<'_> {
                         self.error(StructureErrorKind::ExpectedColon, at);
                     }
                     self.anchor_leading(path);
+                    let first = self.pos;
                     let has_value = self.value(path);
+                    self.value_parsed(first, has_value);
                     self.separator(path, Delim::Brace, has_value);
                     path.pop();
+                    self.close_slot();
                     self.open_entries.pop();
                 }
             }
@@ -790,12 +846,13 @@ impl Walker<'_> {
         }
         let anchor = render_path(path);
         let group = self.innermost_entry();
+        let value = self.slot_id();
         let (taken, rest): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.pending)
             .into_iter()
             .partition(|p| takes(p));
         self.pending = rest;
         for pending in taken {
-            self.resolve(pending, anchor.clone(), group);
+            self.resolve(pending, anchor.clone(), group, value);
         }
     }
 
@@ -816,31 +873,32 @@ impl Walker<'_> {
         }
         let anchor = render_path(path);
         let group = self.innermost_entry();
+        let value = self.slot_id();
         for mut pending in std::mem::take(&mut self.pending) {
             if pending.line != line {
                 self.pending.push(pending);
             } else if pending.leads {
-                pending.fallback = Some((anchor.clone(), group));
+                pending.fallback = Some((anchor.clone(), group, value));
                 self.pending.push(pending);
             } else {
-                self.resolve(pending, anchor.clone(), group);
+                self.resolve(pending, anchor.clone(), group, value);
             }
         }
     }
 
     /// Resolves every pending marker: to its fallback when it has one (it
-    /// led a token no value began at), else to `anchor`.
+    /// led a token no value began at), else to `anchor`, which names no value.
     fn settle_pending(&mut self, anchor: Anchor) {
         for mut pending in std::mem::take(&mut self.pending) {
-            let (anchor, group) = pending
+            let (anchor, group, value) = pending
                 .fallback
                 .take()
-                .unwrap_or_else(|| (anchor.clone(), None));
-            self.resolve(pending, anchor, group);
+                .unwrap_or_else(|| (anchor.clone(), None, None));
+            self.resolve(pending, anchor, group, value);
         }
     }
 
-    fn resolve(&mut self, pending: Pending, anchor: Anchor, group: GroupId) {
+    fn resolve(&mut self, pending: Pending, anchor: Anchor, group: GroupId, value: Option<usize>) {
         self.resolved.push((
             RonMarker {
                 marker: pending.marker,
@@ -849,7 +907,39 @@ impl Walker<'_> {
                 anchor,
             },
             group,
+            value,
         ));
+    }
+
+    /// The id of the innermost open slot (the value at the current path),
+    /// given on first use.
+    fn slot_id(&mut self) -> Option<usize> {
+        let next = self.spans.len();
+        let id = *self.slots.last_mut()?.id.get_or_insert(next);
+        if id == next {
+            self.spans.push(None);
+        }
+        Some(id)
+    }
+
+    /// The value of the innermost slot, begun at token `first`, was consumed
+    /// through its end (`self.last`) when `parsed`.
+    fn value_parsed(&mut self, first: usize, parsed: bool) {
+        if parsed
+            && let (Some(last), Some(slot)) = (self.last, self.slots.last_mut())
+            && last >= first
+        {
+            slot.span = Some(first..last + 1);
+        }
+    }
+
+    /// Closes the innermost slot: a value a comment resolved to keeps its span.
+    fn close_slot(&mut self) {
+        if let Some(Slot { id: Some(id), span }) = self.slots.pop()
+            && let Some(kept) = self.spans.get_mut(id)
+        {
+            *kept = span;
+        }
     }
 
     /// A struct or map entry with this segment text begins in the innermost

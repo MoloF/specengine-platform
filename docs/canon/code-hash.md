@@ -49,7 +49,7 @@ v3, at the crate root (module `levels`); digests are `Digest`. Callers keep a fi
 | `call_targets(node, source)` | the texts `deps` hashes, sorted; on `source_file` every call in the file |
 | `grammar::NODE_TYPES` | `tree_sitter_rust::NODE_TYPES` for the body pin: the crate reads no JSON |
 
-RON seams, crate-private: `hash::put`, `levels::{cr_rule, Stream::tagged, deps_digest}`.
+The RON value hash (`ron::value_hashes`): `docs/canon/code-hash-ron.md`, over the crate-private `hash::put`, `levels::{cr_rule, Stream::tagged, deps_digest}`.
 
 ## Levels
 

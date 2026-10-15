@@ -1,0 +1,15 @@
+// own line before the root
+Config(
+    // a
+    a: 1,
+    // dup-first
+    dup: 2,
+    // dup-second
+    dup: 3,
+    b: 4, // b trailing
+    player: Player( // player opener
+        speed: 2,
+    ), // player closer
+    pos: (/* lead-x */ 10, /* lead-y */ 20),
+    // before closer
+)
