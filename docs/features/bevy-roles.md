@@ -130,7 +130,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec; 08 s2 lists 10a; a dated note in `symbol-index.md`; `export index`, `check` clean.
-- [ ] SW-2 -- at shipping: `code-bindings.md` "The `[code]` table" (`frameworks`; `bevy` an unknown key); a Tier 2 `docs/canon/code-roles.md` (≤ 12 288 B; `code-identity.md` is full at 12 272); `specengine-code` README (10 199 of 10 240 B: 5a-1 moves "Hash recipe" down first), store, CLI READMEs; 05 s5.1 :128 pointer; 07 :30 (`find_symbols` roles), :204 (`bevy = true` -> `frameworks`); `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping: `code-bindings.md` "The `[code]` table" (`frameworks`; `bevy` an unknown key); a Tier 2 `docs/canon/code-roles.md` (≤ 12 288 B; `code-identity.md` 9 918 B on 2026-10-15, 5a and 6a edit it first); `specengine-code` README (10 199 of 10 240 B: 5a-1 moves "Hash recipe" down first), store, CLI READMEs; 05 s5.1 :128 pointer; 07 :30 (`find_symbols` roles), :204 (`bevy = true` -> `frameworks`); `CLAUDE.md` State.
 - [x] SW-3 -- no ADR of its own (ADR-0048 is 10b's).
 
 ## Risks

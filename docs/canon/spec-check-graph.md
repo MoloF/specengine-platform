@@ -51,7 +51,7 @@ None compared on a `walk_gap` (a `read_error`, an `UnreadableDir`, a written `Mi
 
 ## §11.6: the generator registry
 
-This repository's root `specengine.toml` has:
+This repository's entry, less its `spec-*` shard:
 
 ```toml
 [[generators]]

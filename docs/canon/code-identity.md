@@ -3,25 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-code, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-15
 ---
 
 # Layer A identity: target units, markers, RON paths
 
-Layer A (05 §5.1) names code without a build: a heuristic `qpath` per Rust item, the marker grammar of `.rs` and `.ron` comments, a field path per RON marker. The marker is the link identity, the `qpath` only a name (ADR-0020, `docs/canon/architecture.md#code-identity`): what the heuristic cannot decide is reported, never guessed; malformed input is counted, never fatal (ADR-0012). Unit sources know only Cargo's names (`src`, `tests`, `lib.rs`, …: `identity_literals.rs`, ADR-0008). Code: `specengine-code` `qpath.rs`, `markers.rs`, `ron/`; cargo runner: `specengine-eval` `ast_hash/targets.rs`. Read by the eval and `spec refs` (`docs/canon/code-bindings.md`); Phase 3 stores it.
-
-## Target table
-
-`ast-hash` runs, per package dir (a `Cargo.toml` dir owning a listed `.rs` file), shortest first, skipping dirs an earlier run covered (its packages, its `workspace_root`):
-
-    ${SPECENGINE_CARGO:-cargo} metadata --format-version 1 --no-deps --offline --color never --manifest-path <dir>/Cargo.toml
-
-An answer gives `PackageTargets { source: Metadata, targets: [Target { kind, name, root }] }`: Cargo's first kind and name, the root relative to the canonical package dir (outside it: dropped); a covered virtual root has no targets. A dir no run covers (cargo missing, a broken manifest, a nested workspace, no answer) gets `layout_targets(package, files)`, Cargo's auto-discovery (`src/lib.rs` → `lib` `<package>` with `-`→`_`, `src/main.rs` → `bin` `<package>`, `src/bin/<n>.rs`, `src/bin/<n>/main.rs` → `bin` `<n>`, alike under `examples`, `tests`, `benches`, `build.rs` → `custom-build` `build-script-build`), `<package>` = `[package] name` if the manifest parses, else the dir name. Exit 0 either way, `detail.targets_from` tells which. `spec refs` (no cargo): layout for all; a manifest parsing without `[package]` is virtual (no targets: `Unrooted`), one unreadable, unparsable or nameless takes the dir name, `.` for the root (`.::bin:.::main`, deterministic).
-
-- **Never builds, patches or runs a corpus**: `--no-deps` writes no lock file, `--offline` stays off the network, stdin null.
-- **cwd always `/`**, root-owned, for cargo and rustfmt (`ast_hash/fmt.rs`): no corpus `rust-toolchain` or `.cargo/config.toml` is read via the cwd; never a world-writable dir (a planted `rust-toolchain.toml` makes the rustup proxy run a foreign toolchain). rustfmt is picked by `RUSTUP_TOOLCHAIN` or a `SPECENGINE_RUSTFMT` wrapper, a relative path (`bin/fmt`) resolved against the harness's cwd. A corpus at `/` → no cargo call, layout for all; rustfmt not run, its rows `null`, one stderr line.
-- **Budget** per call: min(60 s, the remaining `--timeout` − 1 s); nothing left → no call. An overrun is killed and reaped and, like a cargo that cannot start, ends the run's cargo calls: layout for the rest. No cargo child outlives the run.
-- **stderr** captured, never on stdout; one harness line per failure: cargo's first `error…` line (else first non-blank, else the exit status), the corpus root as a whole path replaced by the label, cut to 200 chars.
+Layer A (05 §5.1) names code without a build: a heuristic `qpath` per Rust item, the marker grammar of `.rs` and `.ron` comments, a field path per RON marker. The marker is the link identity, the `qpath` only a name (ADR-0020, `docs/canon/architecture.md#code-identity`): what the heuristic cannot decide is reported, never guessed; malformed input is counted, never fatal (ADR-0012). Unit sources know only Cargo's names (`src`, `tests`, `lib.rs`, …: `identity_literals.rs`, ADR-0008). Code: `specengine-code` `qpath.rs`, `markers.rs`, `ron/`; the targets, the cargo runner (`specengine-eval` `ast_hash/targets.rs`): `docs/canon/code-targets.md`. Read by the eval and `spec refs` (`docs/canon/code-bindings.md`); Phase 3 stores it.
 
 ## Units and `qpath`
 

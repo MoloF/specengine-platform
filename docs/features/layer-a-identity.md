@@ -13,7 +13,7 @@ adrs: []
 
 Phase 0 refuted "`qpath` names items unambiguously": 16.5–32.2 % of pilot items ambiguous, almost all duplicates across targets (`phase-0-spikes.md`): `file_role` judged a file by its path alone, giving every crate root of a package one empty module path and taking `tests/common/mod.rs` for one, so Phase 3 would mark a sixth to a third of a project `cannot_verify`. The marker parser kept `[tiers]` as note text and counted a glued `X[sig]`, `X*/`, `<slug>/ID` (ADR-0026) and empty IDs as mixed-script (ADR-0009). RON keys cut at 128 bytes or whitespace-collapsed rendered one path for two values. Nothing reads these formats before Phase 3 stores them (05 §3, 07): fix them first. No ADR: within `docs/canon/architecture.md` `#code-identity`, `#markers`, `#ids`, `#universal`; ADR-0021's recipe untouched.
 
-How it works now: `docs/canon/code-identity.md`.
+How it works now: `docs/canon/code-identity.md`, `code-targets.md`.
 
 ## Acceptance criteria
 

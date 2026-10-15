@@ -18,6 +18,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/code-bindings.md](canon/code-bindings.md) Code bindings: [code], markers bound to code, spec refs · crates/specengine-code, crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
+- [docs/canon/code-targets.md](canon/code-targets.md) Layer A targets: cargo runner, layout fallback · crates/specengine-eval, crates/specengine-code · tier 2
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a deciding item approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
@@ -36,6 +37,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/proposal-completion.md](canon/proposal-completion.md) Proposal completion and reject · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/proposal-create-apply.md](canon/proposal-create-apply.md) Proposal kinds: applying a create · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/proposal-decision.md](canon/proposal-decision.md) Proposal kind: decision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui · tier 2
+- [docs/canon/proposal-drift-item.md](canon/proposal-drift-item.md) Proposal kind drift: the item, its evidence, dedup · crates/specengine-core, crates/specengine-store · tier 2
 - [docs/canon/proposal-drift.md](canon/proposal-drift.md) Proposal kind drift: lock drift in the owner's queue · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-interpretation.md](canon/proposal-interpretation.md) Proposal kind: interpretation · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, ui · tier 2
 - [docs/canon/proposal-kinds.md](canon/proposal-kinds.md) Proposal kinds: create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · tier 2
@@ -49,19 +51,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/serve-ui.md](canon/serve-ui.md) Daemon: the web UI it serves · crates/specengine-http, ui · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
-- [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
-- [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
-- [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2
-- [docs/canon/spec-check-links.md](canon/spec-check-links.md) spec check: feature scopes and links · crates/specengine-core, crates/specengine-model · tier 2
-- [docs/canon/spec-check-process.md](canon/spec-check-process.md) spec check: process rules · crates/specengine-core · tier 2
-- [docs/canon/spec-check.md](canon/spec-check.md) spec check: what it enforces · crates/specengine-core, crates/specengine-store, crates/specengine-eval · tier 2
-- [docs/canon/spec-cli-bundle.md](canon/spec-cli-bundle.md) spec bundle and bundle_hash · crates/specengine-cli, crates/specengine-core, crates/specengine-store · tier 2
-- [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
-- [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli · tier 2
-- [docs/canon/spec-lock-accept.md](canon/spec-lock-accept.md) spec lock accept: the owner's lock commit · crates/specengine-cli, crates/specengine-store · tier 2
-- [docs/canon/spec-lock.md](canon/spec-lock.md) spec.lock: the file, its entries, spec lock regen · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
-- [docs/canon/spec-verify-output.md](canon/spec-verify-output.md) spec verify's output: rows, hints, summary, JSON · crates/specengine-cli · tier 2
-- [docs/canon/spec-verify.md](canon/spec-verify.md) spec verify: drift between spec.lock and the tree · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates · tier 2
 - [docs/canon/task-package.md](canon/task-package.md) Task package: what an agent is given · crates/specengine-cli, crates/specengine-mcp, crates/specengine-model · tier 2
 - [docs/canon/tasks.md](canon/tasks.md) Tasks: commands, transitions, place, store · crates/specengine-store, crates/specengine-cli, crates/specengine-core · tier 2

@@ -15,7 +15,7 @@ Nobody saw which code implements, verifies, configures or assumes a node: marker
 
 ## Description and interactions
 
-Canon: `docs/canon/code-bindings.md` (all of it); `code-identity.md` "Target table", "Marker grammar"; `architecture-code.md#markers`; `stack.md` (tree-sitter, `toml`); `spec-check.md` "Not checked yet"; the CLI, code, core, model, eval READMEs. The CLI gains `specengine-code` and `toml` (WA-12); MCP and the daemon reach tree-sitter through the CLI library. Unchanged (WA-11, WA-13): `spec check`, hook triggers, MCP tools, HTTP, UI, `INDEX_FORMAT`; this repository has no `[code]`.
+Canon: `docs/canon/code-bindings.md` (all of it); `code-targets.md` "Target table"; `code-identity.md` "Marker grammar"; `architecture-code.md#markers`; `stack.md` (tree-sitter, `toml`); `spec-check.md` "Not checked yet"; the CLI, code, core, model, eval READMEs. The CLI gains `specengine-code` and `toml` (WA-12); MCP and the daemon reach tree-sitter through the CLI library. Unchanged (WA-11, WA-13): `spec check`, hook triggers, MCP tools, HTTP, UI, `INDEX_FORMAT`; this repository has no `[code]`.
 
 ## Data
 
@@ -25,7 +25,7 @@ Canon: `docs/canon/code-bindings.md` (all of it); `code-identity.md` "Target tab
 
 ### The walk
 
-`docs/canon/code-bindings.md` "The walk" (WA-2, WA-3, WA-9); package names: `code-identity.md` "Target table".
+`docs/canon/code-bindings.md` "The walk" (WA-2, WA-3, WA-9); package names: `code-targets.md` "Target table".
 
 ### Binding rules
 
@@ -41,7 +41,7 @@ Canon: `docs/canon/code-bindings.md` (all of it); `code-identity.md` "Target tab
 
 ### spec refs
 
-`docs/canon/code-bindings.md` "`spec refs`" (WA-8): text, JSON, cap, exits, the no-table sentence.
+`docs/canon/code-bindings.md` "`spec refs`", `spec-cli-refs.md` (WA-8): text, JSON, cap, exits, the no-table sentence.
 
 ## Rules and edge cases
 

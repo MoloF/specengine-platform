@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-code, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-15
 ---
 
 # Code bindings: `[code]`, markers bound to code, `spec refs`
@@ -27,7 +27,7 @@ exclude = ["**/target/**", "crates/*/tests/fixtures/**"] # optional
 - Regular files named `*.rs`, `*.ron` under the roots minus `exclude`, as the spec walk lists `.md` (`crates/specengine-store/README.md` "Walk"): below a root, symlinks and `.`-names skipped; no `.gitignore`; root-relative `/` paths, byte-sorted, repeats dropped. A directory an exclude `G/**` covers is not listed (one unlistable inside it is no gap).
 - **Not UTF-8**: content -> `note: <path> is not UTF-8: skipped`, counted `skipped`; a name -> counted `skipped`, no note, even where an exclude would drop it (a non-UTF-8 name is never matched). `.`-names and excluded files are neither files nor skipped.
 - **Gaps**: a directory that cannot be listed (one on the way to a root too), a file that cannot be read, a Rust file the parser gives no tree -> exit 2, `spec: the code walk is incomplete: <gap>`, the first by path (a file before a directory of the same path), stdout empty, never a partial list.
-- **Packages**: a `.rs` file's package is the nearest directory, its own up to the root, holding a regular `Cargo.toml`; its targets `layout_targets` over the package's walked files (no subprocess, no `cargo metadata`: `code-identity.md` "Target table"). No package: unrooted, package `.`.
+- **Packages**: a `.rs` file's package is the nearest directory, its own up to the root, holding a regular `Cargo.toml`; its targets `layout_targets` over the package's walked files (no subprocess, no `cargo metadata`: `code-targets.md` "Target table"). No package: unrooted, package `.`.
 - Each walked file and probed manifest is read once; nothing about code is stored.
 
 ## Rust binding
@@ -81,25 +81,10 @@ R, the node's own revision (`docs/canon/node-revision.md` "Revision"): a documen
 
 ## `spec refs`
 
-`spec refs REF [--json]`. REF: every `spec show` form (`@rev` ignored with a `note:`; look-alike, mixed script, `project:` -> exit 2; several holders -> one `warning:`, a block each; a `.md` path with no node -> exit 1, `has no node`). A block lists what names its node, never its sections or parents. Order of work: config, REF, walk.
+`spec refs REF [--json]`. REF: every `spec show` form (`@rev` ignored with a `note:`; look-alike, mixed script, `project:` -> exit 2; several holders -> one `warning:`, a block each; a `.md` path with no node -> exit 1, `has no node`). A block lists what names its node, never its sections or parents. Order of work: config, REF, walk. The rows, JSON and exits: `docs/canon/spec-cli-refs.md`.
 
-```
-LAW-STEP | law | Step | docs/spec/counter.md:17 | rev 1 (none written)
-implements | crates/tally/src/counter.rs:23:8 | LAW-STEP@1 | resolved | current | default | item crates/tally::counter::Tally::step function_item
-configures | data/limits.ron:6:17 | LAW-STEP | resolved | unversioned | default | ron data/limits.ron#root.step ambiguous duplicate
-mention | crates/tally/src/counter.rs:4:28 | LAW-STEP | resolved | file
-refs: markers 2, mentions 1; code files 8 (.rs 7, .ron 1), skipped 0
-```
-
-- Header: search's first four fields + ` | rev <R>` (`rev 1 (none written)`, `rev unknown`); blocks apart by an empty line.
-- Marker: `<relation> | <path>:<line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <binding>[ | <note>]`, 1-based, the column in bytes at the `@`; levels `default`, `[a, b]`, `invalid:<category>`. Mention: `mention | <path>:<line>:<column> | <reference as written> | <id_state>[ <fix>] | <binding>`.
-- Binding: `item <qpath> <kind>[ ambiguous <reason>]`, `module <qpath>[ ambiguous <reason>]`, `ron <path>#<field path>[ ambiguous duplicate]`, `unanchored <category>`, `cannot_verify <category>`, `file` (mentions only).
 - Order: markers by relation (`implements`, `verifies`, `configures`, `assumes`), path bytes, line, column; then mentions by path, line, column; the summary last, counting every row of every block (a marker under two holders twice), cut ones too.
 - Cap `OUTPUT_CAP_CHARS` (40 000): rows while the text stays within it, then `[truncated: <k> markers, <j> mentions not shown]`.
-
-`--json`, the printed rows, every key present (absent `null`), in this order: `{ref, reason, notes, nodes: [{id, kind, title, path, line, rev, rev_written, markers: [{relation, path, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, binding}], mentions: [{path, line, column, written, id_state, fix, binding}]}], code: {files, rs, ron, skipped}, omitted: {markers, mentions}}`; `binding` `{kind, qpath, item_kind, line, ambiguity, category}`, `kind` a binding word above, `qpath` a RON anchor's `<path>#<field path>` too, `line` an item's only. Marker `id` is the token's ID part as written, `rev` its 1-9 digits; node `rev` `null` when unreadable; `levels` (a list), `levels_state` as the eval's `markers.json` (`code-identity.md` "Eval outputs").
-
-**Exit**: 0 answered, zero rows too. 1 REF names nothing (show's `spec: <reason>`; JSON `nodes` `[]`, `code`, `omitted` `null`). 2, stdout empty: usage, discovery, a config error (`[code]` included), no table, a refused REF, a walk gap.
 
 ## Guarantees
 

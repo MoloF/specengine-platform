@@ -23,9 +23,13 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 
 /// The live shards of the root config's index entry after the archive, in
 /// config order, each with its one claim (`shards`, `claims`; docs/README.md
-/// "Generated"): Tier 2 canon (cited by path, found by scope), what is read
-/// by id (decisions) and by path (crate READMEs).
-pub const INDEX_LIVE_SHARDS: [(&str, &str); 3] = [
+/// "Generated"): Tier 2 canon (cited by path, found by scope; the `spec-*`
+/// command canons first, since 2026-10-15), what is read by id (decisions)
+/// and by path (crate READMEs). Claims overlap (`docs/canon/spec-*.md` is
+/// within `docs/canon/*.md`): the first matching claim wins
+/// ([`claiming_shard`]).
+pub const INDEX_LIVE_SHARDS: [(&str, &str); 4] = [
+    ("docs/index-canon-spec.md", "docs/canon/spec-*.md"),
     ("docs/index-canon.md", "docs/canon/*.md"),
     ("docs/index-decisions.md", "docs/decisions/*.md"),
     ("docs/index-crates.md", "crates/*/README.md"),
@@ -34,12 +38,13 @@ pub const INDEX_LIVE_SHARDS: [(&str, &str); 3] = [
 /// The index set of the root config in config order: the root, then the
 /// shards. The index entry's `writes`, the render's outputs and the export's
 /// lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 5] = [
+pub const INDEX_OUTPUTS: [&str; 6] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
     INDEX_LIVE_SHARDS[1].0,
     INDEX_LIVE_SHARDS[2].0,
+    INDEX_LIVE_SHARDS[3].0,
 ];
 
 /// X: the registered export command of the index (`[[generators]] command`).
@@ -138,6 +143,17 @@ pub fn claimed(glob: &str, relative: &str) -> bool {
             .iter()
             .zip(&path)
             .all(|(want, got)| !got.is_empty() && segment(want, got))
+}
+
+/// The live shard of [`INDEX_LIVE_SHARDS`] that places the root-relative
+/// `/` path `relative`: the first, in config order, whose claim matches it
+/// (docs/canon/spec-check-graph.md "Index render", **Shards**: the first
+/// matching claim wins); `None` when no claim does.
+pub fn claiming_shard(relative: &str) -> Option<&'static str> {
+    INDEX_LIVE_SHARDS
+        .iter()
+        .find(|(_, claim)| claimed(claim, relative))
+        .map(|(path, _)| *path)
 }
 
 /// `toml` with the one occurrence of `from` replaced by `to` (the in-test

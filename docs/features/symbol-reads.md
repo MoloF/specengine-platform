@@ -37,7 +37,7 @@ crates/tally::counter::impl Tally #2 | impl_item | crates/tally/src/counter.rs:4
 symbols: 1 of 1; code files <f> (.rs <r>, .ron <o>), skipped <s>
 ```
 
-- Target: `<qpath> | <item_kind> | <path>:<start>-<end> | layer <l> | mentions <n>[ | ambiguous <reason>][ | <tier>]`; module `<qpath> | module | <path>`, RON `<path>#<field path> | ron | <path>:<line>`, no `sig`; `sig -` when NULL. Bindings: its direct markers by line, `<relation> | <line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <node or ->[ | <note>]`, `levels`, `note` as refs prints them (`code-bindings.md` "`spec refs`").
+- Target: `<qpath> | <item_kind> | <path>:<start>-<end> | layer <l> | mentions <n>[ | ambiguous <reason>][ | <tier>]`; module `<qpath> | module | <path>`, RON `<path>#<field path> | ron | <path>:<line>`, no `sig`; `sig -` when NULL. Bindings: its direct markers by line, `<relation> | <line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <node or ->[ | <note>]`, `levels`, `note` as refs prints them (`spec-cli-refs.md` "Rows").
 - JSON, every key present: `{form, query, node, path, line, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}]}], total, omitted, code}`.
 - Exit 0 answered, zero rows too; 1 `--node` REF names nothing; 2, stdout empty: usage, discovery, config, no `[code]` (`code-bindings.md` "The `[code]` table"'s text), PATH not a walked code file, a bad LINE, a walk gap. Cap `OUTPUT_CAP_CHARS`, then `[truncated: <k> symbols not shown]`.
 

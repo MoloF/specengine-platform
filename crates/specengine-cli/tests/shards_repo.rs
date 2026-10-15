@@ -3,16 +3,19 @@
 //! root `specengine.toml` with its `[[generators]]` entry replaced by
 //! [`SHIPPING`], the root config byte for byte: since 2026-10-06 the
 //! archive shard of the spec's "Data" plus live shards beside it, three
-//! since 2026-10-10, the spec's AC-12 and AC-13 holding for that config).
+//! since 2026-10-10, four since 2026-10-15 (`docs/index-canon-spec.md`
+//! ahead of `docs/index-canon.md`), the spec's AC-12 and AC-13 holding for
+//! that config).
 //! `spec export index` never runs in this repository; every run gets a
 //! scratch `HOME`; `git status` is the same before and after.
 //!
 //! AC-12: export creates the root, `docs/index-archive.md`,
-//! `docs/index-canon.md`, `docs/index-decisions.md` and
-//! `docs/index-crates.md` as `render_index_set` has them; the archive
-//! lists exactly the walked Tier 3
-//! documents, each live shard exactly the live documents its claim matches,
-//! the root none of either; all are this repository's committed files byte
+//! `docs/index-canon-spec.md`, `docs/index-canon.md`,
+//! `docs/index-decisions.md` and `docs/index-crates.md` as
+//! `render_index_set` has them; the archive lists exactly the walked Tier 3
+//! documents, each live shard exactly the live documents it is the first to
+//! claim (`docs/canon/spec-*.md` before `docs/canon/*.md`), the root none
+//! of either; all are this repository's committed files byte
 //! for byte; all deleted → recreated byte-identical; a rerun → all
 //! `unchanged`; `--stdout` deterministic; `spec check` on the copy clean, W
 //! the library's = this repository's.
@@ -38,7 +41,7 @@ use std::process::Command;
 use common::check::library;
 use common::{Scratch, read, repository_root, snapshot, spec, write};
 use parity_config::{
-    EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, claimed, root_toml, skipped_files,
+    EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, claiming_shard, root_toml, skipped_files,
 };
 use specengine_core::ProjectConfig;
 use specengine_core::check::{
@@ -48,18 +51,20 @@ use specengine_store::{WorkingTree, check_input};
 
 const SHARD: &str = "docs/index-archive.md";
 const ARCHIVE_HEADING: &str = "## Archive \u{2014} Tier 3, by id only";
-const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n";
+const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n";
 
 /// The root config's index entry, verbatim: the spec's shipping entry
-/// (the archive shard) with the three live shards after it.
+/// (the archive shard) with the four live shards after it, the `spec-*`
+/// canon's first (the first matching claim wins).
 const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
-writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\"]
+writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\"]
 index   = true
 gate    = \"cargo run -q -p specengine-cli -- check\"
-# Live shards hold Tier 2 canon (cited by path, found by scope), decisions (read by id) and crate READMEs (by path): docs/README.md \"Generated\".
+# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons first, the first matching claim wins), decisions (read by id) and crate READMEs (by path): docs/README.md \"Generated\".
 shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
+           { path = \"docs/index-canon-spec.md\", claims = [\"docs/canon/spec-*.md\"] },
            { path = \"docs/index-canon.md\", claims = [\"docs/canon/*.md\"] },
            { path = \"docs/index-decisions.md\", claims = [\"docs/decisions/*.md\"] },
            { path = \"docs/index-crates.md\", claims = [\"crates/*/README.md\"] }]
@@ -281,8 +286,9 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
     assert!(listed.is_disjoint(&in_shard));
 
     // Each live shard: its header with its claim, one section, exactly the
-    // walked live documents its claim matches (none Tier 3, none in the
-    // root or another output).
+    // walked live documents it is the first to claim (none Tier 3, none in
+    // the root or another output; a `spec-*` canon in the first canon shard
+    // only).
     let mut seen = listed.union(&in_shard).cloned().collect::<BTreeSet<_>>();
     for (output, (path, claim)) in outputs[2..].iter().zip(INDEX_LIVE_SHARDS) {
         assert_eq!(output.path, path);
@@ -297,7 +303,7 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
         let claimed_live: BTreeSet<String> = input
             .files
             .iter()
-            .filter(|f| claimed(claim, &f.path))
+            .filter(|f| claiming_shard(&f.path) == Some(path))
             .filter(|f| !f.parsed.as_ref().is_some_and(is_tier3_file))
             .map(|f| f.path.clone())
             .collect();
@@ -306,7 +312,7 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
         assert_eq!(
             in_live.iter().cloned().collect::<BTreeSet<_>>(),
             claimed_live,
-            "{path} lists exactly the live documents `{claim}` matches"
+            "{path} lists exactly the live documents `{claim}` is the first to claim"
         );
         assert_eq!(in_live.len(), claimed_live.len(), "{path}: each once");
         for target in in_live {

@@ -50,6 +50,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Shards
 
 - [docs/index-archive.md](index-archive.md) Archive — Tier 3, by id only
+- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`
 - [docs/index-canon.md](index-canon.md) `docs/canon/*.md`
 - [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`
 - [docs/index-crates.md](index-crates.md) `crates/*/README.md`

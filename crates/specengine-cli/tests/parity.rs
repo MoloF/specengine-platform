@@ -6,11 +6,11 @@
 //! AC-04 (on a scratch copy of the walked documents and the root config;
 //! the export never runs in this repository; index-shards AC-12): with
 //! `docs/index.md`, its archive shard `docs/index-archive.md` and its live
-//! shards `docs/index-canon.md`, `docs/index-decisions.md` and
-//! `docs/index-crates.md` deleted, X recreates all five byte-identical to
-//! the working tree's, one `wrote` line each in config order; run again it
-//! reports all `unchanged` and keeps the mtimes, the JSON with `shards`
-//! (the four, in order);
+//! shards `docs/index-canon-spec.md`, `docs/index-canon.md`,
+//! `docs/index-decisions.md` and `docs/index-crates.md` deleted, X
+//! recreates all six byte-identical to the working tree's, one `wrote` line
+//! each in config order; run again it reports all `unchanged` and keeps the
+//! mtimes, the JSON with `shards` (the five, in order);
 //! `--stdout` prints the same bytes, one `==> <path> <==` block per output;
 //! one byte edited in an output → `spec check` exit 1, one `index-drift`
 //! naming X on that output only.
@@ -252,6 +252,7 @@ fn export_index_recreates_this_repository_s_index() {
     let headings: [&str; INDEX_OUTPUTS.len()] = [
         "# Documentation index",
         "## Archive \u{2014} Tier 3, by id only",
+        "## Canon",
         "## Canon",
         "## Decisions",
         "## Canon",

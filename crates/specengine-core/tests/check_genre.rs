@@ -303,10 +303,12 @@ const PROJECT_NAMES: &[&str] = &[
     "records/",
     "features/",
     // docs/features/index-shards.md AC-11: the shard names of this
-    // repository (`docs/index-archive.md`, `docs/index-canon.md`,
-    // `docs/index-decisions.md`, `docs/index-crates.md`) and of the
-    // fixtures' scratch configs in the shard tests.
+    // repository (`docs/index-archive.md`, `docs/index-canon-spec.md`,
+    // `docs/index-canon.md`, `docs/index-decisions.md`,
+    // `docs/index-crates.md`) and of the fixtures' scratch configs in the
+    // shard tests.
     "index-archive",
+    "index-canon-spec",
     "index-canon",
     "index-decisions",
     "index-crates",

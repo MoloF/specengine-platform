@@ -28,7 +28,7 @@ Code and test comments cited spec sections that now only delegate to the canon (
 
 ## Implementation
 
-One iteration, accepted; 1153 tests pass (15 skipped: pilot), code + eval + mcp 344/344, probes 55/55; clippy, fmt clean; every named mutation red (M1, M2, AC-02, AC-03, AC-04 both, the relative-path resolution removed). Canon: `docs/canon/code-identity.md` "Target table" (rustfmt at `/`, choosing a rustfmt, a corpus at `/`), "Known limits" (the scrub gap, a relative `SPECENGINE_CARGO`), "Open" (the rustfmt and sweep items closed); eval README (rustfmt at `/`, `doc_pointers.rs`); `docs/README.md` "Enforcement" (code pointers). AC-09, AC-10 measured: check clean, worst W 109 685 B, of which 199 B are the index line of `docs/features/pilot-schemes.md`, another task's live draft: 109 486 without it, at the bound; canon 12 246 B, grep 0; eval README 9 999.
+One iteration, accepted; 1153 tests pass (15 skipped: pilot), code + eval + mcp 344/344, probes 55/55; clippy, fmt clean; every named mutation red (M1, M2, AC-02, AC-03, AC-04 both, the relative-path resolution removed). Canon: `docs/canon/code-targets.md` "Target table" (rustfmt at `/`, choosing a rustfmt, a corpus at `/`); `code-identity.md` "Known limits" (the scrub gap, a relative `SPECENGINE_CARGO`), "Open" (the rustfmt and sweep items closed); eval README (rustfmt at `/`, `doc_pointers.rs`); `docs/README.md` "Enforcement" (code pointers). AC-09, AC-10 measured: check clean, worst W 109 685 B, of which 199 B are the index line of `docs/features/pilot-schemes.md`, another task's live draft: 109 486 without it, at the bound; canon 12 246 B, grep 0; eval README 9 999.
 
 | Module | What it does |
 |---|---|

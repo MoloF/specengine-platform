@@ -67,7 +67,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 5 | `staged`, `staged_at` | 43 | `decision-staging.md` "Queue" |
 | 6 | `interpretation` | 44 | `proposal-interpretation.md` "Row and review" |
 | 7 | no column: open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
-| 8 | `drift`, `drift_hash` | 46 | `proposal-drift.md` "The item" |
+| 8 | `drift`, `drift_hash` | 46 | `proposal-drift-item.md` "The item" |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, CLI, MCP and `specengine-http` (stages) write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
@@ -77,7 +77,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | Op | Does |
 |---|---|
 | `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a kind whose `family()` is not `Applies` -> `Invalid`; a reserved new ID -> `Reserved` |
-| `create_drift(&[NewDrift], now)` | a raise's drift items, deduplicated (`proposal-drift.md` "Dedup") |
+| `create_drift(&[NewDrift], now)` | a raise's drift items, deduplicated (`proposal-drift-item.md` "Dedup") |
 | `get`, `list(&ProposalFilter {git_common_dir, statuses})` | by ID number; a corrupt row fails, named |
 | `list_readable` | `list` skipping a corrupt row into `ProposalList.unreadable` (`UnreadableRow {id, column, reason}`) |
 | `approve_from(id, seen, decision, now)` | step 7: `open -> approved` (event), or `approved` kept with the decision replaced, no event, when `now` is later than `seen.updated_at` (else `Invalid`); state not `seen` -> `Changed`, nothing written |

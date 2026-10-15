@@ -21,15 +21,17 @@
 //! superseded ADR-0002 adds one `ref-superseded` (spec-check-scopes AC-12);
 //! the file links resolve (spec-check-links AC-10). AC-04 (the library
 //! half): the core render set is the committed `docs/index.md`, its archive
-//! shard `docs/index-archive.md` and its live shards `docs/index-canon.md`,
+//! shard `docs/index-archive.md` and its live shards
+//! `docs/index-canon-spec.md`, `docs/index-canon.md`,
 //! `docs/index-decisions.md` and `docs/index-crates.md` byte for byte
 //! (index-shards AC-12), each header naming X and G; every walked document
 //! but `class: generated` is listed once across the set, the archive's
 //! Archive exactly the Tier 3 files, each live shard exactly the live files
-//! its claim matches, the root none of either (index-compaction AC-05,
+//! it is the first to claim (`docs/canon/spec-*.md` before
+//! `docs/canon/*.md`), the root none of either (index-compaction AC-05,
 //! index-shards AC-03); the Tier 3 seeds render as compact Archive lines in
 //! the archive shard, a claimed path included (AC-04 there). AC-05: each of
-//! the 32 seeds, on a scratch copy, blocks exactly its target with its code
+//! the 33 seeds, on a scratch copy, blocks exactly its target with its code
 //! (plus each output the seed moves the render of, with `index-drift` or
 //! `index-missing`: a Tier 3 line drifts the archive, a claimed live line
 //! its shard, neither the root); the unseeded copy is clean; nothing is
@@ -50,8 +52,8 @@ use std::process::Command;
 use common::{Scratch, repository_root};
 use parity_config::{
     DANGLING, EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, INDEX_SHARD, SKIP_FILES,
-    add_dangling_mention, claimed, glob_matches, mutated, root_toml, roots, skipped_file,
-    skipped_files, std_walk, with_roots,
+    add_dangling_mention, claimed, claiming_shard, glob_matches, mutated, root_toml, roots,
+    skipped_file, skipped_files, std_walk, with_roots,
 };
 use specengine_core::check::{
     CheckConfig, CheckInput, Mode, Report, ShardKind, Verdict, is_tier3_file, render_index,
@@ -669,8 +671,9 @@ fn the_core_render_is_the_committed_index() {
     assert_eq!(generator.command, EXPORT);
     assert_eq!(generator.gate(), GATE);
     assert_eq!(generator.writes, INDEX_OUTPUTS);
-    // Four shards (index-shards, ADR-0030): the archive, then the live
-    // ones, each with its one claim (docs/README.md "Generated").
+    // Five shards (index-shards, ADR-0030): the archive, then the live
+    // ones, each with its one claim (docs/README.md "Generated"), the
+    // `spec-*` canon before the rest of the canon.
     let mut want = vec![(INDEX_SHARD, ShardKind::Tier3)];
     want.extend(
         INDEX_LIVE_SHARDS
@@ -723,7 +726,7 @@ fn the_core_render_is_the_committed_index() {
     }
     // Every section is exercised here but `No class — fix`: Canon, Specs
     // and the pointers in the root, the Archive alone in the archive shard,
-    // Canon alone in the canon shard, Decisions alone in the decisions
+    // Canon alone in each canon shard, Decisions alone in the decisions
     // shard, Canon alone in the crates shard; the root holds no decision
     // (each is claimed or Tier 3) and no `docs/canon/` document (each is
     // claimed).
@@ -747,12 +750,13 @@ fn the_core_render_is_the_committed_index() {
             "Archive \u{2014} Tier 3, by id only".to_owned(),
         ),
         (&set[2], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[0].1)),
+        (&set[3], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[1].1)),
         (
-            &set[3],
+            &set[4],
             "## Decisions",
-            format!("`{}`", INDEX_LIVE_SHARDS[1].1),
+            format!("`{}`", INDEX_LIVE_SHARDS[2].1),
         ),
-        (&set[4], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[2].1)),
+        (&set[5], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[3].1)),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -780,8 +784,8 @@ fn the_core_render_is_the_committed_index() {
     }
     assert_eq!(
         section_lines(root, SHARDS).len(),
-        4,
-        "{INDEX}: four pointers"
+        5,
+        "{INDEX}: five pointers"
     );
     // Independent of the walk's order.
     input.files.reverse();
@@ -990,9 +994,10 @@ fn every_document_of_this_repository_is_listed_once() {
 
 /// Placement by claim (index-shards AC-03 on the root config): each live
 /// shard of [`INDEX_LIVE_SHARDS`] in `outputs` lists exactly the walked live
-/// documents its claim matches and nothing else, none of them `class:
-/// generated` (the root config's claims do not overlap: no first-match
-/// tie). Every live shard is there and holds at least one line.
+/// documents it is the first to claim ([`claiming_shard`]: the root config's
+/// `docs/canon/spec-*.md` overlaps `docs/canon/*.md`, and the earlier shard
+/// takes them) and nothing else, none of them `class: generated`. Every
+/// live shard is there and holds at least one line.
 fn each_live_shard_lists_its_claim(
     what: &str,
     outputs: &[(&str, &str)],
@@ -1007,7 +1012,7 @@ fn each_live_shard_lists_its_claim(
         let want: BTreeSet<String> = input
             .files
             .iter()
-            .filter(|file| claimed(claim, &file.path))
+            .filter(|file| claiming_shard(&file.path) == Some(shard))
             .filter(|file| !file.parsed.as_ref().is_some_and(is_tier3_file))
             .filter(|file| {
                 file.parsed
@@ -1109,7 +1114,7 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     // Three Tier 3 seeds sit under the decisions shard's claim: Tier 3
     // places before the claims.
-    let [_, (_, decisions), _] = INDEX_LIVE_SHARDS;
+    let [_, _, (_, decisions), _] = INDEX_LIVE_SHARDS;
     assert_eq!(
         COMPACTION_SEEDS
             .iter()
@@ -1238,8 +1243,8 @@ const COLLATERAL: &[(&str, &str, &str)] = &[
 fn each_seed_blocks_exactly_its_target() {
     assert_eq!(
         SEEDS.len(),
-        24 + 6 + 2,
-        "the 24 front-matter seeds, the six of §11.5–6 and the two of the archive shard"
+        25 + 6 + 2,
+        "the 25 front-matter seeds, the six of §11.5–6 and the two of the archive shard"
     );
     let documents = std_walk(&repository_root());
     let toml = root_toml();
@@ -1319,12 +1324,14 @@ fn each_seed_blocks_exactly_its_target() {
     // unclaimed one the root, a claimed one its shard), a Tier 3 line the
     // archive only, a document turning Tier 3 the output it leaves and the
     // archive, an output edited or deleted itself only.
-    let [(canon, _), (decisions, _), (crates, _)] = INDEX_LIVE_SHARDS;
+    let [(canon_spec, _), (canon, _), (decisions, _), (crates, _)] = INDEX_LIVE_SHARDS;
     for (name, outputs) in [
         ("docs/index.md hand-edited", &[INDEX][..]),
         ("tier: 0 off CLAUDE.md", &[INDEX]),
         ("a new canon document, not rendered", &[canon]),
         ("tier: 1 on architecture.md", &[canon]),
+        // `docs/canon/*.md` claims it too: the first claim wins.
+        ("tier: 1 on spec-cli-refs.md", &[canon_spec]),
         ("docs/index.md deleted", &[INDEX]),
         ("ADR-0002 as id: ADR-0001", &[INDEX_SHARD]),
         (
@@ -1715,6 +1722,14 @@ const SEEDS: &[Seed] = &[
         "tier-invalid",
         |r| set_key(r, "docs/canon/architecture.md", "tier", Some("tier: 1")),
     ),
+    // A `spec-*` canon's line is in `docs/index-canon-spec.md`, the first
+    // shard to claim it: that shard drifts, never `docs/index-canon.md`.
+    (
+        "tier: 1 on spec-cli-refs.md",
+        "docs/canon/spec-cli-refs.md",
+        "tier-invalid",
+        |r| set_key(r, "docs/canon/spec-cli-refs.md", "tier", Some("tier: 1")),
+    ),
     (
         "shipped: removed from spec-index.md",
         "docs/features/spec-index.md",
@@ -1886,11 +1901,11 @@ const SEEDS: &[Seed] = &[
             "# Documentation Index\n",
         )
     }),
-    // A canon document's live line is in the canon shard (its claim): the
-    // shard drifts, the root untouched.
+    // A canon document's live line is in the canon shard (its claim; not a
+    // `spec-*` one): the shard drifts, the root untouched.
     (
         "a new canon document, not rendered",
-        INDEX_LIVE_SHARDS[0].0,
+        INDEX_LIVE_SHARDS[1].0,
         "index-drift",
         |r| {
             write_new(
@@ -1904,7 +1919,7 @@ const SEEDS: &[Seed] = &[
     // leaves that shard for the archive, the root untouched.
     (
         "ADR-0010 superseded-by ADR-0001, not rendered",
-        INDEX_LIVE_SHARDS[1].0,
+        INDEX_LIVE_SHARDS[2].0,
         "index-drift",
         |r| {
             set_key(

@@ -37,19 +37,19 @@ As built in the canon; the headings stay for the pointers in code, tests and nei
 
 ### The item
 
-`docs/canon/proposal-drift.md` "The item" (Q13).
+`docs/canon/proposal-drift-item.md` "The item" (Q13).
 
 ### Kind family
 
-`docs/canon/proposal-drift.md` "The item", "Store".
+`docs/canon/proposal-drift-item.md` "The item", "Store".
 
 ### Queue schema 8
 
-`docs/canon/proposal-drift.md` "The item", "Store"; `proposal-queue.md` "Store"; `queue-backup.md` "Format".
+`docs/canon/proposal-drift-item.md` "The item", "Store"; `proposal-queue.md` "Store"; `queue-backup.md` "Format".
 
 ### Dedup
 
-`docs/canon/proposal-drift.md` "Dedup" (Q4, Q14).
+`docs/canon/proposal-drift-item.md` "Dedup" (Q4, Q14).
 
 ### Output
 
