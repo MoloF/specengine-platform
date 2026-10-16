@@ -2,7 +2,7 @@
 //! code names a node — every marker (`@implements`, `@verifies`, `@configures`,
 //! `@assumes`) and every comment mention of an ID — read from the code
 //! index, refreshed just now from the `[code]` tree
-//! (task spec `symbol-index`, "spec refs and spec index"), byte for
+//! (canon `symbol-index`, "spec refs and spec index"), byte for
 //! byte what the walk over the tree answers. Read-only: the refreshes
 //! write the data directory, nothing else is written.
 //!
@@ -33,6 +33,7 @@
 //!   JSON holds exactly the printed rows.
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::LazyLock;
 
 use serde::Serialize;
 use specengine_code::{Anchor, Binding, Marker, Name, Relation, markers_in};
@@ -42,21 +43,26 @@ use specengine_core::{CodeConfig, Paths, Revision, revision};
 use specengine_model::{IdScheme, IdScript, Reference, grammar};
 
 use specengine_code::{Ambiguity, ErrorCategory, Level, LevelError, Levels, Unanchored};
-use specengine_store::{CodeFileState, CodeRefs, StoredBinding};
+use specengine_store::{CodeFileState, CodeRefs, StoredBinding, StoredMarker};
 
 use crate::cap::OUTPUT_CAP_CHARS;
 use crate::code_index::{LANG_RON, LANG_RUST, RON_AMBIGUOUS, refresh_code};
-#[allow(
-    unused_imports,
-    reason = "RD-8's oracle (the walk) is read by the tests"
-)]
-use crate::code_walk::{CodeTree, read_tree};
-use crate::corpus::indexed;
+use crate::code_walk::CodeTree;
+use crate::corpus::indexed_in;
 use crate::location::open_index;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::search::notes;
 use crate::show::{Target, classify, latin_text, not_indexed, pick_reference, project_qualified};
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
+// The walk oracle's tests read the tree and the corpus as the walk did.
+#[cfg_attr(
+    not(test),
+    expect(
+        unused_imports,
+        reason = "RD-8's oracle (the walk) is read by the tests"
+    )
+)]
+use crate::{code_walk::read_tree, corpus::indexed};
 
 /// Why a written `@rev` of `REF` is ignored (the note's end).
 const REV_IGNORED: &str = "`spec refs` lists every marker whatever its revision";
@@ -211,7 +217,9 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
         Ok(target) => target,
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };
-    let input = indexed(env, &project, &mut messages, true)?;
+    // One database handle for both refreshes.
+    let mut open = open_index(env, &project)?;
+    let input = indexed_in(&mut open.index, &project, &mut messages, true)?;
     let mut corpus = Corpus::new(&input, scheme, &project.config.paths);
     let nodes = match corpus.target_nodes(&target, written)? {
         Ok(nodes) => nodes,
@@ -226,7 +234,6 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
         )));
     }
 
-    let mut open = open_index(env, &project)?;
     let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
     refreshed.require_complete()?;
     messages.extend(refreshed.messages.iter().cloned());
@@ -258,7 +265,7 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
 /// The code files the answer read: each stored Rust or RON file that was
 /// read and is UTF-8 (a gap refused the answer before), and those skipped
 /// (names and bytes not UTF-8).
-fn stored_count(stored: &CodeRefs, skipped: usize) -> CodeCount {
+pub(crate) fn stored_count(stored: &CodeRefs, skipped: usize) -> CodeCount {
     let read = |lang: &str| {
         stored
             .files
@@ -339,8 +346,10 @@ impl IdState {
         }
     }
 
-    /// The ID names its nodes itself (a revision can be compared).
-    fn names_nodes(self) -> bool {
+    /// The ID names its nodes itself (a revision can be compared): resolved,
+    /// an alias or ambiguous — what binds a node and maps a unit (health's
+    /// row 5).
+    pub(crate) fn names_nodes(self) -> bool {
         matches!(self, Self::Resolved | Self::Alias | Self::Ambiguous)
     }
 }
@@ -350,7 +359,7 @@ impl IdState {
 #[derive(Debug, Clone)]
 pub(crate) struct Judged {
     pub(crate) state: IdState,
-    fix: Option<String>,
+    pub(crate) fix: Option<String>,
     pub(crate) nodes: Vec<NodeKey>,
 }
 
@@ -549,7 +558,7 @@ impl<'a> Corpus<'a> {
     }
 
     /// A node's own revision.
-    fn revision(&self, key: NodeKey) -> Revision {
+    pub(crate) fn revision(&self, key: NodeKey) -> Revision {
         match self
             .files
             .get(key.file)
@@ -560,8 +569,19 @@ impl<'a> Corpus<'a> {
         }
     }
 
+    /// A node's ID, else (a document without one) its path.
+    pub(crate) fn node_name(&self, key: NodeKey) -> &str {
+        self.files
+            .get(key.file)
+            .and_then(|file| file.parsed.as_ref())
+            .and_then(|parsed| parsed.nodes.get(key.ord))
+            .and_then(|node| node.id.as_deref())
+            .or_else(|| self.resolver.paths().get(key.file).copied())
+            .unwrap_or_default()
+    }
+
     /// `slug/ID` for a feature document's node, else its path.
-    fn citation(&self, key: NodeKey) -> String {
+    pub(crate) fn citation(&self, key: NodeKey) -> String {
         let path = self.resolver.paths()[key.file];
         let id = self.files[key.file]
             .parsed
@@ -621,7 +641,7 @@ pub(crate) fn rev_state(
 }
 
 /// [`rev_state`] of a marker's ID, `@N` and token as written.
-fn rev_state_of(
+pub(crate) fn rev_state_of(
     id: &str,
     rev: Option<u32>,
     token: &str,
@@ -674,7 +694,10 @@ impl Lines {
 
 /// The rows a comment's markers and mentions give, under the nodes asked
 /// for.
-#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "RD-8's oracle (the walk), read by the tests")
+)]
 struct CommentRows<'c> {
     path: &'c str,
     /// Where the comment starts in its file.
@@ -686,7 +709,10 @@ struct CommentRows<'c> {
     mention_binding: &'c dyn Fn() -> BindingRow,
 }
 
-#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "RD-8's oracle (the walk), read by the tests")
+)]
 impl CommentRows<'_> {
     fn collect(
         &self,
@@ -771,7 +797,10 @@ impl CommentRows<'_> {
 }
 
 /// The rows of every Rust comment.
-#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "RD-8's oracle (the walk), read by the tests")
+)]
 fn collect_rust(
     tree: &CodeTree,
     corpus: &mut Corpus<'_>,
@@ -821,7 +850,10 @@ fn collect_rust(
 }
 
 /// The rows of every RON comment.
-#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "RD-8's oracle (the walk), read by the tests")
+)]
 fn collect_ron(
     tree: &CodeTree,
     corpus: &mut Corpus<'_>,
@@ -849,7 +881,10 @@ fn collect_ron(
 }
 
 /// An item's or a module's row.
-#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "RD-8's oracle (the walk), read by the tests")
+)]
 fn named_row(
     kind: &'static str,
     name: Option<&Name>,
@@ -880,7 +915,10 @@ fn category_row(kind: &'static str, category: &'static str) -> BindingRow {
 
 /// A RON comment's row: its path, ambiguous or not; a mention in an
 /// unanchored comment belongs to the file (RON has no items).
-#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "RD-8's oracle (the walk), read by the tests")
+)]
 fn ron_row(path: &str, anchor: &Anchor, mention: bool) -> BindingRow {
     match anchor {
         Anchor::Path { path: field, .. } | Anchor::Ambiguous { path: field, .. } => BindingRow {
@@ -922,30 +960,11 @@ fn collect_stored(
         if under.is_empty() {
             continue;
         }
-        let relation = RELATIONS
-            .into_iter()
-            .find(|relation| relation.as_str() == marker.relation)
-            .ok_or_else(|| unknown_word("relation", &marker.relation))?;
-        let levels = match &marker.levels {
-            Some(json) => {
-                let words: Vec<String> =
-                    serde_json::from_str(json).map_err(|_| unknown_word("level list", json))?;
-                Some(
-                    words
-                        .iter()
-                        .map(|word| {
-                            Level::ALL
-                                .into_iter()
-                                .map(Level::as_str)
-                                .find(|level| level == word)
-                                .ok_or_else(|| unknown_word("level", word))
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            }
-            None => None,
-        };
-        let levels_state = known(&marker.levels_state, &levels_states(), "level state")?;
+        let MarkerWords {
+            relation,
+            levels,
+            levels_state,
+        } = marker_words(marker)?;
         let binding = stored_binding(&marker.path, &marker.binding, &files)?;
         for key in under {
             let row = MarkerRow {
@@ -999,66 +1018,84 @@ fn collect_stored(
     Ok(())
 }
 
-/// Every relation a marker declares.
-const RELATIONS: [Relation; 4] = [
-    Relation::Implements,
-    Relation::Verifies,
-    Relation::Configures,
-    Relation::Assumes,
-];
+/// The words a stored row may hold besides a relation and a level, read
+/// from the code crate's closed lists (`ALL`): a new variant there is
+/// known here. Built once per process.
+struct StoredWords {
+    /// Every `levels_state` of a marker row.
+    levels_states: Vec<&'static str>,
+    /// Every category a binding row names: why a comment binds nothing,
+    /// why it cannot be verified, a RON comment's.
+    categories: Vec<&'static str>,
+    /// Every ambiguity of an item or a module.
+    ambiguities: Vec<&'static str>,
+}
 
-/// Every `levels_state` a marker row holds.
-fn levels_states() -> Vec<&'static str> {
-    let mut states: Vec<&'static str> = [Levels::Default, Levels::Declared(Vec::new())]
+static STORED_WORDS: LazyLock<StoredWords> = LazyLock::new(|| StoredWords {
+    levels_states: [Levels::Default, Levels::Declared(Vec::new())]
         .iter()
         .map(|levels| levels.state())
-        .collect();
-    states.extend(
-        [
-            LevelError::Unclosed,
-            LevelError::Unknown,
-            LevelError::Duplicate,
-            LevelError::Empty,
-        ]
-        .map(LevelError::as_str),
-    );
-    states
+        .chain(LevelError::ALL.map(LevelError::as_str))
+        .collect(),
+    categories: Unanchored::ALL
+        .map(Unanchored::as_str)
+        .into_iter()
+        .chain(ErrorCategory::ALL.map(ErrorCategory::as_str))
+        .chain([RON_NO_VALUE, RON_TOO_DEEP])
+        .collect(),
+    ambiguities: Ambiguity::ALL.map(Ambiguity::as_str).to_vec(),
+});
+
+/// A stored marker's relation and levels as this build knows them.
+pub(crate) struct MarkerWords {
+    pub(crate) relation: Relation,
+    /// The levels the marker depends on; `None` when its list is invalid.
+    pub(crate) levels: Option<Vec<&'static str>>,
+    /// `default`, `declared` or the invalid list's category.
+    pub(crate) levels_state: &'static str,
 }
 
-/// Every category a binding row names: why a comment binds nothing, why
-/// it cannot be verified, a RON comment's.
-fn categories() -> Vec<&'static str> {
-    let mut words: Vec<&'static str> = [
-        Unanchored::InMacro,
-        Unanchored::InBody,
-        Unanchored::NoItem,
-        Unanchored::NotAnItem,
-    ]
-    .map(Unanchored::as_str)
-    .to_vec();
-    words.extend(
-        [
-            ErrorCategory::MacroPunct,
-            ErrorCategory::MacroBody,
-            ErrorCategory::WhereMultiline,
-            ErrorCategory::Missing,
-            ErrorCategory::NestingTooDeep,
-            ErrorCategory::Other,
-        ]
-        .map(ErrorCategory::as_str),
-    );
-    words.extend([RON_NO_VALUE, RON_TOO_DEEP]);
-    words
+/// The words of a stored marker; one this build does not write is an
+/// error (`spec index --full`).
+pub(crate) fn marker_words(marker: &StoredMarker) -> Result<MarkerWords, CliError> {
+    let relation = Relation::ALL
+        .into_iter()
+        .find(|relation| relation.as_str() == marker.relation)
+        .ok_or_else(|| unknown_word("relation", &marker.relation))?;
+    let levels = match &marker.levels {
+        Some(json) => {
+            let words: Vec<String> =
+                serde_json::from_str(json).map_err(|_| unknown_word("level list", json))?;
+            Some(
+                words
+                    .iter()
+                    .map(|word| {
+                        Level::ALL
+                            .into_iter()
+                            .map(Level::as_str)
+                            .find(|level| level == word)
+                            .ok_or_else(|| unknown_word("level", word))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            )
+        }
+        None => None,
+    };
+    let levels_state = known(
+        &marker.levels_state,
+        &STORED_WORDS.levels_states,
+        "level state",
+    )?;
+    Ok(MarkerWords {
+        relation,
+        levels,
+        levels_state,
+    })
 }
 
-/// Every ambiguity of an item or a module.
-fn ambiguities() -> [&'static str; 3] {
-    [
-        Ambiguity::PathAttribute,
-        Ambiguity::Unrooted,
-        Ambiguity::Duplicate,
-    ]
-    .map(Ambiguity::as_str)
+/// A stored ambiguity as this build knows it.
+pub(crate) fn known_ambiguity(value: &str) -> Result<&'static str, CliError> {
+    known(value, &STORED_WORDS.ambiguities, "ambiguity")
 }
 
 /// `value` as one of `words`, or the error naming it.
@@ -1071,7 +1108,7 @@ fn known(value: &str, words: &[&'static str], what: &str) -> Result<&'static str
 }
 
 /// Exit 2: the code index holds a word this build does not write.
-fn unknown_word(what: &str, value: &str) -> CliError {
+pub(crate) fn unknown_word(what: &str, value: &str) -> CliError {
     CliError::spec(format!(
         "the code index holds an unknown {what} `{value}`; run `spec index --full`"
     ))
@@ -1084,13 +1121,14 @@ fn stored_binding(
     files: &BTreeMap<&str, &CodeFileState>,
 ) -> Result<BindingRow, CliError> {
     let ambiguity = |value: Option<&String>| -> Result<Option<&'static str>, CliError> {
-        value
-            .map(|value| known(value, &ambiguities(), "ambiguity"))
-            .transpose()
+        value.map(|value| known_ambiguity(value)).transpose()
     };
     let category = |kind: &'static str| -> Result<BindingRow, CliError> {
         let word = stored.anchor.as_deref().unwrap_or_default();
-        Ok(category_row(kind, known(word, &categories(), "category")?))
+        Ok(category_row(
+            kind,
+            known(word, &STORED_WORDS.categories, "category")?,
+        ))
     };
     let symbol = || {
         stored
@@ -1175,6 +1213,16 @@ fn binding_text(binding: &BindingRow) -> String {
     }
 }
 
+/// A marker's levels as a row prints them: `default`, `[a, b]` or
+/// `invalid:<category>`.
+pub(crate) fn levels_text(levels: Option<&[&'static str]>, state: &str) -> String {
+    match (levels, state) {
+        (_, "default") => "default".to_owned(),
+        (Some(levels), _) => format!("[{}]", levels.join(", ")),
+        (None, category) => format!("invalid:{category}"),
+    }
+}
+
 /// `<relation> | <path>:<line>:<column> | <token> | <id_state>[ <fix>] |
 /// <rev_state> | <levels> | <binding>[ | <note>]`.
 fn marker_line(row: &MarkerRow) -> String {
@@ -1183,11 +1231,7 @@ fn marker_line(row: &MarkerRow) -> String {
         .as_deref()
         .map(|fix| format!(" {fix}"))
         .unwrap_or_default();
-    let levels = match (&row.levels, row.levels_state) {
-        (_, "default") => "default".to_owned(),
-        (Some(levels), _) => format!("[{}]", levels.join(", ")),
-        (None, category) => format!("invalid:{category}"),
-    };
+    let levels = levels_text(row.levels.as_deref(), row.levels_state);
     let mut line = format!(
         "{} | {}:{}:{} | {} | {}{fix} | {} | {levels} | {}",
         row.relation,

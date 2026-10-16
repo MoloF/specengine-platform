@@ -21,7 +21,7 @@ use crate::schema;
 const FILE_OWNER: &str = "LEFT JOIN main.files f ON f.file_id = x.file_id
      LEFT JOIN main.worktrees w ON w.wt = f.wt";
 
-/// The owner of a code file's row (docs/features/symbol-index.md "Tables":
+/// The owner of a code file's row (`docs/canon/symbol-index.md` "Tables":
 /// code keys map to `path`, `(path, ord)`).
 const CODE_FILE_OWNER: &str = "LEFT JOIN main.code_files f ON f.file_id = x.file
      LEFT JOIN main.worktrees w ON w.wt = f.wt";

@@ -122,5 +122,325 @@
   "L3: a module declaration `pub mod x;` is an item with a level state and a signature (`pub mod x`, the final `;` dropped).",
   "L4: the cut signature keeps the longest prefix of at most 509 bytes, then `…` (symbol-discriminator Phase A L5).",
   "L5: the largest `.rs` by bytes is page.rs (1 405 B; twins.rs 731 B), the first in walk order bin/stamp.rs: the harness's one-file edit must land on the former."
- ]
+ ],
+ "reads": {
+  "_comment": "What docs/features/symbol-reads.md (draft, 2026-10-15) says `spec symbols` and `spec unmapped` print over this corpus as it stands (TE-1). Each entry: `args` after `spec` (a QUERY passed as one argument, as a quoted shell word arrives; `also` lists other argument vectors that must print the same text), `lines` the text stdout line by line, `json` the request the JSON document echoes. The JSON of every entry is derived from its lines by the tests (crates/specengine-cli/tests/symbol_reads.rs). Derived by hand before any run (Phase A); Phase B confirms against the first run and records a deviation as a reading, never by copying output in. `scratch` adds its files to a scratch copy only: the fixture itself never changes (a new file would move the pinned code-index dump).",
+  "code": {"files": 10, "rs": 9, "ron": 1, "skipped": 0},
+  "symbols": [
+   {"case": "exact", "args": ["symbols", "crates/inkwell::twins::impl Sheet #2"],
+    "also": [["symbols", "crates/inkwell::twins::impl", "Sheet", "#2"]],
+    "json": {"form": "query", "query": "crates/inkwell::twins::impl Sheet #2", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::twins::impl Sheet #2 | impl_item | crates/inkwell/src/twins.rs:25-29 | layer a | mentions 0 | exact",
+     "  sig impl Sheet",
+     "  implements | 24:4 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::twins::impl Sheet #1 | impl_item | crates/inkwell/src/twins.rs:18-22 | layer a | mentions 0 | name",
+     "  sig impl Sheet",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "suffix_then_name", "args": ["symbols", "impl Sheet #2"],
+    "also": [["symbols", "impl", "Sheet", "#2"]],
+    "json": {"form": "query", "query": "impl Sheet #2", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::twins::impl Sheet #2 | impl_item | crates/inkwell/src/twins.rs:25-29 | layer a | mentions 0 | suffix",
+     "  sig impl Sheet",
+     "  implements | 24:4 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::twins::impl Sheet #1 | impl_item | crates/inkwell/src/twins.rs:18-22 | layer a | mentions 0 | name",
+     "  sig impl Sheet",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "name_of_cfg_twins", "args": ["symbols", "separator"],
+    "also": [],
+    "json": {"form": "query", "query": "separator", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::twins::separator #cfg(not(unix)) | function_item | crates/inkwell/src/twins.rs:11-13 | layer a | mentions 0 | name",
+     "  sig pub fn separator() -> char",
+     "crates/inkwell::twins::separator #cfg(unix) | function_item | crates/inkwell/src/twins.rs:5-7 | layer a | mentions 0 | name",
+     "  sig pub fn separator() -> char",
+     "  implements | 3:4 | TENET-ORDER@1 | resolved | current | default | TENET-ORDER",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "suffix_of_a_declaration_and_a_broken_item", "args": ["symbols", "broken"],
+    "also": [],
+    "json": {"form": "query", "query": "broken", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::broken | mod_item | crates/inkwell/src/lib.rs:4-4 | layer a | mentions 0 | suffix",
+     "  sig pub mod broken",
+     "crates/inkwell::broken::broken | function_item | crates/inkwell/src/broken.rs:4-7 | layer a | mentions 0 | suffix",
+     "  sig -",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "suffix_across_units", "args": ["symbols", "main"],
+    "also": [],
+    "json": {"form": "query", "query": "main", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::bin:inkwell-core::main | function_item | crates/inkwell/src/main.rs:2-2 | layer a | mentions 0 | suffix",
+     "  sig fn main()",
+     "  implements | 1:4 | SLAB-SHEET@1 | resolved | current | default | SLAB-SHEET",
+     "crates/inkwell::bin:stamp::main | function_item | crates/inkwell/src/bin/stamp.rs:4-7 | layer a | mentions 0 | suffix",
+     "  sig fn main()",
+     "  implements | 3:4 | TENET-FLOW@1 | resolved | current | default | TENET-FLOW",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "name_with_a_trait_owner", "args": ["symbols", "elsewhere::impl <Page as std::fmt::Display>"],
+    "also": [],
+    "json": {"form": "query", "query": "elsewhere::impl <Page as std::fmt::Display>", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::page::impl <Page as std::fmt::Display> | impl_item | crates/inkwell/src/page.rs:12-17 | layer a | mentions 0 | name",
+     "  sig impl std::fmt::Display for Page",
+     "  implements | 11:4 | QUILL-01@1 | resolved | current | [sig, body] | QUILL-01",
+     "symbols: 1 of 1; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "suffix_with_a_trait_owner", "args": ["symbols", "page::<Page as std::fmt::Display>::fmt"],
+    "also": [],
+    "json": {"form": "query", "query": "page::<Page as std::fmt::Display>::fmt", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::page::<Page as std::fmt::Display>::fmt | function_item | crates/inkwell/src/page.rs:14-16 | layer a | mentions 0 | suffix",
+     "  sig fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result",
+     "  implements | 13:8 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "symbols: 1 of 1; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "name_of_twins_in_twin_mods", "args": ["symbols", "run"],
+    "also": [],
+    "json": {"form": "query", "query": "run", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::twins::probe::run #cfg(not(test)) | function_item | crates/inkwell/src/twins.rs:45-47 | layer a | mentions 0 | name",
+     "  sig pub fn run() -> u32",
+     "crates/inkwell::twins::probe::run #cfg(test) | function_item | crates/inkwell/src/twins.rs:36-38 | layer a | mentions 0 | name",
+     "  sig pub fn run() -> u32",
+     "  implements | 35:8 | SLAB-PROBE@1 | resolved | current | default | SLAB-PROBE",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "name_past_a_path_in_a_cfg", "args": ["symbols", "x::run #cfg(feature = \"a::b\")"],
+    "also": [],
+    "json": {"form": "query", "query": "x::run #cfg(feature = \"a::b\")", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::twins::probe::run #cfg(not(test)) | function_item | crates/inkwell/src/twins.rs:45-47 | layer a | mentions 0 | name",
+     "  sig pub fn run() -> u32",
+     "crates/inkwell::twins::probe::run #cfg(test) | function_item | crates/inkwell/src/twins.rs:36-38 | layer a | mentions 0 | name",
+     "  sig pub fn run() -> u32",
+     "  implements | 35:8 | SLAB-PROBE@1 | resolved | current | default | SLAB-PROBE",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "limit", "args": ["symbols", "run", "--limit", "1"],
+    "also": [],
+    "json": {"form": "query", "query": "run", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::twins::probe::run #cfg(not(test)) | function_item | crates/inkwell/src/twins.rs:45-47 | layer a | mentions 0 | name",
+     "  sig pub fn run() -> u32",
+     "symbols: 1 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "nothing", "args": ["symbols", "nothing_is_named_so"],
+    "also": [],
+    "json": {"form": "query", "query": "nothing_is_named_so", "node": null, "path": null, "line": null},
+    "lines": [
+     "symbols: 0 of 0; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "cut_signature_and_a_mention", "args": ["symbols", "wide"],
+    "also": [],
+    "json": {"form": "query", "query": "wide", "node": null, "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::page::wide | function_item | crates/inkwell/src/page.rs:31-46 | layer a | mentions 1 | suffix",
+     "  sig pub fn wide(first_argument_with_a_rather_long_name: u32, second_argument_with_a_rather_long_name: u32, third_argument_with_a_rather_long_name: u32, fourth_argument_with_a_rather_long_name: u32, fifth_argument_with_a_rather_long_name: u32, sixth_argument_with_a_rather_long_name: u32, seventh_argument_with_a_rather_long_name: u32, eighth_argument_with_a_rather_long_name: u32, ninth_argument_with_a_rather_long_name: u32, tenth_argument_with_a_rather_long_name: u32, eleventh_argument_with_a_rather_long_name:…",
+     "symbols: 1 of 1; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "node_items_and_a_ron_path", "args": ["symbols", "--node", "TENET-WIDTH"],
+    "also": [["symbols", "--node", "SLAB-SHEET#TENET-WIDTH"]],
+    "json": {"form": "node", "query": null, "node": "TENET-WIDTH", "path": null, "line": null},
+    "lines": [
+     "crates/inkwell::outline::nested::depth | function_item | crates/inkwell/src/lib.rs:18-21 | layer a | mentions 0",
+     "  sig pub fn depth() -> u32",
+     "  implements | 17:12 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::page::<Page as std::fmt::Display>::fmt | function_item | crates/inkwell/src/page.rs:14-16 | layer a | mentions 0",
+     "  sig fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result",
+     "  implements | 13:8 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::split::joined | function_item | crates/inkwell/src/split.rs:4-6 | layer a | mentions 0 | ambiguous duplicate",
+     "  sig pub fn joined() -> u32",
+     "  implements | 3:4 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::twins::impl Sheet #2 | impl_item | crates/inkwell/src/twins.rs:25-29 | layer a | mentions 0",
+     "  sig impl Sheet",
+     "  implements | 24:4 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::test:flow::flows | function_item | crates/inkwell/tests/flow.rs:5-7 | layer a | mentions 0",
+     "  sig fn flows()",
+     "  verifies | 3:4 | TENET-WIDTH@2 | resolved | current | [body] | TENET-WIDTH",
+     "data/inks.ron#root.width | ron | data/inks.ron:4",
+     "  configures | 4:19 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "symbols: 6 of 6; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "node_modules", "args": ["symbols", "--node", "SLAB-SHEET"],
+    "also": [["symbols", "--node", "docs/spec/sheet.md"]],
+    "json": {"form": "node", "query": null, "node": "SLAB-SHEET", "path": null, "line": null},
+    "lines": [
+     "crates/inkwell | module | crates/inkwell/src/lib.rs",
+     "  implements | 2:5 | SLAB-SHEET@1 | resolved | current | default | SLAB-SHEET",
+     "crates/inkwell::bin:inkwell-core::main | function_item | crates/inkwell/src/main.rs:2-2 | layer a | mentions 0",
+     "  sig fn main()",
+     "  implements | 1:4 | SLAB-SHEET@1 | resolved | current | default | SLAB-SHEET",
+     "crates/inkwell::test:flow | module | crates/inkwell/tests/flow.rs",
+     "  verifies | 1:5 | SLAB-SHEET | resolved | unversioned | default | SLAB-SHEET",
+     "symbols: 3 of 3; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "file", "args": ["symbols", "--file", "crates/inkwell/src/twins.rs"],
+    "also": [],
+    "json": {"form": "file", "query": null, "node": null, "path": "crates/inkwell/src/twins.rs", "line": null},
+    "lines": [
+     "crates/inkwell::twins::separator #cfg(unix) | function_item | crates/inkwell/src/twins.rs:5-7 | layer a | mentions 0",
+     "  sig pub fn separator() -> char",
+     "  implements | 3:4 | TENET-ORDER@1 | resolved | current | default | TENET-ORDER",
+     "crates/inkwell::twins::separator #cfg(not(unix)) | function_item | crates/inkwell/src/twins.rs:11-13 | layer a | mentions 0",
+     "  sig pub fn separator() -> char",
+     "crates/inkwell::twins::Sheet | struct_item | crates/inkwell/src/twins.rs:16-16 | layer a | mentions 0",
+     "  sig pub struct Sheet",
+     "crates/inkwell::twins::impl Sheet #1 | impl_item | crates/inkwell/src/twins.rs:18-22 | layer a | mentions 0",
+     "  sig impl Sheet",
+     "crates/inkwell::twins::Sheet::width | function_item | crates/inkwell/src/twins.rs:19-21 | layer a | mentions 0",
+     "  sig pub fn width(&self) -> u32",
+     "crates/inkwell::twins::impl Sheet #2 | impl_item | crates/inkwell/src/twins.rs:25-29 | layer a | mentions 0",
+     "  sig impl Sheet",
+     "  implements | 24:4 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::twins::Sheet::height | function_item | crates/inkwell/src/twins.rs:26-28 | layer a | mentions 0",
+     "  sig pub fn height(&self) -> u32",
+     "crates/inkwell::twins::probe #cfg(test) | mod_item | crates/inkwell/src/twins.rs:32-39 | layer a | mentions 1",
+     "  sig mod probe",
+     "crates/inkwell::twins::probe::run #cfg(test) | function_item | crates/inkwell/src/twins.rs:36-38 | layer a | mentions 0",
+     "  sig pub fn run() -> u32",
+     "  implements | 35:8 | SLAB-PROBE@1 | resolved | current | default | SLAB-PROBE",
+     "crates/inkwell::twins::probe #cfg(not(test)) | mod_item | crates/inkwell/src/twins.rs:42-48 | layer a | mentions 0",
+     "  sig mod probe",
+     "  implements | 44:9 | SLAB-PROBE@1 | resolved | current | default | SLAB-PROBE",
+     "crates/inkwell::twins::probe::run #cfg(not(test)) | function_item | crates/inkwell/src/twins.rs:45-47 | layer a | mentions 0",
+     "  sig pub fn run() -> u32",
+     "symbols: 11 of 11; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "at_nested_mods", "args": ["symbols", "--at", "crates/inkwell/src/lib.rs:19"],
+    "also": [],
+    "json": {"form": "at", "query": null, "node": null, "path": "crates/inkwell/src/lib.rs", "line": 19},
+    "lines": [
+     "crates/inkwell::outline::nested::depth | function_item | crates/inkwell/src/lib.rs:18-21 | layer a | mentions 0",
+     "  sig pub fn depth() -> u32",
+     "  implements | 17:12 | TENET-WIDTH@2 | resolved | current | default | TENET-WIDTH",
+     "crates/inkwell::outline::nested | mod_item | crates/inkwell/src/lib.rs:14-22 | layer a | mentions 1",
+     "  sig pub mod nested",
+     "crates/inkwell::outline | mod_item | crates/inkwell/src/lib.rs:10-23 | layer a | mentions 0",
+     "  sig pub mod outline",
+     "  implements | 12:9 | TENET-ORDER@1 | resolved | current | default | TENET-ORDER",
+     "symbols: 3 of 3; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "at_a_body", "args": ["symbols", "--at", "crates/inkwell/src/page.rs:22"],
+    "also": [],
+    "json": {"form": "at", "query": null, "node": null, "path": "crates/inkwell/src/page.rs", "line": 22},
+    "lines": [
+     "crates/inkwell::page::Page::total | function_item | crates/inkwell/src/page.rs:21-26 | layer a | mentions 0",
+     "  sig pub fn total(&self) -> u32",
+     "crates/inkwell::page::impl Page | impl_item | crates/inkwell/src/page.rs:19-27 | layer a | mentions 0",
+     "  sig impl Page",
+     "symbols: 2 of 2; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "at_no_item", "args": ["symbols", "--at", "crates/inkwell/src/page.rs:3"],
+    "also": [],
+    "json": {"form": "at", "query": null, "node": null, "path": "crates/inkwell/src/page.rs", "line": 3},
+    "lines": [
+     "symbols: 0 of 0; code files 10 (.rs 9, .ron 1), skipped 0"
+    ]}
+  ],
+  "unmapped": [
+   {"case": "roots", "args": ["unmapped"], "path": null,
+    "lines": [
+     "crates/ | units 31 | mapped 20 | 64.5 % | mentioned 28",
+     "data/ | units 1 | mapped 1 | 100.0 % | mentioned 1",
+     "(total) | units 32 | mapped 21 | 65.6 % | mentioned 29",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "package", "args": ["unmapped", "crates/inkwell"], "path": "crates/inkwell",
+    "lines": [
+     "crates/inkwell/src/ | units 30 | mapped 19 | 63.3 % | mentioned 28",
+     "crates/inkwell/tests/ | units 1 | mapped 1 | 100.0 % | mentioned 0",
+     "crates/inkwell (total) | units 31 | mapped 20 | 64.5 % | mentioned 28",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "directory", "args": ["unmapped", "crates/inkwell/src"], "path": "crates/inkwell/src",
+    "lines": [
+     "crates/inkwell/src/bin/ | units 1 | mapped 1 | 100.0 % | mentioned 1",
+     "crates/inkwell/src/broken.rs | units 2 | mapped 1 | 50.0 % | mentioned 2",
+     "crates/inkwell/src/lib.rs | units 7 | mapped 7 | 100.0 % | mentioned 7",
+     "crates/inkwell/src/main.rs | units 1 | mapped 1 | 100.0 % | mentioned 0",
+     "crates/inkwell/src/page.rs | units 6 | mapped 2 | 33.3 % | mentioned 6",
+     "crates/inkwell/src/split.rs | units 1 | mapped 1 | 100.0 % | mentioned 1",
+     "crates/inkwell/src/split/ | units 1 | mapped 0 | 0.0 % | mentioned 0",
+     "crates/inkwell/src/twins.rs | units 11 | mapped 6 | 54.5 % | mentioned 11",
+     "crates/inkwell/src (total) | units 30 | mapped 19 | 63.3 % | mentioned 28",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "file_twins", "args": ["unmapped", "crates/inkwell/src/twins.rs"], "path": "crates/inkwell/src/twins.rs",
+    "lines": [
+     "crates/inkwell/src/twins.rs | units 11 | mapped 6 | 54.5 % | mentioned 11",
+     "  crates/inkwell::twins::separator #cfg(not(unix)) | function_item | 11",
+     "  crates/inkwell::twins::Sheet | struct_item | 16",
+     "  crates/inkwell::twins::impl Sheet #1 | impl_item | 18",
+     "  crates/inkwell::twins::Sheet::width | function_item | 19",
+     "  crates/inkwell::twins::probe #cfg(test) | mod_item | 32",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "file_broken", "args": ["unmapped", "crates/inkwell/src/broken.rs"], "path": "crates/inkwell/src/broken.rs",
+    "lines": [
+     "crates/inkwell/src/broken.rs | units 2 | mapped 1 | 50.0 % | mentioned 2",
+     "  crates/inkwell::broken::broken | function_item | 4",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "file_of_a_module_written_twice", "args": ["unmapped", "crates/inkwell/src/split/mod.rs"], "path": "crates/inkwell/src/split/mod.rs",
+    "lines": [
+     "crates/inkwell/src/split/mod.rs | units 1 | mapped 0 | 0.0 % | mentioned 0",
+     "  crates/inkwell::split::joined | function_item | 3",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]},
+   {"case": "ron_root", "args": ["unmapped", "data"], "path": "data",
+    "lines": [
+     "data/inks.ron | units 1 | mapped 1 | 100.0 % | mentioned 1",
+     "data (total) | units 1 | mapped 1 | 100.0 % | mentioned 1",
+     "unmapped: code files 10 (.rs 9, .ron 1), skipped 0"
+    ]}
+  ],
+  "scratch": {
+   "files": [
+    {"path": "crates/inkwell/src/blank/none.rs", "text": "// No item here: a file with no unit.\n"}
+   ],
+   "unmapped": [
+    {"case": "no_unit_directory", "args": ["unmapped", "crates/inkwell/src/blank"], "path": "crates/inkwell/src/blank",
+     "lines": [
+      "crates/inkwell/src/blank/none.rs | units 0 | mapped 0 | - | mentioned 0",
+      "crates/inkwell/src/blank (total) | units 0 | mapped 0 | - | mentioned 0",
+      "unmapped: code files 11 (.rs 10, .ron 1), skipped 0"
+     ]},
+    {"case": "no_unit_file", "args": ["unmapped", "crates/inkwell/src/blank/none.rs"], "path": "crates/inkwell/src/blank/none.rs",
+     "lines": [
+      "crates/inkwell/src/blank/none.rs | units 0 | mapped 0 | - | mentioned 0",
+      "unmapped: code files 11 (.rs 10, .ron 1), skipped 0"
+     ]},
+    {"case": "no_unit_child", "args": ["unmapped", "crates/inkwell/src"], "path": "crates/inkwell/src",
+     "lines": [
+      "crates/inkwell/src/bin/ | units 1 | mapped 1 | 100.0 % | mentioned 1",
+      "crates/inkwell/src/blank/ | units 0 | mapped 0 | - | mentioned 0",
+      "crates/inkwell/src/broken.rs | units 2 | mapped 1 | 50.0 % | mentioned 2",
+      "crates/inkwell/src/lib.rs | units 7 | mapped 7 | 100.0 % | mentioned 7",
+      "crates/inkwell/src/main.rs | units 1 | mapped 1 | 100.0 % | mentioned 0",
+      "crates/inkwell/src/page.rs | units 6 | mapped 2 | 33.3 % | mentioned 6",
+      "crates/inkwell/src/split.rs | units 1 | mapped 1 | 100.0 % | mentioned 1",
+      "crates/inkwell/src/split/ | units 1 | mapped 0 | 0.0 % | mentioned 0",
+      "crates/inkwell/src/twins.rs | units 11 | mapped 6 | 54.5 % | mentioned 11",
+      "crates/inkwell/src (total) | units 30 | mapped 19 | 63.3 % | mentioned 28",
+      "unmapped: code files 11 (.rs 10, .ron 1), skipped 0"
+     ]}
+   ]
+  },
+  "open": [
+   "Every value here is derived by hand (Phase A); the readings behind the values follow, each to confirm against the first run in Phase B.",
+   "A marker binding `cannot_verify` names no item (code Binding::CannotVerify holds none, so its stored row has no symbol): it maps nothing and is no item's direct binding (`broken`: no binding row; broken.rs mapped 1 of 2).",
+   "`mentions <n>` counts the mentions bound directly to the target (its `item`, or its inline mod's `module`), never those reaching it by containment (the spec's own example prints `mentions 0` beside a file mention).",
+   "An inline mod's `module` binding is its mod item's own: the item is mapped by it and lists it among its bindings (`probe #cfg(not(test))`, `outline`).",
+   "Containment is structural (the item, its enclosing items by `parent_ord`, its own file's module), never by qpath prefix: split.rs's module mention reaches nothing in split/mod.rs, which renders the same module.",
+   "Rows sort by the printed path's bytes, the `/` of a directory included: `split.rs` before `split/`; the root rows too (no config order).",
+   "No PATH: the total row reads `(total)`; a file PATH prints its row and its unmapped items, no `(total)` row.",
+   "The summary counts the whole walk (as refs), whatever PATH or form."
+  ]
+ }
 }

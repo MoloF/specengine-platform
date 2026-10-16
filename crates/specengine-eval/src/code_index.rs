@@ -1,6 +1,6 @@
 //! Measurement `code-index`: the code index of the CLI library
 //! (`specengine_cli::refresh_code`, the store's code tables) over a corpus
-//! (docs/features/symbol-index.md "AC-10 measurement"; RD-12).
+//! (`docs/canon/symbol-index.md` "AC-10 measurement"; symbol-index RD-12).
 //!
 //! The `[code]` walk's files, and every `Cargo.toml` on the way from one up
 //! to the corpus root, are copied under `--out/code-index/<label>/corpus`;

@@ -49,6 +49,8 @@ relations = ["implements", "configures"]
 
 WA-7, Q4. Bound for a rule selecting it: a marker of the rule's `relations` names it with `id_state` `resolved`, `alias` or `ambiguous` (each holder) and binding `item`, `module`, `ron` or `cannot_verify` (`code-bindings.md`); unbound when some selecting rule finds it so. `rev_state`, levels and the lock never matter (row 6's). A document's marker binds none of its sections, a section's not its document. Never binding: mentions, `unanchored`, `homoglyph` (nor the fix's node), `queue`, `dangling`, `other_project`; `@assumes` unless listed. **Parity**: unbound for a rule ⟺ `spec refs <node> --json` lists no marker of its relations meeting this.
 
+At this slice's refresh, row 5 must align with 6a-3's X3 (owner pre-approved 2026-10-16): `spec unmapped` maps nothing through a `cannot_verify` marker (`docs/canon/symbol-reads.md` "spec unmapped"), while the rule above still counts it as binding.
+
 ### Row 4: `assumes`
 
 WA-5, Q5. Judged: (a) every marker whose `id_state` is `queue`, any relation; (b) every `@assumes` naming a node (`resolved`, `alias`, each `ambiguous` holder). The queue: the slug's database by `open_existing` (absent: empty), every repository (SW refinement): `get` by exact ID, `list_readable` for (b).

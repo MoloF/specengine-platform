@@ -53,7 +53,8 @@ impl Relation {
         }
     }
 
-    const ALL: [Self; 4] = [
+    /// Every relation, in declaration order.
+    pub const ALL: [Self; 4] = [
         Self::Implements,
         Self::Verifies,
         Self::Configures,
@@ -112,6 +113,9 @@ pub enum LevelError {
 }
 
 impl LevelError {
+    /// Every category, in the order they are tried.
+    pub const ALL: [Self; 4] = [Self::Unclosed, Self::Unknown, Self::Duplicate, Self::Empty];
+
     /// The fixed category name; never text from the file.
     #[must_use]
     pub fn as_str(self) -> &'static str {

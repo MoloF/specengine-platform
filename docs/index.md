@@ -32,7 +32,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/lock-levels.md](features/lock-levels.md) lock-levels (5b-1): spec.lock format 2 and level-aware verify · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/lock-rebase.md](features/lock-rebase.md) lock-rebase (5b-2): spec lock rebase · crates/specengine-core, crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
-- [docs/features/symbol-reads.md](features/symbol-reads.md) symbol-reads: symbol lookup, spec symbols, spec unmapped · crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-node.md](features/verify-node.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/verify-tests.md](features/verify-tests.md) verify-tests: bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft

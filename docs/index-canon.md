@@ -57,6 +57,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates · tier 2
 - [docs/canon/symbol-index.md](canon/symbol-index.md) Symbol index: stored code rows, the refresh, spec index, spec refs · crates/specengine-store, crates/specengine-cli, crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/symbol-names.md](canon/symbol-names.md) Symbol names: in-file twins and display signatures · crates/specengine-code · tier 2
+- [docs/canon/symbol-reads.md](canon/symbol-reads.md) Symbol reads: lookup tiers, spec symbols, spec unmapped · crates/specengine-cli, crates/specengine-store, crates/specengine-code · tier 2
 - [docs/canon/task-package.md](canon/task-package.md) Task package: what an agent is given · crates/specengine-cli, crates/specengine-mcp, crates/specengine-model · tier 2
 - [docs/canon/tasks.md](canon/tasks.md) Tasks: commands, transitions, place, store · crates/specengine-store, crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/w-measurement.md](canon/w-measurement.md) W measurement: every task, before and after · crates/specengine-eval · tier 2

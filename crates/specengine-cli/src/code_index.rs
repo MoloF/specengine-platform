@@ -1,5 +1,5 @@
-//! The code index's analyzer and refresh (task spec `symbol-index`,
-//! "Description and interactions", "Tables"): the store's
+//! The code index's analyzer and refresh (canon `symbol-index`, "Crates
+//! and seams", "Tables"): the store's
 //! [`CodeAnalyzer`] over the code walk's one listing
 //! ([`code_walk::list`]) and package lookup ([`code_walk::disk_packages`]),
 //! and `specengine-code` for every per-file row.
@@ -30,8 +30,8 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use specengine_code::{
     Anchor, Binding, CODE_INDEX_FORMAT, Digest, FileRole, LevelHashes, LevelState, NamedFile,
-    PackageTargets, RustParser, TargetIndex, UnitKind, bind_tree, comment_anchors, file_place,
-    indexed_name_file, item_levels, item_signatures, level_header, markers_in, qpath,
+    PackageTargets, RustParser, TargetIndex, UnitKind, bind_tree, comment_anchors, item_levels,
+    item_signatures, level_header, markers_in, placed_name_file, qpath,
 };
 use specengine_core::CodeConfig;
 use specengine_model::{IdScheme, grammar};
@@ -153,8 +153,15 @@ impl CodeFiles {
 }
 
 /// A root-relative directory as stored: `/`-separated, `""` the root.
+/// Only where `\` separates components is it rewritten: on Unix it is a
+/// character of a name, kept as the walk keeps it.
 fn dir_text(dir: &Path) -> String {
-    dir.to_string_lossy().replace('\\', "/")
+    let text = dir.to_string_lossy();
+    if std::path::MAIN_SEPARATOR == '\\' {
+        text.replace('\\', "/")
+    } else {
+        text.into_owned()
+    }
 }
 
 /// One target of a package's table, as `code_packages.targets` holds it.
@@ -233,8 +240,8 @@ impl<'f> Analyzer<'f> {
             package,
             analysis,
         };
-        let names = indexed_name_file(&named, index);
-        let (label, role) = file_place(&named, index);
+        let placed = placed_name_file(&named, index);
+        let (names, role) = (&placed.names, &placed.role);
         let every: Vec<usize> = (0..analysis.items.len()).collect();
         let levels = item_levels(&tree, text, &every);
         let signatures = item_signatures(&tree, text, &every);
@@ -258,10 +265,9 @@ impl<'f> Analyzer<'f> {
 
         let mut symbols = Vec::with_capacity(analysis.items.len());
         for (at, item) in analysis.items.iter().enumerate() {
-            let Some(name) = names.items.get(at) else {
+            let (Some(name), Some(structured)) = (names.items.get(at), placed.paths.get(at)) else {
                 continue;
             };
-            let structured = qpath::qpath(&label, &role, item);
             let state = levels.get(at).cloned().flatten();
             let (level_state, categories, hashes): (&str, Vec<&str>, Option<LevelHashes>) =
                 match &state {
@@ -358,7 +364,7 @@ impl<'f> Analyzer<'f> {
             lang: LANG_RUST.to_owned(),
             utf8: true,
             read_error: None,
-            role: Some(role_word(&role).to_owned()),
+            role: Some(role_word(role).to_owned()),
             module: Some(module),
             orphan_errors: number(analysis.orphan_errors),
             symbols,

@@ -75,9 +75,17 @@
 //! - [`item_signatures`] — the display signature of chosen bound items,
 //!   at most [`SIGNATURE_CAP_BYTES`], never hashed.
 //!
-//! Phase 3 slice 6a-2 `symbol-index` (`docs/features/symbol-index.md`
-//! "Analyzer stamp"): [`CODE_INDEX_FORMAT`], the stamp of every rule above
-//! whose output the code index stores.
+//! Phase 3 slice 6a-2 `symbol-index`
+//! (`docs/canon/symbol-index.md` "Analyzer stamp"): [`CODE_INDEX_FORMAT`],
+//! the stamp of every rule above whose output the code index stores;
+//! [`placed_name_file`] a file's names with its place and each item's
+//! structured path, each read once.
+//!
+//! Phase 3 slice 6a-3 `symbol-reads` (docs/features/symbol-reads.md
+//! "Lookup"): [`query_name`], a lookup query's `name` key, the one reader
+//! of `::` in a query; the closed word lists `ALL` of [`Relation`],
+//! [`LevelError`], [`Unanchored`], [`ErrorCategory`] and [`Ambiguity`], so
+//! a reader of stored words knows every variant.
 
 pub mod bevy;
 pub mod bind;
@@ -105,8 +113,9 @@ pub use levels::{
 };
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
 pub use naming::{
-    DISCRIMINATOR_SEPARATOR, FileNames, Name, NamedFile, Names, ROOT_PACKAGE, file_place,
-    indexed_name_file, name_file, name_files, path_targets, tree_passes,
+    DISCRIMINATOR_SEPARATOR, FileNames, Name, NamedFile, Names, PlacedNames, ROOT_PACKAGE,
+    file_place, indexed_name_file, name_file, name_files, path_targets, placed_name_file,
+    query_name, tree_passes,
 };
 pub use qpath::{
     Ambiguity, FileRole, PackageTargets, QPath, Target, TargetIndex, TargetSource, Unit, UnitKind,
@@ -118,7 +127,7 @@ pub use ron::{
 };
 
 /// The stamp of what the code index stores per file
-/// (`docs/features/symbol-index.md` "Analyzer stamp"): the binding, the
+/// (`docs/canon/symbol-index.md` "Analyzer stamp"): the binding, the
 /// naming and its discriminator, the display signature, the markers and
 /// mentions as this crate reads them. Any change of a rule whose output a
 /// stored row holds needs a new number (the levels' own recipe is

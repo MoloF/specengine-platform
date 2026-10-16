@@ -27,8 +27,8 @@ pub struct SqliteIndex {
     pub(crate) root_text: String,
     /// This handle's last spec update re-parsed every file (a stamp or
     /// `[ids]` change, a rebuild): a code refresh finding no code rows
-    /// then reports `rederived_all` (docs/features/symbol-index.md "spec
-    /// refs and spec index").
+    /// then reports `rederived_all`
+    /// (`docs/canon/symbol-index.md` "spec refs and spec index").
     pub(crate) reparsed_all: bool,
 }
 

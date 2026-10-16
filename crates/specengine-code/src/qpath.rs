@@ -178,6 +178,9 @@ pub enum Ambiguity {
 }
 
 impl Ambiguity {
+    /// Every reason, in priority order.
+    pub const ALL: [Self; 3] = [Self::PathAttribute, Self::Unrooted, Self::Duplicate];
+
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {

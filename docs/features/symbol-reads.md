@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures]
-ref: Phase 3 slice 6a-3, split from symbol-index 2026-10-15 (its Q23, decided under the owner's pre-approval, review open; WA-8, WA-11..WA-13; Q4, Q7, Q18, Q27; Q35 from `code-tools.md` 2026-10-16); 05 s5.1 (:158); 07 s1.2; 08 s2
+ref: Phase 3 slice 6a-3, split from symbol-index 2026-10-15 (its Q23; WA-8, WA-11..WA-13; Q4, Q7, Q18, Q27, Q35); 05 s5.1 (:158); 07 s1.2; 08 s2; Rust 1 iteration, review accepted with minors, tests 1 round; TE-4 the owner's
+shipped: 2026-10-16
 adrs: []
 ---
 
@@ -10,107 +11,76 @@ adrs: []
 
 ## Why
 
-6a-2 (`symbol-index.md`) stores every item, marker and mention beside the md index, but no command asks it which item sits at a name or `path:line`, what binds a node, or where code has no spec (05 s5.1; :158's suffix index): agents still read files. This slice answers the three on the CLI, the ground 6b-1 mirrors in MCP (`code-tools.md`) and 7b's `--symbol` reuses (`impact.md`).
+6a-2 (`symbol-index.md`) stores every item, marker and mention beside the md index, but no command asked it which item sits at a name or `path:line`, what binds a node, or where code has no spec (05 s5.1; :158's suffix index): agents still read files. This slice answers the three on the CLI, the ground 6b-1 mirrors in MCP (`code-tools.md`) and 7b's `--symbol` reuses (`impact.md`).
 
-Split from 6a-2 (its Q23) so the reads neither wait on nor share iterations with its seeded incremental-equals-rebuild property test (its TE-2). Order (08 s2): after 6a-2, right before 6b-1 (`code-tools.md` Q28); 7a needs only 6a-2. No ADR: 6a-2's apply (ADR-0008, ADR-0020; ADR-0046: `architecture-code.md#sync-in-reads` already lists `symbols`, `unmapped`; ADR-0047: `#health`'s mapping rule reused, health never reads this index).
+Split from 6a-2 (its Q23) so the reads neither waited on nor shared iterations with its incremental-equals-rebuild property test. Order (08 s2): after 6a-2, right before 6b-1. No ADR: 6a-2's apply (ADR-0008, ADR-0020; ADR-0046: `architecture-code.md#sync-in-reads` lists `symbols`, `unmapped`; ADR-0047: `#health`'s mapping rule reused, health never reads this index).
 
 ## Description and interactions
 
-- **Who sees it**: the owner and agents through Bash: `spec symbols` (a query, a node, a file or a line) and `spec unmapped` (coverage per directory and file); 6b-1 mirrors both (`code-tools.md` `find_symbols`, `unmapped`); 7b's `--symbol` takes the lookup's best tier and `unmapped`'s containment (`impact.md`).
-- **Freshness**: each refreshes the md index, then the code index, as `refs` (`docs/canon/symbol-index.md`, `refresh_code`); a walk gap exits 2 (its "spec refs and spec index").
-- **Crates**: store, the tier lookups and the containment as queries over 6a-2's tables, comparing strings only; `specengine-code` `naming.rs`, `query_name` (Q27); CLI, the two commands (new modules join `code_refs_walk.rs` `NEW_MODULES`), `Corpus::judge` once per stored ID, `OUTPUT_CAP_CHARS`. No table, column, `INDEX_FORMAT` or `CODE_INDEX_FORMAT` change (6a-2 creates every table: its Q23); no new dependency; MCP, HTTP, UI untouched (6b-1, Phase 4). **For 6b-1** (Q35): `symbols`, `unmapped` exported from the CLI library with their request and outcome types as `refs` is, the form an enum (QUERY terms and limit, node, file, `at` raw: one `PATH:LINE` parser, in the CLI), the limit bounds as constants (as `SEARCH_LIMIT_*`), so MCP calls them without clap.
+Canon: `docs/canon/symbol-reads.md` (all of it); `symbol-index.md` opening, "Crates and seams", "Guarantees", "Known limits"; the CLI, store and code READMEs; `code-tools.md`, `impact.md`, 05 s5.1 pointers.
 
 ## Data
 
 ### Lookup
 
-WA-8. Over 6a-2's `symbol_suffixes` rows (`docs/canon/symbol-index.md` "Tables", **Suffixes**) and its `qpath`, `name` indexes. The query (positionals joined by a space) matches in tiers, each a B-tree lookup (SW refinement): `exact`, `qpath` = query; `suffix`, a `suffix` = query; `name`, `name` = `query_name(query)` (after the last `::` outside `<>` `()` `[]`, a segment starting `impl ` to the end, ` #<value>` dropped). Once per symbol at its best tier; then qpath bytes, path bytes, start line, never rowid. Shells read an unquoted `#2` as a comment: quote it. `query_name` lives in `specengine-code` (`naming.rs`), the one reader of `::` in a query; the store compares strings only (Q27, "Rules and edge cases").
+`docs/canon/symbol-reads.md` "Lookup" (WA-8, Q27).
 
 ### spec symbols
 
-WA-11, Q4. `spec symbols QUERY… [--limit N] | --node REF | --file PATH | --at PATH:LINE`: exactly one form; `--limit` 1..=200, default 20, QUERY only. `--node`: items, modules, RON paths bound to the nodes REF names (each stored ID resolved once per call), by path, line; `--file`: its items in source order; `--at`: items covering LINE, shortest span first.
-
-```
-crates/tally::counter::impl Tally #2 | impl_item | crates/tally/src/counter.rs:40-45 | layer a | mentions 0 | exact
-  sig impl Tally
-  implements | 45:6 | LAW-BOUND@3a | resolved | bad_rev | default | LAW-BOUND
-symbols: 1 of 1; code files <f> (.rs <r>, .ron <o>), skipped <s>
-```
-
-- Target: `<qpath> | <item_kind> | <path>:<start>-<end> | layer <l> | mentions <n>[ | ambiguous <reason>][ | <tier>]`; module `<qpath> | module | <path>`, RON `<path>#<field path> | ron | <path>:<line>`, no `sig`; `sig -` when NULL. Bindings: its direct markers by line, `<relation> | <line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <node or ->[ | <note>]`, `levels`, `note` as refs prints them (`spec-cli-refs.md` "Rows").
-- JSON, every key present, typed as Q35: `{form, query, node, path, line, reason, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}]}], total, omitted, code}`.
-- Exit 0 answered, zero rows too; 1 `--node` REF names nothing (an outcome with `reason`, its document kept, as `refs`; never a `CliError`: Q35); 2, stdout empty: usage, discovery, config, no `[code]` (`code-bindings.md` "The `[code]` table"'s text), PATH not a walked code file, a bad LINE, a walk gap. Cap `OUTPUT_CAP_CHARS`, then `[truncated: <k> symbols not shown]`.
+`docs/canon/symbol-reads.md` "spec symbols" (WA-11, Q4, Q35).
 
 ### spec unmapped
 
-WA-12, WA-13, Q7, Q18. Units: every symbol, each RON file. An item is mapped when a marker binds it, an enclosing item or inline mod, or its file module, and that marker's ID is resolved, an alias or ambiguous (each holder), as health row 5 (`architecture-code.md#health`): dangling, look-alike, queue and other-project IDs never map. A RON file is mapped when such a `ron` marker anchors in it. One containment function, 7b's too (`impact.md` "Seeds and walk"). `mentioned`: units a mention reaches alike (a `file` mention: all its file's); never mapping. No path classified (no `tests`, `src` literal).
-
-PATH: a root, a directory or code file under one (else exit 2); none: a row per root. Rows: each direct child directory (aggregated, `/`) and code file by path bytes, then `(total)`; a file PATH: its row, then its unmapped items. Percent: mapped‰ rounded half up, one decimal; `-` for no unit.
-
-```
-crates/tally/src/ | units 14 | mapped 6 | 42.9 % | mentioned 3
-crates/tally/tests/ | units 2 | mapped 1 | 50.0 % | mentioned 0
-crates/tally (total) | units 16 | mapped 7 | 43.8 % | mentioned 3
-  crates/tally::counter::Size | enum_item | 60          (file PATH only)
-unmapped: code files <f> (.rs <r>, .ron <o>), skipped <s>
-```
-
-JSON `{path, rows: [{path, dir, units, mapped, percent, mentioned}], total, unmapped: [{qpath, item_kind, path, line}], notes, omitted, code}`, typed as Q35. Exits and cap as `symbols`, no exit 1.
+`docs/canon/symbol-reads.md` "spec unmapped" (WA-12, WA-13, Q7, Q18, Q35).
 
 ## Rules and edge cases
 
 - WHEN `symbols` or `unmapped` run from two roots, cwds, creation orders or CRLF copies, output SHALL be byte-identical; no order follows rowid.
 - WHEN a marker's ID is dangling, a look-alike, a queue ID or another project's, it SHALL map nothing, at any containment depth (Q18); a mention SHALL never map (Q7).
-- Only the data directory is written, through 6a-2's refresh.
-- Genre (`docs/canon/architecture.md#universal`): `query_name` in `specengine-code` is the only reader of `::` in a query (Q27); no fixture prefix, kind, `::` split, stack word, Cargo literal, `tests` or `src` literal in the store, core or the new CLI modules (`code_refs_walk.rs` `NEW_MODULES`).
-
-## Carry-overs
-
-From 6a-2's review 1 (rust-developer nits; none blocked 6a-2):
-
-- Store `code.rs` `update`: a no-op refresh writes nothing: skip the `code_fp` UPDATE when equal, rewrite `code_packages` only when its rows differ (then drop that line from `docs/canon/symbol-index.md` "Known limits").
-- CLI `refs.rs`: open the DB once (`indexed()` and `open_index` each open it today); build the stored-word lists (`RELATIONS`, `levels_states()`, `categories()`, `ambiguities()`) once, from `ALL` consts in `specengine-code` (as `Level::ALL`) or `from_str`, so a new variant never reads as unknown; the walk oracle under `#[cfg_attr(not(test), expect(dead_code, reason = …))]`, not `allow`.
-- CLI `code_index.rs`: `dir_text` keeps `\` on Unix, else the canon's known limit stays; each re-derived item's `QPath` built once (`name_one` returning the structured paths, or one call giving names, place and paths), `file_place` once per file.
-- Re-point the code comments citing `docs/features/symbol-index.md` headings (13: store `code.rs:1,79,276`, `schema.rs:224`, `dump.rs:24`, `lib.rs:46,193`, `index.rs:30`; code `lib.rs:78,121`; eval `code_index.rs:3`, `main.rs:74`) to `docs/canon/symbol-index.md`: "Tables", "Cache key and cross-file pass", "Analyzer stamp", "spec refs and spec index", "AC-10 measurement" keep their names, "Description and interactions" (Crates, 6b's partial tree) becomes "Crates and seams". The CLI's cite the task spec by name (`genre.rs` bans `docs/` there). Then the shipped spec's pointer headings may go (`doc_pointers.rs`).
+- Only the data directory is written; genre: canon "Crates and seams".
 
 ## Acceptance criteria
 
 rust-developer:
 
-- [ ] RD-1 -- lookup (Q27). M: string split -> `trait_owner_with_a_path_is_one_segment`; a scan -> `symbol_lookup_uses_the_suffix_index` (`EXPLAIN QUERY PLAN`), `symbol_lookup_cost_is_sublinear` (10k vs 100k, best of three); rowid order -> `lookup_order_is_independent_of_insertion_order`.
-- [ ] RD-2 -- `symbols`. M: two forms -> `symbols_takes_exactly_one_form`; outermost first -> `at_line_lists_innermost_first`; exit 0 without `[code]` -> `symbols_without_code_table_is_exit_2`; a key dropped (`levels`, `note` too) -> `symbols_json_every_key_present`; a Q35 type changed (`percent` a string, `tier` set outside QUERY) -> `symbol_reads_json_types_are_pinned`; REF naming nothing as a `CliError` -> `symbols_node_naming_nothing_keeps_its_document`.
-- [ ] RD-3 -- `unmapped`. M: no containment -> `module_marker_maps_its_items`; mentions map -> `mentions_never_map`; percents averaged -> `unmapped_counts_items`; any `id_state` maps -> `dangling_marker_never_maps`.
-- [ ] RD-4 -- M: rowid order -> `symbols_and_unmapped_are_byte_identical_across_roots_and_order`.
+- [x] RD-1 -- lookup (Q27). M: string split -> `trait_owner_with_a_path_is_one_segment`; a scan -> `symbol_lookup_uses_the_suffix_index` (`EXPLAIN QUERY PLAN`), `symbol_lookup_cost_is_sublinear` (10k vs 100k, best of three); rowid order -> `lookup_order_is_independent_of_insertion_order`.
+- [x] RD-2 -- `symbols`. M: two forms -> `symbols_takes_exactly_one_form`; outermost first -> `at_line_lists_innermost_first`; exit 0 without `[code]` -> `symbols_without_code_table_is_exit_2`; a key dropped (`levels`, `note` too) -> `symbols_json_every_key_present`; a Q35 type changed (`percent` a string, `tier` set outside QUERY) -> `symbol_reads_json_types_are_pinned`; REF naming nothing as a `CliError` -> `symbols_node_naming_nothing_keeps_its_document`; X1, X2: only resolved or only the node's markers -> `node_lists_a_look_alike_target_and_every_direct_marker`.
+- [x] RD-3 -- `unmapped`. M: no containment -> `module_marker_maps_its_items`; mentions map -> `mentions_never_map`; percents averaged -> `unmapped_counts_items`; any `id_state` maps -> `dangling_marker_never_maps`.
+- [x] RD-4 -- M: rowid order -> `symbols_and_unmapped_are_byte_identical_across_roots_and_order`.
 
 test-engineer:
 
-- [ ] TE-1 -- over 6a-2's `fixtures/code-index/` as it stands (a new file there moves its pinned dump), `expected.json` gains each `symbols` form (QUERY, `--node`, `--file`, `--at`), each tier (`exact`, `suffix`, `name`; a quoted `#2`) and `unmapped`'s rows (a directory, a file, `(total)`, a file PATH's unmapped items, `-` for no unit).
-- [ ] TE-2 -- determinism (two roots, cwd, reverse creation, CRLF): `symbols`, `unmapped`.
-- [ ] TE-3 -- genre: on `spec-c` `symbols`, `unmapped` exit 2 naming `[code]`, stdout empty; the new modules in the "Rules" scan.
+- [x] TE-1 -- over 6a-2's `fixtures/code-index/`, `expected.json` gains each `symbols` form (QUERY, `--node`, `--file`, `--at`), each tier (`exact`, `suffix`, `name`; a quoted `#2`) and `unmapped`'s rows (a directory, a file, `(total)`, a file PATH's unmapped items, `-` for no unit).
+- [x] TE-2 -- determinism (two roots, cwd, reverse creation, CRLF): `symbols`, `unmapped`.
+- [x] TE-3 -- genre: on `spec-c` `symbols`, `unmapped` exit 2 naming `[code]`, stdout empty; the new modules in the "Rules" scan.
 - [ ] TE-4 -- pilots A and B, manual, run by the owner under 6a-2's TE-8 conditions: `unmapped` per root (units, mapped, mentioned), counts only, recorded in "Implementation"; read-only proof as there.
 
 spec-writer:
 
 - [x] SW-1 -- this spec (split from `symbol-index.md` 2026-10-15, Q23); 08 s2 lists 6a-3; `code-tools.md`, `impact.md` pointers follow.
-- [ ] SW-2 -- at shipping: "Lookup", "spec symbols", "spec unmapped" appended to 6a-2's `docs/canon/symbol-index.md` if it stays ≤ 12 288 B (11 774 B at its shipping), else a Tier 2 file of their own (`docs/index-canon.md` re-measured); the CLI README's command lines (pointers, room first); `code-tools.md`, `impact.md` pointers moved to the canon; `CLAUDE.md` State.
+- [x] SW-2 -- at shipping: Tier 2 `docs/canon/symbol-reads.md` (`symbol-index.md` had no room for three sections); `docs/index-canon.md` re-measured; `symbol-index.md` opening, "Crates and seams", "Guarantees", "Known limits"; the CLI, store, code READMEs; `code-tools.md` (pointers, "Carry-overs"), `impact.md`, `health-code.md` (X3), 05 s5.1, 08 s2; `CLAUDE.md` State.
 - [x] SW-3 -- no ADR; `export index`, `check` clean.
 
 ## Out of scope
 
-The tables, the refresh, `spec index`, `refs` from the index, names for 6b-2, AC-10 (6a-2 `symbol-index.md`); MCP `find_symbols`, `unmapped` (6b-1 `code-tools.md`); 7b's `--symbol` (`impact.md`); `--unbound` (Q4); fuzzy search, references, call graphs; HTTP, UI (Q8).
+The tables, the refresh, `refs` (6a-2); MCP `find_symbols`, `unmapped` (6b-1); 7b's `--symbol`; `--unbound` (Q4); fuzzy search, references, call graphs; HTTP, UI (Q8).
 
 ## Open
 
-| Q | Answer (else: the other answer's cost) |
-|---|---|
-| 4 `--unbound` | none; `spec unmapped FILE` |
-| 7 coverage | containment; a RON file one unit; mentions apart |
-| 18 `unmapped` | only resolved, alias or ambiguous-holder markers count as mapping, as health row 5 (else: a gone-node marker covers) |
-| 27 `query_name` | in `specengine-code` `naming.rs`, the one `::` reader (else: a `::` split in the store or CLI, against "Rules") |
-| 35 JSON types, for 6b-1 | pinned before 6b-1's mirrors (`code-tools.md` Q35): `percent` a number, null for `-`; `unmapped`'s `total` a row object as `rows`' items; `omitted` `{symbols}` and `{rows, unmapped}`; `target` one of `item`, `module`, `ron`; `tier` null outside QUERY; `reason` null but at exit 1; the exports of "Crates" (else: string-typed mirrors and a schema change inside 6b-1) |
-
-Q-numbers are shared with `symbol-index.md` (its Q23: this split), `symbol-discriminator.md` and `code-tools.md` (Q35, decided 2026-10-16 under the owner's pre-approval, review open). Q4, Q7 decided 2026-10-10 and Q18 2026-10-13, as rows of `symbol-index.md`; Q27 decided 2026-10-15 (the refresh against shipped 4b-1, 4c-1 and the 5a drafts); all under the owner's pre-approval, review open. WA-n: the 2026-10-10 analysis' working answers (`symbol-index.md`); "SW refinement": the spec-writer's.
+Decided under the owner's pre-approval: Q4 no `--unbound` (`spec unmapped FILE`); Q7 containment, a RON file one unit, mentions apart; Q18 only resolved, alias or ambiguous-holder markers map, as health row 5; Q27 `query_name` in `specengine-code`, the one `::` reader; Q35 the JSON types and exports pinned before 6b-1. Review 1 (2026-10-16): X1 `--node` follows `refs`: a target whose only marker is a look-alike is listed with its `id_state`, `unmapped` never counts it; X2 `--node` lists every direct marker of a target; X3 a `cannot_verify` marker maps nothing (`health-code.md` row 5 aligns at its refresh); X4 one read snapshot per command, carried to 6b-1. Q-numbers shared with `symbol-index.md` and `code-tools.md`.
 
 ## Implementation
 
-Not started. Split from `symbol-index.md` (2026-10-15, Q23): its RD-5, RD-6, RD-7 -> RD-1, RD-2, RD-3; RD-10's `symbols_and_unmapped_are_byte_identical_across_roots_and_order` -> RD-4; TE-1's forms, tiers and unmapped rows -> TE-1; TE-4's and TE-6's `symbols`, `unmapped` parts -> TE-2, TE-3; TE-8's `unmapped` -> TE-4. Its "Lookup" was cut in two: the suffix rows' derivation stays with 6a-2's tables, the tiers came here. To record: modules, TE-4's figures, deviations with reasons.
+| Module | What it does |
+|---|---|
+| store `symbols.rs`, `lib.rs` | `SymbolTier`, `SymbolHit`, `LOOKUP_SQL`; `lookup_symbols`, `file_symbols` |
+| store `code.rs` | `BoundSymbol.ord`, `StoredSymbol.{start_byte, end_byte, layer}`; a no-op refresh writes nothing |
+| code `naming.rs`, `lib.rs`; `markers`, `bind`, `hash`, `qpath` | `query_name`; `placed_name_file` -> `PlacedNames`; five `ALL` consts |
+| CLI `symbols.rs`, `unmapped.rs` | the two commands and their library types; `place`, `reached`, `Seeds` for 7b |
+| CLI `main.rs`, `lib.rs` | the subcommands (an `ArgGroup` of the four forms), exports, `Outcome::{Symbols, Unmapped}` |
+| CLI `refs.rs`, `corpus.rs`, `code_index.rs` | one DB handle (`indexed_in`); `STORED_WORDS` from the `ALL` consts; `placed_name_file` once per file; `dir_text` keeps `\` on Unix |
+| store `schema.rs`, `dump.rs`, `index.rs`; eval `code_index.rs`, `main.rs`; CLI `refresh.rs` | comments re-pointed to canon `symbol-index.md` |
+
+Deviation: `--limit` refuses the other forms with clap `conflicts_with_all`, because clap 4.6.7 did not enforce `requires = "query"` on the positional list (`--node X --limit 5` answered 0). The developer's readings R1-R14 and the tester's L1-L28 are in the canon; X1-X3 decided them where they differed (R2, R5 against L19; L13). 6a-2's carry-overs are done. Review 1's nits and X4 are in `code-tools.md` "Carry-overs". The plain `"Lookup"` citations in code keep this file's "Lookup" heading as a pointer until 6b-1 re-points them.
+
+Tests, 1 round: 2313/2315 (`import_cli`, `layout_cli` red only until `fixtures/code-index/expected.json` is committed); 34 new, the 2 TE-4 pilot tests ignored; mutations M1-M8, M3b, M5b, M6b, S1, S2, X1 killed; "percents averaged" has no one-site mutation, pinned by `unmapped_counts_items`' golden (21.2 % against a 45.8 % mean). TE-4, the owner's pilot run, is pending.

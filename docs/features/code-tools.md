@@ -17,7 +17,7 @@ Delivered: three read tools, twins of `spec symbols`, `spec refs` and `spec unma
 ## Description and interactions
 
 - **An agent**: before an edit `find_symbols {at}` or `{query}` for an item and its markers, `refs {id}` for what binds a node, `unmapped {path}` for where code has no spec. **The owner**: the same commands on the CLI.
-- **Crates**: MCP `code.rs` (new: the `code_tools` router, argument types, descriptions and their asserts; one CLI library call each through `read.rs`' `call` and `Answer`, unchanged), `mirror.rs` (the three documents), `server.rs` (`INSTRUCTIONS`, the router joined); `plugin/` (`read-spec`, version, `PINS`). CLI: no behaviour; the entries are 6a-2's (`refs`, `RefsRequest`, `RefsOutcome`, `lib.rs`) and 6a-3's (`symbol-reads.md` Q35), an export it lacks added in `lib.rs` only. MCP `[dependencies]` stay 7 (`build_graph.rs`); store, core, model unchanged.
+- **Crates**: MCP `code.rs` (new: the `code_tools` router, argument types, descriptions and their asserts; one CLI library call each through `read.rs`' `call` and `Answer`, unchanged), `mirror.rs` (the three documents), `server.rs` (`INSTRUCTIONS`, the router joined); `plugin/` (`read-spec`, version, `PINS`). CLI: no behaviour; the entries are 6a-2's (`refs`, `RefsRequest`, `RefsOutcome`, `lib.rs`) and 6a-3's (`docs/canon/symbol-reads.md` "Crates and seams"), an export it lacks added in `lib.rs` only. MCP `[dependencies]` stay 7 (`build_graph.rs`); store, core, model unchanged.
 - **Freshness**: each call refreshes the md index, then the code index, inside the CLI read (`docs/canon/symbol-index.md`, `refresh_code`); MCP keeps nothing between calls (`mcp-read.md` "No project, discovery, state").
 - **Unchanged**: `spec check`, hook, gate, CI, `INDEX_FORMAT`, queue schema, HTTP (Q8; `daemon-keys`), UI, the other tools, verify. **Writes**: the data directory only (the refresh); never `spec.lock`, a queue row, an event or a file under the root.
 - **Overridden lines**, fixed at shipping (SW-2): 07:26 (the shipped list), :30, :32, :33 (`find_symbols` `node_id`, `path:line`, "Bevy layer"; `refs` `node_id`, "tests, records"); `mcp-read.md` "Binary" (the tool sets served), "Tools" **Texts** (the count, the figures); `plugin-files.md` "Changing it" **Content** ("all fifteen named"), **Version** (0.8.0); the MCP README's opening and `server.rs` row; 6a-2's canon **Freshness** ("no MCP tool … refreshes code": these three do, through the CLI).
@@ -30,9 +30,9 @@ WA-17, WA-20. **Every MCP tool's argument names are its CLI flag names, a positi
 
 | Tool | Input (`?` nullable) | ≙ `spec … --json` |
 |---|---|---|
-| `find_symbols` | `query?`, `node?`, `file?`, `at?` (`PATH:LINE`), `limit?` | `symbols QUERY \| --node REF \| --file PATH \| --at PATH:LINE [--limit N]` (`symbol-reads.md` "spec symbols") |
+| `find_symbols` | `query?`, `node?`, `file?`, `at?` (`PATH:LINE`), `limit?` | `symbols QUERY \| --node REF \| --file PATH \| --at PATH:LINE [--limit N]` (`docs/canon/symbol-reads.md` "spec symbols") |
 | `refs` | `id` | `refs REF` (`docs/canon/spec-cli-refs.md`; command, order, cap: `code-bindings.md` "`spec refs`") |
-| `unmapped` | `path?` | `unmapped [PATH]` (`symbol-reads.md` "spec unmapped") |
+| `unmapped` | `path?` | `unmapped [PATH]` (`docs/canon/symbol-reads.md` "spec unmapped") |
 
 - **Input schemas**, flat (`mcp-read.md` "Tools", **Schemas**): strings, `limit` an integer as `search`'s, optionals `[T, "null"]`, `additionalProperties: false`, no root `anyOf`/`oneOf`/`allOf`, no `$ref`. `find_symbols`' four forms are four nullable keys; `query` passes as one positional (6a-3 joins positionals with a space), `at` raw to the CLI's one `PATH:LINE` parser (Q35): MCP never splits a qpath or `PATH:LINE`.
 - **Form errors**, per surface as `get_task`'s (`task-package.md` "MCP"; SW refinement): not exactly one form -> error result ``spec: find_symbols takes exactly one of `query`, `node`, `file` and `at` ``; `limit` without `query` -> ``spec: find_symbols takes `limit` with `query` only``; no `structuredContent`. The CLI's (6a-3): usage, exit 2.
@@ -80,7 +80,19 @@ Q33. No new fixture. Parity, forms and exits over scratch copies of 6a-2's `fixt
 - WHEN a code tool and its `spec … --json` twin run on one state, its `content` and `structuredContent` SHALL equal the CLI's text and document (RD-3).
 - WHEN a tool runs from two roots, another cwd, in reverse creation order or on CRLF copies, its result SHALL be byte-identical, holding no root, `HOME` or date.
 - Single door (08 AC-3; S14): no code tool writes `spec.lock`, a queue row, an event or a file under the root, or exposes `index`, `lock accept`, `propose drift` (`report_drift` alone queues drift).
-- Genre (`architecture.md#universal`): no stack, kind, fixture or Rust word in MCP sources and texts; qpaths, `item_kind` are data; `query_name` stays the one reader of `::` (`symbol-reads.md` "Rules and edge cases").
+- Genre (`architecture.md#universal`): no stack, kind, fixture or Rust word in MCP sources and texts; qpaths, `item_kind` are data; `query_name` stays the one reader of `::` (`docs/canon/symbol-reads.md` "Crates and seams").
+
+## Carry-overs
+
+From 6a-3's review 1 (`symbol-reads.md`; none blocked it), rust-developer:
+
+- X4 (owner pre-approved): one read snapshot per `symbols`, `unmapped` call: their `code_refs`, `lookup_symbols`/`file_symbols`, `code_symbols` read in one transaction (a store method returning refs and the needed symbols from one `with_worktree`); then drop canon `symbol-reads.md` "Known limits"' first line.
+- CLI `unmapped.rs`: decide file or directory from `stored.files`, not `walked`, and refuse an unread file PATH (exit 2); then drop that canon's second line.
+- Code `naming.rs` `file_place`: rewrite `\` only where `MAIN_SEPARATOR` is `\`, as `dir_text`; then drop `symbol-index.md` "Known limits"' `file_place` line.
+- Store `symbols.rs`: `LOOKUP_SQL` typed `[&str; 3]` (`SymbolTier::ALL.len()`), so a tier is never dropped by the zip.
+- CLI `symbols.rs`: find a bound item with `binary_search_by_key` on `ord`, not a linear `find`.
+- CLI `lib.rs` `Exit` doc: exit 1 lists `refs` and `symbols` too.
+- Re-point the plain `docs/features/symbol-reads.md` "Lookup" comments (code `naming.rs`, `lib.rs`; store `symbols.rs`, `lib.rs`) to `` `docs/canon/symbol-reads.md` "Lookup" `` in data form; then the shipped spec's "Lookup" pointer heading may go.
 
 ## Acceptance criteria
 
@@ -134,13 +146,13 @@ spec-writer:
 | 31 `INSTRUCTIONS` | the two reads lines, no gloss on the code line, `Hints use flags:`, the 76 B probes paragraph: 80 B left, 34 after 6b-2 (else: 7 B left, 7a's and 7b's lines cut from elsewhere) |
 | 32 canon home | a new Tier 2 `docs/canon/mcp-code.md`; `mcp-read.md` one clause in "Binary" once room is made; 6b-2's `--node` in `spec-verify-node.md` (else: `mcp-read.md` over its cap) |
 | 33 fixtures | the reads over 6a-2's `fixtures/code-index/` (twins, tiers, RON, `-`); `code-a` for the door (else: no twin, tier or `-` reaches the mirror tests) |
-| 35 6a-3's JSON | 6a-3 pins, before these mirrors: `percent` a number (null for `-`), `total` a row object, `omitted` `{symbols}` / `{rows, unmapped}`, `target`'s values, `tier` null outside `query`; its exports and exit-1 outcome (`symbol-reads.md` Q35) (else: string-typed mirrors and a schema change inside 6b-1) |
+| 35 6a-3's JSON | 6a-3 pins (shipped: `docs/canon/symbol-reads.md`), before these mirrors: `percent` a number (null for `-`), `total` a row object, `omitted` `{symbols}` / `{rows, unmapped}`, `target`'s values, `tier` null outside `query`; its exports and exit-1 outcome (`symbol-reads.md` Q35) (else: string-typed mirrors and a schema change inside 6b-1) |
 
 Q1, Q4-Q8 (2026-10-10) and Q28-Q35 (2026-10-16) decided under the owner's pre-approval, review open; numbers shared with `verify-node.md`, where Q5, Q29, Q30, Q34 live (Q28, Q31-Q33 in both), and with `symbol-reads.md` (Q35). S-n: the 2026-10-16 refresh's stale points; WA-n: the 2026-10-10 analysis' working answers; "SW refinement": the spec-writer's.
 
 ## Dependencies and ordering
 
-- **Needs**: 6a-2 `symbol-index` (`refs` from the index, its refresh and gap exit, `fixtures/code-index/`; its TE-7 at `TOOLS` 15); 6a-3 `symbol-reads` (`symbols`, `unmapped`, its Q35 exports and types); 4c-1's `INSTRUCTIONS` (shipped).
+- **Needs**: 6a-2 `symbol-index` (`refs` from the index, its refresh and gap exit, `fixtures/code-index/`; its TE-7 at `TOOLS` 15); 6a-3 `symbol-reads` (shipped 2026-10-16: `symbols`, `unmapped`, its Q35 exports and types, `docs/canon/symbol-reads.md`); 4c-1's `INSTRUCTIONS` (shipped).
 - **Order** (Q28, 08 s2): 6a-2 -> 6a-3 -> 6b-1 (this) -> 5b-1 -> 5b-2 -> 5c -> 6b-2 -> 6c -> 7a; nothing from 5b or 5c. **Independent**: 8a, 9a, 9b. **Later**: Phase 4 (HTTP, UI).
 
 ## Implementation

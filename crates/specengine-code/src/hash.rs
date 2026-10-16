@@ -563,6 +563,16 @@ pub enum ErrorCategory {
 }
 
 impl ErrorCategory {
+    /// Every category, sorted.
+    pub const ALL: [Self; 6] = [
+        Self::MacroPunct,
+        Self::MacroBody,
+        Self::WhereMultiline,
+        Self::Missing,
+        Self::NestingTooDeep,
+        Self::Other,
+    ];
+
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {

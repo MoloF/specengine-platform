@@ -11,7 +11,7 @@ use std::panic::{self, AssertUnwindSafe};
 
 use serde::Serialize;
 use specengine_core::check::{CheckFile, CheckInput, Endpoint, NodeAt, SpecGraph, Standing};
-use specengine_store::{Source as _, SpecIndex as _, WorkingTree};
+use specengine_store::{Source as _, SpecIndex as _, SqliteIndex, WorkingTree};
 
 use crate::location::open_index;
 use crate::project::ProjectRoot;
@@ -29,9 +29,20 @@ pub(crate) fn indexed(
     with_bytes: bool,
 ) -> Result<CheckInput, CliError> {
     let mut open = open_index(env, project)?;
-    let (_, warnings) = refresh(&mut open.index, project, false)?;
+    indexed_in(&mut open.index, project, messages, with_bytes)
+}
+
+/// [`indexed`] over a handle the caller opened (and reads again: the
+/// code index's refresh after it, one database handle for both).
+pub(crate) fn indexed_in(
+    index: &mut SqliteIndex,
+    project: &ProjectRoot,
+    messages: &mut Vec<Message>,
+    with_bytes: bool,
+) -> Result<CheckInput, CliError> {
+    let (_, warnings) = refresh(index, project, false)?;
     messages.extend(warnings);
-    let mut input = open.index.indexed_input().map_err(store_error)?;
+    let mut input = index.indexed_input().map_err(store_error)?;
     if with_bytes {
         let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
         read_bytes(&mut input, &tree, project, messages);

@@ -5,7 +5,7 @@
 //! are. Nothing the walk meets is fatal.
 //!
 //! `spec index` then refreshes the code index, a call of its own
-//! ([`crate::code_index::refresh_code`]; task spec `symbol-index`,
+//! ([`crate::code_index::refresh_code`]; canon `symbol-index`,
 //! "spec refs and spec index"): its `code <slug>: …` line before `db`,
 //! JSON `code` (`null` without `[code]`, whose code rows go). A `[code]`
 //! that does not read leaves the code rows as they are: the spec index is

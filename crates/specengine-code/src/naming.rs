@@ -30,12 +30,16 @@
 //!
 //! The package is the package directory relative to the root, `.` for the
 //! root and for a file outside every package.
+//!
+//! A symbol lookup's query is read here too ([`query_name`]): the one
+//! reader of `::` in a query, so the store and the CLI compare strings
+//! only (docs/features/symbol-reads.md "Lookup", Q27).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::items::{FileAnalysis, ItemRecord};
-use crate::qpath::{self, Ambiguity, FileRole, PackageTargets, TargetIndex, UnitKind};
+use crate::qpath::{self, Ambiguity, FileRole, PackageTargets, QPath, TargetIndex, UnitKind};
 
 /// The package label of the root package and of a file outside every
 /// package.
@@ -196,8 +200,26 @@ pub fn file_place(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> (Str
     (label, role)
 }
 
-/// [`name_file`] over the package's prepared target index.
-fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames {
+/// One file named alone ([`indexed_name_file`]) with what its names were
+/// read from: its place ([`file_place`]) and each item's structured path
+/// ([`qpath::qpath`]), each read once — for a caller that stores an item's
+/// suffixes ([`QPath::suffixes`]) beside its name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlacedNames {
+    pub names: FileNames,
+    /// [`file_place`]'s package label.
+    pub label: String,
+    /// [`file_place`]'s role.
+    pub role: FileRole,
+    /// Per item of its [`FileAnalysis::items`], the structured path its
+    /// name renders (without a twin's discriminator).
+    pub paths: Vec<QPath>,
+}
+
+/// [`indexed_name_file`] with the file's place and each item's
+/// structured path ([`PlacedNames`]): the same names, nothing read twice.
+#[must_use]
+pub fn placed_name_file(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> PlacedNames {
     let (label, role) = file_place(file, index);
     // A shared unit is named by its location, however it is included.
     let shared = role
@@ -205,10 +227,11 @@ fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames 
         .is_some_and(|unit| unit.kind == UnitKind::Shared);
     let reason = (role == FileRole::Unrooted).then_some(Ambiguity::Unrooted);
     let items = &file.analysis.items;
-    let paths: Vec<String> = items
+    let structured: Vec<QPath> = items
         .iter()
-        .map(|item| qpath::qpath(&label, &role, item).to_string())
+        .map(|item| qpath::qpath(&label, &role, item))
         .collect();
+    let paths: Vec<String> = structured.iter().map(ToString::to_string).collect();
     let discriminators = discriminate(items, &paths);
     let items = paths
         .into_iter()
@@ -222,7 +245,7 @@ fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames 
             discriminator,
         })
         .collect();
-    FileNames {
+    let names = FileNames {
         module: Name {
             qpath: module_path(&label, &role),
             ambiguity: reason,
@@ -230,7 +253,81 @@ fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames 
         },
         items,
         shared,
+    };
+    PlacedNames {
+        names,
+        label,
+        role,
+        paths: structured,
     }
+}
+
+/// [`name_file`] over the package's prepared target index.
+fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames {
+    placed_name_file(file, index).names
+}
+
+/// What separates two segments of a rendered `qpath`.
+const SEGMENT_SEPARATOR: &[u8] = b"::";
+
+/// How an `impl` block's segment starts: it runs to the end of a query
+/// (its type may hold `::`).
+const IMPL_SEGMENT: &[u8] = b"impl ";
+
+/// The `name` tier's key of a symbol lookup query
+/// (docs/features/symbol-reads.md "Lookup", Q27): the text after the last
+/// `::` outside `<>`, `()` and `[]`, a segment starting `impl ` running to
+/// the end, a trailing ` #<discriminator>` dropped — what a stored item's
+/// `name` holds. The one reader of `::` in a query: the store and the CLI
+/// compare strings only. `<T as a::Tr>` and a `cfg(…)` value are read
+/// whole; the `>` of a `->` closes nothing; an unbalanced closer counts as
+/// none. `crates/x::twins::impl Sheet #2` gives `impl Sheet`,
+/// `run #cfg(feature = "a::b")` gives `run`.
+#[must_use]
+pub fn query_name(query: &str) -> &str {
+    let bytes = query.as_bytes();
+    let mut depth = 0usize;
+    let mut start = 0;
+    let mut at = 0;
+    while at < bytes.len() {
+        if at == start && bytes[at..].starts_with(IMPL_SEGMENT) {
+            break;
+        }
+        if depth == 0 && bytes[at..].starts_with(SEGMENT_SEPARATOR) {
+            at += SEGMENT_SEPARATOR.len();
+            start = at;
+            continue;
+        }
+        depth = bracket_depth(bytes, at, depth);
+        at += 1;
+    }
+    without_discriminator(&query[start..])
+}
+
+/// The bracket depth after the byte at `at` of `bytes` (the depth before
+/// it given): `<`, `(`, `[` open; `>`, `)`, `]` close, but the `>` of `->`.
+fn bracket_depth(bytes: &[u8], at: usize, depth: usize) -> usize {
+    match bytes[at] {
+        b'<' | b'(' | b'[' => depth + 1,
+        b'>' if at > 0 && bytes[at - 1] == b'-' => depth,
+        b'>' | b')' | b']' => depth.saturating_sub(1),
+        _ => depth,
+    }
+}
+
+/// `segment` up to its first ` #` outside brackets: a twin's
+/// discriminator dropped (a `cfg` value may hold ` #` itself).
+fn without_discriminator(segment: &str) -> &str {
+    let bytes = segment.as_bytes();
+    let separator = DISCRIMINATOR_SEPARATOR.as_bytes();
+    let mut depth = 0usize;
+    for at in 0..bytes.len() {
+        if depth == 0 && bytes[at..].starts_with(separator) {
+            return &segment[..at];
+        }
+        depth = bracket_depth(bytes, at, depth);
+    }
+    segment
 }
 
 /// The files a `#[path]` attribute of a `mod` declaration of `files`

@@ -71,7 +71,7 @@ enum Measurement {
     /// update by walk and by path, and the stored counts. `[ids]` and
     /// `[paths]` from `--scheme`.
     Index(IndexArgs),
-    /// The code index (docs/features/symbol-index.md "AC-10 measurement")
+    /// The code index (`docs/canon/symbol-index.md` "AC-10 measurement")
     /// over a scratch copy of the `[code]` walk's files and manifests: the
     /// level and signature cost, a full, an unchanged and a one-file
     /// refresh, the stored twins, signatures and items, each Rust file's

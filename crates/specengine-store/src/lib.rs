@@ -43,7 +43,7 @@
 //!   `spec.lock` for any commit ([`CommitListing`], [`CommitFile`]), a
 //!   path's unmerged stages and files on disk by blob OID (`hash-object`
 //!   without `-w`);
-//! - the code index (docs/features/symbol-index.md "Tables"): a
+//! - the code index (`docs/canon/symbol-index.md` "Tables"): a
 //!   [`CodeAnalyzer`]'s per-file rows stored beside the spec index of the
 //!   same worktree, keyed by `(path, BLAKE3)`, the package and its target
 //!   table and the worktree's `code_fp`, with a cross-file pass, equal to
@@ -51,7 +51,10 @@
 //!   [`SqliteIndex::clear_code`] without `[code]`); read back as
 //!   [`SqliteIndex::stored_names`] (one file's names),
 //!   [`SqliteIndex::code_refs`] (files, markers, mentions) and
-//!   [`SqliteIndex::code_symbols`];
+//!   [`SqliteIndex::code_symbols`]; looked up in tiers
+//!   ([`SqliteIndex::lookup_symbols`], [`SymbolTier`]: one B-tree search
+//!   each, docs/features/symbol-reads.md "Lookup") and per file
+//!   ([`SqliteIndex::file_symbols`]);
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -100,6 +103,7 @@ mod rows;
 mod schema;
 mod search;
 mod source;
+mod symbols;
 mod update;
 mod verify_git;
 mod worktree;
@@ -142,6 +146,7 @@ pub use queue::{
     proposal_columns, record_gate_observed, task_event,
 };
 pub use source::{GitIndex, Listing, Source, WorkingTree};
+pub use symbols::{SymbolHit, SymbolTier};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use verify_git::{
     COMMIT_NOT_A_BLOB, CommitEntry, CommitEntryKind, CommitFile, CommitListing, INDEX_LABEL,
@@ -190,7 +195,7 @@ pub use worktree::{
 /// 9: the code tables `code_worktrees`, `code_files`, `code_packages`,
 /// `symbols`, `symbol_suffixes`, `code_decls`, `code_markers`,
 /// `code_mentions`, created with the schema in every DB and filled by
-/// [`SqliteIndex::update_code`] (docs/features/symbol-index.md "Tables").
+/// [`SqliteIndex::update_code`] (`docs/canon/symbol-index.md` "Tables").
 pub const INDEX_FORMAT: u32 = 9;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the

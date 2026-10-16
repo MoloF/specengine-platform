@@ -117,6 +117,13 @@
 //! - [`verify`]: `spec verify [--changed]`, a state per lock key and
 //!   marker binding, Fix, Check or Pre-existing findings, the verdict under
 //!   `[verify] mode`; its run causes are in the report (exit 2);
+//! - [`symbols`], [`unmapped`]: `spec symbols` (task spec `symbol-reads`:
+//!   a QUERY's items in tiers, a node's, a file's or a line's targets,
+//!   each with its markers; a `--node` naming nothing is an outcome with
+//!   its reason, exit 1) and `spec unmapped` (the units a marker maps, per
+//!   directory and code file), read from the code index; for the bridges
+//!   with [`SymbolsForm`] and [`SYMBOLS_LIMIT_MIN`], [`SYMBOLS_LIMIT_MAX`],
+//!   [`SYMBOLS_LIMIT_DEFAULT`], no clap;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`),
 //!   blocked (`check`, `verify`) or refused by the proposal or its target
 //!   (the queue's commands), 2 could not run (`check`: could not check;
@@ -135,7 +142,7 @@
 //! (`round answer` too, one record per item the owner confirms), `spec lock
 //! accept`, which writes only `spec.lock` and commits it alone, and `spec
 //! lock regen`, which writes only `spec.lock` (canon `spec-lock`,
-//! "Travel and writes"); `index`, `verify`,
+//! "Travel and writes"); `index`, `verify`, `refs`, `symbols`, `unmapped`,
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state` and `round new` write only the data
 //! directory (`propose question`, `discrepancy` and `decision` too), `export
@@ -191,8 +198,10 @@ mod show;
 mod stage;
 mod state;
 mod state_file;
+mod symbols;
 mod task;
 mod tree;
+mod unmapped;
 mod verify;
 mod verify_rows;
 
@@ -319,6 +328,10 @@ pub use state::{
     import_state,
 };
 pub use state_file::STATE_FORMAT;
+pub use symbols::{
+    SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX, SYMBOLS_LIMIT_MIN, SymbolBinding, SymbolTarget,
+    SymbolsForm, SymbolsOutcome, SymbolsRequest, symbols,
+};
 pub use task::{
     TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry, TaskListOutcome,
     TaskListRequest, TaskNewRequest, TaskOutcome, TaskPlanRequest, TaskReportRequest,
@@ -326,6 +339,7 @@ pub use task::{
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
+pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
     VerifiedTree, VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow, verify,
 };
@@ -471,6 +485,10 @@ pub enum Outcome {
     Health(HealthOutcome),
     /// `refs`: what in the code names a node.
     Refs(Box<RefsOutcome>),
+    /// `symbols`: the code index's targets of one form.
+    Symbols(Box<SymbolsOutcome>),
+    /// `unmapped`: how much of the code the spec maps.
+    Unmapped(Box<UnmappedOutcome>),
     /// `lock accept`: the node's entries of `spec.lock`, committed.
     Lock(Box<LockOutcome>),
     /// `lock regen`: a conflict's stages of `spec.lock` merged.
@@ -519,6 +537,7 @@ impl Outcome {
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
             Self::Index(index) if index.code_error.is_some() => Exit::CannotRun,
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
+            Self::Symbols(symbols) if symbols.reason.is_some() => Exit::NotFound,
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
             Self::Verify(verify) => verify.exit(),
@@ -553,6 +572,8 @@ impl Outcome {
             Self::Bump(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Symbols(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Unmapped(outcome) => (&outcome.messages, None),
             Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::LockRegen(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Verify(outcome) => (&outcome.messages, None),
@@ -629,6 +650,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Bump(outcome) => bump::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
+        Outcome::Symbols(outcome) => symbols::render_text(outcome),
+        Outcome::Unmapped(outcome) => unmapped::render_text(outcome),
         Outcome::Lock(outcome) => lock::render_text(outcome),
         Outcome::LockRegen(outcome) => lock_regen::render_text(outcome),
         Outcome::Verify(outcome) => verify::render_text(outcome),
@@ -665,6 +688,8 @@ impl serde::Serialize for Outcome {
             Self::Bump(outcome) => outcome.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),
+            Self::Symbols(outcome) => outcome.serialize(serializer),
+            Self::Unmapped(outcome) => outcome.serialize(serializer),
             Self::Lock(outcome) => outcome.serialize(serializer),
             Self::LockRegen(outcome) => outcome.serialize(serializer),
             Self::Verify(outcome) => outcome.serialize(serializer),

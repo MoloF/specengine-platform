@@ -137,6 +137,7 @@ WA-n: the analysis' working answers (2026-10-10), [A] assumed: WA-1, -2, -3 (git
 ## Dependencies and ordering
 
 - **Needs**: 9a (row shape, walk, parts); slice 3 `spec-lock` (lock reader); 4a `spec-verify` (the judge, run causes). Soft: 8b (`tested`).
+- **Row 5** must align with 6a-3's X3 at the slice 9 refresh: a `cannot_verify` marker maps nothing (`docs/canon/symbol-reads.md` "spec unmapped"; `health-code.md` "What binds").
 - **Order**: 1 -> 3 -> 4a -> … -> 9b, after 9a; independent of 4b, 4c, 6, 7. 5b, 5c reach row 6 through verify (label map: unknown words raw). **Later**: Phase 4's drift screens.
 
 ## Implementation

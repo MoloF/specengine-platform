@@ -39,10 +39,11 @@ use specengine_cli::{
     InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
     LockAcceptRequest, LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText,
     QuestionRequest, RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
-    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest,
-    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
-    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest,
-    VerifiedTree, VerifyRequest, render_json, render_text,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
+    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
+    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
+    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -178,6 +179,31 @@ enum Command {
         /// Any form `show` takes.
         #[arg(value_name = "REF")]
         reference: String,
+    },
+    /// Find code items in the code index: by QUERY (a qpath, a suffix of one or a name, matched in tiers exact, suffix, name), bound to the nodes REF names (--node: items, modules, RON paths), in a file (--file) or covering a line, innermost first (--at); each with its markers; read-only, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run (no `[code]`, a config error, a PATH the walk does not read, a bad LINE, an incomplete walk).
+    #[command(group(ArgGroup::new("form").required(true).args(["query", "node", "file", "at"])))]
+    Symbols {
+        /// A qpath, a suffix of one or a name; the words are joined by a space (quote a `#2`: a shell reads it as a comment).
+        #[arg(value_name = "QUERY")]
+        query: Vec<String>,
+        /// Symbols at most, 1 to 200 (default 20); QUERY only.
+        #[arg(long, value_name = "N", conflicts_with_all = ["node", "file", "at"])]
+        limit: Option<usize>,
+        /// The items, modules and RON paths bound to the nodes REF names (any form `show` takes).
+        #[arg(long, value_name = "REF")]
+        node: Option<String>,
+        /// A code file's items in source order (root-relative).
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+        /// The items covering LINE of a code file, the shortest span first.
+        #[arg(long, value_name = "PATH:LINE")]
+        at: Option<String>,
+    },
+    /// Show how much of the code the spec maps: per directory and code file, the units (items, RON files), those a marker maps (through the item, an enclosing item or inline mod, or the file's module; its ID resolved, an alias or ambiguous), their percent and those a mention reaches; a code file lists its unmapped items; read-only, exit 0, 2 when it cannot run (no `[code]`, a config error, a PATH the walk does not read, an incomplete walk).
+    Unmapped {
+        /// A `[code]` root, or a directory or code file under one (default: a row per root).
+        #[arg(value_name = "PATH")]
+        path: Option<String>,
     },
     /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode.
     Verify {
@@ -834,6 +860,34 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             env,
             globals,
             &RefsRequest { reference },
+        )?)),
+        Command::Symbols {
+            query,
+            limit,
+            node,
+            file,
+            at,
+        } => {
+            // clap's group and `--limit`'s conflicts leave exactly one form.
+            let form = match (node, file, at) {
+                (Some(reference), _, _) => SymbolsForm::Node(reference),
+                (_, Some(path), _) => SymbolsForm::File(path),
+                (_, _, Some(raw)) => SymbolsForm::At(raw),
+                (None, None, None) => SymbolsForm::Query {
+                    terms: query,
+                    limit,
+                },
+            };
+            Outcome::Symbols(Box::new(specengine_cli::symbols(
+                env,
+                globals,
+                &SymbolsRequest { form },
+            )?))
+        }
+        Command::Unmapped { path } => Outcome::Unmapped(Box::new(specengine_cli::unmapped(
+            env,
+            globals,
+            &UnmappedRequest { path },
         )?)),
         Command::Verify { changed, staged } => {
             // clap refuses `--staged` with `--changed`.

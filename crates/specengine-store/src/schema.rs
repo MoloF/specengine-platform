@@ -221,7 +221,7 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// Every table of every index format but `index_meta`, children first; a
 /// later format inserts its tables where their parents ask and never
 /// removes one, as [`FORMAT_TRIGGERS`]. The code tables of format 9
-/// (docs/features/symbol-index.md "Tables") come before `worktrees`, which
+/// (`docs/canon/symbol-index.md` "Tables") come before `worktrees`, which
 /// `code_worktrees` references.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",

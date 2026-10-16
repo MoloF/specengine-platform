@@ -8,6 +8,11 @@
 //! of its "Rules and edge cases" (the store, core and the new modules hold
 //! no fixture word, `::` split or Cargo literal).
 //!
+//! docs/features/symbol-reads.md TE-3 and the genre rule of its "Rules and
+//! edge cases": the slice's store and CLI modules join the scans; no
+//! `tests` or `src` literal (no path is classified) in the store, core or
+//! those modules.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 mod code_index_common;
@@ -565,11 +570,24 @@ const STORE_CODE_MODULE: &str = "crates/specengine-store/src/code.rs";
 /// `specengine-code` ("Crates").
 const ANALYZER_MODULE: &str = "crates/specengine-cli/src/code_index.rs";
 
+/// docs/features/symbol-reads.md's store module, the tier lookups and the
+/// containment as queries over 6a-2's tables (its "Description and
+/// interactions", Crates).
+const STORE_READS_MODULE: &str = "crates/specengine-store/src/symbols.rs";
+
+/// The CLI module of `spec symbols`.
+const SYMBOLS_MODULE: &str = "crates/specengine-cli/src/symbols.rs";
+
+/// The CLI module of `spec unmapped`.
+const UNMAPPED_MODULE: &str = "crates/specengine-cli/src/unmapped.rs";
+
 /// The new modules of the slice, `items.rs` since
 /// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3),
-/// and the store's and the CLI's code-index modules since
-/// docs/features/symbol-index.md ("Rules and edge cases", Genre).
-const NEW_MODULES: [&str; 8] = [
+/// the store's and the CLI's code-index modules since
+/// docs/features/symbol-index.md ("Rules and edge cases", Genre), and the
+/// lookup, `symbols` and `unmapped` modules since
+/// docs/features/symbol-reads.md (its "Rules and edge cases", TE-3).
+const NEW_MODULES: [&str; 11] = [
     "crates/specengine-core/src/code_toml.rs",
     "crates/specengine-code/src/bind.rs",
     "crates/specengine-code/src/naming.rs",
@@ -578,6 +596,9 @@ const NEW_MODULES: [&str; 8] = [
     "crates/specengine-cli/src/refs.rs",
     STORE_CODE_MODULE,
     ANALYZER_MODULE,
+    STORE_READS_MODULE,
+    SYMBOLS_MODULE,
+    UNMAPPED_MODULE,
 ];
 
 /// Stack and genre words no engine source names.
@@ -613,12 +634,20 @@ const EXEMPT: [(&str, &str); 5] = [
 /// Narrow word exemptions of the code-index modules: the spec's column
 /// names `module` (`code_files`) and `note` (`code_markers`), equal to
 /// `fixtures/spec-b`'s kind `module` and a fixture's kind `note`, not
-/// taken from them (docs/features/symbol-index.md "Tables").
-const EXEMPT_WORDS: [(&str, &str); 4] = [
+/// taken from them (docs/features/symbol-index.md "Tables"); and of the
+/// symbol-reads modules: the target word `module` and the JSON key `note`
+/// of `spec symbols`, the binding word `module` the containment reads
+/// (docs/features/symbol-reads.md "spec symbols", "spec unmapped").
+const EXEMPT_WORDS: [(&str, &str); 9] = [
     (STORE_CODE_MODULE, "module"),
     (STORE_CODE_MODULE, "note"),
     (ANALYZER_MODULE, "module"),
     (ANALYZER_MODULE, "note"),
+    (STORE_READS_MODULE, "module"),
+    (STORE_READS_MODULE, "note"),
+    (SYMBOLS_MODULE, "module"),
+    (SYMBOLS_MODULE, "note"),
+    (UNMAPPED_MODULE, "module"),
 ];
 
 /// The string literals of Rust `source`, comments skipped (raw strings,
@@ -880,10 +909,14 @@ fn store_core_and_new_modules_hold_no_path_split_or_cargo_literal() {
     let mut files = sources_under("crates/specengine-store/src");
     files.extend(sources_under("crates/specengine-core/src"));
     files.push(ANALYZER_MODULE.to_owned());
-    assert!(
-        files.iter().any(|file| file == STORE_CODE_MODULE),
-        "the store's code module is {STORE_CODE_MODULE}: {files:?}"
-    );
+    files.push(SYMBOLS_MODULE.to_owned());
+    files.push(UNMAPPED_MODULE.to_owned());
+    for module in [STORE_CODE_MODULE, STORE_READS_MODULE] {
+        assert!(
+            files.iter().any(|file| file == module),
+            "the store's module is {module}: {files:?}"
+        );
+    }
     let mut offenders = Vec::new();
     let mut scanned_literals = 0;
     for file in &files {
@@ -899,6 +932,58 @@ fn store_core_and_new_modules_hold_no_path_split_or_cargo_literal() {
                     .any(|word| word.eq_ignore_ascii_case("cargo"))
             {
                 offenders.push(format!("{file}: {literal:?} (a Cargo literal)"));
+            }
+        }
+    }
+    assert!(
+        scanned_literals > 200,
+        "{scanned_literals} literals scanned"
+    );
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+/// Words of earlier modules that are no path classification: `[verify]`'s
+/// refused key `tests` (core `verify.rs`), `spec.lock`'s header naming
+/// `spec verify --tests` (core `lock.rs`), the `[code]` example
+/// `roots = ["src"]` of a message (core `code_toml.rs`), the `links`
+/// table's column `src`, a link's source node (store `schema.rs`,
+/// `write.rs`).
+const PATH_WORD_EXEMPT: [(&str, &str); 5] = [
+    ("crates/specengine-core/src/verify.rs", "tests"),
+    ("crates/specengine-core/src/lock.rs", "tests"),
+    ("crates/specengine-core/src/code_toml.rs", "src"),
+    ("crates/specengine-store/src/schema.rs", "src"),
+    ("crates/specengine-store/src/write.rs", "src"),
+];
+
+/// docs/features/symbol-reads.md "spec unmapped" ("No path classified")
+/// and its "Rules and edge cases", Genre: no string literal of the store,
+/// core, or the `symbols` and `unmapped` modules holds the word `tests` or
+/// `src` (a directory read as tests or sources), but the narrow
+/// [`PATH_WORD_EXEMPT`]. M: `unmapped` sorts a `tests` directory apart.
+#[test]
+fn store_core_and_new_modules_hold_no_tests_or_src_literal() {
+    let mut files = sources_under("crates/specengine-store/src");
+    files.extend(sources_under("crates/specengine-core/src"));
+    files.push(SYMBOLS_MODULE.to_owned());
+    files.push(UNMAPPED_MODULE.to_owned());
+    assert!(
+        files.iter().any(|file| file == STORE_READS_MODULE),
+        "the store's lookup module is {STORE_READS_MODULE}: {files:?}"
+    );
+    let mut offenders = Vec::new();
+    let mut scanned_literals = 0;
+    for file in &files {
+        let source = scanned(file);
+        for literal in literals(&source) {
+            scanned_literals += 1;
+            for word in words(&literal) {
+                let low = word.to_lowercase();
+                if (low == "tests" || low == "src")
+                    && !PATH_WORD_EXEMPT.contains(&(file.as_str(), low.as_str()))
+                {
+                    offenders.push(format!("{file}: {literal:?} ({word})"));
+                }
             }
         }
     }

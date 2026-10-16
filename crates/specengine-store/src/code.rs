@@ -1,9 +1,9 @@
-//! The code index (docs/features/symbol-index.md "Tables", "Cache key and
-//! cross-file pass"): per-file rows a [`CodeAnalyzer`] makes, stored beside
-//! the spec index of the same worktree, row for row equal to a fresh
-//! rebuild. The store compares, applies and runs the cross-file pass; what
-//! a row says about the code is the analyzer's (the store knows no
-//! language: it stores strings and compares them).
+//! The code index (`docs/canon/symbol-index.md` "Tables",
+//! "Cache key and cross-file pass"): per-file rows a [`CodeAnalyzer`]
+//! makes, stored beside the spec index of the same worktree, row for row
+//! equal to a fresh rebuild. The store compares, applies and runs the
+//! cross-file pass; what a row says about the code is the analyzer's (the
+//! store knows no language: it stores strings and compares them).
 //!
 //! - **Cache key**: a file is re-derived when its BLAKE3, its package
 //!   directory or that package's `targets_fp` (BLAKE3 of its target table)
@@ -31,6 +31,17 @@ use crate::index::SqliteIndex;
 use crate::read::{with_worktree, worktree_id};
 use crate::rows::hash_bytes;
 use crate::{b3_hash, schema, write};
+
+/// The columns [`stored_symbol`] reads, `s` a `symbols` row and `f` its
+/// `code_files` row: a literal, for `concat!`.
+macro_rules! symbol_columns {
+    () => {
+        "f.path, s.ord, s.item_kind, s.name, s.owner, s.qpath, s.discriminator,
+         s.parent_ord, s.start_line, s.end_line, s.start_byte, s.end_byte, s.signature,
+         s.level_state, s.layer, s.twin_files, f.declared_by IS NOT NULL, f.role"
+    };
+}
+pub(crate) use symbol_columns;
 
 /// A file's role whose unit several crates may include: named by its
 /// location, never `path_attribute`.
@@ -76,8 +87,7 @@ const DECLARED_BY_SQL: &str = "SELECT min(f.path)
 
 /// The code tree a refresh indexes, as its analyzer gives it: listing,
 /// packages, per-file rows. Plain rows only: the store depends on no code
-/// library (docs/features/symbol-index.md "Description and interactions",
-/// Crates).
+/// library (`docs/canon/symbol-index.md` "Crates and seams").
 pub trait CodeAnalyzer {
     /// The files of the code walk, read: each listed file once, by path.
     fn list(&self) -> Result<CodeListing, StoreError>;
@@ -273,8 +283,9 @@ pub struct StoredName {
     pub discriminator: Option<String>,
 }
 
-/// The names one file holds (docs/features/symbol-index.md "Description and
-/// interactions", 6b's partial tree): its module and every item by `ord`.
+/// The names one file holds
+/// (`docs/canon/symbol-index.md` "Crates and seams", 6b's partial tree):
+/// its module and every item by `ord`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredNames {
     pub module: StoredName,
@@ -295,6 +306,8 @@ pub struct CodeFileState {
 /// The symbol a marker or a mention is bound to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundSymbol {
+    /// Its `ord` in the marker's or mention's own file.
+    pub ord: u32,
     pub qpath: String,
     pub item_kind: String,
     pub start_line: u32,
@@ -358,8 +371,13 @@ pub struct StoredSymbol {
     pub parent_ord: Option<u32>,
     pub start_line: u32,
     pub end_line: u32,
+    /// Its byte range in its file as indexed.
+    pub start_byte: u32,
+    pub end_byte: u32,
     pub signature: Option<String>,
     pub level_state: String,
+    /// The layer whose rules made the row.
+    pub layer: String,
     pub twin_files: u32,
     pub ambiguity: Option<String>,
 }
@@ -478,46 +496,51 @@ impl SqliteIndex {
                 return Ok(None);
             }
             let mut statement = tx
-                .prepare(
-                    "SELECT f.path, s.ord, s.item_kind, s.name, s.owner, s.qpath,
-                            s.discriminator, s.parent_ord, s.start_line, s.end_line,
-                            s.signature, s.level_state, s.twin_files,
-                            f.declared_by IS NOT NULL, f.role
-                     FROM code_files f JOIN symbols s ON s.file = f.file_id
-                     WHERE f.wt = ?1 ORDER BY f.path, s.ord",
-                )
+                .prepare(concat!(
+                    "SELECT ",
+                    symbol_columns!(),
+                    " FROM code_files f JOIN symbols s ON s.file = f.file_id
+                     WHERE f.wt = ?1 ORDER BY f.path, s.ord"
+                ))
                 .db()?;
             let symbols = statement
-                .query_map([wt], |row| {
-                    let twin_files: i64 = row.get(12)?;
-                    let role: Option<String> = row.get(14)?;
-                    let facts = FileFacts {
-                        declared: row.get(13)?,
-                        role: role.as_deref(),
-                    };
-                    Ok(StoredSymbol {
-                        path: row.get(0)?,
-                        ord: row.get(1)?,
-                        item_kind: row.get(2)?,
-                        name: row.get(3)?,
-                        owner: row.get(4)?,
-                        qpath: row.get(5)?,
-                        discriminator: row.get(6)?,
-                        parent_ord: row.get(7)?,
-                        start_line: row.get(8)?,
-                        end_line: row.get(9)?,
-                        signature: row.get(10)?,
-                        level_state: row.get(11)?,
-                        twin_files: u32::try_from(twin_files).unwrap_or(u32::MAX),
-                        ambiguity: facts.item_ambiguity(twin_files).map(str::to_owned),
-                    })
-                })
+                .query_map([wt], stored_symbol)
                 .db()?
                 .collect::<Result<Vec<_>, _>>()
                 .db()?;
             Ok(Some(symbols))
         })
     }
+}
+
+/// A symbol with its file and its ambiguity from a row of
+/// [`symbol_columns!`] (first).
+pub(crate) fn stored_symbol(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredSymbol> {
+    let twin_files: i64 = row.get(15)?;
+    let role: Option<String> = row.get(17)?;
+    let facts = FileFacts {
+        declared: row.get(16)?,
+        role: role.as_deref(),
+    };
+    Ok(StoredSymbol {
+        path: row.get(0)?,
+        ord: row.get(1)?,
+        item_kind: row.get(2)?,
+        name: row.get(3)?,
+        owner: row.get(4)?,
+        qpath: row.get(5)?,
+        discriminator: row.get(6)?,
+        parent_ord: row.get(7)?,
+        start_line: row.get(8)?,
+        end_line: row.get(9)?,
+        start_byte: row.get(10)?,
+        end_byte: row.get(11)?,
+        signature: row.get(12)?,
+        level_state: row.get(13)?,
+        layer: row.get(14)?,
+        twin_files: u32::try_from(twin_files).unwrap_or(u32::MAX),
+        ambiguity: facts.item_ambiguity(twin_files).map(str::to_owned),
+    })
 }
 
 /// What a file's row says about its names' ambiguity.
@@ -591,12 +614,12 @@ fn file_states(tx: &Transaction<'_>, wt: i64) -> Result<Vec<CodeFileState>, Stor
 
 /// The binding of a marker or mention row: its columns from `first` on are
 /// `binding`, `anchor`, then the bound symbol's `qpath`, `item_kind`,
-/// `start_line`, `twin_files` (NULL without one), then the file's
+/// `start_line`, `twin_files`, `ord` (NULL without one), then the file's
 /// `declared_by IS NOT NULL` and `role`.
 fn binding_at(row: &rusqlite::Row<'_>, first: usize) -> rusqlite::Result<StoredBinding> {
-    let role: Option<String> = row.get(first + 7)?;
+    let role: Option<String> = row.get(first + 8)?;
     let facts = FileFacts {
-        declared: row.get(first + 6)?,
+        declared: row.get(first + 7)?,
         role: role.as_deref(),
     };
     let qpath: Option<String> = row.get(first + 2)?;
@@ -604,6 +627,7 @@ fn binding_at(row: &rusqlite::Row<'_>, first: usize) -> rusqlite::Result<StoredB
         Some(qpath) => {
             let twin_files: i64 = row.get(first + 5)?;
             Some(BoundSymbol {
+                ord: row.get(first + 6)?,
                 qpath,
                 item_kind: row.get(first + 3)?,
                 start_line: row.get(first + 4)?,
@@ -625,7 +649,7 @@ fn stored_markers(tx: &Transaction<'_>, wt: i64) -> Result<Vec<StoredMarker>, St
             "SELECT f.path, m.relation, m.token, m.id, m.rev, m.levels, m.levels_state,
                     m.note, m.line, m.\"column\",
                     m.binding, m.anchor, s.qpath, s.item_kind, s.start_line, s.twin_files,
-                    f.declared_by IS NOT NULL, f.role
+                    s.ord, f.declared_by IS NOT NULL, f.role
              FROM code_files f JOIN code_markers m ON m.file = f.file_id
              LEFT JOIN symbols s ON s.file = m.file AND s.ord = m.symbol_ord
              WHERE f.wt = ?1 ORDER BY f.path, m.ord",
@@ -658,7 +682,7 @@ fn stored_mentions(tx: &Transaction<'_>, wt: i64) -> Result<Vec<StoredMention>, 
         .prepare(
             "SELECT f.path, m.written, m.line, m.\"column\",
                     m.binding, m.anchor, s.qpath, s.item_kind, s.start_line, s.twin_files,
-                    f.declared_by IS NOT NULL, f.role
+                    s.ord, f.declared_by IS NOT NULL, f.role
              FROM code_files f JOIN code_mentions m ON m.file = f.file_id
              LEFT JOIN symbols s ON s.file = m.file AND s.ord = m.symbol_ord
              WHERE f.wt = ?1 ORDER BY f.path, m.ord",
@@ -799,7 +823,10 @@ fn update(
     let rederived_all = full
         || current_fp.as_deref().is_some_and(|fp| fp != code_fp)
         || current_fp.is_none() && index.reparsed_all;
-    match current_fp {
+    // A no-op refresh writes nothing: the stamp and the package rows are
+    // written only when they differ.
+    match current_fp.as_deref() {
+        Some(fp) if fp == code_fp => {}
         Some(_) => {
             tx.execute(
                 "UPDATE code_worktrees SET code_fp = ?1 WHERE wt = ?2",
@@ -815,30 +842,7 @@ fn update(
             .db()?;
         }
     }
-    tx.execute("DELETE FROM code_packages WHERE wt = ?1", [wt])
-        .db()?;
-    {
-        let mut insert = tx
-            .prepare(
-                "INSERT INTO code_packages (wt, dir, manifest_b3, source, targets)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-            )
-            .db()?;
-        let mut dirs = BTreeSet::new();
-        for row in &packages {
-            if dirs.insert(row.dir.as_str()) {
-                insert
-                    .execute((
-                        wt,
-                        row.dir.as_str(),
-                        row.manifest_b3.as_deref(),
-                        row.source.as_str(),
-                        row.targets.as_str(),
-                    ))
-                    .db()?;
-            }
-        }
-    }
+    write_packages(&tx, wt, &packages)?;
 
     let stored = stored_keys(&tx, wt)?;
     let mut writer = Writer::new(&tx)?;
@@ -912,6 +916,69 @@ fn update(
     report.skipped = listing.skipped + report.not_utf8.len();
     tx.commit().db()?;
     Ok(report)
+}
+
+/// The package rows of a refresh, by directory (a repeated directory's
+/// first row kept): what `code_packages` holds after it.
+fn package_rows(packages: &[CodePackageRow]) -> Vec<&CodePackageRow> {
+    let mut by_dir: BTreeMap<&str, &CodePackageRow> = BTreeMap::new();
+    for row in packages {
+        by_dir.entry(row.dir.as_str()).or_insert(row);
+    }
+    by_dir.into_values().collect()
+}
+
+/// Rewrites the worktree's `code_packages` with `packages`, only when the
+/// stored rows differ.
+fn write_packages(
+    tx: &Transaction<'_>,
+    wt: i64,
+    packages: &[CodePackageRow],
+) -> Result<(), StoreError> {
+    let rows = package_rows(packages);
+    let stored = {
+        let mut statement = tx
+            .prepare(
+                "SELECT dir, manifest_b3, source, targets FROM code_packages
+                 WHERE wt = ?1 ORDER BY dir",
+            )
+            .db()?;
+        statement
+            .query_map([wt], |row| {
+                Ok(CodePackageRow {
+                    dir: row.get(0)?,
+                    manifest_b3: row.get(1)?,
+                    source: row.get(2)?,
+                    targets: row.get(3)?,
+                })
+            })
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?
+    };
+    if stored.len() == rows.len() && stored.iter().zip(&rows).all(|(old, new)| old == *new) {
+        return Ok(());
+    }
+    tx.execute("DELETE FROM code_packages WHERE wt = ?1", [wt])
+        .db()?;
+    let mut insert = tx
+        .prepare(
+            "INSERT INTO code_packages (wt, dir, manifest_b3, source, targets)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+        )
+        .db()?;
+    for row in rows {
+        insert
+            .execute((
+                wt,
+                row.dir.as_str(),
+                row.manifest_b3.as_deref(),
+                row.source.as_str(),
+                row.targets.as_str(),
+            ))
+            .db()?;
+    }
+    Ok(())
 }
 
 /// path → (file_id, key) of the worktree's stored code files.

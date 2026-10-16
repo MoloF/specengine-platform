@@ -111,6 +111,9 @@ pub enum Unanchored {
 }
 
 impl Unanchored {
+    /// Every category, in the order they are tried.
+    pub const ALL: [Self; 4] = [Self::InMacro, Self::InBody, Self::NoItem, Self::NotAnItem];
+
     /// The fixed category name.
     #[must_use]
     pub fn as_str(self) -> &'static str {
