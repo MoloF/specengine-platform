@@ -70,14 +70,14 @@ Rule: `architecture.md#control`. ADR-0046.
 <a id="health"></a>
 ## Health's code rows
 
-Rule: `architecture.md#control`, `architecture.md#universal`. ADR-0047.
+Rule: `architecture.md#control`, `architecture.md#universal`. ADR-0047, ADR-0051.
 
 `spec health` (and its route) lists rows 4-6 of "What is left" (06 s7) beside row 3, each its own key, informational only:
 
 - **Row 4**, code assuming a decision: each marker naming a queue item (`code-bindings.md` "ID state" `queue`), looked up by exact ID in the slug's queue: pending, as assumed (the working answer, or the recommended option), otherwise, applied, rejected or unknown; each `@assumes` naming a node whose document is Tier 3, or which an open or approved item targets. A project's status words are never interpreted.
-- **Row 5**, unbound nodes: the live nodes, documents or `{#ID}` sections, that the project's `[[health.bound]]` rules select (`[[check.rules]]`' selectors: kinds, classes, paths, front-matter values; a section by its ID's prefix kind) and that no marker of the rule's relations binds (an ID resolved, an alias or each ambiguous holder; an item, module, RON path or `cannot_verify`). Mentions, look-alikes, `unanchored` never bind; a revision never matters. No rule: not measured, never "all unbound"; `spec check` never reads the table.
+- **Row 5**, unbound nodes: the live nodes, documents or `{#ID}` sections, that the project's `[[health.bound]]` rules select (`[[check.rules]]`' selectors: kinds, classes, paths, front-matter values; a section by its ID's prefix kind) and that no marker of the rule's relations binds by `spec unmapped`'s predicate (`symbol-reads.md` "spec unmapped"): an ID resolved, an alias or each ambiguous holder, placed on an item, a module or a RON path (`ron_ambiguous` too). Mentions, look-alikes, `unanchored` and `cannot_verify` never bind; containment and a revision never matter. No rule: not measured, never "all unbound"; `spec check` never reads the table.
 - **Row 6**, drift: plain `spec verify`'s judgement, run in-process, its rows but `ok`; never its mode or verdict.
-- One fresh code walk per call, never 6a's code index; the queue is opened only if it exists; git only through verify (`hash-object` without `-w`). Only the data directory's index is written. A row it cannot measure shows its causes, never 0, and leaves the other rows and the exit as they are; no exit 1.
+- Rows 4-5 read the code index the call refreshes, as `spec refs` does (`symbol-index.md`), never a walk of their own; no `[code]`: not measured, nothing opened. The queue is opened only if it exists, no schema step run; git only through verify (`hash-object` without `-w`). Only the data directory's indexes are written. A row it cannot measure shows its causes, never 0, and leaves the other rows and the exit as they are; no exit 1.
 
 <a id="tests"></a>
 ## Tests as evidence

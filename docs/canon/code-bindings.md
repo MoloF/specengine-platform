@@ -60,7 +60,7 @@ The token and the ID: `code-identity.md` "Marker grammar". The ID is re-read by 
 | `ambiguous` | several nodes (duplicates, several holders) | each |
 | `homoglyph` | look-alike or mixed script, Latin `fix` shown, never resolved (ADR-0009) | the fix's node |
 | `other_project` | a `project:` qualifier | none |
-| `queue` | no node, and the queue's form `PR-` + digits (a project prefix `PR` resolves first); not looked up (slice 9, `health-code`) | none |
+| `queue` | no node, and the queue's form `PR-` + digits (a project prefix `PR` resolves first); not looked up here; Health's row 4 does (`architecture-code.md#health`) | none |
 | `dangling` | else: empty ID, no reference, unknown prefix, no node | none |
 
 ## Revision state

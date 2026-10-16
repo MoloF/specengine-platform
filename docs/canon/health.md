@@ -18,7 +18,7 @@ Listed: a spec `draft` or `in-progress`, a decision `accepted` or without `statu
 
 ## spec health
 
-`spec health [--json]`, global flags only (CLI `health(&Env, &Globals) -> HealthOutcome`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). No database, index refresh, queue, git, clock or baseline; the data directory is never resolved; nothing is written. Links: `SpecGraph::new` over the same input, built only when a document is listed; each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
+`spec health [--json]`, global flags only (CLI `health(&Env, &Globals) -> HealthOutcome`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). No database, index refresh, queue, git, clock or baseline; the data directory is never resolved; nothing is written. Rows 4-5 (from 9a-1) refresh and read the code index as `spec refs` does, not for a project without `[code]` (`architecture-code.md#health`, ADR-0051). Links: `SpecGraph::new` over the same input, built only when a document is listed; each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
 
 **Text**, each line one-lined: per amendment `<path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]` (absent parts omitted), then each link as `show --links` prints an out line, two spaces in; last, always: `spec health: <d> documents, <n> unapplied amendments`.
 
@@ -61,4 +61,4 @@ Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2),
 
 ## Tests
 
-CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (44 key sets); UI `health.smoke`, `health.live`, `HealthView`, `mocks/health`, `daemonKeys`, `policy` tests.
+CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (46 key sets); UI `health.smoke`, `health.live`, `HealthView`, `mocks/health`, `daemonKeys`, `policy` tests.

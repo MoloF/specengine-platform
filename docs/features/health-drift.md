@@ -63,6 +63,8 @@ WA-2, Q6. 9a's list gains row 6: no `[code]` -> rows 4-6 `off`; a bad `[code]`, 
 
 WA-4, Q8. 9a's `code_walk::read_tree` result feeds rows 4-5 and verify's judge; 6a's code index is neither read nor refreshed. 4a's CLI judge takes the walk (`spec-verify.md` RD-10) and re-parses only the bound files whose blob changed (its Q4), `spec verify` byte-identical (RD-13).
 
+**Note 2026-10-16** (9a's refresh, `health-code.md` Q8, Q18; ADR-0051): 9a-1 reads rows 4-5 from the code index the call refreshes; there is no 9a walk to share. Working answer: row 6 runs 7a's `sync` judge over that index (`docs/canon/architecture-code.md#sync-in-reads`), never a walk of its own. This section, "Why"' and "Description"'s "9a's walk", RD-13's `health_calls_read_tree_once` and Q8, Q9 below are restated at 9b's refresh, which decides; 9b then follows 7a.
+
 ### Route and UI
 
 WA-9, WA-10.
@@ -89,7 +91,7 @@ rust-developer, M: mutation -> the test turning red (CLI `tests/health.rs` unles
 - [ ] RD-15 -- 9a's tests extended to `drift`: `health_code_keys_present_without_code_table`, `health_writes_no_lock_queue_row_or_event` (lock bytes too), `health_code_rows_are_byte_identical_across_roots_and_order`, http `a_row_that_cannot_be_measured_is_still_a_200` (an invalid lock). M: each key or scenario dropped -> its test.
 - [ ] RD-16 -- 8b shipped first: M: a `verified` entry listed -> `drift_tested_lists_only_unverified`; else 8b's spec takes it.
 
-ui-developer (row 6; rows 4-5: `health-code.md`):
+ui-developer (row 6; rows 4-5: `health-code-ui.md`):
 
 - [ ] UI-1 -- the provisional `drift` types cite "Data". M: a key missing -> `daemonKeys.test.ts`.
 - [ ] UI-2 -- row 6's four states; `HealthView.test.tsx`'s "no digit in row 6" replaced by them. M: 0 drawn for `cannot` -> `HealthView.test.tsx`.
@@ -136,8 +138,8 @@ WA-n: the analysis' working answers (2026-10-10), [A] assumed: WA-1, -2, -3 (git
 
 ## Dependencies and ordering
 
-- **Needs**: 9a (row shape, walk, parts); slice 3 `spec-lock` (lock reader); 4a `spec-verify` (the judge, run causes). Soft: 8b (`tested`).
-- **Row 5** must align with 6a-3's X3 at the slice 9 refresh: a `cannot_verify` marker maps nothing (`docs/canon/symbol-reads.md` "spec unmapped"; `health-code.md` "What binds").
+- **Needs**: 9a-1 and 9a-2 (row shape, parts; the walk: "One walk"' note); slice 3 `spec-lock` (lock reader); 4a `spec-verify` (the judge, run causes). Soft: 8b (`tested`).
+- **Row 5** aligned with 6a-3's X3 at 9a's refresh (2026-10-16): a `cannot_verify` marker binds nothing (`health-code.md` "What binds").
 - **Order**: 1 -> 3 -> 4a -> … -> 9b, after 9a; independent of 4b, 4c, 6, 7. 5b, 5c reach row 6 through verify (label map: unknown words raw). **Later**: Phase 4's drift screens.
 
 ## Implementation

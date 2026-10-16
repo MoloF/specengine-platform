@@ -85,7 +85,7 @@ No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distr
 
 ## Concurrency
 
-Requests of one project run one at a time on the blocking pool (a read refreshes its index; `check`, `health`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
+Requests of one project run one at a time on the blocking pool (a read refreshes its index; from 9a-1 `health` too, for rows 4-5 (ADR-0051); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
 
 ## Known limits
 
