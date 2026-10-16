@@ -153,6 +153,7 @@ mod bump;
 mod bundle;
 mod cap;
 mod check;
+mod code_index;
 mod code_walk;
 mod corpus;
 mod create;
@@ -211,6 +212,7 @@ pub use bundle::{
 };
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
+pub use code_index::{CodeRefresh, listed_code_files, refresh_code};
 pub use corpus::LeftOut;
 pub use create::{
     CreateRequest, propose_create, propose_create_brief, propose_create_brief_with_task,
@@ -515,6 +517,7 @@ impl Outcome {
             Self::Tree(tree) if tree.reason.is_some() => Exit::NotFound,
             Self::Graph(graph) if graph.reason.is_some() => Exit::NotFound,
             Self::Bundle(bundle) if bundle.reason.is_some() => Exit::NotFound,
+            Self::Index(index) if index.code_error.is_some() => Exit::CannotRun,
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
@@ -574,6 +577,13 @@ impl Outcome {
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
             lines.push(format!("spec: {}", one_line(reason)));
+        }
+        // A `[code]` that does not read: its config line, as `spec refs`
+        // prints it, after the spec index was written.
+        if let Self::Index(outcome) = self
+            && let Some(error) = &outcome.code_error
+        {
+            lines.push(one_line(error));
         }
         // The queue's commands quote agent-written text.
         // So do the lock's commands: a path, a `qpath`, an ID.

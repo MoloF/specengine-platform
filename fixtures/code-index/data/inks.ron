@@ -1,0 +1,7 @@
+// Inks of a sheet (SLAB-INK).
+// @configures SLAB-INK@1
+Inks(
+    width: 80, // @configures TENET-WIDTH@2
+    // see TENET-FLOW
+    flow: 1,
+)

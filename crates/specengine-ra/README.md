@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-ra]
 owner: owner
-reviewed: 2026-09-29
+reviewed: 2026-10-16
 ---
 
 # specengine-ra — layer C: rust-analyzer as a library
@@ -23,6 +23,8 @@ Layer C of 05 §5.1 (ADR-0020): loads a Cargo workspace read-only into rust-anal
 1. `Project::discover(LoadOptions)` — `cargo metadata` of the workspace and the sysroot, toolchain queries; `ProjectSummary` (toolchain, packages, sysroot, `metadata_degraded` when metadata with dependencies fails and the load falls back to `--no-deps`).
 2. `Project::run_build_scripts` — only with `proc_macros`: `cargo check --compile-time-deps` builds build scripts and proc-macro dylibs into the target directory; `BuildScriptsSummary`.
 3. `Project::into_workspace` — files and crate graph into the database, the proc-macro server when asked (`ProcMacroServer`: `disabled`, `running`, `failed`; `ProcMacroCrates` loaded / not loaded) → `Workspace`.
+
+`specengine-eval ra` times them: `cold_ms` = metadata + build scripts + database + first pass; `warm_ms` = an in-memory appended function + a full pass; `metadata_degraded` = `--locked` failed, `--no-deps` used; `target_dir_fresh` = no build output in the target directory beforehand.
 
 `Workspace::{file, scan, append, close}`: look a file up, scan its items, append text in memory (the warm edit), and **`close` shuts the proc-macro server down** — call it before reporting, so no server outlives the load. A failed step is a `LoadError` (`path`, `metadata`, `build_scripts`, `database` via `category()`); its message may name paths, so it belongs in per-run detail only.
 

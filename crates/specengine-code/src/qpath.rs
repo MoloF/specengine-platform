@@ -200,6 +200,46 @@ pub struct QPath {
     pub name: String,
 }
 
+impl QPath {
+    /// The segments the path renders, in order: the package, the unit, each
+    /// module, the owner, the name (`<T as a::Tr>` is one segment).
+    #[must_use]
+    pub fn segments(&self) -> Vec<String> {
+        let mut segments = vec![self.package.clone()];
+        if let Some(unit) = &self.unit {
+            segments.push(unit.to_string());
+        }
+        segments.extend(self.module.iter().cloned());
+        if let Some(owner) = &self.owner {
+            segments.push(owner.clone());
+        }
+        segments.push(self.name.clone());
+        segments
+    }
+
+    /// The path's suffixes by depth: depth `d` (the `d`-th entry, from 1) is
+    /// its last `d` [`Self::segments`] joined by `::`, the name followed by
+    /// ` #<discriminator>` when a twin's is given; the deepest is the whole
+    /// rendered name. Read from the structure, never by splitting a name.
+    #[must_use]
+    pub fn suffixes(&self, discriminator: Option<&str>) -> Vec<String> {
+        let mut segments = self.segments();
+        if let (Some(value), Some(name)) = (discriminator, segments.last_mut()) {
+            name.push_str(crate::naming::DISCRIMINATOR_SEPARATOR);
+            name.push_str(value);
+        }
+        let mut suffixes: Vec<String> = Vec::with_capacity(segments.len());
+        for segment in segments.iter().rev() {
+            let suffix = match suffixes.last() {
+                Some(deeper) => format!("{segment}::{deeper}"),
+                None => segment.clone(),
+            };
+            suffixes.push(suffix);
+        }
+        suffixes
+    }
+}
+
 impl fmt::Display for QPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.package)?;

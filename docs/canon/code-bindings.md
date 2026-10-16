@@ -8,7 +8,7 @@ reviewed: 2026-10-16
 
 # Code bindings: `[code]`, markers bound to code, `spec refs`
 
-`spec refs REF` reads the `[code]` tree afresh per call: each marker gets one Rust item, module or RON path, or a reason; its ID resolves as `spec show`'s REF, its `@N` meets the node's revision; ID citations in comments are weak mentions (ADR-0010, -0016, -0018, -0020: `docs/canon/architecture-code.md#markers`). Every state is listed, nothing blocked (ADR-0012). Code: core `code_toml.rs`; `specengine-code` `bind.rs`, `naming.rs`; CLI `code_walk.rs`, `refs.rs`. Units, `qpath`, marker grammar, RON anchors: `docs/canon/code-identity.md`. Built by `docs/features/code-refs.md`.
+`spec refs REF` reads the code index, refreshed from the `[code]` tree per call (`docs/canon/symbol-index.md`); `lock accept` and `verify` walk the tree afresh. Each marker gets one Rust item, module or RON path, or a reason; its ID resolves as `spec show`'s REF, its `@N` meets the node's revision; ID citations in comments are weak mentions (ADR-0010, -0016, -0018, -0020: `docs/canon/architecture-code.md#markers`). Every state is listed, nothing blocked (ADR-0012). Code: core `code_toml.rs`; `specengine-code` `bind.rs`, `naming.rs`; CLI `code_walk.rs`, `code_index.rs`, `refs.rs`. Units, `qpath`, marker grammar, RON anchors: `docs/canon/code-identity.md`. Built by `docs/features/code-refs.md`.
 
 ## The `[code]` table
 
@@ -26,9 +26,9 @@ exclude = ["**/target/**", "crates/*/tests/fixtures/**"] # optional
 
 - Regular files named `*.rs`, `*.ron` under the roots minus `exclude`, as the spec walk lists `.md` (`crates/specengine-store/README.md` "Walk"): below a root, symlinks and `.`-names skipped; no `.gitignore`; root-relative `/` paths, byte-sorted, repeats dropped. A directory an exclude `G/**` covers is not listed (one unlistable inside it is no gap).
 - **Not UTF-8**: content -> `note: <path> is not UTF-8: skipped`, counted `skipped`; a name -> counted `skipped`, no note, even where an exclude would drop it (a non-UTF-8 name is never matched). `.`-names and excluded files are neither files nor skipped.
-- **Gaps**: a directory that cannot be listed (one on the way to a root too), a file that cannot be read, a Rust file the parser gives no tree -> exit 2, `spec: the code walk is incomplete: <gap>`, the first by path (a file before a directory of the same path), stdout empty, never a partial list.
+- **Gaps**: a directory that cannot be listed (one on the way to a root too), a file that cannot be read, a Rust file the parser gives no tree -> exit 2, `spec: the code walk is incomplete: <gap>`, the first by path (a file before a directory of the same path), stdout empty, never a partial list (`spec index`: a `warning:`, exit 0).
 - **Packages**: a `.rs` file's package is the nearest directory, its own up to the root, holding a regular `Cargo.toml`; its targets `layout_targets` over the package's walked files (no subprocess, no `cargo metadata`: `code-targets.md` "Target table"). No package: unrooted, package `.`.
-- Each walked file and probed manifest is read once; nothing about code is stored.
+- Each walked file and probed manifest is read once per call. The code index lists through this walk and stores what the rules below give (`symbol-index.md`); the walk stays `refs`' test oracle.
 
 ## Rust binding
 
@@ -81,20 +81,20 @@ R, the node's own revision (`docs/canon/node-revision.md` "Revision"): a documen
 
 ## `spec refs`
 
-`spec refs REF [--json]`. REF: every `spec show` form (`@rev` ignored with a `note:`; look-alike, mixed script, `project:` -> exit 2; several holders -> one `warning:`, a block each; a `.md` path with no node -> exit 1, `has no node`). A block lists what names its node, never its sections or parents. Order of work: config, REF, walk. The rows, JSON and exits: `docs/canon/spec-cli-refs.md`.
+`spec refs REF [--json]`. REF: every `spec show` form (`@rev` ignored with a `note:`; look-alike, mixed script, `project:` -> exit 2; several holders -> one `warning:`, a block each; a `.md` path with no node -> exit 1, `has no node`). A block lists what names its node, never its sections or parents. Order of work: config, REF, the code index's refresh (`symbol-index.md` "spec refs and spec index"). The rows, JSON and exits: `docs/canon/spec-cli-refs.md`.
 
 - Order: markers by relation (`implements`, `verifies`, `configures`, `assumes`), path bytes, line, column; then mentions by path, line, column; the summary last, counting every row of every block (a marker under two holders twice), cut ones too.
 - Cap `OUTPUT_CAP_CHARS` (40 000): rows while the text stays within it, then `[truncated: <k> markers, <j> mentions not shown]`.
 
 ## Guarantees
 
-- **Read-only**: only the data directory is written (the reads' index refresh); nothing under the root; `INDEX_FORMAT` unchanged.
+- **Read-only**: only the data directory is written (the md and code index refresh); nothing under the root.
 - **Deterministic**: one state, byte-identical stdout, stderr, JSON whatever the absolute root, cwd, creation order, LF or CRLF.
 - `spec check` reads no code and has no code finding; the hook's triggers are unchanged.
 - The CLI depends on `specengine-code`, hence tree-sitter (`docs/canon/stack.md`).
 
 ## Known limits
 
-- The whole tree is parsed per call (an index: slice 6, `symbol-index`); measured in debug, 457 `.rs` files in ~5.5 s.
+- `lock accept` and `verify` parse the whole tree per call (debug: 457 `.rs` files in ~5.5 s); `refs` re-derives only the files whose cache key moved, but lists and hashes every one (`symbol-index.md` "Known limits").
 - An unreadable root manifest renders units such as `.::bin:.::main`: deterministic, kept.
 - Untested: non-UTF-8 names, readdir order (the test host's file system refuses the one, sorts the other).

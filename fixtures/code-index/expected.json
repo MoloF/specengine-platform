@@ -1,0 +1,126 @@
+{
+ "_comment": "What docs/features/symbol-index.md (draft, refreshed 2026-10-15) says the code index stores, `spec index` prints, `spec refs` answers from the index and `specengine-eval code-index` counts on this corpus (TE-1, RD-12; Q24). Derived by hand from the spec, docs/features/symbol-discriminator.md and docs/canon/code-identity.md, code-bindings.md before any run (Phase A): `symbols` is every row of the `symbols` table by (path, ord), `ord` the item's index in the file's analysis (pre-order: an item, then the items of its inline mod, impl or trait body, then its next sibling), `parent_ord` the enclosing item's (an impl, a trait, an inline mod), `name` the bare last segment (no discriminator), `owner` an impl's or trait's label; `start_line`/`end_line` the item node's, attributes and comments excluded; `signature` the display signature (6a-1), null for a broken item; `level_state`, `level_categories` 5a-1's LevelState; `twin_files` the pass's count of other files rendering the undiscriminated qpath. `suffixes` maps a qpath to its `symbol_suffixes` rows by depth (1 = the last segment), read from the structured segments (`<Page as std::fmt::Display>` is one segment). `refs` holds `spec refs REF`'s lines after the node's header, the summary last. `eval` is the `code-index` envelope's counts with a cargo that never answers (`roles.metadata` 0, `differ` null).",
+ "slug": "inkwell",
+ "index_code_line": "code inkwell: walked 10, parsed 10, unchanged 0, removed 0, unreadable 0, skipped 0, symbols 31, markers 18, mentions 11",
+ "code_files": [
+  {"path": "crates/inkwell/src/bin/stamp.rs", "package": "crates/inkwell", "module": "crates/inkwell::bin:stamp"},
+  {"path": "crates/inkwell/src/broken.rs", "package": "crates/inkwell", "module": "crates/inkwell::broken"},
+  {"path": "crates/inkwell/src/lib.rs", "package": "crates/inkwell", "module": "crates/inkwell"},
+  {"path": "crates/inkwell/src/main.rs", "package": "crates/inkwell", "module": "crates/inkwell::bin:inkwell-core"},
+  {"path": "crates/inkwell/src/page.rs", "package": "crates/inkwell", "module": "crates/inkwell::page"},
+  {"path": "crates/inkwell/src/split.rs", "package": "crates/inkwell", "module": "crates/inkwell::split"},
+  {"path": "crates/inkwell/src/split/mod.rs", "package": "crates/inkwell", "module": "crates/inkwell::split"},
+  {"path": "crates/inkwell/src/twins.rs", "package": "crates/inkwell", "module": "crates/inkwell::twins"},
+  {"path": "crates/inkwell/tests/flow.rs", "package": "crates/inkwell", "module": "crates/inkwell::test:flow"},
+  {"path": "data/inks.ron", "package": null, "module": null}
+ ],
+ "packages": ["crates/inkwell"],
+ "symbols": [
+  {"path": "crates/inkwell/src/bin/stamp.rs", "ord": 0, "item_kind": "function_item", "name": "main", "owner": null, "qpath": "crates/inkwell::bin:stamp::main", "discriminator": null, "parent_ord": null, "start_line": 4, "end_line": 7, "signature": "fn main()", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+
+  {"path": "crates/inkwell/src/broken.rs", "ord": 0, "item_kind": "function_item", "name": "broken", "owner": null, "qpath": "crates/inkwell::broken::broken", "discriminator": null, "parent_ord": null, "start_line": 4, "end_line": 7, "signature": null, "level_state": "cannot_verify", "level_categories": ["other"], "twin_files": 0},
+  {"path": "crates/inkwell/src/broken.rs", "ord": 1, "item_kind": "function_item", "name": "intact", "owner": null, "qpath": "crates/inkwell::broken::intact", "discriminator": null, "parent_ord": null, "start_line": 10, "end_line": 12, "signature": "pub fn intact() -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+
+  {"path": "crates/inkwell/src/lib.rs", "ord": 0, "item_kind": "mod_item", "name": "broken", "owner": null, "qpath": "crates/inkwell::broken", "discriminator": null, "parent_ord": null, "start_line": 4, "end_line": 4, "signature": "pub mod broken", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/lib.rs", "ord": 1, "item_kind": "mod_item", "name": "page", "owner": null, "qpath": "crates/inkwell::page", "discriminator": null, "parent_ord": null, "start_line": 5, "end_line": 5, "signature": "pub mod page", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/lib.rs", "ord": 2, "item_kind": "mod_item", "name": "split", "owner": null, "qpath": "crates/inkwell::split", "discriminator": null, "parent_ord": null, "start_line": 6, "end_line": 6, "signature": "pub mod split", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/lib.rs", "ord": 3, "item_kind": "mod_item", "name": "twins", "owner": null, "qpath": "crates/inkwell::twins", "discriminator": null, "parent_ord": null, "start_line": 7, "end_line": 7, "signature": "pub mod twins", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/lib.rs", "ord": 4, "item_kind": "mod_item", "name": "outline", "owner": null, "qpath": "crates/inkwell::outline", "discriminator": null, "parent_ord": null, "start_line": 10, "end_line": 23, "signature": "pub mod outline", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/lib.rs", "ord": 5, "item_kind": "mod_item", "name": "nested", "owner": null, "qpath": "crates/inkwell::outline::nested", "discriminator": null, "parent_ord": 4, "start_line": 14, "end_line": 22, "signature": "pub mod nested", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/lib.rs", "ord": 6, "item_kind": "function_item", "name": "depth", "owner": null, "qpath": "crates/inkwell::outline::nested::depth", "discriminator": null, "parent_ord": 5, "start_line": 18, "end_line": 21, "signature": "pub fn depth() -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+
+  {"path": "crates/inkwell/src/main.rs", "ord": 0, "item_kind": "function_item", "name": "main", "owner": null, "qpath": "crates/inkwell::bin:inkwell-core::main", "discriminator": null, "parent_ord": null, "start_line": 2, "end_line": 2, "signature": "fn main()", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+
+  {"path": "crates/inkwell/src/page.rs", "ord": 0, "item_kind": "struct_item", "name": "Page", "owner": null, "qpath": "crates/inkwell::page::Page", "discriminator": null, "parent_ord": null, "start_line": 7, "end_line": 9, "signature": "pub struct Page", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/page.rs", "ord": 1, "item_kind": "impl_item", "name": "impl <Page as std::fmt::Display>", "owner": null, "qpath": "crates/inkwell::page::impl <Page as std::fmt::Display>", "discriminator": null, "parent_ord": null, "start_line": 12, "end_line": 17, "signature": "impl std::fmt::Display for Page", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/page.rs", "ord": 2, "item_kind": "function_item", "name": "fmt", "owner": "<Page as std::fmt::Display>", "qpath": "crates/inkwell::page::<Page as std::fmt::Display>::fmt", "discriminator": null, "parent_ord": 1, "start_line": 14, "end_line": 16, "signature": "fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/page.rs", "ord": 3, "item_kind": "impl_item", "name": "impl Page", "owner": null, "qpath": "crates/inkwell::page::impl Page", "discriminator": null, "parent_ord": null, "start_line": 19, "end_line": 27, "signature": "impl Page", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/page.rs", "ord": 4, "item_kind": "function_item", "name": "total", "owner": "Page", "qpath": "crates/inkwell::page::Page::total", "discriminator": null, "parent_ord": 3, "start_line": 21, "end_line": 26, "signature": "pub fn total(&self) -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/page.rs", "ord": 5, "item_kind": "function_item", "name": "wide", "owner": null, "qpath": "crates/inkwell::page::wide", "discriminator": null, "parent_ord": null, "start_line": 31, "end_line": 46, "signature": "pub fn wide(first_argument_with_a_rather_long_name: u32, second_argument_with_a_rather_long_name: u32, third_argument_with_a_rather_long_name: u32, fourth_argument_with_a_rather_long_name: u32, fifth_argument_with_a_rather_long_name: u32, sixth_argument_with_a_rather_long_name: u32, seventh_argument_with_a_rather_long_name: u32, eighth_argument_with_a_rather_long_name: u32, ninth_argument_with_a_rather_long_name: u32, tenth_argument_with_a_rather_long_name: u32, eleventh_argument_with_a_rather_long_name:…", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+
+  {"path": "crates/inkwell/src/split.rs", "ord": 0, "item_kind": "function_item", "name": "joined", "owner": null, "qpath": "crates/inkwell::split::joined", "discriminator": null, "parent_ord": null, "start_line": 4, "end_line": 6, "signature": "pub fn joined() -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 1},
+  {"path": "crates/inkwell/src/split/mod.rs", "ord": 0, "item_kind": "function_item", "name": "joined", "owner": null, "qpath": "crates/inkwell::split::joined", "discriminator": null, "parent_ord": null, "start_line": 3, "end_line": 5, "signature": "pub fn joined() -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 1},
+
+  {"path": "crates/inkwell/src/twins.rs", "ord": 0, "item_kind": "function_item", "name": "separator", "owner": null, "qpath": "crates/inkwell::twins::separator #cfg(unix)", "discriminator": "cfg(unix)", "parent_ord": null, "start_line": 5, "end_line": 7, "signature": "pub fn separator() -> char", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 1, "item_kind": "function_item", "name": "separator", "owner": null, "qpath": "crates/inkwell::twins::separator #cfg(not(unix))", "discriminator": "cfg(not(unix))", "parent_ord": null, "start_line": 11, "end_line": 13, "signature": "pub fn separator() -> char", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 2, "item_kind": "struct_item", "name": "Sheet", "owner": null, "qpath": "crates/inkwell::twins::Sheet", "discriminator": null, "parent_ord": null, "start_line": 16, "end_line": 16, "signature": "pub struct Sheet", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 3, "item_kind": "impl_item", "name": "impl Sheet", "owner": null, "qpath": "crates/inkwell::twins::impl Sheet #1", "discriminator": "1", "parent_ord": null, "start_line": 18, "end_line": 22, "signature": "impl Sheet", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 4, "item_kind": "function_item", "name": "width", "owner": "Sheet", "qpath": "crates/inkwell::twins::Sheet::width", "discriminator": null, "parent_ord": 3, "start_line": 19, "end_line": 21, "signature": "pub fn width(&self) -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 5, "item_kind": "impl_item", "name": "impl Sheet", "owner": null, "qpath": "crates/inkwell::twins::impl Sheet #2", "discriminator": "2", "parent_ord": null, "start_line": 25, "end_line": 29, "signature": "impl Sheet", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 6, "item_kind": "function_item", "name": "height", "owner": "Sheet", "qpath": "crates/inkwell::twins::Sheet::height", "discriminator": null, "parent_ord": 5, "start_line": 26, "end_line": 28, "signature": "pub fn height(&self) -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 7, "item_kind": "mod_item", "name": "probe", "owner": null, "qpath": "crates/inkwell::twins::probe #cfg(test)", "discriminator": "cfg(test)", "parent_ord": null, "start_line": 32, "end_line": 39, "signature": "mod probe", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 8, "item_kind": "function_item", "name": "run", "owner": null, "qpath": "crates/inkwell::twins::probe::run #cfg(test)", "discriminator": "cfg(test)", "parent_ord": 7, "start_line": 36, "end_line": 38, "signature": "pub fn run() -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 9, "item_kind": "mod_item", "name": "probe", "owner": null, "qpath": "crates/inkwell::twins::probe #cfg(not(test))", "discriminator": "cfg(not(test))", "parent_ord": null, "start_line": 42, "end_line": 48, "signature": "mod probe", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+  {"path": "crates/inkwell/src/twins.rs", "ord": 10, "item_kind": "function_item", "name": "run", "owner": null, "qpath": "crates/inkwell::twins::probe::run #cfg(not(test))", "discriminator": "cfg(not(test))", "parent_ord": 9, "start_line": 45, "end_line": 47, "signature": "pub fn run() -> u32", "level_state": "hashed", "level_categories": [], "twin_files": 0},
+
+  {"path": "crates/inkwell/tests/flow.rs", "ord": 0, "item_kind": "function_item", "name": "flows", "owner": null, "qpath": "crates/inkwell::test:flow::flows", "discriminator": null, "parent_ord": null, "start_line": 5, "end_line": 7, "signature": "fn flows()", "level_state": "hashed", "level_categories": [], "twin_files": 0}
+ ],
+ "suffix_rows": 95,
+ "suffixes": {
+  "crates/inkwell::page::<Page as std::fmt::Display>::fmt": ["fmt", "<Page as std::fmt::Display>::fmt", "page::<Page as std::fmt::Display>::fmt", "crates/inkwell::page::<Page as std::fmt::Display>::fmt"],
+  "crates/inkwell::page::impl <Page as std::fmt::Display>": ["impl <Page as std::fmt::Display>", "page::impl <Page as std::fmt::Display>", "crates/inkwell::page::impl <Page as std::fmt::Display>"],
+  "crates/inkwell::twins::impl Sheet #2": ["impl Sheet #2", "twins::impl Sheet #2", "crates/inkwell::twins::impl Sheet #2"],
+  "crates/inkwell::twins::probe::run #cfg(not(test))": ["run #cfg(not(test))", "probe::run #cfg(not(test))", "twins::probe::run #cfg(not(test))", "crates/inkwell::twins::probe::run #cfg(not(test))"],
+  "crates/inkwell::bin:stamp::main": ["main", "bin:stamp::main", "crates/inkwell::bin:stamp::main"],
+  "crates/inkwell::test:flow::flows": ["flows", "test:flow::flows", "crates/inkwell::test:flow::flows"],
+  "crates/inkwell::outline::nested::depth": ["depth", "nested::depth", "outline::nested::depth", "crates/inkwell::outline::nested::depth"]
+ },
+ "markers": 18,
+ "mentions": 11,
+ "refs": {
+  "TENET-WIDTH": [
+   "implements | crates/inkwell/src/lib.rs:17:12 | TENET-WIDTH@2 | resolved | current | default | item crates/inkwell::outline::nested::depth function_item",
+   "implements | crates/inkwell/src/page.rs:13:8 | TENET-WIDTH@2 | resolved | current | default | item crates/inkwell::page::<Page as std::fmt::Display>::fmt function_item",
+   "implements | crates/inkwell/src/split.rs:3:4 | TENET-WIDTH@2 | resolved | current | default | item crates/inkwell::split::joined function_item ambiguous duplicate",
+   "implements | crates/inkwell/src/twins.rs:24:4 | TENET-WIDTH@2 | resolved | current | default | item crates/inkwell::twins::impl Sheet #2 impl_item",
+   "verifies | crates/inkwell/tests/flow.rs:3:4 | TENET-WIDTH@2 | resolved | current | [body] | item crates/inkwell::test:flow::flows function_item",
+   "configures | data/inks.ron:4:19 | TENET-WIDTH@2 | resolved | current | default | ron data/inks.ron#root.width",
+   "refs: markers 6, mentions 0; code files 10 (.rs 9, .ron 1), skipped 0"
+  ],
+  "TENET-ORDER": [
+   "implements | crates/inkwell/src/broken.rs:9:4 | TENET-ORDER@1 | resolved | current | default | item crates/inkwell::broken::intact function_item",
+   "implements | crates/inkwell/src/lib.rs:12:9 | TENET-ORDER@1 | resolved | current | default | module crates/inkwell::outline",
+   "implements | crates/inkwell/src/twins.rs:3:4 | TENET-ORDER@1 | resolved | current | default | item crates/inkwell::twins::separator #cfg(unix) function_item",
+   "mention | crates/inkwell/src/lib.rs:15:38 | TENET-ORDER | resolved | module crates/inkwell::outline::nested",
+   "mention | crates/inkwell/src/split.rs:1:41 | TENET-ORDER | resolved | module crates/inkwell::split",
+   "mention | crates/inkwell/src/twins.rs:1:43 | TENET-ORDER | resolved | module crates/inkwell::twins",
+   "refs: markers 3, mentions 3; code files 10 (.rs 9, .ron 1), skipped 0"
+  ],
+  "SLAB-PROBE": [
+   "implements | crates/inkwell/src/twins.rs:35:8 | SLAB-PROBE@1 | resolved | current | default | item crates/inkwell::twins::probe::run #cfg(test) function_item",
+   "implements | crates/inkwell/src/twins.rs:44:9 | SLAB-PROBE@1 | resolved | current | default | module crates/inkwell::twins::probe #cfg(not(test))",
+   "mention | crates/inkwell/src/twins.rs:33:31 | SLAB-PROBE | resolved | module crates/inkwell::twins::probe #cfg(test)",
+   "refs: markers 2, mentions 1; code files 10 (.rs 9, .ron 1), skipped 0"
+  ],
+  "QUILL-01": [
+   "implements | crates/inkwell/src/page.rs:11:4 | QUILL-01@1 | resolved | current | [sig, body] | item crates/inkwell::page::impl <Page as std::fmt::Display> impl_item",
+   "mention | crates/inkwell/src/page.rs:1:31 | QUILL-01 | resolved | module crates/inkwell::page",
+   "mention | crates/inkwell/src/page.rs:29:43 | QUILL-01 | resolved | item crates/inkwell::page::wide function_item",
+   "refs: markers 1, mentions 2; code files 10 (.rs 9, .ron 1), skipped 0"
+  ],
+  "QUILL-02": [
+   "implements | crates/inkwell/src/broken.rs:3:4 | QUILL-02@1 | resolved | current | default | cannot_verify other",
+   "mention | crates/inkwell/src/broken.rs:1:41 | QUILL-02 | resolved | module crates/inkwell::broken",
+   "refs: markers 1, mentions 1; code files 10 (.rs 9, .ron 1), skipped 0"
+  ]
+ },
+ "eval": {
+  "rs_files": 9,
+  "ron_files": 1,
+  "kloc": 0.156,
+  "items": 31,
+  "twins": {"cfg": {"groups": 3, "items": 6}, "ordinal": {"groups": 1, "items": 2}, "cross_file": 2},
+  "signatures": {"items": 30, "cut": 1},
+  "roles": {"files": 9, "metadata": 0, "differ": null},
+  "largest_rs": "crates/inkwell/src/page.rs",
+  "first_rs": "crates/inkwell/src/bin/stamp.rs"
+ },
+ "open": [
+  "Every value here is derived by hand (Phase A); Phase B confirms it against the first run and records any deviation as a reading, never by copying the output in.",
+  "L1: `name` of an impl is its rendered last segment without the discriminator (`impl Sheet`), as the spec's `symbols` example shows (`name \"impl Tally\"`).",
+  "L2: `twin_files` is 0, not null, for an item no other file renders.",
+  "L3: a module declaration `pub mod x;` is an item with a level state and a signature (`pub mod x`, the final `;` dropped).",
+  "L4: the cut signature keeps the longest prefix of at most 509 bytes, then `…` (symbol-discriminator Phase A L5).",
+  "L5: the largest `.rs` by bytes is page.rs (1 405 B; twins.rs 731 B), the first in walk order bin/stamp.rs: the harness's one-file edit must land on the former."
+ ]
+}

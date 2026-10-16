@@ -1,11 +1,11 @@
 //! docs/features/spec-cli-bundle.md, config, writes and genre: AC-13 (the
 //! budget's sources; `[budgets] bundle_node` read alone), AC-15 (read only
 //! but the data directory; no table added; an edit shows without `spec
-//! index`), AC-16 (no format of the bundle's own: `INDEX_FORMAT` 7, the
-//! token-calibration stamp, and the format history pinned), AC-18 (a
-//! synthetic non-Rust corpus: no P2-3 word in a bundle or the bundle
-//! sources). Scratch copies of `fixtures/spec-a`, each run with its own
-//! `HOME`; the fixtures are only read.
+//! index`), AC-16 (no format of the bundle's own: `INDEX_FORMAT` 9, the
+//! code index's stamp since docs/features/symbol-index.md, and the format
+//! history pinned), AC-18 (a synthetic non-Rust corpus: no P2-3 word in a
+//! bundle or the bundle sources). Scratch copies of `fixtures/spec-a`,
+//! each run with its own `HOME`; the fixtures are only read.
 
 #![cfg(unix)]
 
@@ -293,21 +293,20 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 8, the stamp
-/// of `nodes.norm_hash` (docs/features/norm-hash.md "Index"), and the
-/// store's format history is its eight lines. M: the dump changed, the
-/// stamp kept (the store's `format.rs` turns red on the dump; this pins the
-/// stamp and the file).
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 9, the stamp
+/// of the code index (docs/features/symbol-index.md "Tables", TE-3), and
+/// the store's format history is its nine lines: norm-hash's eight,
+/// verbatim, and one `9 <hash>`. M: the dump changed, the stamp kept (the
+/// store's `format.rs` turns red on the dump; this pins the stamp and the
+/// file).
 #[test]
-fn ac16_index_format_is_eight() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 8);
+fn ac16_index_format_is_nine() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 9);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
     );
-    assert_eq!(
-        history,
-        "\
+    let earlier = "\
 1 4fd55fa4cf7716f7acc45556ab7c831f1f67d7decdf2f0829ad0a7da5e52a906
 2 2cfc299da177807c83d246aea934a73ab8509021386568a0b2011a31de66c9aa
 3 d63c06dc03ed97243ff25dfb14a165cfec059582eee05dc72d9fba05b3c5f55f
@@ -316,8 +315,20 @@ fn ac16_index_format_is_eight() {
 6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9
 7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b
 8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650
-"
+";
+    let ninth = history
+        .strip_prefix(earlier)
+        .unwrap_or_else(|| panic!("the eight earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = ninth
+        .strip_suffix('\n')
+        .and_then(|line| line.split_once(' '))
+        .unwrap_or_else(|| panic!("one more line, `9 <hash>`:\n{history}"));
+    assert_eq!(format, "9", "{history}");
+    assert!(
+        hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
+        "a BLAKE3 hex: {ninth:?}"
     );
+    assert_eq!(history.lines().count(), 9, "nine lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and

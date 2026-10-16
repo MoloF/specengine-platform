@@ -195,7 +195,10 @@ fn a_64_byte_slug_is_accepted_and_names_the_database() {
 }
 
 /// The name-checked tables are accepted whatever they hold; the data
-/// example of the spec (slug, name, language) loads.
+/// example of the spec (slug, name, language) loads. `[code]` is read by
+/// `spec index` since docs/features/symbol-index.md (Q15, RD-14): a bad
+/// one (`w = [1]`) still writes and prints the md index, then exits 2 at
+/// its line.
 #[test]
 fn known_tables_and_the_data_example_are_accepted() {
     let scratch = Scratch::new("config-known");
@@ -203,9 +206,32 @@ fn known_tables_and_the_data_example_are_accepted() {
     let root = scratch.copy("spec-a", "copy");
     let ids = ids_table(&root);
     let head = "[project]\nslug = \"lantern-keep\"\nname = \"Lantern Keep\"\nlanguage = \"en\"\n\n\
-                [budgets]\nx = 1\n[classes]\ny = \"z\"\n[check]\n[generators]\n[zones]\n[gate]\n[code]\nw = [1]\n";
+                [budgets]\nx = 1\n[classes]\ny = \"z\"\n[check]\n[generators]\n[zones]\n[gate]\n";
     write(&root, "specengine.toml", format!("{head}\n{ids}"));
     let run = spec(&home, &root, &["index"]);
     run.code(0);
     assert_eq!(run.stderr, "", "{}", run.show());
+
+    let config = format!("{head}[code]\nw = [1]\n\n{ids}");
+    let line = config
+        .lines()
+        .position(|text| text.starts_with("w = "))
+        .expect("the key")
+        + 1;
+    write(&root, "specengine.toml", &config);
+    let run = spec(&home, &root, &["index"]);
+    run.code(2);
+    assert!(
+        run.stdout.starts_with("indexed lantern-keep: "),
+        "the md index is written and printed: {}",
+        run.show()
+    );
+    let lines = run.stderr_lines();
+    assert_eq!(lines.len(), 1, "{}", run.show());
+    let cause = lines[0].strip_prefix("spec: ").unwrap_or(lines[0]);
+    assert!(
+        cause.starts_with(&format!("specengine.toml:{line}: ")),
+        "{}",
+        run.show()
+    );
 }

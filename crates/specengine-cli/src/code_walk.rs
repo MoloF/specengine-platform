@@ -2,8 +2,9 @@
 //! `code-bindings`, "The walk"):
 //! the `[code]` roots walked, every file read once, Rust files parsed and
 //! their comments bound (`specengine-code`), RON comments anchored, the
-//! Rust items named over their packages. Nothing is written; nothing about
-//! the code is stored.
+//! Rust items named over their packages. Nothing is written here; the code
+//! index (`crate::code_index`) lists and finds packages through the same
+//! [`list`] and [`disk_packages`].
 //!
 //! - **Files**: regular files ending exactly in `.rs` or `.ron` under the
 //!   roots, minus `[code] exclude`, as the spec walk lists `.md` files
@@ -126,17 +127,18 @@ pub(crate) enum ManifestSeen {
     Unreadable,
 }
 
-/// What the listing found.
+/// What the listing found: the one listing of the code walk and of the
+/// code index's refresh (`crate::code_index`).
 #[derive(Default)]
-struct Listing {
+pub(crate) struct Listing {
     /// Root-relative file paths, byte-sorted, unique.
-    files: BTreeSet<String>,
+    pub(crate) files: BTreeSet<String>,
     /// Directories that could not be listed (`""`: the root itself).
-    unlisted: BTreeSet<String>,
+    pub(crate) unlisted: BTreeSet<String>,
     /// Directories listed, and those of them holding a regular `Cargo.toml`.
     listed: BTreeSet<String>,
     manifests: BTreeSet<String>,
-    skipped_names: usize,
+    pub(crate) skipped_names: usize,
 }
 
 /// Lists, reads, binds and names the code tree under `root` (canonical).
@@ -293,7 +295,7 @@ fn incomplete(gap: &str) -> CliError {
 }
 
 /// The files under the roots, the directories that could not be listed.
-fn list(root: &Path, config: &CodeConfig, messages: &mut Vec<Message>) -> Listing {
+pub(crate) fn list(root: &Path, config: &CodeConfig, messages: &mut Vec<Message>) -> Listing {
     let mut listing = Listing::default();
     for written in &config.roots {
         match resolve(root, written) {
@@ -487,15 +489,48 @@ impl Manifests for BlobManifests<'_> {
     }
 }
 
-/// The names of the Rust files: packages found, their targets laid out,
-/// every item and module named.
-fn name_tree(rust: &[RustFile], manifests: &mut dyn Manifests) -> Names {
-    let mut packages: Vec<Option<PathBuf>> = Vec::with_capacity(rust.len());
+/// The packages of the Rust files of a working tree ([`disk_packages`]).
+pub(crate) struct DiskPackages {
+    /// Per file, its package directory (none: outside every package).
+    pub(crate) dirs: Vec<Option<PathBuf>>,
+    /// Per package directory, its target table.
+    pub(crate) tables: BTreeMap<PathBuf, PackageTargets>,
+    /// Every directory asked for a `Cargo.toml`, with what it found.
+    pub(crate) seen: BTreeMap<String, ManifestSeen>,
+}
+
+/// The packages of the Rust files of the working tree at `paths` (by
+/// path, each read and UTF-8), as the walk finds them over `listing`: per
+/// file its package directory, per package its target table, and every
+/// directory asked for a `Cargo.toml` with what it found (the code index's
+/// `code_packages` rows: `crate::code_index`).
+pub(crate) fn disk_packages(root: &Path, listing: &Listing, paths: &[&str]) -> DiskPackages {
+    let mut manifests = DiskManifests {
+        root,
+        listing,
+        holds: BTreeMap::new(),
+        seen: BTreeMap::new(),
+    };
+    let (dirs, tables) = package_tables(paths, &mut manifests);
+    DiskPackages {
+        dirs,
+        tables,
+        seen: manifests.seen,
+    }
+}
+
+/// Per Rust file at `paths` its package directory, and per package its
+/// target table over its files among `paths`.
+fn package_tables(
+    paths: &[&str],
+    manifests: &mut dyn Manifests,
+) -> (Vec<Option<PathBuf>>, BTreeMap<PathBuf, PackageTargets>) {
+    let mut packages: Vec<Option<PathBuf>> = Vec::with_capacity(paths.len());
     let mut package_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
-    for file in rust {
-        let package = package_of(&file.path, manifests);
+    for path in paths {
+        let package = package_of(path, manifests);
         if let Some(dir) = &package {
-            let inner = Path::new(&file.path)
+            let inner = Path::new(path)
                 .strip_prefix(dir)
                 .map(Path::to_path_buf)
                 .unwrap_or_default();
@@ -507,6 +542,14 @@ fn name_tree(rust: &[RustFile], manifests: &mut dyn Manifests) -> Names {
         .iter()
         .map(|(dir, files)| (dir.clone(), package_targets(dir, files, manifests)))
         .collect();
+    (packages, tables)
+}
+
+/// The names of the Rust files: packages found, their targets laid out,
+/// every item and module named.
+fn name_tree(rust: &[RustFile], manifests: &mut dyn Manifests) -> Names {
+    let paths: Vec<&str> = rust.iter().map(|file| file.path.as_str()).collect();
+    let (packages, tables) = package_tables(&paths, manifests);
     let paths: Vec<PathBuf> = rust.iter().map(|file| PathBuf::from(&file.path)).collect();
     let named: Vec<NamedFile<'_>> = rust
         .iter()

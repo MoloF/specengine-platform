@@ -3,8 +3,14 @@
 //! new modules, and `spec check` blind to code — over scratch copies of
 //! `fixtures/code-a` (and `fixtures/spec-c`, which has no `[code]`).
 //!
+//! docs/features/symbol-index.md RD-11 (`[code] crates` refused, Q2),
+//! RD-13 (one listing, one parse, the binder's state) and the genre rule
+//! of its "Rules and edge cases" (the store, core and the new modules hold
+//! no fixture word, `::` split or Cargo literal).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
+mod code_index_common;
 mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -49,21 +55,26 @@ fn exit_2_quiet(run: &Run) {
 
 // ------------------------------------------------------------------ RD-1
 
-/// RD-1: a closed table. Another key (07 s5's `languages` too), a glob of
-/// another dialect, `roots = []`, no `roots`, a path out of the root, a
-/// wrong type: exit 2, `specengine.toml:<line>:` at the key, for
-/// `spec refs` only — `spec check` and `spec show` name-check `[code]`
-/// and answer. M: accept an unknown key.
+/// RD-1: a closed table. Another key (07 s5's `languages` too, and
+/// `crates`, refused as not built: docs/features/symbol-index.md RD-11,
+/// Q2), a glob of another dialect, `roots = []`, no `roots`, a path out of
+/// the root, a wrong type: exit 2, `specengine.toml:<line>:` at the key,
+/// for `spec refs` only — `spec check` and `spec show` name-check `[code]`
+/// and answer. M: accept an unknown key; accept `crates`.
 #[test]
 fn code_table_unknown_key_is_refused() {
     let scratch = Scratch::new("code-table");
     let root = scratch.copy("code-a", "code-a");
     let home = scratch.home("h");
-    let cases: [(&str, &str); 7] = [
+    let cases: [(&str, &str); 8] = [
         ("[code]\nroots = [\"crates\"]\ncolour = 1\n", "colour"),
         (
             "[code]\nroots = [\"crates\"]\nlanguages = [\"rust\"]\n",
             "languages",
+        ),
+        (
+            "[code]\nroots = [\"crates\"]\ncrates = \"cargo-metadata\"\n",
+            "crates",
         ),
         (
             "[code]\nroots = [\"crates\"]\nexclude = [\"a/[b]\"]\n",
@@ -545,15 +556,28 @@ fn check_is_the_same_with_and_without_the_code() {
 
 // ------------------------------------------------------------------ TE-6
 
-/// The new modules of the slice, and `items.rs` since
-/// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3).
-const NEW_MODULES: [&str; 6] = [
+/// The store's module of the code tables, the pass and the
+/// refresh (docs/features/symbol-index.md "Crates": the store owns compare,
+/// apply and the cross-file pass behind `CodeAnalyzer`).
+const STORE_CODE_MODULE: &str = "crates/specengine-store/src/code.rs";
+
+/// The CLI library's `CodeAnalyzer` over `code_walk.rs` and
+/// `specengine-code` ("Crates").
+const ANALYZER_MODULE: &str = "crates/specengine-cli/src/code_index.rs";
+
+/// The new modules of the slice, `items.rs` since
+/// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3),
+/// and the store's and the CLI's code-index modules since
+/// docs/features/symbol-index.md ("Rules and edge cases", Genre).
+const NEW_MODULES: [&str; 8] = [
     "crates/specengine-core/src/code_toml.rs",
     "crates/specengine-code/src/bind.rs",
     "crates/specengine-code/src/naming.rs",
     "crates/specengine-code/src/items.rs",
     "crates/specengine-cli/src/code_walk.rs",
     "crates/specengine-cli/src/refs.rs",
+    STORE_CODE_MODULE,
+    ANALYZER_MODULE,
 ];
 
 /// Stack and genre words no engine source names.
@@ -584,6 +608,17 @@ const EXEMPT: [(&str, &str); 5] = [
     ("crates/specengine-core/src/code_toml.rs", "bevy"),
     ("crates/specengine-core/src/code_toml.rs", "scip"),
     ("crates/specengine-cli/src/refs.rs", "module"),
+];
+
+/// Narrow word exemptions of the code-index modules: the spec's column
+/// names `module` (`code_files`) and `note` (`code_markers`), equal to
+/// `fixtures/spec-b`'s kind `module` and a fixture's kind `note`, not
+/// taken from them (docs/features/symbol-index.md "Tables").
+const EXEMPT_WORDS: [(&str, &str); 4] = [
+    (STORE_CODE_MODULE, "module"),
+    (STORE_CODE_MODULE, "note"),
+    (ANALYZER_MODULE, "module"),
+    (ANALYZER_MODULE, "note"),
 ];
 
 /// The string literals of Rust `source`, comments skipped (raw strings,
@@ -747,40 +782,54 @@ fn fixture_vocabulary() -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>
     (prefixes, kinds, slugs)
 }
 
+/// A source without its own `#[cfg(test)] mod` (over the fixture, by
+/// design).
+fn scanned(file: &str) -> String {
+    let whole = fs::read_to_string(repository_root().join(file))
+        .unwrap_or_else(|error| panic!("{file}: {error}"));
+    whole
+        .find("\n#[cfg(test)]\nmod ")
+        .map_or(whole.clone(), |at| whole[..at].to_owned())
+}
+
 /// TE-6: no string literal of the slice's new modules holds a fixture
 /// prefix or alias (as a word or `PREFIX-…`), a fixture kind or project
-/// slug, a fixture path (`fixtures/`, `tally`), or a stack word — but the
-/// narrow [`EXEMPT`] list. A module's own `#[cfg(test)] mod` (over the
-/// fixture, by design) ends what is scanned.
+/// slug, a fixture path (`fixtures/`, `tally`, `inkwell`), or a stack word
+/// — but the narrow [`EXEMPT`] and [`EXEMPT_WORDS`] lists. A module's own
+/// `#[cfg(test)] mod` (over the fixture, by design) ends what is scanned.
 #[test]
 fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
     let (prefixes, kinds, slugs) = fixture_vocabulary();
     assert!(prefixes.contains("PIECE") && prefixes.contains("AIM") && kinds.contains("pass-mark"));
     assert!(slugs.contains("code-a"));
+    assert!(
+        prefixes.contains("TENET") && kinds.contains("slab") && slugs.contains("inkwell"),
+        "fixtures/code-index is scanned for"
+    );
     let mut offenders = Vec::new();
-    let mut scanned = 0;
+    let mut scanned_literals = 0;
     for file in NEW_MODULES {
-        let whole = fs::read_to_string(repository_root().join(file)).expect("a new module");
-        let source = whole
-            .find("\n#[cfg(test)]\nmod ")
-            .map_or(whole.as_str(), |at| &whole[..at]);
+        let source = scanned(file);
         if file.ends_with("refs.rs") {
             assert!(
                 source.contains("fn render_text("),
                 "{file}: the code is scanned"
             );
         }
-        for literal in literals(source) {
-            scanned += 1;
+        for literal in literals(&source) {
+            scanned_literals += 1;
             if EXEMPT.contains(&(file, literal.as_str())) {
                 continue;
             }
             let lower = literal.to_lowercase();
-            if lower.contains("fixtures/") || lower.contains("tally") {
+            if lower.contains("fixtures/") || lower.contains("tally") || lower.contains("inkwell") {
                 offenders.push(format!("{file}: {literal:?} (a fixture path)"));
             }
             for word in words(&literal) {
                 let low = word.to_lowercase();
+                if EXEMPT_WORDS.contains(&(file, low.as_str())) {
+                    continue;
+                }
                 let prefix = prefixes.contains(&word)
                     || prefixes.iter().any(|p| word.starts_with(&format!("{p}-")));
                 if prefix
@@ -793,7 +842,70 @@ fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
             }
         }
     }
-    assert!(scanned > 50, "{scanned} literals scanned");
+    assert!(scanned_literals > 50, "{scanned_literals} literals scanned");
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+/// Every `.rs` file under `dir` (relative to the repository), sorted.
+fn sources_under(dir: &str) -> Vec<String> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).expect("a source directory").flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, out);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                out.push(
+                    path.strip_prefix(root)
+                        .expect("under the repository")
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+    }
+    let root = repository_root();
+    let mut out = Vec::new();
+    walk(&root, &root.join(dir), &mut out);
+    out.sort();
+    out
+}
+
+/// docs/features/symbol-index.md "Rules and edge cases", Genre: Rust
+/// syntax stays in `specengine-code`. The store, core and the slice's CLI
+/// module hold no `::` literal (a qpath is compared, never split: the
+/// suffixes come from the structured segments, WA-8) and no Cargo literal
+/// (`Cargo.toml`, a word `cargo`). M: the store splits a qpath at `::`.
+#[test]
+fn store_core_and_new_modules_hold_no_path_split_or_cargo_literal() {
+    let mut files = sources_under("crates/specengine-store/src");
+    files.extend(sources_under("crates/specengine-core/src"));
+    files.push(ANALYZER_MODULE.to_owned());
+    assert!(
+        files.iter().any(|file| file == STORE_CODE_MODULE),
+        "the store's code module is {STORE_CODE_MODULE}: {files:?}"
+    );
+    let mut offenders = Vec::new();
+    let mut scanned_literals = 0;
+    for file in &files {
+        let source = scanned(file);
+        for literal in literals(&source) {
+            scanned_literals += 1;
+            if literal == "::" || literal.starts_with("::") || literal.ends_with("::") {
+                offenders.push(format!("{file}: {literal:?} (a path separator)"));
+            }
+            if literal.contains("Cargo.toml")
+                || words(&literal)
+                    .iter()
+                    .any(|word| word.eq_ignore_ascii_case("cargo"))
+            {
+                offenders.push(format!("{file}: {literal:?} (a Cargo literal)"));
+            }
+        }
+    }
+    assert!(
+        scanned_literals > 200,
+        "{scanned_literals} literals scanned"
+    );
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
 }
 
@@ -951,33 +1063,51 @@ fn manifests_name_packages_alike_from_any_root() {
 /// through `hash_bound_items` alone: `lock.rs` names
 /// `HashState` only for that function's results, and like `lock_regen.rs`
 /// reads no item's `.state` (a judgement's, a level list's or a printed
-/// row's only).
+/// row's only). docs/features/symbol-index.md RD-13: the code index's
+/// analyzer joins, hashing through `item_levels` alone (the pin names per
+/// file the entry it must call).
 #[test]
 fn nothing_outside_the_binder_reads_an_items_state() {
-    for (file, hashes) in [
-        ("crates/specengine-cli/src/code_walk.rs", false),
-        ("crates/specengine-cli/src/refs.rs", false),
-        ("crates/specengine-code/src/naming.rs", false),
-        ("crates/specengine-cli/src/lock.rs", true),
-        ("crates/specengine-cli/src/lock_regen.rs", false),
+    for (file, entry) in [
+        ("crates/specengine-cli/src/code_walk.rs", None),
+        ("crates/specengine-cli/src/refs.rs", None),
+        ("crates/specengine-code/src/naming.rs", None),
+        (
+            "crates/specengine-cli/src/lock.rs",
+            Some("hash_bound_items("),
+        ),
+        ("crates/specengine-cli/src/lock_regen.rs", None),
+        (ANALYZER_MODULE, Some("item_levels(")),
     ] {
-        let whole = fs::read_to_string(repository_root().join(file)).expect("a source");
-        let source = whole
-            .find("\n#[cfg(test)]\nmod ")
-            .map_or(whole.as_str(), |at| &whole[..at]);
-        if hashes {
-            assert!(
-                source.contains("hash_bound_items("),
-                "{file} hashes its items through `hash_bound_items`"
-            );
-            for other in ["hash_item(", "hash_node("] {
+        let source = scanned(file);
+        match entry {
+            Some(entry) => {
                 assert!(
-                    !source.contains(other),
-                    "{file} hashes through `{other}`, not `hash_bound_items`"
+                    source.contains(entry),
+                    "{file} hashes its items through `{entry}`"
                 );
+                for other in [
+                    "hash_item(",
+                    "hash_node(",
+                    "hash_bound_items(",
+                    "item_levels(",
+                ] {
+                    if other == entry {
+                        continue;
+                    }
+                    if file.ends_with("/lock.rs") && other == "item_levels(" {
+                        continue;
+                    }
+                    assert!(
+                        !source.contains(other),
+                        "{file} hashes through `{other}`, not `{entry}`"
+                    );
+                }
+                if entry == "item_levels(" {
+                    assert!(!source.contains("HashState"), "{file} names HashState");
+                }
             }
-        } else {
-            assert!(!source.contains("HashState"), "{file} names HashState");
+            None => assert!(!source.contains("HashState"), "{file} names HashState"),
         }
         let lock_file = file.contains("/lock");
         let mut from = 0;
@@ -1002,4 +1132,128 @@ fn nothing_outside_the_binder_reads_an_items_state() {
             );
         }
     }
+}
+
+// ----------------------------------------------- RD-13 (symbol-index)
+
+/// docs/features/symbol-index.md RD-13. M: a second parse. The analyzer
+/// parses each re-derived `.rs` file once and runs every per-file step on
+/// that one tree: one `.parse(` call, `bind_tree`, `name_file`,
+/// `item_levels`, `item_signatures` given the tree, no entry that parses
+/// on its own (`bind_file`, `analyze_file`); `comment_anchors` once per
+/// `.ron` file.
+#[test]
+fn one_parse_per_rederived_file() {
+    let source = scanned(ANALYZER_MODULE);
+    assert_eq!(
+        source.matches(".parse(").count(),
+        1,
+        "{ANALYZER_MODULE}: one parse"
+    );
+    for entry in [
+        "bind_tree(",
+        "name_file(",
+        "item_levels(",
+        "item_signatures(",
+        "comment_anchors(",
+    ] {
+        assert_eq!(
+            source.matches(entry).count(),
+            1,
+            "{ANALYZER_MODULE}: `{entry}` called once"
+        );
+    }
+    for parses in ["bind_file(", "analyze_file(", "name_files("] {
+        assert!(
+            !source.contains(parses),
+            "{ANALYZER_MODULE}: `{parses}` parses or names the tree again"
+        );
+    }
+}
+
+/// The paths of `code_files` after `spec index` in `root` (a fresh `HOME`).
+fn indexed_paths(scratch: &Scratch, root: &Path, label: &str) -> Vec<String> {
+    let home = scratch.home(label);
+    let run = spec(&home, root, &["index"]);
+    run.code(0);
+    code_index_common::code_paths(&code_index_common::db(&home, "code-a"))
+}
+
+/// docs/features/symbol-index.md RD-13. M: a second listing. Over this
+/// file's walk cases — code-a as it is (a `.`-name, an excluded directory,
+/// a root that is a file), linked files, directories and roots, missing
+/// roots, a root of another file type and content that is not UTF-8 —
+/// `spec index` stores exactly the files the walk lists (`expected.json`
+/// `walked`, plus the non-UTF-8 file it lists and skips), so `refs` counts
+/// what it stored.
+#[test]
+fn index_and_walk_list_alike() {
+    let scratch = Scratch::new("listing");
+    let expected: Value = serde_json::from_str(&read_text(&fixture("code-a"), "expected.json"))
+        .expect("expected.json");
+    let walked: Vec<String> = expected["walked"]
+        .as_array()
+        .expect("walked")
+        .iter()
+        .map(|path| path.as_str().expect("a path").to_owned())
+        .collect();
+
+    let plain = scratch.copy("code-a", "plain");
+    assert_eq!(indexed_paths(&scratch, &plain, "plain"), walked, "code-a");
+
+    let linked = scratch.copy("code-a", "linked");
+    write(
+        &linked,
+        "outside/extra.rs",
+        "// @implements GOAL-01@1\npub fn outside() {}\n",
+    );
+    std::os::unix::fs::symlink(
+        "../../../outside/extra.rs",
+        linked.join("crates/tally/src/linked.rs"),
+    )
+    .expect("file link");
+    std::os::unix::fs::symlink("../outside", linked.join("data/linked")).expect("dir link");
+    std::os::unix::fs::symlink("outside", linked.join("linked-root")).expect("root link");
+    write(
+        &linked,
+        "specengine.toml",
+        with_code(
+            "[code]\nroots = [\"crates\", \"data\", \"tools/loose.rs\", \"linked-root\"]\nexclude = [\"crates/*/tests/fixtures/**\"]\n",
+        ),
+    );
+    assert_eq!(
+        indexed_paths(&scratch, &linked, "linked"),
+        walked,
+        "no link is followed"
+    );
+
+    let notes = scratch.copy("code-a", "notes");
+    write(
+        &notes,
+        "specengine.toml",
+        with_code(
+            "[code]\nroots = [\"absent\", \"crates\", \"crates/tally/Cargo.toml\", \"data\", \"tools/loose.rs\"]\nexclude = [\"crates/*/tests/fixtures/**\"]\n",
+        ),
+    );
+    write(&notes, "crates/tally/src/latin.rs", b"// caf\xe9 GOAL-01\n");
+    let mut with_latin = walked.clone();
+    with_latin.push("crates/tally/src/latin.rs".to_owned());
+    with_latin.sort();
+    let home = scratch.home("notes");
+    spec(&home, &notes, &["index"]).code(0);
+    let db = code_index_common::db(&home, "code-a");
+    assert_eq!(code_index_common::code_paths(&db), with_latin, "notes");
+    let latin = code_index_common::query(
+        &db,
+        "SELECT utf8 FROM code_files WHERE path = 'crates/tally/src/latin.rs'",
+    );
+    assert_eq!(latin[0]["utf8"], 0, "listed, not UTF-8");
+    let run = spec(&home, &notes, &["refs", "PREM-001"]);
+    run.code(0);
+    assert!(
+        run.stdout
+            .ends_with("refs: markers 3, mentions 0; code files 8 (.rs 7, .ron 1), skipped 1\n"),
+        "{}",
+        run.show()
+    );
 }

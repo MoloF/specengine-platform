@@ -372,7 +372,7 @@ struct Package {
 }
 
 /// `[package] name` when the manifest parses, else the directory's name.
-fn package_name(root: &Path, dir: &Path) -> String {
+pub(crate) fn package_name(root: &Path, dir: &Path) -> String {
     let manifest = fs::read_to_string(root.join(dir).join(MANIFEST))
         .ok()
         .and_then(|text| toml::from_str::<Manifest>(&text).ok());

@@ -43,6 +43,9 @@ pub const PILOT_CENSUS_CONFIG: PilotVariable =
     PilotVariable(["SPECENGINE_CENSUS_CONFIG_A", "SPECENGINE_CENSUS_CONFIG_B"]);
 /// The tasks config of `w` (`--tasks`).
 pub const PILOT_TASKS: PilotVariable = PilotVariable(["SPECENGINE_TASKS_A", "SPECENGINE_TASKS_B"]);
+/// The `[code]` roots of `code-index`, comma-separated.
+pub const PILOT_CODE_ROOTS: PilotVariable =
+    PilotVariable(["SPECENGINE_CODE_ROOTS_A", "SPECENGINE_CODE_ROOTS_B"]);
 
 impl PilotVariable {
     /// The variable read under `label`; none for a label that is not a pilot's.
@@ -53,6 +56,13 @@ impl PilotVariable {
             _ => None,
         }
     }
+}
+
+/// The text in `variable` under `label`, when it is set and not empty.
+pub fn text_from_environment(variable: PilotVariable, label: Option<&str>) -> Option<String> {
+    std::env::var(variable.name(label?)?)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 /// The path in `variable` under `label`, when it is set and not empty.

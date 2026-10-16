@@ -6,7 +6,11 @@
 //! `tests/format_history.txt` records `<INDEX_FORMAT> <BLAKE3 of the dump of
 //! spec-a and spec-b, root masked>`: it ends with the current pair, and no
 //! earlier line has the current number with another hash — a change of what
-//! a fresh index stores needs a new line and a new number.
+//! a fresh index stores needs a new line and a new number. Since
+//! docs/features/symbol-index.md (`INDEX_FORMAT` 9) each corpus's worktree
+//! also holds a stub analyzer's code rows (`code_stub`: the store has no
+//! dependency on `specengine-code`), so the history pins the code tables'
+//! projection too.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -21,6 +25,7 @@
 
 #![cfg(unix)]
 
+mod code_stub;
 mod common;
 
 use std::collections::BTreeSet;
@@ -128,8 +133,9 @@ fn other_worktrees_read_not_indexed_until_they_are_updated() {
     );
 }
 
-/// The dump of spec-a and spec-b, each in a fresh DB of its own, with the
-/// scratch root masked: what a fresh index of the current format stores.
+/// The dump of spec-a and spec-b, each in a fresh DB of its own with the
+/// stub analyzer's code rows (`code_stub`), with the scratch root masked:
+/// what a fresh index of the current format stores.
 fn format_dump() -> String {
     let scratch = Scratch::new("format-history");
     let mut out = String::new();
@@ -138,9 +144,15 @@ fn format_dump() -> String {
         let mut index =
             SqliteIndex::open(scratch.db(name), "format-history", &corpus.root).expect("open");
         corpus.update(&mut index);
+        code_stub::index_stub(&mut index, &corpus.scheme);
+        assert!(code_stub::root_is_untouched(&corpus.root));
         let root = index.root().to_str().expect("UTF-8 root").to_owned();
         let dump = index.dump().expect("dump");
         assert!(dump.contains(&root), "the dump names its root");
+        assert!(
+            dump.lines().any(|line| line.starts_with("symbols\t")),
+            "the stub's rows are dumped"
+        );
         out.push_str(&dump.replace(&root, "<root>"));
     }
     out
@@ -401,14 +413,14 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/norm-hash.md TE-6 ("Index", WA-10): `nodes.norm_hash` and
-/// the parser's revision rules make `INDEX_FORMAT` 8, and the history is
-/// the seven earlier lines, verbatim, followed by exactly one `8 <hash>`
-/// line (no earlier `8`). Replaces token-calibration's format-7 pin (AC-06),
-/// whose line stays verbatim. M: the stamp kept 7; an earlier line edited.
+/// docs/features/symbol-index.md TE-3 ("Tables"): the code tables make
+/// `INDEX_FORMAT` 9, and the history is the eight earlier lines, verbatim
+/// (norm-hash's `8` among them), followed by exactly one `9 <hash>` line
+/// (no earlier `9`). Replaces norm-hash's format-8 pin (its TE-6), whose
+/// line stays verbatim. M: the stamp kept 8; an earlier line edited.
 #[test]
-fn norm_hash_pins_format_8_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 8);
+fn symbol_index_pins_format_9_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 9);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -425,11 +437,12 @@ fn norm_hash_pins_format_8_with_one_new_history_line() {
         "5 df99199e747d5d2f16712fd23737a443457140d4bb6e37d59393c78724809be4",
         "6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9",
         "7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b",
+        "8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "token-calibration's history plus exactly one new line:\n{history}"
+        "norm-hash's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -438,15 +451,15 @@ fn norm_hash_pins_format_8_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "8", "the new line is format 8: {last}");
+    assert_eq!(format, "9", "the new line is format 9: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("8 ")).count(),
+        lines.iter().filter(|line| line.starts_with("9 ")).count(),
         1,
-        "no earlier `8` line"
+        "no earlier `9` line"
     );
 }
 
@@ -951,4 +964,163 @@ fn a_seven_stamped_database_rebuilds_with_its_queue_intact() {
         (20, 19),
         "every row but the null one hashed"
     );
+}
+
+/// docs/features/symbol-index.md RD-1, the store's half. M: created
+/// lazily; a code table missing from `FORMAT_TABLES`. An md-only update of
+/// spec-a creates every code table, empty; a stamp change with the stub's
+/// code rows stored and one code table given a column of an older build
+/// recreates every code table (the stale column gone), and the next code
+/// refresh re-derives the rows equal to a fresh worktree's.
+#[test]
+fn format_change_recreates_code_tables() {
+    const CODE_TABLES: [&str; 8] = [
+        "code_worktrees",
+        "code_files",
+        "code_packages",
+        "symbols",
+        "symbol_suffixes",
+        "code_decls",
+        "code_markers",
+        "code_mentions",
+    ];
+    let scratch = Scratch::new("format-code");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let db = scratch.db("code");
+    let mut index = corpus.open(&db);
+    corpus.update(&mut index);
+    let conn = rusqlite::Connection::open(&db).expect("raw connection");
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .expect("busy timeout");
+    let tables: BTreeSet<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    for table in CODE_TABLES {
+        assert!(tables.contains(table), "{table}: {tables:?}");
+        let rows: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rows, 0, "{table}");
+    }
+
+    code_stub::index_stub(&mut index, &corpus.scheme);
+    let fresh = {
+        let other = Scratch::new("format-code-fresh");
+        let twin = Corpus::copy_of("spec-a", &other, "wt");
+        let mut fresh = twin.open(&other.db("code"));
+        twin.update(&mut fresh);
+        code_stub::index_stub(&mut fresh, &twin.scheme);
+        let root = fresh.root().to_str().unwrap().to_owned();
+        fresh.dump().unwrap().replace(&root, "<root>")
+    };
+    conn.execute_batch("ALTER TABLE symbols ADD COLUMN stale_of_an_older_build INTEGER DEFAULT 7")
+        .expect("an older build's column");
+    drop(conn);
+    rewrite_stamp(&db, "0");
+    let report = corpus.update(&mut index);
+    assert!(report.reparsed_all, "{report:?}");
+    let report = code_stub::index_stub(&mut index, &corpus.scheme);
+    assert!(report.rederived_all, "{report:?}");
+    let conn = rusqlite::Connection::open(&db).expect("raw connection");
+    let stale: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM pragma_table_xinfo('symbols') WHERE name = 'stale_of_an_older_build'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stale, 0, "symbols recreated");
+    let root = index.root().to_str().unwrap().to_owned();
+    assert_eq!(
+        index.dump().unwrap().replace(&root, "<root>"),
+        fresh,
+        "the recreated worktree equals a fresh one"
+    );
+}
+
+/// docs/features/symbol-index.md "Cache key and cross-file pass", over the
+/// stub's rows (the store alone, no parser): the pass sets `twin_files` 1
+/// on both files' `crates/stub::shared` and leaves the in-file twins `#1`,
+/// `#2` at 0; `declared_by` names the declaring file; the per-file names
+/// read the facts back: `other.rs` and its items are `path_attribute`
+/// (declared, role not shared), lib.rs's `shared` is `duplicate`, its twins
+/// unambiguous. A second refresh re-derives nothing; another analyzer stamp
+/// re-derives every file (`rederived_all`).
+#[test]
+fn the_stub_rows_carry_the_pass() {
+    let scratch = Scratch::new("format-stub-pass");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let db = scratch.db("stub");
+    let mut index = corpus.open(&db);
+    corpus.update(&mut index);
+    let first = code_stub::index_stub(&mut index, &corpus.scheme);
+    assert_eq!((first.walked, first.parsed), (3, 3), "{first:?}");
+    assert!(!first.rederived_all, "{first:?}");
+    let conn = rusqlite::Connection::open(&db).expect("raw connection");
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .expect("busy timeout");
+    let twins: Vec<(String, String, i64)> = conn
+        .prepare(
+            "SELECT f.path, s.qpath, s.twin_files FROM symbols s
+             JOIN code_files f ON f.file_id = s.file ORDER BY f.path, s.ord",
+        )
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let lib = "crates/stub/src/lib.rs";
+    let other = "crates/stub/src/other.rs";
+    let row = |path: &str, qpath: &str, count: i64| (path.to_owned(), qpath.to_owned(), count);
+    assert_eq!(
+        twins,
+        [
+            row(lib, "crates/stub::alpha", 0),
+            row(lib, "crates/stub::impl Pair #1", 0),
+            row(lib, "crates/stub::impl Pair #2", 0),
+            row(lib, "crates/stub::broken", 0),
+            row(lib, "crates/stub::shared", 1),
+            row(other, "crates/stub::shared", 1),
+        ]
+    );
+    let declared: Option<String> = conn
+        .query_row(
+            "SELECT declared_by FROM code_files WHERE path = ?1",
+            [other],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(declared.as_deref(), Some(lib));
+    drop(conn);
+
+    let names = index.stored_names(other).unwrap().expect("stored");
+    assert_eq!(names.module.qpath, "crates/stub::other");
+    assert_eq!(names.module.ambiguity.as_deref(), Some("path_attribute"));
+    assert_eq!(names.items[0].ambiguity.as_deref(), Some("path_attribute"));
+    let names = index.stored_names(lib).unwrap().expect("stored");
+    let ambiguities: Vec<Option<&str>> = names
+        .items
+        .iter()
+        .map(|name| name.ambiguity.as_deref())
+        .collect();
+    assert_eq!(ambiguities, [None, None, None, None, Some("duplicate")]);
+    assert_eq!(names.items[2].discriminator.as_deref(), Some("2"));
+    assert!(index.stored_names("data/nothing.ron").unwrap().is_none());
+
+    let again = code_stub::index_stub(&mut index, &corpus.scheme);
+    assert_eq!((again.parsed, again.unchanged), (0, 3), "{again:?}");
+    let other_stamp = code_stub::Stub {
+        fingerprint: b"stub-analyzer 2".to_vec(),
+    };
+    let report = index
+        .update_code(&other_stamp, &corpus.scheme, false)
+        .expect("another stamp");
+    assert!(report.rederived_all, "{report:?}");
+    assert_eq!(report.parsed, 3, "{report:?}");
 }

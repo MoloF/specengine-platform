@@ -17,14 +17,14 @@ Split from 6a-2 (its Q23) so the reads neither wait on nor share iterations with
 ## Description and interactions
 
 - **Who sees it**: the owner and agents through Bash: `spec symbols` (a query, a node, a file or a line) and `spec unmapped` (coverage per directory and file); 6b-1 mirrors both (`code-tools.md` `find_symbols`, `unmapped`); 7b's `--symbol` takes the lookup's best tier and `unmapped`'s containment (`impact.md`).
-- **Freshness**: each refreshes the md index, then the code index, as `refs` (`symbol-index.md` "Description and interactions", **Freshness**); a walk gap exits 2 (`symbol-index.md` "spec refs and spec index").
+- **Freshness**: each refreshes the md index, then the code index, as `refs` (`docs/canon/symbol-index.md`, `refresh_code`); a walk gap exits 2 (its "spec refs and spec index").
 - **Crates**: store, the tier lookups and the containment as queries over 6a-2's tables, comparing strings only; `specengine-code` `naming.rs`, `query_name` (Q27); CLI, the two commands (new modules join `code_refs_walk.rs` `NEW_MODULES`), `Corpus::judge` once per stored ID, `OUTPUT_CAP_CHARS`. No table, column, `INDEX_FORMAT` or `CODE_INDEX_FORMAT` change (6a-2 creates every table: its Q23); no new dependency; MCP, HTTP, UI untouched (6b-1, Phase 4). **For 6b-1** (Q35): `symbols`, `unmapped` exported from the CLI library with their request and outcome types as `refs` is, the form an enum (QUERY terms and limit, node, file, `at` raw: one `PATH:LINE` parser, in the CLI), the limit bounds as constants (as `SEARCH_LIMIT_*`), so MCP calls them without clap.
 
 ## Data
 
 ### Lookup
 
-WA-8. Over 6a-2's `symbol_suffixes` rows (`symbol-index.md` "Tables", **Suffixes**) and its `qpath`, `name` indexes. The query (positionals joined by a space) matches in tiers, each a B-tree lookup (SW refinement): `exact`, `qpath` = query; `suffix`, a `suffix` = query; `name`, `name` = `query_name(query)` (after the last `::` outside `<>` `()` `[]`, a segment starting `impl ` to the end, ` #<value>` dropped). Once per symbol at its best tier; then qpath bytes, path bytes, start line, never rowid. Shells read an unquoted `#2` as a comment: quote it. `query_name` lives in `specengine-code` (`naming.rs`), the one reader of `::` in a query; the store compares strings only (Q27, "Rules and edge cases").
+WA-8. Over 6a-2's `symbol_suffixes` rows (`docs/canon/symbol-index.md` "Tables", **Suffixes**) and its `qpath`, `name` indexes. The query (positionals joined by a space) matches in tiers, each a B-tree lookup (SW refinement): `exact`, `qpath` = query; `suffix`, a `suffix` = query; `name`, `name` = `query_name(query)` (after the last `::` outside `<>` `()` `[]`, a segment starting `impl ` to the end, ` #<value>` dropped). Once per symbol at its best tier; then qpath bytes, path bytes, start line, never rowid. Shells read an unquoted `#2` as a comment: quote it. `query_name` lives in `specengine-code` (`naming.rs`), the one reader of `::` in a query; the store compares strings only (Q27, "Rules and edge cases").
 
 ### spec symbols
 
@@ -64,6 +64,15 @@ JSON `{path, rows: [{path, dir, units, mapped, percent, mentioned}], total, unma
 - Only the data directory is written, through 6a-2's refresh.
 - Genre (`docs/canon/architecture.md#universal`): `query_name` in `specengine-code` is the only reader of `::` in a query (Q27); no fixture prefix, kind, `::` split, stack word, Cargo literal, `tests` or `src` literal in the store, core or the new CLI modules (`code_refs_walk.rs` `NEW_MODULES`).
 
+## Carry-overs
+
+From 6a-2's review 1 (rust-developer nits; none blocked 6a-2):
+
+- Store `code.rs` `update`: a no-op refresh writes nothing: skip the `code_fp` UPDATE when equal, rewrite `code_packages` only when its rows differ (then drop that line from `docs/canon/symbol-index.md` "Known limits").
+- CLI `refs.rs`: open the DB once (`indexed()` and `open_index` each open it today); build the stored-word lists (`RELATIONS`, `levels_states()`, `categories()`, `ambiguities()`) once, from `ALL` consts in `specengine-code` (as `Level::ALL`) or `from_str`, so a new variant never reads as unknown; the walk oracle under `#[cfg_attr(not(test), expect(dead_code, reason = …))]`, not `allow`.
+- CLI `code_index.rs`: `dir_text` keeps `\` on Unix, else the canon's known limit stays; each re-derived item's `QPath` built once (`name_one` returning the structured paths, or one call giving names, place and paths), `file_place` once per file.
+- Re-point the code comments citing `docs/features/symbol-index.md` headings (13: store `code.rs:1,79,276`, `schema.rs:224`, `dump.rs:24`, `lib.rs:46,193`, `index.rs:30`; code `lib.rs:78,121`; eval `code_index.rs:3`, `main.rs:74`) to `docs/canon/symbol-index.md`: "Tables", "Cache key and cross-file pass", "Analyzer stamp", "spec refs and spec index", "AC-10 measurement" keep their names, "Description and interactions" (Crates, 6b's partial tree) becomes "Crates and seams". The CLI's cite the task spec by name (`genre.rs` bans `docs/` there). Then the shipped spec's pointer headings may go (`doc_pointers.rs`).
+
 ## Acceptance criteria
 
 rust-developer:
@@ -83,7 +92,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec (split from `symbol-index.md` 2026-10-15, Q23); 08 s2 lists 6a-3; `code-tools.md`, `impact.md` pointers follow.
-- [ ] SW-2 -- at shipping: "Lookup", "spec symbols", "spec unmapped" appended to 6a-2's `docs/canon/symbol-index.md` if it stays ≤ 12 288 B, else a Tier 2 file of their own (`docs/index-canon.md` re-measured); the CLI README's command lines (pointers, room first); `code-tools.md`, `impact.md` pointers moved to the canon; `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping: "Lookup", "spec symbols", "spec unmapped" appended to 6a-2's `docs/canon/symbol-index.md` if it stays ≤ 12 288 B (11 774 B at its shipping), else a Tier 2 file of their own (`docs/index-canon.md` re-measured); the CLI README's command lines (pointers, room first); `code-tools.md`, `impact.md` pointers moved to the canon; `CLAUDE.md` State.
 - [x] SW-3 -- no ADR; `export index`, `check` clean.
 
 ## Out of scope

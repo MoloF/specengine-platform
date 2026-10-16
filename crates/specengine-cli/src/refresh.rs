@@ -3,12 +3,23 @@
 //! (`--full`: `rebuild`). A missing root is worth a warning only when
 //! `[paths]` is written; unreadable directories and skipped names always
 //! are. Nothing the walk meets is fatal.
+//!
+//! `spec index` then refreshes the code index, a call of its own
+//! ([`crate::code_index::refresh_code`]; task spec `symbol-index`,
+//! "spec refs and spec index"): its `code <slug>: …` line before `db`,
+//! JSON `code` (`null` without `[code]`, whose code rows go). A `[code]`
+//! that does not read leaves the code rows as they are: the spec index is
+//! written and printed, then exit 2 naming the cause at its line. A code
+//! file that cannot be read, or a directory that cannot be listed, is
+//! stored and counted (exit 0); the reads that need the whole tree refuse.
 
 use serde::Serialize;
-use specengine_store::{IndexWriter, SqliteIndex, UpdateReport, WorkingTree};
+use specengine_core::CodeConfig;
+use specengine_store::{CodeReport, IndexWriter, SqliteIndex, UpdateReport, WorkingTree};
 
+use crate::code_index::refresh_code;
 use crate::location::open_index;
-use crate::project::{ProjectRoot, discover};
+use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::{CliError, Env, Globals, Message, store_error};
 
 /// `spec index` options.
@@ -26,22 +37,55 @@ pub struct IndexOutcome {
     /// The database file.
     pub db: String,
     pub report: UpdateReport,
+    /// The code index's refresh; `None` without `[code]`, or when it does
+    /// not read.
+    pub code: Option<CodeReport>,
+    /// A `[code]` table that does not read: the whole stderr line
+    /// (`<config>:<line>: …`), exit 2 after the spec index was written.
+    pub code_error: Option<String>,
     pub messages: Vec<Message>,
 }
 
-/// `spec index`: brings the project's index up to date with its files.
+/// `spec index`: brings the project's index up to date with its files,
+/// then its code index with the `[code]` tree.
 pub fn index(
     env: &Env,
     globals: &Globals,
     request: &IndexRequest,
 ) -> Result<IndexOutcome, CliError> {
-    let project = discover(env, globals)?;
+    let (project, text) = discover_with_text(env, globals)?;
     let mut open = open_index(env, &project)?;
-    let (report, messages) = refresh(&mut open.index, &project, request.full)?;
+    let (report, mut messages) = refresh(&mut open.index, &project, request.full)?;
+    let mut code = None;
+    let mut code_error = None;
+    match CodeConfig::from_toml(&text) {
+        Err(error) => code_error = Some(config_error(&project.config_label, &error).message),
+        Ok(None) => {
+            open.index.clear_code().map_err(store_error)?;
+        }
+        Ok(Some(config)) => {
+            let refreshed = refresh_code(
+                &mut open.index,
+                &project.root,
+                &config,
+                &project.config.scheme,
+                request.full,
+            )?;
+            messages.extend(refreshed.messages.iter().cloned());
+            if let Some(gap) = refreshed.gap() {
+                messages.push(Message::Warning(format!(
+                    "the code walk is incomplete: {gap}; reads of the code refuse until it is not"
+                )));
+            }
+            code = Some(refreshed.report);
+        }
+    }
     Ok(IndexOutcome {
         project: open.slug,
         db: open.db.display().to_string(),
         report,
+        code,
+        code_error,
         messages,
     })
 }
@@ -99,6 +143,25 @@ pub(crate) fn render_text(outcome: &IndexOutcome) -> String {
         out.push_str(", reparsed all");
     }
     out.push('\n');
+    if let Some(code) = &outcome.code {
+        out.push_str(&format!(
+            "code {}: walked {}, parsed {}, unchanged {}, removed {}, unreadable {}, skipped {}, symbols {}, markers {}, mentions {}",
+            outcome.project,
+            code.walked,
+            code.parsed,
+            code.unchanged,
+            code.removed,
+            code.unreadable,
+            code.skipped,
+            code.symbols,
+            code.markers,
+            code.mentions
+        ));
+        if code.rederived_all {
+            out.push_str(", rederived all");
+        }
+        out.push('\n');
+    }
     out.push_str(&format!("db {}\n", outcome.db));
     out
 }
@@ -109,6 +172,7 @@ struct IndexJson<'a> {
     db: &'a str,
     #[serde(flatten)]
     report: &'a UpdateReport,
+    code: Option<&'a CodeReport>,
 }
 
 fn view(outcome: &IndexOutcome) -> IndexJson<'_> {
@@ -116,6 +180,7 @@ fn view(outcome: &IndexOutcome) -> IndexJson<'_> {
         project: &outcome.project,
         db: &outcome.db,
         report: &outcome.report,
+        code: outcome.code.as_ref(),
     }
 }
 

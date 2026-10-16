@@ -1,0 +1,6 @@
+# `<CODE_INDEX_FORMAT> <BLAKE3 of the code tables' dump of fixtures/code-index,
+# root masked>` (docs/features/symbol-index.md "Analyzer stamp", Q16, Q24):
+# read by `code_index_cache.rs` `code_format_history_pins_the_code_index_dump`.
+# A changed code dump needs a new CODE_INDEX_FORMAT and a new line; earlier
+# lines stay verbatim.
+1 3eac6715cece86e4385c82367d489ccc24d4a7896044accb18a713ec344a3a0e

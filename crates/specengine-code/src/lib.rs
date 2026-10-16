@@ -65,14 +65,19 @@
 //!   refusal when [`ron::analyze`] rejects it.
 //!
 //! Phase 3 slice 6a-1 `symbol-discriminator`
-//! (`docs/features/symbol-discriminator.md`):
+//! (`docs/canon/symbol-names.md` "Discriminator", "Signature"):
 //!
 //! - [`naming`] — in-file twins named apart, `<qpath> #<discriminator>`
 //!   (their `cfg` chain, [`ItemRecord::cfg`], else their ordinal), in two
-//!   halves: per file ([`name_file`]) and tree-wide ([`tree_passes`] over
-//!   [`path_targets`]);
+//!   halves: per file ([`name_file`], [`indexed_name_file`] over a
+//!   package's prepared [`TargetIndex`]) and tree-wide ([`tree_passes`]
+//!   over [`path_targets`]);
 //! - [`item_signatures`] — the display signature of chosen bound items,
 //!   at most [`SIGNATURE_CAP_BYTES`], never hashed.
+//!
+//! Phase 3 slice 6a-2 `symbol-index` (`docs/features/symbol-index.md`
+//! "Analyzer stamp"): [`CODE_INDEX_FORMAT`], the stamp of every rule above
+//! whose output the code index stores.
 
 pub mod bevy;
 pub mod bind;
@@ -100,8 +105,8 @@ pub use levels::{
 };
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
 pub use naming::{
-    DISCRIMINATOR_SEPARATOR, FileNames, Name, NamedFile, Names, ROOT_PACKAGE, name_file,
-    name_files, path_targets, tree_passes,
+    DISCRIMINATOR_SEPARATOR, FileNames, Name, NamedFile, Names, ROOT_PACKAGE, file_place,
+    indexed_name_file, name_file, name_files, path_targets, tree_passes,
 };
 pub use qpath::{
     Ambiguity, FileRole, PackageTargets, QPath, Target, TargetIndex, TargetSource, Unit, UnitKind,
@@ -111,3 +116,15 @@ pub use ron::{
     Anchor, CommentAnchor, Rejected, RonAnalysis, RonMarker, RonValues, comment_anchors,
     value_hashes,
 };
+
+/// The stamp of what the code index stores per file
+/// (`docs/features/symbol-index.md` "Analyzer stamp"): the binding, the
+/// naming and its discriminator, the display signature, the markers and
+/// mentions as this crate reads them. Any change of a rule whose output a
+/// stored row holds needs a new number (the levels' own recipe is
+/// [`level_header`]'s, a part of the same cache key), and a new line in
+/// the CLI's `tests/code_format_history.txt`.
+///
+/// 1: the first stored rules: 6a-1's discriminator (`cfg` chains read past
+/// comments in attributes) and signature (a space ending a cut dropped).
+pub const CODE_INDEX_FORMAT: u32 = 1;

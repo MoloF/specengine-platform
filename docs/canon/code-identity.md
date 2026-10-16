@@ -8,7 +8,7 @@ reviewed: 2026-10-16
 
 # Layer A identity: target units, markers, RON paths
 
-Layer A (05 §5.1) names code without a build: a heuristic `qpath` per Rust item, the marker grammar of `.rs` and `.ron` comments, a field path per RON marker. The marker is the link identity, the `qpath` only a name (ADR-0020, `docs/canon/architecture.md#code-identity`): what the heuristic cannot decide is reported, never guessed; malformed input is counted, never fatal (ADR-0012). Unit sources know only Cargo's names (`src`, `tests`, `lib.rs`, …: `identity_literals.rs`, ADR-0008). Code: `specengine-code` `qpath.rs`, `markers.rs`, `ron/`; the targets, the cargo runner (`specengine-eval` `ast_hash/targets.rs`): `docs/canon/code-targets.md`. Read by the eval and `spec refs` (`docs/canon/code-bindings.md`); Phase 3 stores it.
+Layer A (05 §5.1) names code without a build: a heuristic `qpath` per Rust item, the marker grammar of `.rs` and `.ron` comments, a field path per RON marker. The marker is the link identity, the `qpath` only a name (ADR-0020, `docs/canon/architecture.md#code-identity`): what the heuristic cannot decide is reported, never guessed; malformed input is counted, never fatal (ADR-0012). Unit sources know only Cargo's names (`src`, `tests`, `lib.rs`, …: `identity_literals.rs`, ADR-0008). Code: `specengine-code` `qpath.rs`, `markers.rs`, `ron/`; the targets, the cargo runner (`specengine-eval` `ast_hash/targets.rs`): `docs/canon/code-targets.md`. Read by the eval and `spec refs` (`docs/canon/code-bindings.md`); stored per file by the code index (`docs/canon/symbol-index.md`).
 
 ## Units and `qpath`
 
@@ -86,4 +86,3 @@ Pilots (read-only): A 0.2 % of 11 852 items ambiguous by the eval's count — `d
 ## Open
 
 - A process-group kill.
-- Phase 3: `symbols` and `markers` rows (6a-2).

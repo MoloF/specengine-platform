@@ -55,6 +55,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/serve-ui.md](canon/serve-ui.md) Daemon: the web UI it serves · crates/specengine-http, ui · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates · tier 2
+- [docs/canon/symbol-index.md](canon/symbol-index.md) Symbol index: stored code rows, the refresh, spec index, spec refs · crates/specengine-store, crates/specengine-cli, crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/symbol-names.md](canon/symbol-names.md) Symbol names: in-file twins and display signatures · crates/specengine-code · tier 2
 - [docs/canon/task-package.md](canon/task-package.md) Task package: what an agent is given · crates/specengine-cli, crates/specengine-mcp, crates/specengine-model · tier 2
 - [docs/canon/tasks.md](canon/tasks.md) Tasks: commands, transitions, place, store · crates/specengine-store, crates/specengine-cli, crates/specengine-core · tier 2

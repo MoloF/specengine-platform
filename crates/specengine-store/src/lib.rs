@@ -43,6 +43,15 @@
 //!   `spec.lock` for any commit ([`CommitListing`], [`CommitFile`]), a
 //!   path's unmerged stages and files on disk by blob OID (`hash-object`
 //!   without `-w`);
+//! - the code index (docs/features/symbol-index.md "Tables"): a
+//!   [`CodeAnalyzer`]'s per-file rows stored beside the spec index of the
+//!   same worktree, keyed by `(path, BLAKE3)`, the package and its target
+//!   table and the worktree's `code_fp`, with a cross-file pass, equal to
+//!   a fresh rebuild ([`SqliteIndex::update_code`], [`CodeReport`];
+//!   [`SqliteIndex::clear_code`] without `[code]`); read back as
+//!   [`SqliteIndex::stored_names`] (one file's names),
+//!   [`SqliteIndex::code_refs`] (files, markers, mentions) and
+//!   [`SqliteIndex::code_symbols`];
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -80,6 +89,7 @@
 
 mod base;
 mod check;
+mod code;
 mod dump;
 mod error;
 mod git;
@@ -104,6 +114,13 @@ pub use check::{
     bump_changed, bump_staged, check_changed_with_notes, check_input, check_source, check_staged,
     check_staged_with_notes, check_tree, check_worktree, default_baseline, load_check, load_config,
     today_utc,
+};
+pub use code::{
+    AMBIGUITY_DUPLICATE, AMBIGUITY_PATH_ATTRIBUTE, AMBIGUITY_UNROOTED, BoundSymbol, CodeAnalyzer,
+    CodeDeclRow, CodeFileRows, CodeFileState, CodeListing, CodeMarkerRow, CodeMentionRow,
+    CodePackageRow, CodeRefs, CodeReport, CodeSymbolRow, ListedCodeFile, ROLE_SHARED,
+    ROLE_UNROOTED, StoredBinding, StoredMarker, StoredMention, StoredName, StoredNames,
+    StoredSymbol,
 };
 pub use error::StoreError;
 pub use git::{GitEnv, same_dir};
@@ -169,7 +186,12 @@ pub use worktree::{
 /// row's parse (NULL when null), and the parser's revision rules: `rev=0`,
 /// `rev: 0` and a repeated `rev` are `bad-rev` (docs/features/norm-hash.md,
 /// ADR-0040).
-pub const INDEX_FORMAT: u32 = 8;
+///
+/// 9: the code tables `code_worktrees`, `code_files`, `code_packages`,
+/// `symbols`, `symbol_suffixes`, `code_decls`, `code_markers`,
+/// `code_mentions`, created with the schema in every DB and filled by
+/// [`SqliteIndex::update_code`] (docs/features/symbol-index.md "Tables").
+pub const INDEX_FORMAT: u32 = 9;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

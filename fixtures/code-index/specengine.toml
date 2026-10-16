@@ -1,0 +1,19 @@
+# Fixture corpus code-index (docs/features/symbol-index.md, TE-1, Q24): a
+# small library of sheets and their marks, its specification and its code,
+# stored by the code index. Prefixes, kinds and a slug of its own; the code
+# index reads `[code]`. What the stored rows, `spec index`, `spec refs` and
+# `specengine-eval code-index` must give: `expected.json`.
+#
+# `fixtures/code-a` stays as docs/features/symbol-discriminator.md leaves it:
+# slices 1-4c-1's goldens read it.
+
+[project]
+slug = "inkwell"
+
+[ids]
+SLAB  = { kind = "slab",  shape = "name" }
+TENET = { kind = "tenet", shape = "name" }
+QUILL = { kind = "quill", width = 2 }
+
+[code]
+roots = ["crates", "data"]

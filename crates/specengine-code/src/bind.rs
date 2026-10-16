@@ -275,7 +275,7 @@ const NO_SPACE_AFTER: [char; 2] = ['(', '['];
 const NO_SPACE_BEFORE: [char; 3] = [')', ']', ','];
 
 /// The display signatures of the items at `items`
-/// (`docs/features/symbol-discriminator.md` "Signature"), the twin of
+/// (`docs/canon/symbol-names.md` "Signature"), the twin of
 /// [`item_levels`]: indexes into the [`RustBinding::analysis`] that
 /// [`bind_tree`] gives for the same `tree` and `source`, in the order
 /// asked; `None` for an index past its items and for a broken item (a
@@ -290,8 +290,9 @@ const NO_SPACE_BEFORE: [char; 3] = [')', ']', ','];
 /// name; an item without a body is whole, a final `;` dropped. Comments
 /// are dropped, each as whitespace; each whitespace run (CR included)
 /// becomes one space, none after `(` or `[` and none before `)`, `]` or
-/// `,`; trimmed. Over [`SIGNATURE_CAP_BYTES`] it is cut at a char boundary
-/// and `…` appended, the whole within the cap.
+/// `,`; trimmed. Over [`SIGNATURE_CAP_BYTES`] it is cut at a char boundary,
+/// a space ending the cut dropped, and `…` appended, the whole within the
+/// cap.
 #[must_use]
 pub fn item_signatures(tree: &Tree, source: &str, items: &[usize]) -> Vec<Option<String>> {
     let (_, nodes) = analyze_with_nodes(tree, source, Hashing::ErrorsOnly);
@@ -380,8 +381,8 @@ fn signature(item: Node<'_>, source: &str) -> String {
     cap_signature(text)
 }
 
-/// `text` cut to [`SIGNATURE_CAP_BYTES`] at a char boundary, `…` appended,
-/// when it is longer.
+/// `text` cut to [`SIGNATURE_CAP_BYTES`] at a char boundary, the space the
+/// cut may leave at its end dropped, `…` appended, when it is longer.
 fn cap_signature(mut text: String) -> String {
     if text.len() <= SIGNATURE_CAP_BYTES {
         return text;
@@ -391,6 +392,8 @@ fn cap_signature(mut text: String) -> String {
         cut -= 1;
     }
     text.truncate(cut);
+    let kept = text.trim_end().len();
+    text.truncate(kept);
     text.push(ELLIPSIS);
     text
 }

@@ -11,6 +11,7 @@ mod ast_hash;
 mod bevy;
 mod census;
 mod check;
+mod code_index;
 mod harness;
 mod import;
 mod index;
@@ -70,6 +71,14 @@ enum Measurement {
     /// update by walk and by path, and the stored counts. `[ids]` and
     /// `[paths]` from `--scheme`.
     Index(IndexArgs),
+    /// The code index (docs/features/symbol-index.md "AC-10 measurement")
+    /// over a scratch copy of the `[code]` walk's files and manifests: the
+    /// level and signature cost, a full, an unchanged and a one-file
+    /// refresh, the stored twins, signatures and items, each Rust file's
+    /// role under the layout against `cargo metadata`. `[ids]`, `[paths]`
+    /// and `[code]` from `--scheme`; under a pilot label
+    /// `SPECENGINE_CODE_ROOTS_A` / `_B` give the roots.
+    CodeIndex(IndexArgs),
     /// `spec check` (increment 1) over the `[paths]` walk, read-only:
     /// counts per code and severity, the verdict under `observe` and
     /// `enforce`; paths, IDs and messages only in
@@ -311,6 +320,23 @@ fn main() -> ExitCode {
                 index::FIXTURE,
                 move |root: &Path| index::prepare(root, scheme.as_deref(), label.as_deref()),
                 index::run,
+            )
+        }
+        Measurement::CodeIndex(args) => {
+            if let Some(refused) = refuse_config(code_index::MEASUREMENT, &args.common) {
+                return refused;
+            }
+            let scheme = args.scheme.clone();
+            let label = args.common.label.clone();
+            let timeout = Duration::from_secs(args.common.timeout);
+            measure_with(
+                code_index::MEASUREMENT,
+                &args.common,
+                code_index::FIXTURE,
+                move |root: &Path| {
+                    code_index::prepare(root, scheme.as_deref(), label.as_deref(), timeout)
+                },
+                code_index::run,
             )
         }
         Measurement::Check(args) => {

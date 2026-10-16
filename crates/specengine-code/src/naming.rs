@@ -8,7 +8,7 @@
 //! item of another file renders the same undiscriminated `qpath`).
 //!
 //! In-file twins
-//! (`docs/features/symbol-discriminator.md` "Discriminator"): two or more
+//! (`docs/canon/symbol-names.md` "Discriminator"): two or more
 //! items of one file rendering one `qpath` form a group, each member named
 //! `<qpath> #<value>` by the first rule
 //! giving every member a non-empty value, all distinct — `cfg(<p>)` over
@@ -144,13 +144,16 @@ pub fn name_file(file: &NamedFile<'_>, tables: &BTreeMap<PathBuf, PackageTargets
 }
 
 /// The tree-wide passes of [`name_files`] over the per-file halves
-/// `named` of `files` (in the same order): `path_attribute` on every file
-/// a `#[path]` attribute of the tree names ([`path_targets`]) outside a
-/// shared unit, outranking `unrooted`; then `duplicate` on every item with
-/// no other ambiguity whose undiscriminated `qpath` an item of another
-/// file renders too.
+/// `named` of `files` (in the same order, one half per file): `path_attribute`
+/// on every file a `#[path]` attribute of the tree names ([`path_targets`])
+/// outside a shared unit, outranking `unrooted`; then `duplicate` on every
+/// item with no other ambiguity whose undiscriminated `qpath` an item of
+/// another file renders too. The caller gives exactly one half per file;
+/// a debug build asserts it (a release build pairs the two lists only as
+/// far as both reach for `path_attribute`).
 #[must_use]
 pub fn tree_passes(files: &[NamedFile<'_>], mut named: Vec<FileNames>) -> Names {
+    debug_assert_eq!(files.len(), named.len(), "one per-file half per file");
     let targets = path_targets(files);
     mark_path_attributes(files, &mut named, &targets);
     mark_duplicates(&mut named);
@@ -162,8 +165,21 @@ pub fn tree_passes(files: &[NamedFile<'_>], mut named: Vec<FileNames>) -> Names 
     names
 }
 
-/// [`name_file`] over the package's prepared target index.
-fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames {
+/// [`name_file`] over the package's [`TargetIndex`], prepared once for all
+/// its files (`None`: the file is unrooted): the per-file half without a
+/// table indexed per call.
+#[must_use]
+pub fn indexed_name_file(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames {
+    name_one(file, index)
+}
+
+/// Where [`name_file`] places `file`: its package label (the package
+/// directory, [`ROOT_PACKAGE`] for the root and outside every package) and
+/// its role over its package's prepared [`TargetIndex`] (none: unrooted).
+/// [`qpath::qpath`] over these two gives an item's structured path, the one
+/// its name renders.
+#[must_use]
+pub fn file_place(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> (String, FileRole) {
     let label = file
         .package
         .map(|package| package.to_string_lossy().replace('\\', "/"))
@@ -177,6 +193,12 @@ fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames 
             Some(index.file_role(inner))
         })
         .unwrap_or(FileRole::Unrooted);
+    (label, role)
+}
+
+/// [`name_file`] over the package's prepared target index.
+fn name_one(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> FileNames {
+    let (label, role) = file_place(file, index);
     // A shared unit is named by its location, however it is included.
     let shared = role
         .unit()

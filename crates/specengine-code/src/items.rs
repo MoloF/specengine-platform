@@ -56,7 +56,7 @@ pub struct ItemRecord {
     /// `cfg(..)` joined with no whitespace, comments dropped, a string
     /// literal kept verbatim; an empty one is not recorded. The first rule
     /// of an in-file twin's discriminator
-    /// (`docs/features/symbol-discriminator.md` "Discriminator").
+    /// (`docs/canon/symbol-names.md` "Discriminator").
     pub cfg: Vec<String>,
     pub byte_range: Range<usize>,
     /// 1-based start line.
@@ -215,28 +215,24 @@ fn collect<'tree>(
             continue;
         }
         let record = make_record(child, source, scope, hashing);
-        let label = record.label.clone();
-        let name = record.name.clone();
-        let cfg = record.cfg.clone();
-        out.items.push(record);
-        nodes.push(child);
+        // Only a container's arms copy its name, label and `cfg` chain.
         let body = match kind {
             MOD_KIND => match child.child_by_field_name("body") {
                 Some(body) => {
                     let mut mod_path = scope.mod_path.clone();
-                    mod_path.push(name.unwrap_or_default());
+                    mod_path.push(record.name.clone().unwrap_or_default());
                     Some((
                         body,
                         Scope {
                             mod_path,
                             owner: None,
-                            cfg,
+                            cfg: record.cfg.clone(),
                         },
                     ))
                 }
                 None => {
                     out.mod_declarations.push(ModDeclaration {
-                        name: name.unwrap_or_default(),
+                        name: record.name.clone().unwrap_or_default(),
                         mod_path: scope.mod_path.clone(),
                         line: child.start_position().row + 1,
                         path_attribute: path_attribute(child, source),
@@ -249,13 +245,15 @@ fn collect<'tree>(
                     body,
                     Scope {
                         mod_path: scope.mod_path.clone(),
-                        owner: Some(label),
-                        cfg,
+                        owner: Some(record.label.clone()),
+                        cfg: record.cfg.clone(),
                     },
                 )
             }),
             _ => None,
         };
+        out.items.push(record);
+        nodes.push(child);
         if let Some((body, scope)) = body {
             stack.push(Level::new(body, scope));
         }
@@ -322,7 +320,8 @@ const STRING_KINDS: [&str; 2] = ["string_literal", "raw_string_literal"];
 
 /// The predicates of the item's own attached `#[cfg(..)]` attributes, in
 /// source order, read structurally: `attribute_item` → `attribute` → path
-/// `identifier` "cfg" + `arguments` token tree opened by `(`. A predicate is
+/// `identifier` "cfg" (comments before each skipped) + `arguments` token
+/// tree opened by `(`. A predicate is
 /// the concatenation of the tree's tokens between its delimiters, with no
 /// whitespace between them and comments (by kind) dropped; a string
 /// literal's text is kept verbatim, its inner spaces included, but a CR
@@ -332,10 +331,9 @@ fn cfg_predicates(item: Node, source: &[u8]) -> Vec<String> {
     attached_attributes(item)
         .into_iter()
         .filter_map(|attribute_item| {
-            let attribute = attribute_item
-                .named_child(0)
-                .filter(|n| n.kind() == "attribute")?;
-            let path = attribute.named_child(0)?;
+            let attribute =
+                first_named_code_child(attribute_item).filter(|n| n.kind() == "attribute")?;
+            let path = first_named_code_child(attribute)?;
             if path.kind() != "identifier" || path.utf8_text(source).ok()? != CFG {
                 return None;
             }
@@ -379,15 +377,15 @@ fn cfg_predicates(item: Node, source: &[u8]) -> Vec<String> {
 }
 
 /// The string of an attached `#[path = "..."]` attribute, read structurally:
-/// `attribute_item` → `attribute` → path `identifier` "path" + `value` string literal.
+/// `attribute_item` → `attribute` → path `identifier` "path" (comments
+/// before each skipped) + `value` string literal.
 fn path_attribute(item: Node, source: &[u8]) -> Option<String> {
     attached_attributes(item)
         .into_iter()
         .find_map(|attribute_item| {
-            let attribute = attribute_item
-                .named_child(0)
-                .filter(|n| n.kind() == "attribute")?;
-            let path = attribute.named_child(0)?;
+            let attribute =
+                first_named_code_child(attribute_item).filter(|n| n.kind() == "attribute")?;
+            let path = first_named_code_child(attribute)?;
             if path.kind() != "identifier" || path.utf8_text(source).ok()? != "path" {
                 return None;
             }
@@ -404,4 +402,12 @@ fn path_attribute(item: Node, source: &[u8]) -> Option<String> {
             }
             Some(text)
         })
+}
+
+/// The first named child of `node` that is not a comment (by kind): an
+/// attribute's path is read past `#[/*c*/cfg(a)]`'s comment.
+fn first_named_code_child(node: Node) -> Option<Node> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find(|child| !is_comment(*child))
 }

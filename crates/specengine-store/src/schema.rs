@@ -87,10 +87,111 @@ CREATE TABLE diagnostics (
   diagnostic TEXT NOT NULL,
   PRIMARY KEY (file_id, ord)
 ) STRICT;
+CREATE TABLE code_worktrees (
+  wt INTEGER PRIMARY KEY REFERENCES worktrees ON DELETE CASCADE,
+  code_fp TEXT NOT NULL
+) STRICT;
+CREATE TABLE code_packages (
+  wt INTEGER NOT NULL REFERENCES code_worktrees ON DELETE CASCADE,
+  dir TEXT NOT NULL,
+  manifest_b3 TEXT,
+  source TEXT NOT NULL,
+  targets TEXT NOT NULL,
+  PRIMARY KEY (wt, dir)
+) STRICT;
+CREATE TABLE code_files (
+  file_id INTEGER PRIMARY KEY,
+  wt INTEGER NOT NULL REFERENCES code_worktrees ON DELETE CASCADE,
+  path TEXT NOT NULL,
+  lang TEXT NOT NULL,
+  blake3 TEXT,
+  size INTEGER NOT NULL,
+  read_error TEXT,
+  utf8 INTEGER NOT NULL,
+  package TEXT,
+  role TEXT,
+  module TEXT,
+  orphan_errors INTEGER NOT NULL,
+  targets_fp TEXT,
+  declared_by TEXT,
+  UNIQUE (wt, path)
+) STRICT;
+CREATE TABLE symbols (
+  file INTEGER NOT NULL REFERENCES code_files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  item_kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  owner TEXT,
+  qpath TEXT NOT NULL,
+  discriminator TEXT,
+  parent_ord INTEGER,
+  start_line INTEGER NOT NULL,
+  end_line INTEGER NOT NULL,
+  start_byte INTEGER NOT NULL,
+  end_byte INTEGER NOT NULL,
+  signature TEXT,
+  level_state TEXT NOT NULL,
+  level_categories TEXT NOT NULL,
+  sig_hash TEXT,
+  body_hash TEXT,
+  deps_hash TEXT,
+  skeleton_hash TEXT,
+  quote_hash TEXT,
+  body_bytes INTEGER,
+  layer TEXT NOT NULL,
+  twin_files INTEGER NOT NULL,
+  PRIMARY KEY (file, ord)
+) STRICT;
+CREATE TABLE symbol_suffixes (
+  file INTEGER NOT NULL REFERENCES code_files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  depth INTEGER NOT NULL,
+  suffix TEXT NOT NULL,
+  PRIMARY KEY (file, ord, depth)
+) STRICT;
+CREATE TABLE code_decls (
+  file INTEGER NOT NULL REFERENCES code_files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  target TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  PRIMARY KEY (file, ord)
+) STRICT;
+CREATE TABLE code_markers (
+  file INTEGER NOT NULL REFERENCES code_files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  relation TEXT NOT NULL,
+  token TEXT NOT NULL,
+  id TEXT NOT NULL,
+  rev INTEGER,
+  levels TEXT,
+  levels_state TEXT NOT NULL,
+  note TEXT,
+  line INTEGER NOT NULL,
+  \"column\" INTEGER NOT NULL,
+  binding TEXT NOT NULL,
+  symbol_ord INTEGER,
+  anchor TEXT,
+  PRIMARY KEY (file, ord)
+) STRICT;
+CREATE TABLE code_mentions (
+  file INTEGER NOT NULL REFERENCES code_files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  written TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  \"column\" INTEGER NOT NULL,
+  binding TEXT NOT NULL,
+  symbol_ord INTEGER,
+  anchor TEXT,
+  PRIMARY KEY (file, ord)
+) STRICT;
 CREATE INDEX nodes_by_id ON nodes (id);
 CREATE INDEX links_by_dst_id ON links (dst_id);
 CREATE INDEX aliases_by_alias ON aliases (alias);
 CREATE INDEX anchors_by_name ON anchors (name);
+CREATE INDEX symbols_by_qpath ON symbols (qpath);
+CREATE INDEX symbols_by_name ON symbols (name);
+CREATE INDEX symbol_suffixes_by_suffix ON symbol_suffixes (suffix);
+CREATE INDEX code_decls_by_target ON code_decls (target);
 CREATE VIRTUAL TABLE nodes_fts USING fts5(
   id, title, own_text,
   content='nodes', content_rowid='node_id',
@@ -117,8 +218,11 @@ END;
 /// loses exactly the index's objects and nothing of Phase 2's own tables.
 const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "nodes_fts_update"];
 
-/// Every table of every index format but `index_meta`, children first;
-/// append-only as [`FORMAT_TRIGGERS`].
+/// Every table of every index format but `index_meta`, children first; a
+/// later format inserts its tables where their parents ask and never
+/// removes one, as [`FORMAT_TRIGGERS`]. The code tables of format 9
+/// (docs/features/symbol-index.md "Tables") come before `worktrees`, which
+/// `code_worktrees` references.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
@@ -127,6 +231,14 @@ const FORMAT_TABLES: &[&str] = &[
     "diagnostics",
     "nodes",
     "files",
+    "symbol_suffixes",
+    "symbols",
+    "code_decls",
+    "code_markers",
+    "code_mentions",
+    "code_files",
+    "code_packages",
+    "code_worktrees",
     "worktrees",
 ];
 

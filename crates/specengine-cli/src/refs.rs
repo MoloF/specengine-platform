@@ -1,13 +1,17 @@
 //! `spec refs REF` (canon `code-bindings`, "`spec refs`"): what in the
 //! code names a node — every marker (`@implements`, `@verifies`, `@configures`,
-//! `@assumes`) and every comment mention of an ID — read from the `[code]`
-//! tree just now. Read-only: the index refresh of every read writes the
-//! data directory, nothing else is written and nothing about the code is
-//! stored.
+//! `@assumes`) and every comment mention of an ID — read from the code
+//! index, refreshed just now from the `[code]` tree
+//! (task spec `symbol-index`, "spec refs and spec index"), byte for
+//! byte what the walk over the tree answers. Read-only: the refreshes
+//! write the data directory, nothing else is written.
 //!
 //! - **Order of work**: the config (`[code]`, else exit 2), `REF` (every
-//!   form `spec show` takes, its exits and notes alike), the walk
-//!   ([`crate::code_walk`]).
+//!   form `spec show` takes, its exits and notes alike), the code index's
+//!   refresh ([`crate::code_index::refresh_code`]; a gap of the walk: exit
+//!   2), its stored markers and mentions, each stored ID judged once.
+//! - **Oracle**: [`collect_rust`] and [`collect_ron`] read the same rows
+//!   from a walked [`CodeTree`] (the tests compare the two answers).
 //! - **States** (canon `code-bindings`, "ID state", "Revision state"): a
 //!   marker's ID is read by the reference grammar
 //!   and resolved as `spec show` resolves it: `resolved`, `alias`,
@@ -37,24 +41,33 @@ use specengine_core::proposal::PROPOSAL_PREFIX;
 use specengine_core::{CodeConfig, Paths, Revision, revision};
 use specengine_model::{IdScheme, IdScript, Reference, grammar};
 
+use specengine_code::{Ambiguity, ErrorCategory, Level, LevelError, Levels, Unanchored};
+use specengine_store::{CodeFileState, CodeRefs, StoredBinding};
+
 use crate::cap::OUTPUT_CAP_CHARS;
+use crate::code_index::{LANG_RON, LANG_RUST, RON_AMBIGUOUS, refresh_code};
+#[allow(
+    unused_imports,
+    reason = "RD-8's oracle (the walk) is read by the tests"
+)]
 use crate::code_walk::{CodeTree, read_tree};
 use crate::corpus::indexed;
+use crate::location::open_index;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::search::notes;
 use crate::show::{Target, classify, latin_text, not_indexed, pick_reference, project_qualified};
-use crate::{CliError, Env, Globals, Message, one_line};
+use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// Why a written `@rev` of `REF` is ignored (the note's end).
 const REV_IGNORED: &str = "`spec refs` lists every marker whatever its revision";
 
 /// The binding words of a row (`spec lock accept`'s rows too).
-const ITEM: &str = "item";
-const MODULE: &str = "module";
-const RON: &str = "ron";
+pub(crate) const ITEM: &str = "item";
+pub(crate) const MODULE: &str = "module";
+pub(crate) const RON: &str = "ron";
 pub(crate) const UNANCHORED: &str = "unanchored";
 pub(crate) const CANNOT_VERIFY: &str = "cannot_verify";
-const FILE: &str = "file";
+pub(crate) const FILE: &str = "file";
 
 /// An ambiguous binding's word, before its reason (`spec lock accept`'s
 /// state; a `spec refs` row prints ` ambiguous <reason>`).
@@ -213,11 +226,18 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
         )));
     }
 
-    let tree = read_tree(&project.root, &code, &mut messages)?;
+    let mut open = open_index(env, &project)?;
+    let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
+    refreshed.require_complete()?;
+    messages.extend(refreshed.messages.iter().cloned());
+    let stored = open
+        .index
+        .code_refs()
+        .map_err(store_error)?
+        .unwrap_or_default();
     let mut blocks: BTreeMap<NodeKey, Block> =
         nodes.iter().map(|&key| (key, Block::default())).collect();
-    collect_rust(&tree, &mut corpus, scheme, &mut blocks);
-    collect_ron(&tree, &mut corpus, scheme, &mut blocks);
+    collect_stored(&stored, &mut corpus, &mut blocks)?;
 
     let nodes = nodes
         .iter()
@@ -231,13 +251,28 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
         reason: None,
         messages,
         nodes,
-        code: Some(CodeCount {
-            files: tree.rust.len() + tree.ron.len(),
-            rs: tree.rust.len(),
-            ron: tree.ron.len(),
-            skipped: tree.skipped,
-        }),
+        code: Some(stored_count(&stored, refreshed.report.skipped)),
     })
+}
+
+/// The code files the answer read: each stored Rust or RON file that was
+/// read and is UTF-8 (a gap refused the answer before), and those skipped
+/// (names and bytes not UTF-8).
+fn stored_count(stored: &CodeRefs, skipped: usize) -> CodeCount {
+    let read = |lang: &str| {
+        stored
+            .files
+            .iter()
+            .filter(|file| file.lang == lang && file.utf8 && file.read_error.is_none())
+            .count()
+    };
+    let (rs, ron) = (read(LANG_RUST), read(LANG_RON));
+    CodeCount {
+        files: rs + ron,
+        rs,
+        ron,
+        skipped,
+    }
 }
 
 /// The `[code]` table of the config read from `text`; none: exit 2, the
@@ -582,10 +617,21 @@ pub(crate) fn rev_state(
     state: IdState,
     node: Revision,
 ) -> &'static str {
-    if token.len() == marker.id.len() {
+    rev_state_of(&marker.id, marker.rev, token, state, node)
+}
+
+/// [`rev_state`] of a marker's ID, `@N` and token as written.
+fn rev_state_of(
+    id: &str,
+    rev: Option<u32>,
+    token: &str,
+    state: IdState,
+    node: Revision,
+) -> &'static str {
+    if token.len() == id.len() {
         return "unversioned";
     }
-    let Some(written) = marker.rev else {
+    let Some(written) = rev else {
         return "bad_rev";
     };
     if !state.names_nodes() {
@@ -602,13 +648,13 @@ pub(crate) fn rev_state(
 }
 
 /// The 1-based line and byte column of offsets in one text.
-struct Lines {
+pub(crate) struct Lines {
     /// The offset each line starts at.
     starts: Vec<usize>,
 }
 
 impl Lines {
-    fn new(text: &str) -> Self {
+    pub(crate) fn new(text: &str) -> Self {
         let starts = std::iter::once(0)
             .chain(
                 text.bytes()
@@ -620,7 +666,7 @@ impl Lines {
         Self { starts }
     }
 
-    fn at(&self, offset: usize) -> (usize, usize) {
+    pub(crate) fn at(&self, offset: usize) -> (usize, usize) {
         let line = self.starts.partition_point(|&start| start <= offset).max(1);
         (line, offset - self.starts[line - 1] + 1)
     }
@@ -628,6 +674,7 @@ impl Lines {
 
 /// The rows a comment's markers and mentions give, under the nodes asked
 /// for.
+#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
 struct CommentRows<'c> {
     path: &'c str,
     /// Where the comment starts in its file.
@@ -639,6 +686,7 @@ struct CommentRows<'c> {
     mention_binding: &'c dyn Fn() -> BindingRow,
 }
 
+#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
 impl CommentRows<'_> {
     fn collect(
         &self,
@@ -723,6 +771,7 @@ impl CommentRows<'_> {
 }
 
 /// The rows of every Rust comment.
+#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
 fn collect_rust(
     tree: &CodeTree,
     corpus: &mut Corpus<'_>,
@@ -772,6 +821,7 @@ fn collect_rust(
 }
 
 /// The rows of every RON comment.
+#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
 fn collect_ron(
     tree: &CodeTree,
     corpus: &mut Corpus<'_>,
@@ -799,6 +849,7 @@ fn collect_ron(
 }
 
 /// An item's or a module's row.
+#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
 fn named_row(
     kind: &'static str,
     name: Option<&Name>,
@@ -829,6 +880,7 @@ fn category_row(kind: &'static str, category: &'static str) -> BindingRow {
 
 /// A RON comment's row: its path, ambiguous or not; a mention in an
 /// unanchored comment belongs to the file (RON has no items).
+#[allow(dead_code, reason = "RD-8's oracle (the walk), read by the tests")]
 fn ron_row(path: &str, anchor: &Anchor, mention: bool) -> BindingRow {
     match anchor {
         Anchor::Path { path: field, .. } | Anchor::Ambiguous { path: field, .. } => BindingRow {
@@ -842,6 +894,262 @@ fn ron_row(path: &str, anchor: &Anchor, mention: bool) -> BindingRow {
         Anchor::Unanchored if mention => category_row(FILE, ""),
         Anchor::Unanchored => category_row(UNANCHORED, RON_NO_VALUE),
         Anchor::CannotVerify => category_row(CANNOT_VERIFY, RON_TOO_DEEP),
+    }
+}
+
+/// The rows of every stored marker and mention under the nodes asked for:
+/// each stored ID judged once ([`Corpus::judge`]), a row built only when
+/// it is listed. A stored word the reads do not know is an error (the
+/// index was written by another build: `spec index --full`).
+fn collect_stored(
+    stored: &CodeRefs,
+    corpus: &mut Corpus<'_>,
+    blocks: &mut BTreeMap<NodeKey, Block>,
+) -> Result<(), CliError> {
+    let files: BTreeMap<&str, &CodeFileState> = stored
+        .files
+        .iter()
+        .map(|file| (file.path.as_str(), file))
+        .collect();
+    for marker in &stored.markers {
+        let judged = corpus.judge(&marker.id);
+        let under: Vec<NodeKey> = judged
+            .nodes
+            .iter()
+            .copied()
+            .filter(|key| blocks.contains_key(key))
+            .collect();
+        if under.is_empty() {
+            continue;
+        }
+        let relation = RELATIONS
+            .into_iter()
+            .find(|relation| relation.as_str() == marker.relation)
+            .ok_or_else(|| unknown_word("relation", &marker.relation))?;
+        let levels = match &marker.levels {
+            Some(json) => {
+                let words: Vec<String> =
+                    serde_json::from_str(json).map_err(|_| unknown_word("level list", json))?;
+                Some(
+                    words
+                        .iter()
+                        .map(|word| {
+                            Level::ALL
+                                .into_iter()
+                                .map(Level::as_str)
+                                .find(|level| level == word)
+                                .ok_or_else(|| unknown_word("level", word))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            }
+            None => None,
+        };
+        let levels_state = known(&marker.levels_state, &levels_states(), "level state")?;
+        let binding = stored_binding(&marker.path, &marker.binding, &files)?;
+        for key in under {
+            let row = MarkerRow {
+                relation: relation.as_str(),
+                path: marker.path.clone(),
+                line: marker.line as usize,
+                column: marker.column as usize,
+                token: marker.token.clone(),
+                id: marker.id.clone(),
+                rev: marker.rev,
+                id_state: judged.state.as_str(),
+                fix: judged.fix.clone(),
+                rev_state: rev_state_of(
+                    &marker.id,
+                    marker.rev,
+                    &marker.token,
+                    judged.state,
+                    corpus.revision(key),
+                ),
+                levels: levels.clone(),
+                levels_state,
+                note: marker.note.clone(),
+                binding: binding.clone(),
+            };
+            if let Some(block) = blocks.get_mut(&key) {
+                block.markers.push((relation, row));
+            }
+        }
+    }
+    for mention in &stored.mentions {
+        let judged = corpus.judge(&mention.written);
+        if !judged.nodes.iter().any(|key| blocks.contains_key(key)) {
+            continue;
+        }
+        let binding = stored_binding(&mention.path, &mention.binding, &files)?;
+        for key in &judged.nodes {
+            let Some(block) = blocks.get_mut(key) else {
+                continue;
+            };
+            block.mentions.push(MentionRow {
+                path: mention.path.clone(),
+                line: mention.line as usize,
+                column: mention.column as usize,
+                written: mention.written.clone(),
+                id_state: judged.state.as_str(),
+                fix: judged.fix.clone(),
+                binding: binding.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Every relation a marker declares.
+const RELATIONS: [Relation; 4] = [
+    Relation::Implements,
+    Relation::Verifies,
+    Relation::Configures,
+    Relation::Assumes,
+];
+
+/// Every `levels_state` a marker row holds.
+fn levels_states() -> Vec<&'static str> {
+    let mut states: Vec<&'static str> = [Levels::Default, Levels::Declared(Vec::new())]
+        .iter()
+        .map(|levels| levels.state())
+        .collect();
+    states.extend(
+        [
+            LevelError::Unclosed,
+            LevelError::Unknown,
+            LevelError::Duplicate,
+            LevelError::Empty,
+        ]
+        .map(LevelError::as_str),
+    );
+    states
+}
+
+/// Every category a binding row names: why a comment binds nothing, why
+/// it cannot be verified, a RON comment's.
+fn categories() -> Vec<&'static str> {
+    let mut words: Vec<&'static str> = [
+        Unanchored::InMacro,
+        Unanchored::InBody,
+        Unanchored::NoItem,
+        Unanchored::NotAnItem,
+    ]
+    .map(Unanchored::as_str)
+    .to_vec();
+    words.extend(
+        [
+            ErrorCategory::MacroPunct,
+            ErrorCategory::MacroBody,
+            ErrorCategory::WhereMultiline,
+            ErrorCategory::Missing,
+            ErrorCategory::NestingTooDeep,
+            ErrorCategory::Other,
+        ]
+        .map(ErrorCategory::as_str),
+    );
+    words.extend([RON_NO_VALUE, RON_TOO_DEEP]);
+    words
+}
+
+/// Every ambiguity of an item or a module.
+fn ambiguities() -> [&'static str; 3] {
+    [
+        Ambiguity::PathAttribute,
+        Ambiguity::Unrooted,
+        Ambiguity::Duplicate,
+    ]
+    .map(Ambiguity::as_str)
+}
+
+/// `value` as one of `words`, or the error naming it.
+fn known(value: &str, words: &[&'static str], what: &str) -> Result<&'static str, CliError> {
+    words
+        .iter()
+        .copied()
+        .find(|word| *word == value)
+        .ok_or_else(|| unknown_word(what, value))
+}
+
+/// Exit 2: the code index holds a word this build does not write.
+fn unknown_word(what: &str, value: &str) -> CliError {
+    CliError::spec(format!(
+        "the code index holds an unknown {what} `{value}`; run `spec index --full`"
+    ))
+}
+
+/// What a stored marker or mention of the file at `path` binds, as a row.
+fn stored_binding(
+    path: &str,
+    stored: &StoredBinding,
+    files: &BTreeMap<&str, &CodeFileState>,
+) -> Result<BindingRow, CliError> {
+    let ambiguity = |value: Option<&String>| -> Result<Option<&'static str>, CliError> {
+        value
+            .map(|value| known(value, &ambiguities(), "ambiguity"))
+            .transpose()
+    };
+    let category = |kind: &'static str| -> Result<BindingRow, CliError> {
+        let word = stored.anchor.as_deref().unwrap_or_default();
+        Ok(category_row(kind, known(word, &categories(), "category")?))
+    };
+    let symbol = || {
+        stored
+            .symbol
+            .as_ref()
+            .ok_or_else(|| unknown_word("binding without its item", &stored.binding))
+    };
+    match stored.binding.as_str() {
+        ITEM => {
+            let symbol = symbol()?;
+            Ok(BindingRow {
+                kind: ITEM,
+                qpath: Some(symbol.qpath.clone()),
+                item_kind: Some(symbol.item_kind.clone()),
+                line: Some(symbol.start_line as usize),
+                ambiguity: ambiguity(symbol.ambiguity.as_ref())?,
+                category: None,
+            })
+        }
+        MODULE if stored.symbol.is_some() => {
+            let symbol = symbol()?;
+            Ok(BindingRow {
+                kind: MODULE,
+                qpath: Some(symbol.qpath.clone()),
+                item_kind: None,
+                line: None,
+                ambiguity: ambiguity(symbol.ambiguity.as_ref())?,
+                category: None,
+            })
+        }
+        MODULE => {
+            let module = files
+                .get(path)
+                .and_then(|file| file.module.as_ref())
+                .ok_or_else(|| unknown_word("binding of a file without a name", MODULE))?;
+            Ok(BindingRow {
+                kind: MODULE,
+                qpath: Some(module.qpath.clone()),
+                item_kind: None,
+                line: None,
+                ambiguity: ambiguity(module.ambiguity.as_ref())?,
+                category: None,
+            })
+        }
+        RON | RON_AMBIGUOUS => Ok(BindingRow {
+            kind: RON,
+            qpath: Some(format!(
+                "{path}#{}",
+                stored.anchor.as_deref().unwrap_or_default()
+            )),
+            item_kind: None,
+            line: None,
+            ambiguity: (stored.binding == RON_AMBIGUOUS).then_some(RON_DUPLICATE),
+            category: None,
+        }),
+        UNANCHORED => category(UNANCHORED),
+        CANNOT_VERIFY => category(CANNOT_VERIFY),
+        FILE => Ok(category_row(FILE, "")),
+        other => Err(unknown_word("binding", other)),
     }
 }
 
@@ -1583,5 +1891,428 @@ mod tests {
                 "current".to_owned()
             )])
         );
+    }
+}
+
+#[cfg(test)]
+mod index_oracle {
+    //! Task spec `symbol-index` RD-8, TE-2's refs half. M: index ≠ walk.
+    //! `spec refs` from the index (`super::refs`) prints what the walk
+    //! prints (`walk_refs`): stdout, stderr and exit alike, text and JSON,
+    //! for every REF of code-a (its generated files written), code-index
+    //! and verify-ecs (a project of another nature), then after
+    //! one edit of every kind TE-2 draws on a code-index copy (a file
+    //! added, removed, renamed, edited, a same-size edit, the package
+    //! renamed, a manifest between, `[code] exclude`, an `[ids]` prefix, a
+    //! CRLF file, twins inserted, removed and `cfg`-edited, a `#[path]`
+    //! dropped, a cross-file twin renamed, a ` #` in a file name, an
+    //! unrooted twin).
+
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+    use crate::{Env, Globals, Outcome, render_json, render_text};
+
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    /// A scratch directory, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(name: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "specengine-refs-oracle-{name}-{}-{}",
+                std::process::id(),
+                COUNTER.fetch_add(1, Ordering::SeqCst)
+            ));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("scratch");
+            Self(fs::canonicalize(&path).expect("canonical scratch"))
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures")
+            .join(name)
+    }
+
+    fn copy_dir(from: &Path, to: &Path) {
+        fs::create_dir_all(to).expect("copy target");
+        for entry in fs::read_dir(from).expect("fixture").flatten() {
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("type").is_dir() {
+                copy_dir(&entry.path(), &target);
+            } else if entry.file_name() != "expected.json" {
+                fs::write(&target, fs::read(entry.path()).expect("read")).expect("write");
+            }
+        }
+    }
+
+    fn write(root: &Path, relative: &str, text: impl AsRef<[u8]>) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().expect("parent")).expect("parent");
+        fs::write(path, text).expect("write");
+    }
+
+    fn read(root: &Path, relative: &str) -> String {
+        fs::read_to_string(root.join(relative)).expect("read")
+    }
+
+    fn replace(root: &Path, relative: &str, from: &str, to: &str) {
+        let text = read(root, relative);
+        assert_eq!(text.matches(from).count(), 1, "{relative}: {from:?}");
+        write(root, relative, text.replacen(from, to, 1));
+    }
+
+    /// code-a's generated files (`expected.json` `generated`).
+    fn write_generated(root: &Path) {
+        let expected: serde_json::Value =
+            serde_json::from_str(&read(&fixture("code-a"), "expected.json")).expect("JSON");
+        for file in expected["generated"]["files"].as_array().expect("files") {
+            let mut text = String::new();
+            for part in file["parts"].as_array().expect("parts") {
+                let times = usize::try_from(part["times"].as_u64().expect("times")).unwrap();
+                text.push_str(&part["text"].as_str().expect("text").repeat(times));
+            }
+            write(root, file["path"].as_str().expect("path"), text);
+        }
+    }
+
+    /// `refs` as shipped before the code index: the walk, read now.
+    fn walk_refs(
+        env: &Env,
+        globals: &Globals,
+        request: &RefsRequest,
+    ) -> Result<RefsOutcome, CliError> {
+        let (project, text) = discover_with_text(env, globals)?;
+        project.slug()?;
+        let code = code_config(&project, &text)?;
+        let written = request.reference.trim();
+        let scheme = &project.config.scheme;
+        let mut messages = Vec::new();
+        let target = match classify(written, scheme, &mut messages, REV_IGNORED)? {
+            Ok(target) => target,
+            Err(reason) => return Ok(not_found(request, reason, messages)),
+        };
+        let input = indexed(env, &project, &mut messages, true)?;
+        let mut corpus = Corpus::new(&input, scheme, &project.config.paths);
+        let nodes = match corpus.target_nodes(&target, written)? {
+            Ok(nodes) => nodes,
+            Err(reason) => return Ok(not_found(request, reason, messages)),
+        };
+        if nodes.len() > 1 {
+            let cited: Vec<String> = nodes.iter().map(|&key| corpus.citation(key)).collect();
+            messages.push(Message::Warning(format!(
+                "`{written}` has {} holders, all shown: {}",
+                nodes.len(),
+                cited.join(", ")
+            )));
+        }
+        let tree = read_tree(&project.root, &code, &mut messages)?;
+        let mut blocks: BTreeMap<NodeKey, Block> =
+            nodes.iter().map(|&key| (key, Block::default())).collect();
+        collect_rust(&tree, &mut corpus, scheme, &mut blocks);
+        collect_ron(&tree, &mut corpus, scheme, &mut blocks);
+        let nodes = nodes
+            .iter()
+            .map(|&key| {
+                let block = blocks.remove(&key).unwrap_or_default();
+                corpus.node(key, block)
+            })
+            .collect();
+        Ok(RefsOutcome {
+            reference: request.reference.clone(),
+            reason: None,
+            messages,
+            nodes,
+            code: Some(CodeCount {
+                files: tree.rust.len() + tree.ron.len(),
+                rs: tree.rust.len(),
+                ron: tree.ron.len(),
+                skipped: tree.skipped,
+            }),
+        })
+    }
+
+    /// (exit, stdout, stderr, JSON) of one answer, or the error's text.
+    fn printed(result: Result<RefsOutcome, CliError>) -> String {
+        match result {
+            Ok(outcome) => {
+                let outcome = Outcome::Refs(Box::new(outcome));
+                format!(
+                    "exit {:?}\n{}\n{}\n{}",
+                    outcome.exit(),
+                    render_text(&outcome),
+                    outcome.stderr_lines().join("\n"),
+                    render_json(&outcome)
+                )
+            }
+            Err(error) => format!("error {error:?}"),
+        }
+    }
+
+    /// The index's and the walk's answers to every REF, alike.
+    fn assert_alike(root: &Path, home: &Path, references: &[&str], step: &str) {
+        let env = Env {
+            cwd: root.to_path_buf(),
+            home: Some(home.as_os_str().to_owned()),
+            xdg_data_home: None,
+        };
+        let globals = Globals::default();
+        for reference in references {
+            let request = RefsRequest {
+                reference: (*reference).to_owned(),
+            };
+            let from_index = printed(refs(&env, &globals, &request));
+            let from_walk = printed(walk_refs(&env, &globals, &request));
+            assert_eq!(from_index, from_walk, "{step}: refs {reference}");
+        }
+    }
+
+    const CODE_A_REFS: [&str; 9] = [
+        "PIECE-COUNTER",
+        "LAW-BOUND",
+        "LAW-STEP",
+        "LAW-ODD",
+        "GOAL-01",
+        "PREM-001",
+        "cap-check/PASS-01",
+        "GOAL-03",
+        "GOAL-99",
+    ];
+
+    const CODE_INDEX_REFS: [&str; 9] = [
+        "TENET-WIDTH",
+        "TENET-ORDER",
+        "TENET-FLOW",
+        "SLAB-PROBE",
+        "SLAB-SHEET",
+        "SLAB-INK",
+        "QUILL-01",
+        "QUILL-02",
+        "NIB-07",
+    ];
+
+    const ECS_REFS: [&str; 8] = [
+        "PERK-STAMINA",
+        "PERK-REGEN",
+        "PERK-DRAIN",
+        "PERK-MOVE",
+        "PERK-SPRINT",
+        "TUNE-01",
+        "TUNE-02",
+        "TUNE-03",
+    ];
+
+    #[test]
+    fn refs_from_index_equals_refs_from_the_walk() {
+        for (name, references) in [
+            ("code-a", &CODE_A_REFS[..]),
+            ("code-index", &CODE_INDEX_REFS[..]),
+            ("verify-ecs", &ECS_REFS[..]),
+        ] {
+            let scratch = Scratch::new(name);
+            let root = scratch.0.join("root");
+            copy_dir(&fixture(name), &root);
+            if name == "code-a" {
+                write_generated(&root);
+            }
+            let home = scratch.0.join("home");
+            fs::create_dir_all(&home).expect("home");
+            assert_alike(&root, &home, references, name);
+        }
+    }
+
+    const SRC: &str = "crates/inkwell/src";
+
+    /// Edit `at` of the sequence on a code-index copy, its name; `None`
+    /// past the last.
+    fn edit(root: &Path, at: usize) -> Option<&'static str> {
+        let twins = format!("{SRC}/twins.rs");
+        let lib = format!("{SRC}/lib.rs");
+        let name = match at {
+            0 => {
+                write(
+                    root,
+                    &format!("{SRC}/added.rs"),
+                    "// @implements TENET-FLOW@1\npub fn added() {}\n",
+                );
+                "a file added"
+            }
+            1 => {
+                fs::create_dir_all(root.join(format!("{SRC}/sub"))).unwrap();
+                fs::rename(
+                    root.join(format!("{SRC}/added.rs")),
+                    root.join(format!("{SRC}/sub/mod.rs")),
+                )
+                .unwrap();
+                "a file renamed"
+            }
+            2 => {
+                let path = format!("{SRC}/page.rs");
+                let text = read(root, &path);
+                write(root, &path, format!("\n\n{text}\n// see TENET-FLOW\n"));
+                "a file edited"
+            }
+            3 => {
+                fs::remove_file(root.join(format!("{SRC}/sub/mod.rs"))).unwrap();
+                "a file removed"
+            }
+            4 => {
+                replace(root, &twins, "'/'", "'|'");
+                "a same-size edit"
+            }
+            5 => {
+                replace(
+                    root,
+                    "crates/inkwell/Cargo.toml",
+                    "name = \"inkwell-core\"",
+                    "name = \"inkwell-press\"",
+                );
+                "the package renamed"
+            }
+            6 => {
+                write(
+                    root,
+                    "crates/inkwell/vendor/side/src/lib.rs",
+                    "// @implements TENET-FLOW@1\npub fn side() {}\n",
+                );
+                write(
+                    root,
+                    "crates/inkwell/vendor/side/Cargo.toml",
+                    "[package]\nname = \"side\"\n",
+                );
+                "a manifest between"
+            }
+            7 => {
+                replace(
+                    root,
+                    "specengine.toml",
+                    "roots = [\"crates\", \"data\"]\n",
+                    "roots = [\"crates\", \"data\"]\nexclude = [\"crates/inkwell/src/split/**\"]\n",
+                );
+                "[code] exclude"
+            }
+            8 => {
+                replace(
+                    root,
+                    "specengine.toml",
+                    "QUILL = { kind = \"quill\", width = 2 }\n",
+                    "QUILL = { kind = \"quill\", width = 2 }\nNIB   = { kind = \"nib\", width = 2 }\n",
+                );
+                write(
+                    root,
+                    &format!("{SRC}/nib.rs"),
+                    "// a nib: NIB-07\npub fn nib() {}\n",
+                );
+                "an [ids] prefix"
+            }
+            9 => {
+                let text = read(root, &lib);
+                write(root, &lib, text.replace('\n', "\r\n"));
+                "a CRLF file"
+            }
+            10 => {
+                let text = read(root, &twins);
+                write(
+                    root,
+                    &twins,
+                    format!(
+                        "{text}\n// @implements TENET-FLOW@1\nimpl Sheet {{\n    pub fn third(&self) {{}}\n}}\n\n#[cfg(feature = \"fast\")]\npub fn separator() -> char {{\n    '+'\n}}\n"
+                    ),
+                );
+                "twins inserted"
+            }
+            11 => {
+                replace(root, &twins, "#[cfg(not(unix))]\n", "");
+                "a cfg edited (rule 1 to rule 2)"
+            }
+            12 => {
+                replace(
+                    root,
+                    &twins,
+                    "#[cfg(not(test))]\nmod probe {",
+                    "#[cfg(not(test))]\nmod other_probe {",
+                );
+                "a twin removed"
+            }
+            13 => {
+                write(
+                    root,
+                    &format!("{SRC}/extra/moved.rs"),
+                    "// @implements TENET-FLOW@1\npub fn shift() {}\n",
+                );
+                let text = read(root, &lib).replace("\r\n", "\n");
+                write(
+                    root,
+                    &lib,
+                    format!("{text}#[path = \"extra/moved.rs\"]\nmod moved;\n"),
+                );
+                "a #[path] written"
+            }
+            14 => {
+                replace(root, &lib, "#[path = \"extra/moved.rs\"]\n", "");
+                "the #[path] dropped"
+            }
+            15 => {
+                replace(
+                    root,
+                    "specengine.toml",
+                    "exclude = [\"crates/inkwell/src/split/**\"]\n",
+                    "",
+                );
+                replace(
+                    root,
+                    &format!("{SRC}/split/mod.rs"),
+                    "pub fn joined()",
+                    "pub fn apart()",
+                );
+                "a cross-file twin renamed, the exclude dropped"
+            }
+            16 => {
+                let text = read(root, &lib);
+                write(
+                    root,
+                    &lib,
+                    format!("{text}// @implements TENET-FLOW@1\npub mod note;\n"),
+                );
+                write(root, &format!("{SRC}/note #2.rs"), "pub fn kept() {}\n");
+                write(
+                    root,
+                    "crates/inkwell/vendor/loose.rs",
+                    "pub fn twins() {}\n",
+                );
+                "a ` #` in a file name, an unrooted twin"
+            }
+            _ => return None,
+        };
+        Some(name)
+    }
+
+    /// One edit of every kind TE-2 draws, each followed by the comparison.
+    #[test]
+    fn every_step_kind_keeps_refs_equal_to_the_walk() {
+        let scratch = Scratch::new("steps");
+        let root = scratch.0.join("root");
+        copy_dir(&fixture("code-index"), &root);
+        let home = scratch.0.join("home");
+        fs::create_dir_all(&home).expect("home");
+        assert_alike(&root, &home, &CODE_INDEX_REFS, "before any edit");
+        let mut at = 0;
+        while let Some(step) = edit(&root, at) {
+            assert_alike(&root, &home, &CODE_INDEX_REFS, step);
+            at += 1;
+        }
+        assert_eq!(at, 17, "every edit ran");
     }
 }

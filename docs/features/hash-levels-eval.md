@@ -11,7 +11,7 @@ adrs: []
 
 ## Why
 
-5a-1 (`hash-levels.md`) fixes the bytes of the levels and fingerprints, 5a-1b (`hash-levels-ron.md`) the RON value's; 5b writes them into every lock, after which a change costs a `LEVEL_RECIPE` bump and a rebase of every lock (ADR-0050). Before that the owner needs figures from real code: do `sig`, `body`, `deps` and `skeleton` hold under rustfmt, comments and a neighbour's edit (08 AC-2), how many items are trivial or twins (AC-15's 124 B), does a renamed item stay followable, what do levels cost per kLOC (AC-10). Split from 5a so the eval cannot use up the library's three iterations (`hash-levels.md` Q10). Order (08 s2): after 5a-1 and 5a-1b, before 6a-1, 6a-2 and 5b. Implemented and reviewed on fixtures (RD-1, TE-2); TE-1, the owner's pilot run, gates 5b alone (a figure below 100.0 % is a 5a-1 recipe change first, ADR-0050) and AC-15's 124 before 5c; `cost.levels_ms_per_kloc` above 6.67 plans 6c at once (`symbol-index.md` "AC-10 measurement") (Q4). No ADR.
+5a-1 (`hash-levels.md`) fixes the bytes of the levels and fingerprints, 5a-1b (`hash-levels-ron.md`) the RON value's; 5b writes them into every lock, after which a change costs a `LEVEL_RECIPE` bump and a rebase of every lock (ADR-0050). Before that the owner needs figures from real code: do `sig`, `body`, `deps` and `skeleton` hold under rustfmt, comments and a neighbour's edit (08 AC-2), how many items are trivial or twins (AC-15's 124 B), does a renamed item stay followable, what do levels cost per kLOC (AC-10). Split from 5a so the eval cannot use up the library's three iterations (`hash-levels.md` Q10). Order (08 s2): after 5a-1 and 5a-1b, before 6a-1, 6a-2 and 5b. Implemented and reviewed on fixtures (RD-1, TE-2); TE-1, the owner's pilot run, gates 5b alone (a figure below 100.0 % is a 5a-1 recipe change first, ADR-0050) and AC-15's 124 before 5c; `cost.levels_ms_per_kloc` above 6.67 plans 6c at once (`docs/canon/symbol-index.md` "AC-10 measurement") (Q4). No ADR.
 
 ## Description and interactions
 
@@ -64,7 +64,7 @@ spec-writer:
 
 ## Out of scope
 
-The library (5a-1, 5a-1b); a marker in a pilot; per-branch ratios (Phase 4); pilot runs in CI; 6a's index timings (`symbol-index.md` "AC-10 measurement").
+The library (5a-1, 5a-1b); a marker in a pilot; per-branch ratios (Phase 4); pilot runs in CI; 6a's index timings (`docs/canon/symbol-index.md` "AC-10 measurement").
 
 ## Open
 

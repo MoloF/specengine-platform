@@ -25,6 +25,11 @@ pub struct SqliteIndex {
     pub(crate) root: PathBuf,
     /// `root` as stored in `worktrees.root`.
     pub(crate) root_text: String,
+    /// This handle's last spec update re-parsed every file (a stamp or
+    /// `[ids]` change, a rebuild): a code refresh finding no code rows
+    /// then reports `rederived_all` (docs/features/symbol-index.md "spec
+    /// refs and spec index").
+    pub(crate) reparsed_all: bool,
 }
 
 /// The connection's settings as SQLite reports them (05 §8).
@@ -102,6 +107,7 @@ impl SqliteIndex {
             project: project.to_owned(),
             root,
             root_text,
+            reparsed_all: false,
         })
     }
 
@@ -226,7 +232,9 @@ impl IndexWriter for SqliteIndex {
         source: &dyn Source,
         scheme: &IdScheme,
     ) -> Result<UpdateReport, StoreError> {
-        write::run(self, source, scheme, Mode::Walk)
+        let report = write::run(self, source, scheme, Mode::Walk)?;
+        self.reparsed_all = report.reparsed_all;
+        Ok(report)
     }
 
     fn update_paths(
@@ -235,7 +243,9 @@ impl IndexWriter for SqliteIndex {
         scheme: &IdScheme,
         paths: &[&str],
     ) -> Result<UpdateReport, StoreError> {
-        write::run(self, source, scheme, Mode::Paths(paths))
+        let report = write::run(self, source, scheme, Mode::Paths(paths))?;
+        self.reparsed_all = report.reparsed_all;
+        Ok(report)
     }
 
     fn rebuild(
@@ -243,7 +253,9 @@ impl IndexWriter for SqliteIndex {
         source: &dyn Source,
         scheme: &IdScheme,
     ) -> Result<UpdateReport, StoreError> {
-        write::run(self, source, scheme, Mode::Rebuild)
+        let report = write::run(self, source, scheme, Mode::Rebuild)?;
+        self.reparsed_all = report.reparsed_all;
+        Ok(report)
     }
 }
 

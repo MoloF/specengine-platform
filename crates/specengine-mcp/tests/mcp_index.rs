@@ -3,10 +3,13 @@
 //! `spec index` (the CLI library) created: no table, index or trigger is
 //! added (the `CREATE` statements in the database files, read as bytes as
 //! the CLI's `bundle_config.rs` does: no SQLite library in this crate's
-//! tests). `INDEX_FORMAT` 7, `format_history.txt` and the CLI's JSON key
-//! sets are pinned by the CLI's own tests (`bundle_config.rs`
-//! `ac16_index_format_is_seven`, the key-set tests of `tree.rs`,
-//! `search.rs`/`bounds.rs`, `show.rs`, `bundle.rs`).
+//! tests). `INDEX_FORMAT` 9 (the code tables' format,
+//! docs/features/symbol-index.md TE-3), `format_history.txt` and the CLI's
+//! JSON key sets are pinned by the CLI's own tests (`bundle_config.rs`
+//! `ac16_index_format_is_nine`, the key-set tests of `tree.rs`,
+//! `search.rs`/`bounds.rs`, `show.rs`, `bundle.rs`, `index.rs`). The code
+//! tables are created with the schema, so no MCP read adds them either
+//! (no MCP tool refreshes code before 6b).
 //!
 //! M: a log table.
 
@@ -53,6 +56,12 @@ fn ac18_reads_add_no_table() {
             .iter()
             .any(|statement| statement.starts_with("CREATE TABLE")),
         "{schema:?}"
+    );
+    assert!(
+        schema
+            .iter()
+            .any(|statement| statement.contains("symbol_suffixes")),
+        "the code tables come with the schema: {schema:?}"
     );
     let calls = [
         ("get_tree", json!({})),

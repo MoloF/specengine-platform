@@ -2,6 +2,10 @@
 //! `update` (`--full`: `rebuild`), one summary line and the `db` line; its
 //! JSON is `project`, `db` and the `UpdateReport` fields; broken,
 //! non-UTF-8 and unreadable files are counted, never fatal.
+//!
+//! docs/features/symbol-index.md "spec refs and spec index": the JSON gains
+//! `code`, `null` without a `[code]` table (spec-a and spec-b have none, so
+//! their text keeps its two lines; the code line: `code_index.rs`).
 
 #![cfg(unix)]
 
@@ -100,8 +104,8 @@ fn index_counts_then_reruns_then_reparses_one_then_rebuilds() {
     }
 }
 
-/// `--json`: exactly `project`, `db` and the `UpdateReport` keys, with the
-/// same values as the text.
+/// `--json`: exactly `project`, `db`, the `UpdateReport` keys and `code`
+/// (`null`: no `[code]` table), with the same values as the text.
 #[test]
 fn index_json_is_project_db_and_the_update_report() {
     for (fixture, slug) in FIXTURES {
@@ -113,6 +117,7 @@ fn index_json_is_project_db_and_the_update_report() {
         let mut want: BTreeSet<String> = report.as_object().unwrap().keys().cloned().collect();
         want.insert("project".to_owned());
         want.insert("db".to_owned());
+        want.insert("code".to_owned());
         let got: BTreeSet<String> = json
             .as_object()
             .expect("an object")
@@ -128,6 +133,7 @@ fn index_json_is_project_db_and_the_update_report() {
                 .display()
                 .to_string()
         );
+        assert!(json["code"].is_null(), "{fixture}: no [code]: {json}");
         let files = md_files(&root.join("docs")).len();
         assert_eq!(json["walked"], files);
         assert_eq!(json["parsed"], files);

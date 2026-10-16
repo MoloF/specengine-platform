@@ -94,7 +94,7 @@ pub(crate) fn run(
 
 /// BLAKE3 of the JSON of the scheme's prefixes: an `[ids]` comment or
 /// another table of `specengine.toml` leaves it.
-fn fingerprint(scheme: &IdScheme) -> Result<String, StoreError> {
+pub(crate) fn fingerprint(scheme: &IdScheme) -> Result<String, StoreError> {
     let json = serde_json::to_vec(scheme.prefixes()).map_err(|error| {
         StoreError::Sqlite(format!("cannot encode the [ids] scheme as JSON: {error}"))
     })?;

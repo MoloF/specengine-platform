@@ -9,7 +9,7 @@ mod fmt;
 mod levels;
 #[cfg(feature = "syn")]
 mod syn_cmp;
-mod targets;
+pub(crate) mod targets;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;

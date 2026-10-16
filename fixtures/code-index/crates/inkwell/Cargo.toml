@@ -1,0 +1,12 @@
+# Package of the code-index fixture: read by the code index, never built
+# (`src/broken.rs` carries a deliberate parse error; `src/split.rs` and
+# `src/split/mod.rs` write one module twice). Its `[package] name` names
+# the `src/main.rs` bin unit. `[workspace]` keeps it out of the repository
+# workspace.
+[package]
+name = "inkwell-core"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

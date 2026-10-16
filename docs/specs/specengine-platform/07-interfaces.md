@@ -68,7 +68,7 @@ Plugin skills carry them: `read-spec`, `ask-owner`, `propose-spec-change`; `/spe
 ```
 # projects and index
 spec init [--import IMPORTER]            # specengine.toml, layout, migration (08 §4)
-spec index [--full]                      # rebuild the index (incremental by BLAKE3)
+spec index [--full]                      # the index (incremental by BLAKE3), + the code index: docs/canon/symbol-index.md
 spec serve [DIR...] [--port 7777]        # built: execs specengine-http; canon/serve.md
 specengine-http --root DIR... [--port N]  # built: reads, staging; crates/specengine-http/README.md
 spec mcp                                 # on a trigger: MCP stdio bridge
@@ -80,7 +80,7 @@ spec new KIND [--parent ID] [TITLE]      # the registry issues the ID, opens $ED
 spec edit ID                             # owner edit = instantly applied proposal
 spec search "query"
 spec graph ID [--impact] [--type T] [--depth N] [--archive] [--format dot|mermaid]
-spec refs REF [--json]                   # reverse lookup, shipped: docs/canon/code-bindings.md
+spec refs REF [--json]                   # reverse lookup from the code index, shipped: docs/canon/code-bindings.md
 spec unmapped [PATH]                     # spec coverage of sources
 spec bundle REF… [--budget N]            # shipped, default 2000: docs/canon/spec-cli-bundle.md; --task T: Phase 2
 
@@ -203,7 +203,7 @@ zones = ["code"]            # min_files, contours: later
 
 [code]
 languages = ["rust", "ron"]
-crates = "cargo-metadata"
+crates = "cargo-metadata"    # refused, not built: only if 6a-2's TE-8 roles differ (docs/features/symbol-index.md Q2)
 bevy = true
 scip = false                # retired 2026-10-10 (ADR-0049): no key; layer C is `spec resolve` (docs/features/layer-c.md)
 ```

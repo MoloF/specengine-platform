@@ -18,7 +18,7 @@ Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restri
 
 - **An agent**: `check_binding {node}` per target before `report_run`; a Fix or cannot row fixed or raised with a working answer. **The owner**: `spec verify --node`.
 - **Crates**: CLI `verify.rs`, `verify_rows.rs` as 5b-1 and 5c leave them: `--node`, `--symbol`, the selection, the cap, and 6a-2's refresh called as one named CLI-library function shared with `refs` (working name `refresh_code`); store: 6a-2's Q17 read and `code_markers` only; core unchanged (`judge_row`, `verdict`). MCP: 6b-1's `code.rs` gains `check_binding`, `mirror.rs` verify's document, `server.rs` the `INSTRUCTIONS` clause; `read.rs` unchanged (S13). `plugin/`: `implement`, version, `PINS`. MCP `[dependencies]` stay 7.
-- **Freshness** (Q30): `--node` refreshes the md index, then the code index, the one verify that does (6a-2's **Freshness** and RD-9 keep plain, `--changed`, `--staged` off it); it uses the index only to pick files and their names (Q17), then reads, blob-hashes, parses and hashes those files afresh, never the index's level columns (`spec-verify.md` "States": "never the index's column"; `symbol-index.md` "Risks").
+- **Freshness** (Q30): `--node` refreshes the md index, then the code index, the one verify that does (6a-2's **Freshness** and RD-9 keep plain, `--changed`, `--staged` off it); it uses the index only to pick files and their names (Q17), then reads, blob-hashes, parses and hashes those files afresh, never the index's level columns (`spec-verify.md` "States": "never the index's column"; `docs/canon/symbol-index.md` "Guarantees").
 - **Unchanged**: plain, `--changed` and `--staged` verify (rows, keys, text; their JSON gains three `null` keys), `spec check`, hook, gate, CI, `INDEX_FORMAT`, queue schema, HTTP (no route: `daemon-keys`), UI. **Writes**: the data directory only; never `spec.lock`, a queue row, an event or a file under the root.
 - **Overridden lines**, fixed at shipping (SW-2; S12): `spec-verify.md`'s opening ("MCP … never run it"; the command line), "Cascade" ("One code walk (`read_tree`) per call": plain only); `spec-verify-output.md` "Text" (`ok` rows under `--node`), "JSON" (`node`, `symbol`, `omitted`); `mcp-read.md` "Tools" **Parity** ("exit 2 -> … no `structuredContent`": a rendered report keeps its document, as `read.rs` does: S13); 6a-2's canon **Freshness** (verify never refreshes code); 07:26, :37 (`check_binding {node_id, qpath}`, "ast_hash, sync"); `mcp-code.md` (6b-1's); `plugin-files.md` **Content** ("all eighteen named"), **Version**.
 
@@ -123,7 +123,7 @@ spec-writer:
 
 ## Risks
 
-- **Divergence**: if 6a-2's store pass and the walk disagree on ambiguity (`symbol-index.md` "Risks"), `check_binding` contradicts `spec verify` (ADR-0046): 6a-2's RD-15 and TE-3 here guard it.
+- **Divergence**: if 6a-2's store pass and the walk disagree on ambiguity (`docs/canon/symbol-index.md` "Cache key and cross-file pass", Ambiguity), `check_binding` contradicts `spec verify` (ADR-0046): 6a-2's RD-15 and TE-3 here guard it.
 - **Churn**: 5b-1 and 5c rewrite `verify.rs`, `verify_rows.rs`; this starts on the commit after 5c ships.
 - **Agent reading**: under `enforce*` a Fix row comes back `isError`; the description says it is a finding.
 - **`INSTRUCTIONS`**: 34 B left; 7a (about 33 B) and 7b (46 B) re-measure and cut about 45 B elsewhere, never a rule.

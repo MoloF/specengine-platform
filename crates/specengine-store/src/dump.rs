@@ -1,7 +1,8 @@
 //! The canonical dump (`crates/specengine-store/README.md`, "Rows"): every
 //! index table in column order (every column, read from the schema) with
-//! its surrogate keys (`wt`, `file_id`, `node_id`) replaced by `(project,
-//! root)`, `path`, `(path, ord)`, rows sorted, plus the FTS5 vocabulary.
+//! its surrogate keys (`wt`, `file_id`, `node_id`, a code row's `file`)
+//! replaced by `(project, root)`, `path`, `(path, ord)`, rows sorted, plus
+//! the FTS5 vocabulary.
 //! Two DBs with equal dumps hold the same index; storage order and rowids
 //! never show.
 
@@ -18,6 +19,11 @@ use crate::schema;
 /// NULLs instead of vanishing). Every index table is named `main.…`, so no
 /// temp object of the connection can shadow it.
 const FILE_OWNER: &str = "LEFT JOIN main.files f ON f.file_id = x.file_id
+     LEFT JOIN main.worktrees w ON w.wt = f.wt";
+
+/// The owner of a code file's row (docs/features/symbol-index.md "Tables":
+/// code keys map to `path`, `(path, ord)`).
+const CODE_FILE_OWNER: &str = "LEFT JOIN main.code_files f ON f.file_id = x.file
      LEFT JOIN main.worktrees w ON w.wt = f.wt";
 
 /// How one index table is dumped: its owner's columns first (`w`, `f`, `n`
@@ -91,6 +97,62 @@ const TABLES: &[TableDump] = &[
         joins: FILE_OWNER,
         filter: "WHERE ?1 IS NULL OR f.wt = ?1",
         skip: &["file_id"],
+    },
+    TableDump {
+        table: "code_worktrees",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["wt"],
+    },
+    TableDump {
+        table: "code_packages",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["wt"],
+    },
+    TableDump {
+        table: "code_files",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["file_id", "wt"],
+    },
+    TableDump {
+        table: "symbols",
+        owner: "w.project, w.root, f.path",
+        joins: CODE_FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file"],
+    },
+    TableDump {
+        table: "symbol_suffixes",
+        owner: "w.project, w.root, f.path",
+        joins: CODE_FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file"],
+    },
+    TableDump {
+        table: "code_decls",
+        owner: "w.project, w.root, f.path",
+        joins: CODE_FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file"],
+    },
+    TableDump {
+        table: "code_markers",
+        owner: "w.project, w.root, f.path",
+        joins: CODE_FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file"],
+    },
+    TableDump {
+        table: "code_mentions",
+        owner: "w.project, w.root, f.path",
+        joins: CODE_FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file"],
     },
 ];
 

@@ -81,7 +81,7 @@ Decided under the owner's pre-approval: Q3 a discriminator in the qpath; Q9 a si
 
 Deviations, accepted in review 1: D1 (owner S1) a `cfg` string literal is kept verbatim, a CR before an LF dropped, where the spec said whitespace removed; D2 public items the spec did not name: `FileNames.shared`, `Name::undiscriminated`, `path_targets`, `DISCRIMINATOR_SEPARATOR`; D3 code comments cite this spec's "Discriminator" and "Signature", kept here as pointers until 6a-2 re-points them to `symbol-names.md`.
 
-Owner's answers (pre-approved): S1 a predicate's bytes; S2 a comment is whitespace in a signature, trailing commas stay; S3 an empty `cfg()` unrecorded, `cfg_attr`, inner, bracketed and absolute `cfg` ignored, a group keyed by qpath whatever the kind; S4 readers never split a qpath. Review 1's nits go to 6a-2 (`symbol-index.md` "Risks", carry-overs).
+Owner's answers (pre-approved): S1 a predicate's bytes; S2 a comment is whitespace in a signature, trailing commas stay; S3 an empty `cfg()` unrecorded, `cfg_attr`, inner, bracketed and absolute `cfg` ignored, a group keyed by qpath whatever the kind; S4 readers never split a qpath. Review 1's nits were done in 6a-2 (`symbol-index.md` "Implementation").
 
 Developer's run: `specengine-code` green; CLI red only on the 10 pins above before the test edits; http, eval (`doc_pointers`, `build_graph`), core, mcp green; fmt, clippy clean.
 
