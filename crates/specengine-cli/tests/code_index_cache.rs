@@ -16,7 +16,7 @@
 //! unrooted twin and a `#[path]` target twin (the 6a-1 review's S4: the
 //! pass reads discriminators, never splits a name, and counts every file).
 //!
-//! docs/features/bevy-roles.md "Formats" (F1, RD-3): from
+//! `docs/canon/code-roles.md` "Table" (bevy-roles F1, RD-3): from
 //! `CODE_INDEX_FORMAT` 3 the history hashes code-index's code-table dump
 //! followed by code-bevy's (its `code_roles` rows in), lines 1 and 2
 //! verbatim.
@@ -317,8 +317,8 @@ fn code_index_dump() -> String {
 }
 
 /// The code tables of a fresh index of `fixtures/code-bevy` (a scratch
-/// copy, `frameworks = ["bevy"]`), its root masked (docs/features/
-/// bevy-roles.md "Formats", F1).
+/// copy, `frameworks = ["bevy"]`), its root masked
+/// (`docs/canon/code-roles.md` "Table"; bevy-roles F1).
 fn code_bevy_dump() -> String {
     let scratch = Scratch::new("ci-history-bevy");
     let home = scratch.home("h");
@@ -412,13 +412,15 @@ fn code_format_history_pins_the_code_index_dump() {
     );
 }
 
-/// bevy-roles "Formats" (F1). M: `CODE_INDEX_FORMAT` kept at 2; an earlier
-/// line edited. The stamp is 3; the history is 6b-1's two lines verbatim
-/// and exactly one `3 <hash>`; its header names code-bevy as hashed after
-/// code-index.
+/// bevy-roles "Formats" (F1); bevy-roles-reads B5 (K2, the owner's
+/// pre-approval: a role subject's qualified type is stored compacted, so
+/// the stamp moves). M: `CODE_INDEX_FORMAT` kept at 3; an earlier line
+/// edited. The stamp is 4; the history is 6b-1's two lines and 10a-1's
+/// third verbatim and exactly one `4 <hash>`; its header names code-bevy as
+/// hashed after code-index.
 #[test]
-fn code_format_history_keeps_lines_1_and_2_and_adds_3() {
-    assert_eq!(specengine_code::CODE_INDEX_FORMAT, 3);
+fn code_format_history_keeps_lines_1_to_3_and_adds_4() {
+    assert_eq!(specengine_code::CODE_INDEX_FORMAT, 4);
     let history = read_text(
         &repository_root(),
         "crates/specengine-cli/tests/code_format_history.txt",
@@ -436,21 +438,22 @@ fn code_format_history_keeps_lines_1_and_2_and_adds_3() {
         .lines()
         .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
         .collect();
-    assert_eq!(lines.len(), 3, "{history}");
+    assert_eq!(lines.len(), 4, "{history}");
     assert_eq!(
-        lines[..2],
+        lines[..3],
         [
             "1 3eac6715cece86e4385c82367d489ccc24d4a7896044accb18a713ec344a3a0e",
             "2 206f941120e31b317e822f026607d6bbccd5efdf77a30f338446578d7fdc275a",
+            "3 49cfadfed7e012013a20e19453f7d70a6a4b50530c9febad2f602e2b86f4889a",
         ],
-        "lines 1 and 2 verbatim"
+        "lines 1 to 3 verbatim"
     );
-    let (format, hash) = lines[2].split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "3", "{history}");
+    let (format, hash) = lines[3].split_once(' ').expect("`<format> <hash>`");
+    assert_eq!(format, "4", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {}",
-        lines[2]
+        lines[3]
     );
 }
 

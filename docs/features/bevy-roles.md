@@ -21,33 +21,7 @@ Canon: `docs/canon/code-roles.md` (all of it); `code-bindings.md` "The `[code]` 
 
 ## Data
 
-### `[code] frameworks`
-
-`docs/canon/code-roles.md` "`[code] frameworks`" (WA-4, Q3, S7, SR5, F2).
-
-### Role facts
-
-`docs/canon/code-roles.md` "Role facts" (WA-1, WA-13, Z1, SR2-SR4).
-
-### Table
-
-`docs/canon/code-roles.md` "Table" (WA-1, S6, SR6).
-
-### Formats
-
-`docs/canon/symbol-index.md` "Analyzer stamp" (F1, S2-S5).
-
-### Links
-
-`docs/canon/code-roles.md` "Links" (L1 as amended by B1, L2, L3).
-
-### spec index
-
-`docs/canon/code-roles.md` "spec index" (J1, G1, SR1).
-
-### Eval
-
-`docs/canon/code-roles.md` "Eval" (E1, B4).
+`docs/canon/code-roles.md`: "`[code] frameworks`" (WA-4, Q3, S7, SR5, F2), "Role facts" (WA-1, WA-13, Z1, SR2-SR4), "Table" (WA-1, S6, SR6), "Links" (L1 as amended by B1, L2, L3), "spec index" (J1, G1, SR1), "Eval" (E1, B4); formats: `docs/canon/symbol-index.md` "Analyzer stamp" (F1, S2-S5).
 
 ## Rules and edge cases
 

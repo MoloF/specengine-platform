@@ -43,6 +43,22 @@
 //! CLI's `--limit` line before any discovery (C1, the developer's
 //! iteration 1): `find_symbols_negative_limit_is_the_clis_limit_line`.
 //!
+//! docs/features/bevy-roles-reads.md (10a-2), `find_symbols`' `roles`
+//! (`SymbolsTarget.roles`, docs/canon/mcp-code.md "Mirrors"):
+//!
+//! - RD-10: `code_tools_equal_the_cli` walks every answer over a scratch
+//!   `fixtures/code-bevy` (the opt-in on; a module and a RON marker of
+//!   `CHORE-02` written in) against the `outputSchema`, its `roles` keys
+//!   met with a value and with `null`, and over code-index (no opt-in)
+//!   finds `roles: null` on every target; `code_mirrors_keep_kinds_free`
+//!   (each role key a free string or integer, `roles` a nullable array);
+//!   `code_mirrors_pin_the_q35_types` (the key sets);
+//!   `find_symbols_roles_schema_holds_no_stack_role_or_source_word` (the
+//!   doc comments become `outputSchema` text; the stack words of every
+//!   text: `mcp_genre.rs`).
+//! - TE-3, the `find_symbols` half:
+//!   `te3_find_symbols_roles_are_byte_identical_across_roots_order_cwd_and_crlf`.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(all(unix, not(feature = "probes")))]
@@ -52,7 +68,7 @@ mod common;
 #[path = "../../specengine-cli/tests/common/git.rs"]
 mod git;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
@@ -121,6 +137,49 @@ const FIXTURE_WORDS: [&str; 7] = [
     "zerkalo",
     "dock-hire",
     "inkwell-core",
+];
+
+/// docs/features/bevy-roles-reads.md's corpus: 10a-1's farm game, its
+/// `[code] frameworks = ["bevy"]` on.
+const BEVY: &str = "code-bevy";
+
+/// One role of `symbols[].roles[]` (docs/features/bevy-roles-reads.md
+/// "find_symbols"): every key a free string or integer.
+const ROLE_KEYS: [&str; 11] = [
+    "role",
+    "layer",
+    "path",
+    "line",
+    "source",
+    "form",
+    "origin",
+    "group",
+    "state",
+    "detail",
+    "candidates",
+];
+
+/// The role keys holding an integer; the others hold a string.
+const ROLE_INTEGERS: [&str; 2] = ["line", "candidates"];
+
+/// The role keys `null` on some row of code-bevy and set on another.
+const ROLE_NULLABLE: [&str; 4] = ["form", "group", "detail", "candidates"];
+
+/// A module and a RON marker of `CHORE-02` written into a code-bevy copy
+/// (path, the line as committed, the line with the marker): `{node:
+/// "CHORE-02"}` lists a module and a RON target. `clock.rs` holds no role
+/// row.
+const BEVY_MARKS: [(&str, &str, &str); 2] = [
+    (
+        "crates/farm/src/clock.rs",
+        "//! The clock: what turns over every tick.\n",
+        "//! The clock: what turns over every tick.\n//! @implements CHORE-02\n",
+    ),
+    (
+        "assets/farm.ron",
+        "    growth_per_tick: 1,\n",
+        "    growth_per_tick: 1, // @configures CHORE-02\n",
+    ),
 ];
 
 // ------------------------------------------------------------- harness
@@ -240,6 +299,13 @@ impl Project {
     fn reads() -> Self {
         let project = Self::new(FIXTURE);
         write(&project.root, BLANK, "// Nothing is declared here.\n");
+        project
+    }
+
+    /// A code-bevy copy (the opt-in on) with [`BEVY_MARKS`] written.
+    fn bevy() -> Self {
+        let project = Self::new(BEVY);
+        mark_bevy(&project.root);
         project
     }
 
@@ -435,6 +501,24 @@ fn genre_problems(text: &str) -> Vec<String> {
         }
     }
     problems
+}
+
+/// [`BEVY_MARKS`] written into a code-bevy copy at `root`.
+fn mark_bevy(root: &Path) {
+    for (path, from, to) in BEVY_MARKS {
+        replace(root, path, from, to);
+    }
+}
+
+/// The `roles` lists of every target of a `find_symbols` result's
+/// document (none for an error without one).
+fn role_lists(result: &Value) -> Vec<Value> {
+    result["structuredContent"]["symbols"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|target| target["roles"].clone())
+        .collect()
 }
 
 // ------------------------------------------------------------------ RD-1
@@ -890,6 +974,86 @@ fn symbol_count(document: &Value) -> usize {
     document["symbols"].as_array().map_or(0, Vec::len)
 }
 
+/// Every code file of code-bevy and its call label.
+const BEVY_FILES: [(&str, &str); 9] = [
+    ("file ron", "assets/farm.ron"),
+    ("file main", "crates/farm-app/src/main.rs"),
+    ("file clock", "crates/farm/src/clock.rs"),
+    ("file crops", "crates/farm/src/crops.rs"),
+    ("file fields", "crates/farm/src/fields.rs"),
+    ("file herd", "crates/farm/src/herd.rs"),
+    ("file lib", "crates/farm/src/lib.rs"),
+    ("file news", "crates/farm/src/news.rs"),
+    ("file weather", "crates/farm/src/weather.rs"),
+];
+
+/// The calls of the code-bevy parity run (docs/features/bevy-roles-reads.md
+/// RD-10): every `find_symbols` form over every code file, a module and a
+/// RON target (`CHORE-02`), exits 1 and 2, `refs` and `unmapped` beside.
+fn bevy_reads() -> Vec<Call> {
+    use Want::{Answered, CannotRun, NotFound};
+    let mut calls = vec![
+        call("tick", "find_symbols", json!({"query": "tick"}), Answered),
+        call("run", "find_symbols", json!({"query": "run"}), Answered),
+        call(
+            "run limit",
+            "find_symbols",
+            json!({"query": "run", "limit": 1}),
+            Answered,
+        ),
+        call("graze", "find_symbols", json!({"query": "graze"}), Answered),
+        call("Quake", "find_symbols", json!({"query": "Quake"}), Answered),
+        call(
+            "node ALM-GROWTH",
+            "find_symbols",
+            json!({"node": "ALM-GROWTH"}),
+            Answered,
+        ),
+        call(
+            "node CHORE-01",
+            "find_symbols",
+            json!({"node": "CHORE-01"}),
+            Answered,
+        ),
+        call(
+            "node CHORE-02",
+            "find_symbols",
+            json!({"node": "CHORE-02"}),
+            Answered,
+        ),
+        call(
+            "node nothing",
+            "find_symbols",
+            json!({"node": "CHORE-99"}),
+            NotFound,
+        ),
+        call(
+            "at lib",
+            "find_symbols",
+            json!({"at": "crates/farm/src/lib.rs:30"}),
+            Answered,
+        ),
+        call(
+            "at herd",
+            "find_symbols",
+            json!({"at": "crates/farm/src/herd.rs:32"}),
+            Answered,
+        ),
+        call(
+            "file md",
+            "find_symbols",
+            json!({"file": "docs/spec/almanac.md"}),
+            CannotRun,
+        ),
+        call("refs", "refs", json!({"id": "ALM-GROWTH"}), Answered),
+        call("unmapped", "unmapped", json!({}), Answered),
+    ];
+    for (label, path) in BEVY_FILES {
+        calls.push(call(label, "find_symbols", json!({"file": path}), Answered));
+    }
+    calls
+}
+
 /// RD-3 (Q33): every code tool and exit over a code-index copy, both
 /// eras: `content` the CLI's text, `structuredContent` its document (kept
 /// at exit 1 with its `reason`, absent at exit 2), each walked against the
@@ -898,11 +1062,34 @@ fn symbol_count(document: &Value) -> usize {
 /// `joined` across files; reading L19: one target per binding of a node).
 /// The forms echo their `form`; `tier` is set in the QUERY form only
 /// (Q35). M: an MCP-side sort or cut; exit 1 as success.
+///
+/// docs/features/bevy-roles-reads.md RD-10 ("find_symbols"; "Rules and
+/// edge cases": `content` and `structuredContent` the CLI's, roles
+/// included). M: `roles` unmirrored (the walker meets a key the
+/// `outputSchema` does not declare). Code-index lists no `[code]
+/// frameworks`: every target holds `roles: null`. Over a scratch
+/// code-bevy (the opt-in on, a module and a RON target written in) every
+/// answer is the CLI's and walked; every target holds a `roles` list,
+/// `[]` on the module and the RON path; the walker meets each role key
+/// that can be `null` both with a value and `null`, every state, more
+/// than one origin.
 #[test]
 fn code_tools_equal_the_cli() {
     let project = Project::reads();
     let calls = reads();
     for results in project.answers(&calls) {
+        for (call, result) in calls.iter().zip(&results) {
+            if call.tool == "find_symbols" {
+                for roles in role_lists(result) {
+                    assert_eq!(
+                        roles,
+                        Value::Null,
+                        "{}: `roles` null without the opt-in",
+                        call.label
+                    );
+                }
+            }
+        }
         let doc = |label: &str| document(&calls, &results, label).clone();
         assert_eq!(symbol_count(&doc("twins")), 2, "{}", doc("twins"));
         assert_eq!(doc("twins")["total"], json!(2), "{}", doc("twins"));
@@ -983,6 +1170,55 @@ fn code_tools_equal_the_cli() {
             "the blank directory's `-`: {dir}"
         );
     }
+
+    let project = Project::bevy();
+    let calls = bevy_reads();
+    for results in project.answers(&calls) {
+        let mut values: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+        let mut kinds = BTreeSet::new();
+        for (call, result) in calls.iter().zip(&results) {
+            if call.tool != "find_symbols" {
+                continue;
+            }
+            let document = &result["structuredContent"];
+            for target in document["symbols"].as_array().into_iter().flatten() {
+                let kind = target["target"].as_str().unwrap_or_default();
+                kinds.insert(kind.to_owned());
+                let roles = target["roles"].as_array().unwrap_or_else(|| {
+                    panic!("{}: `roles` a list with the opt-in: {target}", call.label)
+                });
+                if kind != "item" {
+                    assert!(roles.is_empty(), "{}: {target}", call.label);
+                }
+                for role in roles {
+                    for key in ROLE_KEYS {
+                        values.entry(key).or_default().insert(role[key].to_string());
+                    }
+                }
+            }
+        }
+        assert_eq!(kinds, set(&["item", "module", "ron"]), "every target kind");
+        for key in ROLE_NULLABLE {
+            let seen = &values[key];
+            assert!(
+                seen.contains("null") && seen.len() > 1,
+                "`{key}`: a value and `null` both walked: {seen:?}"
+            );
+        }
+        assert_eq!(
+            values["state"],
+            set(&[
+                "\"ambiguous\"",
+                "\"certain\"",
+                "\"linked\"",
+                "\"uncertain\""
+            ]),
+            "every state walked"
+        );
+        assert!(values["origin"].len() > 1, "{:?}", values["origin"]);
+        let chore = document(&calls, &results, "node CHORE-02");
+        assert_eq!(symbol_count(chore), 2, "{chore}");
+    }
 }
 
 // ------------------------------------------------------------------ RD-4
@@ -1007,6 +1243,12 @@ fn code_schemas() -> (Value, Value, Value) {
 /// role keys join free). `form` is exactly the four forms, `target` Q35's
 /// `item`, `module`, `ron`, `tier` the three tiers or `null`. M:
 /// `item_kind` an enum.
+///
+/// docs/features/bevy-roles-reads.md RD-10 ("find_symbols"): `roles` is
+/// a nullable array; each of its keys a free string or integer, never an
+/// enum of words (as `item_kind`, `layer`): `line` and `candidates`
+/// integers, the nine others strings. M: a role word (`role`, `source`,
+/// `form`, `origin`, `state` …) an enum.
 #[test]
 fn code_mirrors_keep_kinds_free() {
     let (symbols, refs, unmapped) = code_schemas();
@@ -1080,6 +1322,27 @@ fn code_mirrors_keep_kinds_free() {
         types_of(tier).contains("null"),
         "tier null outside QUERY: {tier}"
     );
+
+    let roles = schema_at(&symbols, "symbols[].roles");
+    assert_eq!(enum_values(roles), None, "{roles}");
+    assert!(
+        types_of(roles).is_superset(&set(&["array", "null"])),
+        "`roles` a nullable array: {roles}"
+    );
+    for key in ROLE_KEYS {
+        let path = format!("symbols[].roles[].{key}");
+        let at = schema_at(&symbols, &path);
+        assert_eq!(enum_values(at), None, "{path}: an enum: {at}");
+        let want = if ROLE_INTEGERS.contains(&key) {
+            "integer"
+        } else {
+            "string"
+        };
+        assert!(
+            types_of(at).contains(want),
+            "{path}: not a free {want}: {at}"
+        );
+    }
 }
 
 /// RD-4 (Q35): the documents' key sets are the CLI's, named here (a key
@@ -1088,6 +1351,9 @@ fn code_mirrors_keep_kinds_free() {
 /// `{symbols}`, `{rows, unmapped}`, refs' `{markers, mentions}`; `reason`
 /// a string or `null`. M: `percent` a string (the walker over a `-` row
 /// in `code_tools_equal_the_cli` and the types here); a key dropped.
+/// docs/features/bevy-roles-reads.md "find_symbols": a target gains
+/// `roles`, each item exactly [`ROLE_KEYS`]; `form`, `group`, `detail`,
+/// `candidates` admit `null`. M: a role key dropped.
 #[test]
 fn code_mirrors_pin_the_q35_types() {
     let (symbols, refs, unmapped) = code_schemas();
@@ -1114,9 +1380,22 @@ fn code_mirrors_pin_the_q35_types() {
             "layer",
             "tier",
             "mentions",
-            "bindings"
+            "bindings",
+            "roles"
         ])
     );
+    assert_eq!(
+        keys_at(schema_at(&symbols, "symbols[].roles[]")),
+        set(&ROLE_KEYS)
+    );
+    for key in ROLE_NULLABLE {
+        let path = format!("symbols[].roles[].{key}");
+        let at = schema_at(&symbols, &path);
+        assert!(
+            types_of(at).contains("null"),
+            "{path}: `null` on most rows: {at}"
+        );
+    }
     assert_eq!(
         keys_at(schema_at(&symbols, "symbols[].bindings[]")),
         set(&[
@@ -1503,8 +1782,20 @@ fn determinism_requests() -> Vec<(String, Value)> {
 
 /// Every reply line of one session (`args`, `cwd`, `home`).
 fn session_lines(era: Era, args: &[&str], cwd: &Path, home: &Path) -> Vec<String> {
+    lines_of_requests(era, args, cwd, home, determinism_requests())
+}
+
+/// Every reply line of one session (`args`, `cwd`, `home`) sending
+/// `requests` in order.
+fn lines_of_requests(
+    era: Era,
+    args: &[&str],
+    cwd: &Path,
+    home: &Path,
+    requests: Vec<(String, Value)>,
+) -> Vec<String> {
     let mut session = Session::open(era, args, Some(cwd), Home::At(home));
-    let lines = determinism_requests()
+    let lines = requests
         .into_iter()
         .map(|(method, params)| session.request_line(&method, params))
         .collect();
@@ -1512,6 +1803,37 @@ fn session_lines(era: Era, args: &[&str], cwd: &Path, home: &Path) -> Vec<String
     assert!(done.status.success(), "{era:?}: {}", done.stderr);
     assert_eq!(done.stderr, "", "{era:?}");
     lines
+}
+
+/// The requests of one code-bevy determinism session
+/// (docs/features/bevy-roles-reads.md TE-3): `tools/list`, then
+/// `find_symbols` in every form over every code file, a module and a RON
+/// target, exits 1 and 2.
+fn role_requests() -> Vec<(String, Value)> {
+    let mut list = vec![("tools/list".to_owned(), json!({}))];
+    let mut forms = vec![
+        json!({"query": "tick"}),
+        json!({"query": "run"}),
+        json!({"query": "run", "limit": 1}),
+        json!({"query": "graze"}),
+        json!({"query": "Harvest"}),
+        json!({"query": "Quake"}),
+        json!({"node": "ALM-GROWTH"}),
+        json!({"node": "CHORE-01"}),
+        json!({"node": "CHORE-02"}),
+        json!({"node": "CHORE-99"}),
+        json!({"at": "crates/farm/src/lib.rs:30"}),
+        json!({"at": "crates/farm/src/herd.rs:32"}),
+        json!({"file": "docs/spec/almanac.md"}),
+    ];
+    forms.extend(BEVY_FILES.iter().map(|(_, path)| json!({"file": path})));
+    for arguments in forms {
+        list.push((
+            "tools/call".to_owned(),
+            json!({"name": "find_symbols", "arguments": arguments}),
+        ));
+    }
+    list
 }
 
 /// Today's date and its neighbours, `YYYY-MM-DD` (any time zone).
@@ -1607,6 +1929,114 @@ fn te1_code_tools_are_byte_identical_across_roots_order_cwd_and_crlf() {
                     .map(|home| home.to_str().expect("UTF-8").to_owned()),
             )
             .chain(["cdet-".to_owned()])
+            .chain(dates.iter().cloned())
+            .collect();
+        for line in &first {
+            for text in &forbidden {
+                assert!(
+                    !line.contains(text.as_str()),
+                    "{era:?}: a reply holds {text}: {}",
+                    clip(line)
+                );
+            }
+        }
+    }
+}
+
+/// docs/features/bevy-roles-reads.md TE-3, the `find_symbols` half
+/// ("Rules and edge cases", Determinism; the `symbols` half:
+/// `bevy_roles_reads_determinism.rs`). M: a rowid order of the rows or of
+/// their candidates; the absolute root in a document. code-bevy (the
+/// opt-in on, `CHORE-02`'s module and RON markers written in): a forward
+/// copy, a copy created in reverse order at another root, a CRLF copy
+/// (every `.rs`, `.ron`, `.md`) and a copy read with `--root` from another
+/// working directory, each with its own `HOME`, give byte-identical reply
+/// lines for every request of [`role_requests`] in both eras, role lines
+/// and `roles` included; a repeated session the same bytes again; no line
+/// holds a root, a `HOME`, a scratch name or today's date.
+#[test]
+fn te3_find_symbols_roles_are_byte_identical_across_roots_order_cwd_and_crlf() {
+    let one = Scratch::new("rdet-one");
+    let two = Scratch::new("rdet-two-with-a-longer-name");
+    let forward = one.join("rdet-first-root");
+    copy_dir(&fixture(BEVY), &forward, false);
+    let reverse = two.join("nested/rdet-second-root");
+    copy_dir(&fixture(BEVY), &reverse, true);
+    let crlf = one.join("rdet-crlf-root");
+    copy_dir(&fixture(BEVY), &crlf, false);
+    let fourth = two.join("rdet-fourth-root");
+    copy_dir(&fixture(BEVY), &fourth, true);
+    for root in [&forward, &reverse, &crlf, &fourth] {
+        mark_bevy(root);
+    }
+    for relative in files_with(&crlf, &["rs", "ron", "md"]) {
+        let text = read_text(&crlf, &relative);
+        write(
+            &crlf,
+            &relative,
+            text.replace("\r\n", "\n").replace('\n', "\r\n"),
+        );
+    }
+    let elsewhere = two.dir("rdet-elsewhere");
+    let [forward, reverse, crlf, fourth] =
+        [forward, reverse, crlf, fourth].map(|root| root.canonicalize().expect("a root"));
+    let homes = [
+        one.home("rdet-home-one"),
+        two.home("rdet-home-two"),
+        one.home("rdet-home-crlf"),
+        two.home("rdet-home-four"),
+    ];
+    let fourth_text = fourth.to_str().expect("UTF-8").to_owned();
+    let dates = dates_around_now();
+    for era in ERAS {
+        let first = lines_of_requests(era, &[], &forward, &homes[0], role_requests());
+        assert!(
+            first.iter().any(|line| line.contains("\\n  role ")),
+            "{era:?}: role lines in the content"
+        );
+        assert!(
+            first.iter().any(|line| line.contains("\"roles\":[{")),
+            "{era:?}: roles in the documents"
+        );
+        let variants = [
+            (
+                "reverse",
+                lines_of_requests(era, &[], &reverse, &homes[1], role_requests()),
+            ),
+            (
+                "crlf",
+                lines_of_requests(era, &[], &crlf, &homes[2], role_requests()),
+            ),
+            (
+                "--root from elsewhere",
+                lines_of_requests(
+                    era,
+                    &["--root", fourth_text.as_str()],
+                    &elsewhere,
+                    &homes[3],
+                    role_requests(),
+                ),
+            ),
+            (
+                "again",
+                lines_of_requests(era, &[], &forward, &homes[0], role_requests()),
+            ),
+        ];
+        for (label, lines) in &variants {
+            assert_eq!(first.len(), lines.len(), "{era:?} {label}");
+            for (index, (left, right)) in first.iter().zip(lines).enumerate() {
+                assert_eq!(left, right, "{era:?} {label}: reply {index} differs");
+            }
+        }
+        let forbidden: Vec<String> = [&forward, &reverse, &crlf, &fourth, &elsewhere]
+            .iter()
+            .map(|path| path.to_str().expect("UTF-8").to_owned())
+            .chain(
+                homes
+                    .iter()
+                    .map(|home| home.to_str().expect("UTF-8").to_owned()),
+            )
+            .chain(["rdet-".to_owned()])
             .chain(dates.iter().cloned())
             .collect();
         for line in &first {
@@ -1929,6 +2359,51 @@ fn genre_code_sources_and_texts_hold_no_kind_or_rust_word() {
     }
     for problem in genre_problems(CODE_LINE) {
         offenders.push(format!("INSTRUCTIONS' code line: {problem}"));
+    }
+    assert!(offenders.is_empty(), "{offenders:#?}");
+}
+
+/// docs/features/bevy-roles-reads.md "find_symbols" and "Rules and edge
+/// cases", Genre: the doc comments of the role mirror become
+/// `outputSchema` text, so every description under `find_symbols`'
+/// `symbols[].roles` holds no stack word, role word, source word or
+/// framework name, nor a language or fixture word, a code file suffix or
+/// `::` (the role words and sources: code-bevy's `expected.json`, 10a-1's
+/// copy of the code crate's data; every tool text's stack words:
+/// `mcp_genre.rs`). M: "Bevy" or "system" in a doc comment of the role
+/// mirror.
+#[test]
+fn find_symbols_roles_schema_holds_no_stack_role_or_source_word() {
+    let expected: Value =
+        serde_json::from_str(&read_text(&fixture(BEVY), "expected.json")).expect("JSON");
+    let mut banned: Vec<String> = ["words", "sources"]
+        .iter()
+        .flat_map(|key| {
+            expected[*key]
+                .as_array()
+                .unwrap_or_else(|| panic!("expected.json `{key}`"))
+                .iter()
+                .map(|word| word.as_str().expect("a word").to_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    banned.push("bevy".to_owned());
+    for word in ["system", "component", "derive", "call"] {
+        assert!(banned.iter().any(|banned| banned == word), "{banned:?}");
+    }
+    let (symbols, _, _) = code_schemas();
+    let mut texts = Vec::new();
+    descriptions(schema_at(&symbols, "symbols[].roles"), &mut texts);
+    let mut offenders = Vec::new();
+    for text in &texts {
+        for word in &banned {
+            if has_word(text, word) {
+                offenders.push(format!("the word {word:?} in {text:?}"));
+            }
+        }
+        for problem in genre_problems(text) {
+            offenders.push(format!("{problem} in {text:?}"));
+        }
     }
     assert!(offenders.is_empty(), "{offenders:#?}");
 }

@@ -17,6 +17,13 @@
 //! JSON alone passes 1 000 000 characters). The maxima are printed for the
 //! spec's "Implementation". M: `unmapped` JSON uncut.
 //!
+//! docs/features/bevy-roles-reads.md TE-8 ("`mcp_size` maxima on code-bevy
+//! recorded"): `find_symbols` over a scratch `fixtures/code-bevy` (the
+//! opt-in on, roles in every answer) in every form and over every code
+//! file, each answer the CLI library's and within the caps; the maximum is
+//! printed for the spec's "Implementation"
+//! (`find_symbols_over_code_bevy_records_its_maxima`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -420,4 +427,41 @@ fn code_tools_cut_stay_under_the_declared_cap() {
     for (tool, most) in &largest {
         eprintln!("code-tools RD-6 {tool} maximum: {most}");
     }
+}
+
+/// docs/features/bevy-roles-reads.md TE-8, the recorded size: `find_symbols`
+/// over a scratch `fixtures/code-bevy` (the opt-in on): QUERY, `--node`,
+/// `--at` and `--file` of every code file, each answer the CLI library's
+/// and its schema's, within `OUTPUT_CAP_CHARS` before any tail and
+/// `MAX_RESULT_CHARS` in all (characters and UTF-16 units); the maximum is
+/// printed for the spec's "Implementation".
+#[test]
+fn find_symbols_over_code_bevy_records_its_maxima() {
+    let scratch = Scratch::new("size-bevy");
+    let home = scratch.home("h");
+    let root = scratch.copy("code-bevy", "code-bevy");
+    let mut calls: Vec<(&str, Value)> = vec![
+        ("find_symbols", json!({"query": "tick"})),
+        ("find_symbols", json!({"query": "run"})),
+        ("find_symbols", json!({"query": "graze"})),
+        ("find_symbols", json!({"node": "ALM-GROWTH"})),
+        ("find_symbols", json!({"node": "CHORE-01"})),
+        ("find_symbols", json!({"at": "crates/farm/src/lib.rs:30"})),
+    ];
+    for path in [
+        "assets/farm.ron",
+        "crates/farm-app/src/main.rs",
+        "crates/farm/src/clock.rs",
+        "crates/farm/src/crops.rs",
+        "crates/farm/src/fields.rs",
+        "crates/farm/src/herd.rs",
+        "crates/farm/src/lib.rs",
+        "crates/farm/src/news.rs",
+        "crates/farm/src/weather.rs",
+    ] {
+        calls.push(("find_symbols", json!({"file": path})));
+    }
+    let largest = measure("code-bevy", &root, &home, &calls);
+    eprintln!("bevy-roles-reads TE-8 find_symbols maximum on code-bevy: {largest}");
+    assert!(largest > 0, "measured");
 }

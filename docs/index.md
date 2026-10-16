@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/features/anchor-states.md](features/anchor-states.md) anchor-states: a renamed or moved binding judged against its old lock entry · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) bevy-roles-reads (10a-2): roles in spec symbols and find_symbols, plugin 0.10.0 · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft
 - [docs/features/constant-census.md](features/constant-census.md) constant-census: which string constants carry a record's code (slice 12a) · crates/specengine-eval, crates/specengine-code, fixtures · draft
 - [docs/features/health-code-ui.md](features/health-code-ui.md) health-code-ui (9a-2): Health draws rows 4-5 · ui · draft

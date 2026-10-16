@@ -22,6 +22,16 @@
 //!   come from one read transaction ([`SqliteIndex::code_snapshot`]), so
 //!   a refresh by another process between them cannot pair one state's
 //!   markers with another's symbols.
+//! - **Roles** (canon `code-roles`, "Links"; with `[code]
+//!   frameworks` listed): the snapshot also reads the role rows beside its
+//!   symbols ([`SqliteIndex::code_snapshot_with_roles`]); each item shows
+//!   the rows sitting on it and the rows whose subject it is `linked` or
+//!   `ambiguous` for ([`crate::roles::state`], computed per read), one
+//!   line each after `sig` (counted in the cap with its target) and JSON
+//!   `roles` after `bindings`; a module or a RON target `[]`. An
+//!   `unlinked` row and a row on nothing show nowhere; a role changes no
+//!   binding, count or exit. Without the list every target's `roles` is
+//!   `null` and the text is as before.
 //! - **For the bridges**: [`symbols`] with [`SymbolsRequest`] (the form an
 //!   enum, `--at` raw: the one `PATH:LINE` reader is here) and the limit
 //!   bounds [`SYMBOLS_LIMIT_MIN`], [`SYMBOLS_LIMIT_MAX`],
@@ -29,19 +39,21 @@
 //!   [`symbols_limit_error`], so a caller needs no clap.
 //!
 //! [`SqliteIndex::code_snapshot`]: specengine_store::SqliteIndex::code_snapshot
+//! [`SqliteIndex::code_snapshot_with_roles`]: specengine_store::SqliteIndex::code_snapshot_with_roles
 
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
-use specengine_code::query_name;
+use specengine_code::{frameworks, query_name};
 use specengine_core::Revision;
 use specengine_store::{
     CodeFileState, CodeRefs, CodeSnapshot, SnapshotSymbols, StoredBinding, StoredMarker,
-    StoredSymbol, SymbolTier,
+    StoredRole, StoredSymbol, SymbolTier,
 };
 
 use crate::cap::OUTPUT_CAP_CHARS;
-use crate::code_index::{LANG_RON, LANG_RUST, RON_AMBIGUOUS, refresh_code};
+use crate::code_index::{LANG_RON, LANG_RUST, LAYER, RON_AMBIGUOUS, refresh_code};
 use crate::corpus::indexed_in;
 use crate::location::open_index;
 use crate::project::discover_with_text;
@@ -50,6 +62,7 @@ use crate::refs::{
     UNANCHORED, code_config, known_ambiguity, levels_text, marker_words, rev_state_of,
     stored_count, unknown_word,
 };
+use crate::roles::{RoleState, state};
 use crate::search::notes;
 use crate::show::classify;
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
@@ -156,6 +169,55 @@ pub struct SymbolTarget {
     pub mentions: Option<usize>,
     /// Its direct markers, by line and column.
     pub bindings: Vec<SymbolBinding>,
+    /// The role rows shown on an item, by layer (`b` first), word, path,
+    /// line, source, `ord`; `[]` on a module or a RON target; `None`
+    /// without `[code] frameworks`.
+    pub roles: Option<Vec<SymbolRole>>,
+}
+
+/// One role row shown on an item: on it, or naming it (`linked`, each
+/// candidate of an `ambiguous` row). Every key present.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SymbolRole {
+    /// The row's word (the code crate's data).
+    pub role: String,
+    /// The layer whose rules made the row.
+    pub layer: &'static str,
+    /// The row's own file, as stored.
+    pub path: String,
+    /// The row's own line.
+    pub line: usize,
+    pub source: String,
+    /// As stored; `None` on a row with no form.
+    pub form: Option<String>,
+    pub origin: String,
+    /// The group stored with the row (`group_text`).
+    pub group: Option<String>,
+    /// `linked`, `ambiguous`, or the row's certainty
+    /// ([`RoleState::word`]).
+    pub state: &'static str,
+    /// The stored category (an uncertain row's).
+    pub detail: Option<String>,
+    /// An `ambiguous` row's count of candidates; else `None`.
+    pub candidates: Option<usize>,
+    /// The row's `ord` in its file: the order's last key, not printed.
+    #[serde(skip)]
+    ord: u32,
+}
+
+impl SymbolRole {
+    /// The order of the rows on one target: layer (`b` first), word, path
+    /// bytes, line, source, `ord`; never storage order.
+    fn order(&self) -> (Reverse<&str>, &str, &[u8], usize, &str, u32) {
+        (
+            Reverse(self.layer),
+            self.role.as_str(),
+            self.path.as_bytes(),
+            self.line,
+            self.source.as_str(),
+            self.ord,
+        )
+    }
 }
 
 /// One direct marker of a target.
@@ -256,16 +318,22 @@ pub fn symbols(
         Form::File(path) | Form::At { path, .. } => SnapshotSymbols::File(path),
         Form::Node(_) => SnapshotSymbols::Bound,
     };
+    // With frameworks listed, the role rows beside the symbols too, in the
+    // same transaction.
+    let with_roles = !code.frameworks.is_empty();
+    let snapshot = if with_roles {
+        let kinds = frameworks::item_kinds(&code.frameworks);
+        open.index.code_snapshot_with_roles(wanted, &kinds)
+    } else {
+        open.index.code_snapshot(wanted)
+    };
     let CodeSnapshot {
         refs: stored,
         hits,
         symbols,
-    } = open
-        .index
-        .code_snapshot(wanted)
-        .map_err(store_error)?
-        .unwrap_or_default();
-    let marks = Marks::new(&stored)?;
+        roles,
+    } = snapshot.map_err(store_error)?.unwrap_or_default();
+    let marks = Marks::new(&stored)?.with_roles(with_roles.then_some(roles.as_slice()));
 
     let (targets, total) = match &form {
         Form::Query { limit, .. } => {
@@ -490,6 +558,9 @@ struct Marks<'s> {
     ron: BTreeMap<(&'s str, &'s str), Vec<&'s StoredMarker>>,
     /// (path, ord) → the mentions bound to that item itself.
     mentions: BTreeMap<(&'s str, u32), usize>,
+    /// (path, ord) → the role rows shown on that item, in
+    /// [`SymbolRole::order`]; `None` without `[code] frameworks`.
+    roles: Option<BTreeMap<(&'s str, u32), Vec<SymbolRole>>>,
 }
 
 impl<'s> Marks<'s> {
@@ -499,6 +570,7 @@ impl<'s> Marks<'s> {
             modules: BTreeMap::new(),
             ron: BTreeMap::new(),
             mentions: BTreeMap::new(),
+            roles: None,
         };
         for marker in &stored.markers {
             let path = marker.path.as_str();
@@ -518,6 +590,81 @@ impl<'s> Marks<'s> {
             }
         }
         Ok(marks)
+    }
+
+    /// The role rows of the snapshot (`None`: no frameworks listed) placed
+    /// on the items they show on, each state computed now: a row without a
+    /// subject on its `symbol_ord` (none: nowhere), a `linked` row on its
+    /// candidate, an `ambiguous` row on each of its candidates, an
+    /// `unlinked` row nowhere.
+    fn with_roles(mut self, roles: Option<&'s [StoredRole]>) -> Self {
+        self.roles = roles.map(|roles| {
+            let mut shown: BTreeMap<(&'s str, u32), Vec<SymbolRole>> = BTreeMap::new();
+            for role in roles {
+                let found = state(role);
+                let word = found.word();
+                match &found {
+                    RoleState::Certain | RoleState::Uncertain => {
+                        if let Some(ord) = role.symbol_ord {
+                            shown
+                                .entry((role.path.as_str(), ord))
+                                .or_default()
+                                .push(symbol_role(role, word, None));
+                        }
+                    }
+                    RoleState::Linked(candidate) => shown
+                        .entry((candidate.symbol.path.as_str(), candidate.symbol.ord))
+                        .or_default()
+                        .push(symbol_role(role, word, None)),
+                    RoleState::Ambiguous(candidates) => {
+                        for candidate in candidates {
+                            shown
+                                .entry((candidate.symbol.path.as_str(), candidate.symbol.ord))
+                                .or_default()
+                                .push(symbol_role(role, word, Some(candidates.len())));
+                        }
+                    }
+                    RoleState::Unlinked => {}
+                }
+            }
+            for rows in shown.values_mut() {
+                rows.sort_by(|a, b| a.order().cmp(&b.order()));
+            }
+            shown
+        });
+        self
+    }
+
+    /// The role rows shown on the item at (`path`, `ord`): `None` without
+    /// frameworks listed.
+    fn roles_on(&self, path: &str, ord: u32) -> Option<Vec<SymbolRole>> {
+        self.roles
+            .as_ref()
+            .map(|shown| shown.get(&(path, ord)).cloned().unwrap_or_default())
+    }
+
+    /// A module's or a RON target's roles: `[]` with frameworks listed.
+    fn no_roles(&self) -> Option<Vec<SymbolRole>> {
+        self.roles.as_ref().map(|_| Vec::new())
+    }
+}
+
+/// One stored role row as a target shows it, `state` its word now,
+/// `candidates` an `ambiguous` row's count.
+fn symbol_role(role: &StoredRole, state: &'static str, candidates: Option<usize>) -> SymbolRole {
+    SymbolRole {
+        role: role.word.clone(),
+        layer: LAYER,
+        path: role.path.clone(),
+        line: role.line as usize,
+        source: role.source.clone(),
+        form: role.form.clone(),
+        origin: role.origin.clone(),
+        group: role.group_text.clone(),
+        state,
+        detail: role.category.clone(),
+        candidates,
+        ord: role.ord,
     }
 }
 
@@ -574,6 +721,7 @@ fn node_targets(
                 let markers = marks.modules.get(path).map_or(&[][..], Vec::as_slice);
                 SymbolTarget {
                     bindings: bindings(markers, corpus)?,
+                    roles: marks.no_roles(),
                     ..bare(MODULE, module.qpath.clone(), path, None)
                 }
             }
@@ -582,6 +730,7 @@ fn node_targets(
                 let line = markers.iter().map(|marker| marker.line as usize).min();
                 SymbolTarget {
                     bindings: bindings(markers, corpus)?,
+                    roles: marks.no_roles(),
                     ..bare(RON, format!("{path}#{field}"), path, line)
                 }
             }
@@ -620,10 +769,11 @@ fn bare(target: &'static str, qpath: String, path: &str, line: Option<usize>) ->
         tier: None,
         mentions: None,
         bindings: Vec::new(),
+        roles: None,
     }
 }
 
-/// An item's target with its direct markers and mentions.
+/// An item's target with its direct markers, mentions and roles.
 fn item_target(
     symbol: StoredSymbol,
     tier: Option<SymbolTier>,
@@ -634,6 +784,7 @@ fn item_target(
     let markers = marks.items.get(&key).map_or(&[][..], Vec::as_slice);
     let bindings = bindings(markers, corpus)?;
     let mentions = marks.mentions.get(&key).copied().unwrap_or(0);
+    let roles = marks.roles_on(&symbol.path, symbol.ord);
     let ambiguity = symbol
         .ambiguity
         .as_deref()
@@ -654,6 +805,7 @@ fn item_target(
         tier: tier.map(SymbolTier::as_str),
         mentions: Some(mentions),
         bindings,
+        roles,
     })
 }
 
@@ -734,9 +886,11 @@ fn node_text(judged: &Judged, corpus: &Corpus<'_>) -> Option<String> {
 
 // ------------------------------------------------------------- rendering
 
-/// A target's lines: its own, its signature (items), its bindings.
+/// A target's lines: its own, its signature and its roles (items), its
+/// bindings.
 fn target_lines(target: &SymbolTarget) -> Vec<String> {
-    let mut lines = Vec::with_capacity(target.bindings.len() + 2);
+    let roles = target.roles.as_deref().unwrap_or_default();
+    let mut lines = Vec::with_capacity(target.bindings.len() + roles.len() + 2);
     let qpath = one_line(&target.qpath);
     let path = one_line(&target.path);
     match target.target {
@@ -763,6 +917,7 @@ fn target_lines(target: &SymbolTarget) -> Vec<String> {
                     .as_deref()
                     .map_or_else(|| "-".to_owned(), one_line)
             ));
+            lines.extend(roles.iter().map(role_line));
         }
         RON => lines.push(format!(
             "{qpath} | {RON} | {path}:{}",
@@ -772,6 +927,48 @@ fn target_lines(target: &SymbolTarget) -> Vec<String> {
     }
     lines.extend(target.bindings.iter().map(binding_line));
     lines
+}
+
+/// `  role <word> | <layer> | <path>:<line> | <source>[ <form>][ <origin>]
+/// | <group or -> | <state>[ <detail>]`: the form unless the plain one
+/// (a path), the origin unless ordinary code (the code crate's
+/// [`frameworks::PATH_FORM`], [`frameworks::CODE_ORIGIN`]); the detail an
+/// `ambiguous` row's count of candidates, else its category. Every stored
+/// text through [`one_line`].
+fn role_line(row: &SymbolRole) -> String {
+    let mut source = one_line(&row.source);
+    if let Some(form) = row
+        .form
+        .as_deref()
+        .filter(|form| *form != frameworks::PATH_FORM)
+    {
+        source.push(' ');
+        source.push_str(&one_line(form));
+    }
+    if row.origin != frameworks::CODE_ORIGIN {
+        source.push(' ');
+        source.push_str(&one_line(&row.origin));
+    }
+    let detail = match row.candidates {
+        Some(count) => Some(count.to_string()),
+        None => row.detail.as_deref().map(one_line),
+    };
+    let mut line = format!(
+        "  role {} | {} | {}:{} | {source} | {} | {}",
+        one_line(&row.role),
+        row.layer,
+        one_line(&row.path),
+        row.line,
+        row.group
+            .as_deref()
+            .map_or_else(|| "-".to_owned(), one_line),
+        row.state
+    );
+    if let Some(detail) = detail {
+        line.push(' ');
+        line.push_str(&detail);
+    }
+    line
 }
 
 /// `  <relation> | <line>:<column> | <token> | <id_state>[ <fix>] |

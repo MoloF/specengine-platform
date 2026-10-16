@@ -19,10 +19,11 @@
 //!   that applies: `path_attribute` (a file declares it and its role is not
 //!   [`ROLE_SHARED`]), `unrooted` (its role is [`ROLE_UNROOTED`]),
 //!   `duplicate` (`twin_files` > 0, items only).
-//! - **Framework roles** (format 10, `docs/features/bevy-roles.md`
-//!   "Table"): a file's `code_roles` rows are per-file rows as the others,
-//!   written and cascaded with their file; no pass touches them, links are
-//!   computed per read (`crate::roles`).
+//! - **Framework roles** (format 10, `docs/canon/code-roles.md` "Table"):
+//!   a file's `code_roles` rows are per-file rows as the others, written
+//!   and cascaded with their file; no pass touches them, links are
+//!   computed per read (`crate::roles`); a snapshot reads the rows beside
+//!   its symbols ([`SqliteIndex::code_snapshot_with_roles`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -33,6 +34,7 @@ use specengine_model::IdScheme;
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
 use crate::read::{with_worktree, worktree_id};
+use crate::roles::{StoredRole, roles_on_in};
 use crate::rows::hash_bytes;
 use crate::symbols::{SymbolHit, file_symbols_in, lookup_in};
 use crate::{b3_hash, schema, write};
@@ -188,7 +190,7 @@ pub struct CodeFileRows {
 }
 
 /// One framework role fact of a file (`code_roles`;
-/// `docs/features/bevy-roles.md` "Table"): strings the analyzer gives,
+/// `docs/canon/code-roles.md` "Table"): strings the analyzer gives,
 /// stored and compared, never read for their meaning here.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CodeRoleRow {
@@ -551,26 +553,58 @@ impl SqliteIndex {
         &self,
         symbols: SnapshotSymbols<'_>,
     ) -> Result<Option<CodeSnapshot>, StoreError> {
-        with_worktree(self, |tx, wt| {
-            if stored_code_fp(tx, wt)?.is_none() {
-                return Ok(None);
-            }
-            let mut snapshot = CodeSnapshot {
-                refs: refs_in(tx, wt)?,
-                hits: Vec::new(),
-                symbols: Vec::new(),
-            };
-            match symbols {
-                SnapshotSymbols::Lookup { query, name } => {
-                    snapshot.hits = lookup_in(tx, wt, query, name)?;
-                }
-                SnapshotSymbols::File(path) => snapshot.symbols = file_symbols_in(tx, wt, path)?,
-                SnapshotSymbols::Bound => snapshot.symbols = bound_symbols(tx, wt)?,
-                SnapshotSymbols::All => snapshot.symbols = all_symbols(tx, wt)?,
-            }
-            Ok(Some(snapshot))
-        })
+        snapshot(self, symbols, None)
     }
+
+    /// [`Self::code_snapshot`] and, in the same transaction, the role rows
+    /// a read may show beside the snapshot's symbols (the lookup's hits or
+    /// the other forms' symbols): the rows sitting on one of them and the
+    /// rows whose `subject_name` is one of their names, by (path, `ord`),
+    /// each with its link candidates as [`Self::code_roles`] gives them,
+    /// `kinds` each word's item kinds (`docs/canon/code-roles.md` "Links";
+    /// `docs/canon/symbol-reads.md` "spec symbols").
+    pub fn code_snapshot_with_roles(
+        &self,
+        symbols: SnapshotSymbols<'_>,
+        kinds: &BTreeMap<&str, Vec<&str>>,
+    ) -> Result<Option<CodeSnapshot>, StoreError> {
+        snapshot(self, symbols, Some(kinds))
+    }
+}
+
+/// [`SqliteIndex::code_snapshot`], with the role rows when `kinds` is
+/// given.
+fn snapshot(
+    index: &SqliteIndex,
+    symbols: SnapshotSymbols<'_>,
+    kinds: Option<&BTreeMap<&str, Vec<&str>>>,
+) -> Result<Option<CodeSnapshot>, StoreError> {
+    with_worktree(index, |tx, wt| {
+        if stored_code_fp(tx, wt)?.is_none() {
+            return Ok(None);
+        }
+        let mut snapshot = CodeSnapshot {
+            refs: refs_in(tx, wt)?,
+            ..CodeSnapshot::default()
+        };
+        match symbols {
+            SnapshotSymbols::Lookup { query, name } => {
+                snapshot.hits = lookup_in(tx, wt, query, name)?;
+            }
+            SnapshotSymbols::File(path) => snapshot.symbols = file_symbols_in(tx, wt, path)?,
+            SnapshotSymbols::Bound => snapshot.symbols = bound_symbols(tx, wt)?,
+            SnapshotSymbols::All => snapshot.symbols = all_symbols(tx, wt)?,
+        }
+        if let Some(kinds) = kinds {
+            let shown = snapshot
+                .hits
+                .iter()
+                .map(|hit| &hit.symbol)
+                .chain(&snapshot.symbols);
+            snapshot.roles = roles_on_in(tx, wt, shown, kinds)?;
+        }
+        Ok(Some(snapshot))
+    })
 }
 
 /// Which symbols a [`CodeSnapshot`] holds beside its refs.
@@ -596,6 +630,10 @@ pub struct CodeSnapshot {
     pub hits: Vec<SymbolHit>,
     /// The other forms' symbols, by (path, ord); none for a lookup.
     pub symbols: Vec<StoredSymbol>,
+    /// [`SqliteIndex::code_snapshot_with_roles`]' role rows beside the
+    /// hits or the symbols, by (path, `ord`); none from
+    /// [`SqliteIndex::code_snapshot`].
+    pub roles: Vec<StoredRole>,
 }
 
 /// Every stored file, marker and mention of the worktree inside the

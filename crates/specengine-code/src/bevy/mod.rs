@@ -16,9 +16,9 @@
 //!   arguments, read from tokens: [`Origin::MacroRules`] and
 //!   [`Origin::MacroCall`] carry names only and are never resolved.
 //!
-//! For the framework roles of the code index (`crate::frameworks`, slice
-//! 10a-1 `bevy-roles`) it also reads, apart from the lists above (which
-//! stay as they were):
+//! For the framework roles of the code index (`crate::frameworks`,
+//! `docs/canon/code-roles.md` "Role facts") it also reads, apart from the
+//! lists above (which stay as they were):
 //!
 //! - **derives**: each `#[derive(..)]` element of a struct, enum or union
 //!   whose last path segment is one of [`DeriveRole`] (several attributes,
@@ -183,9 +183,12 @@ pub struct Registration {
 /// subject): the path's segments joined by `::`, generic arguments dropped
 /// (`tick::<T>` → `tick`), each leading `crate`, `self` or `super` segment
 /// followed by another dropped (no qualified path holds them), capped at
-/// [`MAX_TEXT_BYTES`] plus [`TRUNCATION_MARK`]; a segment that is no plain
-/// name (a bracketed type, `<T as Tr>`) kept as written, each whitespace
-/// run one space. From macro tokens: the last segment alone.
+/// [`MAX_TEXT_BYTES`] plus [`TRUNCATION_MARK`]; a qualifier that is no
+/// plain name named as `crate::items`' impl label names an impl: a
+/// qualified type each side compacted, joined by ` as ` (`<Foo<A, B> as
+/// Tr>::f` → `<Foo<A,B> as Tr>::f`, so it meets the impl's item's
+/// suffix), any other kept as written, each whitespace run one space
+/// ([`qualifier_text`]). From macro tokens: the last segment alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Subject {
     pub text: String,
@@ -942,15 +945,9 @@ pub(crate) fn path_subject(node: Node, source: &[u8]) -> Option<Subject> {
             "generic_type" | "generic_type_with_turbofish" => {
                 node = node.child_by_field_name("type")?;
             }
-            // A qualifier that is no plain path (`<T as Tr>::f`): as
-            // written, each whitespace run one space.
+            // A qualifier that is no plain path (`<T as Tr>::f`).
             _ if !segments.is_empty() => {
-                segments.push(kept_span(
-                    source,
-                    node.start_byte(),
-                    node.end_byte(),
-                    Spacing::Single,
-                ));
+                segments.push(qualifier_text(node, source));
                 break;
             }
             _ => return None,
@@ -958,6 +955,35 @@ pub(crate) fn path_subject(node: Node, source: &[u8]) -> Option<Subject> {
     }
     segments.reverse();
     subject_of(&segments)
+}
+
+/// A qualifier that is no plain path as `crate::items`' impl label names
+/// the impl it may sit in: a `bracketed_type` holding a `qualified_type`
+/// (`<T as Tr>`) as `<` type ` as ` alias `>`, each side compacted (its
+/// whitespace dropped); any other node as written, each whitespace run one
+/// space. Children found by kind, comments skipped by kind.
+fn qualifier_text(node: Node, source: &[u8]) -> String {
+    let qualified = (node.kind() == "bracketed_type")
+        .then(|| {
+            let mut cursor = node.walk();
+            node.named_children(&mut cursor)
+                .find(|child| child.kind() == "qualified_type")
+        })
+        .flatten();
+    let sides = qualified.and_then(|qualified| {
+        Some((
+            qualified.child_by_field_name("type")?,
+            qualified.child_by_field_name("alias")?,
+        ))
+    });
+    match sides {
+        Some((ty, alias)) => format!(
+            "<{} as {}>",
+            compact_node(ty, source),
+            compact_node(alias, source)
+        ),
+        None => kept_span(source, node.start_byte(), node.end_byte(), Spacing::Single),
+    }
 }
 
 /// The leading segments a [`Subject`] drops while another follows.

@@ -14,7 +14,7 @@
 //! stored and counted (exit 0); the reads that need the whole tree refuse.
 //!
 //! With `[code] frameworks` listed, a `roles <slug>: …` line follows the
-//! code line (task spec `bevy-roles` "spec index"; [`crate::roles`]), JSON
+//! code line (canon `code-roles`, "spec index"; [`crate::roles`]), JSON
 //! `code.roles`; `null` and no line without it. A framework the code crate
 //! does not know is refused as a `[code]` that does not read: the spec
 //! index written and printed, `code` `null`, exit 2 at the name's line.

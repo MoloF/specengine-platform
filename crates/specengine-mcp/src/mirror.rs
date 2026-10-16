@@ -4,7 +4,9 @@
 //! objects of `report_discrepancy`'s input) and of the task tools
 //! (`docs/canon/task-package.md` "Package", "MCP": the package, the task
 //! commands' document) and of the code tools (`docs/features/code-tools.md`
-//! "Output mirrors": `spec symbols`, `spec refs`, `spec unmapped`).
+//! "Output mirrors": `spec symbols`, `spec refs`, `spec unmapped`; a
+//! symbol target's `roles`, `docs/canon/mcp-code.md` "Mirrors", each key a
+//! free string or integer, never an enum of the code layer's words).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -1201,6 +1203,38 @@ pub(crate) struct SymbolsTarget {
     /// The mentions bound to the target itself.
     pub mentions: Option<usize>,
     pub bindings: Vec<SymbolsBinding>,
+    /// The role rows shown on an item, by layer, word, path, line; an
+    /// empty list on a module or a data path; `null` when the project's
+    /// code table lists no frameworks.
+    pub roles: Option<Vec<SymbolsRole>>,
+}
+
+/// One role row of a target, every key present; each value a free string
+/// or integer, as the code layer gives it.
+#[derive(JsonSchema)]
+pub(crate) struct SymbolsRole {
+    /// The row's word.
+    pub role: String,
+    /// The layer whose rules made the row.
+    pub layer: String,
+    /// The row's own file.
+    pub path: String,
+    /// The row's own line.
+    pub line: usize,
+    /// Where the row was read.
+    pub source: String,
+    /// How its subject is written; `null` when the row has none.
+    pub form: Option<String>,
+    /// What text the row was read from.
+    pub origin: String,
+    /// The group stored with the row; `null` when it has none.
+    pub group: Option<String>,
+    /// Linked, ambiguous, or the row's certainty.
+    pub state: String,
+    /// Why the row is uncertain; `null` otherwise.
+    pub detail: Option<String>,
+    /// How many targets an ambiguous row names; `null` otherwise.
+    pub candidates: Option<usize>,
 }
 
 #[derive(JsonSchema)]

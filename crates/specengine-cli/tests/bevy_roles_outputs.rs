@@ -1,10 +1,12 @@
 //! docs/features/bevy-roles.md RD-7, the index half ("annotation only"; the
-//! `symbols` half is `bevy-roles-reads.md`'s): a role never binds, maps a
-//! unit, enters `spec.lock` or a verify row (ADR-0020, ADR-0031), so with
-//! `frameworks` on and off `refs`, `unmapped`, `symbols` (10a-1: no role
-//! line yet), `verify` and a scratch `lock accept`'s lock are byte for
-//! byte alike, and `spec index` differs only by its `roles` line and
-//! JSON `code.roles`.
+//! `symbols` half is docs/features/bevy-roles-reads.md's,
+//! `bevy_roles_reads.rs` `symbols_equal_with_and_without_frameworks_but_roles`:
+//! since 10a-2 `symbols` prints role lines and `roles`, so it left
+//! [`READS`]): a role never binds, maps a unit, enters `spec.lock` or a
+//! verify row (ADR-0020, ADR-0031), so with `frameworks` on and off
+//! `refs`, `unmapped`, `verify` and a scratch `lock accept`'s lock are
+//! byte for byte alike, and `spec index` differs only by its `roles` line
+//! and JSON `code.roles`.
 //!
 //! Two scratch git repositories of `fixtures/code-bevy`, each with a
 //! `HOME` of its own: one as the fixture is (the opt-in on), one with a
@@ -95,8 +97,9 @@ impl Side {
 }
 
 /// The reads compared: every `refs` form over the fixture's nodes, both
-/// `unmapped` shapes, `symbols` by name and by file (10a-1 adds no role
-/// line there), `verify`; text and JSON.
+/// `unmapped` shapes, `symbols` by name and by file (compared without
+/// their role lines and `roles`, [`without_roles`]: 10a-2 adds them),
+/// `verify`; text and JSON.
 const READS: [&[&str]; 8] = [
     &["refs", "ALM-GROWTH"],
     &["refs", "ALM-FARM"],
@@ -108,6 +111,37 @@ const READS: [&[&str]; 8] = [
     &["verify"],
 ];
 
+/// A `symbols` answer without what docs/features/bevy-roles-reads.md adds
+/// (its "spec symbols"): the text's `  role ` lines, each JSON target's
+/// `roles`; any other answer as it is. The rest is RD-7's to keep equal;
+/// the role lines themselves are `bevy_roles_reads.rs`'.
+fn without_roles(
+    args: &[&str],
+    (code, stdout, stderr): (i32, String, String),
+) -> (i32, String, String) {
+    if !args.contains(&"symbols") {
+        return (code, stdout, stderr);
+    }
+    let stdout = if args.contains(&"--json") && !stdout.is_empty() {
+        let mut document: Value = serde_json::from_str(&stdout).expect("symbols JSON");
+        if let Some(targets) = document["symbols"].as_array_mut() {
+            for target in targets {
+                target
+                    .as_object_mut()
+                    .expect("a target object")
+                    .remove("roles");
+            }
+        }
+        format!("{document}\n")
+    } else {
+        stdout
+            .split_inclusive('\n')
+            .filter(|line| !line.starts_with("  role "))
+            .collect()
+    };
+    (code, stdout, stderr)
+}
+
 fn compare_reads(on: &Side, off: &Side, when: &str) {
     for read_args in READS {
         for json in [false, true] {
@@ -116,7 +150,11 @@ fn compare_reads(on: &Side, off: &Side, when: &str) {
                 args.push("--json");
             }
             args.extend_from_slice(read_args);
-            assert_eq!(on.run(&args), off.run(&args), "{when}: {args:?}");
+            assert_eq!(
+                without_roles(&args, on.run(&args)),
+                without_roles(&args, off.run(&args)),
+                "{when}: {args:?}"
+            );
         }
     }
 }

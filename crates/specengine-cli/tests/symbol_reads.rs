@@ -11,6 +11,12 @@
 //! byte-exact; the JSON is derived from it (`symbol_reads_common`), the
 //! shapes the spec leaves open pinned as the Phase A readings (Q35).
 //!
+//! docs/features/bevy-roles-reads.md RD-6 (10a-2): every target holds
+//! `roles` after `bindings`, `null` without `[code] frameworks`, and with
+//! them every role object holds every key in order
+//! (`symbols_json_every_key_present`, over a scratch `fixtures/code-bevy`
+//! too).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -26,10 +32,10 @@ use serde_json::{Value, json};
 
 use common::{Scratch, spec, write};
 use symbol_reads_common::{
-    BINDING_KEYS, ECS, FIXTURE, FORMS, ITEM_KEYS, NO_TABLE, ROW_KEYS, SYMBOL_KEYS, SYMBOLS_KEYS,
-    TARGETS, UNMAPPED_KEYS, args_of, as_strs, assert_key_order, both, copy, exit_2_quiet, ledger,
-    lines_of, percents_as_f64, reads, stdout_of, stored_symbol, symbols_json, unmapped_json,
-    without_code_table,
+    BINDING_KEYS, ECS, FIXTURE, FORMS, ITEM_KEYS, NO_TABLE, ROLE_KEYS, ROW_KEYS, SYMBOL_KEYS,
+    SYMBOLS_KEYS, TARGETS, UNMAPPED_KEYS, args_of, as_strs, assert_key_order, both, copy,
+    exit_2_quiet, ledger, lines_of, percents_as_f64, reads, stdout_of, stored_symbol, symbols_json,
+    unmapped_json, without_code_table,
 };
 
 /// The golden of `reads.<list>` named `case`.
@@ -582,6 +588,16 @@ pub fn dangled() {}\n";
 /// `tier` is `null` outside the `query` form (Q35). On a scratch file:
 /// a note, declared and invalid levels, a look-alike's `fix`, a dangling
 /// marker's `node` `null`.
+///
+/// docs/features/bevy-roles-reads.md RD-6 (`roles` added). M: a key
+/// dropped (`roles` on a target; `form`, `group`, `detail`, `candidates`
+/// on a role, `null` on most rows). Without `[code] frameworks`
+/// (code-index) every target holds `roles: null`; over a scratch
+/// `fixtures/code-bevy` (the opt-in on) every form's targets hold `roles`
+/// as a list and every role object exactly [`ROLE_KEYS`] in order, a
+/// `null` kept as a key (a derive row: `form`, `group`, `detail`,
+/// `candidates`; the `cfg_attr` row: `detail` set; the ambiguous row:
+/// `candidates` set).
 #[test]
 fn symbols_json_every_key_present() {
     let scratch = Scratch::new("sr-keys");
@@ -618,6 +634,11 @@ fn symbols_json_every_key_present() {
             assert!(
                 TARGETS.contains(&target["target"].as_str().unwrap_or("")),
                 "{context}: {target}"
+            );
+            assert_eq!(
+                target.get("roles"),
+                Some(&Value::Null),
+                "{context}: `roles` null without `[code] frameworks`: {target}"
             );
             if form == "query" {
                 assert!(target["tier"].is_string(), "{context}: {target}");
@@ -686,6 +707,66 @@ fn symbols_json_every_key_present() {
         (&dangled["id_state"], &dangled["fix"], &dangled["node"]),
         (&json!("dangling"), &Value::Null, &Value::Null)
     );
+
+    // docs/features/bevy-roles-reads.md RD-6: code-bevy as it stands, its
+    // `[code] frameworks = ["bevy"]` on.
+    let bevy = copy(&scratch, "code-bevy", "code-bevy");
+    let home = scratch.home("bevy");
+    let bevy_forms: [(&[&str], &str); 5] = [
+        (&["symbols", "run"], "query"),
+        (&["symbols", "--node", "ALM-GROWTH"], "node"),
+        (&["symbols", "--file", "crates/farm/src/herd.rs"], "file"),
+        (&["symbols", "--file", "crates/farm/src/clock.rs"], "file"),
+        (&["symbols", "--at", "crates/farm/src/lib.rs:33"], "at"),
+    ];
+    let nullable = ["form", "group", "detail", "candidates"];
+    let mut nulls = [0_usize; 4];
+    let mut values = [0_usize; 4];
+    for (args, form) in bevy_forms {
+        let (_, json_run) = both(&home, &bevy, args);
+        json_run.code(0);
+        let value = json_run.json();
+        let context = format!("code-bevy {args:?}");
+        assert_eq!(value["form"], form, "{context}");
+        let targets = value["symbols"].as_array().expect("symbols");
+        let bindings: usize = targets
+            .iter()
+            .map(|target| target["bindings"].as_array().expect("bindings").len())
+            .sum();
+        let mut roles = 0;
+        for target in targets {
+            let list = target["roles"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{context}: `roles` a list with the opt-in: {target}"));
+            roles += list.len();
+            for role in list {
+                for (at, key) in nullable.iter().enumerate() {
+                    if role[*key].is_null() {
+                        nulls[at] += 1;
+                    } else {
+                        values[at] += 1;
+                    }
+                }
+            }
+        }
+        assert!(!targets.is_empty() && roles > 0, "{context}: {value}");
+        assert_symbols_keys(&json_run.stdout, targets.len(), bindings, &context);
+        assert_key_order(
+            &json_run.stdout,
+            "$.symbols[].roles[]",
+            &ROLE_KEYS,
+            roles,
+            &context,
+        );
+    }
+    for (at, key) in nullable.iter().enumerate() {
+        assert!(
+            nulls[at] > 0 && values[at] > 0,
+            "`{key}`: a value and a kept `null` both exercised ({} null, {} set)",
+            nulls[at],
+            values[at]
+        );
+    }
 }
 
 /// The closed `ambiguity` words (docs/canon/code-bindings.md "Rust

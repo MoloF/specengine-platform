@@ -1,9 +1,10 @@
-//! Framework roles as the reads see them (task spec `bevy-roles`, "Links",
-//! "spec index"; L1, G1, J1): each stored role row's state, computed per
-//! read from the store's candidates ([`state`]), and the counts
-//! `spec index` prints ([`role_counts`]).
+//! Framework roles as the reads see them (canon `code-roles`,
+//! "Links", "spec index"): each stored role row's state, computed per read
+//! from the store's candidates ([`state`], its word [`RoleState::word`]),
+//! and the counts `spec index` prints ([`role_counts`]); `spec symbols`
+//! shows the rows on each item (`crate::symbols`).
 //!
-//! - **Link** (L1): a row with a subject takes its candidates at the best
+//! - **Link**: a row with a subject takes its candidates at the best
 //!   tier; of those, the ones in its own file's package if any, else all:
 //!   its own package breaks a tie within the tier, never beats a better
 //!   one. One: [`RoleState::Linked`]; several: [`RoleState::Ambiguous`] on
@@ -11,7 +12,7 @@
 //!   A row without a subject is [`RoleState::Certain`] or
 //!   [`RoleState::Uncertain`] by its certainty, on its `symbol_ord` or on
 //!   nothing.
-//! - **Counts** (G1): per word of the listed frameworks (the code crate's
+//! - **Counts**: per word of the listed frameworks (the code crate's
 //!   data, byte order, zeros too), the symbols holding a row of the word
 //!   certain, linked or ambiguous; the rows with a subject by state; the
 //!   uncertain rows. Over the stored rows, a gap of the walk too.
@@ -43,7 +44,28 @@ pub(crate) enum RoleState<'r> {
     Uncertain,
 }
 
-/// The state of `role` from its stored candidates (L1).
+/// The word of [`RoleState::Linked`] in a read's output.
+const LINKED: &str = "linked";
+/// The word of [`RoleState::Ambiguous`].
+const AMBIGUOUS: &str = "ambiguous";
+/// The word of [`RoleState::Unlinked`].
+const UNLINKED: &str = "unlinked";
+
+impl RoleState<'_> {
+    /// The state's word: `linked`, `ambiguous`, `unlinked`, or a row
+    /// without a subject's certainty (the code crate's words).
+    pub(crate) fn word(&self) -> &'static str {
+        match self {
+            Self::Linked(_) => LINKED,
+            Self::Ambiguous(_) => AMBIGUOUS,
+            Self::Unlinked => UNLINKED,
+            Self::Certain => frameworks::CERTAIN,
+            Self::Uncertain => frameworks::UNCERTAIN,
+        }
+    }
+}
+
+/// The state of `role` from its stored candidates.
 pub(crate) fn state(role: &StoredRole) -> RoleState<'_> {
     if role.subject.is_none() {
         return if role.certainty == frameworks::UNCERTAIN {

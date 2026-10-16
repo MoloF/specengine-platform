@@ -1,4 +1,4 @@
-//! docs/features/bevy-roles.md RD-4 ("`[code] frameworks`", WA-4, Q3,
+//! docs/features/bevy-roles.md RD-4 (`docs/canon/code-roles.md` "`[code] frameworks`"; WA-4, Q3,
 //! SR5): the core checks the key's shape (a list of names, each
 //! `[a-z][a-z0-9_-]{0,31}`), `refresh_code` checks the values against the
 //! code crate's `frameworks::KNOWN` before any row is touched; both are

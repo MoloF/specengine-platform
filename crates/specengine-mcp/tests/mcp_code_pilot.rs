@@ -25,6 +25,25 @@
 //! (else `main`); `SPECENGINE_CODE_ID_<A|B>`, a REF (else the tree's first
 //! ID). It fails, never skips, naming an unset variable. A cold call past
 //! the harness's 60 s read timeout fails the run: record it as a breach.
+//!
+//! docs/features/bevy-roles-reads.md TE-8 (S20), the same rules
+//! (`te8_pilot_a_find_symbols_roles_latency`, B alike): `find_symbols`
+//! with and without `[code] frameworks` (`SPECENGINE_CODE_FRAMEWORKS_<A|B>`,
+//! required, comma-separated as the eval's `harness::PILOT_CODE_FRAMEWORKS`
+//! reads it), each config a copy outside the corpus and a `HOME` of its
+//! own: a QUERY (`SPECENGINE_CODE_QUERY_<A|B>`, else `main`) and `{file}`
+//! of the file holding most role rows (read from the opt-in index with the
+//! system's `sqlite3`; `SPECENGINE_CODE_ROLE_FILE_<A|B>` overrides it),
+//! cold and the warm median of five against the same 1 s (printed, never
+//! failed: a breach plans 6c); counts only (targets, roles, the file's role
+//! rows, answer characters), never a path, name or ID.
+//!
+//! ```text
+//! SPECENGINE_PILOT_A=… SPECENGINE_SCHEME_A=… SPECENGINE_CODE_ROOTS_A=dir,dir \
+//!   SPECENGINE_CODE_FRAMEWORKS_A=bevy \
+//!   perl -e 'alarm 1800; exec @ARGV' cargo nextest run --release -p specengine-mcp \
+//!   --test mcp_code_pilot te8_pilot_a --run-ignored only --no-capture --test-threads 1
+//! ```
 
 #![cfg(all(unix, not(feature = "probes")))]
 
@@ -263,4 +282,223 @@ fn te3_pilot_a_code_tools_latency() {
 #[ignore = "manual (TE-3): set SPECENGINE_PILOT_B, SPECENGINE_SCHEME_B, SPECENGINE_CODE_ROOTS_B; read-only"]
 fn te3_pilot_b_code_tools_latency() {
     run("pilot-b", "B");
+}
+
+// ------------------------------------------- bevy-roles-reads TE-8 (S20)
+
+/// A comma-separated value's names, trimmed, empty ones dropped (as the
+/// eval's `harness::PILOT_CODE_FRAMEWORKS` reads its variable).
+fn names(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The system's `sqlite3` client.
+fn sqlite3() -> &'static str {
+    ["/usr/bin/sqlite3", "/bin/sqlite3", "/usr/local/bin/sqlite3"]
+        .into_iter()
+        .find(|path| Path::new(path).exists())
+        .expect("a sqlite3 client: TE-8 reads the role rows per file with it")
+}
+
+/// The code file holding most role rows in the one index under `home`
+/// (ties by path bytes) and its row count; `None` without a role row.
+/// A `SELECT` on the scratch `HOME`'s index (never the corpus); not
+/// `-readonly`, which cannot open the index's WAL without its `-shm`. The
+/// file's path is never printed.
+fn most_role_rows(home: &Path) -> Option<(String, u64)> {
+    let databases: Vec<PathBuf> = fs::read_dir(data_dir(home))
+        .expect("the data directory")
+        .map(|entry| entry.expect("an entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "db"))
+        .collect();
+    assert_eq!(databases.len(), 1, "one index under the scratch HOME");
+    let output = Command::new(sqlite3())
+        .env_clear()
+        .args(["-json", "-cmd", ".timeout 5000"])
+        .arg(&databases[0])
+        .arg(
+            "SELECT f.path AS path, COUNT(*) AS n FROM code_roles r \
+             JOIN code_files f ON f.file_id = r.file \
+             GROUP BY f.path ORDER BY n DESC, f.path LIMIT 1",
+        )
+        .output()
+        .expect("sqlite3 runs");
+    assert!(
+        output.status.success(),
+        "sqlite3: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).expect("sqlite3 prints UTF-8");
+    if text.trim().is_empty() {
+        return None;
+    }
+    let rows: Value = serde_json::from_str(&text).expect("sqlite3 -json");
+    Some((rows[0]["path"].as_str()?.to_owned(), rows[0]["n"].as_u64()?))
+}
+
+/// A `find_symbols` result's counts: targets, role objects over them
+/// (`null` when every target's `roles` is `null`), and the characters of
+/// its text plus its serialized `structuredContent`.
+fn counts(result: &Value) -> (usize, String, usize) {
+    let targets: &[Value] = result["structuredContent"]["symbols"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let lists: Vec<&Vec<Value>> = targets
+        .iter()
+        .filter_map(|target| target["roles"].as_array())
+        .collect();
+    let roles = if lists.is_empty() && !targets.is_empty() {
+        "null".to_owned()
+    } else {
+        lists
+            .iter()
+            .map(|list| list.len())
+            .sum::<usize>()
+            .to_string()
+    };
+    let text = result["content"][0]["text"]
+        .as_str()
+        .map_or(0, |text| text.chars().count());
+    let structured = result
+        .get("structuredContent")
+        .map_or(0, |value| value.to_string().chars().count());
+    (targets.len(), roles, text + structured)
+}
+
+/// TE-8 over one pilot: the config copy with and without the opt-in, each
+/// its own `HOME` and session; the first call builds the index, then each
+/// form's first call and the warm median of five.
+fn roles_run(label: &str, suffix: &str) {
+    let corpus = PathBuf::from(required(
+        &format!("SPECENGINE_PILOT_{suffix}"),
+        "the pilot's project root",
+    ));
+    let scheme = PathBuf::from(required(
+        &format!("SPECENGINE_SCHEME_{suffix}"),
+        "the pilot's scheme (its specengine.toml without [code])",
+    ));
+    let roots = names(&required(
+        &format!("SPECENGINE_CODE_ROOTS_{suffix}"),
+        "the code roots, comma-separated, corpus-relative",
+    ));
+    let frameworks = names(&required(
+        &format!("SPECENGINE_CODE_FRAMEWORKS_{suffix}"),
+        "the frameworks to list, comma-separated (bevy)",
+    ));
+    assert!(
+        !roots.is_empty() && !frameworks.is_empty(),
+        "{label}: name the code roots and the frameworks"
+    );
+    let scratch = Scratch::new("roles-pilot");
+    assert!(
+        !scratch.path().starts_with(&corpus) && !corpus.starts_with(scratch.path()),
+        "{label}: the scratch directory and the corpus must not nest"
+    );
+    let quoted = |names: &[String]| {
+        names
+            .iter()
+            .map(|name| format!("{name:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let scheme_text = fs::read_to_string(&scheme).expect("the scheme");
+    let table = format!("{scheme_text}\n[code]\nroots = [{}]\n", quoted(&roots));
+    let configs = [
+        (
+            "with",
+            format!("{table}frameworks = [{}]\n", quoted(&frameworks)),
+        ),
+        ("without", table),
+    ];
+    let query =
+        optional(&format!("SPECENGINE_CODE_QUERY_{suffix}")).unwrap_or_else(|| "main".to_owned());
+    let mut file = optional(&format!("SPECENGINE_CODE_ROLE_FILE_{suffix}"));
+    let before = proof(&corpus, &roots);
+    let corpus_text = corpus.to_str().expect("a UTF-8 corpus path");
+    let profile = if cfg!(debug_assertions) {
+        "dev"
+    } else {
+        "release"
+    };
+    println!(
+        "[{label}] TE-8 profile {profile}, {} code roots, {} frameworks",
+        roots.len(),
+        frameworks.len()
+    );
+    for (side, config_text) in &configs {
+        let home = scratch.home(side);
+        let cwd = scratch.dir(&format!("cwd-{side}"));
+        let config = scratch.join(&format!("{side}.toml"));
+        fs::write(&config, config_text).expect("a config copy");
+        let config_arg = config.to_str().expect("a UTF-8 scratch path");
+        let mut session = Session::open(
+            Era::Legacy,
+            &["--root", corpus_text, "--config", config_arg],
+            Some(&cwd),
+            Home::At(&home),
+        );
+        let query_args = json!({"query": query});
+        let (built, first) = timed(&mut session, "find_symbols", &query_args);
+        println!(
+            "[{label}] {side}: first call (the index built) {} ms, isError {}",
+            built.as_millis(),
+            first["isError"]
+        );
+        if *side == "with" && file.is_none() {
+            match most_role_rows(&home) {
+                Some((path, rows)) => {
+                    println!("[{label}] the file holding most role rows holds {rows}");
+                    file = Some(path);
+                }
+                None => println!("[{label}] no role row stored"),
+            }
+        }
+        let mut forms = vec![("find_symbols {query}", query_args)];
+        if let Some(path) = &file {
+            forms.push(("find_symbols {file}", json!({"file": path})));
+        }
+        for (form, args) in &forms {
+            let (cold, result) = timed(&mut session, "find_symbols", args);
+            let mut warm: Vec<Duration> = (0..5)
+                .map(|_| timed(&mut session, "find_symbols", args).0)
+                .collect();
+            warm.sort();
+            let median = warm[2];
+            let (targets, roles, characters) = counts(&result);
+            println!(
+                "[{label}] {side} {form}: first {} ms, warm median {} ms (<= {} ms: {}), \
+                 max {} ms, targets {targets}, roles {roles}, characters {characters}, \
+                 isError {}",
+                cold.as_millis(),
+                median.as_millis(),
+                WARM_BOUND.as_millis(),
+                median <= WARM_BOUND,
+                warm[4].as_millis(),
+                result["isError"]
+            );
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{label} {side}: {}", done.stderr);
+        assert_eq!(done.stderr, "", "{label} {side}: stderr");
+    }
+    let after = proof(&corpus, &roots);
+    assert!(before == after, "{label}: the corpus changed");
+}
+
+#[test]
+#[ignore = "manual (TE-8): set SPECENGINE_PILOT_A, SPECENGINE_SCHEME_A, SPECENGINE_CODE_ROOTS_A, SPECENGINE_CODE_FRAMEWORKS_A; read-only"]
+fn te8_pilot_a_find_symbols_roles_latency() {
+    roles_run("pilot-a", "A");
+}
+
+#[test]
+#[ignore = "manual (TE-8): set SPECENGINE_PILOT_B, SPECENGINE_SCHEME_B, SPECENGINE_CODE_ROOTS_B, SPECENGINE_CODE_FRAMEWORKS_B; read-only"]
+fn te8_pilot_b_find_symbols_roles_latency() {
+    roles_run("pilot-b", "B");
 }

@@ -5,8 +5,9 @@
 //! rows a stub makes from fixed text, never from a parse. `format.rs`
 //! indexes them beside spec-a and spec-b, so `format_history.txt`'s lines
 //! from `9` on pin the code tables' projection too ("Tables": `9 <hash>`
-//! over spec-a, spec-b plus a stub analyzer's rows; docs/features/
-//! bevy-roles.md "Formats": `10 <hash>`, the stub emitting role rows).
+//! over spec-a, spec-b plus a stub analyzer's rows;
+//! `docs/canon/code-roles.md` "Table": `10 <hash>`, the stub emitting role
+//! rows).
 //!
 //! The stub's tree: two Rust files of one package and a RON file, holding
 //! one row of every kind the store keeps — a symbol with suffixes, an

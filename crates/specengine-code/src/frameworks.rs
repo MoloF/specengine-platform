@@ -1,6 +1,6 @@
-//! Framework roles of Rust items (task spec `docs/features/bevy-roles.md`
-//! 10a-1, "Role facts"): which items a framework gives a role, as data,
-//! and the role facts of one parsed file.
+//! Framework roles of Rust items (slice 10a-1,
+//! `docs/canon/code-roles.md` "Role facts"): which items a framework gives
+//! a role, as data, and the role facts of one parsed file.
 //!
 //! - **Data**: [`KNOWN`] names the frameworks `[code] frameworks` may
 //!   list; each [`Framework`] its role [`Word`]s (each with the item kinds
@@ -55,6 +55,14 @@ pub const CERTAIN: &str = "certain";
 /// A fact the detector saw and could not read, or read under a condition
 /// ([`RoleFact::category`] says which).
 pub const UNCERTAIN: &str = "uncertain";
+
+/// The [`RoleFact::form`] of a subject written as a path: the plain one,
+/// which a read's text leaves out
+/// (`docs/canon/code-roles.md` "Role facts").
+pub const PATH_FORM: &str = Form::Path.as_str();
+/// The [`RoleFact::origin`] of ordinary code: the plain one, which a
+/// read's text leaves out.
+pub const CODE_ORIGIN: &str = Origin::Code.as_str();
 
 // Bevy 0.19's words.
 const COMPONENT: &str = "component";

@@ -1,11 +1,14 @@
 # `<CODE_INDEX_FORMAT> <BLAKE3 of the code tables' dump of fixtures/code-index,
 # root masked>` (docs/features/symbol-index.md "Analyzer stamp", Q16, Q24):
 # read by `code_index_cache.rs` `code_format_history_pins_the_code_index_dump`.
-# From 3 on (docs/features/bevy-roles.md "Formats", F1) the BLAKE3 is of
+# From 3 on (`docs/canon/code-roles.md` "Table"; bevy-roles F1) the BLAKE3 is of
 # fixtures/code-index's code-table dump followed by fixtures/code-bevy's
 # (`frameworks = ["bevy"]`, its `code_roles` rows in), each root masked.
 # A changed code dump needs a new CODE_INDEX_FORMAT and a new line; earlier
-# lines stay verbatim.
+# lines stay verbatim. 4 (docs/features/bevy-roles-reads.md, B5, K2): the
+# same two dumps under the new stamp, a role subject's qualified type
+# compacted.
 1 3eac6715cece86e4385c82367d489ccc24d4a7896044accb18a713ec344a3a0e
 2 206f941120e31b317e822f026607d6bbccd5efdf77a30f338446578d7fdc275a
 3 49cfadfed7e012013a20e19453f7d70a6a4b50530c9febad2f602e2b86f4889a
+4 8a7cd52d4c4e94d09697c39535e786037a36a60595a5ebf22f6a0a35cffef276

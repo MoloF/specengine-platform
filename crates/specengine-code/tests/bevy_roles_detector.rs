@@ -1,4 +1,4 @@
-//! docs/features/bevy-roles.md RD-9 ("Role facts": `BevyAnalysis` gains
+//! docs/features/bevy-roles.md RD-9 (`docs/canon/code-roles.md` "Role facts": `BevyAnalysis` gains
 //! fields; `CallSites` and the eval's `bevy-detector` output stay byte for
 //! byte): the facts 10a-1 adds (derives, `impl Component for`,
 //! `add_message`, in code and in macro tokens, `cfg_attr` derives) leave

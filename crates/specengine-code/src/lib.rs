@@ -87,8 +87,7 @@
 //! [`LevelError`], [`Unanchored`], [`ErrorCategory`] and [`Ambiguity`], so
 //! a reader of stored words knows every variant.
 //!
-//! Phase 3 slice 10a-1 `bevy-roles`
-//! (`docs/features/bevy-roles.md` "Role facts"):
+//! Phase 3 slice 10a-1 (`docs/canon/code-roles.md` "Role facts"):
 //!
 //! - [`frameworks`] — the framework roles as data ([`frameworks::KNOWN`],
 //!   each framework's words, sources, categories and per-word item kinds)
@@ -159,4 +158,10 @@ pub use ron::{
 /// Rust file's [`frameworks::role_facts`] (`code_roles`); the stamp gains
 /// `frameworks`. From 3 on the history line hashes `fixtures/code-index`'s
 /// dump, then `fixtures/code-bevy`'s. Rows stored under 2 re-derive once.
-pub const CODE_INDEX_FORMAT: u32 = 3;
+///
+/// 4: 10a-2's B5: a role subject's qualifier that is no path is rendered
+/// as `items.rs`' `impl_label` names an impl, each side compacted and
+/// joined by ` as ` (`<Foo<A, B> as Tr>::f` stored `<Foo<A,B> as
+/// Tr>::f`), so a spaced one meets its suffix. Rows stored under 3
+/// re-derive once.
+pub const CODE_INDEX_FORMAT: u32 = 4;

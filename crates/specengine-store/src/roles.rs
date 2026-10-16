@@ -1,9 +1,17 @@
-//! The role read of the code index (`docs/features/bevy-roles.md`
-//! "Links", L2, L3): every stored `code_roles` row of the worktree with its
-//! file's path and package, and for each row with a subject its link
-//! candidates, read in one transaction. Never stored: a link is computed by
-//! the reader from these candidates (L1), so a renamed or removed item
-//! shows at the next read without its row's file re-derived.
+//! The role read of the code index (`docs/canon/code-roles.md` "Links"):
+//! every stored `code_roles` row of the worktree with its file's path and
+//! package, and for each row with a subject its link candidates, read in
+//! one transaction. Never stored: a link is computed by the reader from
+//! these candidates, so a renamed or removed item shows at the next read
+//! without its row's file re-derived.
+//!
+//! - **Targeted** ([`roles_on_in`], a snapshot's read,
+//!   `docs/canon/symbol-reads.md` "spec symbols"): only the rows a read
+//!   may show beside some symbols, by key: each of their files' rows
+//!   sitting on one of them ([`FILE_ROLES_SQL`]) and the rows whose
+//!   `subject_name` is one of their names (`code_roles_by_subject_name`,
+//!   [`NAMED_ROLES_SQL`]), each once, by path and `ord`, with their
+//!   candidates as above.
 //!
 //! - **Candidates**: the worktree's symbols whose `name` is the row's
 //!   `subject_name` and whose `item_kind` is among the kinds the caller
@@ -20,7 +28,7 @@
 //! - **Strings only**: the store knows no word, kind or framework; the
 //!   caller's map pairs them.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Statement, Transaction};
 
@@ -67,12 +75,41 @@ pub struct RoleCandidate {
     pub symbol: StoredSymbol,
 }
 
+/// The columns [`stored_role`] reads, `r` a `code_roles` row and `f` its
+/// `code_files` row: a literal, for `concat!`.
+macro_rules! role_columns {
+    () => {
+        "f.path, f.package, r.ord, r.word, r.source, r.form, r.origin, r.group_text,
+         r.symbol_ord, r.subject, r.subject_name, r.certainty, r.category, r.line"
+    };
+}
+
 /// Every role row of the worktree (`?1`), by path and `ord`.
-pub(crate) const ROLES_SQL: &str = "SELECT f.path, f.package, r.ord, r.word, r.source, r.form,
-            r.origin, r.group_text, r.symbol_ord, r.subject, r.subject_name, r.certainty,
-            r.category, r.line
-     FROM code_files f CROSS JOIN code_roles r ON r.file = f.file_id
-     WHERE f.wt = ?1 ORDER BY f.path, r.ord";
+pub(crate) const ROLES_SQL: &str = concat!(
+    "SELECT ",
+    role_columns!(),
+    " FROM code_files f CROSS JOIN code_roles r ON r.file = f.file_id
+     WHERE f.wt = ?1 ORDER BY f.path, r.ord"
+);
+
+/// The rows of the worktree's (`?1`) file at `?2` that sit on a symbol,
+/// by `ord`: the file by its `(wt, path)` key, its rows by `(file, ord)`.
+pub(crate) const FILE_ROLES_SQL: &str = concat!(
+    "SELECT ",
+    role_columns!(),
+    " FROM code_files f CROSS JOIN code_roles r ON r.file = f.file_id
+     WHERE f.wt = ?1 AND f.path = ?2 AND r.symbol_ord IS NOT NULL ORDER BY r.ord"
+);
+
+/// The rows of the worktree (`?2`) whose `subject_name` is `?1`: from the
+/// `code_roles_by_subject_name` index (`CROSS JOIN` keeps it outermost),
+/// then the file by key.
+pub(crate) const NAMED_ROLES_SQL: &str = concat!(
+    "SELECT ",
+    role_columns!(),
+    " FROM code_roles r CROSS JOIN code_files f ON f.file_id = r.file
+     WHERE r.subject_name = ?1 AND f.wt = ?2"
+);
 
 /// The symbols of the worktree (`?3`) named `?2` with their file's package
 /// and whether the subject `?1` meets them exactly (their qpath, a twin's
@@ -119,33 +156,99 @@ pub(crate) fn roles_in(
 ) -> Result<Vec<StoredRole>, StoreError> {
     let mut statement = tx.prepare(ROLES_SQL).db()?;
     let mut roles = statement
-        .query_map([wt], |row| {
-            Ok(StoredRole {
-                path: row.get(0)?,
-                package: row.get(1)?,
-                ord: row.get(2)?,
-                word: row.get(3)?,
-                source: row.get(4)?,
-                form: row.get(5)?,
-                origin: row.get(6)?,
-                group_text: row.get(7)?,
-                symbol_ord: row.get(8)?,
-                subject: row.get(9)?,
-                subject_name: row.get(10)?,
-                certainty: row.get(11)?,
-                category: row.get(12)?,
-                line: row.get(13)?,
-                candidates: Vec::new(),
-            })
-        })
+        .query_map([wt], stored_role)
         .db()?
         .collect::<Result<Vec<_>, _>>()
         .db()?;
+    with_candidates(tx, wt, &mut roles, kinds)?;
+    Ok(roles)
+}
+
+/// The role rows a read may show beside `symbols` inside the caller's
+/// transaction: each row of their files sitting on one of them, and each
+/// row whose `subject_name` is one of their names, once, by path and
+/// `ord`, with its candidates as [`roles_in`] gives them (`kinds` each
+/// word's item kinds). Index searches only: one per distinct file, one per
+/// distinct name.
+pub(crate) fn roles_on_in<'s>(
+    tx: &Transaction<'_>,
+    wt: i64,
+    symbols: impl IntoIterator<Item = &'s StoredSymbol>,
+    kinds: &BTreeMap<&str, Vec<&str>>,
+) -> Result<Vec<StoredRole>, StoreError> {
+    // path → the ords of its symbols; the symbols' names.
+    let mut on: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
+    let mut names: BTreeSet<&str> = BTreeSet::new();
+    for symbol in symbols {
+        on.entry(symbol.path.as_str())
+            .or_default()
+            .insert(symbol.ord);
+        names.insert(symbol.name.as_str());
+    }
+    let mut found: BTreeMap<(String, u32), StoredRole> = BTreeMap::new();
+    let mut by_file = tx.prepare(FILE_ROLES_SQL).db()?;
+    for (path, ords) in &on {
+        let rows = by_file
+            .query_map((wt, path), stored_role)
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        for role in rows {
+            if role.symbol_ord.is_some_and(|ord| ords.contains(&ord)) {
+                found.insert((role.path.clone(), role.ord), role);
+            }
+        }
+    }
+    let mut by_name = tx.prepare(NAMED_ROLES_SQL).db()?;
+    for name in names {
+        let rows = by_name
+            .query_map((name, wt), stored_role)
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        for role in rows {
+            found.entry((role.path.clone(), role.ord)).or_insert(role);
+        }
+    }
+    let mut roles: Vec<StoredRole> = found.into_values().collect();
+    with_candidates(tx, wt, &mut roles, kinds)?;
+    Ok(roles)
+}
+
+/// A role row of [`role_columns!`], its candidates not read yet.
+fn stored_role(row: &rusqlite::Row<'_>) -> rusqlite::Result<StoredRole> {
+    Ok(StoredRole {
+        path: row.get(0)?,
+        package: row.get(1)?,
+        ord: row.get(2)?,
+        word: row.get(3)?,
+        source: row.get(4)?,
+        form: row.get(5)?,
+        origin: row.get(6)?,
+        group_text: row.get(7)?,
+        symbol_ord: row.get(8)?,
+        subject: row.get(9)?,
+        subject_name: row.get(10)?,
+        certainty: row.get(11)?,
+        category: row.get(12)?,
+        line: row.get(13)?,
+        candidates: Vec::new(),
+    })
+}
+
+/// Each row's candidates: per distinct (subject, name) one lookup, any
+/// kind, then the row's word's kinds kept (a word not in `kinds`: none).
+fn with_candidates(
+    tx: &Transaction<'_>,
+    wt: i64,
+    roles: &mut [StoredRole],
+    kinds: &BTreeMap<&str, Vec<&str>>,
+) -> Result<(), StoreError> {
     let mut lookup = tx.prepare(CANDIDATES_SQL).db()?;
     // subject → name → every symbol named so, any kind: looked up by the
     // row's borrowed strings, owned once per distinct pair.
     let mut found: BTreeMap<String, BTreeMap<String, Vec<RoleCandidate>>> = BTreeMap::new();
-    for role in &mut roles {
+    for role in roles {
         let (Some(subject), Some(name)) = (&role.subject, &role.subject_name) else {
             continue;
         };
@@ -171,7 +274,7 @@ pub(crate) fn roles_in(
             .cloned()
             .collect();
     }
-    Ok(roles)
+    Ok(())
 }
 
 /// Every symbol of the worktree `wt` named `name`, with its tier for

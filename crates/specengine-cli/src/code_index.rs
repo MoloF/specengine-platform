@@ -18,12 +18,12 @@
 //!   with `utf8` 0 and a `note:`. Reads that need the whole tree ask
 //!   [`CodeRefresh::require_complete`]: `spec: the code walk is incomplete:
 //!   <gap>`, the walk's first gap by path.
-//! - **Framework roles** (task spec `bevy-roles` "Role facts"): with
-//!   `[code] frameworks` listed, the same tree gives each Rust file's role
-//!   rows (`specengine_code::frameworks::role_facts`); the list is in the
-//!   stamp, so a change re-derives every file. Its names are checked here,
-//!   against the code crate's data, before any code row is touched
-//!   ([`known_frameworks`]): the key's one reader.
+//! - **Framework roles** (canon `code-roles`, "Role facts"):
+//!   with `[code] frameworks` listed, the same tree gives each Rust
+//!   file's role rows (`specengine_code::frameworks::role_facts`); the
+//!   list is in the stamp, so a change re-derives every file. Its names
+//!   are checked here, against the code crate's data, before any code row
+//!   is touched ([`known_frameworks`]): the key's one reader.
 //!
 //! [`refresh_code`] is the one refresh `spec index` and `spec refs` call
 //! (and later reads that walk no tree).
@@ -72,8 +72,9 @@ const ROLE_MODULE: &str = "module";
 /// [`CANNOT_VERIFY`]).
 const HASHED: &str = "hashed";
 
-/// The layer whose rules made every row (task spec `layer-c`): layer A.
-const LAYER: &str = "a";
+/// The layer whose rules made every row (task spec `layer-c`): layer A;
+/// a role row's too (`crate::symbols`).
+pub(crate) const LAYER: &str = "a";
 
 /// What a file the parser gives no tree is stored with.
 const NO_TREE: &str = "cannot be parsed (the parser gave no tree)";

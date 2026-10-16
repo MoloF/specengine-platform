@@ -15,6 +15,12 @@
 //!   space, a double-quoted heading, further headings after `, `) names
 //!   headings that exist verbatim in that file, each quoted heading on one
 //!   line.
+//! - The CLI's form of a canon citation (its sources may not hold `docs/`,
+//!   CLI `genre.rs` AC-17): in a comment, `` canon `<name>`, "<h>"[, "<h>"] ``
+//!   is read as `docs/canon/<name>.md` and its headings checked alike; a
+//!   heading of this form may wrap onto the next comment line (joined by
+//!   one space). docs/features/bevy-roles-reads.md review: the CLI's
+//!   carry-over citations (canon `code-roles`, "Links") were unchecked.
 //!
 //! Named mutations: citing "RON bindings" in one row, or restoring one stale
 //! pointer, turns this red.
@@ -384,6 +390,111 @@ fn citations(path: &str, text: &str, broken: &mut Vec<String>) -> Vec<Citation> 
                 headings,
             });
         }
+        if is_comment(line) {
+            out.extend(cli_citations(path, &lines, index, broken));
+        }
+    }
+    out
+}
+
+/// Whether `line` is a comment line (`//`, `///`, `//!`, a block
+/// comment's `*`).
+fn is_comment(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("//") || trimmed.starts_with('*')
+}
+
+/// The CLI form's opening: `canon` and a backticked canon name.
+const CLI_FORM: &str = "canon `";
+
+/// Every CLI-form citation starting on comment line `index`:
+/// `` canon `<name>`, "<h>"[, "<h>"] `` (the first heading on this line or,
+/// after a trailing `,`, at the start of the next comment line), read as
+/// `docs/canon/<name>.md`. A heading may wrap onto the next comment line
+/// (joined by one space); one that never closes goes to `broken`.
+fn cli_citations(
+    path: &str,
+    lines: &[&str],
+    index: usize,
+    broken: &mut Vec<String>,
+) -> Vec<Citation> {
+    let line = lines[index];
+    let next_comment = |row: usize| {
+        lines
+            .get(row + 1)
+            .filter(|next| is_comment(next))
+            .map(|next| comment_text(next))
+    };
+    let mut out = Vec::new();
+    let mut search = 0;
+    while let Some(found) = line[search..].find(CLI_FORM) {
+        let start = search + found + CLI_FORM.len();
+        search = start;
+        let Some(close) = line[start..].find('`') else {
+            continue;
+        };
+        let name = &line[start..start + close];
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        {
+            continue;
+        }
+        let Some(after) = line[start + close + 1..].strip_prefix(',') else {
+            continue;
+        };
+        let (mut row, mut rest) = match after.strip_prefix(' ') {
+            Some(rest) if rest.starts_with('"') => (index, rest),
+            _ if after.trim_end().is_empty() => match next_comment(index) {
+                Some(next) if next.starts_with('"') => (index + 1, next),
+                _ => continue,
+            },
+            _ => continue,
+        };
+        let mut headings = Vec::new();
+        loop {
+            match quoted(rest) {
+                Some(Ok((heading, after))) => {
+                    headings.push(heading.to_owned());
+                    rest = after;
+                }
+                Some(Err(())) => {
+                    let joined =
+                        next_comment(row).and_then(|next| next.find('"').map(|end| (next, end)));
+                    let Some((next, end)) = joined else {
+                        broken.push(format!(
+                            "{path}:{}: the quoted heading never closes: {}",
+                            row + 1,
+                            lines[row].trim()
+                        ));
+                        break;
+                    };
+                    headings.push(format!("{} {}", rest[1..].trim_end(), &next[..end]));
+                    row += 1;
+                    rest = &next[end + 1..];
+                }
+                None => break,
+            }
+            if rest.starts_with(", \"") {
+                rest = &rest[", ".len()..];
+            } else if rest.trim_end() == "," {
+                match next_comment(row) {
+                    Some(next) if next.starts_with('"') => {
+                        row += 1;
+                        rest = next;
+                    }
+                    _ => break,
+                }
+            } else {
+                break;
+            }
+        }
+        out.push(Citation {
+            at: format!("{path}:{}", index + 1),
+            file: format!("docs/canon/{name}.md"),
+            headings,
+        });
     }
     out
 }
@@ -466,6 +577,21 @@ fn every_quoted_heading_of_a_data_form_citation_exists_in_its_file() {
         "only {quoted_headings} quoted headings in {} citations",
         all.len()
     );
+    // The CLI's sources hold no `docs/` (AC-17): each canon citation read
+    // there is in the CLI form, its headings checked above.
+    let cli_form = all
+        .iter()
+        .filter(|citation| {
+            citation.at.starts_with("crates/specengine-cli/src/")
+                && citation.file.starts_with("docs/canon/")
+                && !citation.headings.is_empty()
+        })
+        .count();
+    eprintln!("{cli_form} CLI-form citations with headings in the CLI's sources");
+    assert!(
+        cli_form >= 24,
+        "only {cli_form} CLI-form citations read in the CLI's sources"
+    );
 }
 
 #[test]
@@ -504,4 +630,58 @@ fn the_citation_scanner_reads_lists_and_rejects_a_wrapped_heading() {
     );
     assert_eq!(broken.len(), 1, "{broken:?}");
     assert!(broken[0].starts_with("t.rs:4: the quoted heading wraps"));
+}
+
+/// The CLI form (`` canon `<name>`, "<h>" ``, docs/features/bevy-roles-reads.md
+/// review). M: the form left unread; a wrapped heading not joined. One
+/// heading, two citations on a line, a list, a list after a trailing `,`,
+/// a heading wrapped onto the next comment line, one that never closes;
+/// never in code, never a name of other characters, never without a
+/// heading.
+#[test]
+fn the_citation_scanner_reads_the_cli_form() {
+    let mut broken = Vec::new();
+    let text = concat!(
+        "//! (canon `code-roles`, \"Links\"; canon `spec-verify`, \"Rows\", \"States\")\n",
+        "/// the queue (canon `tasks`,\n",
+        "/// \"Backup\") and (canon `symbol-index`, \"Crates\n",
+        "/// and seams\", \"Lookup\"): more\n",
+        "// canon `x`, \"Never closes\n",
+        "let s = \"canon `decision-record`, \";\n",
+        "// canon `Not_A-name`, \"X\"; canon `round`: no heading\n",
+    );
+    let found = citations("t.rs", text, &mut broken);
+    let shape: Vec<(&str, &str, Vec<&str>)> = found
+        .iter()
+        .map(|c| {
+            (
+                c.at.as_str(),
+                c.file.as_str(),
+                c.headings.iter().map(String::as_str).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        [
+            ("t.rs:1", "docs/canon/code-roles.md", vec!["Links"]),
+            (
+                "t.rs:1",
+                "docs/canon/spec-verify.md",
+                vec!["Rows", "States"]
+            ),
+            ("t.rs:2", "docs/canon/tasks.md", vec!["Backup"]),
+            (
+                "t.rs:3",
+                "docs/canon/symbol-index.md",
+                vec!["Crates and seams", "Lookup"]
+            ),
+            ("t.rs:5", "docs/canon/x.md", vec![]),
+        ]
+    );
+    assert_eq!(broken.len(), 1, "{broken:?}");
+    assert!(
+        broken[0].starts_with("t.rs:5: the quoted heading never closes"),
+        "{broken:?}"
+    );
 }

@@ -27,7 +27,7 @@
 //! The corpus is only read; stdout carries counts and times, the refresh
 //! reports go to `--out` only.
 //!
-//! With `frameworks` listed (task spec `bevy-roles` "Eval"),
+//! With `frameworks` listed (`docs/canon/code-roles.md` "Eval"),
 //! `framework_roles` is the role counts `spec index` prints
 //! (`specengine_cli::role_counts`, links computed) read once after the
 //! refreshes, `roles_ms` that read; both `null` otherwise.

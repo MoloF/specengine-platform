@@ -159,7 +159,7 @@ fn format_dump() -> String {
                 .filter(|line| line.starts_with("code_roles\t"))
                 .count(),
             code_stub::ROLE_ROWS.len(),
-            "the stub's role rows are dumped (docs/features/bevy-roles.md \"Formats\")"
+            "the stub's role rows are dumped (docs/canon/code-roles.md \"Table\")"
         );
         out.push_str(&dump.replace(&root, "<root>"));
     }
@@ -421,7 +421,7 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/bevy-roles.md "Formats" (F1, S5): the role table makes
+/// `docs/canon/code-roles.md` "Table" (bevy-roles F1, S5): the role table makes
 /// `INDEX_FORMAT` 10, and the history is the nine earlier lines, verbatim
 /// (symbol-index's `9` among them), followed by exactly one `10 <hash>`
 /// line (no earlier `10`). Replaces symbol-index's format-9 pin (its TE-3),
@@ -1149,7 +1149,7 @@ fn the_stub_rows_carry_the_pass() {
     assert_eq!(report.parsed, 3, "{report:?}");
 }
 
-/// docs/features/bevy-roles.md "Table" (WA-1, S6, SR6), the store's half:
+/// `docs/canon/code-roles.md` "Table" (bevy-roles WA-1, S6, SR6), the store's half:
 /// `CodeFileRows.framework_roles` are stored as `code_roles` rows keyed
 /// `(file, ord)`, strings as given (the store holds no word: the stub's
 /// own), dumped by `(path, ord)`; another analyzer stamp re-derives them

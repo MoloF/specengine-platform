@@ -296,7 +296,7 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
 
 /// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 10, the stamp
 /// of the code index (docs/features/symbol-index.md "Tables", TE-3) and of
-/// its role table (docs/features/bevy-roles.md "Formats", S5), and the
+/// its role table (`docs/canon/code-roles.md` "Table"; bevy-roles S5), and the
 /// store's format history is its ten lines: symbol-index's nine, verbatim,
 /// and one `10 <hash>`. M: the dump changed, the stamp kept (the store's
 /// `format.rs` turns red on the dump; this pins the stamp and the file).

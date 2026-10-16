@@ -14,6 +14,12 @@
 //! `target` one of [`TARGETS`]; `tier` `null` outside the `query` form; a
 //! `--node` naming nothing an outcome with a `reason`, exit 1.
 //!
+//! docs/features/bevy-roles-reads.md (10a-2) "spec symbols": each target
+//! gains `roles` after `bindings` ([`SYMBOL_KEYS`]), `null` without `[code]
+//! frameworks` — every corpus these goldens read lists none, so the
+//! derived JSON holds `roles: null` and a golden never holds a `  role `
+//! line; a role object's keys are [`ROLE_KEYS`].
+//!
 //! Only the symbol-reads test binaries include this module
 //! (`mod symbol_reads_common;`, after `mod common;`).
 //!
@@ -49,8 +55,9 @@ pub const SYMBOLS_KEYS: [&str; 11] = [
     "code",
 ];
 
-/// One target of `symbols[]`, in order.
-pub const SYMBOL_KEYS: [&str; 14] = [
+/// One target of `symbols[]`, in order; `roles` after `bindings` since
+/// docs/features/bevy-roles-reads.md "spec symbols".
+pub const SYMBOL_KEYS: [&str; 15] = [
     "target",
     "qpath",
     "name",
@@ -65,6 +72,23 @@ pub const SYMBOL_KEYS: [&str; 14] = [
     "tier",
     "mentions",
     "bindings",
+    "roles",
+];
+
+/// One role of `symbols[].roles[]`, in order
+/// (docs/features/bevy-roles-reads.md "spec symbols", JSON).
+pub const ROLE_KEYS: [&str; 11] = [
+    "role",
+    "layer",
+    "path",
+    "line",
+    "source",
+    "form",
+    "origin",
+    "group",
+    "state",
+    "detail",
+    "candidates",
 ];
 
 /// One binding of `symbols[].bindings[]`, in order.
@@ -428,13 +452,15 @@ pub fn code_json(text: &str) -> Value {
 /// One target's JSON from its line (L4, L6: a module's and a RON path's
 /// fields the text does not print are `null`; a RON path's `start_line`
 /// is its printed line); `stored` gives an item's `name`, `discriminator`.
+/// `roles` is `null`: no golden's corpus lists `[code] frameworks`
+/// (docs/features/bevy-roles-reads.md "spec symbols").
 fn target_json(line: &str, stored: &dyn Fn(&str, &str) -> Value) -> Value {
     let fields: Vec<&str> = line.split(" | ").collect();
     let mut value = json!({
         "target": null, "qpath": fields[0], "name": null, "discriminator": null,
         "item_kind": null, "path": null, "start_line": null, "end_line": null,
         "signature": null, "ambiguity": null, "layer": null, "tier": null,
-        "mentions": null, "bindings": [],
+        "mentions": null, "bindings": [], "roles": null,
     });
     match fields[1] {
         "module" => {
@@ -501,6 +527,10 @@ pub fn symbols_json(lines: &[String], echo: &Value, stored: &dyn Fn(&str, &str) 
                 json!(signature)
             };
         } else if line.starts_with("  ") {
+            assert!(
+                !line.starts_with("  role "),
+                "a role line in a golden without `[code] frameworks`: {line:?}"
+            );
             let target = targets.last_mut().expect("a target before its bindings");
             target["bindings"]
                 .as_array_mut()

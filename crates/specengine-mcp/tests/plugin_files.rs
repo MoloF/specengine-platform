@@ -56,8 +56,23 @@
 //!   above the wrapper's `limit`, the command `sh` on
 //!   `${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh`, which exists. M: `"type":
 //!   "http"`; `Write` dropped.
+//! - docs/features/bevy-roles-reads.md "Plugin" (P1, RD-10): 0.9.0 ->
+//!   0.10.0 (MINOR: a key a tool returns, `find_symbols`' `roles`),
+//!   `plugin.json`'s version the only change under `plugin/specengine/`
+//!   (the tree with the version set back hashes as 0.9.0's pin). M: the
+//!   version kept; `PINS` stale. SR7, `tool_schemas_follow_the_plugin_version`:
+//!   the BLAKE3 of `tools/list`'s `inputSchema` and `outputSchema` (their
+//!   canonical JSON) is the last of [`SCHEMA_PINS`], an append-only
+//!   `(version, hash)` list, versions strictly increasing, each a version of
+//!   [`PINS`], the last at most `plugin.json`'s; entries 0.9.0 (the
+//!   schemas as 6b-1 shipped them: today's without `roles`) and 0.10.0. M:
+//!   a schema changed, no new entry; a new entry above `plugin.json`'s
+//!   version (the version kept); a repeated version.
 //!
 //! The repository is only read.
+
+// SR7's helpers serve a test of the default build only.
+#![cfg_attr(feature = "probes", allow(dead_code, unused_imports))]
 
 mod common;
 
@@ -66,7 +81,8 @@ use std::fs;
 use std::path::Path;
 
 use common::blake3::blake3_hex;
-use common::{Scratch, copy_dir, repository_root, write};
+use common::read::{Era, Session};
+use common::{Home, Scratch, copy_dir, repository_root, write};
 use serde_json::{Value, json};
 
 /// `(version, hash)` of every released content of `plugin/specengine/`,
@@ -184,6 +200,38 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.9.0",
         "07f98cfc7b7b421ab04e0ecafa407d1bb3bbcc448f24fbea3fc0cdee81ac54a5",
+    ),
+    // docs/features/bevy-roles-reads.md "Plugin" (0.9.0 -> 0.10.0, MINOR: a
+    // key a tool returns, `find_symbols`' `roles`; P1): `plugin.json`'s
+    // version alone changes (the tree with the version set back hashes as
+    // 0.9.0's pin).
+    (
+        "0.10.0",
+        "4f82fced339e7b649efa1debc03ec2232fb59d002e5753cb3247be26e3cfd749",
+    ),
+];
+
+/// `(version, hash)` of the tools' wire schemas (docs/features/bevy-roles-reads.md
+/// "Plugin", SR7): the BLAKE3 of [`canonical`] over every tool's
+/// `inputSchema` and `outputSchema` in `tools/list`
+/// ([`wire_schemas`]), append-only, versions strictly increasing, each a
+/// version of [`PINS`]; the last is the current schemas', its version at
+/// most `plugin.json`'s. A schema change needs a new entry, so a higher
+/// version; a PATCH that changes no schema adds none (6b-2's 0.11.0
+/// appends).
+const SCHEMA_PINS: &[(&str, &str)] = &[
+    // The schemas as 6b-1 shipped them with 0.9.0: `schema_hash` of a fresh
+    // server's `tools/list` at 7648d84 (10a-1's commit, before 10a-2's
+    // mirror); the test ties it to today's schemas without `roles`.
+    (
+        "0.9.0",
+        "6e456d6faf7fb19530a29e394e2a89059b992f7b6c01804dac0e9f2d0c29e1c9",
+    ),
+    // `find_symbols`' `roles` (SymbolsTarget.roles), 10a-2's only schema
+    // change.
+    (
+        "0.10.0",
+        "a3ac083d710a01fef896edb3eda7d534137f3c2ad628ad5f6d07a13ea6e44cff",
     ),
 ];
 
@@ -1265,14 +1313,28 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of code-tools (docs/features/code-tools.md RD-9): 0.9.0,
-    // after drift-queue's 0.8.0. M: the version unchanged.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.9.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.8.0");
+    // The pin of bevy-roles-reads (docs/features/bevy-roles-reads.md
+    // "Plugin", P1): 0.10.0, after code-tools' 0.9.0. M: the version
+    // unchanged.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.10.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.9.0");
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.9.0"),
+        json!("0.10.0"),
         "plugin.json's version"
+    );
+    // "No other file under plugin/specengine/ changes": the tree with
+    // plugin.json's version set back is 0.9.0's pinned content.
+    let back = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.10.0\"",
+        "\"version\": \"0.9.0\"",
+    );
+    assert_eq!(
+        content_hash(&back),
+        PINS[PINS.len() - 2].1,
+        "0.10.0 changes plugin.json's version only"
     );
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
@@ -1312,6 +1374,214 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     assert!(
         version_key("0.10.0") > version_key("0.9.9"),
         "numeric, not textual, order"
+    );
+}
+
+// ------------------------------------------------- bevy-roles-reads SR7
+
+/// `value` as canonical JSON: object keys in byte order at every depth, no
+/// whitespace, arrays in order, scalars as `serde_json` writes them.
+fn canonical(value: &Value) -> String {
+    match value {
+        Value::Object(object) => {
+            let mut keys: Vec<&String> = object.keys().collect();
+            keys.sort();
+            let fields: Vec<String> = keys
+                .into_iter()
+                .map(|key| {
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(key).expect("a key"),
+                        canonical(&object[key])
+                    )
+                })
+                .collect();
+            format!("{{{}}}", fields.join(","))
+        }
+        Value::Array(items) => format!(
+            "[{}]",
+            items.iter().map(canonical).collect::<Vec<_>>().join(",")
+        ),
+        scalar => serde_json::to_string(scalar).expect("a scalar"),
+    }
+}
+
+/// Every tool's `inputSchema` and `outputSchema` of a `tools/list`
+/// result, by tool name (`null` for a schema a tool has none of).
+fn wire_schemas(list: &Value) -> Value {
+    let mut schemas = serde_json::Map::new();
+    for tool in list["tools"].as_array().expect("tools") {
+        let schema = |key: &str| tool.get(key).cloned().unwrap_or(Value::Null);
+        schemas.insert(
+            tool["name"].as_str().expect("a tool name").to_owned(),
+            json!({"inputSchema": schema("inputSchema"), "outputSchema": schema("outputSchema")}),
+        );
+    }
+    Value::Object(schemas)
+}
+
+/// The wire schemas a fresh server lists (no project).
+fn listed_schemas() -> Value {
+    let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
+    let list = session.tools();
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+    wire_schemas(&list)
+}
+
+/// The BLAKE3 of the wire schemas' canonical JSON.
+fn schema_hash(schemas: &Value) -> String {
+    blake3_hex(canonical(schemas).as_bytes())
+}
+
+/// `schema` with `roles` dropped (its property and its `required` entry)
+/// from every object schema whose properties hold `bindings` and `roles`
+/// (a `find_symbols` target): the schemas before 10a-2. The number of
+/// objects changed.
+fn without_roles(schema: &mut Value) -> usize {
+    let mut stripped = 0;
+    if let Some(object) = schema.as_object_mut() {
+        let target = object
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some_and(|properties| {
+                properties.contains_key("bindings") && properties.contains_key("roles")
+            });
+        if target {
+            if let Some(properties) = object.get_mut("properties").and_then(Value::as_object_mut) {
+                properties.remove("roles");
+            }
+            if let Some(required) = object.get_mut("required").and_then(Value::as_array_mut) {
+                required.retain(|name| name != "roles");
+            }
+            stripped += 1;
+        }
+        for value in object.values_mut() {
+            stripped += without_roles(value);
+        }
+    } else if let Some(items) = schema.as_array_mut() {
+        for item in items {
+            stripped += without_roles(item);
+        }
+    }
+    stripped
+}
+
+fn schema_pin_problems(pins: &[(&str, &str)], current: &str, plugin_version: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    let Some(&(last_version, last_hash)) = pins.last() else {
+        return vec!["SCHEMA_PINS: empty".to_owned()];
+    };
+    let mut previous: Option<(u64, u64, u64)> = None;
+    for (version, hash) in pins {
+        let Some(key) = version_key(version) else {
+            problems.push(format!("SCHEMA_PINS: {version:?} is not N.N.N"));
+            continue;
+        };
+        if previous.is_some_and(|earlier| key <= earlier) {
+            problems.push(format!("SCHEMA_PINS: {version} does not increase"));
+        }
+        previous = Some(key);
+        if hash.len() != 64 || !hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            problems.push(format!("SCHEMA_PINS: {version} hash is not lowercase hex"));
+        }
+        if !PINS.iter().any(|(pinned, _)| pinned == version) {
+            problems.push(format!(
+                "SCHEMA_PINS: {version} is no released plugin version (PINS)"
+            ));
+        }
+    }
+    match (version_key(last_version), version_key(plugin_version)) {
+        (_, None) => problems.push(format!(
+            "plugin.json: version {plugin_version:?} is not N.N.N"
+        )),
+        (Some(last), Some(plugin)) if last > plugin => problems.push(format!(
+            "SCHEMA_PINS: the last version {last_version} is above plugin.json's {plugin_version}"
+        )),
+        _ => {}
+    }
+    if current != last_hash {
+        problems.push(format!(
+            "SCHEMA_PINS: tools/list's schemas hash {current}, not the last pin's {last_hash}"
+        ));
+    }
+    problems
+}
+
+/// docs/features/bevy-roles-reads.md "Plugin", SR7. M: the version kept (a
+/// schema changed, `plugin.json` still 0.9.0: no entry can pin it); a
+/// schema changed with no new entry. The committed state gives no problem:
+/// the schemas a fresh server lists hash as the last entry, the entries
+/// increase, each is a version of `PINS`, the last is at most
+/// `plugin.json`'s. Two servers hash alike; the canonical JSON ignores key
+/// order. The entries are 0.9.0 and 0.10.0, 0.9.0's hash today's schemas
+/// with `roles` dropped from `find_symbols`' target (reading R5: the only
+/// schema change of 10a-2). The default build's tools (feature `probes`
+/// adds tools no plugin ships).
+#[test]
+#[cfg(not(feature = "probes"))]
+fn tool_schemas_follow_the_plugin_version() {
+    let schemas = listed_schemas();
+    let current = schema_hash(&schemas);
+    let plugin = json_at(&committed(), PLUGIN_JSON).expect("plugin.json");
+    let version = plugin["version"].as_str().expect("a version").to_owned();
+    assert_eq!(
+        schema_pin_problems(SCHEMA_PINS, &current, &version),
+        Vec::<String>::new(),
+        "tools/list's schemas hash {current}"
+    );
+    assert_eq!(schema_hash(&listed_schemas()), current, "deterministic");
+    assert_eq!(
+        canonical(&json!({"b": [1, {"d": null, "c": "x"}], "a": true})),
+        r#"{"a":true,"b":[1,{"c":"x","d":null}]}"#
+    );
+
+    assert_eq!(SCHEMA_PINS[0].0, "0.9.0", "the first entry is 0.9.0's");
+    assert!(
+        SCHEMA_PINS.iter().any(|(pinned, _)| *pinned == "0.10.0"),
+        "an entry for 0.10.0"
+    );
+    let mut before = schemas.clone();
+    assert_eq!(
+        without_roles(&mut before["find_symbols"]["outputSchema"]),
+        1,
+        "`roles` on the one target object"
+    );
+    let before_hash = schema_hash(&before);
+    assert_eq!(
+        before_hash, SCHEMA_PINS[0].1,
+        "0.9.0's schemas are today's without `roles`"
+    );
+    assert_ne!(before_hash, current, "`roles` changed the schemas");
+
+    let mut changed = schemas.clone();
+    changed["find_symbols"]["outputSchema"]["properties"]["extra"] = json!({"type": "null"});
+    assert_names(
+        &schema_pin_problems(SCHEMA_PINS, &schema_hash(&changed), &version),
+        "not the last pin's",
+        "a schema changed, no new entry",
+    );
+    assert_names(
+        &schema_pin_problems(SCHEMA_PINS, &current, "0.9.0"),
+        "above plugin.json's",
+        "plugin.json kept at 0.9.0",
+    );
+    let (last, hash) = *SCHEMA_PINS.last().expect("an entry");
+    let repeated: Vec<(&str, &str)> = SCHEMA_PINS.iter().copied().chain([(last, hash)]).collect();
+    assert_names(
+        &schema_pin_problems(&repeated, &current, &version),
+        "does not increase",
+        "a repeated version",
+    );
+    let unreleased: Vec<(&str, &str)> = SCHEMA_PINS
+        .iter()
+        .copied()
+        .chain([("9.9.9", hash)])
+        .collect();
+    assert_names(
+        &schema_pin_problems(&unreleased, &current, "9.9.9"),
+        "no released plugin version",
+        "9.9.9 in no PINS entry",
     );
 }
 

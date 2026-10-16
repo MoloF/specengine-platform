@@ -9,7 +9,7 @@
 //! `ast_hash_units.rs`): `differ` counts a changed role, `null` when no
 //! package answered; the fixtures untouched.
 //!
-//! docs/features/bevy-roles.md "Eval" (E1, SR6): `result` gains
+//! `docs/canon/code-roles.md` "Eval" (bevy-roles E1, SR6): `result` gains
 //! `framework_roles` (the `code.roles` object of the last refresh; `null`
 //! with the opt-in off) and `roles_ms`; the scheme's `frameworks` is kept
 //! (`--pilot` over a scratch copy of `fixtures/code-bevy`), and under a

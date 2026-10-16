@@ -1364,7 +1364,7 @@ fn nothing_outside_the_binder_reads_an_items_state() {
 /// that one tree: one `.parse(` call, `bind_tree`, `name_file`,
 /// `item_levels`, `item_signatures` given the tree, no entry that parses
 /// on its own (`bind_file`, `analyze_file`); `comment_anchors` once per
-/// `.ron` file. docs/features/bevy-roles.md "Role facts": the framework
+/// `.ron` file. `docs/canon/code-roles.md` "Role facts": the framework
 /// detector runs on that one tree too, never through `detect_file`, which
 /// parses again.
 #[test]

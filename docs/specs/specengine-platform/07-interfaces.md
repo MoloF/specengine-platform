@@ -27,7 +27,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
-| `find_symbols` | one of `query` (+ `limit`), `node`, `file`, `at` (`PATH:LINE`) | `spec symbols --json`: qpath, item kind, signature, lines, layer, tier, bindings with their nodes | shipped; repo-map on demand; Bevy roles join with 10a-2 (`docs/features/bevy-roles-reads.md`); general code navigation the agent does with the `LSP` tool of the code-intelligence plugin (04 §1.7), SpecEngine does not duplicate it |
+| `find_symbols` | one of `query` (+ `limit`), `node`, `file`, `at` (`PATH:LINE`) | `spec symbols --json`: qpath, item kind, signature, lines, layer, tier, bindings with their nodes, roles with `[code] frameworks` | shipped; repo-map on demand; roles: `docs/canon/code-roles.md`; general code navigation the agent does with the `LSP` tool of the code-intelligence plugin (04 §1.7), SpecEngine does not duplicate it |
 | `get_impact` | `node_id` \| `qpath` \| `since: <commit>` | nodes, symbols, tests, tasks within the radius | graph + bindings; `since` = git diff -> graph walk (change impact) |
 | `refs` | `id` | `spec refs --json`: the node's markers and mentions, each with its binding | shipped; needed **during** refactoring; spec-side referrers: `get_node` with links |
 | `unmapped` | `path?` | `spec unmapped --json`: rows of units, mapped, percent, mentioned; a file's unmapped items | shipped; where there is no spec (tracey `query unmapped`) |

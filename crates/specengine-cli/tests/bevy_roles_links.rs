@@ -1,4 +1,4 @@
-//! docs/features/bevy-roles.md RD-5 ("Links", L1, L3, SR2): a row with a
+//! docs/features/bevy-roles.md RD-5 (`docs/canon/code-roles.md` "Links"; L1, L3, SR2): a row with a
 //! subject links to the worktree's symbols of its `subject_name` and of the
 //! item kinds its word takes, own package first, at the best tier only, a
 //! `cfg` twin lifted to the tier its undiscriminated qpath reaches; one

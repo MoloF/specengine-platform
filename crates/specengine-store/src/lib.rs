@@ -59,7 +59,8 @@
 //!   [`CodeSnapshot`]); framework role rows (`code_roles`,
 //!   [`CodeRoleRow`]) read back with their link candidates
 //!   ([`SqliteIndex::code_roles`], [`StoredRole`], [`RoleCandidate`];
-//!   `docs/features/bevy-roles.md` "Links"), never a link stored;
+//!   `docs/canon/code-roles.md` "Links"), never a link stored, and beside
+//!   a snapshot's symbols ([`SqliteIndex::code_snapshot_with_roles`]);
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -207,7 +208,7 @@ pub use worktree::{
 /// 10: the code table `code_roles` (and its index
 /// `code_roles_by_subject_name`), a file's framework role rows
 /// ([`CodeRoleRow`]), created with the schema in every DB
-/// (`docs/features/bevy-roles.md` "Table").
+/// (`docs/canon/code-roles.md` "Table").
 pub const INDEX_FORMAT: u32 = 10;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the

@@ -14,7 +14,7 @@
 //!   dropped, byte-sorted, each name's line kept
 //!   ([`CodeConfig::framework_line`]): the shape only; which names are
 //!   known is the code crate's data, checked by the code index's refresh
-//!   (task spec `bevy-roles` "`[code] frameworks`"). Absent or `[]`: off.
+//!   (`docs/canon/code-roles.md` "`[code] frameworks`"). Absent or `[]`: off.
 //! - **Roots**: root-relative `/` paths under `[paths]`' rules (no leading
 //!   `/`, no `.`, `..` or empty component, one trailing `/` dropped),
 //!   repeats dropped; each a directory or a `.rs` or `.ron` file.
