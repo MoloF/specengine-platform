@@ -41,6 +41,13 @@
 //! empty, and the queue holds the one amendment. M: a file write in
 //! propose.
 //!
+//! RD-1, RD-7 of docs/features/code-tools.md (6b-1): the three code tools
+//! join the door with valid and invalid calls (spec-a has no `[code]`: each
+//! valid call is the CLI's exit-2 line, the form errors the tool's own);
+//! the queue holds what it held, the repository stays byte-identical. M: a
+//! code tool without its calls here; a write under the root. Their own
+//! door over `fixtures/code-a` with its lock (TE-2): `mcp_code.rs`.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -378,6 +385,46 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"task_id": "T-0001", "plan_md": "1. Do.", "criteria": "MEC-STAMINA",
                     "affected_nodes": []}),
                 json!({"task_id": "T-0001", "criteria": [], "affected_nodes": []}),
+            ],
+        ),
+        // docs/features/code-tools.md RD-1, RD-7: every form, the form
+        // errors (results, not bad arguments), a `null` form.
+        "find_symbols" => (
+            vec![
+                json!({"query": "stamina"}),
+                json!({"query": "regen", "limit": 5}),
+                json!({"node": "MEC-STAMINA"}),
+                json!({"file": "src/stamina.rs"}),
+                json!({"at": "src/stamina.rs:3"}),
+                json!({"query": null, "node": "MEC-STAMINA"}),
+                json!({}),
+                json!({"query": "stamina", "node": "MEC-STAMINA"}),
+                json!({"node": "MEC-STAMINA", "limit": 2}),
+            ],
+            vec![
+                json!({"query": ["stamina"]}),
+                json!({"query": "stamina", "limit": "5"}),
+                json!({"bogus": true}),
+            ],
+        ),
+        "refs" => (
+            vec![
+                json!({"id": "MEC-STAMINA"}),
+                json!({"id": "MEC-NOPE"}),
+                json!({"id": "M\u{0415}C-STAMINA"}),
+            ],
+            vec![
+                json!({}),
+                json!({"id": 7}),
+                json!({"id": "MEC-STAMINA", "with": ["links"]}),
+            ],
+        ),
+        "unmapped" => (
+            vec![json!({}), json!({"path": "src"}), json!({"path": null})],
+            vec![
+                json!({"path": 7}),
+                json!({"path": ["src"]}),
+                json!({"bogus": true}),
             ],
         ),
         _ => return None,

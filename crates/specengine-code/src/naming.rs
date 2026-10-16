@@ -33,7 +33,7 @@
 //!
 //! A symbol lookup's query is read here too ([`query_name`]): the one
 //! reader of `::` in a query, so the store and the CLI compare strings
-//! only (docs/features/symbol-reads.md "Lookup", Q27).
+//! only (`docs/canon/symbol-reads.md` "Lookup"; Q27).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -186,7 +186,7 @@ pub fn indexed_name_file(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) 
 pub fn file_place(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> (String, FileRole) {
     let label = file
         .package
-        .map(|package| package.to_string_lossy().replace('\\', "/"))
+        .map(package_label)
         .filter(|label| !label.is_empty())
         .unwrap_or_else(|| ROOT_PACKAGE.to_owned());
     let role = file
@@ -198,6 +198,19 @@ pub fn file_place(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> (Str
         })
         .unwrap_or(FileRole::Unrooted);
     (label, role)
+}
+
+/// A package directory as a qpath's label: `/`-separated. Only where `\`
+/// separates components is it rewritten (as the CLI's `dir_text`): on Unix
+/// it is a character of a name, so a directory holding one keeps one
+/// spelling.
+fn package_label(package: &Path) -> String {
+    let text = package.to_string_lossy();
+    if std::path::MAIN_SEPARATOR == '\\' {
+        text.replace('\\', "/")
+    } else {
+        text.into_owned()
+    }
 }
 
 /// One file named alone ([`indexed_name_file`]) with what its names were
@@ -275,7 +288,7 @@ const SEGMENT_SEPARATOR: &[u8] = b"::";
 const IMPL_SEGMENT: &[u8] = b"impl ";
 
 /// The `name` tier's key of a symbol lookup query
-/// (docs/features/symbol-reads.md "Lookup", Q27): the text after the last
+/// (`docs/canon/symbol-reads.md` "Lookup"; Q27): the text after the last
 /// `::` outside `<>`, `()` and `[]`, a segment starting `impl ` running to
 /// the end, a trailing ` #<discriminator>` dropped — what a stored item's
 /// `name` holds. The one reader of `::` in a query: the store and the CLI

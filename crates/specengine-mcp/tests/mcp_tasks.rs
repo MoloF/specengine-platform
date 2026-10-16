@@ -241,8 +241,10 @@ fn ac14_the_task_tools_and_their_schemas() {
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(TASKS_LINE).count(), 1);
     // 1 890 since docs/features/kind-decision.md names `report_decision`;
     // 1 885 since docs/features/kind-amendment.md (+10 `amendment`, -15);
-    // 1 886 since docs/features/drift-queue.md (its `report_drift` line).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1886);
+    // 1 886 since docs/features/drift-queue.md (its `report_drift` line);
+    // 1 892 since docs/features/code-tools.md "INSTRUCTIONS" (the reads in
+    // two lines, the second the code tools; `Hints use flags:`).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1892);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();

@@ -3,7 +3,8 @@
 //! "Intake document", "Tools": the review and intake documents; the closed
 //! objects of `report_discrepancy`'s input) and of the task tools
 //! (`docs/canon/task-package.md` "Package", "MCP": the package, the task
-//! commands' document).
+//! commands' document) and of the code tools (`docs/features/code-tools.md`
+//! "Output mirrors": `spec symbols`, `spec refs`, `spec unmapped`).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -953,4 +954,319 @@ pub(crate) struct TaskDocument {
     pub run: Option<u64>,
     /// A refusal's reason last.
     pub notes: Vec<String>,
+}
+
+// -------------------------------------------------------------------- code
+//
+// The code reads' documents (`docs/canon/spec-cli-refs.md` "JSON",
+// `docs/canon/symbol-reads.md` "spec symbols", "spec unmapped"): the CLI's
+// closed words are enums; what the code or the project names (an item's
+// kind, a layer, a category, a level, a node's kind) is a free string.
+
+/// The code files a read covered.
+#[derive(JsonSchema)]
+pub(crate) struct CodeCount {
+    /// Code files read and analysed.
+    pub files: usize,
+    pub rs: usize,
+    pub ron: usize,
+    /// Files and names skipped for not being UTF-8.
+    pub skipped: usize,
+}
+
+/// How a marker relates its code to its node.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum MarkerRelation {
+    Implements,
+    Verifies,
+    Configures,
+    Assumes,
+}
+
+/// How a written ID fared.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum IdState {
+    Resolved,
+    Alias,
+    Ambiguous,
+    Homoglyph,
+    OtherProject,
+    Queue,
+    Dangling,
+}
+
+/// A marker's written revision against its node's.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum RevState {
+    Unversioned,
+    BadRev,
+    RevUnknown,
+    Current,
+    SpecAhead,
+    Predated,
+}
+
+/// A marker's level list: the default, declared, or why it is invalid.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum LevelsState {
+    Default,
+    Declared,
+    Unclosed,
+    Unknown,
+    Duplicate,
+    Empty,
+}
+
+/// Why a name is shown, not resolved.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum CodeAmbiguity {
+    PathAttribute,
+    Unrooted,
+    Duplicate,
+}
+
+/// What a marker binds, or where a mention belongs.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum BindingKind {
+    Item,
+    Module,
+    Ron,
+    Unanchored,
+    CannotVerify,
+    File,
+}
+
+/// A marker's or a mention's binding, every key present.
+#[derive(JsonSchema)]
+pub(crate) struct CodeBinding {
+    pub kind: BindingKind,
+    /// An item's or a module's qpath; a data anchor as `<path>#<field path>`.
+    pub qpath: Option<String>,
+    /// The item's kind as the code layer names it.
+    pub item_kind: Option<String>,
+    /// An item's first line.
+    pub line: Option<usize>,
+    pub ambiguity: Option<CodeAmbiguity>,
+    /// Why nothing is bound, or why it cannot be verified.
+    pub category: Option<String>,
+}
+
+/// `spec refs --json`.
+#[derive(JsonSchema)]
+pub(crate) struct RefsDocument {
+    /// The REF as given.
+    #[schemars(rename = "ref")]
+    pub reference: String,
+    /// Why the REF names nothing (the result is then an error); `null`
+    /// otherwise.
+    pub reason: Option<String>,
+    pub notes: Vec<String>,
+    pub nodes: Vec<RefsNode>,
+    /// `null` when the REF names nothing.
+    pub code: Option<CodeCount>,
+    /// `null` when the REF names nothing.
+    pub omitted: Option<RefsOmitted>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RefsNode {
+    pub id: Option<String>,
+    pub kind: Option<String>,
+    pub title: Option<String>,
+    pub path: String,
+    pub line: usize,
+    /// Written, else 1; `null` when written but unreadable.
+    pub rev: Option<u32>,
+    pub rev_written: bool,
+    pub markers: Vec<RefsMarker>,
+    pub mentions: Vec<RefsMention>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RefsMarker {
+    pub relation: MarkerRelation,
+    pub path: String,
+    pub line: usize,
+    pub column: usize,
+    /// The ID and the revision as written.
+    pub token: String,
+    pub id: String,
+    pub rev: Option<u32>,
+    pub id_state: IdState,
+    /// The Latin form of a look-alike ID.
+    pub fix: Option<String>,
+    pub rev_state: RevState,
+    /// `null` when the list is invalid.
+    pub levels: Option<Vec<String>>,
+    pub levels_state: LevelsState,
+    pub note: Option<String>,
+    pub binding: CodeBinding,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RefsMention {
+    pub path: String,
+    pub line: usize,
+    pub column: usize,
+    pub written: String,
+    pub id_state: IdState,
+    pub fix: Option<String>,
+    pub binding: CodeBinding,
+}
+
+/// The rows the cap left out.
+#[derive(JsonSchema)]
+pub(crate) struct RefsOmitted {
+    pub markers: usize,
+    pub mentions: usize,
+}
+
+/// `spec symbols`' one form.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CodeForm {
+    Query,
+    Node,
+    File,
+    At,
+}
+
+/// What a target is.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CodeTarget {
+    Item,
+    Module,
+    Ron,
+}
+
+/// How a target meets the query, the best first.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CodeTier {
+    Exact,
+    Suffix,
+    Name,
+}
+
+/// `spec symbols --json`.
+#[derive(JsonSchema)]
+pub(crate) struct SymbolsDocument {
+    pub form: CodeForm,
+    /// The query as given; `null` in the other forms.
+    pub query: Option<String>,
+    /// The node's REF as given; `null` in the other forms.
+    pub node: Option<String>,
+    /// The file's path (file, at); `null` in the other forms.
+    pub path: Option<String>,
+    /// The line (at); `null` in the other forms.
+    pub line: Option<usize>,
+    /// Why the node's REF names nothing (the result is then an error);
+    /// `null` otherwise.
+    pub reason: Option<String>,
+    pub notes: Vec<String>,
+    pub symbols: Vec<SymbolsTarget>,
+    /// Every target the form names, the limit's cut included.
+    pub total: usize,
+    /// `null` when the REF names nothing.
+    pub omitted: Option<SymbolsOmitted>,
+    /// `null` when the REF names nothing.
+    pub code: Option<CodeCount>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct SymbolsTarget {
+    pub target: CodeTarget,
+    /// An item's or a module's qpath; a data path as `<path>#<field path>`.
+    pub qpath: String,
+    pub name: Option<String>,
+    pub discriminator: Option<String>,
+    /// The item's kind as the code layer names it.
+    pub item_kind: Option<String>,
+    pub path: String,
+    pub start_line: Option<usize>,
+    pub end_line: Option<usize>,
+    pub signature: Option<String>,
+    pub ambiguity: Option<CodeAmbiguity>,
+    /// The layer whose rules made the row.
+    pub layer: Option<String>,
+    /// The query form only.
+    pub tier: Option<CodeTier>,
+    /// The mentions bound to the target itself.
+    pub mentions: Option<usize>,
+    pub bindings: Vec<SymbolsBinding>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct SymbolsBinding {
+    pub relation: MarkerRelation,
+    pub line: usize,
+    pub column: usize,
+    pub token: String,
+    pub id: String,
+    pub rev: Option<u32>,
+    pub id_state: IdState,
+    pub fix: Option<String>,
+    pub rev_state: RevState,
+    pub levels: Option<Vec<String>>,
+    pub levels_state: LevelsState,
+    pub note: Option<String>,
+    /// The IDs of the nodes the marker is listed under, `, `-joined.
+    pub node: Option<String>,
+}
+
+/// The targets the cap left out.
+#[derive(JsonSchema)]
+pub(crate) struct SymbolsOmitted {
+    pub symbols: usize,
+}
+
+/// `spec unmapped --json`.
+#[derive(JsonSchema)]
+pub(crate) struct UnmappedDocument {
+    /// The path as given, a trailing `/` dropped; `null` for every root.
+    pub path: Option<String>,
+    pub rows: Vec<UnmappedRow>,
+    /// The sums over the path (every root without one); a file: its row.
+    pub total: UnmappedRow,
+    /// A file's unmapped items, in source order.
+    pub unmapped: Vec<UnmappedItem>,
+    pub notes: Vec<String>,
+    pub omitted: UnmappedOmitted,
+    pub code: CodeCount,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct UnmappedRow {
+    /// No trailing `/`; `null` for the total of every root.
+    pub path: Option<String>,
+    pub dir: bool,
+    pub units: usize,
+    pub mapped: usize,
+    /// The mapped units in percent, one decimal, half up; `null` without a
+    /// unit.
+    pub percent: Option<f64>,
+    pub mentioned: usize,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct UnmappedItem {
+    pub qpath: String,
+    pub item_kind: String,
+    pub path: String,
+    /// Its first line.
+    pub line: usize,
+}
+
+/// The rows and items the cap left out.
+#[derive(JsonSchema)]
+pub(crate) struct UnmappedOmitted {
+    pub rows: usize,
+    pub unmapped: usize,
 }

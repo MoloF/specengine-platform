@@ -81,7 +81,7 @@
 //! [`placed_name_file`] a file's names with its place and each item's
 //! structured path, each read once.
 //!
-//! Phase 3 slice 6a-3 `symbol-reads` (docs/features/symbol-reads.md
+//! Phase 3 slice 6a-3 `symbol-reads` (`docs/canon/symbol-reads.md`
 //! "Lookup"): [`query_name`], a lookup query's `name` key, the one reader
 //! of `::` in a query; the closed word lists `ALL` of [`Relation`],
 //! [`LevelError`], [`Unanchored`], [`ErrorCategory`] and [`Ambiguity`], so
@@ -136,4 +136,11 @@ pub use ron::{
 ///
 /// 1: the first stored rules: 6a-1's discriminator (`cfg` chains read past
 /// comments in attributes) and signature (a space ending a cut dropped).
-pub const CODE_INDEX_FORMAT: u32 = 1;
+///
+/// 2: a stored directory's `\` becomes `/` only where it separates
+/// components (`std::path::MAIN_SEPARATOR`); on Unix it is a character of
+/// a name and kept. Two rules: 6a-3's `dir_text` in the CLI (the stored
+/// package and target directories) and 6b-1's [`file_place`] package label
+/// (the package of a qpath and of a name). Rows stored under 1 re-derive
+/// once.
+pub const CODE_INDEX_FORMAT: u32 = 2;

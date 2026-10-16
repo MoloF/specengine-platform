@@ -32,20 +32,21 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// Server `instructions` (07 §1.1): Claude Code truncates them at 2 048
 /// characters and defers tool definitions behind tool search, so this is the
 /// server's most important text. ASCII only, so bytes equal characters.
-/// Task spec `drift-queue` adds the `report_drift` line (108 bytes and its
-/// LF) and trims words elsewhere, the meaning kept, so the probes build's
-/// text (with its 157-byte paragraph) stays within the limit.
+/// Task spec `code-tools` (Q31) puts the reads on one line and the code
+/// tools on a second (`spec ` and two glosses dropped), says `Hints use
+/// flags:` and cuts the probes paragraph to 76 bytes: 1 892 bytes, 1 754
+/// without the tasks line, 1 968 with the probes paragraph.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
 command: content its `2>&1` output, structuredContent its --json document.
 
 Reads:
-- get_tree(root?, depth?, kinds?, archive?) = spec tree.
-- get_node(id, with?, archive?) = spec show: a node; with [\"links\"] its links.
-- search(query, kinds?, limit?, archive?) = spec search.
-- get_context_bundle(node_ids, budget?) = spec bundle: nodes' context in a budget.
-- get_proposal(proposal_id) = spec review --brief.
+- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
+search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
+bundle; get_proposal(proposal_id) = review --brief.
+- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
+= unmapped.
 Queue (writes only the queue; the owner decides on a terminal):
 - propose_change = spec propose update|create|interpretation|amendment: a node's new text \
 against its span_hash; create: new ID sections in it, or a new file (base null).
@@ -58,7 +59,7 @@ computed, never typed.
     tasks_line!(),
     "
 
-REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use CLI flags: --kind \
+REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
 is kinds, ROOT is root, --links is with [\"links\"]. Answers are cut at 40000 characters, with \
 a tail on narrowing. A REF naming nothing or a call that cannot run (no specengine.toml: \
 `spec init`) is an error result with the reason. Resources: spec://<slug>/tree, \
@@ -73,12 +74,12 @@ files change only when the owner approves.
 );
 
 /// Appended to [`INSTRUCTIONS`] when the measurement tools are built in
-/// (cut to leave room for the queue's lines, task spec `proposal-kinds`).
+/// (cut to leave room for the code tools' line, task spec `code-tools`;
+/// the probe tools' descriptions say what each does).
 #[cfg(feature = "probes")]
 const PROBE_INSTRUCTIONS: &str = "
 
-Probes build, owner's checklist only: review_proposal(proposal_id) asks the owner by form; \
-probe_output(tokens) returns filler; probe_sleep(seconds) waits.";
+Probes build: review_proposal, probe_output, probe_sleep (owner's checks).";
 
 /// Claude Code truncates `instructions` and tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").
@@ -150,7 +151,8 @@ impl SpecEngineServer {
     /// consent demo from the OS; without one, stateless reviews answer with a
     /// tool error and everything else keeps working.
     pub fn new(lifecycle: Lifecycle, globals: Globals) -> Self {
-        let tool_router = Self::read_tools() + Self::intake_tools() + Self::task_tools();
+        let tool_router =
+            Self::read_tools() + Self::code_tools() + Self::intake_tools() + Self::task_tools();
         #[cfg(feature = "probes")]
         let tool_router = tool_router + Self::review_tools() + Self::probe_tools();
         Self {

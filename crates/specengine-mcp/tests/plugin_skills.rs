@@ -42,6 +42,13 @@
 //!   M: `claim_task` dropped from `feature`; "at most 3 rounds" in it;
 //!   `cargo` in the implementer. The agents' own rules:
 //!   `plugin_roles.rs`.
+//! - docs/features/code-tools.md RD-9 ("Plugin", 0.9.0): the eighteen
+//!   tools (`find_symbols`, `refs`, `unmapped` join) backticked across the
+//!   skills; `read-spec` backticks the three after the bundle and before
+//!   its files step; the descriptions unchanged (`read-spec`'s byte for
+//!   byte, the five model-invoked ones 1 170 bytes together, of 1 200).
+//!   M: a code tool unnamed; the three before the bundle; a description
+//!   edited or over 1 200 bytes.
 //!
 //! Compiles to nothing with `--features probes` (the ACs name the default
 //! build). The repository is only read.
@@ -57,7 +64,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
-use common::read::{BAD_ARGUMENTS, Era, STACK_WORDS, Session, TOOLS, content_text, has_word};
+use common::read::{
+    BAD_ARGUMENTS, CODE_TOOLS, Era, STACK_WORDS, Session, TOOLS, content_text, has_word,
+};
 use common::*;
 use git::Sandbox;
 use serde_json::Value;
@@ -68,9 +77,18 @@ const PRECEDENCE: &str = "The project's CLAUDE.md and its roles take precedence 
 
 /// AC-11's list: what each skill backticks.
 const NAMES: [(&str, &[&str]); 6] = [
+    // docs/features/code-tools.md "Plugin": the three code tools join.
     (
         "read-spec",
-        &["get_context_bundle", "get_node", "search", "get_tree"],
+        &[
+            "get_context_bundle",
+            "get_node",
+            "search",
+            "get_tree",
+            "find_symbols",
+            "refs",
+            "unmapped",
+        ],
     ),
     (
         "ask-owner",
@@ -330,7 +348,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's fifteen tools"
+        "the default build's eighteen tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1143,7 +1161,8 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.8.0");
+    // 0.9.0 since docs/features/code-tools.md.
+    assert_eq!(manifest["version"], "0.9.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1223,7 +1242,8 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    assert_eq!(manifest["version"], "0.8.0");
+    // 0.9.0 since docs/features/code-tools.md.
+    assert_eq!(manifest["version"], "0.9.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1326,9 +1346,9 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.8.0",
+        manifest["version"], "0.9.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
-         drift-queue: 0.8.0"
+         drift-queue: 0.8.0; code-tools: 0.9.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1341,4 +1361,158 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     );
     assert!(schema["properties"].get("base").is_some(), "{schema}");
     drop(session.finish());
+}
+
+// ------------------------------------------------- code-tools RD-9
+
+/// `read-spec`'s description as drift-queue (0.8.0) left it:
+/// docs/features/code-tools.md "Plugin" changes bodies only.
+const READ_SPEC_DESCRIPTION: &str = "Read the project's spec through the SpecEngine tools before \
+                                     reading or changing behaviour the spec describes, or when \
+                                     asked what the spec says. A context bundle first (a search \
+                                     first when no ID is known), then a node, its links or the \
+                                     tree; spec files only for what the bundle lacks.";
+
+/// The model-invoked skills, whose descriptions every session loads.
+const MODEL_INVOKED: [&str; 5] = [
+    "analyze",
+    "ask-owner",
+    "implement",
+    "propose-spec-change",
+    "read-spec",
+];
+
+/// The front-matter `description` of a skill's text.
+fn description_of(text: &str) -> Option<&str> {
+    text.strip_prefix("---\n")?
+        .split("\n---\n")
+        .next()?
+        .lines()
+        .find_map(|line| line.strip_prefix("description: "))
+}
+
+/// The byte offset of `read-spec`'s files step in `body`: the first
+/// numbered step (`N. `) after `from` that speaks of files (reading L19 of
+/// the phase A report: the step "Files last" keeps the word).
+fn files_step(body: &str, from: usize) -> Option<usize> {
+    let mut at = 0;
+    for line in body.split_inclusive('\n') {
+        let numbered = line.split_once(". ").is_some_and(|(number, _)| {
+            !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+        });
+        if at > from && numbered && line.to_ascii_lowercase().contains("files") {
+            return Some(at);
+        }
+        at += line.len();
+    }
+    None
+}
+
+/// RD-9's problems: `read-spec` backticks each code tool, its first
+/// mention after the first `get_context_bundle` and before the files
+/// step; its description is [`READ_SPEC_DESCRIPTION`]; the five
+/// model-invoked descriptions are 1 170 bytes together, within 1 200.
+fn rd9_problems(skills: &Skills) -> Vec<String> {
+    let mut problems = Vec::new();
+    let text = &skills["read-spec"];
+    if description_of(text) != Some(READ_SPEC_DESCRIPTION) {
+        problems.push(format!(
+            "read-spec: the description changed: {:?}",
+            description_of(text)
+        ));
+    }
+    let total: usize = MODEL_INVOKED
+        .iter()
+        .map(|skill| description_of(&skills[*skill]).map_or(0, str::len))
+        .sum();
+    if total != 1_170 {
+        problems.push(format!(
+            "descriptions: {total} bytes together, not 1 170 (of 1 200)"
+        ));
+    }
+    let body = text.splitn(3, "---\n").nth(2).unwrap_or_default();
+    let Some(bundle) = body.find("`get_context_bundle`") else {
+        problems.push("read-spec: no `get_context_bundle`".to_owned());
+        return problems;
+    };
+    let Some(files) = files_step(body, bundle) else {
+        problems.push("read-spec: no files step after the bundle".to_owned());
+        return problems;
+    };
+    for tool in CODE_TOOLS {
+        match body.find(&format!("`{tool}`")) {
+            None => problems.push(format!("read-spec: `{tool}` not backticked")),
+            Some(at) if at < bundle => {
+                problems.push(format!("read-spec: `{tool}` before the bundle"));
+            }
+            Some(at) if at > files => {
+                problems.push(format!("read-spec: `{tool}` after the files step"));
+            }
+            Some(_) => {}
+        }
+    }
+    problems
+}
+
+/// docs/features/code-tools.md RD-9 ("Plugin"): `read-spec` names
+/// `find_symbols`, `refs`, `unmapped` after the bundle and before files
+/// (an item at a line, what binds a node, where code has no spec); the
+/// descriptions are unchanged; the eighteen tools are backticked across
+/// the skills (AC-06 with `TOOLS`). M: a code tool unnamed; the three
+/// before the bundle; a description edited.
+#[test]
+fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
+    let skills = committed();
+    assert_eq!(rd9_problems(&skills), Vec::<String>::new());
+    assert_eq!(TOOLS.len(), 18);
+    assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
+
+    // M: a code tool unnamed (every backticked `refs` reworded).
+    let mut unnamed = skills.clone();
+    let text = unnamed["read-spec"].replace("`refs`", "the binding tool");
+    unnamed.insert("read-spec".to_owned(), text);
+    assert_ne!(unnamed, skills);
+    assert_names(
+        &rd9_problems(&unnamed),
+        "read-spec: `refs` not backticked",
+        "refs unnamed",
+    );
+    assert_names(
+        &ac11_problems(&unnamed),
+        "read-spec: `refs` not backticked",
+        "refs unnamed (AC-11's list)",
+    );
+    // M: the three named before the bundle (right after the precedence
+    // sentence, which every skill holds verbatim).
+    let early = edited(
+        &skills,
+        "read-spec",
+        PRECEDENCE,
+        &format!("{PRECEDENCE} Start with `find_symbols`, `refs` or `unmapped`."),
+    );
+    for tool in CODE_TOOLS {
+        assert_names(
+            &rd9_problems(&early),
+            &format!("read-spec: `{tool}` before the bundle"),
+            "the code tools first",
+        );
+    }
+    // M: the description edited (a word added: also over the 1 170).
+    let longer = edited(
+        &skills,
+        "read-spec",
+        READ_SPEC_DESCRIPTION,
+        &format!("{READ_SPEC_DESCRIPTION} Code too."),
+    );
+    assert_names(
+        &rd9_problems(&longer),
+        "read-spec: the description changed",
+        "description edited",
+    );
+    // " Code too." is 10 bytes.
+    assert_names(
+        &rd9_problems(&longer),
+        "1180 bytes together",
+        "description sum",
+    );
 }

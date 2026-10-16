@@ -8,10 +8,15 @@
 //! JSON key sets are pinned by the CLI's own tests (`bundle_config.rs`
 //! `ac16_index_format_is_nine`, the key-set tests of `tree.rs`,
 //! `search.rs`/`bounds.rs`, `show.rs`, `bundle.rs`, `index.rs`). The code
-//! tables are created with the schema, so no MCP read adds them either
-//! (no MCP tool refreshes code before 6b).
+//! tables are created with the schema, so no MCP read adds them either.
 //!
 //! M: a log table.
+//!
+//! docs/features/code-tools.md TE-1 (`mcp_index`): the three code tools
+//! refresh the code index inside the CLI read (6b-1), and over a scratch
+//! copy of `fixtures/code-index` every form, exit and tool, in both eras,
+//! leaves the `CREATE` statements `spec index` made. M: a table or index
+//! of MCP's own (a cache of symbols between calls).
 
 #![cfg(unix)]
 
@@ -112,5 +117,59 @@ fn ac18_reads_add_no_table() {
         );
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+/// docs/features/code-tools.md TE-1: the code tools over a code-index
+/// copy add no table, index or trigger to what `spec index` created,
+/// answering every form and exit (0, 1, 2) in both eras.
+#[test]
+fn code_tools_add_no_table() {
+    let scratch = Scratch::new("code-tables");
+    let home = scratch.home("h");
+    let root = scratch.copy("code-index", "copy");
+    index_with_library(&cli_env(&root, Some(&home)), &Globals::default());
+    let schema = schema_statements(&home);
+    assert!(
+        schema
+            .iter()
+            .any(|statement| statement.contains("symbol_suffixes")),
+        "the code tables come with the schema: {schema:?}"
+    );
+    let calls = [
+        ("find_symbols", json!({"query": "separator"})),
+        ("find_symbols", json!({"query": "run", "limit": 1})),
+        ("find_symbols", json!({"node": "TENET-WIDTH"})),
+        ("find_symbols", json!({"node": "QUILL-99"})),
+        (
+            "find_symbols",
+            json!({"file": "crates/inkwell/src/twins.rs"}),
+        ),
+        (
+            "find_symbols",
+            json!({"at": "crates/inkwell/src/lib.rs:19"}),
+        ),
+        ("find_symbols", json!({"at": "crates/inkwell/src/lib.rs:0"})),
+        ("find_symbols", json!({})),
+        ("refs", json!({"id": "TENET-WIDTH"})),
+        ("refs", json!({"id": "QUILL-99"})),
+        ("unmapped", json!({})),
+        ("unmapped", json!({"path": "crates/inkwell/src/twins.rs"})),
+        ("unmapped", json!({"path": "docs"})),
+    ];
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&root), Home::At(&home));
+        for (tool, args) in &calls {
+            let reply = session.call(tool, args.clone());
+            assert!(reply.get("result").is_some(), "{era:?} {tool}: {reply}");
+            assert_eq!(
+                schema_statements(&home),
+                schema,
+                "{era:?}: the tables changed after {tool} {args}"
+            );
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+        assert_eq!(done.stderr, "", "{era:?}: stderr");
     }
 }

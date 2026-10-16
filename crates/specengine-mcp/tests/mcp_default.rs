@@ -5,13 +5,16 @@
 //! writers (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
 //! `openWorldHint` all `false`, no `requiresUserInteraction`), and since
 //! docs/features/task-package.md `get_task` (read-only) and the four tools
-//! that move a task (writers' hints) — each with
+//! that move a task (writers' hints), and since docs/features/code-tools.md
+//! the three code tools (`find_symbols`, `refs`, `unmapped`: the reads'
+//! hints) — each with
 //! an `outputSchema`, `_meta["anthropic/maxResultSizeChars"]` =
 //! `MAX_RESULT_CHARS` and a description of at most 2 048 characters holding
 //! the determinism sentence; `instructions` are at most 2 048 bytes, name
-//! all fifteen and mention neither `review_proposal` nor a probe. The probe
+//! all eighteen and mention neither `review_proposal` nor a probe. The probe
 //! tools are absent (Phase 0 behaviour kept), and `probes` is no default
-//! feature of the manifest.
+//! feature of the manifest. code-tools RD-1, RD-5, M: a code tool with a
+//! writer's hints; a code tool unnamed in `instructions`.
 //!
 //! M: the demo in the default build (`default = ["probes"]` in the
 //! manifest: `probes_is_not_a_default_feature` turns red, the list tests

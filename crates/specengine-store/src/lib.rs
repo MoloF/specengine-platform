@@ -53,8 +53,10 @@
 //!   [`SqliteIndex::code_refs`] (files, markers, mentions) and
 //!   [`SqliteIndex::code_symbols`]; looked up in tiers
 //!   ([`SqliteIndex::lookup_symbols`], [`SymbolTier`]: one B-tree search
-//!   each, docs/features/symbol-reads.md "Lookup") and per file
-//!   ([`SqliteIndex::file_symbols`]);
+//!   each, `docs/canon/symbol-reads.md` "Lookup") and per file
+//!   ([`SqliteIndex::file_symbols`]); a read's refs and symbols in one
+//!   transaction ([`SqliteIndex::code_snapshot`], [`SnapshotSymbols`],
+//!   [`CodeSnapshot`]);
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -122,9 +124,9 @@ pub use check::{
 pub use code::{
     AMBIGUITY_DUPLICATE, AMBIGUITY_PATH_ATTRIBUTE, AMBIGUITY_UNROOTED, BoundSymbol, CodeAnalyzer,
     CodeDeclRow, CodeFileRows, CodeFileState, CodeListing, CodeMarkerRow, CodeMentionRow,
-    CodePackageRow, CodeRefs, CodeReport, CodeSymbolRow, ListedCodeFile, ROLE_SHARED,
-    ROLE_UNROOTED, StoredBinding, StoredMarker, StoredMention, StoredName, StoredNames,
-    StoredSymbol,
+    CodePackageRow, CodeRefs, CodeReport, CodeSnapshot, CodeSymbolRow, ListedCodeFile, ROLE_SHARED,
+    ROLE_UNROOTED, SnapshotSymbols, StoredBinding, StoredMarker, StoredMention, StoredName,
+    StoredNames, StoredSymbol,
 };
 pub use error::StoreError;
 pub use git::{GitEnv, same_dir};

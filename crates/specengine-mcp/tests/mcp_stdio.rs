@@ -27,12 +27,14 @@ const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 /// `mcp-read`), the four queue tools (task spec `agent-intake`),
 /// `report_decision` (docs/features/kind-decision.md) and `report_drift`
 /// (docs/features/drift-queue.md), the five task tools
-/// (docs/features/task-package.md), the consent demo and the two probes,
-/// in wire order.
-const PROBES_BUILD_TOOLS: [&str; 18] = [
+/// (docs/features/task-package.md), the three code tools
+/// (docs/features/code-tools.md), the consent demo and the two probes, in
+/// wire order.
+const PROBES_BUILD_TOOLS: [&str; 21] = [
     "ask_question",
     "claim_task",
     "complete_task",
+    "find_symbols",
     "get_context_bundle",
     "get_node",
     "get_proposal",
@@ -41,6 +43,7 @@ const PROBES_BUILD_TOOLS: [&str; 18] = [
     "probe_output",
     "probe_sleep",
     "propose_change",
+    "refs",
     "report_decision",
     "report_discrepancy",
     "report_drift",
@@ -48,6 +51,7 @@ const PROBES_BUILD_TOOLS: [&str; 18] = [
     "review_proposal",
     "search",
     "submit_plan",
+    "unmapped",
 ];
 
 fn repository_root() -> PathBuf {

@@ -10,7 +10,10 @@
 //!
 //! Tools: the four reads `get_tree`, `get_node`, `search`,
 //! `get_context_bundle`, each one call into the CLI library (`spec tree`,
-//! `show`, `search`, `bundle`), answering what the CLI answers; the queue
+//! `show`, `search`, `bundle`), answering what the CLI answers; the code
+//! tools `find_symbols`, `refs`, `unmapped` (`spec symbols`, `refs`,
+//! `unmapped`: task spec `code-tools`, reading the code index the call
+//! refreshes, as the CLI does); the queue
 //! tools `propose_change`, `ask_question`, `report_discrepancy`,
 //! `report_decision`, `report_drift` (writing only the proposal queue in
 //! the data directory, as `spec propose` does; `report_decision`: task spec
@@ -34,6 +37,7 @@
 //! here runs. Stdout is the protocol channel: nothing else is ever printed
 //! there.
 
+mod code;
 mod intake;
 mod mirror;
 #[cfg(feature = "probes")]

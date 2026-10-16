@@ -88,7 +88,7 @@ Q13. `spec verify --changed --json`: "Since"'s `{added, removed, changed, rename
 
 ### INSTRUCTIONS
 
-WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included: the reads lines reworded, none dropped. 2026-10-16: 5 B of room today (1 886 B, 2 043 with `probes`); 6b-1 and 6b-2 spend first and leave 34 B (1 938, 2 014; `code-tools.md`, `verify-node.md` "INSTRUCTIONS"), 7a about 33 B of it; in the reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B): about 45 B cut elsewhere, never a rule, re-measured after 7a.
+WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included: the reads lines reworded, none dropped. 2026-10-16: 80 B of room after 6b-1 (1 892 B, 1 968 with `probes`: `mcp-read.md` **Texts**); 6b-2 spends first and leaves 34 B (1 938, 2 014; `verify-node.md` "INSTRUCTIONS"), 7a about 33 B of it; in the reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B): about 45 B cut elsewhere, never a rule, re-measured after 7a.
 
 ## Rules and edge cases
 

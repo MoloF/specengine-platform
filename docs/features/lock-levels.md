@@ -143,6 +143,14 @@ WA-6: no real format-1 lock exists ("Dependencies and ordering"). `fixtures/spec
 - **The pin** (Q16, S6) `nothing_outside_the_binder_reads_an_items_state` (CLI `code_refs_walk.rs`), per file since 6a-2's RD-13: `lock.rs` calls `item_levels(` and `module_levels(`, no longer `hash_bound_items(` (format 2 holds no v2 digest); `verify_rows.rs` joins, calling `item_levels(`; `hash_item(`, `hash_node(` banned, no `.state` read. 5b-2 adds `lock_rebase.rs`.
 - No stack, kind or prefix in rows, texts or the lock (WA-12).
 
+## Carry-overs
+
+From 6b-1's review 1 (`code-tools.md`; nits, none blocked it; owner pre-approved 2026-10-16), rust-developer, no behaviour change:
+
+- One function for a stored directory's text: code `naming.rs` `package_label` and CLI `code_index.rs` `dir_text` (both rewrite `\` only where `MAIN_SEPARATOR` is `\`) become one public function in `specengine-code` that the CLI calls; their two copies are how 6b-1's `\` carry-over arose. Done when `code_index.rs` defines no `dir_text`; `code_format_history.txt` gains no line (the rows do not move).
+- CLI `symbols.rs:1` still cites `docs/features/symbol-reads.md` "Lookup": re-point it to `` `docs/canon/symbol-reads.md` "Lookup" `` (data form, `doc_pointers.rs`); then that shipped spec's "Lookup" heading may go (spec-writer).
+- CLI `lib.rs:127-129`: re-wrap the `Exit` doc bullet's short "`refs`, `symbols`)," line.
+
 ## Acceptance criteria
 
 rust-developer (M = the mutation that must turn the named test red):

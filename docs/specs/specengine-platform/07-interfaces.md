@@ -23,14 +23,14 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`); `find_symbols`, `refs`, `unmapped` as reads of the code index (`docs/canon/mcp-code.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
-| `find_symbols` | `query` \| `node_id` \| `file` \| `path:line` | qpath, kind, Bevy layer, signature, file:lines, bound nodes | repo-map on demand; general code navigation the agent does with the `LSP` tool of the code-intelligence plugin (04 §1.7), SpecEngine does not duplicate it |
+| `find_symbols` | one of `query` (+ `limit`), `node`, `file`, `at` (`PATH:LINE`) | `spec symbols --json`: qpath, item kind, signature, lines, layer, tier, bindings with their nodes | shipped; repo-map on demand; Bevy roles join with 10a; general code navigation the agent does with the `LSP` tool of the code-intelligence plugin (04 §1.7), SpecEngine does not duplicate it |
 | `get_impact` | `node_id` \| `qpath` \| `since: <commit>` | nodes, symbols, tests, tasks within the radius | graph + bindings; `since` = git diff -> graph walk (change impact) |
-| `refs` | `node_id` | reverse lookup: all markers, tests, records referring to the node | needed **during** refactoring |
-| `unmapped` | `path?` | source tree with spec coverage percentage | where there is no spec (tracey `query unmapped`) |
+| `refs` | `id` | `spec refs --json`: the node's markers and mentions, each with its binding | shipped; needed **during** refactoring; spec-side referrers: `get_node` with links |
+| `unmapped` | `path?` | `spec unmapped --json`: rows of units, mapped, percent, mentioned; a file's unmapped items | shipped; where there is no spec (tracey `query unmapped`) |
 | `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`; `content` = the neutral brief | shipped; `next`: the lowest-numbered `ready` (priority later) |
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | shipped; only `ready`; opens a run |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | shipped; -> `review` |

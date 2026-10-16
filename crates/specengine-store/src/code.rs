@@ -30,6 +30,7 @@ use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
 use crate::read::{with_worktree, worktree_id};
 use crate::rows::hash_bytes;
+use crate::symbols::{SymbolHit, file_symbols_in, lookup_in};
 use crate::{b3_hash, schema, write};
 
 /// The columns [`stored_symbol`] reads, `s` a `symbols` row and `f` its
@@ -480,11 +481,7 @@ impl SqliteIndex {
             if stored_code_fp(tx, wt)?.is_none() {
                 return Ok(None);
             }
-            Ok(Some(CodeRefs {
-                files: file_states(tx, wt)?,
-                markers: stored_markers(tx, wt)?,
-                mentions: stored_mentions(tx, wt)?,
-            }))
+            Ok(Some(refs_in(tx, wt)?))
         })
     }
 
@@ -495,22 +492,115 @@ impl SqliteIndex {
             if stored_code_fp(tx, wt)?.is_none() {
                 return Ok(None);
             }
-            let mut statement = tx
-                .prepare(concat!(
-                    "SELECT ",
-                    symbol_columns!(),
-                    " FROM code_files f JOIN symbols s ON s.file = f.file_id
-                     WHERE f.wt = ?1 ORDER BY f.path, s.ord"
-                ))
-                .db()?;
-            let symbols = statement
-                .query_map([wt], stored_symbol)
-                .db()?
-                .collect::<Result<Vec<_>, _>>()
-                .db()?;
-            Ok(Some(symbols))
+            Ok(Some(all_symbols(tx, wt)?))
         })
     }
+
+    /// One read snapshot of the code index: [`Self::code_refs`]' files,
+    /// markers and mentions and the symbols `symbols` names, read in one
+    /// transaction, so a refresh by another connection between two reads
+    /// never pairs one state's markers with another's symbols (a read's
+    /// one snapshot: `docs/canon/symbol-reads.md` "Crates and seams");
+    /// `Ok(None)` when no code is indexed.
+    pub fn code_snapshot(
+        &self,
+        symbols: SnapshotSymbols<'_>,
+    ) -> Result<Option<CodeSnapshot>, StoreError> {
+        with_worktree(self, |tx, wt| {
+            if stored_code_fp(tx, wt)?.is_none() {
+                return Ok(None);
+            }
+            let mut snapshot = CodeSnapshot {
+                refs: refs_in(tx, wt)?,
+                hits: Vec::new(),
+                symbols: Vec::new(),
+            };
+            match symbols {
+                SnapshotSymbols::Lookup { query, name } => {
+                    snapshot.hits = lookup_in(tx, wt, query, name)?;
+                }
+                SnapshotSymbols::File(path) => snapshot.symbols = file_symbols_in(tx, wt, path)?,
+                SnapshotSymbols::Bound => snapshot.symbols = bound_symbols(tx, wt)?,
+                SnapshotSymbols::All => snapshot.symbols = all_symbols(tx, wt)?,
+            }
+            Ok(Some(snapshot))
+        })
+    }
+}
+
+/// Which symbols a [`CodeSnapshot`] holds beside its refs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotSymbols<'q> {
+    /// [`SqliteIndex::lookup_symbols`]' hits of `query`, `name` its name
+    /// key, in [`CodeSnapshot::hits`].
+    Lookup { query: &'q str, name: &'q str },
+    /// [`SqliteIndex::file_symbols`] of one path.
+    File(&'q str),
+    /// Each symbol a stored marker is bound to, once, by (path, ord).
+    Bound,
+    /// Every symbol, as [`SqliteIndex::code_symbols`].
+    All,
+}
+
+/// What [`SqliteIndex::code_snapshot`] read in its one transaction.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CodeSnapshot {
+    /// Every stored file, marker and mention, as [`SqliteIndex::code_refs`].
+    pub refs: CodeRefs,
+    /// [`SnapshotSymbols::Lookup`]'s hits in the lookup's order; else none.
+    pub hits: Vec<SymbolHit>,
+    /// The other forms' symbols, by (path, ord); none for a lookup.
+    pub symbols: Vec<StoredSymbol>,
+}
+
+/// Every stored file, marker and mention of the worktree inside the
+/// caller's transaction.
+fn refs_in(tx: &Transaction<'_>, wt: i64) -> Result<CodeRefs, StoreError> {
+    Ok(CodeRefs {
+        files: file_states(tx, wt)?,
+        markers: stored_markers(tx, wt)?,
+        mentions: stored_mentions(tx, wt)?,
+    })
+}
+
+/// Every stored symbol of the worktree by (path, ord) inside the caller's
+/// transaction.
+fn all_symbols(tx: &Transaction<'_>, wt: i64) -> Result<Vec<StoredSymbol>, StoreError> {
+    let mut statement = tx
+        .prepare(concat!(
+            "SELECT ",
+            symbol_columns!(),
+            " FROM code_files f JOIN symbols s ON s.file = f.file_id
+             WHERE f.wt = ?1 ORDER BY f.path, s.ord"
+        ))
+        .db()?;
+    let symbols = statement
+        .query_map([wt], stored_symbol)
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    Ok(symbols)
+}
+
+/// Each stored symbol a marker of the worktree is bound to, once, by
+/// (path, ord), inside the caller's transaction: read from the markers,
+/// never by scanning the symbols.
+fn bound_symbols(tx: &Transaction<'_>, wt: i64) -> Result<Vec<StoredSymbol>, StoreError> {
+    let mut statement = tx
+        .prepare(concat!(
+            "SELECT DISTINCT ",
+            symbol_columns!(),
+            " FROM code_files f JOIN code_markers m ON m.file = f.file_id
+             JOIN symbols s ON s.file = m.file AND s.ord = m.symbol_ord
+             WHERE f.wt = ?1 ORDER BY f.path, s.ord"
+        ))
+        .db()?;
+    let symbols = statement
+        .query_map([wt], stored_symbol)
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    Ok(symbols)
 }
 
 /// A symbol with its file and its ambiguity from a row of

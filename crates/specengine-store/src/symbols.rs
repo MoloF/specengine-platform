@@ -1,16 +1,19 @@
-//! The symbol lookup over the code index (docs/features/symbol-reads.md
+//! The symbol lookup over the code index (`docs/canon/symbol-reads.md`
 //! "Lookup"): a query meets the worktree's stored symbols in tiers, each
 //! one B-tree search over 6a-2's tables — [`SymbolTier::Exact`] (`qpath`
 //! equals the query, the `qpath` index), [`SymbolTier::Suffix`] (a stored
 //! suffix equals it, the `suffix` index), [`SymbolTier::Name`] (`name`
 //! equals the key the caller derives, the `name` index) — once per symbol
 //! at its best tier, then by qpath, path and start line, never by rowid.
-//! And one file's symbols, by `ord`.
+//! And one file's symbols, by `ord`. Each read is one transaction; inside
+//! a [`SqliteIndex::code_snapshot`] they share the snapshot's.
 //!
 //! Strings only: the store splits no name and reads no `::`; the `name`
 //! key comes from the code crate's `query_name` (Q27).
 
 use std::collections::BTreeMap;
+
+use rusqlite::Transaction;
 
 use crate::code::{StoredSymbol, stored_symbol, symbol_columns};
 use crate::error::{Db, StoreError};
@@ -54,8 +57,9 @@ pub struct SymbolHit {
 /// The lookup's statements, one per tier in [`SymbolTier::ALL`]'s order:
 /// `?1` the tier's key, `?2` the worktree. Each starts at its index
 /// (`CROSS JOIN` keeps it outermost), then reaches the symbol and its file
-/// by key: no statement scans a table.
-pub(crate) const LOOKUP_SQL: &[&str] = &[
+/// by key: no statement scans a table. One per tier, by type: a tier is
+/// never dropped by the zip that pairs them.
+pub(crate) const LOOKUP_SQL: [&str; SymbolTier::ALL.len()] = [
     concat!(
         "SELECT ",
         symbol_columns!(),
@@ -85,51 +89,66 @@ impl SqliteIndex {
     /// tier, then qpath, path and start line (bytes; `ord` last), never by
     /// storage order. No code indexed: none.
     pub fn lookup_symbols(&self, query: &str, name: &str) -> Result<Vec<SymbolHit>, StoreError> {
-        with_worktree(self, |tx, wt| {
-            let mut best: BTreeMap<(String, u32), SymbolHit> = BTreeMap::new();
-            for (tier, sql) in SymbolTier::ALL.into_iter().zip(LOOKUP_SQL) {
-                let key = match tier {
-                    SymbolTier::Exact | SymbolTier::Suffix => query,
-                    SymbolTier::Name => name,
-                };
-                let mut statement = tx.prepare(sql).db()?;
-                let symbols = statement
-                    .query_map((key, wt), stored_symbol)
-                    .db()?
-                    .collect::<Result<Vec<_>, _>>()
-                    .db()?;
-                for symbol in symbols {
-                    // The tiers are read best first: the first hit stays.
-                    best.entry((symbol.path.clone(), symbol.ord))
-                        .or_insert(SymbolHit { tier, symbol });
-                }
-            }
-            let mut hits: Vec<SymbolHit> = best.into_values().collect();
-            hits.sort_by(|a, b| order_key(a).cmp(&order_key(b)));
-            Ok(hits)
-        })
+        with_worktree(self, |tx, wt| lookup_in(tx, wt, query, name))
     }
 
     /// The stored symbols of the file at `path`, by `ord` (source order);
     /// none when the path holds no symbol or is not stored.
     pub fn file_symbols(&self, path: &str) -> Result<Vec<StoredSymbol>, StoreError> {
-        with_worktree(self, |tx, wt| {
-            let mut statement = tx
-                .prepare(concat!(
-                    "SELECT ",
-                    symbol_columns!(),
-                    " FROM code_files f CROSS JOIN symbols s ON s.file = f.file_id
-                     WHERE f.wt = ?1 AND f.path = ?2 ORDER BY s.ord"
-                ))
-                .db()?;
-            let symbols = statement
-                .query_map((wt, path), stored_symbol)
-                .db()?
-                .collect::<Result<Vec<_>, _>>()
-                .db()?;
-            Ok(symbols)
-        })
+        with_worktree(self, |tx, wt| file_symbols_in(tx, wt, path))
     }
+}
+
+/// [`SqliteIndex::lookup_symbols`] inside the caller's transaction.
+pub(crate) fn lookup_in(
+    tx: &Transaction<'_>,
+    wt: i64,
+    query: &str,
+    name: &str,
+) -> Result<Vec<SymbolHit>, StoreError> {
+    let mut best: BTreeMap<(String, u32), SymbolHit> = BTreeMap::new();
+    for (tier, sql) in SymbolTier::ALL.into_iter().zip(LOOKUP_SQL) {
+        let key = match tier {
+            SymbolTier::Exact | SymbolTier::Suffix => query,
+            SymbolTier::Name => name,
+        };
+        let mut statement = tx.prepare(sql).db()?;
+        let symbols = statement
+            .query_map((key, wt), stored_symbol)
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        for symbol in symbols {
+            // The tiers are read best first: the first hit stays.
+            best.entry((symbol.path.clone(), symbol.ord))
+                .or_insert(SymbolHit { tier, symbol });
+        }
+    }
+    let mut hits: Vec<SymbolHit> = best.into_values().collect();
+    hits.sort_by(|a, b| order_key(a).cmp(&order_key(b)));
+    Ok(hits)
+}
+
+/// [`SqliteIndex::file_symbols`] inside the caller's transaction.
+pub(crate) fn file_symbols_in(
+    tx: &Transaction<'_>,
+    wt: i64,
+    path: &str,
+) -> Result<Vec<StoredSymbol>, StoreError> {
+    let mut statement = tx
+        .prepare(concat!(
+            "SELECT ",
+            symbol_columns!(),
+            " FROM code_files f CROSS JOIN symbols s ON s.file = f.file_id
+             WHERE f.wt = ?1 AND f.path = ?2 ORDER BY s.ord"
+        ))
+        .db()?;
+    let symbols = statement
+        .query_map((wt, path), stored_symbol)
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    Ok(symbols)
 }
 
 /// A hit's place in the answer: tier, qpath, path, start line, `ord`.

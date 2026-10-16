@@ -18,10 +18,17 @@
 //!   storage order. Targets are printed while the text stays within
 //!   [`OUTPUT_CAP_CHARS`], then `[truncated: <k> symbols not shown]`; the
 //!   JSON holds exactly the printed targets.
+//! - **One snapshot**: the stored markers and the symbols the form reads
+//!   come from one read transaction ([`SqliteIndex::code_snapshot`]), so
+//!   a refresh by another process between them cannot pair one state's
+//!   markers with another's symbols.
 //! - **For the bridges**: [`symbols`] with [`SymbolsRequest`] (the form an
 //!   enum, `--at` raw: the one `PATH:LINE` reader is here) and the limit
 //!   bounds [`SYMBOLS_LIMIT_MIN`], [`SYMBOLS_LIMIT_MAX`],
-//!   [`SYMBOLS_LIMIT_DEFAULT`], so a caller needs no clap.
+//!   [`SYMBOLS_LIMIT_DEFAULT`] with their usage error
+//!   [`symbols_limit_error`], so a caller needs no clap.
+//!
+//! [`SqliteIndex::code_snapshot`]: specengine_store::SqliteIndex::code_snapshot
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,7 +36,8 @@ use serde::Serialize;
 use specengine_code::query_name;
 use specengine_core::Revision;
 use specengine_store::{
-    CodeFileState, CodeRefs, SqliteIndex, StoredBinding, StoredMarker, StoredSymbol, SymbolTier,
+    CodeFileState, CodeRefs, CodeSnapshot, SnapshotSymbols, StoredBinding, StoredMarker,
+    StoredSymbol, SymbolTier,
 };
 
 use crate::cap::OUTPUT_CAP_CHARS;
@@ -50,6 +58,16 @@ use crate::{CliError, Env, Globals, Message, one_line, store_error};
 pub const SYMBOLS_LIMIT_MIN: usize = 1;
 pub const SYMBOLS_LIMIT_MAX: usize = 200;
 pub const SYMBOLS_LIMIT_DEFAULT: usize = 20;
+
+/// `--limit`'s usage error (exit 2): `limit` as given, outside
+/// [`SYMBOLS_LIMIT_MIN`]..=[`SYMBOLS_LIMIT_MAX`]. A bridge whose limit
+/// can be below zero answers it with this text too, so no caller words
+/// it twice.
+pub fn symbols_limit_error(limit: impl std::fmt::Display) -> CliError {
+    CliError::spec(format!(
+        "--limit {limit}: the limit is {SYMBOLS_LIMIT_MIN} to {SYMBOLS_LIMIT_MAX}"
+    ))
+}
 
 /// Why a written `@rev` of `--node`'s REF is ignored (the note's end).
 const REV_IGNORED: &str = "`spec symbols --node` lists every binding whatever its revision";
@@ -221,19 +239,29 @@ pub fn symbols(
     let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
     refreshed.require_complete()?;
     messages.extend(refreshed.messages.iter().cloned());
-    let stored = open
+    // One snapshot: the markers and the symbols they bind from one read
+    // transaction, whatever another connection writes meanwhile.
+    let wanted = match &form {
+        Form::Query { query, .. } => SnapshotSymbols::Lookup {
+            query,
+            name: query_name(query),
+        },
+        Form::File(path) | Form::At { path, .. } => SnapshotSymbols::File(path),
+        Form::Node(_) => SnapshotSymbols::Bound,
+    };
+    let CodeSnapshot {
+        refs: stored,
+        hits,
+        symbols,
+    } = open
         .index
-        .code_refs()
+        .code_snapshot(wanted)
         .map_err(store_error)?
         .unwrap_or_default();
     let marks = Marks::new(&stored)?;
 
     let (targets, total) = match &form {
-        Form::Query { query, limit } => {
-            let hits = open
-                .index
-                .lookup_symbols(query, query_name(query))
-                .map_err(store_error)?;
+        Form::Query { limit, .. } => {
             let total = hits.len();
             let targets = hits
                 .into_iter()
@@ -244,10 +272,7 @@ pub fn symbols(
         }
         Form::File(path) => {
             walked(&stored, path)?;
-            let targets = open
-                .index
-                .file_symbols(path)
-                .map_err(store_error)?
+            let targets = symbols
                 .into_iter()
                 .map(|symbol| item_target(symbol, None, &marks, &mut corpus))
                 .collect::<Result<Vec<_>, _>>()?;
@@ -256,10 +281,7 @@ pub fn symbols(
         }
         Form::At { path, line } => {
             walked(&stored, path)?;
-            let mut covering: Vec<StoredSymbol> = open
-                .index
-                .file_symbols(path)
-                .map_err(store_error)?
+            let mut covering: Vec<StoredSymbol> = symbols
                 .into_iter()
                 .filter(|symbol| {
                     (symbol.start_line as usize) <= *line && *line <= symbol.end_line as usize
@@ -283,7 +305,7 @@ pub fn symbols(
         }
         Form::Node(_) => {
             let nodes: BTreeSet<NodeKey> = nodes.into_iter().collect();
-            let targets = node_targets(&nodes, &stored, &marks, &open.index, &mut corpus)?;
+            let targets = node_targets(&nodes, &stored, &marks, &symbols, &mut corpus)?;
             let total = targets.len();
             (targets, total)
         }
@@ -317,11 +339,7 @@ impl Form {
                     Some(limit) if (SYMBOLS_LIMIT_MIN..=SYMBOLS_LIMIT_MAX).contains(&limit) => {
                         limit
                     }
-                    Some(limit) => {
-                        return Err(CliError::spec(format!(
-                            "--limit {limit}: the limit is {SYMBOLS_LIMIT_MIN} to {SYMBOLS_LIMIT_MAX}"
-                        )));
-                    }
+                    Some(limit) => return Err(symbols_limit_error(limit)),
                 };
                 Self::Query {
                     query: terms.join(" "),
@@ -505,12 +523,14 @@ enum Bound<'s> {
 }
 
 /// The targets bound by a marker listed under one of `nodes` (as `spec
-/// refs` lists it), each once, by path, line.
+/// refs` lists it), each once, by path, line; an item found by binary
+/// search in `bound_symbols`, the symbols the snapshot's markers are bound
+/// to, by (path, ord).
 fn node_targets(
     nodes: &BTreeSet<NodeKey>,
     stored: &CodeRefs,
     marks: &Marks<'_>,
-    index: &SqliteIndex,
+    bound_symbols: &[StoredSymbol],
     corpus: &mut Corpus<'_>,
 ) -> Result<Vec<SymbolTarget>, CliError> {
     let mut bound: BTreeSet<Bound<'_>> = BTreeSet::new();
@@ -527,18 +547,14 @@ fn node_targets(
             Place::File | Place::Nothing => false,
         };
     }
-    // Each file's symbols read once.
-    let mut symbols: BTreeMap<&str, Vec<StoredSymbol>> = BTreeMap::new();
     let mut targets = Vec::with_capacity(bound.len());
     for target in bound {
         targets.push(match target {
             Bound::Item(path, ord) => {
-                if !symbols.contains_key(path) {
-                    symbols.insert(path, index.file_symbols(path).map_err(store_error)?);
-                }
-                let symbol = symbols
-                    .get(path)
-                    .and_then(|file| file.iter().find(|symbol| symbol.ord == ord))
+                let symbol = bound_symbols
+                    .binary_search_by_key(&(path, ord), |symbol| (symbol.path.as_str(), symbol.ord))
+                    .ok()
+                    .and_then(|at| bound_symbols.get(at))
                     .cloned()
                     .ok_or_else(|| unknown_word("binding of a missing item", ITEM))?;
                 item_target(symbol, None, marks, corpus)?

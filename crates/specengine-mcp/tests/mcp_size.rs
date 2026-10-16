@@ -9,6 +9,14 @@
 //!
 //! M: the declared value below the measurement.
 //!
+//! RD-6 and TE-1 (`mcp_size`) of docs/features/code-tools.md (6b-1): a
+//! code corpus of 12 000 items in two files and 1 200 one-item files drives
+//! `find_symbols`, `refs` and `unmapped` past the cut; each answer is the
+//! CLI library's, carries the CLI's tail, and its text plus serialized
+//! `structuredContent` stays within `MAX_RESULT_CHARS` (uncut, `unmapped`'s
+//! JSON alone passes 1 000 000 characters). The maxima are printed for the
+//! spec's "Implementation". M: `unmapped` JSON uncut.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -281,4 +289,135 @@ fn ac15_a_document_of_many_sections_stays_under_the_declared_cap() {
         );
     }
     assert!(session.finish().status.success());
+}
+
+// ------------------------------------------------------- code-tools RD-6
+
+/// One long item name of the size corpus (`n` < 100 000).
+fn wide_name(n: usize) -> String {
+    format!("item_with_a_rather_long_name_for_the_size_corpus_{n:05}")
+}
+
+/// A code corpus past every cut: `pkg/w/src/bound.rs` with 3 000 items,
+/// each bound to `LANE-WIDE` by a marker; `pkg/w/src/loose.rs` with 9 000
+/// unbound items; `pkg/w/src/many/` with 1 200 one-item files. Its own
+/// prefix and kind (no fixture's), one node.
+fn wide_code(root: &Path) {
+    write(
+        root,
+        "specengine.toml",
+        "[project]\nslug = \"wide-code\"\n\n[ids]\nLANE = { kind = \"lane\", shape = \"name\" }\n\n\
+         [code]\nroots = [\"pkg\"]\n",
+    );
+    write(
+        root,
+        "docs/spec/lanes.md",
+        "---\nclass: canon\nid: LANE-WIDE\nowner: owner\nreviewed: 2026-01-01\n---\n\n# Wide\n\n\
+         One lane bound by many items.\n",
+    );
+    write(
+        root,
+        "pkg/w/Cargo.toml",
+        "[package]\nname = \"w\"\nversion = \"0.0.0\"\nedition = \"2024\"\npublish = false\n",
+    );
+    write(
+        root,
+        "pkg/w/src/lib.rs",
+        "pub mod bound;\npub mod loose;\npub mod many;\n",
+    );
+    let mut bound = String::new();
+    for n in 0..3_000 {
+        bound.push_str(&format!(
+            "// @implements LANE-WIDE@1\npub fn {}() -> u32 {{\n    {n}\n}}\n",
+            wide_name(n)
+        ));
+    }
+    write(root, "pkg/w/src/bound.rs", bound);
+    let mut loose = String::new();
+    for n in 3_000..12_000 {
+        loose.push_str(&format!(
+            "pub fn {}() -> u32 {{\n    {n}\n}}\n",
+            wide_name(n)
+        ));
+    }
+    write(root, "pkg/w/src/loose.rs", loose);
+    let mut modules = String::new();
+    for n in 0..1_200 {
+        modules.push_str(&format!("pub mod m{n:04};\n"));
+        write(
+            root,
+            &format!("pkg/w/src/many/m{n:04}.rs"),
+            format!("pub fn {}() -> u32 {{\n    {n}\n}}\n", wide_name(n)),
+        );
+    }
+    write(root, "pkg/w/src/many/mod.rs", modules);
+}
+
+/// RD-6: every code tool's answer over [`wide_code`] is the CLI library's
+/// (parity and the output schema), is cut by the CLI (its text ends in a
+/// `[truncated: …]` tail and holds at most `OUTPUT_CAP_CHARS` plus that
+/// tail and the summary line: reading L14 of the phase A report), and its
+/// text plus serialized `structuredContent` is within `MAX_RESULT_CHARS`
+/// in characters and UTF-16 units. The maxima are printed.
+#[test]
+fn code_tools_cut_stay_under_the_declared_cap() {
+    let scratch = Scratch::new("size-code");
+    let home = scratch.home("h");
+    let root = scratch.dir("wide");
+    wide_code(&root);
+    let env = cli_env(&root, Some(&home));
+    let globals = Globals::default();
+    let calls = [
+        ("find_symbols", json!({"node": "LANE-WIDE"})),
+        ("find_symbols", json!({"file": "pkg/w/src/loose.rs"})),
+        ("find_symbols", json!({"file": "pkg/w/src/bound.rs"})),
+        ("refs", json!({"id": "LANE-WIDE"})),
+        ("unmapped", json!({"path": "pkg/w/src/loose.rs"})),
+        ("unmapped", json!({"path": "pkg/w/src/many"})),
+        // A few lines each: the name of two items, a root's rows.
+        ("find_symbols", json!({"query": wide_name(7), "limit": 200})),
+        ("unmapped", json!({})),
+    ];
+    // The first six pass the CLI's cut.
+    let cut = 6;
+    let mut session = Session::open(Era::Legacy, &[], Some(&root), Home::At(&home));
+    let schemas = output_schemas(&session.tools());
+    let mut largest: Vec<(String, usize)> = Vec::new();
+    for (index, (tool, args)) in calls.iter().enumerate() {
+        let result = checked_call(&mut session, &schemas, tool, args.clone(), &env, &globals);
+        assert_eq!(result["isError"], json!(false), "{tool} {args}");
+        let (text, structured, chars, units) = sizes(&result);
+        eprintln!(
+            "code-tools RD-6 {tool} {args}: text {text}, structuredContent {structured}, \
+             sum {chars} chars, {units} UTF-16 units"
+        );
+        let shown = content_text(&result);
+        if index < cut {
+            assert!(
+                shown.lines().any(|line| line.starts_with("[truncated: ")),
+                "{tool} {args}: the corpus does not reach the CLI's cut: {}",
+                clip(shown)
+            );
+        }
+        assert!(
+            before_tail(shown).chars().count() <= OUTPUT_CAP_CHARS + 1_000,
+            "{tool} {args}: {} characters before the tail",
+            before_tail(shown).chars().count()
+        );
+        assert!(
+            chars as u64 <= MAX_RESULT_CHARS && units as u64 <= MAX_RESULT_CHARS,
+            "{tool} {args}: text + structuredContent = {chars} characters ({units} UTF-16 \
+             units), over MAX_RESULT_CHARS = {MAX_RESULT_CHARS}"
+        );
+        match largest.iter_mut().find(|(name, _)| name == tool) {
+            Some((_, most)) => *most = (*most).max(chars).max(units),
+            None => largest.push(((*tool).to_owned(), chars.max(units))),
+        }
+    }
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+    assert_eq!(done.stderr, "", "stderr");
+    for (tool, most) in &largest {
+        eprintln!("code-tools RD-6 {tool} maximum: {most}");
+    }
 }

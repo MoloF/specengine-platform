@@ -8,7 +8,7 @@ reviewed: 2026-10-16
 
 # specengine-code — layer A: Rust and RON parsing, AST hash, markers, Bevy detector
 
-Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A default workspace member in the core graph: it never depends on `ra_ap_*`, `syn` or Bevy (`specengine-eval` `tests/build_graph.rs` asserts it). Pins: `tree-sitter =0.27.0`, `tree-sitter-rust =0.24.2` (ABI 15), `blake3`. Callers: `specengine-eval`, the CLI (`spec index`, `spec refs`, `spec lock`, `spec verify`). `CODE_INDEX_FORMAT` (1) stamps every rule whose output the code index stores: `docs/canon/symbol-index.md` "Analyzer stamp". Target units, marker grammar, RON binding and ambiguity: `docs/canon/code-identity.md`; in-file twins and signatures: `docs/canon/symbol-names.md`; hashes: `docs/canon/code-hash.md`.
+Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A default workspace member in the core graph: it never depends on `ra_ap_*`, `syn` or Bevy (`specengine-eval` `tests/build_graph.rs` asserts it). Pins: `tree-sitter =0.27.0`, `tree-sitter-rust =0.24.2` (ABI 15), `blake3`. Callers: `specengine-eval`, the CLI (`spec index`, `spec refs`, `spec lock`, `spec verify`). `CODE_INDEX_FORMAT` (2) stamps every rule whose output the code index stores: `docs/canon/symbol-index.md` "Analyzer stamp". Target units, marker grammar, RON binding and ambiguity: `docs/canon/code-identity.md`; in-file twins and signatures: `docs/canon/symbol-names.md`; hashes: `docs/canon/code-hash.md`.
 
 ## Modules
 

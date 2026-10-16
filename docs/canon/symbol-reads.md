@@ -12,11 +12,11 @@ The reads over the code index (`symbol-index.md`: tables, refresh, `refs`): whic
 
 ## Crates and seams
 
-- **Store** `symbols.rs`: `SqliteIndex::lookup_symbols(query, name) -> Vec<SymbolHit {tier, symbol}>`, `file_symbols(path)` (one file's `StoredSymbol`s by `ord`); `SymbolTier {Exact, Suffix, Name}` (`ALL`, `as_str`); `LOOKUP_SQL`, one statement per tier. It compares strings only.
+- **Store** `symbols.rs`: `SqliteIndex::lookup_symbols(query, name) -> Vec<SymbolHit {tier, symbol}>`, `file_symbols(path)` (one file's `StoredSymbol`s by `ord`); `SymbolTier {Exact, Suffix, Name}` (`ALL`, `as_str`); `LOOKUP_SQL: [&str; SymbolTier::ALL.len()]`, one statement per tier. `code.rs`: `code_snapshot(SnapshotSymbols::{Lookup {query, name}, File(path), Bound, All}) -> Option<CodeSnapshot {refs, hits, symbols}>` (`None`: no code indexed), one deferred transaction: every stored file, marker and mention, then the hits, one file's symbols, each marker-bound symbol once or every symbol, by (path, ord). It compares strings only.
 - **Code**: `query_name` (`naming.rs`), the one reader of `::` in a query. `ALL` on `Relation`, `LevelError`, `Unanchored`, `ErrorCategory`, `Ambiguity` feed the CLI's stored-word lists (`refs.rs` `STORED_WORDS`): a new variant is never read as unknown.
-- **CLI** `symbols.rs`, `unmapped.rs`, exported for callers without clap (6b-1): `symbols(&Env, &Globals, &SymbolsRequest {form}) -> SymbolsOutcome`, `form` a `SymbolsForm::{Query {terms, limit}, Node(REF), File(PATH), At("PATH:LINE")}` (the one `PATH:LINE` reader is here); `unmapped(.., &UnmappedRequest {path}) -> UnmappedOutcome`; `SymbolTarget`, `SymbolBinding`, `UnmappedRow` (`per_mille()`), `UnmappedItem`; `SYMBOLS_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `Outcome::{Symbols, Unmapped}` (exit, stderr, text, JSON). Each outcome serializes to its `--json` document.
+- **CLI** `symbols.rs`, `unmapped.rs`, exported for callers without clap (6b-1): `symbols(&Env, &Globals, &SymbolsRequest {form}) -> SymbolsOutcome`, `form` a `SymbolsForm::{Query {terms, limit}, Node(REF), File(PATH), At("PATH:LINE")}` (the one `PATH:LINE` reader is here); `unmapped(.., &UnmappedRequest {path}) -> UnmappedOutcome`; `SymbolTarget`, `SymbolBinding`, `UnmappedRow` (`per_mille()`), `UnmappedItem`; `SYMBOLS_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20, `symbols_limit_error(limit)` (the `--limit` line, MCP's too); `Outcome::{Symbols, Unmapped}` (exit, stderr, text, JSON). Each outcome serializes to its `--json` document.
 - **For 7b**, `pub(crate)`: `unmapped::reached(items, &Seeds)`, the one containment function; `symbols::place`, where a stored binding sits.
-- **Order of work**, as `refs`: the form, the config (`[code]`), `--node`'s REF, the md index, `refresh_code`, `require_complete`, PATH, the stored rows; each stored ID judged once (`Corpus::judge`).
+- **Order of work**, as `refs`: the form, the config (`[code]`), `--node`'s REF, the md index, `refresh_code`, `require_complete`, the stored rows as one snapshot (QUERY: `Lookup`; `--file`, `--at`: `File`; `--node`: `Bound`, its items found by (path, ord); `unmapped`: `All`), then PATH; each stored ID judged once (`Corpus::judge`).
 - **Genre** (`architecture.md#universal`): no fixture prefix, kind, `::` split, stack word, Cargo, `tests` or `src` literal in the store, core or these modules (`code_refs_walk.rs` `NEW_MODULES`).
 
 ## Lookup
@@ -59,7 +59,7 @@ symbols: 1 of 1; code files <f> (.rs <r>, .ron <o>), skipped <s>
 
 **Units**: every stored item; each RON file is one unit. **Mapped**: a marker binds the item, an enclosing item or inline mod (the `parent_ord` chain, never across files) or its file module, with an ID `resolved`, `alias` or `ambiguous` (each holder: `IdState::names_nodes`), any relation. Dangling, look-alike, queue and other-project IDs map nothing at any depth. `unanchored` and `cannot_verify` markers sit on no stored item and map nothing, so a broken item with a valid marker is unmapped, though health row 5 counts that marker as binding its node (`health-code.md` aligns at its refresh). A RON file is mapped by an anchored `ron` or `ron_ambiguous` marker with such an ID. Containment is structural, never by qpath prefix. **`mentioned`**: the units a mention reaches by the same containment, whatever its ID state (a `file` mention: all its file's); it never maps.
 
-`spec unmapped [PATH]`: PATH root-relative and clean, one trailing `/` dropped: a root, a walked code file under one, or a directory under a root holding one, read from the index, never the disk; else exit 2 (an empty directory, one above a root, a skipped file). None: a row per root.
+`spec unmapped [PATH]`: PATH root-relative and clean, one trailing `/` dropped: a root, a walked code file under one, or a directory under a root holding one, read from the index, never the disk: a stored code file is a file, else the directory rules apply; else exit 2 (an empty directory, one above a root, a skipped or unread file: ``spec: `<PATH>` is no `[code]` root, nor a directory or code file the walk reads under one``). None: a row per root; a root that is an unread file is a file row, `units 0` and `-`.
 
 ```
 crates/tally/src/ | units 14 | mapped 6 | 42.9 % | mentioned 3
@@ -75,6 +75,5 @@ unmapped: code files <f> (.rs <r>, .ron <o>), skipped <s>
 
 ## Known limits
 
-- A command's reads run in separate transactions: a refresh by another process between them can pair markers with the wrong symbols, or exit 2 asking for `spec index --full` (one snapshot: 6b-1, `code-tools.md` "Carry-overs").
-- A `[code]` root that is an unread file reads as a directory (`<file>/ | units 0 | … | -`) and `unmapped <file>` exits 0 (6b-1).
+- The gap and `skipped` come from the call's own refresh; its snapshot may hold another process's newer refresh (one committed state, never a mix).
 - `query_name`: an unclosed opener in a package directory name (`a(b`) makes the rest of the query one segment.

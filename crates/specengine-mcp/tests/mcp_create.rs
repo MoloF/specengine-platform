@@ -388,10 +388,11 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // 171 and 1 885 since docs/features/kind-amendment.md names
     // `amendment` (+10) and drops get_tree's ": the node tree" (-15); 1 886
     // since docs/features/drift-queue.md (its `report_drift` line, words
-    // trimmed elsewhere).
+    // trimmed elsewhere); 1 892 since docs/features/code-tools.md
+    // "INSTRUCTIONS" (the code tools' line), the change line unchanged.
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1886);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1892);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -406,22 +407,26 @@ fn ac17_the_instructions_name_create_within_their_budget() {
 /// bytes), 1 897 bytes as of this slice; 2 035 of 2 048 since
 /// docs/features/task-package.md ("Description and interactions") adds
 /// its 138-byte tasks line; 2 046 since docs/features/kind-interpretation.md;
-/// 2 047 since docs/features/kind-decision.md.
+/// 2 047 since docs/features/kind-decision.md. docs/features/code-tools.md
+/// "INSTRUCTIONS" (Q31): the paragraph becomes 76 bytes with its blank
+/// line, the probe tools named without their arguments (their
+/// descriptions keep the owner's checklist words); 1 968 bytes on the wire,
+/// 80 left. M: the 157-byte paragraph kept; the text changed, the pin kept.
 #[test]
 #[cfg(feature = "probes")]
 fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
-    let paragraph = "\n\nProbes build, owner's checklist only: review_proposal(proposal_id) asks \
-                     the owner by form; probe_output(tokens) returns filler; \
-                     probe_sleep(seconds) waits.";
-    assert_eq!(paragraph.len(), 157);
+    let paragraph =
+        "\n\nProbes build: review_proposal, probe_output, probe_sleep (owner's checks).";
+    assert_eq!(paragraph.len(), 76);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     let sent = discover["instructions"].as_str().expect("instructions");
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
     // 2 042 since docs/features/kind-amendment.md; 2 043 since
-    // docs/features/drift-queue.md.
-    assert_eq!(sent.len(), 2043);
-    assert!(sent.len() <= 2048);
+    // docs/features/drift-queue.md; 1 968 since docs/features/code-tools.md
+    // (1 892 and the 76-byte paragraph).
+    assert_eq!(sent.len(), 1968);
+    assert_eq!(2048 - sent.len(), 80, "the room the spec states");
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());
 }

@@ -346,15 +346,18 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 747 since docs/features/kind-amendment.md names `amendment` in the
     // `propose_change` line (+10) and drops get_tree's ": the node tree"
     // (-15); 1 748 since docs/features/drift-queue.md adds the
-    // `report_drift` line (109 with its LF) and trims words elsewhere.
-    assert_eq!(before.len(), 1748);
+    // `report_drift` line (109 with its LF) and trims words elsewhere;
+    // 1 754 since docs/features/code-tools.md "INSTRUCTIONS" (1 892 less
+    // 138; the spec's 1 755 is off by one: phase A report, D1). The BLAKE3
+    // values are `mcp_code.rs`' `PLANNED_*_BLAKE3` (as `mcp_path.rs`).
+    assert_eq!(before.len(), 1754);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "a85fedfd05fbc7fb7d3f0baeccda018c155b8d1b6c6cf5ee7e3f3b0694a1db0a"
+        "42f9ecfda69898a7615608e5a09789da3b2c2ac25d178b6461b70ddfd33f1133"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1886);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1892);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "bcc30d1dedced94ad32d18bf167e6723e97a663a936a3e7311fcd119e13edc07"
+        "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c"
     );
 }

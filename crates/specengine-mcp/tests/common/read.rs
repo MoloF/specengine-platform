@@ -4,6 +4,14 @@
 //! `CliError` line(s); `structuredContent` = the parsed `render_json`), a
 //! test-local JSON Schema walker for the output schemas (AC-14), and the
 //! flat-input rule of "Data" (AC-13).
+//!
+//! docs/features/code-tools.md (6b-1): the three code tools join `TOOLS`
+//! (eighteen) as [`CODE_TOOLS`], their twins in [`code_library`]. PHASE-B:
+//! the 6a-3 library names there (`symbols`, `SymbolsRequest { form }`,
+//! `SymbolsForm::{Query { terms, limit }, Node, File, At}`, `unmapped`,
+//! `UnmappedRequest { path }`, `Outcome::Symbols`, `Outcome::Unmapped`)
+//! are the working names of docs/features/symbol-reads.md Q35 and its
+//! tester's phase A (L25); adapt them to what 6a-3 commits.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -12,9 +20,9 @@ use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
     DriftRequest, Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, ReviewRequest, SearchRequest, ShowRequest, TaskClaimRequest,
-    TaskCompleteRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest,
-    render_json, render_text,
+    ProposedText, QuestionRequest, RefsRequest, ReviewRequest, SearchRequest, ShowRequest,
+    SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest, render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -55,27 +63,44 @@ pub const TASK_TOOLS: [&str; 5] = [
     "submit_plan",
 ];
 
+/// The code tools of docs/features/code-tools.md (6b-1), in `tools/list`
+/// order: `spec symbols`, `spec refs`, `spec unmapped`, each read-only.
+pub const CODE_TOOLS: [&str; 3] = ["find_symbols", "refs", "unmapped"];
+
 /// Every tool of the default build, in `tools/list` order (by name):
 /// thirteen since docs/features/task-package.md, fourteen since
 /// docs/features/kind-decision.md (`report_decision`), fifteen since
-/// docs/features/drift-queue.md (`report_drift`).
-pub const TOOLS: [&str; 15] = [
+/// docs/features/drift-queue.md (`report_drift`), eighteen since
+/// docs/features/code-tools.md (`find_symbols`, `refs`, `unmapped`).
+pub const TOOLS: [&str; 18] = [
     "ask_question",
     "claim_task",
     "complete_task",
+    "find_symbols",
     "get_context_bundle",
     "get_node",
     "get_proposal",
     "get_task",
     "get_tree",
     "propose_change",
+    "refs",
     "report_decision",
     "report_discrepancy",
     "report_drift",
     "report_run",
     "search",
     "submit_plan",
+    "unmapped",
 ];
+
+/// docs/features/code-tools.md "Form errors": `find_symbols` given not
+/// exactly one of its four forms (a `null` is absent), as `get_task`'s.
+pub const FIND_SYMBOLS_ONE_FORM: &str =
+    "spec: find_symbols takes exactly one of `query`, `node`, `file` and `at`\n";
+
+/// docs/features/code-tools.md "Form errors": `limit` beside a form other
+/// than `query`.
+pub const FIND_SYMBOLS_LIMIT: &str = "spec: find_symbols takes `limit` with `query` only\n";
 
 /// The words of P2-3 (07 §1.2): stack words and this repository's role
 /// names.
@@ -508,11 +533,81 @@ pub fn task_library(
     expected(outcome.map(|outcome| Outcome::Task(Box::new(outcome))))
 }
 
+/// The code tools' twins (docs/features/code-tools.md "Tools", "Form
+/// errors", "Results and exits"): `find_symbols` = `spec symbols` with
+/// exactly one form, `query` one positional, `at` passed raw (MCP never
+/// splits it), `limit` with `query` only (else the tool's own error, no
+/// CLI twin, no document; the form count is judged first: reading L3 of
+/// the phase A report); `refs` = `spec refs REF`; `unmapped` = `spec
+/// unmapped [PATH]`. Exit 1 keeps its document (`reason`), exit 2 has
+/// none ([`expected`]). PHASE-B: the 6a-3 names (module docs).
+pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
+    let text = |key: &str| args[key].as_str().map(str::to_owned);
+    let refused = |message: &str| Expected {
+        text: message.to_owned(),
+        document: None,
+        is_error: true,
+    };
+    let outcome = match tool {
+        "find_symbols" => {
+            let forms: Vec<&str> = ["query", "node", "file", "at"]
+                .into_iter()
+                .filter(|key| !args[*key].is_null())
+                .collect();
+            let &[form] = forms.as_slice() else {
+                return refused(FIND_SYMBOLS_ONE_FORM);
+            };
+            if !args["limit"].is_null() && form != "query" {
+                return refused(FIND_SYMBOLS_LIMIT);
+            }
+            // A limit below zero never reaches the library's `usize`: the
+            // CLI's own `--limit` line (`symbols_limit_error`), as MCP
+            // answers it before any discovery (C1).
+            if let Some(limit) = args["limit"].as_i64().filter(|limit| *limit < 0) {
+                return expected(Err(specengine_cli::symbols_limit_error(limit)));
+            }
+            let given = || text(form).expect("a string form");
+            let form = match form {
+                // The library's limit is a `usize` (6a-3).
+                "query" => SymbolsForm::Query {
+                    terms: vec![given()],
+                    limit: args["limit"]
+                        .as_u64()
+                        .map(|limit| usize::try_from(limit).expect("a usize limit")),
+                },
+                "node" => SymbolsForm::Node(given()),
+                "file" => SymbolsForm::File(given()),
+                _ => SymbolsForm::At(given()),
+            };
+            specengine_cli::symbols(env, globals, &SymbolsRequest { form })
+                .map(|outcome| Outcome::Symbols(Box::new(outcome)))
+        }
+        "refs" => specengine_cli::refs(
+            env,
+            globals,
+            &RefsRequest {
+                reference: text("id").expect("refs id"),
+            },
+        )
+        .map(|outcome| Outcome::Refs(Box::new(outcome))),
+        "unmapped" => {
+            specengine_cli::unmapped(env, globals, &UnmappedRequest { path: text("path") })
+                .map(|outcome| Outcome::Unmapped(Box::new(outcome)))
+        }
+        other => panic!("no code twin for tool {other}"),
+    };
+    expected(outcome)
+}
+
 /// The same request through the CLI library (task spec, the tool table):
 /// `get_tree` = `tree`, `get_node` = `show`, `search` = `search` with the
 /// query as one word, `get_context_bundle` = `bundle`; a queue tool as
-/// [`queue_library`] with the wall clock and the server's git environment.
+/// [`queue_library`] with the wall clock and the server's git environment;
+/// a code tool as [`code_library`].
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
+    if CODE_TOOLS.contains(&tool) {
+        return code_library(tool, args, env, globals);
+    }
     if QUEUE_TOOLS.contains(&tool) {
         return queue_library(
             tool,

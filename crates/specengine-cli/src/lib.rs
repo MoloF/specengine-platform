@@ -123,8 +123,9 @@
 //!   its reason, exit 1) and `spec unmapped` (the units a marker maps, per
 //!   directory and code file), read from the code index; for the bridges
 //!   with [`SymbolsForm`] and [`SYMBOLS_LIMIT_MIN`], [`SYMBOLS_LIMIT_MAX`],
-//!   [`SYMBOLS_LIMIT_DEFAULT`], no clap;
-//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`),
+//!   [`SYMBOLS_LIMIT_DEFAULT`], [`symbols_limit_error`], no clap;
+//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
+//!   `refs`, `symbols`),
 //!   blocked (`check`, `verify`) or refused by the proposal or its target
 //!   (the queue's commands), 2 could not run (`check`: could not check;
 //!   `verify`: could not verify).
@@ -330,7 +331,7 @@ pub use state::{
 pub use state_file::STATE_FORMAT;
 pub use symbols::{
     SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX, SYMBOLS_LIMIT_MIN, SymbolBinding, SymbolTarget,
-    SymbolsForm, SymbolsOutcome, SymbolsRequest, symbols,
+    SymbolsForm, SymbolsOutcome, SymbolsRequest, symbols, symbols_limit_error,
 };
 pub use task::{
     TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry, TaskListOutcome,
@@ -351,8 +352,9 @@ pub enum Exit {
     /// The command answered, zero search hits included; `spec check`:
     /// clean or observed.
     Answered = 0,
-    /// `spec show`, `spec tree`, `spec graph`, `spec bundle` found nothing: a dangling
-    /// reference, no configured prefix, a `.md` path that is not indexed.
+    /// `spec show`, `spec tree`, `spec graph`, `spec bundle`, `spec refs`,
+    /// `spec symbols --node` found nothing: a dangling reference, no
+    /// configured prefix, a `.md` path that is not indexed.
     /// `spec check`: blocked. The queue's commands: refused by the proposal
     /// or its target (nothing stored, written or committed).
     NotFound = 1,

@@ -8,14 +8,14 @@ reviewed: 2026-10-16
 
 # Symbol index: stored code rows, the refresh, `spec index`, `spec refs`
 
-The code index stores every `[code]` file's rows beside the spec index of the same worktree (the slug's DB, outside the repository: ADR-0001, ADR-0003): its items with names, lines, signatures and level digests, its `#[path]` declarations, its markers and mentions with what each binds. **After any sequence of file, manifest, `[code]`, `[ids]` or stamp changes it equals a fresh rebuild, row for row** (canonical dumps), and `spec refs` from it prints what the walk prints, byte for byte (`code-bindings.md`). Only `spec index`, `refs`, `symbols` and `unmapped` refresh it. `verify` (every mode), `lock accept`, `propose drift` and a drift item's approve keep their fresh walk or a commit's blobs; `show`, `search`, `graph`, health, MCP and the daemon never touch code (`architecture-code.md#sync-in-reads`, `#health`). Names: `symbol-names.md`; lookup, `symbols`, `unmapped`: `symbol-reads.md`. Built by `docs/features/symbol-index.md`.
+The code index stores every `[code]` file's rows beside the spec index of the same worktree (the slug's DB, outside the repository: ADR-0001, ADR-0003): its items with names, lines, signatures and level digests, its `#[path]` declarations, its markers and mentions with what each binds. **After any sequence of file, manifest, `[code]`, `[ids]` or stamp changes it equals a fresh rebuild, row for row** (canonical dumps), and `spec refs` from it prints what the walk prints, byte for byte (`code-bindings.md`). Only `spec index`, `refs`, `symbols`, `unmapped` and their MCP twins (through the CLI: `mcp-code.md`) refresh it. `verify` (every mode), `lock accept`, `propose drift` and a drift item's approve keep their fresh walk or a commit's blobs; `show`, `search`, `graph`, health, the other MCP tools and the daemon never touch code (`architecture-code.md#sync-in-reads`, `#health`). Names: `symbol-names.md`; lookup, `symbols`, `unmapped`: `symbol-reads.md`. Built by `docs/features/symbol-index.md`.
 
 ## Crates and seams
 
 - **Store** `code.rs`: compare, apply and the cross-file pass behind `trait CodeAnalyzer {list, packages, fingerprint, analyze}` over plain rows (`CodeListing`, `ListedCodeFile`, `CodePackageRow`, `CodeFileRows`, `Code{Symbol,Decl,Marker,Mention}Row`). No code crate, no tree-sitter, no `rusqlite` type public; it compares strings and reads only the roles `ROLE_SHARED`, `ROLE_UNROOTED`.
 - **CLI** `code_index.rs`, the analyzer: the walk's one listing and package lookup (`code_walk::list`, `disk_packages`); one parse per re-derived `.rs` file for `bind_tree`, `placed_name_file` (each package's `TargetIndex` built once; each item's `QPath`, `file_place` once), `item_levels`, `item_signatures`; `comment_anchors` once per `.ron` file; never an item's binding `state`.
 - `SqliteIndex::update_code(&dyn CodeAnalyzer, &IdScheme, full) -> CodeReport` refreshes; `refresh_code(index, root, code, scheme, full) -> CodeRefresh {report, messages, gap(), require_complete()}`: the one named refresh (`index`, `refs`, `symbols`, `unmapped`; later 6b-2's `verify --node`), lenient. `listed_code_files(root, code)`: the walk's listing.
-- Reads: `stored_names(path) -> StoredNames {module, items}` (`None`: no row or no module), each `StoredName {qpath, ambiguity, discriminator}` by `ord`, from rows only (a file edited since keeps its names); `code_refs() -> CodeRefs {files, markers, mentions}` (a binding's `BoundSymbol.ord`), `code_symbols()` (`StoredSymbol` with `start_byte`, `end_byte`, `layer`; `None`: no code indexed); `lookup_symbols`, `file_symbols`: `symbol-reads.md`. `clear_code()` drops the worktree's rows.
+- Reads: `stored_names(path) -> StoredNames {module, items}` (`None`: no row or no module), each `StoredName {qpath, ambiguity, discriminator}` by `ord`, from rows only (a file edited since keeps its names); `code_refs() -> CodeRefs {files, markers, mentions}` (a binding's `BoundSymbol.ord`), `code_symbols()` (`StoredSymbol` with `start_byte`, `end_byte`, `layer`; `None`: no code indexed); `lookup_symbols`, `file_symbols`, `code_snapshot` (one transaction): `symbol-reads.md`. `clear_code()` drops the worktree's rows.
 - `specengine-code`: `CODE_INDEX_FORMAT`, `placed_name_file` -> `PlacedNames` (`indexed_name_file`'s names, `file_place`'s label and role, each item's `QPath`), `QPath::segments`, `QPath::suffixes(discriminator)`.
 
 ## Tables
@@ -49,7 +49,7 @@ Indexes `symbols_by_qpath`, `symbols_by_name`, `symbol_suffixes_by_suffix`, `cod
 
 ## Analyzer stamp
 
-`CODE_INDEX_FORMAT` (`specengine-code`), 1: the binding, naming, discriminator, signature, marker and mention rules a row holds, `symbol-names.md`'s as of now included; any change to one bumps it (all re-derived); `level_header()` covers the levels. CLI `tests/code_format_history.txt`: `<CODE_INDEX_FORMAT> <BLAKE3 of fixtures/code-index's code-table dump, root masked>`; a changed dump under a kept stamp is red. The store's `format_history.txt` line 9 hashes spec-a, spec-b and a stub analyzer's rows.
+`CODE_INDEX_FORMAT` (`specengine-code`), 2: the binding, naming, discriminator, signature, marker and mention rules a row holds, `symbol-names.md`'s as of now included; 2 (6b-1): `\` becomes `/` only where `MAIN_SEPARATOR` is `\`, in stored directories (CLI `dir_text`) and package labels (`file_place`), so Unix keeps it; any change to one bumps it (all re-derived); `level_header()` covers the levels. CLI `tests/code_format_history.txt`: `<CODE_INDEX_FORMAT> <BLAKE3 of fixtures/code-index's code-table dump, root masked>`; a changed dump under a kept stamp is red. The store's `format_history.txt` line 9 hashes spec-a, spec-b and a stub analyzer's rows.
 
 ## spec refs and spec index
 
@@ -76,5 +76,3 @@ Judged in release on the pilots: `hash_ms` × 300 / `kloc` ≤ 2 000, `one_file_
 ## Known limits
 
 - Each refresh BLAKE3s every code file; rows of moved roots are never pruned.
-- On Unix `\` is kept; an index written before keeps a `/`-rewritten `#[path]` target until its declaring file is re-derived or `spec index --full`.
-- On Unix `file_place` still rewrites `\` to `/` in a qpath's package label, so a package directory holding `\` has two spellings (6b-1: `code-tools.md` "Carry-overs").

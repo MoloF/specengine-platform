@@ -19,12 +19,16 @@
 //!   half up, one decimal; `-` with no unit. Rows and items are printed
 //!   while the text stays within [`OUTPUT_CAP_CHARS`], then a
 //!   `[truncated: …]` line; the JSON holds exactly the printed ones.
+//! - **PATH**: a file or a directory as the stored code files say, a code
+//!   file the walk could not read refused (exit 2); a root that is such a
+//!   file is a file's row without a unit. The markers and the symbols
+//!   come from one read transaction (one snapshot).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use specengine_core::is_clean_relative;
-use specengine_store::{CodeFileState, CodeRefs, StoredSymbol};
+use specengine_store::{CodeFileState, CodeRefs, CodeSnapshot, SnapshotSymbols, StoredSymbol};
 
 use crate::cap::OUTPUT_CAP_CHARS;
 use crate::code_index::{LANG_RUST, refresh_code};
@@ -128,18 +132,19 @@ pub fn unmapped(
     let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
     refreshed.require_complete()?;
     messages.extend(refreshed.messages.iter().cloned());
-    let stored = open
+    // One snapshot: the markers and every symbol from one read
+    // transaction, whatever another connection writes meanwhile.
+    let CodeSnapshot {
+        refs: stored,
+        symbols,
+        ..
+    } = open
         .index
-        .code_refs()
-        .map_err(store_error)?
-        .unwrap_or_default();
-    let symbols = open
-        .index
-        .code_symbols()
+        .code_snapshot(SnapshotSymbols::All)
         .map_err(store_error)?
         .unwrap_or_default();
     let walked: Vec<&CodeFileState> = stored.files.iter().filter(|file| is_read(file)).collect();
-    let scope = Scope::of(asked, &code.roots, &walked)?;
+    let scope = Scope::of(asked, &code.roots, &stored.files, &walked)?;
     let coverage = Coverage::new(&stored, &symbols, &walked, &mut corpus)?;
 
     let mut outcome = UnmappedOutcome {
@@ -200,7 +205,9 @@ pub fn unmapped(
             let mut rows: BTreeMap<String, UnmappedRow> = BTreeMap::new();
             for root in &code.roots {
                 let prefix = format!("{root}/");
-                let file = walked.iter().any(|file| file.path == *root);
+                // A root that is a code file, read or not, is a file's row
+                // (an unread one: no unit).
+                let file = stored_file(&stored.files, root).is_some();
                 let row = row_of(&mut rows, root.clone(), !file);
                 for file in walked
                     .iter()
@@ -248,29 +255,51 @@ enum Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
+    /// What `asked` names: a file or a directory as the stored files say
+    /// (`files`, every code file of the walk, by path), never by the read
+    /// ones alone; a code file the walk could not read is refused.
     fn of(
         asked: Option<&'a str>,
         roots: &[String],
+        files: &[CodeFileState],
         walked: &[&CodeFileState],
     ) -> Result<Self, CliError> {
         let Some(path) = asked else {
             return Ok(Self::Roots);
         };
+        let refused = || {
+            CliError::spec(format!(
+                "`{}` is no `[code]` root, nor a directory or code file the walk reads under one",
+                one_line(path)
+            ))
+        };
         let under_root = roots
             .iter()
             .any(|root| path == root || is_below(path, root));
-        if under_root && walked.iter().any(|file| file.path == path) {
-            return Ok(Self::File(path));
+        if !under_root {
+            return Err(refused());
+        }
+        if let Some(file) = stored_file(files, path) {
+            return if is_read(file) {
+                Ok(Self::File(path))
+            } else {
+                Err(refused())
+            };
         }
         let root = roots.iter().any(|root| root == path);
-        if under_root && (root || walked.iter().any(|file| is_below(&file.path, path))) {
+        if root || walked.iter().any(|file| is_below(&file.path, path)) {
             return Ok(Self::Dir(path));
         }
-        Err(CliError::spec(format!(
-            "`{}` is no `[code]` root, nor a directory or code file the walk reads under one",
-            one_line(path)
-        )))
+        Err(refused())
     }
+}
+
+/// The stored code file at `path` (`files` by path), read or not.
+fn stored_file<'s>(files: &'s [CodeFileState], path: &str) -> Option<&'s CodeFileState> {
+    files
+        .binary_search_by(|file| file.path.as_str().cmp(path))
+        .ok()
+        .and_then(|at| files.get(at))
 }
 
 /// `path` lies below the directory `dir`.

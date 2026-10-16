@@ -70,7 +70,7 @@ Q31. 6b-1's code line (`code-tools.md` "INSTRUCTIONS") gains `; check_binding(no
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.
 ```
 
-1 938 B, 1 801 less the tasks line, 2 014 with `probes`: 34 B left (measured 2026-10-16 over 6b-1's text as specified; re-measured over 6b-1's as built). The four pins re-pinned as 6b-1's.
+1 938 B, 1 800 less the tasks line, 2 014 with `probes`: 34 B left (over 6b-1's text as built: 1 892, 1 754, 1 968; `mcp-read.md` **Texts**). The four pins re-pinned as 6b-1's.
 
 **Description** (≤ 2 048 B, ASCII, the determinism sentence): plain verify of one node, its CLI twin, the `[code]` need, nothing written; a report kept at exit 2; under `enforce*` a Fix row comes back `isError`, a finding, not a failure; `OUTPUT_CAP_CHARS` asserted.
 

@@ -178,6 +178,13 @@ const PINS: &[(&str, &str)] = &[
         "0.8.0",
         "eb767178bc0f75e8f26db54271a47fa961a80efa8cefcb62fdb6624253b1fc2c",
     ),
+    // docs/features/code-tools.md "Plugin" (0.8.0 -> 0.9.0, MINOR: newly
+    // named tools): `read-spec` names `find_symbols`, `refs`, `unmapped`
+    // as bullets of its step 2, before "Files last".
+    (
+        "0.9.0",
+        "07f98cfc7b7b421ab04e0ecafa407d1bb3bbcc448f24fbea3fc0cdee81ac54a5",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
@@ -1258,9 +1265,15 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of drift-queue: 0.8.0, after rev-discipline's 0.7.2.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.8.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.7.2");
+    // The pin of code-tools (docs/features/code-tools.md RD-9): 0.9.0,
+    // after drift-queue's 0.8.0. M: the version unchanged.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.9.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.8.0");
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.9.0"),
+        "plugin.json's version"
+    );
     // A renamed file with the same bytes changes the hash too.
     let mut moved = tree.clone();
     let bytes = moved.files.remove(READ_SPEC).unwrap();

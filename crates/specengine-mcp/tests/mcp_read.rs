@@ -19,6 +19,11 @@
 //! -32602 for a bad argument, a nested parameter struct, a CLI key missing
 //! from a mirror type.
 //!
+//! RD-4 of docs/features/code-tools.md (6b-1): AC-13's flat rule holds for
+//! the three code tools too (`find_symbols`' four forms four nullable
+//! strings, `limit` an integer as `search`'s, `refs` requiring `id`,
+//! `unmapped` requiring nothing). M: a nested or `oneOf` input.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -30,8 +35,8 @@ use std::path::{Path, PathBuf};
 
 use common::blake3::blake3_hex;
 use common::read::{
-    ERAS, READ_TOOLS, Session, assert_bad_arguments, checked_call, cli_env, conforms, content_text,
-    flat_input_problems, output_schemas,
+    CODE_TOOLS, ERAS, READ_TOOLS, Session, assert_bad_arguments, checked_call, cli_env, conforms,
+    content_text, flat_input_problems, output_schemas,
 };
 use common::*;
 use serde_json::{Value, json};
@@ -516,11 +521,13 @@ fn ac13_every_input_schema_is_flat() {
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
-        for name in READ_TOOLS {
+        // docs/features/code-tools.md RD-4: the code tools alike.
+        for name in READ_TOOLS.iter().chain(&CODE_TOOLS) {
             let schema = &tool(&list, name)["inputSchema"];
             let problems = flat_input_problems(name, schema);
             assert!(problems.is_empty(), "{era:?}: {problems:?}\n{schema}");
         }
+        code_input_schemas_are_the_flags(&list, era);
         let required = |name: &str| tool(&list, name)["inputSchema"]["required"].clone();
         assert_eq!(required("get_node"), json!(["id"]));
         assert_eq!(required("search"), json!(["query"]));
@@ -547,6 +554,80 @@ fn ac13_every_input_schema_is_flat() {
         assert_eq!(
             tool(&list, "get_node")["inputSchema"]["properties"]["with"]["items"],
             json!({"type": "string", "enum": ["links"]})
+        );
+    }
+}
+
+/// The JSON Schema `type` of `property` as a set (`"string"` or
+/// `["string", "null"]`).
+fn type_set(property: &Value) -> std::collections::BTreeSet<String> {
+    match &property["type"] {
+        Value::String(name) => [name.clone()].into(),
+        Value::Array(names) => names
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+        other => panic!("no type: {other} in {property}"),
+    }
+}
+
+/// docs/features/code-tools.md "Tools": every argument name is the CLI
+/// flag's (`refs`' positional REF `id`); `find_symbols`' four forms are
+/// four nullable strings, `limit` an integer typed as `search`'s;
+/// `unmapped`'s `path` a nullable string; only `refs` requires anything.
+fn code_input_schemas_are_the_flags(list: &Value, era: common::read::Era) {
+    let input = |name: &str| tool(list, name)["inputSchema"].clone();
+    let keys = |name: &str| -> Vec<String> {
+        input(name)["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .cloned()
+            .collect()
+    };
+    assert_eq!(
+        keys("find_symbols"),
+        ["at", "file", "limit", "node", "query"],
+        "{era:?}"
+    );
+    assert_eq!(keys("refs"), ["id"], "{era:?}");
+    assert_eq!(keys("unmapped"), ["path"], "{era:?}");
+    let nullable_string: std::collections::BTreeSet<String> =
+        ["null".to_owned(), "string".to_owned()].into();
+    let symbols = input("find_symbols");
+    for form in ["query", "node", "file", "at"] {
+        assert_eq!(
+            type_set(&symbols["properties"][form]),
+            nullable_string,
+            "{era:?}: find_symbols.{form}"
+        );
+    }
+    assert_eq!(
+        type_set(&symbols["properties"]["limit"]),
+        type_set(&input("search")["properties"]["limit"]),
+        "{era:?}: find_symbols.limit is typed as search's"
+    );
+    assert!(
+        type_set(&symbols["properties"]["limit"]).contains("integer"),
+        "{era:?}: {symbols}"
+    );
+    assert_eq!(
+        type_set(&input("unmapped")["properties"]["path"]),
+        nullable_string,
+        "{era:?}: unmapped.path"
+    );
+    assert_eq!(
+        type_set(&input("refs")["properties"]["id"]),
+        ["string".to_owned()].into(),
+        "{era:?}: refs.id"
+    );
+    assert_eq!(input("refs")["required"], json!(["id"]), "{era:?}");
+    for name in ["find_symbols", "unmapped"] {
+        let required = input(name)["required"].clone();
+        assert!(
+            required.is_null() || required == json!([]),
+            "{era:?}: {name} requires nothing: {required}"
         );
     }
 }

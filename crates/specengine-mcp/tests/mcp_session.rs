@@ -76,6 +76,11 @@ fn valid_args(tool: &str) -> Value {
             "task_id": "T-0001", "outcome": "completed", "summary": "Done.", "changed_files": []
         }),
         "complete_task" => json!({"task_id": "T-0001"}),
+        // docs/features/code-tools.md: one form each, so the call reaches
+        // the CLI (no project: its `spec init` line).
+        "find_symbols" => json!({"query": "stamina"}),
+        "refs" => json!({"id": "MEC-STAMINA"}),
+        "unmapped" => json!({}),
         other => panic!("no arguments for {other}"),
     }
 }
