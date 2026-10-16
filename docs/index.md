@@ -21,7 +21,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/features/anchor-states.md](features/anchor-states.md) anchor-states: a renamed or moved binding judged against its old lock entry · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/bevy-roles.md](features/bevy-roles.md) bevy-roles: framework roles of Rust items in the code index, opt-in [code] frameworks · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
+- [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) bevy-roles-reads (10a-2): roles in spec symbols and find_symbols, plugin 0.10.0 · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
+- [docs/features/bevy-roles.md](features/bevy-roles.md) bevy-roles (10a-1): framework roles of Rust items in the code index, opt-in [code] frameworks · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, fixtures · draft
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) bundle-bindings: an agent's reads carry its nodes' code bindings and sync · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, fixtures · draft
 - [docs/features/constant-census.md](features/constant-census.md) constant-census: which string constants carry a record's code (slice 12a) · crates/specengine-eval, crates/specengine-code, fixtures · draft
 - [docs/features/health-code.md](features/health-code.md) health-code: Health shows code assuming a decision and nodes no code binds · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
@@ -33,7 +34,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-node.md](features/verify-node.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft
-- [docs/features/verify-tests.md](features/verify-tests.md) verify-tests: bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
+- [docs/features/verify-task.md](features/verify-task.md) verify-task (8a-2): spec verify --task T · crates/specengine-cli · draft
+- [docs/features/verify-tests.md](features/verify-tests.md) verify-tests (8a-1): bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

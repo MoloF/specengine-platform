@@ -14,7 +14,7 @@ Layer A names items by a heuristic and says where it is unsure (`mod x;`, stray 
 
 **11a** (this): `specengine-ra` gains an executable speaking protocol v1, no proc macros; only `spec resolve` spawns it; `spec` stores each item's moniker beside 6a's rows as advisory data, shown by `spec symbols`. No `ra_ap_*` in `spec`, MCP or the daemon. ADR-0049. Insurance, built small: on the pilots A plus 6a's discriminator leave almost nothing open (WA-13).
 
-Follow-ups on measured triggers: **11b** `layer-c-macros` (attribute expansions; owner-started project code on a scratch copy) when TE-6 finds > 1 % of a pilot's items under attribute macros; **11c** `layer-c-registration` (Bevy registration by resolved types) after 10b, for what the dump cannot give, gated by `[code] frameworks` listing `bevy` (10a).
+Follow-ups on measured triggers: **11b** `layer-c-macros` (attribute expansions; owner-started project code on a scratch copy) when TE-6 finds > 1 % of a pilot's items under attribute macros; **11c** `layer-c-registration` (Bevy registration by resolved types) after 10b, for what the dump cannot give, gated by `[code] frameworks` listing `bevy` (10a-1).
 
 ## Description and interactions
 
@@ -33,7 +33,7 @@ WA-1, WA-2, Q1-Q3. S: seconds 1..=3600, default 300. In order, each failure exit
 2. `flock` on `<data dir>/<slug>.ra/lock`, try-exclusive; `target/`, `tmp/` beside it.
 3. Lookup (`spec serve`'s): beside `current_exe()`, else the first `PATH` entry with an executable regular `specengine-ra`.
 4. Spawn, never exec: `--protocol 1`, cwd and `TMPDIR` `tmp/`, own process group, env minus eval's list (`RUSTUP_TOOLCHAIN`, `RUSTC`, `RUSTC_WRAPPER`, `CARGO_TARGET_DIR`, …); stderr copied live; stdin gets the request, stays open.
-5. stdout read to `done`, each line checked; at S: `SIGTERM` to the group, 5 s, `SIGKILL` (8a's runner).
+5. stdout read to `done`, each line checked; at S: `SIGTERM` to the group, 5 s, `SIGKILL` (8a-1's runner, `verify-tests.md` "Runner").
 6. After `done` and exit 0: code index refreshed, `tree_fp` recomputed; equal: one Immediate transaction replaces the worktree's rows; else nothing stored.
 
 ### Protocol v1
@@ -115,7 +115,7 @@ layer c: stale (ra_ap 0.0.352); spec resolve refreshes it
 
 ### Config and install
 
-- Q11: no `[code]` key. `scip` (07:205) is retired as 10a retires `bevy`: `NOT_BUILT_KEYS` loses it (`["languages", "crates", "scip"]` -> `["languages", "crates"]` after 10a); `scip` takes the unknown-key arm and text (`KEYS` as then); the module doc drops it; `code_refs_walk.rs` `EXEMPT` drops `(…code_toml.rs, "scip")`. `crates` stays refused (6a Q2).
+- Q11: no `[code]` key. `scip` (07:205) is retired as 10a-1 retires `bevy`: `NOT_BUILT_KEYS` loses it (`["languages", "crates", "scip"]` -> `["languages", "crates"]` after 10a-1); `scip` takes the unknown-key arm and text (`KEYS` as then); the module doc drops it; `code_refs_walk.rs` `EXEMPT` drops `(…code_toml.rs, "scip")`. `crates` stays refused (6a Q2).
 - Q8: `cargo install --locked --force --path crates/specengine-ra`, beside `spec`, same commit; rustc ≥ 1.98, `rust-src`. Direct dependencies: nine `ra_ap_*`, four pins, `serde`, `serde_json`, `libc`; no `ra_ap_hir` (Q12).
 
 ## Rules and edge cases
@@ -192,7 +192,7 @@ WA-n: the analysis' (2026-10-10), checked against `scan.rs`, `load.rs`, eval's `
 
 ## Dependencies and ordering
 
-- **Needs**: 6a `symbol-index` (hard: rows, start bytes, discriminator, `code_packages`, `symbols`), on `code-refs` (shipped). Soft: 8a (runner, `libc`; else 11a builds both); 6b-1 `code-tools` (MCP mirror); 10a (the second to ship edits `NOT_BUILT_KEYS`, `EXEMPT` from the other's state).
+- **Needs**: 6a `symbol-index` (hard: rows, start bytes, discriminator, `code_packages`, `symbols`), on `code-refs` (shipped). Soft: 8a-1 `verify-tests` (runner, `libc`; else 11a builds both); 6b-1 `code-tools` (MCP mirror); 10a-1 (the second to ship edits `NOT_BUILT_KEYS`, `EXEMPT` from the other's state).
 - **Order**: ADR-0049, this spec -> binary and real protocol tests -> CLI spawn on fakes -> tables -> display, lookup -> TE-6. 11b after TE-6's trigger; 11c after 10b; moniker locking after 5b/5c, own ADR. **Independent**: 4a, 5a, 6b, 9a, 9b, 10b.
 
 ## Implementation

@@ -179,8 +179,8 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 
 ## Dependencies and ordering
 
-- **Needs**: 10a `bevy-roles` (hard: `frameworks`, `code_roles`, `fixtures/code-bevy`); 6a `symbol-index` (hard: symbols, `code_packages.targets`, `name` lookups, `CodeAnalyzer`); 1 `code-refs` (shipped). Soft: 6b-1 `code-tools` (MCP for free).
-- **Order**: 5a-1 -> 10a -> 10b, **built right before 12 `machine-bindings`**, which reads the skipped `dependency` edges. Slice 11 `layer-c` is independent of 10b: ADR-0048 leaves layer C to its own decision. `INDEX_FORMAT` +1 per part, once if 10a and 10b ship together.
+- **Needs**: 10a-1 `bevy-roles` (hard: `frameworks`, `code_roles`, `fixtures/code-bevy`) and 10a-2 `bevy-roles-reads` (hard: the role lines and `roles` B rows join); 6a `symbol-index` (hard: symbols, `code_packages.targets`, `name` lookups, `CodeAnalyzer`); 1 `code-refs` (shipped). Soft: 6b-1 `code-tools` (shipped; MCP for free).
+- **Order**: 10a-1 -> 10a-2 -> 10b. **Parked** (2026-10-16, the owner's pre-approval, 08 s2; Q9 superseded): its consumer, slice 12, no longer reads the dump (`constant-census.md`); it resumes when 11c or another consumer needs it, refreshed against shipped 10a first. Slice 11 `layer-c` is independent of 10b: ADR-0048 leaves layer C to its own decision. `INDEX_FORMAT` +1 (10a-1 takes 10).
 
 ## Implementation
 

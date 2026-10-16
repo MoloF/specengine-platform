@@ -19,8 +19,8 @@ Delivered: one `[[tested]]` block per node in `spec.lock`, pinned by `rev`, `spe
 - **Boundary.** 8a: config, selection, runner, verdicts, event, the single `[y/N]`. 8b: the block and format 3, the write and its commit, the per-node state, `tested` in plain verify, blocks under accept, `--editorial`, a gone node, regen and rebase, 8a's `lock` and `lock_commit`. 4c-1 unchanged: its approve runs accept's function and inherits; stale evidence never becomes a drift item (that would amend ADR-0045). 7a reads, 9b Health: "Surfaces".
 - **The owner** answers 8a's one question, now naming the lock commit. **An agent** reads `tested`; it never writes evidence: no MCP tool, route, hook, CI step or role (ADR-0044); `report_run` changes nothing (07:38).
 - **Crates.** Core `lock.rs`: the block in `Lock`, `parse_lock`/`render_lock` for format 3, `bound_bytes` (the canonical input; core has no BLAKE3), `tested_state`, blocks in `merge_accept`, `drop_node`, `refresh_editorial`, `merge_stages` and the rebase. CLI: the write after the run, `write_and_commit`/`check_lock_commit` taking a set of nodes (5b-2 gave them a subject, `lock-rebase.md`), `LockMode` `tests`, hashing with store's `b3_hash`, `tested` output. Store nothing new; model, MCP, HTTP, UI only as mirrors with 7a or 9b. No new crate or dependency.
-- **Order** (2026-10-12): after 4a, 8a and 5b (levels, `spec lock rebase`); soft after 4b-1 (shipped 2026-10-14; 8b changes `refresh_editorial`, which 4b-1 runs inside the apply commit filtered to vouching entries, `rev-discipline.md` Q10: 8b wires vouching blocks into the editorial apply and adds 4b-1's RD-2 test `editorial_apply_refreshes_tested`) and 4b-2 (its rule reads blocks: `rev-rule.md`); 4c-1, 7a, 9b on either side, the later adding its part.
-- **4a is not edited** (being implemented): at 8b's shipping plain `spec verify` gains a `tested` key and section ("Plain verify"), null under `--changed`, no exit effect; 4a's code and goldens change then.
+- **Order** (2026-10-12; 8a split 2026-10-16): after 4a, 8a-1 `verify-tests`, 8a-2 `verify-task` (`--task` scopes `tested`) and 5b (levels, `spec lock rebase`); soft after 4b-1 (shipped 2026-10-14; 8b changes `refresh_editorial`, which 4b-1 runs inside the apply commit filtered to vouching entries, `rev-discipline.md` Q10: 8b wires vouching blocks into the editorial apply and adds 4b-1's RD-2 test `editorial_apply_refreshes_tested`) and 4b-2 (its rule reads blocks: `rev-rule.md`); 4c-1, 7a, 9b on either side, the later adding its part.
+- **4a's canon and code are not edited now** (4a shipped 2026-10-13): at 8b's shipping plain `spec verify` gains a `tested` key and section ("Plain verify"), null under `--changed`, no exit effect; 4a's code and goldens change then.
 
 ## Data
 
@@ -88,7 +88,7 @@ No block: no entry (a per-node read's `tested` null).
 
 ### Plain verify
 
-WA-11; at 8b's shipping. JSON `tested` after 4a's `delta`: per block by `node` bytes `{"node":"R-12","state":"stale","category":"code_changed","rev":3,"node_rev":3,"commit":"a0cea48<33 hex>","verified_at":"2026-10-12"}` (`rev`, `commit`, `verified_at` the block's; `node_rev` 4a's); `[]` without a block; null under `--changed` and on a lock run cause; `--task` scopes it as rows. Text: each non-`verified` entry after the rows' `hint:` lines, before the summary; an evidence-free lock's text stays byte-identical. No finding, class, count, hint or exit effect.
+WA-11; at 8b's shipping. JSON `tested` after 4a's `delta`: per block by `node` bytes `{"node":"R-12","state":"stale","category":"code_changed","rev":3,"node_rev":3,"commit":"a0cea48<33 hex>","verified_at":"2026-10-12"}` (`rev`, `commit`, `verified_at` the block's; `node_rev` 4a's); `[]` without a block; null under `--changed` and on a lock run cause; `--task` (8a-2, `verify-task.md`) scopes it as rows. Text: each non-`verified` entry after the rows' `hint:` lines, before the summary; an evidence-free lock's text stays byte-identical. No finding, class, count, hint or exit effect.
 
 ```
 tested | stale code_changed | R-12
@@ -138,7 +138,7 @@ Q4, Q5. Reads (7a: `show --bindings`, bundle layer 9, tree, package) and Health 
 
 ### Fixtures
 
-WA-12: `fixtures/code-a` has no cleanly verifiable node (`bounds.rs:1` a module marker; LAW-BOUND `@3a`, `counter.rs:45`): 8a's temp repos and fake runners, or a minimal fixture; a format-3 golden beside `code-a.lock`.
+WA-12: `fixtures/code-a` has no cleanly verifiable node (`bounds.rs:1` a module marker; LAW-BOUND `@3a`, `counter.rs:45`): 8a-1's `fixtures/verify-tests/` (`verify-tests.md` "Fixture", shared) and its fake runners; a format-3 golden of it beside `code-a.lock`.
 
 ## Rules and edge cases
 

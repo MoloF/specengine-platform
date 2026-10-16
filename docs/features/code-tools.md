@@ -13,7 +13,7 @@ adrs: []
 
 An agent asks which item sits at a name or `PATH:LINE` and what binds it, what binds a node, where code has no spec. 6a-2 (`symbol-index.md`: `refs` from the code index) and 6a-3 (`symbol-reads.md`: `spec symbols`, `spec unmapped`) answered on the CLI only (07 s1.2): agents ran Bash or read files.
 
-Delivered: three read tools, twins of `spec symbols`, `spec refs` and `spec unmapped`; the `read-spec` skill naming them; `TOOLS` 18, plugin 0.9.0; 6a-3's carry-overs (one read snapshot per call; `CODE_INDEX_FORMAT` 2). 6b-2 `verify-node.md` (`check_binding`, 0.10.0) follows after 5c (Q28). No ADR: ADR-0004/0005 (one door), ADR-0008 (genre), ADR-0046 (`architecture-code.md#sync-in-reads`) applied.
+Delivered: three read tools, twins of `spec symbols`, `spec refs` and `spec unmapped`; the `read-spec` skill naming them; `TOOLS` 18, plugin 0.9.0; 6a-3's carry-overs (one read snapshot per call; `CODE_INDEX_FORMAT` 2). 6b-2 `verify-node.md` (`check_binding`, 0.11.0) follows after 5c (Q28). No ADR: ADR-0004/0005 (one door), ADR-0008 (genre), ADR-0046 (`architecture-code.md#sync-in-reads`) applied.
 
 ## Description and interactions
 
@@ -71,7 +71,7 @@ spec-writer:
 - **`INSTRUCTIONS`**: 80 B left, 34 after 6b-2; 7b still cuts about 45 B.
 - **Latency**: each call refreshes the code index against MCP's 1 s warm; TE-3 records it, a breach plans 6c. The first call after the stamp 2 upgrade is a cold refresh.
 - **Hand-written enums** (deviation 5): a new code-crate variant (`Relation::ALL`) passes the CLI but breaks MCP's `outputSchema` until mirrored; the parity walker sees only the values the fixtures produce.
-- **Upstream JSON**: a 6a-3 key or type change reopens the mirrors; 10a's role keys join `find_symbols`' mirror as free strings (`bevy-roles.md`).
+- **Upstream JSON**: a 6a-3 key or type change reopens the mirrors; 10a-2's role keys join `find_symbols`' mirror as free strings, plugin 0.10.0 (`bevy-roles-reads.md`).
 
 ## Out of scope
 

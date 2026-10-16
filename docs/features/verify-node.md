@@ -12,7 +12,7 @@ adrs: []
 
 Before handing in, an agent asks whether a node's bindings still hold. Plain `spec verify` judges every lock key against the whole tree (`docs/canon/spec-verify.md`), and MCP never runs it (its opening): an agent runs Bash and reads the whole project's findings.
 
-Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restricted to one node's bindings, judged over the files the code index selects (Q5, Q30); `check_binding`, its MCP twin, a report kept at exit 2; the `implement` skill naming it; `TOOLS` 19, plugin 0.10.0. Split from `code-tools.md` (Q28): 6b-1 ships the three code reads after 6a-3; this ships after 5c, so its rows carry 5b-1's `levels` and 5c's `anchor` from the start. No ADR: ADR-0042 (judge, exits; `architecture-code.md#verify`), ADR-0046 (`#sync-in-reads`: verify's plain state over the refreshed code index, the lock and the read's own parse), ADR-0012/0039 (no gate reads a finding), ADR-0004/0005, ADR-0050 (format 2), ADR-0008 applied.
+Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restricted to one node's bindings, judged over the files the code index selects (Q5, Q30); `check_binding`, its MCP twin, a report kept at exit 2; the `implement` skill naming it; `TOOLS` 19, plugin 0.11.0. Split from `code-tools.md` (Q28): 6b-1 ships the three code reads after 6a-3; this ships after 5c, so its rows carry 5b-1's `levels` and 5c's `anchor` from the start. No ADR: ADR-0042 (judge, exits; `architecture-code.md#verify`), ADR-0046 (`#sync-in-reads`: verify's plain state over the refreshed code index, the lock and the read's own parse), ADR-0012/0039 (no gate reads a finding), ADR-0004/0005, ADR-0050 (format 2), ADR-0008 applied.
 
 ## Description and interactions
 
@@ -26,13 +26,13 @@ Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restri
 
 ### spec verify --node
 
-WA-16, Q5, Q30. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--config`), plain only: with `--changed` or `--staged` (8a's `--task`, `--tests` alike), or `--symbol` alone: usage, exit 2. Order: config, `[verify]`, REF, the md and code index refresh, selection, lock, files, judge.
+WA-16, Q5, Q30. `spec verify --node REF [--symbol QPATH] [--json]` (+ `--root`, `--config`), plain only: with `--changed` or `--staged` (8a-2's `--task`, 8a-1's `--tests` alike: `verify-task.md`, `verify-tests.md`), or `--symbol` alone: usage, exit 2. Order: config, `[verify]`, REF, the md and code index refresh, selection, lock, files, judge.
 
 - **REF**: `spec show`'s resolver; naming nothing, a look-alike, `project:`: exit 2, stdout empty, show's `spec: <reason>` (SW refinement: ADR-0042 keeps exit 1 for Fix alone); several holders: one `warning:`, all of them.
-- **Rows**: plain verify's rows (`spec-verify.md` "Rows", "States"; 5b-1's levels, 5c's pairing) that `spec refs REF` lists under REF's holders: holding a marker listed there (`code-bindings.md` "ID state": `resolved`, `alias`, each `ambiguous`, `homoglyph` under its fix's node), or a lock entry whose `node` is a holder's ID; never sections' or parents'. `--symbol`: rows whose `symbol` is QPATH byte for byte (`ron` also `<file>#<symbol>`); no tiers (qpaths come from `find_symbols`, `refs`); a gone symbol still matches its lock row; so does a moved row whose `anchor.from` symbol is QPATH, anchors paired before the filter (`anchor-states.md`). Zero rows: exit 0, `clean`, `note: verify: <REF> has no binding[ on <QPATH>]`.
+- **Rows** (8a-1's shared "A row in a set" over REF's holders: `verify-tests.md` "The node set", P2): plain verify's rows (`spec-verify.md` "Rows", "States"; 5b-1's levels, 5c's pairing) that `spec refs REF` lists under REF's holders: holding a marker listed there (`code-bindings.md` "ID state": `resolved`, `alias`, each `ambiguous`, `homoglyph` under its fix's node), or a lock entry whose `node` is a holder's ID; never sections' or parents'. `--symbol`: rows whose `symbol` is QPATH byte for byte (`ron` also `<file>#<symbol>`); no tiers (qpaths come from `find_symbols`, `refs`); a gone symbol still matches its lock row; so does a moved row whose `anchor.from` symbol is QPATH, anchors paired before the filter (`anchor-states.md`). Zero rows: exit 0, `clean`, `note: verify: <REF> has no binding[ on <QPATH>]`.
 - **Files** (Q30): only the selected rows' files (markers' from the refreshed `code_markers`, each stored ID judged once, `Corpus::judge`; entries' from `spec.lock`) are read, blob-hashed, parsed and hashed; their qpaths and ambiguity come from 6a-2's Q17 read, no tree walk. A walk gap anywhere stays plain verify's run cause (`cannot:`, `rows` `[]`, exit 2 with the report), never the refresh's `CliError`. Judge, classes, mode (`enforce-introduced` as `enforce`: no base), verdict, exits: plain verify's; `counts`, `cascade`, `delta` over the selected rows; `base` null, `pre_existing` false, `skipped` 0.
 - **Text**: plain verify's row lines (`spec-verify-output.md` "Text"), `ok` rows too (class `-`); a moved row its `moved from` line, `ok` or not (Q34; `anchor-states.md` "Output"); the hints; the summary `verify --node <REF>[ --symbol <QPATH>]: ` + plain's after `verify: `; cut at `OUTPUT_CAP_CHARS`, then `[truncated: <k> rows not shown; narrow with --symbol QPATH]`.
-- **JSON**: plain verify's document (`spec-verify-output.md` "JSON"; rows with 5b-1's `levels`, 5c's `anchor`), `rows` the printed ones; `node` (the holders' IDs) and `symbol` after `base`, `omitted` `{rows}` last; the three `null` without `--node`. **No new row key** (Q29): `markers` stay `{line, rev}`; `id_state`, `rev_state` come from `refs` and `find_symbols {node}`.
+- **JSON**: plain verify's document (`spec-verify-output.md` "JSON"; rows with 5b-1's `levels`, 5c's `anchor`), `rows` the printed ones; `node` (the holders' IDs) and `symbol` after 8a-2's `task` (after `base`: `verify-task.md`, P6), `omitted` `{rows}` last; the three `null` without `--node`. **No new row key** (Q29): `markers` stay `{line, rev}`; `id_state`, `rev_state` come from `refs` and `find_symbols {node}`.
 
 ```
 check | code_ahead code_changed body | LAW-BOUND | implements | crates/tally/src/counter.rs | item crates/tally::counter::impl Tally #1 impl_item
@@ -41,7 +41,7 @@ verify --node LAW-BOUND: observed [observe]: 0 fix, 1 check, 0 cannot, 1 ok; 1 b
 ```
 
 ```json
-{"mode":"observe","base":null,"node":["LAW-BOUND"],"symbol":null,"verdict":"observed",
+{"mode":"observe","base":null,"task":null,"node":["LAW-BOUND"],"symbol":null,"verdict":"observed",
  "counts":{"rows":2,"ok":1,"fix":0,"check":1,"cannot":0,"pre_existing":0,"skipped":0},"cascade":{"by_blob":1,"by_ast":1},
  "rows":[{"node":"LAW-BOUND","relation":"implements","file":"crates/tally/src/counter.rs","kind":"item",
    "symbol":"crates/tally::counter::impl Tally #1","item_kind":"impl_item","state":"code_ahead","category":"code_changed",
@@ -76,7 +76,7 @@ Q31. 6b-1's code line (`code-tools.md` "INSTRUCTIONS") gains `; check_binding(no
 
 ### Plugin
 
-WA-19. `implement`'s body names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged; the body ≤ 4 096 B (2 521 B now, front-matter included); all nineteen tools named; 0.10.0, a `PINS` line.
+WA-19. `implement`'s body names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged; the body ≤ 4 096 B (2 521 B now, front-matter included); all nineteen tools named; 0.11.0, a `PINS` line and an entry in 10a-2's schema-pin list (P1, 2026-10-16: `bevy-roles-reads.md` takes 0.10.0).
 
 ### Fixtures
 
@@ -118,7 +118,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec, split from `code-tools.md` 2026-10-16 (Q28); 08 s2 lists 6b-2 after 5c.
-- [ ] SW-2 -- at shipping (Q32), bytes measured 2026-10-16: a Tier 2 `docs/canon/spec-verify-node.md` (command, rows, files, text, JSON; about 3 KB of 12 288), its line in `docs/index-canon-spec.md` (2 592 of 10 240); `spec-verify.md` (11 710 before 5b-1 and 5c write it: the opening's MCP clause and command line, "Cascade"'s walk, one pointer; over 12 288 a section moves to a Tier 2 file of its own); `spec-verify-output.md` (5 380: `node`, `symbol`, `omitted`, `ok` rows); `mcp-code.md` (6b-1's: `check_binding`, its exits); `mcp-read.md` **Parity** reworded byte-neutral, **Texts** figures; the MCP README `code.rs` row; the CLI README (9 086: the `--node` line); `plugin-files.md` (nineteen, 0.10.0), `plugin.md` "Skills" `implement`; `architecture-code.md` (10 711: one "As built" pointer); 6a-2's canon **Freshness**; 07:26, :37; 08 s2, :44; `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping (Q32), bytes measured 2026-10-16: a Tier 2 `docs/canon/spec-verify-node.md` (command, rows, files, text, JSON; about 3 KB of 12 288), its line in `docs/index-canon-spec.md` (2 592 of 10 240); `spec-verify.md` (11 710 before 5b-1 and 5c write it: the opening's MCP clause and command line, "Cascade"'s walk, one pointer; over 12 288 a section moves to a Tier 2 file of its own); `spec-verify-output.md` (5 380: `node`, `symbol`, `omitted`, `ok` rows); `mcp-code.md` (6b-1's: `check_binding`, its exits); `mcp-read.md` **Parity** reworded byte-neutral, **Texts** figures; the MCP README `code.rs` row; the CLI README (9 086: the `--node` line); `plugin-files.md` (nineteen, 0.11.0), `plugin.md` "Skills" `implement`; `architecture-code.md` (10 711: one "As built" pointer); 6a-2's canon **Freshness**; 07:26, :37; 08 s2, :44; `CLAUDE.md` State.
 - [x] SW-3 -- no ADR; `export index`, `check` clean.
 
 ## Risks
@@ -151,9 +151,9 @@ Q5 (2026-10-10) and Q28-Q34 (2026-10-16) decided under the owner's pre-approval,
 
 ## Dependencies and ordering
 
-- **Needs**: 6b-1 `code-tools` (`code.rs`, the mirrors, `mcp-code.md`, the code line); 6a-2 `symbol-index` (the refresh as a named CLI function, the Q17 read, `code_markers`, RD-9's scope); 4a `spec-verify` (the judge, shipped); 5b-1 `lock-levels` (format 2, `levels`, the golden); 5c `anchor-states` (`anchor`, `delta.bindings.moved`, Q34).
-- **Order** (Q28, 08 s2): 6a-2 -> 6a-3 -> 6b-1 -> 5b-1 -> 5b-2 -> 5c -> 6b-2 (this) -> 6c -> 7a; on the commit after 5c ships. **Independent**: 8a, 9a, 9b.
+- **Needs**: 6b-1 `code-tools` (`code.rs`, the mirrors, `mcp-code.md`, the code line); 6a-2 `symbol-index` (the refresh as a named CLI function, the Q17 read, `code_markers`, RD-9's scope); 4a `spec-verify` (the judge, shipped); 5b-1 `lock-levels` (format 2, `levels`, the golden); 5c `anchor-states` (`anchor`, `delta.bindings.moved`, Q34); 8a-1 `verify-tests` ("The node set", P2); 8a-2 `verify-task` with or before this (`task` precedes `node`, P6).
+- **Order** (Q28, 08 s2): 6a-2 -> 6a-3 -> 6b-1 -> 5b-1 -> 5b-2 -> 5c -> 6b-2 (this) -> 6c -> 7a; on the commit after 5c ships. 8a-1 first (now), 8a-2 after 5b-1, with or before this. **Independent**: 9a, 9b.
 
 ## Implementation
 
-Not started. From the split (2026-10-16, `code-tools.md` Q28): RD-2 <- its RD-2's verify flags; RD-3 <- its RD-5 (+ `verify_symbol_matches_a_moved_rows_from`); RD-4 new (Q30), with its RD-6's fresh-levels mutation; RD-5 <- its RD-6 without `ast_hash` (Q29); RD-6 <- its RD-7 (no MCP code: S13); RD-7 <- its RD-9's `--node` half and Q34; RD-8 <- its RD-8; RD-9 <- its RD-10's task half (a new test: S18); RD-10, RD-11 <- its RD-11, RD-12 (0.10.0); TE-1, TE-2 <- its TE-1, TE-2's `check_binding` half on the format-2 golden; TE-3, TE-4 <- its TE-3, TE-4; TE-5 <- its TE-5's `check_binding`. To record: modules, `INSTRUCTIONS` bytes, TE-4's and TE-5's figures, deviations with reasons.
+Not started. From the split (2026-10-16, `code-tools.md` Q28): RD-2 <- its RD-2's verify flags; RD-3 <- its RD-5 (+ `verify_symbol_matches_a_moved_rows_from`); RD-4 new (Q30), with its RD-6's fresh-levels mutation; RD-5 <- its RD-6 without `ast_hash` (Q29); RD-6 <- its RD-7 (no MCP code: S13); RD-7 <- its RD-9's `--node` half and Q34; RD-8 <- its RD-8; RD-9 <- its RD-10's task half (a new test: S18); RD-10, RD-11 <- its RD-11, RD-12 (0.11.0 since P1); TE-1, TE-2 <- its TE-1, TE-2's `check_binding` half on the format-2 golden; TE-3, TE-4 <- its TE-3, TE-4; TE-5 <- its TE-5's `check_binding`. To record: modules, `INSTRUCTIONS` bytes, TE-4's and TE-5's figures, deviations with reasons.
