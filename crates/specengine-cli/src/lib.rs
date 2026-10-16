@@ -192,6 +192,7 @@ mod refresh;
 mod refs;
 mod review;
 mod revisions;
+mod roles;
 mod round;
 mod search;
 mod serve;
@@ -222,7 +223,7 @@ pub use bundle::{
 };
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
-pub use code_index::{CodeRefresh, listed_code_files, refresh_code};
+pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
 pub use corpus::LeftOut;
 pub use create::{
     CreateRequest, propose_create, propose_create_brief, propose_create_brief_with_task,
@@ -273,6 +274,7 @@ pub use refs::{
     BindingRow, CodeCount, MarkerRow, MentionRow, RefsNode, RefsOutcome, RefsRequest, refs,
 };
 pub use review::{ReviewRequest, review, review_brief};
+pub use roles::{RoleCounts, SubjectCounts, role_counts};
 pub use round::{
     AnswerOutcome, RoundAnswer, RoundAnswerBody, RoundAnswerEntry, RoundAnswerRequest,
     RoundAnswersBody, RoundAnswersOutcome, RoundAnswersRequest, RoundItem, RoundNewRequest,

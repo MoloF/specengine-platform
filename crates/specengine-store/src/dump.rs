@@ -154,6 +154,13 @@ const TABLES: &[TableDump] = &[
         filter: "WHERE ?1 IS NULL OR f.wt = ?1",
         skip: &["file"],
     },
+    TableDump {
+        table: "code_roles",
+        owner: "w.project, w.root, f.path",
+        joins: CODE_FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file"],
+    },
 ];
 
 /// `(table, SELECT … FROM main.<table> x <joins> <filter>)` for every index

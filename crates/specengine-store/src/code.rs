@@ -19,6 +19,10 @@
 //!   that applies: `path_attribute` (a file declares it and its role is not
 //!   [`ROLE_SHARED`]), `unrooted` (its role is [`ROLE_UNROOTED`]),
 //!   `duplicate` (`twin_files` > 0, items only).
+//! - **Framework roles** (format 10, `docs/features/bevy-roles.md`
+//!   "Table"): a file's `code_roles` rows are per-file rows as the others,
+//!   written and cascaded with their file; no pass touches them, links are
+//!   computed per read (`crate::roles`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -43,6 +47,21 @@ macro_rules! symbol_columns {
     };
 }
 pub(crate) use symbol_columns;
+
+/// How many columns [`symbol_columns!`] holds, counted from it (its commas
+/// plus one; no column holds a comma): a query's first column after them.
+pub(crate) const SYMBOL_COLUMN_COUNT: usize = {
+    let bytes = symbol_columns!().as_bytes();
+    let mut count = 1;
+    let mut at = 0;
+    while at < bytes.len() {
+        if bytes[at] == b',' {
+            count += 1;
+        }
+        at += 1;
+    }
+    count
+};
 
 /// A file's role whose unit several crates may include: named by its
 /// location, never `path_attribute`.
@@ -163,6 +182,32 @@ pub struct CodeFileRows {
     pub decls: Vec<CodeDeclRow>,
     pub markers: Vec<CodeMarkerRow>,
     pub mentions: Vec<CodeMentionRow>,
+    /// The framework role rows (`code_roles`), by `ord`; none without a
+    /// framework listed.
+    pub framework_roles: Vec<CodeRoleRow>,
+}
+
+/// One framework role fact of a file (`code_roles`;
+/// `docs/features/bevy-roles.md` "Table"): strings the analyzer gives,
+/// stored and compared, never read for their meaning here.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CodeRoleRow {
+    pub ord: u32,
+    pub word: String,
+    pub source: String,
+    pub form: Option<String>,
+    pub origin: String,
+    /// Whitespace dropped, capped.
+    pub group_text: Option<String>,
+    /// The `ord` of the symbol of this file it sits on.
+    pub symbol_ord: Option<u32>,
+    /// What it names, for a read to link.
+    pub subject: Option<String>,
+    /// The subject's last segment, as the analyzer gives it.
+    pub subject_name: Option<String>,
+    pub certainty: String,
+    pub category: Option<String>,
+    pub line: u32,
 }
 
 /// One item of a file.
@@ -659,7 +704,7 @@ impl FileFacts<'_> {
 }
 
 /// The stored `code_fp` of the worktree, if it has code rows.
-fn stored_code_fp(tx: &Transaction<'_>, wt: i64) -> Result<Option<String>, StoreError> {
+pub(crate) fn stored_code_fp(tx: &Transaction<'_>, wt: i64) -> Result<Option<String>, StoreError> {
     tx.query_row(
         "SELECT code_fp FROM code_worktrees WHERE wt = ?1",
         [wt],
@@ -1140,6 +1185,7 @@ struct Writer<'t> {
     insert_decl: Statement<'t>,
     insert_marker: Statement<'t>,
     insert_mention: Statement<'t>,
+    insert_role: Statement<'t>,
 }
 
 impl<'t> Writer<'t> {
@@ -1195,6 +1241,14 @@ impl<'t> Writer<'t> {
                     "INSERT INTO code_mentions
                        (file, ord, written, line, \"column\", binding, symbol_ord, anchor)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                )
+                .db()?,
+            insert_role: tx
+                .prepare(
+                    "INSERT INTO code_roles
+                       (file, ord, word, source, form, origin, group_text, symbol_ord, subject,
+                        subject_name, certainty, category, line)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 )
                 .db()?,
         })
@@ -1334,6 +1388,25 @@ impl<'t> Writer<'t> {
                     mention.binding,
                     mention.symbol_ord,
                     mention.anchor,
+                ])
+                .db()?;
+        }
+        for role in &rows.framework_roles {
+            self.insert_role
+                .execute(rusqlite::params![
+                    file_id,
+                    role.ord,
+                    role.word,
+                    role.source,
+                    role.form,
+                    role.origin,
+                    role.group_text,
+                    role.symbol_ord,
+                    role.subject,
+                    role.subject_name,
+                    role.certainty,
+                    role.category,
+                    role.line,
                 ])
                 .db()?;
         }

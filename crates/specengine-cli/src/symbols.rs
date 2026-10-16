@@ -236,7 +236,14 @@ pub fn symbols(
         _ => Vec::new(),
     };
 
-    let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
+    let refreshed = refresh_code(
+        &mut open.index,
+        &project.root,
+        &code,
+        &project.config_label,
+        scheme,
+        false,
+    )?;
     refreshed.require_complete()?;
     messages.extend(refreshed.messages.iter().cloned());
     // One snapshot: the markers and the symbols they bind from one read

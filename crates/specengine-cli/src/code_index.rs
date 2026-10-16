@@ -18,6 +18,12 @@
 //!   with `utf8` 0 and a `note:`. Reads that need the whole tree ask
 //!   [`CodeRefresh::require_complete`]: `spec: the code walk is incomplete:
 //!   <gap>`, the walk's first gap by path.
+//! - **Framework roles** (task spec `bevy-roles` "Role facts"): with
+//!   `[code] frameworks` listed, the same tree gives each Rust file's role
+//!   rows (`specengine_code::frameworks::role_facts`); the list is in the
+//!   stamp, so a change re-derives every file. Its names are checked here,
+//!   against the code crate's data, before any code row is touched
+//!   ([`known_frameworks`]): the key's one reader.
 //!
 //! [`refresh_code`] is the one refresh `spec index` and `spec refs` call
 //! (and later reads that walk no tree).
@@ -28,20 +34,22 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use specengine_code::frameworks::{self, KNOWN, role_facts};
 use specengine_code::{
     Anchor, Binding, CODE_INDEX_FORMAT, Digest, FileRole, LevelHashes, LevelState, NamedFile,
     PackageTargets, RustParser, TargetIndex, UnitKind, bind_tree, comment_anchors, item_levels,
     item_signatures, level_header, markers_in, placed_name_file, qpath,
 };
-use specengine_core::CodeConfig;
+use specengine_core::{CodeConfig, ProjectError};
 use specengine_model::{IdScheme, grammar};
 use specengine_store::{
     CodeAnalyzer, CodeDeclRow, CodeFileRows, CodeListing, CodeMarkerRow, CodeMentionRow,
-    CodePackageRow, CodeReport, CodeSymbolRow, ListedCodeFile, ROLE_SHARED, ROLE_UNROOTED,
-    SqliteIndex, StoreError, b3_hash,
+    CodePackageRow, CodeReport, CodeRoleRow, CodeSymbolRow, ListedCodeFile, ROLE_SHARED,
+    ROLE_UNROOTED, SqliteIndex, StoreError, b3_hash,
 };
 
 use crate::code_walk::{self, ManifestSeen, RUST_EXTENSION};
+use crate::project::config_error;
 use crate::refs::{
     CANNOT_VERIFY, FILE, ITEM, Lines, MODULE, RON, RON_NO_VALUE, RON_TOO_DEEP, UNANCHORED,
 };
@@ -360,6 +368,31 @@ impl<'f> Analyzer<'f> {
             );
         }
 
+        // The listed frameworks' role facts, on the same tree; none listed:
+        // no detector runs.
+        let framework_roles = if self.config.frameworks.is_empty() {
+            Vec::new()
+        } else {
+            role_facts(&self.config.frameworks, &tree, text, &analysis.items)
+                .into_iter()
+                .enumerate()
+                .map(|(ord, fact)| CodeRoleRow {
+                    ord: number(ord),
+                    word: fact.word.to_owned(),
+                    source: fact.source.to_owned(),
+                    form: fact.form.map(str::to_owned),
+                    origin: fact.origin.to_owned(),
+                    group_text: fact.group,
+                    symbol_ord: fact.symbol_ord.map(number),
+                    subject: fact.subject,
+                    subject_name: fact.subject_name,
+                    certainty: fact.certainty.to_owned(),
+                    category: fact.category.map(str::to_owned),
+                    line: number(fact.line),
+                })
+                .collect()
+        };
+
         CodeFileRows {
             lang: LANG_RUST.to_owned(),
             utf8: true,
@@ -371,6 +404,7 @@ impl<'f> Analyzer<'f> {
             decls,
             markers: found.markers,
             mentions: found.mentions,
+            framework_roles,
         }
     }
 
@@ -525,13 +559,15 @@ fn role_word(role: &FileRole) -> &'static str {
 
 /// What the code fingerprint covers besides the bytes, path, package
 /// table and `[ids]`: the analyzer's stamp, the level recipe's header and
-/// the parsed `[code]` table.
+/// the parsed `[code]` table, `frameworks` always (sorted, `[]` when
+/// absent).
 #[derive(Serialize)]
 struct Stamp<'a> {
     format: u32,
     levels: String,
     roots: &'a [String],
     exclude: &'a [String],
+    frameworks: &'a [String],
 }
 
 impl CodeAnalyzer for Analyzer<'_> {
@@ -553,6 +589,7 @@ impl CodeAnalyzer for Analyzer<'_> {
             levels: header,
             roots: &self.config.roots,
             exclude: &self.config.exclude,
+            frameworks: &self.config.frameworks,
         })
         .unwrap_or_default()
     }
@@ -613,19 +650,45 @@ impl CodeRefresh {
     }
 }
 
+/// Every name of `[code] frameworks` is one the code crate knows
+/// (`specengine_code::frameworks::KNOWN`): else the first other, by name,
+/// at its line of `config_label` (``<config>:<line>: `[code] frameworks`:
+/// `<name>` is not known: known `…` ``), exit 2.
+pub fn known_frameworks(code: &CodeConfig, config_label: &str) -> Result<(), CliError> {
+    let Some(name) = code
+        .frameworks
+        .iter()
+        .find(|name| frameworks::framework(name).is_none())
+    else {
+        return Ok(());
+    };
+    let problem = ProjectError {
+        line: code.framework_line(name),
+        message: format!(
+            "`[code] frameworks`: `{name}` is not known: known `{}`",
+            KNOWN.join("`, `")
+        ),
+    };
+    Err(config_error(config_label, &problem))
+}
+
 /// Refreshes the code index of `index`'s worktree (`root`, canonical) from
-/// the `[code]` walk `code`, `[ids]` from `scheme`: the files whose cache
-/// key moved are re-derived (`full`: every file), the rest kept, the
-/// cross-file pass run. Lenient: a gap is stored and reported
+/// the `[code]` walk `code` (read from `config_label`), `[ids]` from
+/// `scheme`: the files whose cache key moved are re-derived (`full`: every
+/// file), the rest kept, the cross-file pass run. A framework name the code
+/// crate does not know is refused first ([`known_frameworks`]), no code
+/// row touched. Lenient: a gap is stored and reported
 /// ([`CodeRefresh::gap`]), never an error here. The spec index must be
 /// refreshed first (the store's `NotIndexed` otherwise).
 pub fn refresh_code(
     index: &mut SqliteIndex,
     root: &Path,
     code: &CodeConfig,
+    config_label: &str,
     scheme: &IdScheme,
     full: bool,
 ) -> Result<CodeRefresh, CliError> {
+    known_frameworks(code, config_label)?;
     let files = CodeFiles::read(root, code);
     let analyzer = Analyzer::new(&files, code, scheme)?;
     let report = index

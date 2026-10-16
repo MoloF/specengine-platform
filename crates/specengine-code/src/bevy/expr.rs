@@ -4,10 +4,54 @@ use tree_sitter::Node;
 
 use super::{
     ADAPTERS, ADD_OBSERVER, ADD_PLUGINS, ADD_SYSTEMS, BevyAnalysis, COMBINATORS, Form, MAX_NESTING,
-    Origin, PluginUse, Registration, Target, Uncertain, UncertainCategory, compact_node,
-    compact_span, line, text,
+    MessageUse, Origin, Piped, PluginUse, Registration, Subject, Target, Uncertain,
+    UncertainCategory, compact_node, compact_span, line, path_subject, text,
 };
 use crate::hash::is_comment;
+
+/// Reads one `.add_message::<T>()` call whose method name node is `field`:
+/// `T`'s subject, or why it cannot be read (a parse error in the call's own
+/// parts, no turbofish or not one type, an argument, a type that is no
+/// path).
+pub(super) fn message(call: Node, field: Node, source: &[u8], out: &mut BevyAnalysis) {
+    let subject = if own_error(call) {
+        Err(UncertainCategory::ParseError)
+    } else {
+        message_subject(call, source)
+    };
+    out.messages.push(MessageUse {
+        origin: Origin::Code,
+        subject,
+        line: line(field),
+        start: field.start_byte(),
+    });
+}
+
+fn message_subject(call: Node, source: &[u8]) -> Result<Subject, UncertainCategory> {
+    let arguments = call
+        .child_by_field_name("arguments")
+        .ok_or(UncertainCategory::Arguments)?;
+    if !expression_children(arguments).is_empty() {
+        return Err(UncertainCategory::Arguments);
+    }
+    let function = call
+        .child_by_field_name("function")
+        .filter(|function| function.kind() == "generic_function")
+        .ok_or(UncertainCategory::Arguments)?;
+    let types = function
+        .child_by_field_name("type_arguments")
+        .map(expression_children)
+        .unwrap_or_default();
+    let [ty] = types.as_slice() else {
+        return Err(UncertainCategory::Arguments);
+    };
+    match ty.kind() {
+        "type_identifier" | "scoped_type_identifier" | "generic_type" => {
+            path_subject(*ty, source).ok_or(UncertainCategory::Expression)
+        }
+        _ => Err(UncertainCategory::Expression),
+    }
+}
 
 /// Reads one `add_systems` / `add_observer` / `add_plugins` call whose
 /// method name node is `field`.
@@ -32,6 +76,7 @@ pub(super) fn registration(
         call: method,
         text: compact_span(source, field.start_byte(), call.end_byte()),
         line: line(field),
+        start: field.start_byte(),
     };
     if own_error(call) {
         out.uncertain.push(uncertain(UncertainCategory::ParseError));
@@ -100,6 +145,7 @@ impl Context<'_> {
             call: self.method,
             text: compact_node(node, self.source),
             line: line(node),
+            start: node.start_byte(),
         }
     }
 }
@@ -145,24 +191,35 @@ fn walk(
                 }
             }
             _ => match leaf(peeled.base, context) {
-                Ok((form, name, text)) => out.registrations.push(Registration {
+                Ok(read) => out.registrations.push(Registration {
                     target,
                     origin: Origin::Code,
-                    form,
+                    form: read.form,
                     schedule: schedule.cloned(),
-                    text,
-                    name,
+                    text: read.text,
+                    name: read.name,
                     enclosing_fn: context.enclosing.map(str::to_owned),
                     adapters: peeled.adapters,
                     piped: peeled
                         .piped
-                        .into_iter()
+                        .iter()
                         .map(|piped| {
-                            path_name(piped, context.source)
-                                .unwrap_or_else(|| compact_node(piped, context.source))
+                            path_name(*piped, context.source)
+                                .unwrap_or_else(|| compact_node(*piped, context.source))
                         })
                         .collect(),
                     line: line(peeled.base),
+                    subject: read.subject,
+                    start: peeled.base.start_byte(),
+                    pipes: peeled
+                        .piped
+                        .iter()
+                        .map(|piped| Piped {
+                            read: leaf(*piped, context).map(|read| (read.form, read.subject)),
+                            start: piped.start_byte(),
+                            line: line(*piped),
+                        })
+                        .collect(),
                 }),
                 Err(category) => out.uncertain.push(context.uncertain(category, peeled.base)),
             },
@@ -244,25 +301,42 @@ fn method_call(node: Node) -> Option<(Node, Node, Option<Node>)> {
     ))
 }
 
-/// Form, name and text of a leaf that is not a tuple.
-fn leaf(
-    node: Node,
-    context: &Context,
-) -> Result<(Form, Option<String>, String), UncertainCategory> {
+/// A leaf read: its form, name, text and subject.
+struct LeafRead {
+    form: Form,
+    name: Option<String>,
+    text: String,
+    /// `None` for a closure, and for a path [`path_subject`] cannot name.
+    subject: Option<Subject>,
+}
+
+/// Form, name, text and subject of a leaf that is not a tuple.
+fn leaf(node: Node, context: &Context) -> Result<LeafRead, UncertainCategory> {
     let source = context.source;
     match node.kind() {
-        "identifier" | "scoped_identifier" | "generic_function" | "self" => Ok((
-            Form::Path,
-            path_name(node, source),
-            compact_node(node, source),
-        )),
-        "closure_expression" => Ok((Form::Closure, None, "closure".to_owned())),
+        "identifier" | "scoped_identifier" | "generic_function" | "self" => Ok(LeafRead {
+            form: Form::Path,
+            name: path_name(node, source),
+            text: compact_node(node, source),
+            subject: path_subject(node, source),
+        }),
+        "closure_expression" => Ok(LeafRead {
+            form: Form::Closure,
+            name: None,
+            text: "closure".to_owned(),
+            subject: None,
+        }),
         "call_expression" => {
             let function = node
                 .child_by_field_name("function")
                 .ok_or(UncertainCategory::Expression)?;
             let name = path_name(function, source).ok_or(UncertainCategory::Expression)?;
-            Ok((Form::Factory, Some(name), compact_node(function, source)))
+            Ok(LeafRead {
+                form: Form::Factory,
+                name: Some(name),
+                text: compact_node(function, source),
+                subject: path_subject(function, source),
+            })
         }
         "macro_invocation" => Err(UncertainCategory::MacroInArguments),
         _ => Err(UncertainCategory::Expression),
@@ -305,14 +379,75 @@ fn plugin_uses(root: Node, context: &Context, out: &mut BevyAnalysis) {
                     stack.push((child, nesting + 1));
                 }
             }
-            _ => out.plugin_uses.push(PluginUse {
-                origin: Origin::Code,
-                name: plugin_name(base, source),
-                text: compact_node(base, source),
-                line: line(base),
-            }),
+            _ => {
+                let (subject, form) = match plugin_subject(base, source) {
+                    Some((subject, form)) => (Some(subject), Some(form)),
+                    None => (None, None),
+                };
+                out.plugin_uses.push(PluginUse {
+                    origin: Origin::Code,
+                    name: plugin_name(base, source),
+                    text: compact_node(base, source),
+                    line: line(base),
+                    subject,
+                    form,
+                    start: base.start_byte(),
+                });
+            }
         }
     }
+}
+
+/// A plugin use's subject ([`path_subject`]) and how it is written: `P`,
+/// `a::P`, `P { … }`, `P(…)` are [`Form::Path`] (the plugin's type or
+/// value); so is a lowercase callee whose qualifier's last segment starts
+/// uppercase (`P::default()`, `a::P::new(…)`), its subject the qualifier,
+/// the type. Any other lowercase callee (`make_plugin()`,
+/// `a::make_plugin()`) is a [`Form::Factory`], its subject the whole
+/// callee.
+fn plugin_subject(node: Node, source: &[u8]) -> Option<(Subject, Form)> {
+    match node.kind() {
+        "identifier" | "scoped_identifier" | "generic_function" => {
+            Some((path_subject(node, source)?, Form::Path))
+        }
+        "struct_expression" => {
+            let name = node.child_by_field_name("name")?;
+            Some((path_subject(name, source)?, Form::Path))
+        }
+        "call_expression" => {
+            let function = node.child_by_field_name("function")?;
+            let last = path_name(function, source)?;
+            if !last.starts_with(|c: char| c.is_ascii_lowercase()) {
+                return Some((path_subject(function, source)?, Form::Path));
+            }
+            match type_qualifier(function, source) {
+                Some(qualifier) => Some((qualifier, Form::Path)),
+                None => Some((path_subject(function, source)?, Form::Factory)),
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The qualifier of a callee (`P` of `P::new`, `a::P` of
+/// `a::P::default::<T>`) when it is a path whose last segment starts
+/// uppercase: the type the callee is called on. `None` for a callee with
+/// no qualifier, a lowercase one (a module, `a` of `a::make_plugin`) or
+/// one that is no path (`<T as Tr>`).
+fn type_qualifier(function: Node, source: &[u8]) -> Option<Subject> {
+    let callee = if function.kind() == "generic_function" {
+        function.child_by_field_name("function")?
+    } else {
+        function
+    };
+    if callee.kind() != "scoped_identifier" {
+        return None;
+    }
+    let qualifier = path_subject(callee.child_by_field_name("path")?, source)?;
+    qualifier
+        .name
+        .starts_with(|c: char| c.is_ascii_uppercase())
+        .then_some(qualifier)
 }
 
 /// `P` for `P`, `a::P`, `P { … }`, `P(…)`, `P::default()` / `a::P::new(…)`.

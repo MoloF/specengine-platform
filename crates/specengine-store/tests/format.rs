@@ -10,7 +10,8 @@
 //! docs/features/symbol-index.md (`INDEX_FORMAT` 9) each corpus's worktree
 //! also holds a stub analyzer's code rows (`code_stub`: the store has no
 //! dependency on `specengine-code`), so the history pins the code tables'
-//! projection too.
+//! projection too; since docs/features/bevy-roles.md (`INDEX_FORMAT` 10,
+//! "Formats") the stub emits role rows, so it pins `code_roles` as well.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -152,6 +153,13 @@ fn format_dump() -> String {
         assert!(
             dump.lines().any(|line| line.starts_with("symbols\t")),
             "the stub's rows are dumped"
+        );
+        assert_eq!(
+            dump.lines()
+                .filter(|line| line.starts_with("code_roles\t"))
+                .count(),
+            code_stub::ROLE_ROWS.len(),
+            "the stub's role rows are dumped (docs/features/bevy-roles.md \"Formats\")"
         );
         out.push_str(&dump.replace(&root, "<root>"));
     }
@@ -413,14 +421,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/symbol-index.md TE-3 ("Tables"): the code tables make
-/// `INDEX_FORMAT` 9, and the history is the eight earlier lines, verbatim
-/// (norm-hash's `8` among them), followed by exactly one `9 <hash>` line
-/// (no earlier `9`). Replaces norm-hash's format-8 pin (its TE-6), whose
-/// line stays verbatim. M: the stamp kept 8; an earlier line edited.
+/// docs/features/bevy-roles.md "Formats" (F1, S5): the role table makes
+/// `INDEX_FORMAT` 10, and the history is the nine earlier lines, verbatim
+/// (symbol-index's `9` among them), followed by exactly one `10 <hash>`
+/// line (no earlier `10`). Replaces symbol-index's format-9 pin (its TE-3),
+/// whose line stays verbatim. M: the table added under format 9; an
+/// earlier line edited.
 #[test]
-fn symbol_index_pins_format_9_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 9);
+fn bevy_roles_pins_format_10_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 10);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -438,11 +447,12 @@ fn symbol_index_pins_format_9_with_one_new_history_line() {
         "6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9",
         "7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b",
         "8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650",
+        "9 8c4c50d29560a9d26db29690a4d03de1b5a453910d8cb646809c433cf2a331c1",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "norm-hash's history plus exactly one new line:\n{history}"
+        "symbol-index's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -451,15 +461,15 @@ fn symbol_index_pins_format_9_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "9", "the new line is format 9: {last}");
+    assert_eq!(format, "10", "the new line is format 10: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("9 ")).count(),
+        lines.iter().filter(|line| line.starts_with("10 ")).count(),
         1,
-        "no earlier `9` line"
+        "no earlier `10` line"
     );
 }
 
@@ -966,24 +976,29 @@ fn a_seven_stamped_database_rebuilds_with_its_queue_intact() {
     );
 }
 
-/// docs/features/symbol-index.md RD-1, the store's half. M: created
-/// lazily; a code table missing from `FORMAT_TABLES`. An md-only update of
-/// spec-a creates every code table, empty; a stamp change with the stub's
-/// code rows stored and one code table given a column of an older build
-/// recreates every code table (the stale column gone), and the next code
-/// refresh re-derives the rows equal to a fresh worktree's.
+/// Every code table of the format: symbol-index's eight and bevy-roles'
+/// `code_roles` ("Table").
+const CODE_TABLES: [&str; 9] = [
+    "code_worktrees",
+    "code_files",
+    "code_packages",
+    "symbols",
+    "symbol_suffixes",
+    "code_decls",
+    "code_markers",
+    "code_mentions",
+    "code_roles",
+];
+
+/// docs/features/symbol-index.md RD-1, the store's half, and
+/// docs/features/bevy-roles.md RD-3 (`code_roles` in `FORMAT_TABLES`). M:
+/// created lazily; a code table missing from `FORMAT_TABLES`. An md-only
+/// update of spec-a creates every code table, empty; a stamp change with
+/// the stub's code rows stored and every code table given a column of an
+/// older build recreates every code table (each stale column gone), and
+/// the next code refresh re-derives the rows equal to a fresh worktree's.
 #[test]
 fn format_change_recreates_code_tables() {
-    const CODE_TABLES: [&str; 8] = [
-        "code_worktrees",
-        "code_files",
-        "code_packages",
-        "symbols",
-        "symbol_suffixes",
-        "code_decls",
-        "code_markers",
-        "code_mentions",
-    ];
     let scratch = Scratch::new("format-code");
     let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
     let db = scratch.db("code");
@@ -1019,8 +1034,12 @@ fn format_change_recreates_code_tables() {
         let root = fresh.root().to_str().unwrap().to_owned();
         fresh.dump().unwrap().replace(&root, "<root>")
     };
-    conn.execute_batch("ALTER TABLE symbols ADD COLUMN stale_of_an_older_build INTEGER DEFAULT 7")
-        .expect("an older build's column");
+    for table in CODE_TABLES {
+        conn.execute_batch(&format!(
+            "ALTER TABLE {table} ADD COLUMN stale_of_an_older_build INTEGER DEFAULT 7"
+        ))
+        .unwrap_or_else(|error| panic!("{table}: an older build's column: {error}"));
+    }
     drop(conn);
     rewrite_stamp(&db, "0");
     let report = corpus.update(&mut index);
@@ -1028,14 +1047,19 @@ fn format_change_recreates_code_tables() {
     let report = code_stub::index_stub(&mut index, &corpus.scheme);
     assert!(report.rederived_all, "{report:?}");
     let conn = rusqlite::Connection::open(&db).expect("raw connection");
-    let stale: i64 = conn
-        .query_row(
-            "SELECT count(*) FROM pragma_table_xinfo('symbols') WHERE name = 'stale_of_an_older_build'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(stale, 0, "symbols recreated");
+    for table in CODE_TABLES {
+        let stale: i64 = conn
+            .query_row(
+                &format!(
+                    "SELECT count(*) FROM pragma_table_xinfo('{table}') \
+                     WHERE name = 'stale_of_an_older_build'"
+                ),
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stale, 0, "{table} recreated");
+    }
     let root = index.root().to_str().unwrap().to_owned();
     assert_eq!(
         index.dump().unwrap().replace(&root, "<root>"),
@@ -1123,4 +1147,77 @@ fn the_stub_rows_carry_the_pass() {
         .expect("another stamp");
     assert!(report.rederived_all, "{report:?}");
     assert_eq!(report.parsed, 3, "{report:?}");
+}
+
+/// docs/features/bevy-roles.md "Table" (WA-1, S6, SR6), the store's half:
+/// `CodeFileRows.framework_roles` are stored as `code_roles` rows keyed
+/// `(file, ord)`, strings as given (the store holds no word: the stub's
+/// own), dumped by `(path, ord)`; another analyzer stamp re-derives them
+/// equal, their dump lines byte for byte. M: role rows dropped, keyed by
+/// rowid, or dumped without their path.
+#[test]
+fn the_stub_role_rows_are_stored_by_path_and_ord() {
+    let scratch = Scratch::new("format-stub-roles");
+    let corpus = Corpus::copy_of("spec-a", &scratch, "wt");
+    let db = scratch.db("roles");
+    let mut index = corpus.open(&db);
+    corpus.update(&mut index);
+    code_stub::index_stub(&mut index, &corpus.scheme);
+    let read = || -> Vec<(String, u32, String, String)> {
+        let conn = rusqlite::Connection::open(&db).expect("raw connection");
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .expect("busy timeout");
+        conn.prepare(
+            "SELECT f.path, r.ord, r.word, r.certainty FROM code_roles r
+             JOIN code_files f ON f.file_id = r.file ORDER BY f.path, r.ord",
+        )
+        .unwrap()
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+    };
+    let want: Vec<(String, u32, String, String)> = code_stub::ROLE_ROWS
+        .iter()
+        .map(|(path, ord, word, certainty)| {
+            (
+                (*path).to_owned(),
+                *ord,
+                (*word).to_owned(),
+                (*certainty).to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(read(), want);
+    let dump = index.dump().expect("dump");
+    let lines: Vec<&str> = dump
+        .lines()
+        .filter(|line| line.starts_with("code_roles\t"))
+        .collect();
+    assert_eq!(lines.len(), want.len(), "{dump}");
+    for line in &lines {
+        assert!(
+            line.contains("\"crates/stub/src/"),
+            "a role row names its path: {line}"
+        );
+    }
+
+    let other_stamp = code_stub::Stub {
+        fingerprint: b"stub-analyzer 2".to_vec(),
+    };
+    let report = index
+        .update_code(&other_stamp, &corpus.scheme, false)
+        .expect("another stamp");
+    assert!(report.rederived_all, "{report:?}");
+    assert_eq!(read(), want, "re-derived equal");
+    // `code_worktrees.code_fp` is dumped and moved with the stamp: the
+    // role lines alone compare.
+    let again = index.dump().expect("dump");
+    let again: Vec<&str> = again
+        .lines()
+        .filter(|line| line.starts_with("code_roles\t"))
+        .collect();
+    assert_eq!(again, lines, "the same role lines");
 }

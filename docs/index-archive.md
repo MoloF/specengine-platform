@@ -17,6 +17,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0006](decisions/ADR-0006.md) superseded-by ADR-0039
 - [ADR-0037](decisions/ADR-0037.md) superseded-by ADR-0039
 - [docs/features/agent-intake.md](features/agent-intake.md) shipped
+- [docs/features/bevy-roles.md](features/bevy-roles.md) shipped
 - [docs/features/code-refs.md](features/code-refs.md) shipped
 - [docs/features/code-tools.md](features/code-tools.md) shipped
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped

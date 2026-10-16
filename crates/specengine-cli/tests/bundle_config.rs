@@ -1,11 +1,12 @@
 //! docs/features/spec-cli-bundle.md, config, writes and genre: AC-13 (the
 //! budget's sources; `[budgets] bundle_node` read alone), AC-15 (read only
 //! but the data directory; no table added; an edit shows without `spec
-//! index`), AC-16 (no format of the bundle's own: `INDEX_FORMAT` 9, the
-//! code index's stamp since docs/features/symbol-index.md, and the format
-//! history pinned), AC-18 (a synthetic non-Rust corpus: no P2-3 word in a
-//! bundle or the bundle sources). Scratch copies of `fixtures/spec-a`,
-//! each run with its own `HOME`; the fixtures are only read.
+//! index`), AC-16 (no format of the bundle's own: `INDEX_FORMAT` 10, the
+//! code index's stamp since docs/features/symbol-index.md and the role
+//! table's since docs/features/bevy-roles.md, and the format history
+//! pinned), AC-18 (a synthetic non-Rust corpus: no P2-3 word in a bundle
+//! or the bundle sources). Scratch copies of `fixtures/spec-a`, each run
+//! with its own `HOME`; the fixtures are only read.
 
 #![cfg(unix)]
 
@@ -293,15 +294,15 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 9, the stamp
-/// of the code index (docs/features/symbol-index.md "Tables", TE-3), and
-/// the store's format history is its nine lines: norm-hash's eight,
-/// verbatim, and one `9 <hash>`. M: the dump changed, the stamp kept (the
-/// store's `format.rs` turns red on the dump; this pins the stamp and the
-/// file).
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 10, the stamp
+/// of the code index (docs/features/symbol-index.md "Tables", TE-3) and of
+/// its role table (docs/features/bevy-roles.md "Formats", S5), and the
+/// store's format history is its ten lines: symbol-index's nine, verbatim,
+/// and one `10 <hash>`. M: the dump changed, the stamp kept (the store's
+/// `format.rs` turns red on the dump; this pins the stamp and the file).
 #[test]
-fn ac16_index_format_is_nine() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 9);
+fn ac16_index_format_is_ten() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 10);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -315,20 +316,21 @@ fn ac16_index_format_is_nine() {
 6 f014f154e83805144ef39e54ee05e18a5d110ec0d93f6005481dd73f597a70a9
 7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b
 8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650
+9 8c4c50d29560a9d26db29690a4d03de1b5a453910d8cb646809c433cf2a331c1
 ";
-    let ninth = history
+    let tenth = history
         .strip_prefix(earlier)
-        .unwrap_or_else(|| panic!("the eight earlier lines stay verbatim:\n{history}"));
-    let (format, hash) = ninth
+        .unwrap_or_else(|| panic!("the nine earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = tenth
         .strip_suffix('\n')
         .and_then(|line| line.split_once(' '))
-        .unwrap_or_else(|| panic!("one more line, `9 <hash>`:\n{history}"));
-    assert_eq!(format, "9", "{history}");
+        .unwrap_or_else(|| panic!("one more line, `10 <hash>`:\n{history}"));
+    assert_eq!(format, "10", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
-        "a BLAKE3 hex: {ninth:?}"
+        "a BLAKE3 hex: {tenth:?}"
     );
-    assert_eq!(history.lines().count(), 9, "nine lines:\n{history}");
+    assert_eq!(history.lines().count(), 10, "ten lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and

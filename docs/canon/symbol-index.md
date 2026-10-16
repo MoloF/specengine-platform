@@ -14,13 +14,13 @@ The code index stores every `[code]` file's rows beside the spec index of the sa
 
 - **Store** `code.rs`: compare, apply and the cross-file pass behind `trait CodeAnalyzer {list, packages, fingerprint, analyze}` over plain rows (`CodeListing`, `ListedCodeFile`, `CodePackageRow`, `CodeFileRows`, `Code{Symbol,Decl,Marker,Mention}Row`). No code crate, no tree-sitter, no `rusqlite` type public; it compares strings and reads only the roles `ROLE_SHARED`, `ROLE_UNROOTED`.
 - **CLI** `code_index.rs`, the analyzer: the walk's one listing and package lookup (`code_walk::list`, `disk_packages`); one parse per re-derived `.rs` file for `bind_tree`, `placed_name_file` (each package's `TargetIndex` built once; each item's `QPath`, `file_place` once), `item_levels`, `item_signatures`; `comment_anchors` once per `.ron` file; never an item's binding `state`.
-- `SqliteIndex::update_code(&dyn CodeAnalyzer, &IdScheme, full) -> CodeReport` refreshes; `refresh_code(index, root, code, scheme, full) -> CodeRefresh {report, messages, gap(), require_complete()}`: the one named refresh (`index`, `refs`, `symbols`, `unmapped`; later 6b-2's `verify --node`), lenient. `listed_code_files(root, code)`: the walk's listing.
+- `SqliteIndex::update_code(&dyn CodeAnalyzer, &IdScheme, full) -> CodeReport` refreshes; `refresh_code(index, root, code, config_label, scheme, full) -> CodeRefresh {report, messages, gap(), require_complete()}`: the one named refresh (`index`, `refs`, `symbols`, `unmapped`; later 6b-2's `verify --node`), lenient. `listed_code_files(root, code)`: the walk's listing.
 - Reads: `stored_names(path) -> StoredNames {module, items}` (`None`: no row or no module), each `StoredName {qpath, ambiguity, discriminator}` by `ord`, from rows only (a file edited since keeps its names); `code_refs() -> CodeRefs {files, markers, mentions}` (a binding's `BoundSymbol.ord`), `code_symbols()` (`StoredSymbol` with `start_byte`, `end_byte`, `layer`; `None`: no code indexed); `lookup_symbols`, `file_symbols`, `code_snapshot` (one transaction): `symbol-reads.md`. `clear_code()` drops the worktree's rows.
 - `specengine-code`: `CODE_INDEX_FORMAT`, `placed_name_file` -> `PlacedNames` (`indexed_name_file`'s names, `file_place`'s label and role, each item's `QPath`), `QPath::segments`, `QPath::suffixes(discriminator)`.
 
 ## Tables
 
-`INDEX_FORMAT` 9: eight `STRICT` tables created with the schema in every DB (columns: store `schema.rs`), IDs and revs as written. `code_files.file_id` is an `INTEGER PRIMARY KEY`; the per-file tables key on `(file, ord)`, `file` that `file_id`, and cascade; `code_worktrees.wt` references `worktrees`, `code_files` and `code_packages` reference `code_worktrees`.
+`INDEX_FORMAT` 10: nine `STRICT` tables created with the schema in every DB (columns: store `schema.rs`), IDs and revs as written. `code_files.file_id` is an `INTEGER PRIMARY KEY`; the per-file tables key on `(file, ord)`, `file` that `file_id`, and cascade; `code_worktrees.wt` references `worktrees`, `code_files` and `code_packages` reference `code_worktrees`.
 
 | Table | Key | Columns |
 |---|---|---|
@@ -32,6 +32,7 @@ The code index stores every `[code]` file's rows beside the spec index of the sa
 | `code_decls` | `(file, ord)` | `target` (a `#[path]` module's file), `line` |
 | `code_markers` | `(file, ord)` | `relation`, `token`, `id`, `rev`, `levels` (JSON; NULL invalid), `levels_state`, `note`, `line`, `"column"`, `binding`, `symbol_ord`, `anchor` |
 | `code_mentions` | `(file, ord)` | `written`, `line`, `"column"`, `binding`, `symbol_ord`, `anchor` |
+| `code_roles` | `(file, ord)` | `code-roles.md` "Table" |
 
 Indexes `symbols_by_qpath`, `symbols_by_name`, `symbol_suffixes_by_suffix`, `code_decls_by_target`; `"column"` quoted everywhere. The dump maps `wt`, `file_id`, `file` to `(project, root)`, `path`, `(path, ord)`. `FORMAT_TABLES` (a list that never removes one) holds them children first, before `worktrees`: a stamp change recreates them, queue tables survive.
 
@@ -41,7 +42,7 @@ Indexes `symbols_by_qpath`, `symbols_by_name`, `symbol_suffixes_by_suffix`, `cod
 
 ## Cache key and cross-file pass
 
-- **`code_fp`**: `b3:` BLAKE3 of parts, each prefixed by its length (8 bytes, little-endian): the stamp JSON `{format: CODE_INDEX_FORMAT, levels: level_header() hex, roots, exclude}`, then the md writer's `[ids]` fingerprint. **`targets_fp`**: framed alike over (`source`, `targets`).
+- **`code_fp`**: `b3:` BLAKE3 of parts, each prefixed by its length (8 bytes, little-endian): the stamp JSON `{format: CODE_INDEX_FORMAT, levels: level_header() hex, roots, exclude, frameworks}`, then the md writer's `[ids]` fingerprint. **`targets_fp`**: framed alike over (`source`, `targets`).
 - **Key**: a row is kept when its (BLAKE3, package directory, `targets_fp`) is the file's under an equal `code_fp`; never mtime. A new `Cargo.toml` between a file and its package re-parents it; a manifest edit or a new `src/bin/x.rs` re-derives the package. An unreadable file (BLAKE3 NULL) is rewritten every refresh; a file the parser gives no tree is a `read_error` row cached by its BLAKE3. `--full`, a moved `code_fp`, or an index this handle's spec update recreated re-derives all (`rederived_all`).
 - **Refresh**: a snapshot read, the analyses outside any lock, then one `Immediate` transaction: `code_fp` and keys re-read, a row moved since analysed in place, `code_packages` rewritten, removed files deleted, rows applied, the pass, the counts; a crash rolls all back.
 - **Pass**, over every path and undiscriminated qpath a removed or re-derived file held or holds: `declared_by`, the smallest path among the files declaring it (`code_decls_by_target`); `twin_files`, the number of other files rendering the qpath `u` (0 if none; unrooted and `#[path]` files count), read by `TWIN_SQL`: `qpath = u` with no discriminator, plus the `qpath` index range [`u #`, `u $`) filtered by `discriminator IS NOT NULL AND qpath = u ‖ ' #' ‖ discriminator`, the index search outermost (`CROSS JOIN`). Never a scan, never a split of a qpath (names hold ` #`).
@@ -49,7 +50,7 @@ Indexes `symbols_by_qpath`, `symbols_by_name`, `symbol_suffixes_by_suffix`, `cod
 
 ## Analyzer stamp
 
-`CODE_INDEX_FORMAT` (`specengine-code`), 2: the binding, naming, discriminator, signature, marker and mention rules a row holds, `symbol-names.md`'s as of now included; 2 (6b-1): `\` becomes `/` only where `MAIN_SEPARATOR` is `\`, in stored directories (CLI `dir_text`) and package labels (`file_place`), so Unix keeps it; any change to one bumps it (all re-derived); `level_header()` covers the levels. CLI `tests/code_format_history.txt`: `<CODE_INDEX_FORMAT> <BLAKE3 of fixtures/code-index's code-table dump, root masked>`; a changed dump under a kept stamp is red. The store's `format_history.txt` line 9 hashes spec-a, spec-b and a stub analyzer's rows.
+`CODE_INDEX_FORMAT` (`specengine-code`), 3: the binding, naming, discriminator, signature, marker, mention and role rules a row holds (`symbol-names.md`, `code-roles.md`); `\` becomes `/` in stored directories and package labels only where `MAIN_SEPARATOR` is `\`; any change to one bumps it (all re-derived); `level_header()` covers the levels. CLI `tests/code_format_history.txt`: `<CODE_INDEX_FORMAT> <BLAKE3 of fixtures/code-index's code-table dump, from 3 on then fixtures/code-bevy's, roots masked>`; a changed dump under a kept stamp is red. The store's `format_history.txt` line 10 hashes spec-a, spec-b and a stub analyzer's rows.
 
 ## spec refs and spec index
 
@@ -62,7 +63,7 @@ Indexes `symbols_by_qpath`, `symbols_by_name`, `symbol_suffixes_by_suffix`, `cod
 
 ## AC-10 measurement
 
-`specengine-eval code-index` copies the `[code]` walk's files and each manifest up to the corpus root to `--out/code-index/<label>/corpus` and indexes it into `index.db` there. `result`: `kloc` (`.rs` newlines / 1000), `rs_files`, `ron_files`, `bytes`, `items` (stored symbols); `hash_ms` (parse, `bind_tree`, `item_levels`, `item_signatures`, no DB); `full_ms`; `noop_ms` + `noop_parsed`; `one_file_ms` + `one_file_parsed` (a `//` line appended to the largest `.rs` by bytes, smallest path on a tie; `null` without one); `db_bytes` (DB + WAL); `refs_ms` (one `code_refs()`); `twins.{cfg, ordinal}.{groups, items}` (a discriminator of digits is ordinal), `twins.cross_file` (`duplicate` items); `signatures.{items, cut}`; `roles.{files, metadata, differ}`, each Rust file's role under the layout vs `cargo metadata`'s table over the original corpus (`$SPECENGINE_CARGO`, absolute under a scratch `HOME`, else `cargo`; `differ` `null` when no package answered).
+`specengine-eval code-index` copies the `[code]` walk's files and each manifest up to the corpus root to `--out/code-index/<label>/corpus` and indexes it into `index.db` there. `result`: `kloc` (`.rs` newlines / 1000), `rs_files`, `ron_files`, `bytes`, `items` (stored symbols); `hash_ms` (parse, `bind_tree`, `item_levels`, `item_signatures`, no DB); `full_ms`; `noop_ms` + `noop_parsed`; `one_file_ms` + `one_file_parsed` (a `//` line appended to the largest `.rs` by bytes, smallest path on a tie; `null` without one); `db_bytes` (DB + WAL); `refs_ms` (one `code_refs()`); `twins.{cfg, ordinal}.{groups, items}` (a discriminator of digits is ordinal), `twins.cross_file` (`duplicate` items); `signatures.{items, cut}`; `roles.{files, metadata, differ}`, each Rust file's role under the layout vs `cargo metadata`'s table over the original corpus (`$SPECENGINE_CARGO`, absolute under a scratch `HOME`, else `cargo`; `differ` `null` when no package answered); `framework_roles`, `roles_ms`: `code-roles.md` "Eval".
 
 Judged in release on the pilots: `hash_ms` × 300 / `kloc` ≤ 2 000, `one_file_ms` ≤ 200, `noop_ms` ≤ 200 (7a's gate); `full_ms` recorded. A failed figure, or 5a-2's `levels_ms_per_kloc` above 6.67 (`code-hash-eval.md`), plans 6c `code-index-speed`.
 

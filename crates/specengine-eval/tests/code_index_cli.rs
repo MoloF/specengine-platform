@@ -9,11 +9,20 @@
 //! `ast_hash_units.rs`): `differ` counts a changed role, `null` when no
 //! package answered; the fixtures untouched.
 //!
+//! docs/features/bevy-roles.md "Eval" (E1, SR6): `result` gains
+//! `framework_roles` (the `code.roles` object of the last refresh; `null`
+//! with the opt-in off) and `roles_ms`; the scheme's `frameworks` is kept
+//! (`--pilot` over a scratch copy of `fixtures/code-bevy`), and under a
+//! pilot label `SPECENGINE_CODE_FRAMEWORKS_A` joins
+//! `SPECENGINE_CODE_ROOTS_A`'s table (unset or empty: off; an unknown name:
+//! exit 2).
+//!
 //! As built (the spec leaves them open): where the harness keeps its scratch copy and database
 //! (`--out/code-index/<label>/corpus`, `…/index.db`, as `index.rs`'s
 //! `--out/index/<label>/`), and the shape of `twins` (`{cfg, ordinal}` as
 //! `{groups, items}`, `cross_file` a count) and `roles` (`{files,
-//! metadata, differ}`) follow the spec's words.
+//! metadata, differ}`) follow the spec's words. As built (iteration 1):
+//! `roles_ms` is `null` with the opt-in off (no role read).
 
 #![cfg(unix)]
 
@@ -27,22 +36,25 @@ use serde_json::Value;
 const BIN: &str = env!("CARGO_BIN_EXE_specengine-eval");
 
 /// The variables a pilot run reads: never inherited here.
-const ENV: [&str; 9] = [
+const ENV: [&str; 11] = [
     "SPECENGINE_PILOT_A",
     "SPECENGINE_PILOT_B",
     "SPECENGINE_SCHEME_A",
     "SPECENGINE_SCHEME_B",
     "SPECENGINE_CODE_ROOTS_A",
     "SPECENGINE_CODE_ROOTS_B",
+    "SPECENGINE_CODE_FRAMEWORKS_A",
+    "SPECENGINE_CODE_FRAMEWORKS_B",
     "SPECENGINE_CENSUS_CONFIG_A",
     "SPECENGINE_CENSUS_CONFIG_B",
     "SPECENGINE_CARGO",
 ];
 
-/// The spec's fields ("AC-10 measurement"), exactly.
-const RESULT_KEYS: [&str; 16] = [
+/// The spec's fields ("AC-10 measurement"; bevy-roles "Eval"), exactly.
+const RESULT_KEYS: [&str; 18] = [
     "bytes",
     "db_bytes",
+    "framework_roles",
     "full_ms",
     "hash_ms",
     "items",
@@ -53,6 +65,7 @@ const RESULT_KEYS: [&str; 16] = [
     "one_file_parsed",
     "refs_ms",
     "roles",
+    "roles_ms",
     "ron_files",
     "rs_files",
     "signatures",
@@ -74,6 +87,13 @@ fn fixture() -> PathBuf {
 fn expected() -> Value {
     serde_json::from_str(&fs::read_to_string(fixture().join("expected.json")).unwrap())
         .expect("fixtures/code-index/expected.json")
+}
+
+/// `fixtures/code-bevy/expected.json` (bevy-roles TE-1).
+fn bevy_expected() -> Value {
+    let path = repository_root().join("fixtures/code-bevy/expected.json");
+    serde_json::from_str(&fs::read_to_string(path).unwrap())
+        .expect("fixtures/code-bevy/expected.json")
 }
 
 /// A scratch directory under the system temp dir, removed on drop.
@@ -140,15 +160,25 @@ fn answering_cargo(scratch: &Scratch, extra: &str) -> PathBuf {
 /// `specengine-eval code-index --out <out>` over the default fixture, the
 /// pilot variables removed, `cargo` the stand-in.
 fn code_index(out: &Path, cargo: &Path) -> Output {
+    code_index_with(out, cargo, &[], &[])
+}
+
+/// [`code_index`] with `args` before `--out` and `env` set (after the
+/// pilot variables are removed).
+fn code_index_with(out: &Path, cargo: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut command = Command::new(BIN);
     command.current_dir(repository_root());
     for variable in ENV {
         command.env_remove(variable);
     }
+    for (variable, value) in env {
+        command.env(variable, value);
+    }
     command
         .env("SPECENGINE_CARGO", cargo)
+        .arg("code-index")
+        .args(args)
         .args([
-            "code-index",
             "--out",
             out.to_str().expect("UTF-8 scratch"),
             "--timeout",
@@ -254,7 +284,8 @@ fn query(db: &Path, sql: &str) -> Vec<BTreeMap<String, Value>> {
 /// `one_file_parsed` 1, `kloc` the `.rs` newlines / 1000, `bytes` the code
 /// files' bytes, no path, ID or project word on stdout; a cargo that never
 /// answers leaves `roles.metadata` 0 and `differ` `null`; the fixtures
-/// untouched.
+/// untouched. bevy-roles E1: code-index has no `frameworks`, so
+/// `framework_roles` is `null`.
 #[test]
 fn code_index_envelope_counts_the_fixture() {
     let scratch = Scratch::new("envelope");
@@ -293,6 +324,14 @@ fn code_index_envelope_counts_the_fixture() {
     ] {
         assert_eq!(result[key], want[key], "result.{key}");
     }
+    assert!(
+        result["framework_roles"].is_null(),
+        "off without `frameworks`: {result}"
+    );
+    assert!(
+        result["roles_ms"].is_null(),
+        "no role read with the opt-in off: {result}"
+    );
     let kloc = result["kloc"].as_f64().expect("kloc");
     assert!((kloc - 0.156).abs() < 1e-9, "kloc {kloc}");
     let files = code_files();
@@ -449,6 +488,7 @@ fn counts_repeat_byte_for_byte() {
             "noop_ms",
             "one_file_ms",
             "refs_ms",
+            "roles_ms",
             "db_bytes",
         ] {
             object.remove(key);
@@ -456,4 +496,133 @@ fn counts_repeat_byte_for_byte() {
         result.to_string()
     };
     assert_eq!(counts("one"), counts("two"));
+}
+
+// ------------------------------------------------- bevy-roles "Eval" (E1)
+
+/// Copies `fixtures/code-bevy` to `to`, `expected.json` left out, the
+/// config's `[code]` (its last table) replaced by `code` (`None`: kept).
+fn copy_code_bevy(to: &Path, code: Option<&str>) {
+    fn copy(from: &Path, to: &Path) {
+        fs::create_dir_all(to).expect("target");
+        for entry in fs::read_dir(from).expect("fixture").flatten() {
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("type").is_dir() {
+                copy(&entry.path(), &target);
+            } else if entry.file_name() != "expected.json" {
+                fs::write(&target, fs::read(entry.path()).expect("read")).expect("write");
+            }
+        }
+    }
+    copy(&repository_root().join("fixtures/code-bevy"), to);
+    if let Some(code) = code {
+        let config = fs::read_to_string(to.join("specengine.toml")).expect("config");
+        let at = config.find("\n[code]\n").expect("a [code] table") + 1;
+        fs::write(
+            to.join("specengine.toml"),
+            format!("{}{code}", &config[..at]),
+        )
+        .expect("the config");
+    }
+}
+
+/// bevy-roles E1 (TE-1's figures). M: the scheme's `frameworks` dropped;
+/// `framework_roles` not the last refresh's `code.roles`. Over a scratch
+/// copy of code-bevy (`--pilot`, its own scheme, `frameworks =
+/// ["bevy"]`): `framework_roles` is `expected.json`'s `code_roles`,
+/// `roles_ms` a count; stdout names no path, ID or project word; the
+/// fixtures untouched.
+#[test]
+fn framework_roles_count_the_code_bevy_fixture() {
+    let scratch = Scratch::new("framework-roles");
+    let before = fixtures_git_status();
+    let corpus = scratch.join("corpus");
+    copy_code_bevy(&corpus, None);
+    let corpus_text = corpus.to_str().expect("UTF-8 scratch").to_owned();
+    let output = code_index_with(
+        &scratch.join("out"),
+        &silent_cargo(&scratch),
+        &["--pilot", corpus_text.as_str()],
+        &[],
+    );
+    let envelope = envelope(&output);
+    let result = &envelope["result"];
+    assert_eq!(
+        result["framework_roles"],
+        bevy_expected()["code_roles"],
+        "{result}"
+    );
+    assert!(result["roles_ms"].is_u64(), "roles_ms a count: {result}");
+    assert_eq!(result["items"], 41, "{result}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for leak in ["/", ".rs", "farm", "ALM", "CHORE", "Crop", "spawn_every"] {
+        assert!(!stdout.contains(leak), "{leak:?} on stdout: {stdout}");
+    }
+    assert_eq!(fixtures_git_status(), before, "the fixtures are only read");
+}
+
+/// bevy-roles E1 (`harness::PILOT_CODE_FRAMEWORKS`). M: the variable
+/// ignored; a framework read from the scheme under a roots variable. Under
+/// `--label pilot-a` with `SPECENGINE_CODE_ROOTS_A` (the scheme's own
+/// `[code]` without `frameworks`): `SPECENGINE_CODE_FRAMEWORKS_A=bevy`
+/// gives `expected.json`'s `code_roles`; unset or empty, `null`; an
+/// unknown name is exit 2 naming it.
+#[test]
+fn pilot_frameworks_variable_joins_the_roots_table() {
+    let scratch = Scratch::new("framework-variable");
+    let corpus = scratch.join("corpus");
+    copy_code_bevy(&corpus, Some("[code]\nroots = [\"crates\", \"assets\"]\n"));
+    let corpus_text = corpus.to_str().expect("UTF-8 scratch").to_owned();
+    let cargo = silent_cargo(&scratch);
+    let run = |out: &str, frameworks: Option<&str>| {
+        let mut env = vec![("SPECENGINE_CODE_ROOTS_A", "crates,assets")];
+        if let Some(frameworks) = frameworks {
+            env.push(("SPECENGINE_CODE_FRAMEWORKS_A", frameworks));
+        }
+        code_index_with(
+            &scratch.join(out),
+            &cargo,
+            &["--pilot", corpus_text.as_str(), "--label", "pilot-a"],
+            &env,
+        )
+    };
+    let on = envelope(&run("on", Some("bevy")));
+    assert_eq!(
+        on["result"]["framework_roles"],
+        bevy_expected()["code_roles"],
+        "{on}"
+    );
+    for (out, frameworks) in [("unset", None), ("empty", Some(""))] {
+        let off = envelope(&run(out, frameworks));
+        assert!(off["result"]["framework_roles"].is_null(), "{out}: {off}");
+    }
+    let unknown = run("unknown", Some("loom"));
+    assert_eq!(unknown.status.code(), Some(2), "{unknown:?}");
+    assert!(
+        String::from_utf8_lossy(&unknown.stderr).contains("loom"),
+        "{}",
+        String::from_utf8_lossy(&unknown.stderr)
+    );
+}
+
+/// Review 1 target, built in iteration 2 (B4). M: the frameworks
+/// variable ignored without the roots variable (a TE-7 run measuring with
+/// roles off by mistake). Under `--label pilot-a`,
+/// `SPECENGINE_CODE_FRAMEWORKS_A` set while `SPECENGINE_CODE_ROOTS_A` is
+/// not: exit 2, nothing on stdout, the refusal on stderr.
+#[test]
+fn frameworks_variable_without_roots_is_refused() {
+    let scratch = Scratch::new("framework-variable-alone");
+    let corpus = scratch.join("corpus");
+    copy_code_bevy(&corpus, None);
+    let corpus_text = corpus.to_str().expect("UTF-8 scratch").to_owned();
+    let output = code_index_with(
+        &scratch.join("out"),
+        &silent_cargo(&scratch),
+        &["--pilot", corpus_text.as_str(), "--label", "pilot-a"],
+        &[("SPECENGINE_CODE_FRAMEWORKS_A", "bevy")],
+    );
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(!output.stderr.is_empty(), "{output:?}");
 }

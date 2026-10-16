@@ -1,0 +1,10 @@
+# The binary package of the code-bevy fixture: read by the code index,
+# never built (no dependency is declared: its `use` lines are text only).
+# `[workspace]` keeps it out of the repository workspace.
+[package]
+name = "farm-app"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

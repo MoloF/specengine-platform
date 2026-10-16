@@ -1,0 +1,24 @@
+# Fixture corpus code-bevy (docs/features/bevy-roles.md, TE-1, WA-12, Z1): a
+# small farm game written against Bevy 0.19's API, its almanac and its
+# chores. Parsed only: no Bevy dependency, never built (`fixtures/bevy-mini`
+# stays as it is). Two packages, a library and a binary; every derive form,
+# `impl Component for`, `add_message::<T>()` in code and in a `macro_rules!`
+# body, one generic system registered from one site for three types, a
+# closure, a pipe, a factory, a macro-registered nested `fn`, `cfg` twins
+# beside a bare-named registration, a `crate::`- and a module-qualified
+# subject beside a same-named `fn` elsewhere, a struct and a `fn` of one
+# name, `impl Plugin for`, `&mut App` fns, `DefaultPlugins`, two markers on
+# role-holding items. Prefixes, kinds and a slug of its own; the kinds avoid
+# the words the role modules print. What the stored role rows, their link
+# states and `spec index` must give: `expected.json`.
+
+[project]
+slug = "code-bevy"
+
+[ids]
+ALM   = { kind = "almanac", shape = "name" }
+CHORE = { kind = "chore",   width = 2 }
+
+[code]
+roots      = ["crates", "assets"]
+frameworks = ["bevy"]

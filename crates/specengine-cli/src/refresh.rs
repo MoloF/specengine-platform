@@ -12,14 +12,21 @@
 //! written and printed, then exit 2 naming the cause at its line. A code
 //! file that cannot be read, or a directory that cannot be listed, is
 //! stored and counted (exit 0); the reads that need the whole tree refuse.
+//!
+//! With `[code] frameworks` listed, a `roles <slug>: …` line follows the
+//! code line (task spec `bevy-roles` "spec index"; [`crate::roles`]), JSON
+//! `code.roles`; `null` and no line without it. A framework the code crate
+//! does not know is refused as a `[code]` that does not read: the spec
+//! index written and printed, `code` `null`, exit 2 at the name's line.
 
 use serde::Serialize;
 use specengine_core::CodeConfig;
 use specengine_store::{CodeReport, IndexWriter, SqliteIndex, UpdateReport, WorkingTree};
 
-use crate::code_index::refresh_code;
+use crate::code_index::{known_frameworks, refresh_code};
 use crate::location::open_index;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
+use crate::roles::{RoleCounts, render_line, role_counts};
 use crate::{CliError, Env, Globals, Message, store_error};
 
 /// `spec index` options.
@@ -40,6 +47,9 @@ pub struct IndexOutcome {
     /// The code index's refresh; `None` without `[code]`, or when it does
     /// not read.
     pub code: Option<CodeReport>,
+    /// The role counts after the refresh; `None` without `frameworks` (or
+    /// without `code`).
+    pub roles: Option<RoleCounts>,
     /// A `[code]` table that does not read: the whole stderr line
     /// (`<config>:<line>: …`), exit 2 after the spec index was written.
     pub code_error: Option<String>,
@@ -57,34 +67,45 @@ pub fn index(
     let mut open = open_index(env, &project)?;
     let (report, mut messages) = refresh(&mut open.index, &project, request.full)?;
     let mut code = None;
+    let mut roles = None;
     let mut code_error = None;
     match CodeConfig::from_toml(&text) {
         Err(error) => code_error = Some(config_error(&project.config_label, &error).message),
         Ok(None) => {
             open.index.clear_code().map_err(store_error)?;
         }
-        Ok(Some(config)) => {
-            let refreshed = refresh_code(
-                &mut open.index,
-                &project.root,
-                &config,
-                &project.config.scheme,
-                request.full,
-            )?;
-            messages.extend(refreshed.messages.iter().cloned());
-            if let Some(gap) = refreshed.gap() {
-                messages.push(Message::Warning(format!(
-                    "the code walk is incomplete: {gap}; reads of the code refuse until it is not"
-                )));
+        Ok(Some(config)) => match known_frameworks(&config, &project.config_label) {
+            // Refused as a `[code]` that does not read (`refresh_code`
+            // refuses it too, before any code row).
+            Err(error) => code_error = Some(error.message),
+            Ok(()) => {
+                let refreshed = refresh_code(
+                    &mut open.index,
+                    &project.root,
+                    &config,
+                    &project.config_label,
+                    &project.config.scheme,
+                    request.full,
+                )?;
+                messages.extend(refreshed.messages.iter().cloned());
+                if let Some(gap) = refreshed.gap() {
+                    messages.push(Message::Warning(format!(
+                        "the code walk is incomplete: {gap}; reads of the code refuse until it is not"
+                    )));
+                }
+                if !config.frameworks.is_empty() {
+                    roles = Some(role_counts(&open.index, &config.frameworks)?);
+                }
+                code = Some(refreshed.report);
             }
-            code = Some(refreshed.report);
-        }
+        },
     }
     Ok(IndexOutcome {
         project: open.slug,
         db: open.db.display().to_string(),
         report,
         code,
+        roles,
         code_error,
         messages,
     })
@@ -161,6 +182,10 @@ pub(crate) fn render_text(outcome: &IndexOutcome) -> String {
             out.push_str(", rederived all");
         }
         out.push('\n');
+        if let Some(roles) = &outcome.roles {
+            out.push_str(&render_line(&outcome.project, roles));
+            out.push('\n');
+        }
     }
     out.push_str(&format!("db {}\n", outcome.db));
     out
@@ -172,7 +197,16 @@ struct IndexJson<'a> {
     db: &'a str,
     #[serde(flatten)]
     report: &'a UpdateReport,
-    code: Option<&'a CodeReport>,
+    code: Option<CodeJson<'a>>,
+}
+
+/// JSON `code`: the store's report and the CLI's role counts (`null`
+/// without `frameworks`).
+#[derive(Serialize)]
+struct CodeJson<'a> {
+    #[serde(flatten)]
+    report: &'a CodeReport,
+    roles: Option<&'a RoleCounts>,
 }
 
 fn view(outcome: &IndexOutcome) -> IndexJson<'_> {
@@ -180,7 +214,10 @@ fn view(outcome: &IndexOutcome) -> IndexJson<'_> {
         project: &outcome.project,
         db: &outcome.db,
         report: &outcome.report,
-        code: outcome.code.as_ref(),
+        code: outcome.code.as_ref().map(|report| CodeJson {
+            report,
+            roles: outcome.roles.as_ref(),
+        }),
     }
 }
 

@@ -204,6 +204,6 @@ zones = ["code"]            # min_files, contours: later
 [code]
 languages = ["rust", "ron"]
 crates = "cargo-metadata"    # refused, not built: only if 6a-2's TE-8 roles differ (docs/features/symbol-index.md Q2)
-bevy = true
+frameworks = ["bevy"]       # built: docs/canon/code-roles.md (opt-in role facts; `bevy = true` is an unknown key)
 scip = false                # retired 2026-10-10 (ADR-0049): no key; layer C is `spec resolve` (docs/features/layer-c.md)
 ```

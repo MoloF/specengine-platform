@@ -86,10 +86,21 @@
 //! of `::` in a query; the closed word lists `ALL` of [`Relation`],
 //! [`LevelError`], [`Unanchored`], [`ErrorCategory`] and [`Ambiguity`], so
 //! a reader of stored words knows every variant.
+//!
+//! Phase 3 slice 10a-1 `bevy-roles`
+//! (`docs/features/bevy-roles.md` "Role facts"):
+//!
+//! - [`frameworks`] — the framework roles as data ([`frameworks::KNOWN`],
+//!   each framework's words, sources, categories and per-word item kinds)
+//!   and [`frameworks::role_facts`], the role facts of one parsed file;
+//! - [`bevy`] — also reads role derives (`cfg_attr` too), `impl Component
+//!   for`, `add_message`, and each registration's subject; its shipped
+//!   lists and counts are unchanged.
 
 pub mod bevy;
 pub mod bind;
 pub mod comments;
+pub mod frameworks;
 pub mod grammar;
 pub mod hash;
 pub mod items;
@@ -143,4 +154,9 @@ pub use ron::{
 /// package and target directories) and 6b-1's [`file_place`] package label
 /// (the package of a qpath and of a name). Rows stored under 1 re-derive
 /// once.
-pub const CODE_INDEX_FORMAT: u32 = 2;
+///
+/// 3: 10a-1's framework role rows: with `[code] frameworks` listed, each
+/// Rust file's [`frameworks::role_facts`] (`code_roles`); the stamp gains
+/// `frameworks`. From 3 on the history line hashes `fixtures/code-index`'s
+/// dump, then `fixtures/code-bevy`'s. Rows stored under 2 re-derive once.
+pub const CODE_INDEX_FORMAT: u32 = 3;

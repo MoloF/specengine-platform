@@ -16,6 +16,22 @@
 //!   arguments, read from tokens: [`Origin::MacroRules`] and
 //!   [`Origin::MacroCall`] carry names only and are never resolved.
 //!
+//! For the framework roles of the code index (`crate::frameworks`, slice
+//! 10a-1 `bevy-roles`) it also reads, apart from the lists above (which
+//! stay as they were):
+//!
+//! - **derives**: each `#[derive(..)]` element of a struct, enum or union
+//!   whose last path segment is one of [`DeriveRole`] (several attributes,
+//!   qualified paths), also inside `#[cfg_attr(<p>, derive(..))]`
+//!   ([`Derive::cfg_attr`]); one with a parse error by name only
+//!   ([`Derive::parse_error`]); a derive in a macro body is not read;
+//! - **trait impls**: `impl Component for T` and `impl Plugin for T`
+//!   ([`TraitImpl`]), in code and in macro tokens as `impl Plugin for` is;
+//! - **messages**: `.add_message::<T>()` ([`MessageUse`]), read as
+//!   `add_observer` is: code exactly, macro tokens by name only;
+//! - **subjects** ([`Subject`]): what each registration, `pipe` argument
+//!   ([`Piped`]), plugin use, impl and message names, as written.
+//!
 //! What the detector cannot read is an [`Uncertain`] with a category, never a
 //! guess. Everything is text as written: resolution to definitions is
 //! layer B (the schedule dump) or layer C (rust-analyzer).
@@ -30,9 +46,12 @@
 mod expr;
 mod tokens;
 
+use std::ops::Range;
+
 use tree_sitter::{Node, Tree};
 
 use crate::grammar::RustParser;
+use crate::hash::{attached_attributes, is_comment};
 
 /// Configuration combinators of `IntoScheduleConfigs` (Bevy 0.19): peeled off
 /// a system expression, their arguments are sets or conditions, not systems.
@@ -77,7 +96,7 @@ pub enum Target {
 
 impl Target {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::System => "system",
             Self::Observer => "observer",
@@ -98,7 +117,7 @@ pub enum Origin {
 
 impl Origin {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Code => "code",
             Self::MacroRules => "macro_rules",
@@ -121,7 +140,7 @@ pub enum Form {
 
 impl Form {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Path => "path",
             Self::Closure => "closure",
@@ -151,6 +170,130 @@ pub struct Registration {
     pub piped: Vec<String>,
     /// 1-based line of the leaf.
     pub line: usize,
+    /// What a path or a factory names ([`Subject`]); `None` for a closure
+    /// and for a path the detector cannot name. Macro tokens: the name only.
+    pub subject: Option<Subject>,
+    /// The leaf's first byte (a closure's place among the file's items).
+    pub start: usize,
+    /// Each `pipe` argument read as a system, source order.
+    pub pipes: Vec<Piped>,
+}
+
+/// What a path or a type names, as written (`crate::frameworks`' role
+/// subject): the path's segments joined by `::`, generic arguments dropped
+/// (`tick::<T>` → `tick`), each leading `crate`, `self` or `super` segment
+/// followed by another dropped (no qualified path holds them), capped at
+/// [`MAX_TEXT_BYTES`] plus [`TRUNCATION_MARK`]; a segment that is no plain
+/// name (a bracketed type, `<T as Tr>`) kept as written, each whitespace
+/// run one space. From macro tokens: the last segment alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Subject {
+    pub text: String,
+    /// The last segment (never cut).
+    pub name: String,
+}
+
+/// One argument of `.pipe(…)`, read as a system leaf is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Piped {
+    /// Its form and subject (a closure has none), or why it cannot be read.
+    pub read: Result<(Form, Option<Subject>), UncertainCategory>,
+    /// Its first byte.
+    pub start: usize,
+    pub line: usize,
+}
+
+/// A role a `#[derive(..)]` element gives its item: the Bevy 0.19 derive
+/// macro its last path segment names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DeriveRole {
+    Component,
+    Resource,
+    Message,
+    Event,
+    EntityEvent,
+    Reflect,
+}
+
+impl DeriveRole {
+    /// Every derive read.
+    pub const ALL: [Self; 6] = [
+        Self::Component,
+        Self::Resource,
+        Self::Message,
+        Self::Event,
+        Self::EntityEvent,
+        Self::Reflect,
+    ];
+
+    /// The derive macro's name, as an element's last segment holds it.
+    #[must_use]
+    pub const fn macro_name(self) -> &'static str {
+        match self {
+            Self::Component => "Component",
+            Self::Resource => "Resource",
+            Self::Message => "Message",
+            Self::Event => "Event",
+            Self::EntityEvent => "EntityEvent",
+            Self::Reflect => "Reflect",
+        }
+    }
+
+    fn named(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|role| role.macro_name() == name)
+    }
+}
+
+/// One role derive of a struct, enum or union in code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Derive {
+    pub role: DeriveRole,
+    /// Read inside `#[cfg_attr(<p>, derive(..))]`: it holds only where `<p>`
+    /// does.
+    pub cfg_attr: bool,
+    /// Read from an attribute with a parse error, by name only: the
+    /// attribute may not say what it seems to.
+    pub parse_error: bool,
+    /// The byte range of the item's node (attributes excluded), as
+    /// [`crate::ItemRecord::byte_range`] holds it.
+    pub item: Range<usize>,
+    /// The line of the element's last segment.
+    pub line: usize,
+    /// The first byte of the element's last segment (its source order).
+    pub start: usize,
+}
+
+/// The trait of a [`TraitImpl`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ImplTrait {
+    /// `impl Component for T`.
+    Component,
+    /// `impl Plugin for T` (also in [`BevyAnalysis::plugins`]).
+    Plugin,
+}
+
+/// `impl Component for T` or `impl Plugin for T`: the trait's role on `T`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraitImpl {
+    pub implemented: ImplTrait,
+    pub origin: Origin,
+    /// `T` without generic arguments, or why it cannot be named.
+    pub subject: Result<Subject, UncertainCategory>,
+    pub line: usize,
+    /// The first byte of the `impl` (code) or of the trait's name (tokens).
+    pub start: usize,
+}
+
+/// One `.add_message::<T>()` call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MessageUse {
+    pub origin: Origin,
+    /// `T` without generic arguments, or why the call cannot be read.
+    pub subject: Result<Subject, UncertainCategory>,
+    /// The method name's line.
+    pub line: usize,
+    /// The method name's first byte.
+    pub start: usize,
 }
 
 /// How a plugin is defined.
@@ -164,7 +307,7 @@ pub enum PluginKind {
 
 impl PluginKind {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::ImplPlugin => "impl_plugin",
             Self::FnApp => "fn_app",
@@ -181,6 +324,11 @@ pub struct PluginDef {
     /// a macro transcriber names it by a metavariable.
     pub name: Option<String>,
     pub line: usize,
+    /// The byte range of the `impl` or `fn` node in code (none from macro
+    /// tokens): the item a [`PluginKind::FnApp`] role sits on.
+    pub item: Option<Range<usize>>,
+    /// The first byte it was read at (its source order).
+    pub start: usize,
 }
 
 /// One argument leaf of `add_plugins`.
@@ -193,6 +341,14 @@ pub struct PluginUse {
     /// The leaf's text without whitespace (capped).
     pub text: String,
     pub line: usize,
+    /// What the leaf names, the same path as [`Self::name`] whole
+    /// ([`Subject`]); `None` when it has no name.
+    pub subject: Option<Subject>,
+    /// [`Form::Factory`] when the subject is a callee that is no type
+    /// (`make_plugin()`), else [`Form::Path`]; `None` without a subject.
+    pub form: Option<Form>,
+    /// The leaf's first byte.
+    pub start: usize,
 }
 
 /// Why a construct could not be read.
@@ -215,8 +371,19 @@ pub enum UncertainCategory {
 }
 
 impl UncertainCategory {
+    /// Every category.
+    pub const ALL: [Self; 7] = [
+        Self::MacroInArguments,
+        Self::Metavariable,
+        Self::UnknownMethod,
+        Self::Expression,
+        Self::Arguments,
+        Self::NestingTooDeep,
+        Self::ParseError,
+    ];
+
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::MacroInArguments => "macro_in_arguments",
             Self::Metavariable => "metavariable",
@@ -239,6 +406,8 @@ pub struct Uncertain {
     /// The construct's text without whitespace (capped).
     pub text: String,
     pub line: usize,
+    /// The construct's first byte.
+    pub start: usize,
 }
 
 /// Registration call sites per method.
@@ -261,12 +430,28 @@ pub struct BevyAnalysis {
     pub call_sites: CallSites,
     /// The file has a parse error somewhere.
     pub has_error: bool,
+    /// Role derives of the file's structs, enums and unions, source order.
+    pub derives: Vec<Derive>,
+    /// `impl Component for` and `impl Plugin for`, by line.
+    pub impls: Vec<TraitImpl>,
+    /// `.add_message::<T>()` calls, by line (counted in no [`CallSites`]).
+    pub messages: Vec<MessageUse>,
 }
 
 /// The three registration methods the detector reads.
 pub(crate) const ADD_SYSTEMS: &str = "add_systems";
 pub(crate) const ADD_OBSERVER: &str = "add_observer";
 pub(crate) const ADD_PLUGINS: &str = "add_plugins";
+/// The message registration, read for the roles only.
+pub(crate) const ADD_MESSAGE: &str = "add_message";
+
+/// The traits of [`ImplTrait`], by the last segment of the impl's trait.
+pub(crate) const COMPONENT_TRAIT: &str = "Component";
+pub(crate) const PLUGIN_TRAIT: &str = "Plugin";
+
+/// The attributes a derive is read from.
+const DERIVE_ATTRIBUTE: &str = "derive";
+const CFG_ATTR_ATTRIBUTE: &str = "cfg_attr";
 
 /// Parses and analyses one file. `None` when the parse was cancelled.
 pub fn detect_file(parser: &mut RustParser, source: &str) -> Option<BevyAnalysis> {
@@ -313,6 +498,9 @@ pub fn detect(tree: &Tree, source: &str) -> BevyAnalysis {
                 out.plugins.sort_by_key(|p| p.line);
                 out.plugin_uses.sort_by_key(|u| u.line);
                 out.uncertain.sort_by_key(|u| u.line);
+                out.derives.sort_by_key(|d| d.line);
+                out.impls.sort_by_key(|i| i.line);
+                out.messages.sort_by_key(|m| m.line);
                 return out;
             }
             depth -= 1;
@@ -328,11 +516,16 @@ fn visit(node: Node, source: &[u8], enclosing: Option<&str>, out: &mut BevyAnaly
         "call_expression" => {
             if let Some((method, field)) = registration_method(node, source) {
                 expr::registration(node, field, method, source, enclosing, out);
+            } else if let Some(field) = message_method(node, source) {
+                expr::message(node, field, source, out);
             }
         }
         "impl_item" => {
             if let Some(plugin) = impl_plugin(node, source) {
                 out.plugins.push(plugin);
+            }
+            if let Some(implemented) = trait_impl(node, source) {
+                out.impls.push(implemented);
             }
         }
         "function_item" => {
@@ -344,9 +537,12 @@ fn visit(node: Node, source: &[u8], enclosing: Option<&str>, out: &mut BevyAnaly
                         .child_by_field_name("name")
                         .map(|n| compact_node(n, source)),
                     line: line(node),
+                    item: Some(node.byte_range()),
+                    start: node.start_byte(),
                 });
             }
         }
+        "struct_item" | "enum_item" | "union_item" => derives(node, source, out),
         "macro_definition" => {
             let mut cursor = node.walk();
             for rule in node.named_children(&mut cursor) {
@@ -406,7 +602,261 @@ fn impl_plugin(node: Node, source: &[u8]) -> Option<PluginDef> {
         origin: Origin::Code,
         name: type_name(ty, source),
         line: line(node),
+        item: Some(node.byte_range()),
+        start: node.start_byte(),
     })
+}
+
+/// `impl Component for T` or `impl Plugin for T` (any path ending in the
+/// trait's name, generic arguments dropped), `T`'s subject.
+fn trait_impl(node: Node, source: &[u8]) -> Option<TraitImpl> {
+    let trait_node = node.child_by_field_name("trait")?;
+    let implemented = match type_name(trait_node, source)?.as_str() {
+        COMPONENT_TRAIT => ImplTrait::Component,
+        PLUGIN_TRAIT => ImplTrait::Plugin,
+        _ => return None,
+    };
+    let subject = node
+        .child_by_field_name("type")
+        .and_then(|ty| path_subject(ty, source))
+        .ok_or(UncertainCategory::Expression);
+    Some(TraitImpl {
+        implemented,
+        origin: Origin::Code,
+        subject,
+        line: line(node),
+        start: node.start_byte(),
+    })
+}
+
+/// The method name node of `x.add_message(…)` (also with a turbofish).
+fn message_method<'tree>(call: Node<'tree>, source: &[u8]) -> Option<Node<'tree>> {
+    let mut function = call.child_by_field_name("function")?;
+    if function.kind() == "generic_function" {
+        function = function.child_by_field_name("function")?;
+    }
+    if function.kind() != "field_expression" {
+        return None;
+    }
+    let field = function.child_by_field_name("field")?;
+    (text(field, source) == ADD_MESSAGE).then_some(field)
+}
+
+/// The role derives on `item` (a struct, enum or union): every element of
+/// each attached `#[derive(..)]`, and of each `derive(..)` inside an
+/// attached `#[cfg_attr(..)]` (nested `cfg_attr` too, on a work stack),
+/// whose last path segment is a [`DeriveRole`]. An attribute with a parse
+/// error is read by name only ([`broken_derives`]).
+fn derives(item: Node, source: &[u8], out: &mut BevyAnalysis) {
+    for attribute_item in attached_attributes(item) {
+        if attribute_item.has_error() {
+            broken_derives(item, attribute_item, source, out);
+            continue;
+        }
+        let mut cursor = attribute_item.walk();
+        let Some(attribute) = attribute_item
+            .named_children(&mut cursor)
+            .find(|child| child.kind() == "attribute")
+        else {
+            continue;
+        };
+        let mut cursor = attribute.walk();
+        let path = attribute
+            .named_children(&mut cursor)
+            .find(|child| !is_comment(*child));
+        let (Some(path), Some(arguments)) = (path, attribute.child_by_field_name("arguments"))
+        else {
+            continue;
+        };
+        let first = match type_name(path, source).as_deref() {
+            Some(DERIVE_ATTRIBUTE) => (arguments, AttributeTree::Derive, false),
+            Some(CFG_ATTR_ATTRIBUTE) => (arguments, AttributeTree::CfgAttr, true),
+            _ => continue,
+        };
+        // (token tree, how it reads, inside a `cfg_attr`): popped in source
+        // order, as the nested trees are pushed reversed.
+        let mut stack = vec![first];
+        while let Some((tree, reads, cfg_attr)) = stack.pop() {
+            let elements = token_elements(tree);
+            match reads {
+                AttributeTree::Derive => {
+                    for element in &elements {
+                        let Some(last) = element_path_end(element) else {
+                            continue;
+                        };
+                        if let Some(role) = DeriveRole::named(text(last, source)) {
+                            out.derives.push(Derive {
+                                role,
+                                cfg_attr,
+                                parse_error: false,
+                                item: item.byte_range(),
+                                line: line(last),
+                                start: last.start_byte(),
+                            });
+                        }
+                    }
+                }
+                AttributeTree::CfgAttr => {
+                    // The first element is the predicate; each other one an
+                    // attribute.
+                    let mut nested = Vec::new();
+                    for element in elements.iter().skip(1) {
+                        let [name, inner] = element.as_slice() else {
+                            continue;
+                        };
+                        if name.kind() != "identifier" || inner.kind() != "token_tree" {
+                            continue;
+                        }
+                        match text(*name, source) {
+                            DERIVE_ATTRIBUTE => nested.push((*inner, AttributeTree::Derive, true)),
+                            CFG_ATTR_ATTRIBUTE => {
+                                nested.push((*inner, AttributeTree::CfgAttr, true));
+                            }
+                            _ => {}
+                        }
+                    }
+                    stack.extend(nested.into_iter().rev());
+                }
+            }
+        }
+    }
+}
+
+/// The role derives of an attached attribute with a parse error, whose
+/// element structure cannot be trusted: its identifiers in source order
+/// (inside `ERROR` nodes too). When the first is `derive`, or `cfg_attr`
+/// with a `derive` later, each identifier after that `derive` naming a
+/// [`DeriveRole`] is a [`Derive::parse_error`] derive. Any other attribute,
+/// or one naming no role, gives none.
+fn broken_derives(item: Node, attribute_item: Node, source: &[u8], out: &mut BevyAnalysis) {
+    let names = identifiers(attribute_item);
+    let Some((first, rest)) = names.split_first() else {
+        return;
+    };
+    let (cfg_attr, roles) = match text(*first, source) {
+        DERIVE_ATTRIBUTE => (false, rest),
+        CFG_ATTR_ATTRIBUTE => {
+            let Some(at) = rest
+                .iter()
+                .position(|name| text(*name, source) == DERIVE_ATTRIBUTE)
+            else {
+                return;
+            };
+            (true, &rest[at + 1..])
+        }
+        _ => return,
+    };
+    for name in roles {
+        if let Some(role) = DeriveRole::named(text(*name, source)) {
+            out.derives.push(Derive {
+                role,
+                cfg_attr,
+                parse_error: true,
+                item: item.byte_range(),
+                line: line(*name),
+                start: name.start_byte(),
+            });
+        }
+    }
+}
+
+/// Every `identifier` node under `scope`, in source order (a cursor walk,
+/// no recursion); `MISSING` nodes skipped.
+fn identifiers(scope: Node) -> Vec<Node> {
+    let mut found = Vec::new();
+    let root = scope.id();
+    let mut cursor = scope.walk();
+    loop {
+        let current = cursor.node();
+        if current.kind() == "identifier" && !current.is_missing() {
+            found.push(current);
+        }
+        if cursor.goto_first_child() {
+            continue;
+        }
+        if cursor.node().id() == root {
+            return found;
+        }
+        loop {
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            if !cursor.goto_parent() || cursor.node().id() == root {
+                return found;
+            }
+        }
+    }
+}
+
+/// How the token tree of an attribute reads.
+#[derive(Clone, Copy)]
+enum AttributeTree {
+    /// `derive(..)`: a list of paths.
+    Derive,
+    /// `cfg_attr(<p>, ..)`: a predicate, then attributes.
+    CfgAttr,
+}
+
+/// The elements of a token tree: its tokens between the delimiters, split
+/// at the commas of this level (a nested tree is one token), comments
+/// dropped, empty elements dropped.
+fn token_elements(tree: Node) -> Vec<Vec<Node>> {
+    let mut cursor = tree.walk();
+    let children: Vec<Node> = tree.children(&mut cursor).collect();
+    let inner = match children.as_slice() {
+        [open, inner @ .., close]
+            if matches!(open.kind(), "(" | "[" | "{")
+                && matches!(close.kind(), ")" | "]" | "}") =>
+        {
+            inner
+        }
+        _ => children.as_slice(),
+    };
+    let mut elements = Vec::new();
+    let mut current = Vec::new();
+    for child in inner {
+        if is_comment(*child) {
+            continue;
+        }
+        if !child.is_named() && child.kind() == "," {
+            if !current.is_empty() {
+                elements.push(std::mem::take(&mut current));
+            }
+        } else {
+            current.push(*child);
+        }
+    }
+    if !current.is_empty() {
+        elements.push(current);
+    }
+    elements
+}
+
+/// The last identifier of an element that is a path (`C`, `b::C`,
+/// `::b::C`, `crate::C`); `None` for any other element.
+fn element_path_end<'tree>(element: &[Node<'tree>]) -> Option<Node<'tree>> {
+    let segments = match element {
+        [first, rest @ ..] if first.kind() == "::" => rest,
+        _ => element,
+    };
+    // Segments at even places, separators at odd ones, a segment last.
+    if segments.len() % 2 == 0 {
+        return None;
+    }
+    for (at, token) in segments.iter().enumerate() {
+        let fits = if at % 2 == 0 {
+            matches!(token.kind(), "identifier" | "crate" | "self" | "super")
+        } else {
+            token.kind() == "::"
+        };
+        if !fits {
+            return None;
+        }
+    }
+    segments
+        .last()
+        .filter(|last| last.kind() == "identifier")
+        .copied()
 }
 
 /// A function whose parameter list is exactly one non-`self` parameter of
@@ -465,6 +915,87 @@ fn type_name(node: Node, source: &[u8]) -> Option<String> {
     }
 }
 
+/// The [`Subject`] of a path or type node: an `identifier`,
+/// `type_identifier`, `self`, `super` or `crate`, a scoped path, a
+/// `generic_function` or a generic type (its arguments dropped); `None` for
+/// any other node. Each step moves to a strictly smaller child: bounded by
+/// the path's depth, no recursion over user input.
+pub(crate) fn path_subject(node: Node, source: &[u8]) -> Option<Subject> {
+    // From the last segment to the first.
+    let mut segments: Vec<String> = Vec::new();
+    let mut node = node;
+    loop {
+        match node.kind() {
+            "identifier" | "type_identifier" | "self" | "super" | "crate" => {
+                segments.push(compact_node(node, source));
+                break;
+            }
+            "scoped_identifier" | "scoped_type_identifier" => {
+                segments.push(compact_node(node.child_by_field_name("name")?, source));
+                match node.child_by_field_name("path") {
+                    Some(path) => node = path,
+                    // `::a`: a global path.
+                    None => break,
+                }
+            }
+            "generic_function" => node = node.child_by_field_name("function")?,
+            "generic_type" | "generic_type_with_turbofish" => {
+                node = node.child_by_field_name("type")?;
+            }
+            // A qualifier that is no plain path (`<T as Tr>::f`): as
+            // written, each whitespace run one space.
+            _ if !segments.is_empty() => {
+                segments.push(kept_span(
+                    source,
+                    node.start_byte(),
+                    node.end_byte(),
+                    Spacing::Single,
+                ));
+                break;
+            }
+            _ => return None,
+        }
+    }
+    segments.reverse();
+    subject_of(&segments)
+}
+
+/// The leading segments a [`Subject`] drops while another follows.
+const DROPPED_LEADS: [&str; 3] = ["crate", "self", "super"];
+
+/// The [`Subject`] of `segments`, first to last.
+fn subject_of(segments: &[String]) -> Option<Subject> {
+    let (name, before) = segments.split_last()?;
+    let lead = before
+        .iter()
+        .take_while(|segment| DROPPED_LEADS.contains(&segment.as_str()))
+        .count();
+    let mut text = String::new();
+    // A plain segment holds no whitespace; a kept one its single spaces.
+    for (at, segment) in segments[lead..].iter().enumerate() {
+        if at > 0 && !push_kept(&mut text, "::", Spacing::Single) {
+            break;
+        }
+        if !push_kept(&mut text, segment, Spacing::Single) {
+            break;
+        }
+    }
+    Some(Subject {
+        text,
+        name: name.clone(),
+    })
+}
+
+/// The [`Subject`] of a name read from macro tokens: the name alone.
+pub(crate) fn name_subject(name: &str) -> Subject {
+    let mut text = String::new();
+    push_compact(&mut text, name);
+    Subject {
+        text,
+        name: name.to_owned(),
+    }
+}
+
 /// The whole text of a node, validated in full: only for names and other
 /// single tokens; a text that is kept goes through [`compact_node`].
 pub(crate) fn text<'s>(node: Node, source: &'s [u8]) -> &'s str {
@@ -481,11 +1012,27 @@ pub(crate) fn compact_node(node: Node, source: &[u8]) -> String {
 }
 
 /// `source[start..end]` without whitespace, capped at [`MAX_TEXT_BYTES`]
-/// plus [`TRUNCATION_MARK`]. The range is never validated whole: it is read
-/// [`MAX_TEXT_BYTES`] bytes at a time, each window cut back to a character
-/// boundary and validated alone, until the cap is reached — a large node
-/// costs what its kept text costs. Invalid UTF-8 ends the text.
+/// plus [`TRUNCATION_MARK`] ([`kept_span`]).
 pub(crate) fn compact_span(source: &[u8], start: usize, end: usize) -> String {
+    kept_span(source, start, end, Spacing::Dropped)
+}
+
+/// How a kept text treats whitespace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Spacing {
+    /// Dropped: a compacted text.
+    Dropped,
+    /// Each run one space, none leading.
+    Single,
+}
+
+/// `source[start..end]` with its whitespace as `spacing` says, capped at
+/// [`MAX_TEXT_BYTES`] plus [`TRUNCATION_MARK`]. The range is never
+/// validated whole: it is read [`MAX_TEXT_BYTES`] bytes at a time, each
+/// window cut back to a character boundary and validated alone, until the
+/// cap is reached — a large node costs what its kept text costs. Invalid
+/// UTF-8 ends the text.
+fn kept_span(source: &[u8], start: usize, end: usize, spacing: Spacing) -> String {
     let end = end.min(source.len());
     let mut out = String::new();
     let mut at = start;
@@ -501,7 +1048,7 @@ pub(crate) fn compact_span(source: &[u8], start: usize, end: usize) -> String {
         else {
             return out;
         };
-        if !push_compact(&mut out, window) {
+        if !push_kept(&mut out, window, spacing) {
             return out;
         }
         at = cut;
@@ -512,7 +1059,21 @@ pub(crate) fn compact_span(source: &[u8], start: usize, end: usize) -> String {
 /// Appends `text` without whitespace to `out` up to [`MAX_TEXT_BYTES`];
 /// `false` once the cap is hit and [`TRUNCATION_MARK`] appended.
 fn push_compact(out: &mut String, text: &str) -> bool {
-    for c in text.chars().filter(|c| !c.is_whitespace()) {
+    push_kept(out, text, Spacing::Dropped)
+}
+
+/// Appends `text` to `out` up to [`MAX_TEXT_BYTES`], its whitespace as
+/// `spacing` says (a run spanning two calls is still one space); `false`
+/// once the cap is hit and [`TRUNCATION_MARK`] appended.
+fn push_kept(out: &mut String, text: &str, spacing: Spacing) -> bool {
+    for c in text.chars() {
+        let c = if !c.is_whitespace() {
+            c
+        } else if spacing == Spacing::Single && !out.is_empty() && !out.ends_with(' ') {
+            ' '
+        } else {
+            continue;
+        };
         if out.len() + c.len_utf8() > MAX_TEXT_BYTES {
             out.push(TRUNCATION_MARK);
             return false;

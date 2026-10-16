@@ -37,7 +37,7 @@ crates/game::stats::regen | function_item | crates/game/src/stats.rs:12-18 | lay
   role system | a | crates/game/src/lib.rs:20 | call | Update | linked
 ```
 
-- **On a target**: the rows sitting on it (`symbol_ord`) and the rows whose subject it is `linked` or `ambiguous` for (`bevy-roles.md` "Links"); `unlinked` rows and rows on nothing show nowhere.
+- **On a target**: the rows sitting on it (`symbol_ord`) and the rows whose subject it is `linked` or `ambiguous` for (`docs/canon/code-roles.md` "Links"); `unlinked` rows and rows on nothing show nowhere.
 - Line: `role <word> | <layer> | <path>:<line> | <source>[ <form>][ <origin>] | <group or -> | <state>[ <detail>]`; `<form>` only `closure` or `factory`; `<origin>` only when not `code`; `<detail>` the category (`uncertain`) or the candidates' count (`ambiguous`); `<path>:<line>` the row's own place. Fields through `one_line`. Order: layer (`b` first, 10b), word, path bytes, line, source, `ord`.
 - JSON: each target gains `roles` after `bindings`: `[{role, layer, path, line, source, form, origin, group, state, detail, candidates}]`, every key present (absent `null`); `detail` the category, `candidates` the `ambiguous` count; an item without a row, a module or RON target: `[]`; every target `null` without `frameworks`.
 - Cap `OUTPUT_CAP_CHARS`: role lines are their target's; whole targets as now.
@@ -57,6 +57,13 @@ P1, S12. `plugin.json` 0.9.0 -> 0.10.0 and a `PINS` line (`plugin_files.rs`); no
 - A role line changes no binding, `mentions`, tier, `total`, `omitted` or exit.
 - Determinism: two roots, cwd, reverse creation, CRLF: byte-identical `symbols` and `find_symbols`.
 - Genre (`architecture.md#universal`): no stack, role or source word in CLI, store or MCP sources or texts (10a-1's RD-8 scan; `mcp_genre`).
+
+## Carry-overs
+
+From 10a-1's reviews (`bevy-roles.md`; nits, none blocked it; owner pre-approved 2026-10-16), rust-developer; only B5 changes output:
+
+- Re-point the comments citing the task spec `bevy-roles` to `docs/canon/code-roles.md`, its headings of the same names (data form `` `docs/canon/code-roles.md` "Links" ``, `doc_pointers.rs`): core `code_toml.rs:17`; store `code.rs:22`, `:176`, `roles.rs:1`, `lib.rs:62`, `:210`; CLI `roles.rs:1`, `code_index.rs:21`, `refresh.rs:17`; also code `lib.rs:91`, `frameworks.rs:1`, `bevy/mod.rs:20` and eval `code_index.rs:30`. Done when no `src` file names `bevy-roles`; then the shipped spec's pointer headings under "Data" may go (spec-writer). Test comments citing it are the test-engineer's, alike.
+- B5 (owner pre-approved 2026-10-16): render a qualifier that is no path as `impl_label` does, each side compacted and joined by ` as ` (`<T as Tr>::f`), so a spaced one meets its suffix (`docs/canon/code-roles.md` "Known limits").
 
 ## Acceptance criteria
 

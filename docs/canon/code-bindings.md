@@ -14,12 +14,13 @@ reviewed: 2026-10-16
 
 ```toml
 [code]
-roots   = ["crates", "assets/data", "build.rs"]         # required, non-empty
-exclude = ["**/target/**", "crates/*/tests/fixtures/**"] # optional
+roots      = ["crates", "assets/data", "build.rs"]         # required, non-empty
+exclude    = ["**/target/**", "crates/*/tests/fixtures/**"] # optional
+frameworks = ["bevy"]                                       # optional: docs/canon/code-roles.md
 ```
 
 - **No table: the code layer is off**, no default root (ADR-0008). `spec refs` then exits 2 with exactly `spec: <config> has no [code] table: the code layer is off (add [code] with roots)`, `<config>` as given (`specengine.toml` or `--config`'s).
-- **Closed**, read by `CodeConfig::from_toml` only where code is read (`ProjectConfig` only name-checks `code`: a bad table fails no other command). Refused at the key's line, `<config>:<line>: message`, exit 2: `languages`, `crates`, `bevy`, `scip` (07 s5, reserved, "is not built"); any other key (unknown); a wrong type; `roots` missing or empty; a path not `is_clean_relative`, as `[paths]` (one trailing `/` and repeats dropped); a glob outside the `[paths] exclude` dialect (`*`, `**`, `?`; `[ ] { } \` refused; `docs/canon/gate.md` "Config"). `bevy` is SpecEngine's own 07 s5 key; slice 10a (`bevy-roles`) replaces it with a neutral `frameworks` key.
+- **Closed**, read by `CodeConfig::from_toml` only where code is read (`ProjectConfig` only name-checks `code`: a bad table fails no other command). Refused at the key's line, `<config>:<line>: message`, exit 2: `languages`, `crates`, `scip` (07 s5, reserved, "is not built"); any other key, `bevy` too (``… `[code]` has no key `<key>`: it takes `roots` and `exclude` and `frameworks` only``); a wrong type; `roots` missing or empty; a path not `is_clean_relative`, as `[paths]` (one trailing `/` and repeats dropped); a glob outside the `[paths] exclude` dialect (`*`, `**`, `?`; `[ ] { } \` refused; `docs/canon/gate.md` "Config"). `frameworks`: framework names whose item roles the code index stores, its shape checked here, its values against `specengine-code`'s list (`code-roles.md` "`[code] frameworks`").
 - A root is a directory or a `.rs`/`.ron` file, looked up by exact name per component: missing (a symlink on the way too) -> `note: [code] root <path> does not exist`; another file -> `note: [code] root <path> is not a .rs or .ron file`; neither contributes.
 
 ## The walk

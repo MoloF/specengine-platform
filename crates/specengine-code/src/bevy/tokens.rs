@@ -9,9 +9,10 @@
 use tree_sitter::Node;
 
 use super::{
-    ADAPTERS, ADD_OBSERVER, ADD_PLUGINS, ADD_SYSTEMS, BevyAnalysis, COMBINATORS, Form, MAX_NESTING,
-    Origin, PluginDef, PluginKind, PluginUse, Registration, Target, Uncertain, UncertainCategory,
-    compact_span,
+    ADAPTERS, ADD_MESSAGE, ADD_OBSERVER, ADD_PLUGINS, ADD_SYSTEMS, BevyAnalysis, COMBINATORS,
+    COMPONENT_TRAIT, Form, ImplTrait, MAX_NESTING, MessageUse, Origin, PLUGIN_TRAIT, Piped,
+    PluginDef, PluginKind, PluginUse, Registration, Subject, Target, TraitImpl, Uncertain,
+    UncertainCategory, compact_span, name_subject,
 };
 use crate::hash::is_comment;
 
@@ -159,6 +160,13 @@ impl<'s> Tokens<'s> {
     /// Returns (index after the path, last identifier) or `None` when no
     /// identifier segment starts here.
     fn path(&self, i: usize, end: usize) -> Option<(usize, &'s str)> {
+        self.path_at(i, end)
+            .map(|(after, last)| (after, self.toks[last].text))
+    }
+
+    /// [`Self::path`] with the index of its last identifier in place of
+    /// its text.
+    fn path_at(&self, i: usize, end: usize) -> Option<(usize, usize)> {
         let mut j = i;
         let mut last = None;
         while j < end {
@@ -173,14 +181,33 @@ impl<'s> Tokens<'s> {
                 }
                 (Kind::Other, "<" | "<<") if last.is_none() => j = self.skip_angle(j, end),
                 (Kind::Meta, "$crate") if last.is_none() && j == i => j += 1,
-                (Kind::Ident, text) if last.is_none() || self.text_is(j - 1, "::") => {
-                    last = Some(text);
+                (Kind::Ident, _) if last.is_none() || self.text_is(j - 1, "::") => {
+                    last = Some(j);
                     j += 1;
                 }
                 _ => break,
             }
         }
-        last.map(|name| (j, name))
+        last.map(|at| (j, at))
+    }
+
+    /// The qualifier of the path `i..` whose last identifier is at `last`,
+    /// when it is a path whose last segment starts uppercase: that segment
+    /// (`P` of `P::new` and of `a::P::<T>::default`), the type a lowercase
+    /// callee is called on. `None` for no qualifier, a lowercase one (a
+    /// module) or one that is no path (`<T as Tr>`).
+    fn type_qualifier(&self, i: usize, last: usize) -> Option<&'s str> {
+        if last < i + 2 || !self.text_is(last - 1, "::") {
+            return None;
+        }
+        match self.path(i, last - 1) {
+            Some((after, name))
+                if after == last - 1 && name.starts_with(|c: char| c.is_ascii_uppercase()) =>
+            {
+                Some(name)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -305,7 +332,10 @@ pub(super) fn scan(
             {
                 call(&tokens, i, origin, enclosing, out);
             }
-            (Kind::Ident, "Plugin") if tokens.text_is(i + 1, "for") => {
+            (Kind::Ident, ADD_MESSAGE) if tokens.text_is(i.wrapping_sub(1), ".") => {
+                message(&tokens, i, origin, out);
+            }
+            (Kind::Ident, PLUGIN_TRAIT) if tokens.text_is(i + 1, "for") => {
                 let name = match tokens.toks.get(i + 2) {
                     Some(t) if t.kind == Kind::Meta => None,
                     _ => tokens.path(i + 2, n).map(|(_, name)| name.to_owned()),
@@ -315,7 +345,15 @@ pub(super) fn scan(
                     origin,
                     name,
                     line: tok.line,
+                    item: None,
+                    start: tok.start,
                 });
+                out.impls
+                    .push(trait_impl(&tokens, i, ImplTrait::Plugin, origin));
+            }
+            (Kind::Ident, COMPONENT_TRAIT) if tokens.text_is(i + 1, "for") => {
+                out.impls
+                    .push(trait_impl(&tokens, i, ImplTrait::Component, origin));
             }
             (Kind::Other, "fn") => {
                 if let Some(name) = app_function(&tokens, i) {
@@ -324,11 +362,104 @@ pub(super) fn scan(
                         origin,
                         name,
                         line: tok.line,
+                        item: None,
+                        start: tok.start,
                     });
                 }
             }
             _ => {}
         }
+    }
+}
+
+/// `<Trait> for T` with the trait's name at `i`: `T`'s name, a
+/// metavariable, or no path.
+fn trait_impl(tokens: &Tokens, i: usize, implemented: ImplTrait, origin: Origin) -> TraitImpl {
+    let n = tokens.toks.len();
+    let subject = match tokens.toks.get(i + 2) {
+        Some(t) if t.kind == Kind::Meta && t.text != "$crate" => {
+            Err(UncertainCategory::Metavariable)
+        }
+        _ => tokens
+            .path(i + 2, n)
+            .map(|(_, name)| name_subject(name))
+            .ok_or(UncertainCategory::Expression),
+    };
+    TraitImpl {
+        implemented,
+        origin,
+        subject,
+        line: tokens.toks[i].line,
+        start: tokens.toks[i].start,
+    }
+}
+
+/// `.add_message::<T>()` with the method name at `i`: `T`'s name (the
+/// whole element a path), a metavariable, an expression (a qualified
+/// path, any other type) or arguments (no turbofish or not one type, an
+/// argument, a turbofish never closed). Otherwise not followed by a call:
+/// not read.
+fn message(tokens: &Tokens, i: usize, origin: Origin, out: &mut BevyAnalysis) {
+    let n = tokens.toks.len();
+    let (line, start) = (tokens.toks[i].line, tokens.toks[i].start);
+    let mut j = i + 1;
+    let mut read = Err(UncertainCategory::Arguments);
+    if tokens.turbofish(j) {
+        let open = j + 1;
+        let close = tokens.angle_close.get(open).copied().unwrap_or(usize::MAX);
+        if close >= n {
+            // `add_message::<T` with no `>`: where the call ends is unknown.
+            out.messages.push(MessageUse {
+                origin,
+                subject: Err(UncertainCategory::Arguments),
+                line,
+                start,
+            });
+            return;
+        }
+        read = if tokens.text_is(open, "<<") {
+            Err(UncertainCategory::Expression)
+        } else {
+            message_type(tokens, open + 1, close)
+        };
+        j = close + 1;
+    }
+    if !tokens.open_paren(j) {
+        return;
+    }
+    if tokens.close[j] != j + 1 {
+        read = Err(UncertainCategory::Arguments);
+    }
+    out.messages.push(MessageUse {
+        origin,
+        subject: read,
+        line,
+        start,
+    });
+}
+
+/// The one type of the generic arguments `a..b`.
+fn message_type(tokens: &Tokens, a: usize, b: usize) -> Result<Subject, UncertainCategory> {
+    let [(start, end)] = tokens.elements(a, b)[..] else {
+        return Err(UncertainCategory::Arguments);
+    };
+    match tokens.toks.get(start) {
+        Some(t) if t.kind == Kind::Meta && t.text != "$crate" => {
+            return Err(UncertainCategory::Metavariable);
+        }
+        _ => {}
+    }
+    match tokens.path(start, end) {
+        Some((after, name)) if after == end => Ok(name_subject(name)),
+        // `Wrapper<T>`: generic arguments to the end (their `>` may be the
+        // turbofish's own `>>`).
+        Some((after, name))
+            if tokens.angle_open(after)
+                && matches!(tokens.angle_close.get(after), Some(&c) if c + 1 == end || c == end) =>
+        {
+            Ok(name_subject(name))
+        }
+        _ => Err(UncertainCategory::Expression),
     }
 }
 
@@ -456,9 +587,35 @@ struct Leaf {
     at: usize,
     adapters: Vec<&'static str>,
     piped: Vec<String>,
+    pipes: Vec<Piped>,
 }
 
 impl<'s> Reader<'_, 's> {
+    /// The first argument of the `pipe` call whose `(` is at `q`, read as a
+    /// system leaf: a closure, or a path or factory by its name.
+    fn pipe_argument(&self, q: usize) -> Piped {
+        let tokens = self.tokens;
+        let Some(&(a, b)) = tokens.elements(q + 1, tokens.close[q]).first() else {
+            let at = tokens.toks.get(q);
+            return Piped {
+                read: Err(UncertainCategory::Arguments),
+                start: at.map_or(0, |t| t.start),
+                line: at.map_or(0, |t| t.line),
+            };
+        };
+        let read = match self.primary(a, b) {
+            Ok((Primary::Leaf(Form::Closure, ..), _)) => Ok((Form::Closure, None)),
+            Ok((Primary::Leaf(form, Some(name), _), _)) => Ok((form, Some(name_subject(name)))),
+            Ok(_) => Err(UncertainCategory::Expression),
+            Err(category) => Err(category),
+        };
+        Piped {
+            read,
+            start: tokens.toks[a].start,
+            line: tokens.toks[a].line,
+        }
+    }
+
     fn uncertain(&self, category: UncertainCategory, (a, b): (usize, usize)) -> Uncertain {
         Uncertain {
             category,
@@ -466,6 +623,7 @@ impl<'s> Reader<'_, 's> {
             call: self.method,
             text: self.tokens.span_text(a, b),
             line: self.tokens.toks.get(a).map_or(0, |t| t.line),
+            start: self.tokens.toks.get(a).map_or(0, |t| t.start),
         }
     }
 
@@ -501,6 +659,7 @@ impl<'s> Reader<'_, 's> {
                     at: a,
                     adapters: Vec::new(),
                     piped: Vec::new(),
+                    pipes: Vec::new(),
                 };
                 out.registrations
                     .push(self.registration(target, schedule, leaf));
@@ -508,6 +667,7 @@ impl<'s> Reader<'_, 's> {
             }
             let mut adapters = Vec::new();
             let mut piped = Vec::new();
+            let mut pipes = Vec::new();
             // What stops the chain: a field access (not a call) or an unknown method.
             let mut unreadable = None;
             while p < b && tokens.text_is(p, ".") && tokens.kind_is(p + 1, Kind::Ident) {
@@ -526,6 +686,9 @@ impl<'s> Reader<'_, 's> {
                         && let Some((_, name)) = tokens.path(q + 1, tokens.close[q])
                     {
                         piped.push(name.to_owned());
+                    }
+                    if *adapter == "pipe" {
+                        pipes.push(self.pipe_argument(q));
                     }
                 } else if !COMBINATORS.contains(&method) {
                     unreadable = Some((UncertainCategory::UnknownMethod, (p + 1, p + 2)));
@@ -557,6 +720,7 @@ impl<'s> Reader<'_, 's> {
                         at: a,
                         adapters,
                         piped,
+                        pipes,
                     };
                     out.registrations
                         .push(self.registration(target, schedule, leaf));
@@ -600,11 +764,14 @@ impl<'s> Reader<'_, 's> {
             form: leaf.form,
             schedule: schedule.cloned(),
             text: leaf.text,
+            subject: leaf.name.as_deref().map(name_subject),
             name: leaf.name,
             enclosing_fn: self.enclosing.map(str::to_owned),
             adapters: leaf.adapters,
             piped: leaf.piped,
             line: self.tokens.toks[leaf.at].line,
+            start: self.tokens.toks[leaf.at].start,
+            pipes: leaf.pipes,
         }
     }
 
@@ -626,23 +793,38 @@ impl<'s> Reader<'_, 's> {
                 }
                 continue;
             }
-            let name = tokens.path(a, b).map(|(after, last)| {
+            // (name, subject, how it is written). The name is the shipped
+            // one: a lowercase callee's token before its last `::`. The
+            // subject (its name only): a lowercase callee's type qualifier
+            // (`P::new(…)`), a path; any other lowercase callee, a factory.
+            let read = tokens.path_at(a, b).map(|(after, at)| {
+                let last = tokens.toks[at].text;
                 let lower = last.starts_with(|c: char| c.is_ascii_lowercase());
-                if lower
-                    && tokens.open_paren(after)
-                    && after >= a + 3
-                    && tokens.text_is(after - 2, "::")
-                {
-                    tokens.toks[after - 3].text.to_owned()
+                let call = lower && tokens.open_paren(after);
+                let name = if call && after >= a + 3 && tokens.text_is(after - 2, "::") {
+                    tokens.toks[after - 3].text
                 } else {
-                    last.to_owned()
-                }
+                    last
+                };
+                let (subject, form) = match tokens.type_qualifier(a, at) {
+                    Some(qualifier) if call => (qualifier, Form::Path),
+                    _ if call => (last, Form::Factory),
+                    _ => (last, Form::Path),
+                };
+                (name.to_owned(), name_subject(subject), form)
             });
+            let (name, subject, form) = match read {
+                Some((name, subject, form)) => (Some(name), Some(subject), Some(form)),
+                None => (None, None, None),
+            };
             out.plugin_uses.push(PluginUse {
                 origin: self.origin,
                 name,
                 text: tokens.span_text(a, b),
                 line: tokens.toks[a].line,
+                subject,
+                form,
+                start: tokens.toks[a].start,
             });
         }
     }

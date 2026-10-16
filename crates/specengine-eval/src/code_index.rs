@@ -21,9 +21,16 @@
 //! `SPECENGINE_SCHEME_A` / `_B` under `--label pilot-a` / `pilot-b`, else
 //! `specengine.toml` at the corpus root); under a pilot label
 //! `SPECENGINE_CODE_ROOTS_A` / `_B` (comma-separated) give the roots
-//! instead. No `[code]` and no roots: refused (exit 2). The corpus is only
-//! read; stdout carries counts and times, the refresh reports go to
-//! `--out` only.
+//! instead, and `SPECENGINE_CODE_FRAMEWORKS_A` / `_B` (comma-separated;
+//! unset or empty: off) that table's `frameworks`. No `[code]` and no
+//! roots, or a framework the code crate does not know: refused (exit 2).
+//! The corpus is only read; stdout carries counts and times, the refresh
+//! reports go to `--out` only.
+//!
+//! With `frameworks` listed (task spec `bevy-roles` "Eval"),
+//! `framework_roles` is the role counts `spec index` prints
+//! (`specengine_cli::role_counts`, links computed) read once after the
+//! refreshes, `roles_ms` that read; both `null` otherwise.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -32,6 +39,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use specengine_cli::RoleCounts;
 use specengine_code::qpath::{self, PackageTargets, TargetSource};
 use specengine_code::{
     DISCRIMINATOR_SEPARATOR, RustParser, bind_tree, item_levels, item_signatures,
@@ -65,11 +73,17 @@ const MANIFEST: &str = "Cargo.toml";
 /// The end of a digest-cut display signature.
 const CUT: char = '\u{2026}';
 
+/// The label of a `[code]` table built from the pilot variables.
+const VARIABLES_LABEL: &str = "the code roots variable";
+const VARIABLES_FRAMEWORKS_LABEL: &str = "the code roots and frameworks variables";
+
 /// What the run needs, read before anything is written.
 pub struct Setup {
     scheme: IdScheme,
     paths: Paths,
     code: CodeConfig,
+    /// Where `code` was read from, as its errors name it.
+    code_label: String,
     /// The end of `--timeout` (the cargo calls end before it).
     run_end: Option<Instant>,
 }
@@ -96,25 +110,59 @@ pub fn prepare(
         .map_err(|error| format!("{shown}: cannot read the scheme: {error}"))?;
     let ids = IdScheme::from_toml(&text).map_err(|error| error.at(&shown))?;
     let paths = Paths::from_toml(&text).map_err(|error| error.at(&shown))?;
-    let code = match harness::text_from_environment(harness::PILOT_CODE_ROOTS, label) {
+    let (code, code_label) = match harness::text_from_environment(harness::PILOT_CODE_ROOTS, label)
+    {
         Some(roots) => {
             let list: Vec<String> = roots
                 .split(',')
                 .map(|root| format!("{:?}", root.trim()))
                 .collect();
-            let table = format!("[code]\nroots = [{}]\n", list.join(", "));
-            CodeConfig::from_toml(&table)
-                .map_err(|error| error.at("the code roots variable"))?
-                .ok_or_else(|| "the code roots variable gives no [code] table".to_owned())?
+            let mut table = format!("[code]\nroots = [{}]\n", list.join(", "));
+            let mut code_label = VARIABLES_LABEL;
+            if let Some(names) =
+                harness::text_from_environment(harness::PILOT_CODE_FRAMEWORKS, label)
+            {
+                let names: Vec<String> = names
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(|name| format!("{name:?}"))
+                    .collect();
+                table.push_str(&format!("frameworks = [{}]\n", names.join(", ")));
+                code_label = VARIABLES_FRAMEWORKS_LABEL;
+            }
+            let code = CodeConfig::from_toml(&table)
+                .map_err(|error| error.at(code_label))?
+                .ok_or_else(|| "the code roots variable gives no [code] table".to_owned())?;
+            (code, code_label.to_owned())
         }
-        None => CodeConfig::from_toml(&text)
-            .map_err(|error| error.at(&shown))?
-            .ok_or_else(|| format!("{shown} has no [code] table and no code roots are set"))?,
+        None => {
+            // The frameworks join the roots' table: alone, they would be
+            // dropped and the run measured without roles.
+            if let Some(pilot) = label
+                && harness::text_from_environment(harness::PILOT_CODE_FRAMEWORKS, label).is_some()
+                && let (Some(frameworks), Some(roots)) = (
+                    harness::PILOT_CODE_FRAMEWORKS.name(pilot),
+                    harness::PILOT_CODE_ROOTS.name(pilot),
+                )
+            {
+                return Err(format!(
+                    "{VARIABLES_FRAMEWORKS_LABEL}: `{frameworks}` is set without `{roots}`"
+                ));
+            }
+            let code = CodeConfig::from_toml(&text)
+                .map_err(|error| error.at(&shown))?
+                .ok_or_else(|| format!("{shown} has no [code] table and no code roots are set"))?;
+            (code, shown)
+        }
     };
+    // The refresh's own check, made before anything is written: refused.
+    specengine_cli::known_frameworks(&code, &code_label).map_err(|error| error.message)?;
     Ok(Setup {
         scheme: ids,
         paths,
         code,
+        code_label,
         run_end,
     })
 }
@@ -186,6 +234,11 @@ pub struct CodeIndexResult {
     pub twins: Twins,
     pub signatures: Signatures,
     pub roles: Roles,
+    /// The role counts after the refreshes (`spec index`'s `code.roles`);
+    /// `null` without `frameworks`.
+    pub framework_roles: Option<RoleCounts>,
+    /// That one read, links computed; `null` without `frameworks`.
+    pub roles_ms: Option<u128>,
 }
 
 #[derive(Serialize)]
@@ -200,6 +253,7 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<CodeIndexResult, String> {
         scheme,
         paths,
         code,
+        code_label,
         run_end,
     } = setup;
     let out_dir = corpus.out.join(MEASUREMENT).join(&corpus.label);
@@ -258,8 +312,9 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<CodeIndexResult, String> {
     let root = index.root().to_path_buf();
     let mut refresh = || {
         let started = Instant::now();
-        let refreshed = specengine_cli::refresh_code(&mut index, &root, &code, &scheme, false)
-            .map_err(|error| error.message.clone())?;
+        let refreshed =
+            specengine_cli::refresh_code(&mut index, &root, &code, &code_label, &scheme, false)
+                .map_err(|error| error.message.clone())?;
         Ok::<_, String>((started.elapsed().as_millis(), refreshed.report))
     };
     let (full_ms, full) = refresh()?;
@@ -276,6 +331,14 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<CodeIndexResult, String> {
     let started = Instant::now();
     index.code_refs().map_err(|error| error.to_string())?;
     let refs_ms = started.elapsed().as_millis();
+    let (framework_roles, roles_ms) = if code.frameworks.is_empty() {
+        (None, None)
+    } else {
+        let started = Instant::now();
+        let counts = specengine_cli::role_counts(&index, &code.frameworks)
+            .map_err(|error| error.message.clone())?;
+        (Some(counts), Some(started.elapsed().as_millis()))
+    };
     let symbols = index
         .code_symbols()
         .map_err(|error| error.to_string())?
@@ -319,6 +382,8 @@ pub fn run(corpus: &Corpus, setup: Setup) -> Result<CodeIndexResult, String> {
                 .count(),
         },
         roles,
+        framework_roles,
+        roles_ms,
     };
 
     let reports = Reports {

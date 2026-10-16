@@ -3,20 +3,28 @@
 //! `CodeAnalyzer` — list, packages, fingerprint, analyze; plain rows): the
 //! store has no dependency on `specengine-code`, so its own tests give it
 //! rows a stub makes from fixed text, never from a parse. `format.rs`
-//! indexes them beside spec-a and spec-b, so `format_history.txt`'s `9`
-//! line pins the code tables' projection too ("Tables": `9 <hash>` over
-//! spec-a, spec-b plus a stub analyzer's rows).
+//! indexes them beside spec-a and spec-b, so `format_history.txt`'s lines
+//! from `9` on pin the code tables' projection too ("Tables": `9 <hash>`
+//! over spec-a, spec-b plus a stub analyzer's rows; docs/features/
+//! bevy-roles.md "Formats": `10 <hash>`, the stub emitting role rows).
 //!
 //! The stub's tree: two Rust files of one package and a RON file, holding
 //! one row of every kind the store keeps — a symbol with suffixes, an
 //! in-file twin pair (`#1`, `#2`), an item another file renders too (the
 //! pass's `twin_files`), a `#[path]` declaration (the pass's
 //! `declared_by`), a cannot-verify symbol with no digest, a marker on an
-//! item, a marker on a RON path, a mention.
+//! item, a marker on a RON path, a mention, and role rows
+//! (`framework_roles`, bevy-roles "Table"): one on an item, one with a
+//! subject and a group, one `uncertain` with a category, one in the other
+//! file. Their words and sources are the stub's own: the store keeps
+//! strings, it knows no framework (RD-8).
 //!
 //! Every store type it names (the trait, its row types,
 //! `SqliteIndex::update_code`, `CodeReport`) is the store's public API; a
 //! change of those types is adapted here, and nowhere else in the tests.
+//! `CodeRoleRow` and `CodeFileRows.framework_roles` are the spec's
+//! names (bevy-roles "Table", SR6); as built: strings,
+//! `Option` where the column takes NULL, `u32` ordinals and lines.
 
 #![allow(dead_code)]
 
@@ -25,7 +33,8 @@ use std::path::Path;
 use specengine_model::IdScheme;
 use specengine_store::{
     CodeAnalyzer, CodeDeclRow, CodeFileRows, CodeListing, CodeMarkerRow, CodeMentionRow,
-    CodePackageRow, CodeReport, CodeSymbolRow, ListedCodeFile, SqliteIndex, StoreError,
+    CodePackageRow, CodeReport, CodeRoleRow, CodeSymbolRow, ListedCodeFile, SqliteIndex,
+    StoreError,
 };
 
 /// `b3:` and 64 hex digits of `seed` repeated: a stand-in digest.
@@ -99,6 +108,24 @@ fn symbol(
         body_bytes: hashed.then_some(42),
         layer: "a".to_owned(),
         suffixes,
+    }
+}
+
+/// A role row on the item `symbol_ord` (no subject), `certain`.
+fn role_on_item(ord: u32, word: &str, symbol_ord: u32, line: u32) -> CodeRoleRow {
+    CodeRoleRow {
+        ord,
+        word: word.to_owned(),
+        source: "stub_source_item".to_owned(),
+        form: None,
+        origin: "code".to_owned(),
+        group_text: None,
+        symbol_ord: Some(symbol_ord),
+        subject: None,
+        subject_name: None,
+        certainty: "certain".to_owned(),
+        category: None,
+        line,
     }
 }
 
@@ -181,6 +208,37 @@ impl CodeAnalyzer for Stub {
                     symbol_ord: Some(1),
                     anchor: None,
                 }],
+                framework_roles: vec![
+                    role_on_item(0, "stub_word_a", 0, 1),
+                    CodeRoleRow {
+                        ord: 1,
+                        word: "stub_word_b".to_owned(),
+                        source: "stub_source_call".to_owned(),
+                        form: Some("path".to_owned()),
+                        origin: "code".to_owned(),
+                        group_text: Some("StubGroup".to_owned()),
+                        symbol_ord: None,
+                        subject: Some("other::shared".to_owned()),
+                        subject_name: Some("shared".to_owned()),
+                        certainty: "certain".to_owned(),
+                        category: None,
+                        line: 5,
+                    },
+                    CodeRoleRow {
+                        ord: 2,
+                        word: "stub_word_b".to_owned(),
+                        source: "stub_source_call".to_owned(),
+                        form: None,
+                        origin: "macro_rules".to_owned(),
+                        group_text: None,
+                        symbol_ord: None,
+                        subject: None,
+                        subject_name: None,
+                        certainty: "uncertain".to_owned(),
+                        category: Some("stub_category".to_owned()),
+                        line: 8,
+                    },
+                ],
             },
             "crates/stub/src/other.rs" => CodeFileRows {
                 lang: "rust".to_owned(),
@@ -193,6 +251,7 @@ impl CodeAnalyzer for Stub {
                 decls: Vec::new(),
                 markers: Vec::new(),
                 mentions: Vec::new(),
+                framework_roles: vec![role_on_item(0, "stub_word_a", 0, 2)],
             },
             _ => CodeFileRows {
                 lang: "ron".to_owned(),
@@ -219,6 +278,7 @@ impl CodeAnalyzer for Stub {
                     anchor: Some("root.cap".to_owned()),
                 }],
                 mentions: Vec::new(),
+                framework_roles: Vec::new(),
             },
         }
     }
@@ -237,3 +297,12 @@ pub fn index_stub(index: &mut SqliteIndex, scheme: &IdScheme) -> CodeReport {
 pub fn root_is_untouched(root: &Path) -> bool {
     FILES.iter().all(|(path, _)| !root.join(path).exists())
 }
+
+/// The role rows the stub gives, `(path, ord, word, certainty)`, by path
+/// and ord: what `code_roles` must hold after [`index_stub`].
+pub const ROLE_ROWS: [(&str, u32, &str, &str); 4] = [
+    ("crates/stub/src/lib.rs", 0, "stub_word_a", "certain"),
+    ("crates/stub/src/lib.rs", 1, "stub_word_b", "certain"),
+    ("crates/stub/src/lib.rs", 2, "stub_word_b", "uncertain"),
+    ("crates/stub/src/other.rs", 0, "stub_word_a", "certain"),
+];

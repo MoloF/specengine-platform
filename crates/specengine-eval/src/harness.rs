@@ -46,10 +46,16 @@ pub const PILOT_TASKS: PilotVariable = PilotVariable(["SPECENGINE_TASKS_A", "SPE
 /// The `[code]` roots of `code-index`, comma-separated.
 pub const PILOT_CODE_ROOTS: PilotVariable =
     PilotVariable(["SPECENGINE_CODE_ROOTS_A", "SPECENGINE_CODE_ROOTS_B"]);
+/// The `[code] frameworks` of `code-index` beside [`PILOT_CODE_ROOTS`],
+/// comma-separated (unset or empty: off; set without it: refused).
+pub const PILOT_CODE_FRAMEWORKS: PilotVariable = PilotVariable([
+    "SPECENGINE_CODE_FRAMEWORKS_A",
+    "SPECENGINE_CODE_FRAMEWORKS_B",
+]);
 
 impl PilotVariable {
     /// The variable read under `label`; none for a label that is not a pilot's.
-    fn name(self, label: &str) -> Option<&'static str> {
+    pub(crate) fn name(self, label: &str) -> Option<&'static str> {
         match label {
             "pilot-a" => Some(self.0[0]),
             "pilot-b" => Some(self.0[1]),

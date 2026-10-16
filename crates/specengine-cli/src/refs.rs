@@ -234,7 +234,14 @@ pub fn refs(env: &Env, globals: &Globals, request: &RefsRequest) -> Result<RefsO
         )));
     }
 
-    let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
+    let refreshed = refresh_code(
+        &mut open.index,
+        &project.root,
+        &code,
+        &project.config_label,
+        scheme,
+        false,
+    )?;
     refreshed.require_complete()?;
     messages.extend(refreshed.messages.iter().cloned());
     let stored = open

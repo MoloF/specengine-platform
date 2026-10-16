@@ -75,9 +75,11 @@ enum Measurement {
     /// over a scratch copy of the `[code]` walk's files and manifests: the
     /// level and signature cost, a full, an unchanged and a one-file
     /// refresh, the stored twins, signatures and items, each Rust file's
-    /// role under the layout against `cargo metadata`. `[ids]`, `[paths]`
-    /// and `[code]` from `--scheme`; under a pilot label
-    /// `SPECENGINE_CODE_ROOTS_A` / `_B` give the roots.
+    /// role under the layout against `cargo metadata`; with `[code]
+    /// frameworks`, the role counts and their read. `[ids]`, `[paths]` and
+    /// `[code]` from `--scheme`; under a pilot label
+    /// `SPECENGINE_CODE_ROOTS_A` / `_B` give the roots,
+    /// `SPECENGINE_CODE_FRAMEWORKS_A` / `_B` their frameworks.
     CodeIndex(IndexArgs),
     /// `spec check` (increment 1) over the `[paths]` walk, read-only:
     /// counts per code and severity, the verdict under `observe` and

@@ -129,7 +129,14 @@ pub fn unmapped(
     let mut open = open_index(env, &project)?;
     let input = indexed_in(&mut open.index, &project, &mut messages, false)?;
     let mut corpus = Corpus::new(&input, scheme, &project.config.paths);
-    let refreshed = refresh_code(&mut open.index, &project.root, &code, scheme, false)?;
+    let refreshed = refresh_code(
+        &mut open.index,
+        &project.root,
+        &code,
+        &project.config_label,
+        scheme,
+        false,
+    )?;
     refreshed.require_complete()?;
     messages.extend(refreshed.messages.iter().cloned());
     // One snapshot: the markers and every symbol from one read

@@ -1,0 +1,6 @@
+// The farm's tuning: growth per tick and the calves' interval. A RON file
+// holds no role.
+(
+    growth_per_tick: 1,
+    calves_every: 3,
+)

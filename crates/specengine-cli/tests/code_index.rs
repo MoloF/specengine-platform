@@ -13,6 +13,10 @@
 //! `item_signatures` over the same bytes, on code-index, code-a and
 //! verify-ecs (an ECS-style game crate: ADR-0008's second project).
 //!
+//! docs/features/bevy-roles.md RD-3: `code_roles` is one of the code
+//! tables (`CODE_TABLES`), so the format change gives every one of them a
+//! stale column and wants it gone (`FORMAT_TABLES`).
+//!
 //! Built names the spec leaves open: `SqliteIndex::stored_names` (RD-15)
 //! and the JSON keys of `spec index`'s `code` object (the line's words).
 //!
@@ -418,12 +422,13 @@ fn index_on_spec_c_prints_no_code_line() {
     assert!(run.stderr.contains("[code]"), "{}", run.show());
 }
 
-/// RD-1, TE-3. M: a code table absent from `FORMAT_TABLES`. An index
-/// format change (the stored stamp rewritten as an older build left it,
-/// a code table given a stale column of that build): `spec index` recreates
-/// every index table, the code ones too, re-derives the code rows and ends
-/// equal to a fresh index; the queue's proposal, events, task and stage
-/// stay byte for byte; `--full` keeps them too.
+/// RD-1, TE-3; bevy-roles RD-3. M: a code table absent from
+/// `FORMAT_TABLES` (`code_roles` too). An index format change (the stored
+/// stamp rewritten as an older build left it, every code table given a
+/// stale column of that build): `spec index` recreates every index table,
+/// the code ones too (each stale column gone), re-derives the code rows
+/// and ends equal to a fresh index; the queue's proposal, events, task and
+/// stage stay byte for byte; `--full` keeps them too.
 #[test]
 fn format_change_recreates_code_tables_and_keeps_queue_rows() {
     use specengine_core::proposal::Author;
@@ -504,20 +509,32 @@ fn format_change_recreates_code_tables_and_keeps_queue_rows() {
     let queue_dump = queue.dump().expect("queue dump");
     drop(queue);
 
+    let stale: Vec<String> = CODE_TABLES
+        .iter()
+        .map(|table| {
+            format!("ALTER TABLE {table} ADD COLUMN stale_of_an_older_build INTEGER DEFAULT 7;")
+        })
+        .collect();
     execute(
         &db,
-        "ALTER TABLE symbols ADD COLUMN stale_of_an_older_build INTEGER DEFAULT 7; \
-         UPDATE index_meta SET value = '0' WHERE key = 'format';",
+        &format!(
+            "{} UPDATE index_meta SET value = '0' WHERE key = 'format';",
+            stale.join(" ")
+        ),
     );
     let run = spec(&home, &root, &["index"]);
     run.code(0);
     let counts = counts_of(&run);
     assert_eq!(counts["parsed"], counts["walked"], "{}", run.show());
-    let columns = query(
-        &db,
-        "SELECT name FROM pragma_table_xinfo('symbols') WHERE name = 'stale_of_an_older_build'",
-    );
-    assert!(columns.is_empty(), "symbols was not recreated");
+    for table in CODE_TABLES {
+        let columns = query(
+            &db,
+            &format!(
+                "SELECT name FROM pragma_table_xinfo('{table}') WHERE name = 'stale_of_an_older_build'"
+            ),
+        );
+        assert!(columns.is_empty(), "{table} was not recreated");
+    }
     assert_eq!(
         dump(&home, &root, SLUG),
         fresh_dump(&scratch, &root, SLUG),
@@ -842,7 +859,9 @@ fn replace_once(root: &Path, relative: &str, from: &str, to: &str) {
 
 /// Every table name the dump prints is one `sqlite_master` holds: the
 /// dump covers each code table (`dump.rs` maps code keys to `path`,
-/// `(path, ord)`) and shows no surrogate key or rowid.
+/// `(path, ord)`) and shows no surrogate key or rowid. code-index holds no
+/// `#[path]` declaration and no framework role (`code_roles` by path:
+/// `bevy_roles.rs`, store `format.rs`).
 #[test]
 fn the_dump_covers_every_code_table_by_path() {
     let scratch = Scratch::new("ci-dump");
@@ -855,7 +874,7 @@ fn the_dump_covers_every_code_table_by_path() {
         .map(|line| line.split('\t').next().unwrap())
         .collect();
     for table in CODE_TABLES {
-        if table == "code_decls" {
+        if table == "code_decls" || table == "code_roles" {
             continue;
         }
         assert!(tables.contains(table), "{table} not dumped");

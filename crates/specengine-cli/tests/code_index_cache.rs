@@ -16,6 +16,11 @@
 //! unrooted twin and a `#[path]` target twin (the 6a-1 review's S4: the
 //! pass reads discriminators, never splits a name, and counts every file).
 //!
+//! docs/features/bevy-roles.md "Formats" (F1, RD-3): from
+//! `CODE_INDEX_FORMAT` 3 the history hashes code-index's code-table dump
+//! followed by code-bevy's (its `code_roles` rows in), lines 1 and 2
+//! verbatim.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -311,16 +316,42 @@ fn code_index_dump() -> String {
     code_lines(&dump(&home, &root, SLUG))
 }
 
-/// RD-2, TE-3 (Q16, Q24). M: a signature rule changed, the stamp kept.
-/// `tests/code_format_history.txt` holds `<CODE_INDEX_FORMAT> <BLAKE3 of
-/// the code tables' dump of code-index, root masked>` lines: numbers never
-/// go down, the first is 1, it ends with the current pair, and no earlier
-/// line has the current number with another hash.
+/// The code tables of a fresh index of `fixtures/code-bevy` (a scratch
+/// copy, `frameworks = ["bevy"]`), its root masked (docs/features/
+/// bevy-roles.md "Formats", F1).
+fn code_bevy_dump() -> String {
+    let scratch = Scratch::new("ci-history-bevy");
+    let home = scratch.home("h");
+    let root = copy(&scratch, "code-bevy", "code-bevy");
+    index(&home, &root);
+    code_lines(&dump(&home, &root, "code-bevy"))
+}
+
+/// What the current line of `code_format_history.txt` hashes: from
+/// `CODE_INDEX_FORMAT` 3 on, code-index's code dump followed by
+/// code-bevy's (the header says so).
+fn code_history_dump() -> String {
+    format!("{}{}", code_index_dump(), code_bevy_dump())
+}
+
+/// RD-2, TE-3 (Q16, Q24); bevy-roles RD-3 (F1). M: a signature or a role
+/// rule changed, the stamp kept. `tests/code_format_history.txt` holds
+/// `<CODE_INDEX_FORMAT> <BLAKE3 of the code tables' dump, root masked>`
+/// lines (from 3: code-index then code-bevy): numbers never go down, the
+/// first is 1, it ends with the current pair, and no earlier line has the
+/// current number with another hash.
 #[test]
 fn code_format_history_pins_the_code_index_dump() {
-    let text = code_index_dump();
-    assert_eq!(text, code_index_dump(), "the code dump is deterministic");
+    let text = code_history_dump();
+    assert_eq!(text, code_history_dump(), "the code dump is deterministic");
     assert!(text.lines().count() > 100, "{text}");
+    assert!(
+        text.lines()
+            .filter(|line| line.starts_with("code_roles\t"))
+            .count()
+            >= 27,
+        "code-bevy's role rows are hashed:\n{text}"
+    );
     let hash = blake3_hex(text.as_bytes());
     // The stamp of "Analyzer stamp", in `specengine-code`.
     let format = specengine_code::CODE_INDEX_FORMAT;
@@ -378,6 +409,48 @@ fn code_format_history_pins_the_code_index_dump() {
         "code_format_history.txt must end with the current stamp and code dump hash:\n{current}\n\
          last line: {last_format} {last_hash}\n\
          (a changed code dump needs a new CODE_INDEX_FORMAT and a new line)"
+    );
+}
+
+/// bevy-roles "Formats" (F1). M: `CODE_INDEX_FORMAT` kept at 2; an earlier
+/// line edited. The stamp is 3; the history is 6b-1's two lines verbatim
+/// and exactly one `3 <hash>`; its header names code-bevy as hashed after
+/// code-index.
+#[test]
+fn code_format_history_keeps_lines_1_and_2_and_adds_3() {
+    assert_eq!(specengine_code::CODE_INDEX_FORMAT, 3);
+    let history = read_text(
+        &repository_root(),
+        "crates/specengine-cli/tests/code_format_history.txt",
+    );
+    let header: String = history
+        .lines()
+        .filter(|line| line.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        header.contains("fixtures/code-index") && header.contains("fixtures/code-bevy"),
+        "the header says what is hashed:\n{header}"
+    );
+    let lines: Vec<&str> = history
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .collect();
+    assert_eq!(lines.len(), 3, "{history}");
+    assert_eq!(
+        lines[..2],
+        [
+            "1 3eac6715cece86e4385c82367d489ccc24d4a7896044accb18a713ec344a3a0e",
+            "2 206f941120e31b317e822f026607d6bbccd5efdf77a30f338446578d7fdc275a",
+        ],
+        "lines 1 and 2 verbatim"
+    );
+    let (format, hash) = lines[2].split_once(' ').expect("`<format> <hash>`");
+    assert_eq!(format, "3", "{history}");
+    assert!(
+        hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
+        "a BLAKE3 hex: {}",
+        lines[2]
     );
 }
 

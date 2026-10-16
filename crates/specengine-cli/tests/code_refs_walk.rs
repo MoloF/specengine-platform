@@ -13,6 +13,12 @@
 //! `tests` or `src` literal (no path is classified) in the store, core or
 //! those modules.
 //!
+//! docs/features/bevy-roles.md RD-4 and RD-8: `[code] frameworks` is a key
+//! (`bevy` no longer named as not built, `EXEMPT` 5 -> 4); the slice's
+//! store and CLI role modules join the scans, and no core, store or CLI
+//! module holds a role word, a source or a framework name, all read from
+//! the code crate's data; the detector runs on the analyzer's one parse.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 mod code_index_common;
@@ -66,31 +72,63 @@ fn exit_2_quiet(run: &Run) {
 /// the root, a wrong type: exit 2, `specengine.toml:<line>:` at the key,
 /// for `spec refs` only — `spec check` and `spec show` name-check `[code]`
 /// and answer. M: accept an unknown key; accept `crates`.
+/// docs/features/bevy-roles.md RD-4: `bevy` is an unknown key now (the
+/// text names `frameworks` among the keys); `frameworks` of a wrong shape
+/// or naming no known framework is refused alike, `check` and `show`
+/// still answer; `frameworks = ["bevy"]` reads. M: `bevy` kept in
+/// `NOT_BUILT_KEYS`; `spec check` failing on the key.
 #[test]
 fn code_table_unknown_key_is_refused() {
     let scratch = Scratch::new("code-table");
     let root = scratch.copy("code-a", "code-a");
     let home = scratch.home("h");
-    let cases: [(&str, &str); 8] = [
-        ("[code]\nroots = [\"crates\"]\ncolour = 1\n", "colour"),
+    let cases: [(&str, &str, Option<&str>); 12] = [
+        ("[code]\nroots = [\"crates\"]\ncolour = 1\n", "colour", None),
         (
             "[code]\nroots = [\"crates\"]\nlanguages = [\"rust\"]\n",
             "languages",
+            None,
         ),
         (
             "[code]\nroots = [\"crates\"]\ncrates = \"cargo-metadata\"\n",
             "crates",
+            None,
         ),
         (
             "[code]\nroots = [\"crates\"]\nexclude = [\"a/[b]\"]\n",
             "exclude",
+            None,
         ),
-        ("[code]\nroots = []\n", "roots"),
-        ("[code]\nroots = [\"../x\"]\n", "roots"),
-        ("[code]\nroots = \"crates\"\n", "roots"),
-        ("[code]\nexclude = []\n", "[code]"),
+        ("[code]\nroots = []\n", "roots", None),
+        ("[code]\nroots = [\"../x\"]\n", "roots", None),
+        ("[code]\nroots = \"crates\"\n", "roots", None),
+        ("[code]\nexclude = []\n", "[code]", None),
+        (
+            "[code]\nroots = [\"crates\"]\nbevy = true\n",
+            "bevy",
+            Some(
+                "`[code]` has no key `bevy`: it takes `roots` and `exclude` and `frameworks` only",
+            ),
+        ),
+        (
+            "[code]\nroots = [\"crates\"]\nframeworks = \"bevy\"\n",
+            "frameworks",
+            Some("`[code] frameworks` is a string, not a list of names"),
+        ),
+        (
+            "[code]\nroots = [\"crates\"]\nframeworks = [\"Bevy\"]\n",
+            "frameworks",
+            Some(
+                "`[code] frameworks`: `Bevy` is not a name: a lowercase letter, then at most 31 of a-z, 0-9, `_`, `-`",
+            ),
+        ),
+        (
+            "[code]\nroots = [\"crates\"]\nframeworks = [\"loom\"]\n",
+            "frameworks",
+            None,
+        ),
     ];
-    for (table, key) in cases {
+    for (table, key, message) in cases {
         let config = with_code(table);
         write(&root, "specengine.toml", &config);
         let line = line_starting(&config, key);
@@ -103,10 +141,17 @@ fn code_table_unknown_key_is_refused() {
                 "{table:?}: want one line starting {prefix:?}\n{}",
                 run.show()
             );
+            if let Some(message) = message {
+                assert_eq!(run.stderr, format!("{prefix}{message}\n"), "{table:?}");
+            }
         }
         spec(&home, &root, &["check"]).code(0);
         spec(&home, &root, &["show", "GOAL-01"]).code(0);
     }
+    let config = with_code("[code]\nroots = [\"crates\"]\nframeworks = [\"bevy\"]\n");
+    write(&root, "specengine.toml", &config);
+    spec(&home, &root, &["refs", "GOAL-01"]).code(0);
+    spec(&home, &root, &["check"]).code(0);
 }
 
 // ------------------------------------------------------------------ RD-6
@@ -581,13 +626,25 @@ const SYMBOLS_MODULE: &str = "crates/specengine-cli/src/symbols.rs";
 /// The CLI module of `spec unmapped`.
 const UNMAPPED_MODULE: &str = "crates/specengine-cli/src/unmapped.rs";
 
+/// docs/features/bevy-roles.md's store module: the role read (L3), role
+/// rows with their file's package and their link candidates, strings only
+/// (as built).
+const STORE_ROLES_MODULE: &str = "crates/specengine-store/src/roles.rs";
+
+/// docs/features/bevy-roles.md's CLI role module: links (L1) and counts
+/// (G1), the spec's working name `roles.rs`.
+const ROLES_MODULE: &str = "crates/specengine-cli/src/roles.rs";
+
 /// The new modules of the slice, `items.rs` since
 /// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3),
 /// the store's and the CLI's code-index modules since
-/// docs/features/symbol-index.md ("Rules and edge cases", Genre), and the
+/// docs/features/symbol-index.md ("Rules and edge cases", Genre), the
 /// lookup, `symbols` and `unmapped` modules since
-/// docs/features/symbol-reads.md (its "Rules and edge cases", TE-3).
-const NEW_MODULES: [&str; 11] = [
+/// docs/features/symbol-reads.md (its "Rules and edge cases", TE-3), and
+/// the store's and the CLI's role modules since docs/features/bevy-roles.md
+/// (RD-8: `NEW_MODULES` 11 + 2; the code crate's `frameworks` and `bevy`
+/// name the framework and stay out).
+const NEW_MODULES: [&str; 13] = [
     "crates/specengine-core/src/code_toml.rs",
     "crates/specengine-code/src/bind.rs",
     "crates/specengine-code/src/naming.rs",
@@ -599,6 +656,8 @@ const NEW_MODULES: [&str; 11] = [
     STORE_READS_MODULE,
     SYMBOLS_MODULE,
     UNMAPPED_MODULE,
+    STORE_ROLES_MODULE,
+    ROLES_MODULE,
 ];
 
 /// Stack and genre words no engine source names.
@@ -620,13 +679,13 @@ const STACK_WORDS: [&str; 14] = [
 ];
 
 /// Narrow exemptions, each a whole literal of one file: 07 s5's `[code]`
-/// keys, refused by name as not built (the spec's "The code table"), and
+/// keys, refused by name as not built (the spec's "The code table"; `bevy`
+/// dropped by docs/features/bevy-roles.md RD-4: an unknown key now), and
 /// the binding word `module` of "spec refs" (equal to `fixtures/spec-b`'s
 /// kind `module`, not taken from it).
-const EXEMPT: [(&str, &str); 5] = [
+const EXEMPT: [(&str, &str); 4] = [
     ("crates/specengine-core/src/code_toml.rs", "languages"),
     ("crates/specengine-core/src/code_toml.rs", "crates"),
-    ("crates/specengine-core/src/code_toml.rs", "bevy"),
     ("crates/specengine-core/src/code_toml.rs", "scip"),
     ("crates/specengine-cli/src/refs.rs", "module"),
 ];
@@ -811,6 +870,50 @@ fn fixture_vocabulary() -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>
     (prefixes, kinds, slugs)
 }
 
+/// docs/features/bevy-roles.md RD-8 (WA-11, G1): every role word and
+/// source the code crate's `frameworks` data lists, and every framework
+/// name it knows, read from the data, never written here: the words are
+/// the keys of `spec index`'s JSON `code.roles.words` over a scratch copy
+/// of `fixtures/code-bevy` (every word of the listed frameworks, zeros
+/// too), the sources the `code_roles.source` values stored there (the
+/// fixture holds every source of "Role facts"), the names
+/// `specengine_code::frameworks::KNOWN` (the spec's name, a list
+/// of names).
+fn framework_vocabulary() -> BTreeSet<String> {
+    let scratch = Scratch::new("genre-roles");
+    let home = scratch.home("h");
+    let root = code_index_common::copy(&scratch, "code-bevy", "code-bevy");
+    let run = spec(&home, &root, &["--json", "index"]);
+    run.code(0);
+    let json = run.json();
+    let mut out: BTreeSet<String> = json["code"]["roles"]["words"]
+        .as_object()
+        .unwrap_or_else(|| panic!("code.roles.words: {json}"))
+        .keys()
+        .cloned()
+        .collect();
+    let sources: BTreeSet<String> = code_index_common::query(
+        &code_index_common::db(&home, "code-bevy"),
+        "SELECT DISTINCT source FROM code_roles",
+    )
+    .into_iter()
+    .map(|row| row["source"].as_str().expect("a source").to_owned())
+    .collect();
+    for source in ["call", "derive", "fn", "impl"] {
+        assert!(
+            sources.contains(source),
+            "code-bevy holds a row of every source: {sources:?}"
+        );
+    }
+    out.extend(sources);
+    out.extend(
+        specengine_code::frameworks::KNOWN
+            .iter()
+            .map(|name| (*name).to_owned()),
+    );
+    out
+}
+
 /// A source without its own `#[cfg(test)] mod` (over the fixture, by
 /// design).
 fn scanned(file: &str) -> String {
@@ -826,6 +929,11 @@ fn scanned(file: &str) -> String {
 /// slug, a fixture path (`fixtures/`, `tally`, `inkwell`), or a stack word
 /// — but the narrow [`EXEMPT`] and [`EXEMPT_WORDS`] lists. A module's own
 /// `#[cfg(test)] mod` (over the fixture, by design) ends what is scanned.
+/// docs/features/bevy-roles.md RD-8: nor, in a core, store or CLI module,
+/// a role word, a source or a framework name of the code crate's data
+/// ([`framework_vocabulary`]). M: a `"component"` or `"call"` literal, or
+/// a framework name, in a core, store or CLI module; `bevy` kept in
+/// `code_toml.rs`.
 #[test]
 fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
     let (prefixes, kinds, slugs) = fixture_vocabulary();
@@ -835,6 +943,28 @@ fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
         prefixes.contains("TENET") && kinds.contains("slab") && slugs.contains("inkwell"),
         "fixtures/code-index is scanned for"
     );
+    assert!(
+        prefixes.contains("CHORE") && kinds.contains("almanac") && slugs.contains("code-bevy"),
+        "fixtures/code-bevy is scanned for"
+    );
+    let roles = framework_vocabulary();
+    for word in [
+        "bevy",
+        "component",
+        "entity_event",
+        "system",
+        "derive",
+        "call",
+    ] {
+        assert!(roles.contains(word), "{word} read from the data: {roles:?}");
+    }
+    for file in NEW_MODULES {
+        assert!(
+            !file.starts_with("crates/specengine-code/src/frameworks")
+                && !file.starts_with("crates/specengine-code/src/bevy"),
+            "{file}: the code crate's framework modules stay out of the scan"
+        );
+    }
     let mut offenders = Vec::new();
     let mut scanned_literals = 0;
     for file in NEW_MODULES {
@@ -845,6 +975,7 @@ fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
                 "{file}: the code is scanned"
             );
         }
+        let engine = !file.starts_with("crates/specengine-code/");
         for literal in literals(&source) {
             scanned_literals += 1;
             if EXEMPT.contains(&(file, literal.as_str())) {
@@ -867,6 +998,10 @@ fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
                     || STACK_WORDS.contains(&low.as_str())
                 {
                     offenders.push(format!("{file}: {literal:?} ({word})"));
+                } else if engine && roles.contains(&low) {
+                    offenders.push(format!(
+                        "{file}: {literal:?} ({word}: the code crate's data)"
+                    ));
                 }
             }
         }
@@ -904,6 +1039,8 @@ fn sources_under(dir: &str) -> Vec<String> {
 /// module hold no `::` literal (a qpath is compared, never split: the
 /// suffixes come from the structured segments, WA-8) and no Cargo literal
 /// (`Cargo.toml`, a word `cargo`). M: the store splits a qpath at `::`.
+/// docs/features/bevy-roles.md RD-5 (L3): the CLI role module too. M: the
+/// package cut from a qpath.
 #[test]
 fn store_core_and_new_modules_hold_no_path_split_or_cargo_literal() {
     let mut files = sources_under("crates/specengine-store/src");
@@ -911,7 +1048,8 @@ fn store_core_and_new_modules_hold_no_path_split_or_cargo_literal() {
     files.push(ANALYZER_MODULE.to_owned());
     files.push(SYMBOLS_MODULE.to_owned());
     files.push(UNMAPPED_MODULE.to_owned());
-    for module in [STORE_CODE_MODULE, STORE_READS_MODULE] {
+    files.push(ROLES_MODULE.to_owned());
+    for module in [STORE_CODE_MODULE, STORE_READS_MODULE, STORE_ROLES_MODULE] {
         assert!(
             files.iter().any(|file| file == module),
             "the store's module is {module}: {files:?}"
@@ -1226,7 +1364,9 @@ fn nothing_outside_the_binder_reads_an_items_state() {
 /// that one tree: one `.parse(` call, `bind_tree`, `name_file`,
 /// `item_levels`, `item_signatures` given the tree, no entry that parses
 /// on its own (`bind_file`, `analyze_file`); `comment_anchors` once per
-/// `.ron` file.
+/// `.ron` file. docs/features/bevy-roles.md "Role facts": the framework
+/// detector runs on that one tree too, never through `detect_file`, which
+/// parses again.
 #[test]
 fn one_parse_per_rederived_file() {
     let source = scanned(ANALYZER_MODULE);
@@ -1248,7 +1388,7 @@ fn one_parse_per_rederived_file() {
             "{ANALYZER_MODULE}: `{entry}` called once"
         );
     }
-    for parses in ["bind_file(", "analyze_file(", "name_files("] {
+    for parses in ["bind_file(", "analyze_file(", "name_files(", "detect_file("] {
         assert!(
             !source.contains(parses),
             "{ANALYZER_MODULE}: `{parses}` parses or names the tree again"

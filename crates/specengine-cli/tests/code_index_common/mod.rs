@@ -9,7 +9,9 @@
 //! of its own (`build_graph.rs` `cli_reaches_rusqlite_only_through_the_store`).
 //!
 //! The column names are the spec's ("Data", "Tables"); a per-file row
-//! reaches its `code_files` row through [`FILE_JOIN`].
+//! reaches its `code_files` row through [`FILE_JOIN`]. Since
+//! docs/features/bevy-roles.md the code tables include `code_roles`
+//! ("Table").
 //!
 //! Only the code-index test binaries include this module
 //! (`mod code_index_common;`, after `mod common;`).
@@ -39,9 +41,9 @@ pub const CODE_A_SLUG: &str = "code-a";
 /// nature (ADR-0008), and its slug.
 pub const ECS: &str = "verify-ecs";
 
-/// Every code table of the spec's "Tables", as the dump and `sqlite_master`
-/// name them.
-pub const CODE_TABLES: [&str; 8] = [
+/// Every code table of the spec's "Tables" (and bevy-roles' "Table"), as
+/// the dump and `sqlite_master` name them.
+pub const CODE_TABLES: [&str; 9] = [
     "code_worktrees",
     "code_files",
     "code_packages",
@@ -50,11 +52,12 @@ pub const CODE_TABLES: [&str; 8] = [
     "code_decls",
     "code_markers",
     "code_mentions",
+    "code_roles",
 ];
 
 /// A per-file row's `file` is its `code_files` row's rowid (`file_id`)
 /// (the spec keys `symbols`, `symbol_suffixes`, `code_decls`,
-/// `code_markers`, `code_mentions` by `(file, ord)`).
+/// `code_markers`, `code_mentions`, `code_roles` by `(file, ord)`).
 pub const FILE_JOIN: &str = "JOIN code_files f ON f.file_id = x.file";
 
 static FRESH: AtomicUsize = AtomicUsize::new(0);

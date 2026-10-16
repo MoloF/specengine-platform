@@ -184,6 +184,22 @@ CREATE TABLE code_mentions (
   anchor TEXT,
   PRIMARY KEY (file, ord)
 ) STRICT;
+CREATE TABLE code_roles (
+  file INTEGER NOT NULL REFERENCES code_files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  word TEXT NOT NULL,
+  source TEXT NOT NULL,
+  form TEXT,
+  origin TEXT NOT NULL,
+  group_text TEXT,
+  symbol_ord INTEGER,
+  subject TEXT,
+  subject_name TEXT,
+  certainty TEXT NOT NULL,
+  category TEXT,
+  line INTEGER NOT NULL,
+  PRIMARY KEY (file, ord)
+) STRICT;
 CREATE INDEX nodes_by_id ON nodes (id);
 CREATE INDEX links_by_dst_id ON links (dst_id);
 CREATE INDEX aliases_by_alias ON aliases (alias);
@@ -192,6 +208,7 @@ CREATE INDEX symbols_by_qpath ON symbols (qpath);
 CREATE INDEX symbols_by_name ON symbols (name);
 CREATE INDEX symbol_suffixes_by_suffix ON symbol_suffixes (suffix);
 CREATE INDEX code_decls_by_target ON code_decls (target);
+CREATE INDEX code_roles_by_subject_name ON code_roles (subject_name);
 CREATE VIRTUAL TABLE nodes_fts USING fts5(
   id, title, own_text,
   content='nodes', content_rowid='node_id',
@@ -222,7 +239,8 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// later format inserts its tables where their parents ask and never
 /// removes one, as [`FORMAT_TRIGGERS`]. The code tables of format 9
 /// (`docs/canon/symbol-index.md` "Tables") come before `worktrees`, which
-/// `code_worktrees` references.
+/// `code_worktrees` references; format 10's `code_roles` before
+/// `code_files`, which it references.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
@@ -236,6 +254,7 @@ const FORMAT_TABLES: &[&str] = &[
     "code_decls",
     "code_markers",
     "code_mentions",
+    "code_roles",
     "code_files",
     "code_packages",
     "code_worktrees",

@@ -56,7 +56,10 @@
 //!   each, `docs/canon/symbol-reads.md` "Lookup") and per file
 //!   ([`SqliteIndex::file_symbols`]); a read's refs and symbols in one
 //!   transaction ([`SqliteIndex::code_snapshot`], [`SnapshotSymbols`],
-//!   [`CodeSnapshot`]);
+//!   [`CodeSnapshot`]); framework role rows (`code_roles`,
+//!   [`CodeRoleRow`]) read back with their link candidates
+//!   ([`SqliteIndex::code_roles`], [`StoredRole`], [`RoleCandidate`];
+//!   `docs/features/bevy-roles.md` "Links"), never a link stored;
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -101,6 +104,7 @@ mod git;
 mod index;
 mod queue;
 mod read;
+mod roles;
 mod rows;
 mod schema;
 mod search;
@@ -124,9 +128,9 @@ pub use check::{
 pub use code::{
     AMBIGUITY_DUPLICATE, AMBIGUITY_PATH_ATTRIBUTE, AMBIGUITY_UNROOTED, BoundSymbol, CodeAnalyzer,
     CodeDeclRow, CodeFileRows, CodeFileState, CodeListing, CodeMarkerRow, CodeMentionRow,
-    CodePackageRow, CodeRefs, CodeReport, CodeSnapshot, CodeSymbolRow, ListedCodeFile, ROLE_SHARED,
-    ROLE_UNROOTED, SnapshotSymbols, StoredBinding, StoredMarker, StoredMention, StoredName,
-    StoredNames, StoredSymbol,
+    CodePackageRow, CodeRefs, CodeReport, CodeRoleRow, CodeSnapshot, CodeSymbolRow, ListedCodeFile,
+    ROLE_SHARED, ROLE_UNROOTED, SnapshotSymbols, StoredBinding, StoredMarker, StoredMention,
+    StoredName, StoredNames, StoredSymbol,
 };
 pub use error::StoreError;
 pub use git::{GitEnv, same_dir};
@@ -147,6 +151,7 @@ pub use queue::{
     UnreadableRow, UnreadableTask, binding_problem, claimed_elsewhere, open_for_gate, patch_hash,
     proposal_columns, record_gate_observed, task_event,
 };
+pub use roles::{RoleCandidate, StoredRole};
 pub use source::{GitIndex, Listing, Source, WorkingTree};
 pub use symbols::{SymbolHit, SymbolTier};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
@@ -198,7 +203,12 @@ pub use worktree::{
 /// `symbols`, `symbol_suffixes`, `code_decls`, `code_markers`,
 /// `code_mentions`, created with the schema in every DB and filled by
 /// [`SqliteIndex::update_code`] (`docs/canon/symbol-index.md` "Tables").
-pub const INDEX_FORMAT: u32 = 9;
+///
+/// 10: the code table `code_roles` (and its index
+/// `code_roles_by_subject_name`), a file's framework role rows
+/// ([`CodeRoleRow`]), created with the schema in every DB
+/// (`docs/features/bevy-roles.md` "Table").
+pub const INDEX_FORMAT: u32 = 10;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

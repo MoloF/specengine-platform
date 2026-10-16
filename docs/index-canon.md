@@ -21,6 +21,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/code-hash-ron.md](canon/code-hash-ron.md) Code hash: the RON value · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/code-hash.md](canon/code-hash.md) Code hash: recipe v2 and the v3 levels · crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
+- [docs/canon/code-roles.md](canon/code-roles.md) Code roles: framework roles of Rust items, [code] frameworks · crates/specengine-code, crates/specengine-store, crates/specengine-cli, crates/specengine-core, crates/specengine-eval · tier 2
 - [docs/canon/code-targets.md](canon/code-targets.md) Layer A targets: cargo runner, layout fallback · crates/specengine-eval, crates/specengine-code · tier 2
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a deciding item approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
