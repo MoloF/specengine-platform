@@ -45,7 +45,7 @@ Q7, WA-11.
 - **REV**: a leading `-` or a control character: exit 2 before any git call. Then `git rev-parse --verify --end-of-options <REV>^{commit}`; not a commit: exit 1 ``spec: --since `<REV>` is not a commit``.
 - **Compared**: REV's tree with the working tree on disk under the `[code]` roots and excludes, untracked files included, `.gitignore` and the git index never read (as `spec check --changed`, `spec-check-git.md` "The changed check"). `spec.lock` is not involved: drift since verification is `spec verify`'s question.
 - **Reads**: REV's `ls-tree -r -z` once; disk OIDs from one `hash-object --no-filters --stdin-paths`. Equal OID: unchanged. A differing path: REV's blob from one `cat-file --batch`, parsed; each item's 5a level digests against the index's (6a's columns; it stores no `ast_hash`: `symbol-index.md` Q11, 2026-10-13); a RON file whole.
-- **Delta**: `added` (disk only), `removed` (REV only), `changed` (both, the hash differs), each `{file, symbol, item_kind, line}` (`line` the disk's, REV's for removed), by file bytes, line, symbol; an equal-hash edit (a comment, formatting) is no change; `renamed` null until 5c.
+- **Delta**: `added` (disk only), `removed` (REV only), `changed` (both, the hash differs), each `{file, symbol, item_kind, line}` (`line` the disk's, REV's for removed), by file bytes, line, symbol; an equal-hash edit (a comment, formatting) is no change; `renamed` null until 7b's follow-up builds it on 5c's core pairing (`anchor-states.md` Q13, Q14: 5c fills `bindings.moved` only).
 
 ### Output
 
@@ -106,7 +106,7 @@ rust-developer, M: mutation -> the test turning red:
 - [ ] RD-3 -- M: `-o…` or a control character passed through -> `option_like_since_is_refused_before_git`.
 - [ ] RD-4 -- since. M: `HEAD` used instead of REV -> `since_compares_the_given_revision`; untracked files ignored -> `since_counts_untracked_code`; an equal-hash edit counted -> `since_ignores_unchanged_hashes`.
 - [ ] RD-5 -- M: the exact item only -> `symbol_impact_reaches_the_enclosing_binding`.
-- [ ] RD-6 -- delta. M: filled in plain mode -> `plain_verify_has_no_symbol_delta`; `renamed` set -> `renamed_waits_for_anchor_states`.
+- [ ] RD-6 -- delta. M: filled in plain mode -> `plain_verify_has_no_symbol_delta`; `renamed` set -> `renamed_stays_null`.
 - [ ] RD-7 -- M: no tail -> `impact_cut_names_narrowing`; a terminal task listed -> `impact_lists_open_tasks_only`.
 - [ ] RD-8 -- M: `mcp_door` without `get_impact {since}` -> `mcp_door.rs`'s tool coverage; `INSTRUCTIONS` over 2 048 B, `probes` included -> `server.rs`'s compile-time asserts; a git library in MCP -> `build_graph.rs`'s dependency count (7); `git status` -> `reads_leave_git_index_and_objects_untouched` (7a's RD-12, with `impact`).
 
@@ -131,7 +131,7 @@ spec-writer:
 
 ## Out of scope
 
-`renamed`, `bindings.moved` (5c); a call-graph radius (5a `deps`, LSP); documents changed since REV as seeds (`spec check --changed` shows them; `spec graph --impact` per node); `--archive`; an HTTP route and the graph's impact screen (Phase 4); `--format dot|mermaid`; tasks of other repositories; a cap on `--since` work.
+filling `renamed` (7b's follow-up on 5c's core pairing, `anchor-states.md` Q14); `bindings.moved` (5c); a call-graph radius (5a `deps`, LSP); documents changed since REV as seeds (`spec check --changed` shows them; `spec graph --impact` per node); `--archive`; an HTTP route and the graph's impact screen (Phase 4); `--format dot|mermaid`; tasks of other repositories; a cap on `--since` work.
 
 ## Open
 
@@ -153,7 +153,7 @@ WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writ
 ## Dependencies and ordering
 
 - **Needs**: 7a (rows, sync, refresh, degrade) and through it 1, 3, 4a, 6a; 4a's `HEAD` base reader, generalised here.
-- **Order**: 7a -> 7b; 6b-1 and 6b-2 ship before 7a (08 s2, 2026-10-16) and take their `INSTRUCTIONS` shares first. **Independent**: 4b, 4c, 8a, 8b. **Later**: 5c (`renamed`), Phase 4 (the graph's impact mode).
+- **Order**: 7a -> 7b; 6b-1 and 6b-2 ship before 7a (08 s2, 2026-10-16) and take their `INSTRUCTIONS` shares first. **Independent**: 4b, 4c, 8a, 8b. **Later**: `renamed` on 5c's core pairing (`anchor-states.md` Q14: 5c ships first and leaves it null), Phase 4 (the graph's impact mode).
 
 ## Implementation
 
