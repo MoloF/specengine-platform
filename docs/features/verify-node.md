@@ -12,7 +12,7 @@ adrs: []
 
 Before handing in, an agent asks whether a node's bindings still hold. Plain `spec verify` judges every lock key against the whole tree (`docs/canon/spec-verify.md`), and MCP never runs it (its opening): an agent runs Bash and reads the whole project's findings.
 
-Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restricted to one node's bindings, judged over the files the code index selects (Q5, Q30); `check_binding`, its MCP twin, a report kept at exit 2; the `implement` skill naming it; `TOOLS` 19, plugin 0.11.0. Split from `code-tools.md` (Q28): 6b-1 ships the three code reads after 6a-3; this ships after 5c, so its rows carry 5b-1's `levels` and 5c's `anchor` from the start. No ADR: ADR-0042 (judge, exits; `architecture-code.md#verify`), ADR-0046 (`#sync-in-reads`: verify's plain state over the refreshed code index, the lock and the read's own parse), ADR-0012/0039 (no gate reads a finding), ADR-0004/0005, ADR-0050 (format 2), ADR-0008 applied.
+Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restricted to one node's bindings, judged over the files the code index selects (Q5, Q30); `check_binding`, its MCP twin, a report kept at exit 2; the `implement` skill naming it; `TOOLS` 19, the next plugin MINOR at shipping (L2 2026-10-19: `layer-c-reads.md` may take 0.11.0 first). Split from `code-tools.md` (Q28): 6b-1 ships the three code reads after 6a-3; this ships after 5c, so its rows carry 5b-1's `levels` and 5c's `anchor` from the start. No ADR: ADR-0042 (judge, exits; `architecture-code.md#verify`), ADR-0046 (`#sync-in-reads`: verify's plain state over the refreshed code index, the lock and the read's own parse), ADR-0012/0039 (no gate reads a finding), ADR-0004/0005, ADR-0050 (format 2), ADR-0008 applied.
 
 ## Description and interactions
 
@@ -76,7 +76,7 @@ Q31. 6b-1's code line (`code-tools.md` "INSTRUCTIONS") gains `; check_binding(no
 
 ### Plugin
 
-WA-19. `implement`'s body names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged; the body ≤ 4 096 B (2 521 B now, front-matter included); all nineteen tools named; 0.11.0, a `PINS` line and an entry in 10a-2's schema-pin list (P1, 2026-10-16: `bevy-roles-reads.md` takes 0.10.0).
+WA-19. `implement`'s body names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged; the body ≤ 4 096 B (2 521 B now, front-matter included); all nineteen tools named; the next MINOR, a `PINS` line and an entry in 10a-2's schema-pin list (P1, 2026-10-16: `bevy-roles-reads.md` takes 0.10.0; L2, 2026-10-19: 11a-3 `layer-c-reads.md` takes the next MINOR if it ships first).
 
 ### Fixtures
 
@@ -118,7 +118,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec, split from `code-tools.md` 2026-10-16 (Q28); 08 s2 lists 6b-2 after 5c.
-- [ ] SW-2 -- at shipping (Q32), bytes measured 2026-10-16: a Tier 2 `docs/canon/spec-verify-node.md` (command, rows, files, text, JSON; about 3 KB of 12 288), its line in `docs/index-canon-spec.md` (2 592 of 10 240); `spec-verify.md` (11 710 before 5b-1 and 5c write it: the opening's MCP clause and command line, "Cascade"'s walk, one pointer; over 12 288 a section moves to a Tier 2 file of its own); `spec-verify-output.md` (5 380: `node`, `symbol`, `omitted`, `ok` rows); `mcp-code.md` (6b-1's: `check_binding`, its exits); `mcp-read.md` **Parity** reworded byte-neutral, **Texts** figures; the MCP README `code.rs` row; the CLI README (9 086: the `--node` line); `plugin-files.md` (nineteen, 0.11.0), `plugin.md` "Skills" `implement`; `architecture-code.md` (10 711: one "As built" pointer); 6a-2's canon **Freshness**; 07:26, :37; 08 s2, :44; `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping (Q32), bytes measured 2026-10-16: a Tier 2 `docs/canon/spec-verify-node.md` (command, rows, files, text, JSON; about 3 KB of 12 288), its line in `docs/index-canon-spec.md` (2 592 of 10 240); `spec-verify.md` (11 710 before 5b-1 and 5c write it: the opening's MCP clause and command line, "Cascade"'s walk, one pointer; over 12 288 a section moves to a Tier 2 file of its own); `spec-verify-output.md` (5 380: `node`, `symbol`, `omitted`, `ok` rows); `mcp-code.md` (6b-1's: `check_binding`, its exits); `mcp-read.md` **Parity** reworded byte-neutral, **Texts** figures; the MCP README `code.rs` row; the CLI README (9 086: the `--node` line); `plugin-files.md` (nineteen, the version taken), `plugin.md` "Skills" `implement`; `architecture-code.md` (10 711: one "As built" pointer); 6a-2's canon **Freshness**; 07:26, :37; 08 s2, :44; `CLAUDE.md` State.
 - [x] SW-3 -- no ADR; `export index`, `check` clean.
 
 ## Risks
@@ -156,4 +156,4 @@ Q5 (2026-10-10) and Q28-Q34 (2026-10-16) decided under the owner's pre-approval,
 
 ## Implementation
 
-Not started. From the split (2026-10-16, `code-tools.md` Q28): RD-2 <- its RD-2's verify flags; RD-3 <- its RD-5 (+ `verify_symbol_matches_a_moved_rows_from`); RD-4 new (Q30), with its RD-6's fresh-levels mutation; RD-5 <- its RD-6 without `ast_hash` (Q29); RD-6 <- its RD-7 (no MCP code: S13); RD-7 <- its RD-9's `--node` half and Q34; RD-8 <- its RD-8; RD-9 <- its RD-10's task half (a new test: S18); RD-10, RD-11 <- its RD-11, RD-12 (0.11.0 since P1); TE-1, TE-2 <- its TE-1, TE-2's `check_binding` half on the format-2 golden; TE-3, TE-4 <- its TE-3, TE-4; TE-5 <- its TE-5's `check_binding`. To record: modules, `INSTRUCTIONS` bytes, TE-4's and TE-5's figures, deviations with reasons.
+Not started. From the split (2026-10-16, `code-tools.md` Q28): RD-2 <- its RD-2's verify flags; RD-3 <- its RD-5 (+ `verify_symbol_matches_a_moved_rows_from`); RD-4 new (Q30), with its RD-6's fresh-levels mutation; RD-5 <- its RD-6 without `ast_hash` (Q29); RD-6 <- its RD-7 (no MCP code: S13); RD-7 <- its RD-9's `--node` half and Q34; RD-8 <- its RD-8; RD-9 <- its RD-10's task half (a new test: S18); RD-10, RD-11 <- its RD-11, RD-12 (the next MINOR: P1, then L2 2026-10-19); TE-1, TE-2 <- its TE-1, TE-2's `check_binding` half on the format-2 golden; TE-3, TE-4 <- its TE-3, TE-4; TE-5 <- its TE-5's `check_binding`. To record: modules, `INSTRUCTIONS` bytes, TE-4's and TE-5's figures, deviations with reasons.
