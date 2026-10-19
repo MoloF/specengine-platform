@@ -1,8 +1,8 @@
 import { useId } from "react";
 import type { ProposalOption, Stage } from "../api/types";
-import { shownSlot } from "../round/text";
 import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
+import { shownSlot } from "../ui/text";
 import { confirmCommand, WORDING } from "./decisions";
 
 const COPY_FAILED = "Copy failed: select the command and copy it";

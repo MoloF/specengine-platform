@@ -50,6 +50,8 @@ Row 6 (9b, `health-drift.md`); any Rust, route or daemon-key change (9a-1); a ty
 
 ## Follow-ups
 
+Closed 2026-10-19, all five, by 9a-3 (`health-ui-follow-up.md`).
+
 - Add `proposal.approved` to Health's re-read triggers (a spec change, no ADR): it moves row 4 from `pending` to `as_assumed`/`otherwise`, which stays stale until "Check again" (`health.md` "Known limits").
 - UI nits from review 1, optional: give `otherwise` its own colour alias (it and `rejected` both resolve to #ff7d88; label and icon differ); a `measured` row with null `counts`/`rows` (outside the contract) falls back to the raw-word branch, not "Not measured: Measured"; move `shownText` from `round/text.ts` to shared `ui/` code (now a health-to-round dependency); re-cite the comment at `ui/src/api/queries.ts:423`, which names a "Reads" heading ui-home's spec lacks, to its "Data".
 
@@ -75,7 +77,7 @@ Deviations, accepted in review 1:
 2. Causes and fields are one-lined and escaped as the CLI's text, not verbatim; U+2028/U+2029 too, so not byte-identical to the CLI. The read-failure message stays verbatim.
 3. A failed read shows in rows 4-5 without `role=alert`: row 3 speaks it, one alert per failure.
 4. Row 5 reads "Rules failed: 1, 2": a quoted "rule" is barred by `ui_policy` AC-19.
-5. Row 4 stale on `proposal.approved`/`created`: a Known limit, no ADR (the owner); "Follow-ups".
+5. Row 4 stale on `proposal.approved`/`created`: a Known limit, no ADR (the owner); "Follow-ups". Closed 2026-10-19 for `approved` by 9a-3; `created` stays a Known limit.
 6. `ui/README.md`'s scenario list lacks the two new ones (8 181 of 8 192 B); `health.md` "UI" names them.
 
 Mutations, 10/10 red: M1 0 drawn for `cannot` (HealthView); M1b `cannot` labelled measured (labels; HealthView renders it equivalently); M2a row 5 sorted by ID, M2a' row 4 by path (health.smoke); M2b a state compared in `AssumesPart` (policy); M3 the `proposal.rejected` trigger off (health.live); M4 a mock key renamed, M4' an extra key (mocks/health, 7 scenarios); M6 focus left on "Show all" (HealthView); M6' an item's ID linked to the tree (HealthView, health.smoke). Gates: `pnpm lint` 0, `test` twice 84 files, 1949/1949, `build` 0.

@@ -3,13 +3,13 @@ import { apiErrorOf } from "../api/client";
 import type { HealthQuery } from "../api/queries";
 import type { HealthAssumes, HealthReport, HealthUnbound } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
-import { shownText } from "../round/text";
 import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";
+import { shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { SHOWN_OPEN } from "./findings";
-import { codeRowLook } from "./labels";
+import { codeRowLook, MEASURED_WITHOUT_COUNTS } from "./labels";
 
 // What rows 4 and 5 of What is left share (docs/features/health-code-ui.md "Data"): the part's
 // frame and its four states, the fields as `spec health` prints them, and "Show all".
@@ -34,8 +34,9 @@ export function oneLine(text: string): string {
 /**
  * A code row the daemon did not measure. Off or not configured, and any state word not listed:
  * "Not measured", the state's words and each cause, no digit, no Retry, since asking again cannot
- * change a configuration. Could not be measured: the causes and a Retry reading the health read
- * alone; no value at all, never 0.
+ * change a configuration. A state of measured whose answer holds no counts or no rows (outside the
+ * contract): the same, in fixed neutral words, never "Measured". Could not be measured: the causes
+ * and a Retry reading the health read alone; no value at all, never 0.
  */
 export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes | HealthUnbound; retrying: boolean; onRetry: () => void }) {
   const look = codeRowLook(row.state);
@@ -76,7 +77,7 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
   return (
     <>
       <p className="health-left-total health-code-off">
-        <span className="health-value">Not measured</span>: <span className="health-code-state">{oneLine(look.label)}</span>
+        <span className="health-value">Not measured</span>: <span className="health-code-state">{oneLine(look.measured ? MEASURED_WITHOUT_COUNTS : look.label)}</span>
       </p>
       {causes}
     </>

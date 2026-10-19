@@ -101,6 +101,13 @@ export function codeRowLook(value: HealthRowState): CodeRowLook {
   return Object.hasOwn(CODE_ROW, value) ? CODE_ROW[value as keyof typeof CODE_ROW] : { label: value, measured: false, retry: false };
 }
 
+/**
+ * The words of a row whose state says measured but whose answer holds no counts or no rows (outside
+ * the contract, `docs/canon/health.md` "UI"): drawn as not measured, after "Not measured: ", with
+ * no digit and no Retry, never as "Measured".
+ */
+export const MEASURED_WITHOUT_COUNTS = "the answer holds no counts";
+
 /** How a row 4 line is drawn: its state's badge and which part of the CLI's tail it carries. */
 export interface AssumedLook {
   look: Look;

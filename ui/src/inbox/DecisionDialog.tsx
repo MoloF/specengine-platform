@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import type { Proposal, StageChoice } from "../api/types";
-import { shownSlot } from "../round/text";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
+import { shownSlot } from "../ui/text";
 import { WORDING, type DecisionKind } from "./decisions";
 import { isRefused, revisionsToKeep } from "./revisions";
 import { RevisionList } from "./RevisionList";

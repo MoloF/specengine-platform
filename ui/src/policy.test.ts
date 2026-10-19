@@ -39,6 +39,31 @@ function importsOf(text: string): string[] {
   return found;
 }
 
+/**
+ * The source path a specifier names from the file `from` imports it in: a relative or root path
+ * resolved, its extension dropped; a package name as written.
+ */
+function resolvedFrom(from: string, specifier: string): string {
+  if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
+    return specifier;
+  }
+  const parts = specifier.startsWith("/") ? [] : from.split("/").slice(0, -1);
+  for (const part of specifier.split("/")) {
+    if (part === ".." && parts.length > 0) {
+      parts.pop();
+    } else if (part !== "" && part !== "." && part !== "..") {
+      parts.push(part);
+    }
+  }
+  return `/${parts.filter((part) => part !== "").join("/")}`.replace(/\.[jt]sx?$/, "");
+}
+
+/** The round's text module: its caps and fixed words, the round's own (UI-9 of health-ui-follow-up). */
+const ROUND_TEXT = "/src/round/text";
+
+/** The two text modules as loaded, for their exports. */
+const textModules = import.meta.glob<Record<string, unknown>>(["/src/round/text.ts", "/src/ui/text.ts"], { eager: true });
+
 /** The provisional types' module, with or without an extension (as in eslint.config.js). */
 const PROVISIONAL = /(^|\/)provisional(\.[jt]sx?)?$/;
 
@@ -75,6 +100,34 @@ describe("source policy", () => {
     }
     expect(wrong).toEqual([]);
     expect(importsOf(sources["/src/main.tsx"] ?? "").some((specifier) => specifier.includes("mocks"))).toBe(true);
+  });
+
+  it("shows stored text through src/ui/text.ts; src/round/text.ts keeps the round's caps and words, imported from src/round/ alone (UI-9 of health-ui-follow-up)", () => {
+    const wrong: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      if (path.startsWith("/src/round/")) {
+        continue;
+      }
+      for (const specifier of importsOf(text)) {
+        if (resolvedFrom(path, specifier) === ROUND_TEXT) {
+          wrong.push(`${path} imports ${specifier}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    const exported = (path: string) => Object.keys(textModules[path] ?? {}).sort();
+    expect(exported("/src/ui/text.ts")).toEqual(["shownSlot", "shownText"]);
+    // Nothing of the shared module re-exported here: its importers move, never route through the round.
+    expect(exported("/src/round/text.ts")).toEqual(["ANSWER_MAX_BYTES", "REASON_MAX_BYTES", "ROUND_COMMAND", "ROUND_LIMIT_MAX", "utf8Bytes"]);
+    // The detector itself.
+    expect(resolvedFrom("/src/health/codeRows.tsx", "../round/text")).toBe(ROUND_TEXT);
+    expect(resolvedFrom("/src/inbox/StagedChoice.tsx", "../round/text.ts")).toBe(ROUND_TEXT);
+    expect(resolvedFrom("/src/main.tsx", "./round/text")).toBe(ROUND_TEXT);
+    expect(resolvedFrom("/src/app/App.tsx", "/src/round/text")).toBe(ROUND_TEXT);
+    expect(resolvedFrom("/src/round/RoundScreen.tsx", "./text")).toBe(ROUND_TEXT);
+    expect(resolvedFrom("/src/health/codeRows.tsx", "../ui/text")).toBe("/src/ui/text");
+    expect(resolvedFrom("/src/api/http.ts", "./round/text")).toBe("/src/api/round/text");
+    expect(resolvedFrom("/src/api/http.ts", "react")).toBe("react");
   });
 
   it("recognises the provisional module with or without an extension (AC-05)", () => {

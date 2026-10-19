@@ -5,9 +5,10 @@ import { severityLook } from "../inbox/labels";
 import { StagedChoice } from "../inbox/StagedChoice";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
+import { shownSlot, shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { capOf, draftOf, offers, stateOf, textOf, type Draft, type DraftPick } from "./drafts";
-import { shownSlot, shownText, utf8Bytes } from "./text";
+import { utf8Bytes } from "./text";
 
 /**
  * Agent text of several lines as the sheet prints it: verbatim, never markdown, its controls

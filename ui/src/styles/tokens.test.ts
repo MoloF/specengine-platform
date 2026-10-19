@@ -196,6 +196,18 @@ describe("tokens.css (AC-09)", () => {
     }
   });
 
+  it("gives row 4's nine states nine colours, each at least 3:1 on every surface: otherwise never rejected's (UI-8 of health-ui-follow-up)", () => {
+    expect(ASSUMED).toHaveLength(9);
+    const colours = ASSUMED.map((state) => resolve(`--assumed-${state}`).toLowerCase());
+    expect(new Set(colours).size).toBe(ASSUMED.length);
+    expect(resolve("--assumed-otherwise").toLowerCase()).not.toBe(resolve("--assumed-rejected").toLowerCase());
+    for (const state of ASSUMED) {
+      for (const surface of SURFACES) {
+        expect([state, surface, contrast(`--assumed-${state}`, surface) >= 3]).toEqual([state, surface, true]);
+      }
+    }
+  });
+
   it("gives cannot-verify its own colour, never ok's or another sync state's", () => {
     const own = resolve("--sync-cannot-verify").toLowerCase();
     for (const state of SYNC.filter((value) => value !== "cannot-verify")) {

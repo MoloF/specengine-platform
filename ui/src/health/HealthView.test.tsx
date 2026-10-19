@@ -34,6 +34,7 @@ import { argsOf, stubClient } from "../test/stubClient";
 // Check again read), AC-U7 (rows 4 to 6; kind-amendment's AC-U2 tests replaced).
 // docs/features/health-code-ui.md: UI-1 (rows 4 and 5, four states apart each; row 6 alone not
 // measured yet), UI-6 (Show all hands the focus on; an item's ID to its inbox card, a node's to the tree).
+// health-ui-follow-up: UI-7 (a measured row without counts or rows in fixed neutral words).
 
 const LF = String.fromCharCode(10);
 
@@ -784,6 +785,36 @@ describe("rows 4 and 5: code assuming a decision, unbound nodes (UI-1, UI-6 of h
     await settle();
     expect(client.getHealth).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ["counts", { counts: null }],
+    ["rows", { rows: null }],
+  ] as const)(
+    "measured with no %s (outside the contract): Not measured in fixed neutral words, never Measured; no digit, no Retry, the causes as given; row 3 drawn (UI-7 of health-ui-follow-up)",
+    async (_missing, hole) => {
+      const cause = `the answer was cut short${LF}at the rows`;
+      const report = aHealthReport([anAmendment({ path: "docs/features/a.md" })], {
+        assumes: { ...measuredAssumes(ASSUMES, 11), causes: [cause], ...hole },
+        unbound: { ...measuredUnbound(UNBOUND, 41, 2), causes: [cause], ...hole },
+      });
+      const client = await openHealth(healthOf(report));
+      for (const row of ["assumes", "unbound"] as const) {
+        expect([row, textOf(codePart(row).querySelector(".health-code-off"))]).toEqual([row, "Not measured: the answer holds no counts"]);
+        expect([row, Array.from(codePart(row).querySelectorAll(".health-value"), (value) => value.textContent)]).toEqual([row, ["Not measured"]]);
+        expect([row, codePart(row).querySelector(".health-measured")]).toEqual([row, null]);
+        expect(codePart(row).textContent).not.toMatch(/\d|Measured/);
+        expect(within(codePart(row)).queryByRole("button", { name: "Retry" })).toBeNull();
+        expect(lines(row)).toHaveLength(0);
+        expect(Array.from(within(codePart(row)).getByRole("list", { name: "Causes, as the daemon gives them" }).children, (item) => item.textContent)).toEqual([
+          "the answer was cut short at the rows",
+        ]);
+      }
+      // Row 3, from the same read, drawn as it is.
+      expect(textOf(region("What is left").querySelector('[data-row="amendments"] .health-left-total'))).toBe("1 unapplied amendment over 7 documents");
+      await settle();
+      expect(client.getHealth).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("could not be measured: the causes as the CLI prints them, no value, never 0; Retry reads getHealth alone, then focus on the part's heading; the other parts stand", async () => {
     const cannot = aCodeRow("cannot", [`the code walk is incomplete: \`src/a${ESC}.rs\` cannot be read (os error 13)`, "the queue stands at schema 6; a queue command upgrades it"]);

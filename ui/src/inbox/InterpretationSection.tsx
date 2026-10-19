@@ -3,8 +3,8 @@ import { apiErrorOf } from "../api/client";
 import { useNode } from "../api/queries";
 import type { Interpretation } from "../api/types";
 import { sectionHash } from "../app/routes";
-import { shownSlot, shownText } from "../round/text";
 import { ErrorPanel, Section } from "../ui/states";
+import { shownSlot, shownText } from "../ui/text";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 

@@ -194,17 +194,20 @@ function eventId(payload: unknown): string | null {
  */
 const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health"] as const;
 
-/** The spec reads that walk the whole corpus (`READS_OF_THE_SPEC`'s check and health read). */
-const WALKS: ReadonlySet<string> = new Set(["check", "health"]);
+/** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
+const WALKS: ReadonlySet<string> = new Set(["check"]);
 
 /** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
 const APPLIED = "proposal.applied";
 
 /**
- * The queue event of a rejection: no spec file changes, but code resting on that item is now
- * row 4's `rejected` (`docs/features/health-code-ui.md` "Data"), so the health read alone is read again.
+ * The queue events after which the health read alone is read again, as after an apply
+ * (`docs/canon/health.md` "UI"): no spec file changes, but row 4 moves. A rejection makes code
+ * resting on that item `rejected`; an approval, logged inside an apply, moves `pending` to
+ * `as_assumed` or `otherwise`; an apply refused at a later step may reopen the item
+ * (`approved -> open`, `docs/canon/proposal-queue.md` "States and events").
  */
-const REJECTED = "proposal.rejected";
+const HEALTH_EVENTS: ReadonlySet<string> = new Set(["proposal.approved", "proposal.rejected", "proposal.apply_failed"]);
 
 /** A proposal's queue events (`docs/canon/proposal-queue.md` "States and events"). */
 const PROPOSAL_EVENT = "proposal.";
@@ -249,20 +252,24 @@ const TASK_EVENT = "task.";
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
  * every task of it (a task's open proposals and assumptions are the queue's); `proposal.applied`
  * also that project's trees, nodes, searches, bundles, graphs, check and unapplied amendments (a
- * spec file changed; `docs/features/ui-live.md` "Data"); `proposal.rejected` also that project's
- * health read, which row 4 shows (`docs/features/health-code-ui.md` "Data"). A stage event, `proposal.staged` or `.unstaged`, reads only
- * that project's inbox and that proposal again: a stage touches no task and no spec file
- * (`docs/canon/decision-staging.md` "Queue"); one no write of this tab accounts for is returned as
- * the outside change to show, until `dismiss` or the next one. A `task.*` event reads that
- * project's task list and that task again (no string `id`: every task of it), never the inbox, a
- * proposal or a spec read (`docs/features/ui-live-tasks.md` "Data"). Every `proposal.*` and
- * `task.*` event also reads that project's round sheets again, a read in flight aborted
+ * spec file changed; `docs/features/ui-live.md` "Data"); `proposal.approved`, `.rejected` and
+ * `.apply_failed` also that project's health read, which row 4 shows (`docs/canon/health.md` "UI").
+ * A health read in flight when one of these, an apply or a gap lands is kept, never aborted, and
+ * exactly one more is read when it settles, answered or failed, however many landed. A stage
+ * event, `proposal.staged` or `.unstaged`, reads only that project's inbox and that proposal
+ * again: a stage touches no task and no spec file (`docs/canon/decision-staging.md` "Queue"); one
+ * no write of this tab accounts for is returned as the outside change to show, until `dismiss` or
+ * the next one. A `task.*` event reads that project's task list and that task again (no string
+ * `id`: every task of it), never the inbox, a proposal or a spec read
+ * (`docs/features/ui-live-tasks.md` "Data"). Every `proposal.*` and `task.*` event also reads that
+ * project's round sheets again, a read in flight aborted
  * (`docs/features/ui-round.md` "Description and interactions"). No other project's read, and no
  * other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads and the round sheets of the project again. Only the reads on screen are fetched, once each
- * (the check and the health read only while Health shows them:
- * `docs/features/health-left.md` "Description and interactions"); the rest are marked stale.
+ * but the health read's one more after a walk (the check and the health read only while Health
+ * shows them: `docs/features/health-left.md` "Description and interactions"); the rest are marked
+ * stale.
  */
 export function useLiveQueue(project: string | null): { outside: OutsideStage | null; dismiss: () => void } {
   const client = useClient();
@@ -275,13 +282,41 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     if (project === null) {
       return undefined;
     }
+    // Whether one more health read is owed once the walk in flight settles: one, however many
+    // events land during it; dropped with the subscription (entering Health reads anyway).
+    let healthOwed = false;
+    // The health read, a walk of the whole tree (`docs/canon/health.md` "UI"): none in flight, read
+    // at once (on screen; off screen it is only marked stale and entering Health reads it). One in
+    // flight (Health entered, Check again, an earlier event) is kept, never aborted, its answer
+    // taken; it may predate the event, so exactly one more is read after it settles, answered or
+    // failed, active only. No timer: the walk's own settling sends the next.
+    const readHealthAgain = () => {
+      const key = queryKeys.health(project);
+      const walk = queryClient.getQueryCache().find({ queryKey: key, exact: true })?.promise;
+      void queryClient.invalidateQueries({ queryKey: key, exact: true }, { cancelRefetch: false });
+      if (walk === undefined || healthOwed) {
+        return;
+      }
+      healthOwed = true;
+      const after = () => {
+        if (healthOwed) {
+          healthOwed = false;
+          void queryClient.invalidateQueries({ queryKey: key, exact: true }, { cancelRefetch: false });
+        }
+      };
+      void walk.then(after, after);
+    };
     const readSpecAgain = () => {
       // `[read, project]` matches that project's entries of the read whatever their options.
       // The check and the health read are full walks: one already running (Health entered, Check
-      // again) is kept and its answer taken, never cancelled for a second walk; any other read is
-      // read again at once.
+      // again) is kept and its answer taken, never cancelled for a second walk (the health read
+      // then read once more, readHealthAgain); any other read is read again at once.
       for (const read of READS_OF_THE_SPEC) {
-        void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: !WALKS.has(read) });
+        if (read === "health") {
+          readHealthAgain();
+        } else {
+          void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: !WALKS.has(read) });
+        }
       }
     };
     /** The task list and every task of the project, whatever task is open. */
@@ -295,7 +330,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     const readRoundAgain = () => {
       void queryClient.invalidateQueries({ queryKey: roundsOf(project) });
     };
-    return client.subscribe(
+    const unsubscribe = client.subscribe(
       project,
       (event) => {
         const id = eventId(event.payload);
@@ -329,9 +364,8 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         if (event.type === APPLIED) {
           readSpecAgain();
         }
-        if (event.type === REJECTED) {
-          // A walk, as on an apply: one in flight is kept and its answer taken.
-          void queryClient.invalidateQueries({ queryKey: queryKeys.health(project), exact: true }, { cancelRefetch: false });
+        if (HEALTH_EVENTS.has(event.type)) {
+          readHealthAgain();
         }
       },
       () => {
@@ -342,6 +376,10 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readRoundAgain();
       },
     );
+    return () => {
+      healthOwed = false;
+      unsubscribe();
+    };
   }, [client, queryClient, project]);
   return { outside: outside !== null && outside.project === project ? outside : null, dismiss };
 }
@@ -420,7 +458,7 @@ export function useTasks(project: string) {
 export type TasksQuery = ReturnType<typeof useTasks>;
 
 /**
- * The palette's reads (docs/features/ui-home.md "Reads"): the cached answer as it is, never read
+ * The palette's reads (`docs/features/ui-home.md` "Data"): the cached answer as it is, never read
  * again by opening; read once when uncached or failed (`enabled` false: no project, nothing read).
  */
 export function useCachedTasks(project: string, enabled = true) {
@@ -486,13 +524,12 @@ export function useCheck(project: string) {
 export type CheckQuery = ReturnType<typeof useCheck>;
 
 /**
- * The project's `spec health` (rows 3 to 5 of What is left), read as the check is
- * (`docs/features/health-left.md` "Description and interactions"): on entering Health, on "Check
- * again" (`refetch`) and, while Health is on screen, after the live tail's apply, rejection
- * (`docs/features/health-code-ui.md` "Data") or gap (useLiveQueue); never on window focus, a
- * reconnect, an interval, a stage, `proposal.created` or a `task.*` event. A walk of the whole tree: its
- * query's AbortSignal is never taken, a walk in flight is kept and its answer used. The home reads
- * none.
+ * The project's `spec health` (rows 3 to 5 of What is left; `docs/canon/health.md` "UI"): on
+ * entering Health, on "Check again" (`refetch`) and, while Health is on screen, after the live
+ * tail's apply, approval, rejection, refused apply or gap (useLiveQueue); never on window focus, a
+ * reconnect, an interval, a stage, `proposal.created` or a `task.*` event. A walk of the whole
+ * tree: its query's AbortSignal is never taken, a walk in flight is kept and its answer used, then
+ * read once more when an event landed during it. The home reads none.
  */
 export function useHealth(project: string) {
   const client = useClient();

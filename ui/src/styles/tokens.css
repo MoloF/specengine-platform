@@ -105,10 +105,10 @@
 
   /* Health's code rows (docs/features/health-code-ui.md): row 4's states and row 5's reasons, none
      of them a hold on work; a reason of cannot_verify takes cannot-verify's colour, never ok's, and
-     no reason takes ok's. */
+     no reason takes ok's. Row 4's nine states take nine colours: otherwise is not rejected's. */
   --assumed-pending: var(--proposal-open);
   --assumed-as-assumed: var(--sync-ok);
-  --assumed-otherwise: var(--sync-conflict);
+  --assumed-otherwise: var(--sync-predated);
   --assumed-applied: var(--sync-spec-ahead);
   --assumed-rejected: var(--proposal-rejected);
   --assumed-missing: var(--sync-broken-binding);

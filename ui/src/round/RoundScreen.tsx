@@ -8,13 +8,14 @@ import { CopyButton } from "../ui/CopyButton";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
+import { shownSlot } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { answerOf, stateOf, withDraft, type Draft } from "./drafts";
 import { useRoundEntry, type RoundEntry, type RoundMemory } from "./memory";
 import { RoundItemCard } from "./RoundItemCard";
-import { ROUND_COMMAND, ROUND_LIMIT_MAX, shownSlot } from "./text";
+import { ROUND_COMMAND, ROUND_LIMIT_MAX } from "./text";
 
 const COPY_FAILED = "Copy failed: select the command and copy it";
 

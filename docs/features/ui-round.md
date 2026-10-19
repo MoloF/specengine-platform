@@ -36,7 +36,7 @@ Http: `tests/round.rs` unless named; M: the mutation that turned it red.
 - [x] R-06 - 20 entries: 2 staged, 18 refused alone (M: the last duplicate wins; one refusal fails all; `updated_at` read at POST) (`r06_each_unfit_answer_is_refused_alone_and_the_valid_ones_staged`).
 - [x] R-07 - `replaced` names the earlier stage, one event (`r07_an_answer_on_a_staged_item_names_the_stage_it_replaced`).
 - [x] R-08 - Each waits for its project's turn; a left client's GET dropped (`turn.rs` `r08_a_queued_round_dropped_by_its_client_never_runs`, `r08_the_round_and_its_answers_wait_for_their_own_projects_turn`).
-- [x] U-01 to U-10 - `src/round/QuestionsView.test.tsx` (per criterion), `round.live.test.tsx` (U-04, U-06 over `HttpClient`), `drafts.test.ts` (U-03 to U-05), `text.test.ts` (U-08, U-09); `inbox/optionLabels.test.tsx`.
+- [x] U-01 to U-10 - `src/round/QuestionsView.test.tsx` (per criterion), `round.live.test.tsx` (U-04, U-06 over `HttpClient`), `drafts.test.ts` (U-03 to U-05), `text.test.ts` (U-08); `src/ui/text.test.ts` (U-09); `inbox/optionLabels.test.tsx`.
 - [x] U-11, U-12 - `mocks/round.test.ts`, `round.smoke.test.tsx`; lint, build (496.97 kB), 74 files / 1 601 tests.
 - [x] T-01 - The files above.
 - [x] T-02 - `door.rs` `ui_round_t02_the_round_routes_change_nothing_and_a_valid_post_only_stages`, `ui_round_t02_the_scan_catches_a_round_walk_and_its_terminal_but_not_the_staging_call` (M: `round_answer` with an always-yes terminal).
@@ -70,7 +70,7 @@ Rust 1 iteration, UI 3 (2: 5 minors, 5 nits fixed; 3: the bar's outcome line, la
 |---|---|
 | CLI `round.rs`, `lib.rs` | `round_stage_answers`, `RoundAnswersBody::from_json` (decode, project, at most 200), `round_limit`; `queue_checked` (`Unfit`, the bare step 2-3 reason) shared with the text route; `stage_planned`; `Outcome::RoundAnswers` |
 | http `app.rs`, `answer.rs` | `round`, `round_answers` (`same_origin`, `json_typed`, `ROUND_BODY_MAX`), `only_round_answers` 405, `round` in the 404 list; `RoundAnswers` 200 by type |
-| UI `src/round/` | `QuestionsView` (lazy `RoundScreen`), `RoundItemCard`, `drafts.ts`, `memory.ts` (the Shell's store), `text.ts` (`shownSlot`, `utf8Bytes`) |
+| UI `src/round/` | `QuestionsView` (lazy `RoundScreen`), `RoundItemCard`, `drafts.ts`, `memory.ts` (the Shell's store), `text.ts` (`utf8Bytes`, the caps, `ROUND_COMMAND`); `shownSlot`/`shownText` in `src/ui/text.ts` |
 | UI `src/api/`, `mocks/`, `inbox/` | `getRound`, `stageRoundAnswers`, `useRound`, `useStageRoundAnswers`, `useRoundPosting`, sheets in `useLiveQueue`, `useStageDecision`'s `shown`; the mock; `shownSlot` on labels |
 
 Deviations, accepted, each as `round-ui.md` words it: the 405 text (`answers` is a `LINK_TYPES` word); `spec: ` on the 400s; the over-200 text; an approve with `canon` judged by `stage_with`; a look-alike equal to another entry's ID a duplicate first; a corrupt row an answer names refused alone, `notes` only from the waiting tasks (Data said a note); the `no_domain.rs` exemption; the door's three type bans. UI: the hint once in a panel; blank own text left out; trimming before sending; "Keep my answer for this version"; the limit per project; the Shell's store; the sticky bar; labels escaped in the Inbox too; `NotBuilt` gone; a 0.38 kB lazy mock chunk; the "draft pushed past the limit" nit left as specified.
