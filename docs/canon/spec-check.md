@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-19
 ---
 
 # spec check: what it enforces
@@ -88,7 +88,7 @@ This repository, root config, no baseline: `enforce` → `clean`, 0 debt (`check
 
 ## Not checked yet
 
-- Code: no finding (`spec refs` lists markers: `code-bindings.md`; drift: `spec verify`). `@assumes` vs the queue → slice 9 (`health-code`); `impl_status` bound, glossary term in code → Phase 3. An unapplied amendment is no finding: a Health row (`proposal-amendment.md` "Unapplied").
+- Code: no finding (`spec refs` lists markers: `code-bindings.md`; drift: `spec verify`). `@assumes` vs the queue: Health, `health-code.md`; `impl_status` bound, glossary term in code → Phase 3. An unapplied amendment is no finding: a Health row (`proposal-amendment.md` "Unapplied").
 
 ## Open owner questions
 

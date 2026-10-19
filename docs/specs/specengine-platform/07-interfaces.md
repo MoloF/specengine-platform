@@ -101,7 +101,7 @@ spec task show T | --next | list [--status S]
 spec task approve T | changes T --note "..." | cancel T
 
 # code and drift
-spec symbols [--file F] [--unbound]
+spec symbols QUERY | --node REF | --file F | --at F:L   # shipped: docs/canon/symbol-reads.md; unbound nodes: spec health
 spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md; --task 8a-2
 spec verify --tests [--task T] [--json]             # shipped: docs/canon/spec-verify-tests.md; the owner's terminal, [y/N]
 spec bump [--staged] [--json]                       # read-only: nodes to raise (shipped: docs/canon/node-revision.md)
@@ -112,7 +112,7 @@ spec resolve [--timeout S] [--json]                 # layer C on request (draft 
 
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
-spec health                                          # shipped: docs/canon/health.md
+spec health                                          # shipped: docs/canon/health.md, rows 4-5 health-code.md
 spec round new [--limit N] | round answer FILE | --staged  # shipped: docs/canon/round.md
 spec ship SLUG [--accepted]
 spec compact --dry-run
@@ -145,7 +145,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
-| **Health** | "what is left", drift, budgets, W metrics |
+| **Health** | "what is left" (rows 4-5 from `spec health`: `docs/canon/health-code.md`; drawn by `health-code-ui`), drift, budgets, W metrics |
 | **Questions** | the round's sheet and its answers, staged at once, each confirmed on a terminal (`docs/canon/round-ui.md`); print, paste later |
 
 ## 4. Claude Code hooks (shipped by the plugin)

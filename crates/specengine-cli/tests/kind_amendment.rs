@@ -1809,11 +1809,12 @@ fn ac_r9_tasks_list_it_bound_or_by_the_nodes_it_amends() {
 /// name keeps the count AC-R10 cites it by), the fixture's `Proposal` set
 /// in order, `diff` `@@ -0,0 +1,13 @@`, `preview` `applies`; `--brief`
 /// keeps the keys (texts and diff dropped); the inbox entry the fixture's
-/// `InboxEntry` keys; `fixtures/daemon-keys.json` holds 46 sets (41 until
+/// `InboxEntry` keys; `fixtures/daemon-keys.json` holds 56 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
-/// docs/features/rev-discipline.md its `RevisionRow`, TE-3, and
-/// docs/features/drift-queue.md its `DriftEvidence`; the amendment adds
-/// none). M: a key added.
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
+/// docs/features/drift-queue.md its `DriftEvidence` and
+/// docs/features/health-code.md its ten, AC-9; the amendment adds none).
+/// M: a key added.
 #[test]
 fn ac_r10_the_review_is_a_new_files_46_keys() {
     let pair = Pair::new("ka-r10", "spec-a");
@@ -1833,9 +1834,10 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        46,
+        56,
         "no set added by the amendment: 41, health-left's three, \
-         rev-discipline's `RevisionRow` and drift-queue's `DriftEvidence`"
+         rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence` and \
+         health-code's ten"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-10-19
 ---
 
 # Health: what is left, measured
 
-The corpus-wide read behind Health's "What is left" (06 s7). It has one key now, `amendments` (row 3: the unapplied amendments of `proposal-amendment.md` "Unapplied"). The document **grows by keys** in Phase 3, one key per row 4-6 producer (`@assumes` against a decision, unbound accepted nodes, drift), never a `null` placeholder. Rows 1-2 are the queue (`spec inbox`, the Inbox's order: severity, `created_at` oldest first, ID; no age threshold, no clock); row 7 is the check's `budget` findings. Read-only and informational: it never blocks, raises no check finding, rule or gate (ADR-0012); the core names no class, status, kind or link type (ADR-0008). No MCP tool or resource, no plugin skill.
+The corpus-wide read behind Health's "What is left" (06 s7). Row 3 is `amendments` (the unapplied amendments of `proposal-amendment.md` "Unapplied"), described here; rows 4-5 are `assumes` (`@assumes` against a decision) and `unbound` (unbound selected nodes) beside the `code` count, in `health-code.md`. The document **grows by keys**, one per producer (row 6, drift: 9b), never a placeholder before it. Rows 1-2 are the queue (`spec inbox`, the Inbox's order: severity, `created_at` oldest first, ID; no age threshold, no clock); row 7 is the check's `budget` findings. Informational (rows 4-5 write the data directory's indexes only): it never blocks, raises no check finding, rule or gate (ADR-0012); the core names no class, status, kind or link type (ADR-0008). No MCP tool or resource, no plugin skill.
 
 ## Rule
 
@@ -18,9 +18,9 @@ Listed: a spec `draft` or `in-progress`, a decision `accepted` or without `statu
 
 ## spec health
 
-`spec health [--json]`, global flags only (CLI `health(&Env, &Globals) -> HealthOutcome`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). No database, index refresh, queue, git, clock or baseline; the data directory is never resolved; nothing is written. Rows 4-5 (from 9a-1) refresh and read the code index as `spec refs` does, not for a project without `[code]` (`architecture-code.md#health`, ADR-0051). Links: `SpecGraph::new` over the same input, built only when a document is listed; each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
+`spec health [--json]`, global flags only (CLI `health(&Env, &Globals) -> HealthOutcome`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). Row 3 reads no database, index, queue, git, clock or baseline. Rows 4-5 (`code`, `assumes`, `unbound`) follow it from the same config bytes, refreshing and reading the code index as `spec refs` does, nothing opened without `[code]`: `health-code.md` (ADR-0051). Links: `SpecGraph::new` over the same input, built only when a document is listed; each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
 
-**Text**, each line one-lined: per amendment `<path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]` (absent parts omitted), then each link as `show --links` prints an out line, two spaces in; last, always: `spec health: <d> documents, <n> unapplied amendments`.
+**Text**, each line one-lined: per amendment `<path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]` (absent parts omitted), then each link as `show --links` prints an out line, two spaces in; then rows 4-5's lines (`health-code.md` "Text"); last, always: `spec health: <d> documents, <n> unapplied amendments`.
 
 ```text
 docs/decisions/DEC-0014.md | id DEC-0014 | class decision | status accepted | Quay lights stay amber
@@ -28,7 +28,7 @@ docs/decisions/DEC-0014.md | id DEC-0014 | class decision | status accepted | Qu
 spec health: 41 documents, 1 unapplied amendments
 ```
 
-**JSON**: `{documents, amendments, notes}`; an amendment `{path, id, title, class, status, links}`: `id` the document's Latin ID, `title` `title:` else the first H1, `class` and `status` raw, each `null` when absent; `links` the `ShownLink` of `show --links` (`spec-cli-graph.md` "spec show --links"), never empty. `documents` = the walked files = `spec check --json`'s `counts.documents`. Every key present, absent `null`, empty `[]`.
+**JSON**: `{documents, amendments, notes, code, assumes, unbound}` (the last three: `health-code.md` "Document"); an amendment `{path, id, title, class, status, links}`: `id` the document's Latin ID, `title` `title:` else the first H1, `class` and `status` raw, each `null` when absent; `links` the `ShownLink` of `show --links` (`spec-cli-graph.md` "spec show --links"), never empty. `documents` = the walked files = `spec check --json`'s `counts.documents`. Every key present, absent `null`, empty `[]`.
 
 **Notes**: one per file not judged, by path: `<path>:<line>: <code>: <message>; not judged` (the parser's code and message), on stderr as `note: ` in both modes and in JSON `notes`; exit 0.
 
@@ -38,7 +38,7 @@ spec health: 41 documents, 1 unapplied amendments
 
 ## Route
 
-`GET /api/projects/:p/health` (`specengine-http`, `crates/specengine-http/README.md` "Endpoints"): 200 `spec --root R health --json`'s stdout less its final LF. Error bodies `{"status", "message"}`: 400 any query name (it takes none) or a bad `%`, naming it; 403 the fence; 404 an unknown slug or route (the route list names `health` after `check`); 405 any other method, HEAD too, `Allow: GET`; 500 a caught panic; 503 exit 2 (a config `discover` refuses, a changed slug, a walk gap), `message` the CLI's line(s) verbatim. `Cache-Control: no-store`, no `Access-Control-*`. It runs in the project's turn (`serve.md` "Concurrency"), writes nothing, emits no event.
+`GET /api/projects/:p/health` (`specengine-http`, `crates/specengine-http/README.md` "Endpoints"): 200 `spec --root R health --json`'s stdout less its final LF. Error bodies `{"status", "message"}`: 400 any query name (it takes none) or a bad `%`, naming it; 403 the fence; 404 an unknown slug or route (the route list names `health` after `check`); 405 any other method, HEAD too, `Allow: GET`; 500 a caught panic; 503 exit 2 (a config `discover` refuses, a changed slug, a walk gap), `message` the CLI's line(s) verbatim. `Cache-Control: no-store`, no `Access-Control-*`. It runs in the project's turn (`serve.md` "Concurrency"), writes only the data directory's indexes (rows 4-5), emits no event; any state of rows 4-5 is a 200.
 
 ## UI
 
@@ -56,9 +56,10 @@ Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2),
 - A document in a class that never reaches Tier 3 (a canon) declaring `amends` stays listed until edited.
 - The served root's working tree only, no other worktree. A project writing amendments in its own vocabulary reads none until its importer maps them (ADR-0008).
 - A hand edit fires no event: "Check again" or re-entering Health re-reads.
-- Entering Health runs two whole-tree walks (check, health) and the inbox, serialized by the turn: 0.11 to 0.32 s per health walk at 150 to 1 540 documents (release).
+- Rows 4-5's: `health-code.md` "Known limits".
+- Entering Health runs two whole-tree walks (check, health), Health's index refreshes and the inbox, serialized by the turn: 0.11 to 0.32 s per health walk at 150 to 1 540 documents (release).
 - Untested: the 500; the unreadable-root line (the config read fails first); no event through an SSE probe (`door.rs` covers it indirectly).
 
 ## Tests
 
-CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (46 key sets); UI `health.smoke`, `health.live`, `HealthView`, `mocks/health`, `daemonKeys`, `policy` tests.
+CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre; rows 4-5: `health-code.md` "Tests"); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (56 key sets); UI `health.smoke`, `health.live`, `HealthView`, `mocks/health`, `daemonKeys`, `policy` tests.

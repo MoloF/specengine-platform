@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-19
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -35,7 +35,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
 | GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json`, browser view |
 | GET `.../check` | -- | `spec check --json`, the plain run |
-| GET `.../health` | -- | `spec health --json` (`docs/canon/health.md`) |
+| GET `.../health` | -- | `spec health --json` (`health{,-code}.md`) |
 | GET `.../inbox` | -- | `spec inbox --json` |
 | GET `.../proposals/:id` | -- | `spec review PR --json` (not `--brief`) |
 | GET `.../tasks` | `status` | `spec task list --json` |
@@ -55,7 +55,7 @@ One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {ro
 
 **One door.** The write routes only stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps. No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and `Staged`, `Changed`, `baseline`, `RoundTerminal`, `WalkOutcome`, `AnswerOutcome`. No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, all in the data directory: stages in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`docs/canon/architecture.md#storage`); nothing under a root changes.
 
-**Worktrees**: `tree`, `nodes`, `search`, `bundle`, `graph`, `check`, `health` read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, no git or database); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
+**Worktrees**: `tree`, `nodes`, `search`, `bundle`, `graph`, `check`, `health` read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
 ## Live tail
 
@@ -73,9 +73,9 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 - U+0002 to U+0004 in the corpus can fake a snippet's hit or cut, capped too.
 - One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's per-host connections.
 - A database replaced under a live stream: its events with `seq` <= the stream's cursor are never sent.
-- An uncut graph is big: 701 nodes, 700 edges ~220 KB.
-- In the project's turn, other reads wait: `check`, `health` walk the tree (27 ms at 700 sections); a package read runs `git diff --no-index` per changed node (128: 1 to 1.5 s).
+- An uncut graph is big: 701 nodes ~220 KB.
+- In the project's turn, other reads wait: `check`, `health` walk the tree (27 ms at 700 sections; `health` refreshes the indexes); a package read runs `git diff --no-index` per changed node (128: 1 to 1.5 s).
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 46 key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs` (a drift item served, its stage 409), `turn.rs` (queued requests dropped, a read waits for its own project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins` first). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 56 key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs` (a drift item served, its stage 409), `turn.rs` (a dropped request unrun, reads wait per project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").

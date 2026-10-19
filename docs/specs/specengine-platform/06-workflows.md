@@ -100,7 +100,7 @@ One queue in three places:
 | **Needs clarification** | `changes_requested` with the owner's question → the agent sees it in `get_proposal`/`get_task` and extends |
 | **Defer** | the proposal stays in the queue with a mark; work continues on the working answer |
 
-**Reconciling with the working answer.** If the decision matches the working answer, the `@assumes PR-0042` markers are removed with one command. If not, SpecEngine finds every `@assumes PR-0042` (code, tests, data) and creates a follow-up task, or reopens the original one if it is not yet accepted. Either way it is visible in the queue.
+**Reconciling with the working answer.** If the decision matches the working answer, the `@assumes PR-0042` markers are removed with one command. If not, SpecEngine finds every `@assumes PR-0042` (code, tests, data) and creates a follow-up task, or reopens the original one if it is not yet accepted. Either way it is visible in the queue. Built so far: `spec health` row 4 lists each such marker and how its item was decided (`docs/canon/health-code.md`); the one-command removal and the follow-up task are later.
 
 On the next `get_task`/`get_context_bundle` the agent gets a fresh bundle headed "changed since last time: RULE-STAM-REGEN (diff)".
 
@@ -143,7 +143,7 @@ Shipped as `round` (`docs/canon/round.md`, ADR-0038); R and A records, cancelled
 
 ## 7. Corpus health and compaction
 
-- **"What is left" panel**: `severity: high` proposals → old open ones → unapplied amendments (live documents declaring `amends`, measured by `spec health`: `docs/canon/health.md`) → `@assumes` with a decision different from the working answer → `unbound` accepted nodes → drift → documents over budget.
+- **"What is left" panel**: `severity: high` proposals → old open ones → unapplied amendments (live documents declaring `amends`, measured by `spec health`: `docs/canon/health.md`) → `@assumes` with a decision different from the working answer → `unbound` accepted nodes (both measured by `spec health`: `docs/canon/health-code.md`) → drift → documents over budget.
 - **Metrics**: open proposals by `severity`, age of open ones, share of decisions diverging from the working answer, decisions without a price, **task W — median and p90 from bundle logs**, number of "third steps" of further reading.
 - **Compaction**: `spec compact --dry-run` proposes absorbing settled decisions into canon, closing superseded ones, compressing shipped specs. The result is a batch of proposals for agreement, not an auto-edit.
 

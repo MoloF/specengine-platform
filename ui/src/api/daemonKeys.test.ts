@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import source from "./provisional.ts?raw";
 import type {
+  AssumedNode,
+  AssumedProposal,
+  AssumesCounts,
+  AssumesRow,
   Author,
   BundleView,
   CheckCause,
@@ -13,7 +17,10 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  HealthAssumes,
+  HealthCode,
   HealthReport,
+  HealthUnbound,
   InboxEntry,
   Interpretation,
   NodeView,
@@ -48,6 +55,9 @@ import type {
   TaskRun,
   TaskTarget,
   UnappliedAmendment,
+  UnboundCounts,
+  UnboundMarker,
+  UnboundRow,
 } from "./types";
 
 // AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-07 of
@@ -67,11 +77,13 @@ import type {
 // rev-discipline's one (UI-4, TE-3 of docs/features/rev-discipline.md: `RevisionRow`, a `revisions`
 // entry, the provisional `RevisionChange`), with the review document's `revisions` after `conflict`
 // (47 keys) and the stage's `editorial` after `canon` (7 keys), and drift-queue's one (UI-1, TE-11 of
-// docs/features/drift-queue.md: `DriftEvidence`, a drift item's evidence, the forty-sixth and last
-// set), with the review document's `drift` after `revisions` (48 keys), both written into the file by
-// its TE-11. A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a
-// listed key the file already names fails. While that file is absent the comparison is skipped,
-// saying so; once it exists it names all forty-six, in the slices' order.
+// docs/features/drift-queue.md: `DriftEvidence`, a drift item's evidence, the forty-sixth set), with
+// the review document's `drift` after `revisions` (48 keys), both written into the file by its TE-11,
+// and health-code's ten (UI-1, AC-9 of docs/features/health-code.md: the health document's `code`,
+// `assumes`, `unbound` after `notes`, rows 4-5 and their parts, the fifty-sixth and last
+// `UnboundMarker`). A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty
+// today; a listed key the file already names fails. While that file is absent the comparison is
+// skipped, saying so; once it exists it names all fifty-six, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -341,8 +353,16 @@ const KEYS = {
     reason: true,
   } satisfies Record<keyof RoundAnswerEntry, true>,
   // docs/features/health-left.md "Data": the document, an amendment; a link as
-  // docs/canon/spec-cli-graph.md "spec show --links" lists one.
-  HealthReport: { documents: true, amendments: true, notes: true } satisfies Record<keyof HealthReport, true>,
+  // docs/canon/spec-cli-graph.md "spec show --links" lists one. docs/features/health-code.md "Data":
+  // `code`, `assumes`, `unbound` after `notes`.
+  HealthReport: {
+    documents: true,
+    amendments: true,
+    notes: true,
+    code: true,
+    assumes: true,
+    unbound: true,
+  } satisfies Record<keyof HealthReport, true>,
   UnappliedAmendment: { path: true, id: true, title: true, class: true, status: true, links: true } satisfies Record<keyof UnappliedAmendment, true>,
   ShownLink: {
     type: true,
@@ -360,6 +380,61 @@ const KEYS = {
   RevisionRow: { id: true, rev: true, to: true, lock_entries: true, refused: true } satisfies Record<keyof RevisionChange, true>,
   // docs/features/drift-queue.md "Review, inbox, round, stage": the review's `drift`, `{"hash","rows","more"}`.
   DriftEvidence: { hash: true, rows: true, more: true } satisfies Record<keyof DriftEvidence, true>,
+  // docs/features/health-code.md "Data": the code count, rows 4-5, and their parts, keys in its order.
+  HealthCode: { files: true, rs: true, ron: true, skipped: true } satisfies Record<keyof HealthCode, true>,
+  HealthAssumes: { state: true, causes: true, counts: true, rows: true } satisfies Record<keyof HealthAssumes, true>,
+  HealthUnbound: { state: true, causes: true, counts: true, rows: true } satisfies Record<keyof HealthUnbound, true>,
+  AssumesCounts: {
+    markers: true,
+    rows: true,
+    pending: true,
+    as_assumed: true,
+    otherwise: true,
+    applied: true,
+    rejected: true,
+    unknown: true,
+    archived: true,
+    in_question: true,
+  } satisfies Record<keyof AssumesCounts, true>,
+  AssumesRow: {
+    id: true,
+    state: true,
+    path: true,
+    line: true,
+    column: true,
+    relation: true,
+    proposal: true,
+    node: true,
+  } satisfies Record<keyof AssumesRow, true>,
+  AssumedProposal: {
+    kind: true,
+    status: true,
+    choice: true,
+    record_id: true,
+    record_path: true,
+    reason: true,
+  } satisfies Record<keyof AssumedProposal, true>,
+  AssumedNode: { id: true, path: true, line: true, status: true, successor: true, proposals: true } satisfies Record<keyof AssumedNode, true>,
+  UnboundCounts: { rules: true, selected: true, bound: true, unbound: true } satisfies Record<keyof UnboundCounts, true>,
+  UnboundRow: {
+    id: true,
+    kind: true,
+    title: true,
+    path: true,
+    line: true,
+    rules: true,
+    mentions: true,
+    markers: true,
+  } satisfies Record<keyof UnboundRow, true>,
+  UnboundMarker: {
+    path: true,
+    line: true,
+    column: true,
+    relation: true,
+    id_state: true,
+    binding: true,
+    reason: true,
+  } satisfies Record<keyof UnboundMarker, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -419,11 +494,21 @@ const CITED: Record<Named, string> = {
   RoundTask: "id, status, title",
   RoundAnswersOutcome: "project, answers, notes",
   RoundAnswerEntry: "id, outcome, stage, staged_at, replaced, reason",
-  HealthReport: "documents, amendments, notes",
+  HealthReport: "documents, amendments, notes, code, assumes, unbound",
   UnappliedAmendment: "path, id, title, class, status, links",
   ShownLink: "type, origin, at, name, written, path, line, state, reason",
   RevisionRow: "id, rev, to, lock_entries, refused",
   DriftEvidence: "hash, rows, more",
+  HealthCode: "files, rs, ron, skipped",
+  HealthAssumes: "state, causes, counts, rows",
+  HealthUnbound: "state, causes, counts, rows",
+  AssumesCounts: "markers, rows, pending, as_assumed, otherwise, applied, rejected, unknown, archived, in_question",
+  AssumesRow: "id, state, path, line, column, relation, proposal, node",
+  AssumedProposal: "kind, status, choice, record_id, record_path, reason",
+  AssumedNode: "id, path, line, status, successor, proposals",
+  UnboundCounts: "rules, selected, bound, unbound",
+  UnboundRow: "id, kind, title, path, line, rules, mentions, markers",
+  UnboundMarker: "path, line, column, relation, id_state, binding, reason",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -485,8 +570,28 @@ const BEFORE_DRIFT_QUEUE: readonly Named[] = [...BEFORE_REV_DISCIPLINE, ...REV_D
 /** drift-queue's one: a drift item's evidence (docs/features/drift-queue.md "Review, inbox, round, stage", TE-11). */
 const DRIFT_QUEUE: readonly Named[] = ["DriftEvidence"];
 
+/** The forty-six types the fixture named before health-code. */
+const BEFORE_HEALTH_CODE: readonly Named[] = [...BEFORE_DRIFT_QUEUE, ...DRIFT_QUEUE];
+
+/**
+ * health-code's ten: the code count, rows 4-5, and their parts, in "The document"'s listing order
+ * (docs/features/health-code.md "Data", AC-9).
+ */
+const HEALTH_CODE: readonly Named[] = [
+  "HealthCode",
+  "HealthAssumes",
+  "HealthUnbound",
+  "AssumesCounts",
+  "AssumesRow",
+  "AssumedProposal",
+  "AssumedNode",
+  "UnboundCounts",
+  "UnboundRow",
+  "UnboundMarker",
+];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_DRIFT_QUEUE, ...DRIFT_QUEUE];
+const ALL: readonly Named[] = [...BEFORE_HEALTH_CODE, ...HEALTH_CODE];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -544,7 +649,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(DRIFT_QUEUE.map((name) => served(name))).toEqual([["hash", "rows", "more"]]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("drift");
-    expect(ALL.at(-1)).toBe("DriftEvidence");
+    expect(BEFORE_HEALTH_CODE.at(-1)).toBe("DriftEvidence");
+    expect(ALL.at(-1)).toBe("UnboundMarker");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -621,12 +727,14 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
     expect(BEFORE_REV_DISCIPLINE).toHaveLength(44);
     expect(BEFORE_DRIFT_QUEUE).toHaveLength(45);
-    expect(ALL).toHaveLength(46);
-    expect(new Set(ALL).size).toBe(46);
+    expect(BEFORE_HEALTH_CODE).toHaveLength(46);
+    expect(ALL).toHaveLength(56);
+    expect(new Set(ALL).size).toBe(56);
   });
 
-  it("counts health-left's three: 3 document keys, 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
-    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([3, 6, 9]);
+  it("counts health-left's three: 3 document keys (6 since health-code's three follow them), 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
+    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([6, 6, 9]);
+    expect(served("HealthReport").slice(0, 3)).toEqual(["documents", "amendments", "notes"]);
     expect(served("UnappliedAmendment")).toEqual(["path", "id", "title", "class", "status", "links"]);
   });
 
@@ -634,6 +742,19 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf(`export interface ${type} `);
     expect(at).toBeGreaterThan(0);
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/health-left.md` "Data"');
+  });
+
+  it("gives the health document code, assumes, unbound after notes, and counts health-code's ten: 4, 4, 4, 10, 8, 6, 6, 4, 8, 7 (UI-1 of health-code)", () => {
+    expect(served("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound"]);
+    expect(HEALTH_CODE.map((name) => served(name).length)).toEqual([4, 4, 4, 10, 8, 6, 6, 4, 8, 7]);
+    expect(served("HealthAssumes")).toEqual(served("HealthUnbound"));
+  });
+
+  it.each<Named>(["HealthReport", ...HEALTH_CODE])('%s cites `docs/features/health-code.md` "Data" and declares its keys in the record order (UI-1 of health-code)', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/health-code.md` "Data"');
+    expect(declaredKeys(type)).toEqual(Object.keys(KEYS[type]));
   });
 
   it('ShownLink cites `docs/canon/spec-cli-graph.md` "spec show --links"', () => {
@@ -744,12 +865,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the forty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one", () => {
+  it("names exactly the fifty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all forty-six, in the slices' order.
+    // None is ahead of the file today: it names all fifty-six, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(46);
+    expect(Object.keys(sets)).toHaveLength(56);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -767,23 +888,29 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.RevisionRow).toEqual(served("RevisionRow"));
     expect(Object.keys(sets).indexOf("RevisionRow")).toBe(BEFORE_REV_DISCIPLINE.length);
     expect(Object.keys(sets).indexOf("RevisionRow")).toBe(44);
-    expect(Object.keys(sets).at(-2)).toBe("RevisionRow");
+    expect(Object.keys(sets).slice(0, BEFORE_HEALTH_CODE.length).at(-2)).toBe("RevisionRow");
   });
 
-  it("names drift-queue's keys where the types put them: the review's 48, drift after revisions, before decided_by; DriftEvidence's three in order, the forty-sixth and last set (UI-1, TE-11)", () => {
+  it("names drift-queue's keys where the types put them: the review's 48, drift after revisions, before decided_by; DriftEvidence's three in order, the forty-sixth set, before health-code's (UI-1, TE-11)", () => {
     const review = sets.Proposal ?? [];
     expect(review).toEqual(served("Proposal"));
     expect(review).toHaveLength(48);
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);
-    expect(Object.keys(sets).at(-1)).toBe("DriftEvidence");
+    expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(45);
+    expect(Object.keys(sets).at(-1)).toBe("UnboundMarker");
     expect(sets.InboxEntry).not.toContain("drift");
   });
 
-  it("names health-left's keys in the document's order: the health document's three, an amendment's six (AC-T2)", () => {
-    expect(sets.HealthReport).toEqual(["documents", "amendments", "notes"]);
+  it("names health-left's keys in the document's order: the health document's three, then health-code's three, an amendment's six (AC-T2; UI-1 of health-code)", () => {
+    expect(sets.HealthReport).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound"]);
     expect(sets.UnappliedAmendment).toEqual(["path", "id", "title", "class", "status", "links"]);
+  });
+
+  it("names health-code's ten after DriftEvidence, in the types' order and with their keys (UI-1, AC-9 of health-code)", () => {
+    expect(Object.keys(sets).slice(BEFORE_HEALTH_CODE.length)).toEqual([...HEALTH_CODE]);
+    expect(HEALTH_CODE.map((name) => sets[name])).toEqual(HEALTH_CODE.map((name) => served(name)));
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

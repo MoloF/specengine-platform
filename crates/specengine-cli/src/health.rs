@@ -2,8 +2,14 @@
 //! working tree, row 3 of Health's "What is left". Core's
 //! [`unapplied_amendments`] over the tree walked as `spec check` walks it
 //! (`load_config`, [`WorkingTree`], `check_input`); no index, database,
-//! queue, git, clock or baseline, the data directory never resolved;
-//! nothing is written. Uncut.
+//! queue, git, clock or baseline for it. Uncut.
+//!
+//! Rows 4-5 (task spec `health-code`) come after it, from the
+//! same config bytes: [`crate::health_code`] reads the code index the call
+//! refreshes, as `spec refs` does (the data directory's two indexes are
+//! written, nothing else; without `[code]` nothing is opened). Their
+//! states and causes never change row 3 or the exit; the refreshes' notes
+//! and a `cannot` row's causes go to stderr, never into `notes`.
 //!
 //! Each amendment is a walked live document that names a node it amends,
 //! listed with its `amends` out links exactly as `spec show <path>
@@ -22,6 +28,7 @@
 //! ```text
 //! <path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]
 //!   out <type> <name, else written> | <path>:<line>[ | as <written>][ | dangling: <reason> | …]
+//! <rows 4-5's rows, their summaries or causes, `code:` when read>
 //! spec health: <d> documents, <n> unapplied amendments
 //! ```
 //!
@@ -36,8 +43,13 @@ use specengine_store::{NamedBytes, WorkingTree, check_input, load_config};
 
 use crate::corpus::Admission;
 use crate::export::{config_errors, incomplete, io_message};
+use crate::health_code::{
+    AssumesCounts, AssumesRow, CodeRow, CodeRows, UnboundCounts, UnboundRow, code_rows, row_lines,
+    summary_lines,
+};
 use crate::links::{LinkJson, ShownLink, link_json, link_line, node_links};
-use crate::project::locate;
+use crate::project::{ProjectRoot, locate};
+use crate::refs::CodeCount;
 use crate::search::notes;
 use crate::{CliError, Env, Globals, Message, one_line};
 
@@ -50,6 +62,8 @@ pub struct HealthOutcome {
     pub amendments: Vec<UnappliedAmendment>,
     /// A note per file not judged, by path.
     pub messages: Vec<Message>,
+    /// Rows 4-5 (task spec `health-code`).
+    pub code_rows: CodeRows,
 }
 
 /// One unapplied amendment: a live document that names a node it amends.
@@ -130,10 +144,25 @@ pub fn health(env: &Env, globals: &Globals) -> Result<HealthOutcome, CliError> {
             }
         })
         .collect();
+
+    // Rows 4-5 read row 3's config bytes: one config for every row.
+    // `load_config` has refused bytes that do not read or are not UTF-8
+    // (exit 2 above), so these are its checked text.
+    let Ok(Ok(text)) = config.bytes.as_deref().map(std::str::from_utf8) else {
+        return Err(CliError::spec(format!(
+            "{label}: the config cannot be used"
+        )));
+    };
+    let root = ProjectRoot {
+        root: located.root.clone(),
+        config_label: label.to_owned(),
+        config: project,
+    };
     Ok(HealthOutcome {
         documents: input.files.len(),
         amendments,
         messages,
+        code_rows: code_rows(env, &root, text),
     })
 }
 
@@ -167,8 +196,8 @@ fn header_line(amendment: &UnappliedAmendment) -> String {
     line
 }
 
-/// Per amendment its header line and its links' lines, then the count
-/// line, always.
+/// Per amendment its header line and its links' lines, rows 4-5's rows
+/// and summaries, then the count line, always.
 pub(crate) fn render_text(outcome: &HealthOutcome) -> String {
     let mut out = String::new();
     for amendment in &outcome.amendments {
@@ -179,6 +208,8 @@ pub(crate) fn render_text(outcome: &HealthOutcome) -> String {
             out.push('\n');
         }
     }
+    row_lines(&outcome.code_rows, &mut out);
+    summary_lines(&outcome.code_rows, &mut out);
     out.push_str(&format!(
         "spec health: {} documents, {} unapplied amendments\n",
         outcome.documents,
@@ -192,6 +223,9 @@ struct HealthJson<'a> {
     documents: usize,
     amendments: Vec<AmendmentJson<'a>>,
     notes: Vec<String>,
+    code: Option<CodeCount>,
+    assumes: &'a CodeRow<AssumesCounts, AssumesRow>,
+    unbound: &'a CodeRow<UnboundCounts, UnboundRow>,
 }
 
 #[derive(Serialize)]
@@ -220,6 +254,9 @@ fn view(outcome: &HealthOutcome) -> HealthJson<'_> {
             })
             .collect(),
         notes: notes(&outcome.messages),
+        code: outcome.code_rows.code,
+        assumes: &outcome.code_rows.assumes,
+        unbound: &outcome.code_rows.unbound,
     }
 }
 

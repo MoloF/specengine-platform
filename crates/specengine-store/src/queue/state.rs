@@ -320,6 +320,14 @@ impl SqliteQueue {
         }))
     }
 
+    /// The queue schema this DB stands at (its `user_version`), read, no
+    /// step run: 0 when no queue step has run (an index-only DB), below
+    /// [`QUEUE_SCHEMA_VERSION`] until a queue command upgrades it (a
+    /// handle from [`Self::open_existing`]).
+    pub fn schema_version(&self) -> Result<i64, QueueError> {
+        user_version(&self.conn)
+    }
+
     /// Every row of the queue tables, every project's, as stored, in one
     /// read transaction: `proposals` and `tasks` by ID number, `runs` by
     /// task and number, `events` by `seq`. A `TEXT` column that holds no

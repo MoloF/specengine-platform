@@ -4,7 +4,7 @@ import type { HealthReport } from "../api/types";
 import { checkReportOf } from "./check";
 import { nodeViewOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
-import { healthReportOf, LARGE_AMENDMENTS, walkGapMessage } from "./health";
+import { CODE_OFF_CAUSE, healthReportOf, LARGE_AMENDMENTS, walkGapMessage } from "./health";
 import { MockClient } from "./MockClient";
 import { SCENARIOS } from "./scenario";
 
@@ -34,7 +34,7 @@ function byBytes(a: string, b: string): number {
 describe("the mock's health read", () => {
   it("normal: harbor-sim's two, the spec's decision with a dangling link and a draft spec amending RULE-BERTH-DRAFT, resolved", () => {
     const report = healthReportOf("harbor-sim", "normal");
-    expect(Object.keys(report)).toEqual(["documents", "amendments", "notes"]);
+    expect(Object.keys(report)).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound"]);
     expect(report.amendments.map((amendment) => Object.keys(amendment))).toEqual([
       ["path", "id", "title", "class", "status", "links"],
       ["path", "id", "title", "class", "status", "links"],
@@ -62,6 +62,20 @@ describe("the mock's health read", () => {
       expect(node?.links?.outgoing.filter((link) => link.type === "amends")).toEqual(amendment.links);
     }
   });
+
+  it.each(SCENARIOS.filter((scenario) => scenario !== "cannot-check"))(
+    "%s: rows 4-5 off for either project, the code layer's sentence their cause, code null (UI-1 of health-code)",
+    (scenario) => {
+      for (const project of PROJECTS) {
+        const { code, assumes, unbound } = healthReportOf(project, scenario);
+        expect([project, code]).toEqual([project, null]);
+        for (const row of [assumes, unbound]) {
+          expect([project, Object.keys(row)]).toEqual([project, ["state", "causes", "counts", "rows"]]);
+          expect([project, row]).toEqual([project, { state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null }]);
+        }
+      }
+    },
+  );
 
   it("empty: none for either project", () => {
     for (const project of PROJECTS) {

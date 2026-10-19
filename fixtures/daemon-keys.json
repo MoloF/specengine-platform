@@ -40,9 +40,19 @@
   "RoundAnswersOutcome": ["project", "answers", "notes"],
   "RoundAnswerEntry": ["id", "outcome", "stage", "staged_at", "replaced", "reason"],
   "Interpretation": ["decision", "how", "why"],
-  "HealthReport": ["documents", "amendments", "notes"],
+  "HealthReport": ["documents", "amendments", "notes", "code", "assumes", "unbound"],
   "UnappliedAmendment": ["path", "id", "title", "class", "status", "links"],
   "ShownLink": ["type", "origin", "at", "name", "written", "path", "line", "state", "reason"],
   "RevisionRow": ["id", "rev", "to", "lock_entries", "refused"],
-  "DriftEvidence": ["hash", "rows", "more"]
+  "DriftEvidence": ["hash", "rows", "more"],
+  "HealthCode": ["files", "rs", "ron", "skipped"],
+  "HealthAssumes": ["state", "causes", "counts", "rows"],
+  "HealthUnbound": ["state", "causes", "counts", "rows"],
+  "AssumesCounts": ["markers", "rows", "pending", "as_assumed", "otherwise", "applied", "rejected", "unknown", "archived", "in_question"],
+  "AssumesRow": ["id", "state", "path", "line", "column", "relation", "proposal", "node"],
+  "AssumedProposal": ["kind", "status", "choice", "record_id", "record_path", "reason"],
+  "AssumedNode": ["id", "path", "line", "status", "successor", "proposals"],
+  "UnboundCounts": ["rules", "selected", "bound", "unbound"],
+  "UnboundRow": ["id", "kind", "title", "path", "line", "rules", "mentions", "markers"],
+  "UnboundMarker": ["path", "line", "column", "relation", "id_state", "binding", "reason"]
 }

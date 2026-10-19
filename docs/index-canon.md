@@ -28,6 +28,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
 - [docs/canon/gate.md](canon/gate.md) Task gate: the write hook · crates/specengine-cli, plugin · tier 2
+- [docs/canon/health-code.md](canon/health-code.md) Health's code rows: assumes and unbound · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/health.md](canon/health.md) Health: what is left, measured · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/import-layout-verifier.md](canon/import-layout-verifier.md) Import layout: verifier, attribution, output · crates/specengine-eval · tier 2
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2

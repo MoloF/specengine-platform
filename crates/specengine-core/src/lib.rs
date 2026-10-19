@@ -57,6 +57,9 @@
 //! - [`code_toml`] — `CodeConfig::from_toml`: the `[code]` table, the code
 //!   tree `spec refs` walks, read apart from the reads
 //!   (`docs/canon/code-bindings.md` "The `[code]` table");
+//! - [`health_toml`] — `HealthConfig::from_toml`: `[health]`'s
+//!   `[[health.bound]]` rules, read by `spec health` alone (task spec
+//!   `health-code`);
 //! - [`lock`] — `spec.lock`'s model (`docs/canon/spec-lock.md` "The file",
 //!   "Entry"): the reader, the canonical render, an accept's merge into one
 //!   node's entries, its editorial refresh and a gone node's drop
@@ -81,6 +84,7 @@ pub mod drift;
 mod front_matter;
 pub mod gate;
 mod glob;
+pub mod health_toml;
 pub mod intake;
 mod lines;
 pub mod lock;
@@ -113,6 +117,7 @@ use specengine_model::{
 pub use code_toml::{CodeConfig, code_from_toml};
 pub use front_matter::{KeyType, TYPED_KEYS};
 pub use gate::{GateConfig, GateMode};
+pub use health_toml::{BoundRule, HealthConfig, health_from_toml};
 pub use norm::{NORM_RECIPE, norm_input};
 pub use own_text::own_spans;
 pub use paths_toml::{Paths, PathsError, paths_from_toml};

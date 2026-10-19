@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-code]
 owner: owner
-reviewed: 2026-10-16
+reviewed: 2026-10-19
 ---
 
 # Symbol reads: lookup tiers, `spec symbols`, `spec unmapped`
@@ -15,7 +15,7 @@ The reads over the code index (`symbol-index.md`: tables, refresh, `refs`): whic
 - **Store** `symbols.rs`: `SqliteIndex::lookup_symbols(query, name) -> Vec<SymbolHit {tier, symbol}>`, `file_symbols(path)` (one file's `StoredSymbol`s by `ord`); `SymbolTier {Exact, Suffix, Name}` (`ALL`, `as_str`); `LOOKUP_SQL: [&str; SymbolTier::ALL.len()]`, one statement per tier. `code.rs`: `code_snapshot(SnapshotSymbols::{Lookup {query, name}, File(path), Bound, All}) -> Option<CodeSnapshot {refs, hits, symbols}>` (`None`: no code indexed), one deferred transaction: every stored file, marker and mention, then the hits, one file's symbols, each marker-bound symbol once or every symbol, by (path, ord); `code_snapshot_with_roles(symbols, kinds)` adds `roles`, the role rows on them (`code-roles.md` "Links"). It compares strings only.
 - **Code**: `query_name` (`naming.rs`), the one reader of `::` in a query. `ALL` on `Relation`, `LevelError`, `Unanchored`, `ErrorCategory`, `Ambiguity` feed the CLI's stored-word lists (`refs.rs` `STORED_WORDS`): a new variant is never read as unknown.
 - **CLI** `symbols.rs`, `unmapped.rs`, exported for callers without clap (6b-1): `symbols(&Env, &Globals, &SymbolsRequest {form}) -> SymbolsOutcome`, `form` a `SymbolsForm::{Query {terms, limit}, Node(REF), File(PATH), At("PATH:LINE")}` (the one `PATH:LINE` reader is here); `unmapped(.., &UnmappedRequest {path}) -> UnmappedOutcome`; `SymbolTarget`, `SymbolBinding`, `SymbolRole`, `UnmappedRow` (`per_mille()`), `UnmappedItem`; `SYMBOLS_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20, `symbols_limit_error(limit)` (the `--limit` line, MCP's too); `Outcome::{Symbols, Unmapped}` (exit, stderr, text, JSON). Each outcome serializes to its `--json` document.
-- **For 7b**, `pub(crate)`: `unmapped::reached(items, &Seeds)`, the one containment function; `symbols::place`, where a stored binding sits.
+- **For 7b**, `pub(crate)`: `unmapped::reached(items, &Seeds)`, the one containment function; `symbols::place`, where a stored binding sits; `symbols::maps`, whether a marker seeds (Health's row 5 too).
 - **Order of work**, as `refs`: the form, the config (`[code]`), `--node`'s REF, the md index, `refresh_code`, `require_complete`, the stored rows as one snapshot, roles in when `[code] frameworks` lists one (QUERY: `Lookup`; `--file`, `--at`: `File`; `--node`: `Bound`, its items found by (path, ord); `unmapped`: `All`), then PATH; each stored ID judged once (`Corpus::judge`).
 - **Genre** (`architecture.md#universal`): no fixture prefix, kind, `::` split, stack word, Cargo, `tests` or `src` literal in the store, core or these modules (`code_refs_walk.rs` `NEW_MODULES`).
 
@@ -58,7 +58,7 @@ symbols: 1 of 1; code files <f> (.rs <r>, .ron <o>), skipped <s>
 
 ## spec unmapped
 
-**Units**: every stored item; each RON file is one unit. **Mapped**: a marker binds the item, an enclosing item or inline mod (the `parent_ord` chain, never across files) or its file module, with an ID `resolved`, `alias` or `ambiguous` (each holder: `IdState::names_nodes`), any relation. Dangling, look-alike, queue and other-project IDs map nothing at any depth. `unanchored` and `cannot_verify` markers sit on no stored item and map nothing, so a broken item with a valid marker is unmapped, and Health's row 5 finds its node unbound (`architecture-code.md#health`). A RON file is mapped by an anchored `ron` or `ron_ambiguous` marker with such an ID. Containment is structural, never by qpath prefix. **`mentioned`**: the units a mention reaches by the same containment, whatever its ID state (a `file` mention: all its file's); it never maps.
+**Units**: every stored item; each RON file is one unit. **Mapped**: a marker binds the item, an enclosing item or inline mod (the `parent_ord` chain, never across files) or its file module, with an ID `resolved`, `alias` or `ambiguous` (each holder: `IdState::names_nodes`), any relation. Dangling, look-alike, queue and other-project IDs map nothing at any depth. `unanchored` and `cannot_verify` markers sit on no stored item and map nothing, so a broken item with a valid marker is unmapped. The seed is `symbols::maps(marker, judged)` (`Some(place)` when the ID names nodes and the place is no `Nothing`), shared with Health's row 5, which so finds that node unbound (`health-code.md` "Row 5: unbound"). A RON file is mapped by an anchored `ron` or `ron_ambiguous` marker with such an ID. Containment is structural, never by qpath prefix. **`mentioned`**: the units a mention reaches by the same containment, whatever its ID state (a `file` mention: all its file's); it never maps.
 
 `spec unmapped [PATH]`: PATH root-relative and clean, one trailing `/` dropped: a root, a walked code file under one, or a directory under a root holding one, read from the index, never the disk: a stored code file is a file, else the directory rules apply; else exit 2 (an empty directory, one above a root, a skipped or unread file: ``spec: `<PATH>` is no `[code]` root, nor a directory or code file the walk reads under one``). None: a row per root; a root that is an unread file is a file row, `units 0` and `-`.
 

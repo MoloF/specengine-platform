@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-19
 ---
 
 # Queue backup and restore
@@ -56,7 +56,8 @@ Neither command writes a spec file, commits, runs apply or completion, or runs g
 
 | Op | Does |
 |---|---|
-| `SqliteQueue::open_existing(db, project)` | `None` without the file; creates nothing, runs no schema step; `user_version` above the build's -> `SchemaTooNew`; no queue tables: reads empty |
+| `SqliteQueue::open_existing(db, project)` | `None` without the file; creates nothing, runs no schema step; `user_version` above the build's -> `SchemaTooNew`; no queue tables: reads empty, and at `user_version` 0 (an index-only DB, as a read's refresh leaves it) `get` -> `None`, `list`, `list_readable` none too (Health's row 4, `health-code.md`); a schema-run DB that lost `proposals`: they error |
+| `schema_version() -> i64` | the DB's `user_version`, read only: never steps or writes (0 an index-only DB, 1-7 not yet upgraded; Health's row 4) |
 | `stored_rows() -> StoredQueue` | every row of the four tables, every project's, raw, one read transaction, in dump order (a schema 1-7 DB: the later columns `None`, 1-3 no tasks; tables at another `user_version` -> `Invalid`); a TEXT value that is no UTF-8 text (or a number, a BLOB) fails naming row and column |
 | `counts() -> QueueCounts {<C>}` | every table, every project's, one snapshot (`is_empty()`) |
 | `restore(&StoredQueue) -> Restore {Restored, Occupied(QueueCounts)}` | schema steps, then one `Immediate` transaction: all empty or `Occupied`, plain `INSERT`s, commit; a row of another project than the handle's -> `Invalid`, nothing written |

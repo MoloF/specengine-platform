@@ -15,12 +15,12 @@ adrs: [ADR-0047]
 ## Description and interactions
 
 - **The owner**, in Health's "What is left": row 4 "Code assuming a decision" and row 5 "Unbound nodes" become parts beside row 3's (`ui/src/health/AmendmentsPart.tsx`, the pattern), from the same read (`getHealth`, key `["health", p]`, `useHealth`); `LeftRegion.tsx`'s "Not measured yet" list (`:24-43`, `:157-163`) keeps row 6 alone until 9b.
-- **ui-developer only**, `ui/**`: two parts in `ui/src/health/`, the state words in `labels.ts`, `mocks/health.ts`, tests. No Rust, no daemon key, no new package. Types: 9a-1's provisional ones (`ui/src/api/provisional.ts`); a change they need goes back to `health-code.md` "Data", never made here alone.
+- **ui-developer only**, `ui/**`: two parts in `ui/src/health/`, the state words in `labels.ts`, `mocks/health.ts`, tests. No Rust, no daemon key, no new package. Types: 9a-1's provisional ones (`ui/src/api/provisional.ts`); a change they need goes back to `docs/canon/health-code.md` "Document" (9a-1 shipped 2026-10-19), never made here alone.
 - **Order** (08 s2): built on mocks once 9a-1's "Data" is frozen at its review; ships right after 9a-1, before 12a.
 
 ## Data
 
-The body: `health-code.md` "The document", "Row 4: `assumes`", "Row 5: `unbound`". Each part keeps four states apart (9a's Q11):
+The body: `docs/canon/health-code.md` "Document", "Row 4: assumes", "Row 5: unbound". Each part keeps four states apart (9a's Q11):
 
 - **being measured**: a skeleton, `aria-busy`, no digit;
 - **not measured** (`off`, `not_configured`): each cause verbatim, no digit, no Retry;
@@ -29,7 +29,7 @@ The body: `health-code.md` "The document", "Row 4: `assumes`", "Row 5: `unbound`
 
 | Part | Value | A row | Beneath it |
 |---|---|---|---|
-| Row 4 | `<counts.rows>` rows of `<counts.markers>` markers | the state's label, the ID (a `PR-` ID linked to its inbox card, a node ID to the tree), `path:line:column`, the relation, the tail of `health-code.md` "Text" | — |
+| Row 4 | `<counts.rows>` rows of `<counts.markers>` markers | the state's label, the ID (a `PR-` ID linked to its inbox card, a node ID to the tree), `path:line:column`, the relation, the tail of `docs/canon/health-code.md` "Text" | — |
 | Row 5 | `<counts.unbound>` of `<counts.selected>` selected nodes | the ID linked to the tree, kind and title raw, `path:line`, the failed rules, the mentions | each marker: `path:line:column`, relation, `id_state`, `binding`, the reason's label |
 
 - Rows in the daemon's order; over 10 (`SHOWN_OPEN`) the first 10 and "Show all <n>", which focuses the first added row; paths plain.

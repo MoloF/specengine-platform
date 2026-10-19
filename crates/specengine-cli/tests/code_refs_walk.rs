@@ -635,6 +635,13 @@ const STORE_ROLES_MODULE: &str = "crates/specengine-store/src/roles.rs";
 /// (G1), the spec's working name `roles.rs`.
 const ROLES_MODULE: &str = "crates/specengine-cli/src/roles.rs";
 
+/// docs/features/health-code.md's modules (TE-5): the CLI's Health and its
+/// rows 4-5, the core's `[health]` reader and section selection.
+const HEALTH_MODULE: &str = "crates/specengine-cli/src/health.rs";
+const HEALTH_CODE_MODULE: &str = "crates/specengine-cli/src/health_code.rs";
+const HEALTH_TOML_MODULE: &str = "crates/specengine-core/src/health_toml.rs";
+const HEALTH_CHECK_MODULE: &str = "crates/specengine-core/src/check/health.rs";
+
 /// The new modules of the slice, `items.rs` since
 /// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3),
 /// the store's and the CLI's code-index modules since
@@ -643,8 +650,9 @@ const ROLES_MODULE: &str = "crates/specengine-cli/src/roles.rs";
 /// docs/features/symbol-reads.md (its "Rules and edge cases", TE-3), and
 /// the store's and the CLI's role modules since docs/features/bevy-roles.md
 /// (RD-8: `NEW_MODULES` 11 + 2; the code crate's `frameworks` and `bevy`
-/// name the framework and stay out).
-const NEW_MODULES: [&str; 13] = [
+/// name the framework and stay out); Health's four since
+/// docs/features/health-code.md (TE-5: 13 + 4).
+const NEW_MODULES: [&str; 17] = [
     "crates/specengine-core/src/code_toml.rs",
     "crates/specengine-code/src/bind.rs",
     "crates/specengine-code/src/naming.rs",
@@ -658,6 +666,10 @@ const NEW_MODULES: [&str; 13] = [
     UNMAPPED_MODULE,
     STORE_ROLES_MODULE,
     ROLES_MODULE,
+    HEALTH_MODULE,
+    HEALTH_CODE_MODULE,
+    HEALTH_TOML_MODULE,
+    HEALTH_CHECK_MODULE,
 ];
 
 /// Stack and genre words no engine source names.
@@ -696,8 +708,12 @@ const EXEMPT: [(&str, &str); 4] = [
 /// taken from them (docs/features/symbol-index.md "Tables"); and of the
 /// symbol-reads modules: the target word `module` and the JSON key `note`
 /// of `spec symbols`, the binding word `module` the containment reads
-/// (docs/features/symbol-reads.md "spec symbols", "spec unmapped").
-const EXEMPT_WORDS: [(&str, &str); 9] = [
+/// (docs/features/symbol-reads.md "spec symbols", "spec unmapped"); and
+/// Health's row 5 cause, the spec's sentence ``no [[health.bound]] rule:
+/// which nodes must be bound is the project's to declare``, whose `rule`
+/// is `fixtures/spec-a`'s kind `rule`, not taken from it
+/// (docs/features/health-code.md "`[[health.bound]]`").
+const EXEMPT_WORDS: [(&str, &str); 10] = [
     (STORE_CODE_MODULE, "module"),
     (STORE_CODE_MODULE, "note"),
     (ANALYZER_MODULE, "module"),
@@ -707,6 +723,7 @@ const EXEMPT_WORDS: [(&str, &str); 9] = [
     (SYMBOLS_MODULE, "module"),
     (SYMBOLS_MODULE, "note"),
     (UNMAPPED_MODULE, "module"),
+    (HEALTH_CODE_MODULE, "rule"),
 ];
 
 /// The string literals of Rust `source`, comments skipped (raw strings,

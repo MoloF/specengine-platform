@@ -8,7 +8,9 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  HealthAssumes,
   HealthReport,
+  HealthUnbound,
   InboxEntry,
   Proposal,
   RoundItem,
@@ -465,9 +467,14 @@ export function anAmendment(fields: Partial<UnappliedAmendment> & Pick<Unapplied
   };
 }
 
-/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note. */
+/** Row 4 or 5 of `spec health --json` for tests, the code layer off (docs/features/health-code.md "Data"). */
+export function aCodeRowOff(): HealthAssumes & HealthUnbound {
+  return { state: "off", causes: ["specengine.toml has no [code] table: the code layer is off (add [code] with roots)"], counts: null, rows: null };
+}
+
+/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-5 off. */
 export function aHealthReport(amendments: UnappliedAmendment[] = [], fields: Partial<Omit<HealthReport, "amendments">> = {}): HealthReport {
-  return { documents: 7, amendments, notes: [], ...fields };
+  return { documents: 7, amendments, notes: [], code: null, assumes: aCodeRowOff(), unbound: aCodeRowOff(), ...fields };
 }
 
 /** One item of a round sheet for tests: a question without options, nothing staged; omitted keys as the sheet gives them. */

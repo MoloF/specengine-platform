@@ -614,12 +614,172 @@ export interface UnappliedAmendment {
 /**
  * `spec health --json`, the daemon's `health`: `documents` the walked tree's documents (`spec check`'s
  * `counts.documents` on the same tree), the unapplied amendments by path, then the notes (a
- * front-matter that could not be judged), each without `note: `. Source: `docs/features/health-left.md` "Data".
+ * front-matter that could not be judged), each without `note: `; after them rows 4-5: `code` the
+ * stored code files' count, null unless the rows read the code index, `assumes` row 4, `unbound`
+ * row 5, every key present. Sources: `docs/features/health-left.md` "Data";
+ * `docs/features/health-code.md` "Data".
  */
 export interface HealthReport {
   documents: number;
   amendments: UnappliedAmendment[];
   notes: string[];
+  code: HealthCode | null;
+  assumes: HealthAssumes;
+  unbound: HealthUnbound;
+}
+
+// `spec health --json`'s rows 4-5 (docs/features/health-code.md "Data"): read from the code index
+// the call refreshes; a row `measured`, `off`, `not_configured` or `cannot`, its counts and rows
+// null unless measured. Words raw: a row's state, a marker's relation, `id_state` and `binding` as
+// `spec refs` gives them.
+
+/** A code row's state as sent; other strings kept (9b and later add words). Source: `docs/features/health-code.md` "Data". */
+export type HealthRowState = "measured" | "off" | "not_configured" | "cannot" | Unlisted;
+
+/**
+ * `spec refs`' count of the stored code files: all, `.rs`, `.ron`, and the files the refresh
+ * skipped (not UTF-8). Source: `docs/features/health-code.md` "Data".
+ */
+export interface HealthCode {
+  files: number;
+  rs: number;
+  ron: number;
+  skipped: number;
+}
+
+/**
+ * Row 4: the markers naming a queue item, and the `@assumes` markers on an archived node or one in
+ * question; `causes` the lines behind any state but `measured`, else `[]`; `counts`, `rows` null
+ * unless `measured`. Source: `docs/features/health-code.md` "Data".
+ */
+export interface HealthAssumes {
+  state: HealthRowState;
+  causes: string[];
+  counts: AssumesCounts | null;
+  rows: AssumesRow[] | null;
+}
+
+/**
+ * Row 5: the nodes `[[health.bound]]` selects that no marker binds; `causes` the lines behind any
+ * state but `measured`, else `[]`; `counts`, `rows` null unless `measured`.
+ * Source: `docs/features/health-code.md` "Data".
+ */
+export interface HealthUnbound {
+  state: HealthRowState;
+  causes: string[];
+  counts: UnboundCounts | null;
+  rows: UnboundRow[] | null;
+}
+
+/** Row 4's state of a marker, as sent; other strings kept. Source: `docs/features/health-code.md` "Data". */
+export type AssumedState =
+  | "pending"
+  | "as_assumed"
+  | "otherwise"
+  | "applied"
+  | "rejected"
+  | "unknown"
+  | "archived"
+  | "in_question"
+  | Unlisted;
+
+/** Row 4's counts: the markers judged, the rows listed, one count per state. Source: `docs/features/health-code.md` "Data". */
+export interface AssumesCounts {
+  markers: number;
+  rows: number;
+  pending: number;
+  as_assumed: number;
+  otherwise: number;
+  applied: number;
+  rejected: number;
+  unknown: number;
+  archived: number;
+  in_question: number;
+}
+
+/**
+ * One row 4 line: a marker (and holder), `id` as written, its place, its relation raw; `proposal`
+ * the queue item it names (null for `unknown` and a node's row), `node` the archived or questioned
+ * node an `@assumes` names (null for a queue item's row). Source: `docs/features/health-code.md` "Data".
+ */
+export interface AssumesRow {
+  id: string;
+  state: AssumedState;
+  path: string;
+  line: number;
+  column: number;
+  relation: string;
+  proposal: AssumedProposal | null;
+  node: AssumedNode | null;
+}
+
+/**
+ * The queue item a row 4 marker names: `kind` plain text (ADR-0031), `status` the queue's, `choice`
+ * the stored one-key JSON, the record it applied to, `reason` a rejection's; null when absent.
+ * Source: `docs/features/health-code.md` "Data".
+ */
+export interface AssumedProposal {
+  kind: string;
+  status: ProposalStatus;
+  choice: Choice | null;
+  record_id: string | null;
+  record_path: string | null;
+  reason: string | null;
+}
+
+/**
+ * The node an `@assumes` marker names: canonical ID and place, its document's raw `status:`,
+ * `successor` the X of `superseded-by X`, the `open`/`approved` items holding it, by ID.
+ * Source: `docs/features/health-code.md` "Data".
+ */
+export interface AssumedNode {
+  id: string;
+  path: string;
+  line: number;
+  status: string | null;
+  successor: string | null;
+  proposals: string[];
+}
+
+/** Row 5's counts: the rules, the nodes they select, those bound and unbound. Source: `docs/features/health-code.md` "Data". */
+export interface UnboundCounts {
+  rules: number;
+  selected: number;
+  bound: number;
+  unbound: number;
+}
+
+/**
+ * One selected node no marker binds: `kind`, `title` raw; `rules` the 1-based indices of the rules
+ * it fails; `mentions` those naming it; `markers` those naming it without binding.
+ * Source: `docs/features/health-code.md` "Data".
+ */
+export interface UnboundRow {
+  id: string;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  rules: number[];
+  mentions: number;
+  markers: UnboundMarker[];
+}
+
+/** Why a marker naming a node binds it not, the first that applies; other strings kept. Source: `docs/features/health-code.md` "Data". */
+export type UnboundReason = "homoglyph" | "unanchored" | "cannot_verify" | "relation" | Unlisted;
+
+/**
+ * A marker naming an unbound node without binding it: its place, relation, `id_state` and
+ * `binding` as `spec refs` gives them, and why. Source: `docs/features/health-code.md` "Data".
+ */
+export interface UnboundMarker {
+  path: string;
+  line: number;
+  column: number;
+  relation: string;
+  id_state: string;
+  binding: string;
+  reason: UnboundReason;
 }
 
 /** Why a tree row is a root although its document declares a parent. Source: `docs/canon/spec-cli-graph.md` "spec tree". */

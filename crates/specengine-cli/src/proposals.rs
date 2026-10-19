@@ -467,6 +467,13 @@ pub(crate) fn queue_cannot(error: QueueError) -> CliError {
     CliError::spec(error)
 }
 
+/// Why a read that runs no schema step cannot read a queue still at an
+/// older `schema` (1 up to this build's): its columns are not this build's
+/// until a queue command's steps run (Health's row 4).
+pub(crate) fn queue_below_schema(schema: i64) -> String {
+    format!("the queue stands at schema {schema}; a queue command upgrades it")
+}
+
 /// A queue error: a refusal (no such proposal, a state that does not allow
 /// the change) as `Ok(reason)`, anything else exit 2.
 pub(crate) fn queue_refusal(error: QueueError) -> Result<String, CliError> {

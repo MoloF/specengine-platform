@@ -547,6 +547,21 @@ pub(crate) fn place(binding: &StoredBinding) -> Result<Place<'_>, CliError> {
     }
 }
 
+/// Where a stored marker maps, the one predicate `spec unmapped` and `spec
+/// health`'s row 5 share (task spec `health-code`, "The shared
+/// predicate"): its [`place`] first (a word this build does not write is
+/// an error whatever the ID), then that place when the judged ID names its
+/// nodes itself (`IdState::names_nodes`: resolved, an alias or ambiguous)
+/// and the place is something; else `None` (a dangling, look-alike, queue
+/// or other-project ID; an `unanchored` or `cannot_verify` binding).
+pub(crate) fn maps<'s>(
+    marker: &'s StoredMarker,
+    judged: &Judged,
+) -> Result<Option<Place<'s>>, CliError> {
+    let place = place(&marker.binding)?;
+    Ok((judged.state.names_nodes() && place != Place::Nothing).then_some(place))
+}
+
 /// The stored markers by what they bind, and the mentions bound to each
 /// item; each list in file order.
 struct Marks<'s> {

@@ -87,6 +87,20 @@
 //! (`{hash, rows, more}`) from the reviews of the drift items raised by
 //! `spec propose drift` on `fixtures/code-a` with its golden lock and
 //! `CAP` edited. M: `drift` dropped from the review document.
+//!
+//! AC-9 (TE-6) of docs/features/health-code.md, its Rust half ("The
+//! document"): `HealthReport` holds `code`, `assumes`, `unbound` after
+//! `notes` (6 keys; on A, which has no `[code]`, `code` null and both rows
+//! `off`, the same keys); ten sets more, 56 in all, last: `HealthCode`,
+//! `HealthAssumes`, `HealthUnbound`, `AssumesCounts`, `AssumesRow`,
+//! `AssumedProposal`, `AssumedNode`, `UnboundCounts`, `UnboundRow`,
+//! `UnboundMarker`, from `GET health` on `fixtures/code-a` served as
+//! `code-health` ([`health_code_repo`]: a rule on its objectives by
+//! `configures` alone, so `GOAL-01` is unbound with its markers listed;
+//! `@assumes PR-0001` written in, `PR-0001` a question on `PREM-001`, which
+//! `counter.rs:37` assumes: a row with its proposal, one with its node),
+//! and on A and its amended copy (`off`). M: a key dropped from the
+//! fixture.
 
 mod common;
 mod task_state;
@@ -348,7 +362,15 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // `drift` object).
     let code = drift_repo(&scratch, &home);
 
-    let server = Server::serve(&home, &cwd, &[&a, &observed, &cannot, &amended, &code.0]);
+    // health-code: fixtures/code-a served as `code-health`, rows 4-5
+    // measured with every nested object.
+    let health_code = health_code_repo(&scratch, &home);
+
+    let server = Server::serve(
+        &home,
+        &cwd,
+        &[&a, &observed, &cannot, &amended, &code.0, &health_code],
+    );
     let p = "/api/projects/lantern-keep";
     // decision-staging: each proposal staged, as a same-origin page stages,
     // before the inbox and the reviews are read.
@@ -458,8 +480,9 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
-    // health-left: the amended copy's unapplied amendments, and A's none.
-    let healths: Vec<String> = ["lk-amended", "lantern-keep"]
+    // health-left: the amended copy's unapplied amendments, and A's none;
+    // health-code: code-health's rows 4-5.
+    let healths: Vec<String> = ["lk-amended", "lantern-keep", "code-health"]
         .iter()
         .map(|slug| {
             server
@@ -556,6 +579,38 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let snapshots = objects(&holding("spec_snapshot", '{'), "spec_snapshot");
     let amendments = items(&healths, "amendments");
     assert_eq!(amendments.len(), 2, "the amended copy's two: {healths:?}");
+    // health-code: the documents whose rows 4-5 are measured (`code` an
+    // object), their rows, and the rows holding a nested object.
+    let measured: Vec<String> = healths
+        .iter()
+        .filter(|text| text.contains("\"code\":{"))
+        .cloned()
+        .collect();
+    assert_eq!(measured.len(), 1, "code-health's alone: {healths:?}");
+    let assumes_measured = objects(&measured, "assumes");
+    let unbound_measured = objects(&measured, "unbound");
+    let assumes_rows = items(&assumes_measured, "rows");
+    let unbound_rows = items(&unbound_measured, "rows");
+    let with_object = |texts: &[String], key: &str| -> Vec<String> {
+        texts
+            .iter()
+            .filter(|text| text.contains(&format!("\"{key}\":{{")))
+            .cloned()
+            .collect()
+    };
+    let assumed_proposals = objects(&with_object(&assumes_rows, "proposal"), "proposal");
+    let assumed_nodes = objects(&with_object(&assumes_rows, "node"), "node");
+    let unbound_markers = items(&unbound_rows, "markers");
+    for (name, found) in [
+        ("AssumedProposal", &assumed_proposals),
+        ("AssumedNode", &assumed_nodes),
+        ("UnboundMarker", &unbound_markers),
+    ] {
+        assert!(
+            !found.is_empty(),
+            "{name}: code-health serves one: {measured:?}"
+        );
+    }
 
     vec![
         (
@@ -750,6 +805,54 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "DriftEvidence",
             one_key_set("DriftEvidence", &objects(&drift_reviews, "drift"), keys_of),
         ),
+        (
+            "HealthCode",
+            one_key_set("HealthCode", &objects(&measured, "code"), keys_of),
+        ),
+        (
+            "HealthAssumes",
+            one_key_set("HealthAssumes", &objects(&healths, "assumes"), keys_of),
+        ),
+        (
+            "HealthUnbound",
+            one_key_set("HealthUnbound", &objects(&healths, "unbound"), keys_of),
+        ),
+        (
+            "AssumesCounts",
+            one_key_set(
+                "AssumesCounts",
+                &objects(&assumes_measured, "counts"),
+                keys_of,
+            ),
+        ),
+        (
+            "AssumesRow",
+            one_key_set("AssumesRow", &assumes_rows, keys_of),
+        ),
+        (
+            "AssumedProposal",
+            one_key_set("AssumedProposal", &assumed_proposals, keys_of),
+        ),
+        (
+            "AssumedNode",
+            one_key_set("AssumedNode", &assumed_nodes, keys_of),
+        ),
+        (
+            "UnboundCounts",
+            one_key_set(
+                "UnboundCounts",
+                &objects(&unbound_measured, "counts"),
+                keys_of,
+            ),
+        ),
+        (
+            "UnboundRow",
+            one_key_set("UnboundRow", &unbound_rows, keys_of),
+        ),
+        (
+            "UnboundMarker",
+            one_key_set("UnboundMarker", &unbound_markers, keys_of),
+        ),
     ]
 }
 
@@ -793,6 +896,50 @@ fn drift_repo(scratch: &Scratch, home: &std::path::Path) -> (std::path::PathBuf,
         .collect();
     assert_eq!(ids, ["PR-0001", "PR-0002"], "{document}");
     (root, ids)
+}
+
+/// health-code, AC-9 (`docs/features/health-code.md` "The document"):
+/// `fixtures/code-a` as a repository served as `code-health`, a
+/// `[[health.bound]]` on its objectives by `configures` alone (`GOAL-01`
+/// unbound, its markers listed), `// @assumes PR-0001` appended to
+/// `crates/tally/src/lib.rs`, committed; `PR-0001` a question on
+/// `PREM-001` raised with `HOME` `home` (`counter.rs:37` assumes
+/// `PREM-001`: `in_question` with its node; `PR-0001`'s marker `pending`
+/// with its proposal; `PR-7` `unknown`).
+fn health_code_repo(scratch: &Scratch, home: &std::path::Path) -> std::path::PathBuf {
+    let root = scratch.copy("code-a", "code-health");
+    let config = fs::read_to_string(root.join("specengine.toml")).expect("config");
+    assert_eq!(config.matches("slug = \"code-a\"").count(), 1);
+    fs::write(
+        root.join("specengine.toml"),
+        format!(
+            "{}\n[[health.bound]]\nkinds = [\"objective\"]\nrelations = [\"configures\"]\n",
+            config.replace("slug = \"code-a\"", "slug = \"code-health\"")
+        ),
+    )
+    .expect("config");
+    let lib = fs::read_to_string(root.join("crates/tally/src/lib.rs")).expect("lib.rs");
+    fs::write(
+        root.join("crates/tally/src/lib.rs"),
+        format!("{lib}// @assumes PR-0001\n"),
+    )
+    .expect("lib.rs");
+    let git = scratch.git();
+    git.run(
+        &root,
+        &["init", "-q", "--template=", "--initial-branch=main"],
+    );
+    git.quiet(&root);
+    git.run(&root, &["add", "-A"]);
+    git.run(&root, &["commit", "-q", "-m", "fixture"]);
+    let id = ask(
+        home,
+        &root,
+        &["PREM-001"],
+        "Is the count shared between threads?",
+    );
+    assert_eq!(id, "PR-0001");
+    root
 }
 
 /// health-left's amendments, written into a copy of A: a spec draft and
@@ -943,8 +1090,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        46,
-        "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46)"
+        56,
+        "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
+         health-code: 56)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1058,9 +1206,21 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // kind-interpretation's one ("Data", "Daemon keys").
     assert_eq!(sets[40].0, "Interpretation");
     assert_eq!(sets[40].1, ["decision", "how", "why"]);
-    // health-left's three, last (docs/features/health-left.md "Data").
+    // health-left's three (docs/features/health-left.md "Data"); the health
+    // document gains `code`, `assumes`, `unbound` after `notes`
+    // (docs/features/health-code.md "The document").
     assert_eq!(sets[41].0, "HealthReport");
-    assert_eq!(sets[41].1, ["documents", "amendments", "notes"]);
+    assert_eq!(
+        sets[41].1,
+        [
+            "documents",
+            "amendments",
+            "notes",
+            "code",
+            "assumes",
+            "unbound"
+        ]
+    );
     assert_eq!(sets[42].0, "UnappliedAmendment");
     assert_eq!(
         sets[42].1,
@@ -1073,15 +1233,76 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "type", "origin", "at", "name", "written", "path", "line", "state", "reason"
         ]
     );
-    // rev-discipline's one, last: docs/features/rev-discipline.md
+    // rev-discipline's one: docs/features/rev-discipline.md
     // "Review document, stage, queue" ("5 keys", `refused` last).
     assert_eq!(sets[44].0, "RevisionRow");
     assert_eq!(sets[44].1, ["id", "rev", "to", "lock_entries", "refused"]);
-    // drift-queue's one, last:
+    // drift-queue's one:
     // `docs/features/drift-queue.md` "Review, inbox, round, stage"
     // (`{hash, rows, more}` as stored, rows untyped).
     assert_eq!(sets[45].0, "DriftEvidence");
     assert_eq!(sets[45].1, ["hash", "rows", "more"]);
+    // health-code's ten, last, in "The document"'s order (AC-9).
+    let ten: Vec<(&str, Vec<String>)> = sets[46..].to_vec();
+    let want: [(&str, &[&str]); 10] = [
+        ("HealthCode", &["files", "rs", "ron", "skipped"]),
+        ("HealthAssumes", &["state", "causes", "counts", "rows"]),
+        ("HealthUnbound", &["state", "causes", "counts", "rows"]),
+        (
+            "AssumesCounts",
+            &[
+                "markers",
+                "rows",
+                "pending",
+                "as_assumed",
+                "otherwise",
+                "applied",
+                "rejected",
+                "unknown",
+                "archived",
+                "in_question",
+            ],
+        ),
+        (
+            "AssumesRow",
+            &[
+                "id", "state", "path", "line", "column", "relation", "proposal", "node",
+            ],
+        ),
+        (
+            "AssumedProposal",
+            &[
+                "kind",
+                "status",
+                "choice",
+                "record_id",
+                "record_path",
+                "reason",
+            ],
+        ),
+        (
+            "AssumedNode",
+            &["id", "path", "line", "status", "successor", "proposals"],
+        ),
+        ("UnboundCounts", &["rules", "selected", "bound", "unbound"]),
+        (
+            "UnboundRow",
+            &[
+                "id", "kind", "title", "path", "line", "rules", "mentions", "markers",
+            ],
+        ),
+        (
+            "UnboundMarker",
+            &[
+                "path", "line", "column", "relation", "id_state", "binding", "reason",
+            ],
+        ),
+    ];
+    assert_eq!(ten.len(), want.len(), "{names:?}");
+    for ((name, keys), (want_name, want_keys)) in ten.iter().zip(want) {
+        assert_eq!(*name, want_name);
+        assert_eq!(keys, want_keys, "{name}");
+    }
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1102,10 +1323,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 46 sets (41 until
+/// unchanged, no new key): the fixture holds 56 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
-/// docs/features/rev-discipline.md its `RevisionRow`, TE-3, and
-/// docs/features/drift-queue.md its `DriftEvidence`, TE-11); a decision
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
+/// docs/features/drift-queue.md its `DriftEvidence`, TE-11, and
+/// docs/features/health-code.md its ten, AC-9); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1119,9 +1341,10 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        46,
-        "46 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
-         rev-discipline's `RevisionRow` (TE-3) and drift-queue's `DriftEvidence`"
+        56,
+        "56 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+         rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence` and \
+         health-code's ten (AC-9)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1235,10 +1458,11 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 46 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 56 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
-/// docs/features/rev-discipline.md its `RevisionRow`, TE-3, and
-/// docs/features/drift-queue.md its `DriftEvidence`, TE-11); "Data"'s
+/// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
+/// docs/features/drift-queue.md its `DriftEvidence`, TE-11, and
+/// docs/features/health-code.md its ten, AC-9); "Data"'s
 /// amendment raised through `spec propose amendment` is
 /// served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -1255,9 +1479,10 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        46,
-        "46 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
-         rev-discipline's `RevisionRow` (TE-3) and drift-queue's `DriftEvidence`"
+        56,
+        "56 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+         rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence` and \
+         health-code's ten (AC-9)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

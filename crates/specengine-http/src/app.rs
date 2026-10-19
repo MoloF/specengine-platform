@@ -415,10 +415,13 @@ async fn check(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
     .await)
 }
 
-/// `GET …/health`: `spec health --json` (task spec `health-left`), the
-/// working tree on disk walked as the plain check walks it, no index
-/// refreshed, in the project's turn; no query name. A walk that is
-/// incomplete is the CLI's exit 2: a 503, never a document.
+/// `GET …/health`: `spec health --json` (task specs `health-left`,
+/// `health-code`), in the project's turn; no query name. Row 3 walks the
+/// working tree on disk as the plain check walks it; rows 4-5 read the
+/// code index the call refreshes, as `refs` does (the data directory's
+/// indexes written, nothing else). Any row state is a 200 document; only
+/// the CLI's exit 2, row 3's alone (a config that cannot be used, an
+/// incomplete walk), is a 503.
 async fn health(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     args("health", &[], &uri)?;

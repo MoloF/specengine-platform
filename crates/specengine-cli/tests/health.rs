@@ -21,11 +21,19 @@
 //! broken file skipped without a note; AC-R5 an index refresh, a `HashMap`
 //! order; AC-R7 an `"amends"` literal in the new core or CLI code.
 //!
+//! docs/features/health-code.md (9a-1) changes these row-3 pins only by
+//! its new lines: the document holds `code`, `assumes` and `unbound` after
+//! `notes` (`code` null and both rows `off` without `[code]`, as in every
+//! fixture here), the text their two `off` lines before the last one; AC-R7
+//! scans the slice's new sources too (RD-4, TE-5). Rows 4-5 themselves:
+//! the [`health_rows`] module.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
 mod common;
+mod health_rows;
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -163,6 +171,35 @@ const QUEUED: &str = "docs/features/queued-delay.md";
 
 /// The listed paths of the amended copy of A, by path (byte order).
 const LISTED: [&str; 4] = [BARE, DRAFT, ACCEPTED, NO_STATUS];
+
+/// docs/features/health-code.md "Failures and exits": the cause of rows
+/// 4-5 `off` without `[code]`, code-refs' sentence (`refs.rs`
+/// `code_config`) for the config label `specengine.toml`.
+const NO_CODE: &str =
+    "specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+
+/// A row 4 or 5 `off` without `[code]`, keys in "Data"'s order.
+fn off_row() -> J {
+    J::Obj(vec![
+        ("state".to_owned(), J::Str("off".to_owned())),
+        (
+            "causes".to_owned(),
+            J::Arr(vec![J::Str(NO_CODE.to_owned())]),
+        ),
+        ("counts".to_owned(), J::Null),
+        ("rows".to_owned(), J::Null),
+    ])
+}
+
+/// The JSON text of [`off_row`].
+fn off_json() -> String {
+    format!("{{\"state\":\"off\",\"causes\":[\"{NO_CODE}\"],\"counts\":null,\"rows\":null}}")
+}
+
+/// The text's two lines of rows 4-5 `off`, before the last line.
+fn off_lines() -> String {
+    format!("assumes: off: {NO_CODE}\nunbound: off: {NO_CODE}\n")
+}
 
 /// A's amended copy: the documents written into it, in this order.
 fn amended_files() -> Vec<(&'static str, String)> {
@@ -560,6 +597,11 @@ fn ac_r2_links_are_show_links_amends_entries_every_state() {
 /// `counts.documents` on A, the amended A, B and C; the library's
 /// document and text are the binary's; the text of "Data", its last line
 /// with zero too. M: `notes` omitted when empty; rows sorted by title.
+///
+/// docs/features/health-code.md "The document": the keys gain `code`,
+/// `assumes`, `unbound` (none of these fixtures has `[code]`: `code` null,
+/// both rows `off` with code-refs' sentence); the text gains their two
+/// `off` lines before the last one.
 #[test]
 fn ac_r3_the_document_keys_counts_order_and_text() {
     let pair = amended_pair("health-r3");
@@ -578,7 +620,14 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
         let context = root.display().to_string();
         assert_eq!(
             document.keys(),
-            ["documents", "amendments", "notes"],
+            [
+                "documents",
+                "amendments",
+                "notes",
+                "code",
+                "assumes",
+                "unbound"
+            ],
             "{context}"
         );
         assert_eq!(document.get("documents").number(), documents, "{context}");
@@ -588,6 +637,12 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
             "{context}: documents = spec check's counts.documents"
         );
         assert_eq!(document.get("amendments").items().len(), rows, "{context}");
+        // docs/features/health-code.md: rows 4-5 not measured without
+        // `[code]`, `code` null.
+        assert_eq!(document.get("code"), &J::Null, "{context}");
+        for key in ["assumes", "unbound"] {
+            assert_eq!(document.get(key), &off_row(), "{context}: {key}");
+        }
         for row in document.get("amendments").items() {
             assert_eq!(
                 row.keys(),
@@ -610,7 +665,12 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
             assert_eq!(document.get("amendments"), &J::Arr(Vec::new()));
             assert_eq!(document.get("notes"), &J::Arr(Vec::new()));
             assert_eq!(
-                run.stdout, "{\"documents\":13,\"amendments\":[],\"notes\":[]}\n",
+                run.stdout,
+                format!(
+                    "{{\"documents\":13,\"amendments\":[],\"notes\":[],\"code\":null,\
+                     \"assumes\":{off},\"unbound\":{off}}}\n",
+                    off = off_json()
+                ),
                 "the whole document with zero"
             );
         }
@@ -635,8 +695,17 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
             format!("spec health: {documents} documents, {rows} unapplied amendments"),
             "{context}: the count line, always"
         );
+        assert!(
+            text.stdout.ends_with(&format!("{}{last}\n", off_lines())),
+            "{context}: rows 4-5 `off`, then the last line:\n{}",
+            text.stdout
+        );
         if rows == 0 {
-            assert_eq!(text.stdout, format!("{last}\n"), "{context}: zero rows");
+            assert_eq!(
+                text.stdout,
+                format!("{}{last}\n", off_lines()),
+                "{context}: zero rows"
+            );
         }
     }
     // The amended A's text: the header lines as "Data" (absent parts
@@ -645,7 +714,12 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
     let headers: Vec<&str> = text
         .stdout
         .lines()
-        .filter(|line| !line.starts_with("  ") && !line.starts_with("spec health: "))
+        .filter(|line| {
+            !line.starts_with("  ")
+                && !line.starts_with("spec health: ")
+                && !line.starts_with("assumes: ")
+                && !line.starts_with("unbound: ")
+        })
         .collect();
     assert_eq!(
         headers,
@@ -1022,10 +1096,23 @@ fn literals(line: &str) -> Vec<&str> {
     line.split('"').skip(1).step_by(2).collect()
 }
 
+/// The fixtures whose configs give the scanned vocabulary: health-left's
+/// three, and since docs/features/health-code.md (TE-5) the code
+/// fixtures, the ECS game among them.
+const SCANNED_FIXTURES: [&str; 7] = [
+    "spec-a",
+    "spec-b",
+    "spec-c",
+    "code-a",
+    "code-index",
+    "code-bevy",
+    "verify-ecs",
+];
+
 /// Every `kind = "…"` of the fixtures' configs.
 fn fixture_kinds() -> BTreeSet<String> {
     let mut kinds = BTreeSet::new();
-    for fixture in ["spec-a", "spec-b", "spec-c"] {
+    for fixture in SCANNED_FIXTURES {
         let config = read_text(&common::fixture(fixture), "specengine.toml");
         for part in config.split("kind").skip(1) {
             if let Some(value) = part
@@ -1041,17 +1128,90 @@ fn fixture_kinds() -> BTreeSet<String> {
     kinds
 }
 
+/// Every `[ids]` prefix (a key line `PREFIX = { … }`), `aliases_from`
+/// entry and slug of the fixtures' configs (docs/features/health-code.md
+/// TE-5: "no fixture prefix").
+fn fixture_prefixes_and_slugs() -> BTreeSet<String> {
+    let mut words = BTreeSet::new();
+    for fixture in SCANNED_FIXTURES {
+        let config = read_text(&common::fixture(fixture), "specengine.toml");
+        for line in config.lines() {
+            let line = line.split('#').next().unwrap_or_default();
+            let Some((key, rest)) = line.split_once('=') else {
+                continue;
+            };
+            let key = key.trim();
+            let rest = rest.trim_start();
+            if !key.is_empty()
+                && key
+                    .bytes()
+                    .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+                && rest.starts_with('{')
+            {
+                words.insert(key.to_owned());
+            }
+            if key == "slug" {
+                words.extend(rest.split('"').nth(1).map(str::to_owned));
+            }
+            if let Some(list) = rest
+                .split_once("aliases_from")
+                .and_then(|(_, after)| after.split_once('['))
+                .and_then(|(_, after)| after.split_once(']'))
+                .map(|(inside, _)| inside)
+            {
+                words.extend(list.split('"').skip(1).step_by(2).map(str::to_owned));
+            }
+        }
+    }
+    words
+}
+
+/// The slice's new sources AC-R7 scans: health-left's core
+/// `check/unapplied.rs` and CLI `health.rs`, and since
+/// docs/features/health-code.md (RD-4, TE-5) every core and CLI source
+/// whose path names `health` (rows 4-5's modules, the `[health]` reader,
+/// the row-4 judge) with [`health_rows::PHASE_B_SOURCES`].
+fn ac_r7_sources() -> Vec<String> {
+    let mut sources: BTreeSet<String> = BTreeSet::from([
+        "crates/specengine-core/src/check/unapplied.rs".to_owned(),
+        "crates/specengine-cli/src/health.rs".to_owned(),
+    ]);
+    for crate_dir in ["crates/specengine-core/src", "crates/specengine-cli/src"] {
+        sources.extend(
+            health_rows::rust_files(&repository_root().join(crate_dir))
+                .into_iter()
+                .filter(|path| path.contains("health")),
+        );
+    }
+    sources.extend(
+        health_rows::PHASE_B_SOURCES
+            .iter()
+            .map(|path| (*path).to_owned()),
+    );
+    sources.into_iter().collect()
+}
+
 /// AC-R7, the scan half (`proposal_genre.rs` holds the `"amends"` scan of
 /// every CLI source): the slice's new sources, core `check/unapplied.rs`
 /// and CLI `health.rs`, write no class, status, kind or link-type literal;
 /// core names `AMENDS` only through `amended_refs` (no `AMENDS` in its
 /// code). M: an `"amends"` literal in the new core or CLI code.
+///
+/// docs/features/health-code.md RD-4 and TE-5, extended to the new
+/// sources ([`ac_r7_sources`]): nor a queue status or kind word, a
+/// choice's key (the model's `ProposalStatus`, `decides()`, `Choice` say
+/// them), a fixture prefix, kind or slug, `cargo`, `nextest` or `bevy`.
+/// M: a status word in a new source.
 #[test]
 fn ac_r7_the_new_sources_write_no_class_status_kind_or_link_type() {
     let mut words: BTreeSet<String> = fixture_kinds();
     assert!(
         words.contains("mechanic") && words.contains("tariff"),
         "{words:?}"
+    );
+    assert!(
+        words.contains("law") && words.contains("quill") && words.contains("almanac"),
+        "the code fixtures are read: {words:?}"
     );
     words.extend(LINK_TYPES.iter().map(|name| (*name).to_owned()));
     for word in [
@@ -1067,16 +1227,44 @@ fn ac_r7_the_new_sources_write_no_class_status_kind_or_link_type() {
         "superseded-by",
         "open",
         "amendment",
+        // docs/features/health-code.md RD-4, TE-5: the queue's words are
+        // the model's, never a new source's literal (Health's own row
+        // states `applied`, `rejected` are its words and stay allowed).
+        "approved",
+        "question",
+        "discrepancy",
+        "update",
+        "create",
+        "interpretation",
+        "drift",
+        "working_answer",
+        "option",
+        "answer",
+        "recommendation",
+        "cargo",
+        "nextest",
+        "bevy",
     ] {
         words.insert(word.to_owned());
     }
+    let prefixes = fixture_prefixes_and_slugs();
+    assert!(
+        prefixes.contains("PIECE") && prefixes.contains("AIM") && prefixes.contains("inkwell"),
+        "{prefixes:?}"
+    );
+    words.extend(prefixes);
+    let sources = ac_r7_sources();
+    assert!(
+        sources.len() >= 2,
+        "health-left's two at least: {sources:?}"
+    );
     let mut found = Vec::new();
-    for source in [
-        "crates/specengine-core/src/check/unapplied.rs",
-        "crates/specengine-cli/src/health.rs",
-    ] {
+    for source in &sources {
         let text = read_text(&repository_root(), source);
         for (number, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("#[cfg(test)]") {
+                break;
+            }
             for literal in literals(line) {
                 if words.contains(literal) {
                     found.push(format!("{source}:{}: {literal:?}", number + 1));

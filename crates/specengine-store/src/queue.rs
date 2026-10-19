@@ -1578,9 +1578,13 @@ impl SqliteQueue {
     }
 
     /// The project's rows `filter`'s repository admits, by ID number, in
-    /// one snapshot, not decoded.
+    /// one snapshot, not decoded; none in an index-only DB
+    /// ([`Self::open_existing`]: no schema step runs; `index_only`).
     fn raw_rows(&self, filter: &ProposalFilter) -> Result<Vec<RawRow>, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        if index_only(&tx)? {
+            return Ok(Vec::new());
+        }
         let mut statement = tx
             .prepare(&format!(
                 "SELECT {COLUMNS} FROM main.proposals \
@@ -2036,6 +2040,13 @@ fn user_version(conn: &Connection) -> Result<i64, QueueError> {
     Ok(conn
         .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
         .db()?)
+}
+
+/// A DB no queue step has run on (`user_version` 0, no `proposals`): the
+/// index-only DB a read's refresh leaves, read as an empty queue. A
+/// schema-run DB that lost `proposals` is not one: its reads error.
+fn index_only(conn: &Connection) -> Result<bool, QueueError> {
+    Ok(user_version(conn)? == 0 && !schema::has_table(conn, "proposals")?)
 }
 
 fn check_time(now: &str) -> Result<(), QueueError> {
@@ -3774,6 +3785,10 @@ impl ProposalQueue for SqliteQueue {
     }
 
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError> {
+        // An index-only DB opened by `open_existing` holds no proposal.
+        if index_only(&self.conn)? {
+            return Ok(None);
+        }
         select_one(&self.conn, &self.project, id)
     }
 

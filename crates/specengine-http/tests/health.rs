@@ -18,6 +18,14 @@
 //!
 //! M: `limit` accepted; the route at `/left`; 200 `{"amendments":[]}` on a
 //! gap.
+//!
+//! docs/features/health-code.md RD-10 (WA-9): the route is unchanged for
+//! rows 4-5. None of the fixtures above has `[code]`: their documents
+//! carry `code` null and both rows `off`, nothing refreshed, as before. On
+//! a copy of `fixtures/code-a` the body is the CLI's bytes with rows 4-5
+//! measured, and a row that cannot be measured (a code walk gap, a bad
+//! `[code]`) stays a 200 holding `cannot`, never a 503; the call writes
+//! the slug's DB in the data directory alone. M: `cannot` as a 503.
 
 mod common;
 
@@ -413,5 +421,109 @@ fn ac_r6_a_walk_gap_or_a_refused_config_is_a_503_never_a_document() {
         beyond_daemon(&home).is_empty(),
         "{:?}",
         beyond_daemon(&home)
+    );
+}
+
+/// code-a's `[code] roots` line, as the fixture writes it.
+const CODE_ROOTS: &str = "roots   = [\"crates\", \"data\", \"tools/loose.rs\"]";
+
+/// docs/features/health-code.md RD-10 (WA-9, "Route and HTTP"): on a git
+/// copy of `fixtures/code-a` with a rule on its laws, the route's body is
+/// `spec --root R health --json`'s bytes (another `HOME`) with rows 4-5
+/// measured. A code walk gap (`lib.rs` mode 000) and a bad `[code]`
+/// (`roots` a string), each made after the start, keep it a 200, the
+/// CLI's bytes, rows 4-5 `cannot` with no count, `code` null, row 3
+/// measured; restored, measured again. Beyond the daemon's own files the
+/// data directory holds the slug's DB alone. M: `cannot` as a 503.
+#[test]
+fn a_row_that_cannot_be_measured_is_still_a_200() {
+    let scratch = Scratch::new("health-code-route");
+    let config = format!(
+        "{}\n[[health.bound]]\nkinds = [\"law\"]\n",
+        read_text(&common::fixture("code-a"), "specengine.toml")
+    );
+    assert!(config.contains(CODE_ROOTS), "{config}");
+    let code = variant(
+        &scratch,
+        "code-a",
+        "code",
+        None,
+        &[("specengine.toml", config.as_str())],
+    );
+    let home = scratch.home("fresh");
+    let cli_home = scratch.home("cli");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&code]);
+    let path = "/api/projects/code-a/health";
+    let measured = |context: &str| {
+        let reply = server.get(path);
+        assert_eq!(reply.status, 200, "{context}: {}", reply.text());
+        assert_eq!(
+            reply.text(),
+            cli_health(&cli_home, &cwd, &code).document(),
+            "{context}: the CLI's bytes"
+        );
+        let document = reply.json();
+        for row in ["assumes", "unbound"] {
+            assert_eq!(document[row]["state"], "measured", "{context}: {row}");
+        }
+        assert!(document["code"].is_object(), "{context}");
+        assert_plain(&reply, context);
+    };
+    measured("measured");
+
+    let cannot = |context: &str| {
+        for _ in 0..2 {
+            let reply = server.get(path);
+            assert_eq!(reply.status, 200, "{context}: no 503: {}", reply.text());
+            assert_eq!(
+                reply.text(),
+                cli_health(&cli_home, &cwd, &code).document(),
+                "{context}: the CLI's bytes"
+            );
+            let document = reply.json();
+            for row in ["assumes", "unbound"] {
+                assert_eq!(document[row]["state"], "cannot", "{context}: {row}");
+                assert!(document[row]["counts"].is_null(), "{context}: {row}");
+                assert!(document[row]["rows"].is_null(), "{context}: {row}");
+                assert_eq!(
+                    document[row]["causes"].as_array().map(Vec::len),
+                    Some(1),
+                    "{context}: {row}"
+                );
+            }
+            assert!(document["code"].is_null(), "{context}");
+            assert!(
+                document["documents"]
+                    .as_u64()
+                    .is_some_and(|count| count > 0),
+                "{context}: row 3 measured"
+            );
+            assert_plain(&reply, context);
+        }
+    };
+
+    // A code walk gap after the start.
+    let lib = code.join("crates/tally/src/lib.rs");
+    fs::set_permissions(&lib, fs::Permissions::from_mode(0o000)).expect("chmod 000");
+    cannot("a code walk gap");
+    fs::set_permissions(&lib, fs::Permissions::from_mode(0o644)).expect("chmod 644");
+    measured("readable again");
+
+    // A bad `[code]` after the start.
+    write(
+        &code,
+        "specengine.toml",
+        config.replace(CODE_ROOTS, "roots   = \"crates\""),
+    );
+    cannot("a bad [code]");
+    write(&code, "specengine.toml", &config);
+    measured("restored");
+
+    let written = beyond_daemon(&home);
+    assert!(!written.is_empty(), "the route refreshed the code index");
+    assert!(
+        written.iter().all(|entry| entry.contains("code-a.db")),
+        "the slug's DB alone: {written:?}"
     );
 }

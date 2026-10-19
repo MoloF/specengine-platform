@@ -41,6 +41,8 @@
 //! - [`unapplied_amendments`] — the live documents that amend a node (task
 //!   spec `health-left`), and the files whose front-matter does not read,
 //!   not judged: a read, never a finding;
+//! - [`bound_candidates`] — the nodes each `[[health.bound]]` rule selects
+//!   (task spec `health-code`, row 5): a read, never a finding;
 //! - [`worst_w`] — the worst-case working set W (§3), reported in the
 //!   summary and `counts.worst_w_bytes`, never a finding;
 //! - the rules: parser diagnostics through [`PARSER_SEVERITY`], class
@@ -67,6 +69,7 @@ pub mod config;
 mod engine;
 mod generated;
 mod graph;
+mod health;
 pub mod input;
 mod links;
 mod render;
@@ -90,6 +93,7 @@ pub use config::{
 };
 pub use engine::{PARSER_SEVERITY, add_findings, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
+pub use health::{BoundCandidate, bound_candidates};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, render_index_set};
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};

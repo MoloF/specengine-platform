@@ -25,7 +25,7 @@ Slice 9 split (Q1): 9a `health-code.md` (rows 4-5, the rule table, the document'
 
 ### `drift`
 
-WA-8, Q7. A row of 9a's shape (`health-code.md` "The document"), its `rows` and `counts` from plain `spec verify --json` (`docs/canon/spec-verify-output.md` "JSON"), plus `notes`:
+WA-8, Q7. A row of 9a's shape (`docs/canon/health-code.md` "Document"), its `rows` and `counts` from plain `spec verify --json` (`docs/canon/spec-verify-output.md` "JSON"), plus `notes`:
 
 ```json
 "drift":{"state":"measured","causes":[],
@@ -139,7 +139,7 @@ WA-n: the analysis' working answers (2026-10-10), [A] assumed: WA-1, -2, -3 (git
 ## Dependencies and ordering
 
 - **Needs**: 9a-1 and 9a-2 (row shape, parts; the walk: "One walk"' note); slice 3 `spec-lock` (lock reader); 4a `spec-verify` (the judge, run causes). Soft: 8b (`tested`).
-- **Row 5** aligned with 6a-3's X3 at 9a's refresh (2026-10-16): a `cannot_verify` marker binds nothing (`health-code.md` "What binds").
+- **Row 5** aligned with 6a-3's X3 at 9a's refresh (2026-10-16): a `cannot_verify` marker binds nothing (`docs/canon/health-code.md` "Row 5: unbound").
 - **Order**: 1 -> 3 -> 4a -> … -> 9b, after 9a; independent of 4b, 4c, 6, 7. 5b, 5c reach row 6 through verify (label map: unknown words raw). **Later**: Phase 4's drift screens.
 
 ## Implementation

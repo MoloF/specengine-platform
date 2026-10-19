@@ -175,7 +175,7 @@ Following a rename and telling copies apart takes three fingerprints, not one (c
 | no | yes | `code_ahead` | a `drift` item: approve accepts the code (lock) or reject (`--follow-up code`: a task to fix the code; `--follow-up spec`: a task to propose a spec edit) |
 | yes | yes | `conflict` | UI: spec-section and symbol-span diffs since `lock.commit`, side by side |
 | — | symbol not found | `broken_binding` | marker removed or symbol renamed; a `drift` item, its approve locking what accept finds |
-| node accepted, no bindings | | `unbound` | visible on the "what's left" panel |
+| node accepted, no bindings | | `unbound` | `spec health` row 5, the nodes `[[health.bound]]` selects (`docs/canon/health-code.md`) |
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
 | unparseable / symbol ambiguous | | `cannot_verify` | **never counted as `ok`**; shown separately |
 
@@ -200,7 +200,7 @@ Computed, shown in the UI and the context bundle. The answer to "agents get thei
 | 5 | prose only |
 | — | `non_verifiable`: the node is explicitly marked unverifiable (procedural principle, lore) |
 
-The coverage requirement is set **on the node**, not globally (OpenFastTrace `Needs:`): `needs: [impl, test]` on an invariant, `needs: []` on an explanation.
+The coverage requirement is set **on the node**, not globally (OpenFastTrace `Needs:`): `needs: [impl, test]` on an invariant, `needs: []` on an explanation. Not built: Health's row 5 selects by the project's `[[health.bound]]` rules (`docs/canon/health-code.md`).
 
 ## 6. Context bundle (`get_context_bundle`)
 
@@ -215,7 +215,7 @@ The full scenario is in `06-workflows.md`. The engine invariants:
 3. **Deduplication** against accepted decisions and the queue: re-asking a settled question is the most expensive noise in the queue (canon `agent-intake`).
 4. `approve` calls `apply_proposal` (`docs/canon/proposal-apply.md`; a question or discrepancy: a decision record, `decision-apply`): applied where raised (ADR-0004, ADR-0032), one commit `spec: apply PR-0042` with provenance (ADR-0005); revisions: `docs/canon/proposal-revisions.md`.
 5. **Nothing blocks** (ADR-0012): several proposals may be open on a node; on apply each rebases from its `base_hash` by three-way merge, a conflict refused with its text (shipped; resolving it in a UI diff: later). The only control point is **task approval by the owner**: `claim_task` from MCP hands out only `ready`, and `ready` is set by a human.
-6. **Reconciliation with the working answer**: agent code written before the decision carries `// @assumes PR-…`; a decision diverging from the working answer creates a follow-up task.
+6. **Reconciliation with the working answer**: agent code written before the decision carries `// @assumes PR-…`; a decision diverging from the working answer creates a follow-up task (not built: `spec health` row 4 lists each such marker, `docs/canon/health-code.md`).
 7. **Task staleness** (`docs/canon/task-package.md`): a `spec_snapshot` node changed in the compared place sets an informational `stale` per read, with the diff; its own proposals applied there refresh the snapshot.
 
 ## 8. Operational-state reliability

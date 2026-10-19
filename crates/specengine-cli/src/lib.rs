@@ -53,6 +53,8 @@
 //!   each giving its outcome or a [`CliError`];
 //! - [`health`]: the working tree's unapplied amendments (live documents
 //!   that name a node they amend) over the walk `check` reads, no index;
+//!   then rows 4-5 ([`CodeRows`]: `@assumes` and queue markers, unbound
+//!   nodes) over the code index the call refreshes, as `refs` reads it;
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
 //! - [`tree_with_view`], [`show_with_view`], [`search_with_view`],
@@ -178,6 +180,7 @@ mod follow_up;
 mod gate;
 mod graph;
 mod health;
+mod health_code;
 mod inbox;
 mod init;
 mod intake;
@@ -251,6 +254,10 @@ pub use graph::{
     FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
 };
 pub use health::{HealthOutcome, UnappliedAmendment, health};
+pub use health_code::{
+    AssumedNode, AssumedProposal, AssumedState, AssumesCounts, AssumesRow, CodeRow, CodeRows,
+    RowState, UnboundCounts, UnboundMarker, UnboundRow,
+};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use intake::{
@@ -624,6 +631,10 @@ impl Outcome {
             && let Some(error) = &outcome.code_error
         {
             lines.push(one_line(error));
+        }
+        // Health's rows 4-5: the refreshes' notes, a `cannot` row's causes.
+        if let Self::Health(outcome) = self {
+            lines.extend(outcome.code_rows.messages.iter().map(Message::line));
         }
         // The queue's commands quote agent-written text.
         // So do the lock's commands: a path, a `qpath`, an ID.

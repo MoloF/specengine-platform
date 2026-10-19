@@ -294,12 +294,15 @@ pub(crate) fn stored_count(stored: &CodeRefs, skipped: usize) -> CodeCount {
 pub(crate) fn code_config(project: &ProjectRoot, text: &str) -> Result<CodeConfig, CliError> {
     CodeConfig::from_toml(text)
         .map_err(|error| config_error(&project.config_label, &error))?
-        .ok_or_else(|| {
-            CliError::spec(format!(
-                "{} has no [code] table: the code layer is off (add [code] with roots)",
-                project.config_label
-            ))
-        })
+        .ok_or_else(|| no_code_table(&project.config_label))
+}
+
+/// `config_label` has no `[code]` table: the code layer is off (`spec
+/// health`'s rows 4-5 `off` give its sentence as their cause).
+pub(crate) fn no_code_table(config_label: &str) -> CliError {
+    CliError::spec(format!(
+        "{config_label} has no [code] table: the code layer is off (add [code] with roots)"
+    ))
 }
 
 /// Exit 1: the reason on one line.
@@ -601,6 +604,22 @@ impl<'a> Corpus<'a> {
         }
     }
 
+    /// The 1-based line a node's span starts on (the header's line; `spec
+    /// health` places its rows' nodes by it too).
+    pub(crate) fn node_line(&self, key: NodeKey) -> usize {
+        let file = self.files[key.file];
+        let start = file
+            .parsed
+            .as_ref()
+            .and_then(|parsed| parsed.nodes.get(key.ord))
+            .map_or(0, |node| node.span.start);
+        file.bytes[..start.min(file.bytes.len())]
+            .iter()
+            .filter(|&&byte| byte == b'\n')
+            .count()
+            + 1
+    }
+
     /// The block of a node, its rows sorted.
     fn node(&self, key: NodeKey, block: Block) -> RefsNode {
         let file = self.files[key.file];
@@ -608,12 +627,7 @@ impl<'a> Corpus<'a> {
             .parsed
             .as_ref()
             .and_then(|parsed| parsed.nodes.get(key.ord));
-        let start = node.map_or(0, |node| node.span.start);
-        let line = file.bytes[..start.min(file.bytes.len())]
-            .iter()
-            .filter(|&&byte| byte == b'\n')
-            .count()
-            + 1;
+        let line = self.node_line(key);
         let revision = self.revision(key);
         let Block {
             mut markers,

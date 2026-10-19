@@ -38,7 +38,7 @@ use crate::project::discover_with_text;
 use crate::refs::{CodeCount, Corpus, code_config, stored_count};
 use crate::search::notes;
 use crate::show::unclean_path;
-use crate::symbols::{Place, is_read, place};
+use crate::symbols::{Place, is_read, maps, place};
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// `spec unmapped` options.
@@ -341,8 +341,7 @@ impl<'s> Coverage<'s> {
         // Per file, what its mapping markers and its mentions reach.
         let mut mapping: BTreeMap<&str, Seeds> = BTreeMap::new();
         for marker in &stored.markers {
-            let seed = place(&marker.binding)?;
-            if corpus.judge(&marker.id).state.names_nodes() {
+            if let Some(seed) = maps(marker, &corpus.judge(&marker.id))? {
                 mapping.entry(marker.path.as_str()).or_default().add(seed);
             }
         }

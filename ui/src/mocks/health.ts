@@ -1,4 +1,4 @@
-import type { HealthReport, ShownLink, UnappliedAmendment } from "../api/types";
+import type { HealthAssumes, HealthReport, HealthUnbound, ShownLink, UnappliedAmendment } from "../api/types";
 import { DEEP_BERTH_FILE, QUAY_DECISION_FILE } from "./harbor-sim/fixtures";
 import type { Scenario } from "./scenario";
 
@@ -9,7 +9,8 @@ import type { Scenario } from "./scenario";
 // lists them (src/mocks/health.test.ts holds the two to that); ledger-api none. empty: none. large: harbor-sim 3 000 by path. cannot-check: a 503, the walk incomplete
 // (both reads walk one tree, so the first gap of the check's causes). `documents` is the check's
 // `counts.documents` for the same project and scenario (src/mocks/check.ts). `error` and `slow`
-// act in the client, as for every read.
+// act in the client, as for every read. Rows 4-5 (docs/features/health-code.md "Data"): `off` in
+// every scenario, no `[code]` table, `code` null; their real mocks are health-code-ui's.
 
 const HARBOR = "harbor-sim";
 
@@ -118,11 +119,19 @@ export function walkGapMessage(project: string): string {
   return `spec: the walk is incomplete: ${gap}: unapplied amendments not measured`;
 }
 
+/** Why rows 4-5 are `off`: code-refs' sentence for a config with no `[code]` table, less `spec: ` (docs/features/health-code.md "Failures and exits"). */
+export const CODE_OFF_CAUSE = "specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+
+/** Row 4 or 5 not measured, the code layer off: its cause, no counts, no rows (both rows share the shape). */
+function codeRowOff(): HealthAssumes & HealthUnbound {
+  return { state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null };
+}
+
 /** The report `spec health --json` gives for `project` in `scenario` (`cannot-check`, `error` and `slow` act in the client). */
 export function healthReportOf(project: string, scenario: Scenario): HealthReport {
   let amendments: UnappliedAmendment[] = [];
   if (project === HARBOR && scenario !== "empty") {
     amendments = scenario === "large" ? largeAmendments() : harborAmendments();
   }
-  return { documents: documentsOf(project, scenario), amendments, notes: [] };
+  return { documents: documentsOf(project, scenario), amendments, notes: [], code: null, assumes: codeRowOff(), unbound: codeRowOff() };
 }

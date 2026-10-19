@@ -300,6 +300,8 @@ struct RawFile {
     code: Option<IgnoredAny>,
     #[serde(default)]
     verify: Option<IgnoredAny>,
+    #[serde(default)]
+    health: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.
