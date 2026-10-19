@@ -103,6 +103,7 @@ mod dump;
 mod error;
 mod git;
 mod index;
+mod layer_c;
 mod queue;
 mod read;
 mod roles;
@@ -136,6 +137,9 @@ pub use code::{
 pub use error::StoreError;
 pub use git::{GitEnv, same_dir};
 pub use index::{DbSettings, SqliteIndex};
+pub use layer_c::{
+    CodeTreeFile, CodeTreeRows, LayerCFile, LayerCItem, LayerCSnapshot, LayerCStamp,
+};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, DriftItem, DriftResult,
     EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED,
@@ -209,7 +213,13 @@ pub use worktree::{
 /// `code_roles_by_subject_name`), a file's framework role rows
 /// ([`CodeRoleRow`]), created with the schema in every DB
 /// (`docs/canon/code-roles.md` "Table").
-pub const INDEX_FORMAT: u32 = 10;
+///
+/// 11: the layer C snapshot `code_resolve`, `code_resolve_files`,
+/// `code_monikers` (and its index `code_monikers_by_moniker`), created
+/// with the schema in every DB, written only by `spec resolve`
+/// ([`SqliteIndex::replace_layer_c`]; `docs/features/layer-c-resolve.md`
+/// "Tables").
+pub const INDEX_FORMAT: u32 = 11;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

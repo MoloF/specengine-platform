@@ -39,9 +39,9 @@ use specengine_code::{
 };
 
 use code_index_common::{
-    CODE_A, CODE_TABLES, ECS, FIXTURE, SLUG, code_files, code_line, code_lines, copy, count,
-    counts_of, db, dump, execute, expected, fresh_dump, fresh_dump_with_exit, index, md_lines,
-    query, refs_rows, suffixes, symbols, table_names, with_code_table,
+    CODE_A, CODE_TABLES, ECS, FIXTURE, LAYER_C_TABLES, SLUG, code_files, code_line, code_lines,
+    copy, count, counts_of, db, dump, execute, expected, fresh_dump, fresh_dump_with_exit, index,
+    md_lines, query, refs_rows, suffixes, symbols, table_names, with_code_table,
 };
 use common::{Scratch, read_text, spec, write};
 
@@ -429,6 +429,11 @@ fn index_on_spec_c_prints_no_code_line() {
 /// the code ones too (each stale column gone), re-derives the code rows
 /// and ends equal to a fresh index; the queue's proposal, events, task and
 /// stage stay byte for byte; `--full` keeps them too.
+/// docs/features/layer-c-resolve.md R7: the three layer C snapshot tables
+/// (`LAYER_C_TABLES`) are in `FORMAT_TABLES` too, each given the stale
+/// column and wanted recreated. M: one of them outside `FORMAT_TABLES`.
+/// (The snapshot dropped by the change: `layer_c.rs`
+/// `format_change_drops_the_snapshot`.)
 #[test]
 fn format_change_recreates_code_tables_and_keeps_queue_rows() {
     use specengine_core::proposal::Author;
@@ -509,7 +514,12 @@ fn format_change_recreates_code_tables_and_keeps_queue_rows() {
     let queue_dump = queue.dump().expect("queue dump");
     drop(queue);
 
-    let stale: Vec<String> = CODE_TABLES
+    let recreated: Vec<&str> = CODE_TABLES
+        .iter()
+        .chain(LAYER_C_TABLES.iter())
+        .copied()
+        .collect();
+    let stale: Vec<String> = recreated
         .iter()
         .map(|table| {
             format!("ALTER TABLE {table} ADD COLUMN stale_of_an_older_build INTEGER DEFAULT 7;")
@@ -526,7 +536,7 @@ fn format_change_recreates_code_tables_and_keeps_queue_rows() {
     run.code(0);
     let counts = counts_of(&run);
     assert_eq!(counts["parsed"], counts["walked"], "{}", run.show());
-    for table in CODE_TABLES {
+    for table in &recreated {
         let columns = query(
             &db,
             &format!(

@@ -59,7 +59,7 @@ One at a time: `process_group(0)`, cwd the root, stdin null, `env_clear` + `Work
 - Exit seen unreaped (`waitid` `WNOWAIT`, every 10 ms), the group `SIGKILL`ed, then the reap: a signalled group ID is never reused; the pipe read to EOF or 5 s. Overrun from spawn: `SIGTERM` to the group, 5 s, `SIGKILL`.
 - Steps 8-9 only: `SIGINT`, `SIGTERM`, `SIGHUP` (a `sigaction` flag) go to the group as that escalation: `interrupted`.
 - A leader that cannot be waited on (`waitid` and `try_wait` failing): `cannot start`, unless a stop is under way (its cause wins); its pid is never signalled.
-- `libc` `killpg`, `sigaction`, `waitid`: the CLI's only `unsafe`, a `// SAFETY:` each.
+- `libc` `killpg`, `sigaction`, `waitid`: the CLI's only `unsafe`, a `// SAFETY:` each, in `group.rs`, the core `spec resolve` shares (`layer-c.md`; its wait adds the caller's stop as a third trigger).
 
 ## Verdicts and event
 

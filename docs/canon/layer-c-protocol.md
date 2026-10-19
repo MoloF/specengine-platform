@@ -8,7 +8,7 @@ reviewed: 2026-10-19
 
 # Layer C protocol v1: the `specengine-ra` executable
 
-rust-analyzer (`ra_ap_*` =0.0.352) runs only in the executable `specengine-ra` (`crates/specengine-ra`, `[[bin]]` `src/main.rs`, outside `default-members`): a pure function of one request and the disk, protocol v1 on stdin and stdout (ADR-0049; the rule: `architecture-code.md#code-identity`). It runs no build script, proc macro or `cargo check` and writes nothing under the request's root. Its one caller is to be `spec resolve` (`docs/features/layer-c-resolve.md`, not built); nothing else spawns it. The library under it: `crates/specengine-ra/README.md`.
+rust-analyzer (`ra_ap_*` =0.0.352) runs only in the executable `specengine-ra` (`crates/specengine-ra`, `[[bin]]` `src/main.rs`, outside `default-members`): a pure function of one request and the disk, protocol v1 on stdin and stdout (ADR-0049; the rule: `architecture-code.md#code-identity`). It runs no build script, proc macro or `cargo check` and writes nothing under the request's root. Only `spec resolve` spawns it (`layer-c.md`). The library under it: `crates/specengine-ra/README.md`.
 
 ## Run
 
@@ -75,7 +75,7 @@ JSON lines on stdout, key `t` first, each written whole and flushed. ra-mini, ab
 
 - `error` `category`: `metadata` (the manifest, `cargo metadata`, toolchain queries, or a rust-analyzer panic while discovering); `database` (the load, or a rust-analyzer panic while loading or scanning a file); `path` (a requested file unreadable or not UTF-8: the first in request order within the first workspace, in manifest-directory order, that has one; files under no manifest last; or a path rust-analyzer cannot take); `build_scripts` is never written (no build script runs). `workspace` is the failing workspace's number, after its steps: all its requested files are read before any is scanned, so a bad module file is `path` even after a sibling. 0 for a file under no manifest: right after `hello` when no requested file has a manifest, else after every workspace's steps. Every text (`LoadError`, panic, I/O) goes to stderr only: it may name paths.
 - `refused`: no cargo or rustc has run, nothing under the root was written; `protocol` is the binary's own.
-- Exit 3: a watchdog fired, or stdout closed (EPIPE), while the binary does not lead its group; or the analysis thread failed outside a guarded step. Leading its group, a watchdog or a closed stdout ends in `kill(0, SIGKILL)`: death by signal. Known limit: on macOS that kill can land after `kill` returns, so the binary may end with exit 3 instead; the group is gone either way (fixed in 11a-2). Once `done` or `error` is written, a firing watchdog exits with that line's code, 0 or 1, silently, and kills nothing; while it is being written (a mark set before its first byte), the watchdog waits up to 1 s, then ends the run as before.
+- Exit 3: a watchdog fired, or stdout closed (EPIPE), while the binary does not lead its group; or the analysis thread failed outside a guarded step. Leading its group, a watchdog or a closed stdout ends in `kill(0, SIGKILL)`, the thread then parked, never exiting: death by signal. Once `done` or `error` is written, a firing watchdog exits with that line's code, 0 or 1, silently, and kills nothing; while it is being written (a mark set before its first byte), the watchdog waits up to 1 s, then ends the run as before.
 
 ## Environment
 

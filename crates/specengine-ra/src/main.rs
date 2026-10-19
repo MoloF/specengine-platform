@@ -8,7 +8,8 @@
 //! request, before anything is discovered). Outside the protocol: 3 when a
 //! watchdog or a closed stdout ends a run that does not lead its process
 //! group, or on an internal failure; no line is written then, the reason
-//! goes to stderr.
+//! goes to stderr. A run that leads its group ends there by its group's
+//! `SIGKILL`, never by an exit.
 //!
 //! Its caller (`spec resolve`) spawns it as a process group of its own and
 //! keeps stdin open. Two watchdogs then end the whole group, cargo and rustc
@@ -166,6 +167,11 @@ fn start_watchdogs(started: Instant, budget: Duration) {
 /// alone. One write, so the stderr line is whole or absent. After the last
 /// line (`done` or `error`) the run has already ended: the process exits
 /// with that line's code, silently, and kills nothing.
+///
+/// A leader never exits after its group `SIGKILL`: the signal may land
+/// after `kill` returns (on macOS an `exit` can beat it, ending with exit 3
+/// instead of the signal), so the calling thread parks until the signal
+/// takes the process with its group.
 fn terminate(reason: &str) -> ! {
     if let Some(ending) = reply::last_line(LAST_LINE_PATIENCE) {
         std::process::exit(i32::from(ending.exit_code()));
@@ -180,6 +186,9 @@ fn terminate(reason: &str) -> ! {
     let _ = io::stderr().write_all(line.as_bytes());
     if leads {
         sys::kill_own_group();
+        loop {
+            thread::park();
+        }
     }
     std::process::exit(i32::from(EXIT_OUTSIDE_PROTOCOL))
 }

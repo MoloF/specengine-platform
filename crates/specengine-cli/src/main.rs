@@ -38,7 +38,7 @@ use specengine_cli::{
     GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest,
     InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
     LockAcceptRequest, LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText,
-    QuestionRequest, RefsRequest, RejectRequest, ReviewRequest, RoundAnswerRequest,
+    QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoundAnswerRequest,
     RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
     SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
     TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
@@ -204,6 +204,12 @@ enum Command {
         /// A `[code]` root, or a directory or code file under one (default: a row per root).
         #[arg(value_name = "PATH")]
         path: Option<String>,
+    },
+    /// Resolve the code tree's items with rust-analyzer through the `specengine-ra` executable (beside spec or on PATH; one cold load) and store its answers as the worktree's advisory layer C snapshot, outside the project; prints the counts and the run's timings. Exit 0 stored, 2 when it cannot run, the binary is missing, fails, refuses, overruns or is interrupted, or the tree changed during the run (the previous snapshot is kept).
+    Resolve {
+        /// The run's budget in seconds, 1 to 3600: past it the run's process group is stopped.
+        #[arg(long, value_name = "S", default_value_t = specengine_cli::RESOLVE_TIMEOUT_DEFAULT, value_parser = clap::value_parser!(u64).range(specengine_cli::RESOLVE_TIMEOUT_MIN..=specengine_cli::RESOLVE_TIMEOUT_MAX))]
+        timeout: u64,
     },
     /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode. With --tests: run the tests `@verifies` binds through the project's `[verify] tests` command, on a terminal after one [y/N], over a clean committed tree; exit 0 verified, 1 not verified, 2 refused, interrupted or when it cannot run.
     Verify {
@@ -906,6 +912,15 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             env,
             globals,
             &UnmappedRequest { path },
+        )?)),
+        Command::Resolve { timeout } => Outcome::Resolve(Box::new(specengine_cli::resolve(
+            env,
+            globals,
+            &ResolveRequest {
+                timeout,
+                spec_path: std::env::current_exe().ok(),
+                path: std::env::var_os("PATH"),
+            },
         )?)),
         Command::Verify {
             tests: true, task, ..

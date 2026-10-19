@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-code, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-16
+reviewed: 2026-10-19
 ---
 
 # Code bindings: `[code]`, markers bound to code, `spec refs`
@@ -20,7 +20,7 @@ frameworks = ["bevy"]                                       # optional: docs/can
 ```
 
 - **No table: the code layer is off**, no default root (ADR-0008). `spec refs` then exits 2 with exactly `spec: <config> has no [code] table: the code layer is off (add [code] with roots)`, `<config>` as given (`specengine.toml` or `--config`'s).
-- **Closed**, read by `CodeConfig::from_toml` only where code is read (`ProjectConfig` only name-checks `code`: a bad table fails no other command). Refused at the key's line, `<config>:<line>: message`, exit 2: `languages`, `crates`, `scip` (07 s5, reserved, "is not built"); any other key, `bevy` too (``… `[code]` has no key `<key>`: it takes `roots` and `exclude` and `frameworks` only``); a wrong type; `roots` missing or empty; a path not `is_clean_relative`, as `[paths]` (one trailing `/` and repeats dropped); a glob outside the `[paths] exclude` dialect (`*`, `**`, `?`; `[ ] { } \` refused; `docs/canon/gate.md` "Config"). `frameworks`: framework names whose item roles the code index stores, its shape checked here, its values against `specengine-code`'s list (`code-roles.md` "`[code] frameworks`").
+- **Closed**, read by `CodeConfig::from_toml` only where code is read (`ProjectConfig` only name-checks `code`: a bad table fails no other command). Refused at the key's line, `<config>:<line>: message`, exit 2: `languages`, `crates` (07 s5, reserved, "is not built"); any other key, `bevy` and the retired `scip` too (``… `[code]` has no key `<key>`: it takes `roots` and `exclude` and `frameworks` only``); a wrong type; `roots` missing or empty; a path not `is_clean_relative`, as `[paths]` (one trailing `/` and repeats dropped); a glob outside the `[paths] exclude` dialect (`*`, `**`, `?`; `[ ] { } \` refused; `docs/canon/gate.md` "Config"). `frameworks`: framework names whose item roles the code index stores, its shape checked here, its values against `specengine-code`'s list (`code-roles.md` "`[code] frameworks`").
 - A root is a directory or a `.rs`/`.ron` file, looked up by exact name per component: missing (a symlink on the way too) -> `note: [code] root <path> does not exist`; another file -> `note: [code] root <path> is not a .rs or .ron file`; neither contributes.
 
 ## The walk

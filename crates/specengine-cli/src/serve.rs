@@ -259,7 +259,19 @@ fn roots(
 /// holding an executable regular file of that name (an empty entry
 /// skipped).
 fn find_daemon(spec_path: Option<&Path>, path: Option<&OsStr>) -> Option<PathBuf> {
-    let name = format!("{DAEMON_BIN}{}", std::env::consts::EXE_SUFFIX);
+    find_beside_or_on_path(DAEMON_BIN, spec_path, path)
+}
+
+/// The executable `binary` (the platform's suffix added) beside
+/// `spec_path`, else in the first `PATH` entry holding an executable
+/// regular file of that name (an empty entry skipped): the launcher's
+/// lookup, `spec resolve`'s too.
+pub(crate) fn find_beside_or_on_path(
+    binary: &str,
+    spec_path: Option<&Path>,
+    path: Option<&OsStr>,
+) -> Option<PathBuf> {
+    let name = format!("{binary}{}", std::env::consts::EXE_SUFFIX);
     let beside = spec_path.and_then(Path::parent).map(|dir| dir.join(&name));
     let on_path = path
         .into_iter()

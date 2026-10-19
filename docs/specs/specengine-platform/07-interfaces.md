@@ -108,7 +108,7 @@ spec bump [--staged] [--json]                       # read-only: nodes to raise 
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md
 spec lock regen                                     # a merge conflicting in spec.lock: docs/canon/spec-lock.md
 spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/gate.md
-spec resolve [--timeout S] [--json]                 # layer C on request (draft 2026-10-10, split 2026-10-19: docs/features/layer-c-resolve.md, ADR-0049)
+spec resolve [--timeout S] [--json]                 # layer C on request (shipped: docs/canon/layer-c.md, ADR-0049)
 
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
@@ -206,7 +206,7 @@ zones = ["code"]            # min_files, contours: later
 languages = ["rust", "ron"]
 crates = "cargo-metadata"    # refused, not built: only if 6a-2's TE-8 roles differ (docs/features/symbol-index.md Q2)
 frameworks = ["bevy"]       # built: docs/canon/code-roles.md (opt-in role facts; `bevy = true` is an unknown key)
-scip = false                # retired 2026-10-10 (ADR-0049): no key; layer C is `spec resolve` (docs/features/layer-c-resolve.md)
+scip = false                # retired (ADR-0049): an unknown key; layer C is `spec resolve` (docs/canon/layer-c.md)
 
 [verify]                    # built: docs/canon/spec-verify.md (mode), docs/canon/spec-verify-tests.md (tests, timeout)
 mode = "observe"            # observe | enforce-introduced | enforce

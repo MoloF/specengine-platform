@@ -129,6 +129,10 @@
 //!   directory and code file), read from the code index; for the bridges
 //!   with [`SymbolsForm`] and [`SYMBOLS_LIMIT_MIN`], [`SYMBOLS_LIMIT_MAX`],
 //!   [`SYMBOLS_LIMIT_DEFAULT`], [`symbols_limit_error`], no clap;
+//! - [`resolve`]: `spec resolve` (task spec `layer-c-resolve`), the one
+//!   command that spawns the layer C executable (Unix only), its reply
+//!   checked and stored as the worktree's advisory snapshot after `done`
+//!   over an unchanged tree; [`layer_c_state`] that snapshot's freshness;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
 //!   `refs`, `symbols`),
 //!   blocked (`check`, `verify`) or refused by the proposal or its target
@@ -150,10 +154,11 @@
 //! lock regen`, which writes only `spec.lock` (canon `spec-lock`,
 //! "Travel and writes"); `index`, `verify`, `refs`, `symbols`, `unmapped`,
 //! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
-//! `review`, `reject`, `import-state` and `round new` write only the data
-//! directory (`propose question`, `discrepancy` and `decision` too), `export
-//! state` only its dump (never inside the worktree), `check`, `health` and
-//! `serve` nothing (the daemon `serve` execs writes its data directory).
+//! `review`, `reject`, `import-state`, `round new` and `resolve` write only
+//! the data directory (`propose question`, `discrepancy` and `decision`
+//! too), `export state` only its dump (never inside the worktree), `check`,
+//! `health` and `serve` nothing (the daemon `serve` execs writes its data
+//! directory).
 //! Nothing found in the corpus is fatal to the indexed reads (`search`,
 //! `show`, `tree`, `graph`, `bundle`): broken or unreadable files are
 //! indexed with their diagnostics and never change their exit code. The
@@ -179,12 +184,19 @@ mod export;
 mod follow_up;
 mod gate;
 mod graph;
+#[cfg(unix)]
+mod group;
 mod health;
 mod health_code;
 mod inbox;
 mod init;
 mod intake;
 mod interpret;
+mod layer_c;
+#[cfg(unix)]
+mod layer_c_reply;
+#[cfg(unix)]
+mod layer_c_run;
 mod links;
 mod location;
 mod lock;
@@ -268,6 +280,10 @@ pub use intake::{
     read_decision_input, read_discrepancy_input,
 };
 pub use interpret::{InterpretRequest, propose_interpretation, propose_interpretation_brief};
+pub use layer_c::{
+    LayerCState, RESOLVE_TIMEOUT_DEFAULT, RESOLVE_TIMEOUT_MAX, RESOLVE_TIMEOUT_MIN, ResolveByState,
+    ResolveOutcome, ResolveRequest, ResolvedWorkspace, layer_c_state, resolve,
+};
 pub use links::{ShownLink, ShownLinks};
 pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir};
 pub use lock::{
@@ -511,6 +527,8 @@ pub enum Outcome {
     Symbols(Box<SymbolsOutcome>),
     /// `unmapped`: how much of the code the spec maps.
     Unmapped(Box<UnmappedOutcome>),
+    /// `resolve`: the layer C snapshot stored, and its figures.
+    Resolve(Box<ResolveOutcome>),
     /// `lock accept`: the node's entries of `spec.lock`, committed.
     Lock(Box<LockOutcome>),
     /// `lock regen`: a conflict's stages of `spec.lock` merged.
@@ -599,6 +617,7 @@ impl Outcome {
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Symbols(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Unmapped(outcome) => (&outcome.messages, None),
+            Self::Resolve(outcome) => (&outcome.messages, None),
             Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::LockRegen(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Verify(outcome) => (&outcome.messages, None),
@@ -683,6 +702,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Symbols(outcome) => symbols::render_text(outcome),
         Outcome::Unmapped(outcome) => unmapped::render_text(outcome),
+        Outcome::Resolve(outcome) => layer_c::render_text(outcome),
         Outcome::Lock(outcome) => lock::render_text(outcome),
         Outcome::LockRegen(outcome) => lock_regen::render_text(outcome),
         Outcome::Verify(outcome) => verify::render_text(outcome),
@@ -722,6 +742,7 @@ impl serde::Serialize for Outcome {
             Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Symbols(outcome) => outcome.serialize(serializer),
             Self::Unmapped(outcome) => outcome.serialize(serializer),
+            Self::Resolve(outcome) => outcome.serialize(serializer),
             Self::Lock(outcome) => outcome.serialize(serializer),
             Self::LockRegen(outcome) => outcome.serialize(serializer),
             Self::Verify(outcome) => outcome.serialize(serializer),

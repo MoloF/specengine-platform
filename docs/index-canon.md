@@ -35,6 +35,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2
 - [docs/canon/import.md](canon/import.md) Import: record model and rules · crates/specengine-import · tier 2
 - [docs/canon/layer-c-protocol.md](canon/layer-c-protocol.md) Layer C protocol v1: the specengine-ra executable · crates/specengine-ra, crates/specengine-code · tier 2
+- [docs/canon/layer-c.md](canon/layer-c.md) Layer C: spec resolve and the advisory snapshot · crates/specengine-cli, crates/specengine-store, crates/specengine-code · tier 2
 - [docs/canon/mcp-code.md](canon/mcp-code.md) MCP code tools: find_symbols, refs, unmapped · crates/specengine-mcp, crates/specengine-cli · tier 2
 - [docs/canon/mcp-read.md](canon/mcp-read.md) MCP read tools and resources · crates/specengine-mcp, crates/specengine-cli · tier 2
 - [docs/canon/node-revision.md](canon/node-revision.md) Node revision and meaning hash · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2

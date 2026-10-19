@@ -8,8 +8,8 @@
 //! - **Off**: no table, no default root (ADR-0008).
 //! - **Closed**: `roots` (required, a non-empty list), `exclude` and
 //!   `frameworks` (optional), lists of strings. Another key is an error at
-//!   its line (07 s5's `languages`, `crates`, `scip` named as not built), a
-//!   wrong type too.
+//!   its line (07 s5's `languages`, `crates` named as not built), a wrong
+//!   type too.
 //! - **Frameworks**: names of the shape `[a-z][a-z0-9_-]{0,31}`, repeats
 //!   dropped, byte-sorted, each name's line kept
 //!   ([`CodeConfig::framework_line`]): the shape only; which names are
@@ -41,7 +41,7 @@ use crate::project_toml::ProjectError;
 const KEYS: [&str; 3] = ["roots", "exclude", "frameworks"];
 
 /// 07 s5's `[code]` keys, built by later slices: named as such when written.
-const NOT_BUILT_KEYS: [&str; 3] = ["languages", "crates", "scip"];
+const NOT_BUILT_KEYS: [&str; 2] = ["languages", "crates"];
 
 /// The suffix of a glob that matches everything under a directory.
 const ANY_BELOW: &str = "/**";

@@ -394,6 +394,13 @@ impl<'a> TargetIndex<'a> {
         FileRole::Unrooted
     }
 
+    /// The primary target (the library, else the default binary): the
+    /// target of a file whose role has no unit.
+    #[must_use]
+    pub fn primary(&self) -> Option<&'a Target> {
+        self.primary.and_then(|index| self.targets.get(index))
+    }
+
     /// The unit of target `index`; `None` for the primary target.
     fn unit_of(&self, index: usize) -> Option<Unit> {
         (Some(index) != self.primary).then(|| Unit::target(&self.targets[index]))

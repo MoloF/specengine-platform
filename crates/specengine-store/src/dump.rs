@@ -161,6 +161,27 @@ const TABLES: &[TableDump] = &[
         filter: "WHERE ?1 IS NULL OR f.wt = ?1",
         skip: &["file"],
     },
+    TableDump {
+        table: "code_resolve",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["wt"],
+    },
+    TableDump {
+        table: "code_resolve_files",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["wt"],
+    },
+    TableDump {
+        table: "code_monikers",
+        owner: "w.project, w.root",
+        joins: "LEFT JOIN main.worktrees w ON w.wt = x.wt",
+        filter: "WHERE ?1 IS NULL OR x.wt = ?1",
+        skip: &["wt"],
+    },
 ];
 
 /// `(table, SELECT … FROM main.<table> x <joins> <filter>)` for every index

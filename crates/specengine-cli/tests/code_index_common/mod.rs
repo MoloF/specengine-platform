@@ -111,10 +111,27 @@ pub fn code_lines(dump: &str) -> String {
         .collect()
 }
 
-/// The dump lines of every other table (the md index).
+/// The layer C snapshot tables (docs/features/layer-c-resolve.md
+/// "Tables"): outside [`CODE_TABLES`] and outside [`md_lines`], written
+/// only by `spec resolve`, never by a rebuild.
+pub const LAYER_C_TABLES: [&str; 3] = ["code_resolve", "code_resolve_files", "code_monikers"];
+
+/// The dump lines of the layer C snapshot tables only.
+pub fn layer_c_lines(dump: &str) -> String {
+    dump.lines()
+        .filter(|line| LAYER_C_TABLES.contains(&table_of(line)))
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
+/// The dump lines of every other table (the md index): neither a code
+/// table nor a layer C one.
 pub fn md_lines(dump: &str) -> String {
     dump.lines()
-        .filter(|line| !CODE_TABLES.contains(&table_of(line)))
+        .filter(|line| {
+            let table = table_of(line);
+            !CODE_TABLES.contains(&table) && !LAYER_C_TABLES.contains(&table)
+        })
         .map(|line| format!("{line}\n"))
         .collect()
 }

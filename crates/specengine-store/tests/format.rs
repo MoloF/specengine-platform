@@ -11,7 +11,9 @@
 //! also holds a stub analyzer's code rows (`code_stub`: the store has no
 //! dependency on `specengine-code`), so the history pins the code tables'
 //! projection too; since docs/features/bevy-roles.md (`INDEX_FORMAT` 10,
-//! "Formats") the stub emits role rows, so it pins `code_roles` as well.
+//! "Formats") the stub emits role rows, so it pins `code_roles` as well;
+//! docs/features/layer-c-resolve.md (R7) makes it `INDEX_FORMAT` 11 for the
+//! three layer C snapshot tables.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -421,15 +423,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// `docs/canon/code-roles.md` "Table" (bevy-roles F1, S5): the role table makes
-/// `INDEX_FORMAT` 10, and the history is the nine earlier lines, verbatim
-/// (symbol-index's `9` among them), followed by exactly one `10 <hash>`
-/// line (no earlier `10`). Replaces symbol-index's format-9 pin (its TE-3),
-/// whose line stays verbatim. M: the table added under format 9; an
-/// earlier line edited.
+/// docs/features/layer-c-resolve.md R7 (its "Tables"): the three layer C
+/// snapshot tables make `INDEX_FORMAT` 11, and the history is the ten
+/// earlier lines, verbatim (symbol-index's `9` and bevy-roles' `10` among
+/// them), followed by exactly one `11 <hash>` line (no earlier `11`).
+/// Replaces bevy-roles' format-10 pin (its F1, S5), whose line stays
+/// verbatim. M: `INDEX_FORMAT` kept at 10; an earlier line edited.
 #[test]
-fn bevy_roles_pins_format_10_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 10);
+fn layer_c_pins_format_11_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 11);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -448,11 +450,12 @@ fn bevy_roles_pins_format_10_with_one_new_history_line() {
         "7 af07f5675c92f05058d5f7a0507d9ab040cd54a3fb6d7b50809def468339b88b",
         "8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650",
         "9 8c4c50d29560a9d26db29690a4d03de1b5a453910d8cb646809c433cf2a331c1",
+        "10 59e87cae8512cc3a5391034deb0531b0fa2c4df8c16b095dc3de95a9e4146f4c",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "symbol-index's history plus exactly one new line:\n{history}"
+        "bevy-roles' history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -461,15 +464,15 @@ fn bevy_roles_pins_format_10_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "10", "the new line is format 10: {last}");
+    assert_eq!(format, "11", "the new line is format 11: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("10 ")).count(),
+        lines.iter().filter(|line| line.starts_with("11 ")).count(),
         1,
-        "no earlier `10` line"
+        "no earlier `11` line"
     );
 }
 

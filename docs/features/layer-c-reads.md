@@ -94,6 +94,7 @@ Q4: 2026-10-10 under the owner's pre-approval; L2: owner pre-approved 2026-10-19
 
 - **Needs**: 11a-2 `layer-c-resolve` (the snapshot, `layer_c_state()`, the join); the owner's TE-6; shipped 6a-3 (`symbols`), 6b-1 (the mirror), 10a-2 (roles, `SCHEMA_PINS`).
 - **Order**: 11a-1 -> 11a-2 -> TE-6 -> 11a-3 (this), unless the owner parks it on TE-6's figures; 5b-1 takes over at any boundary.
+- **Carried from 11a-2's review** (2026-10-19, no change there): `layer_c_state` reads the `Tree` twice, so the reads take the state from the tree they refreshed (a `state_of`) or call `state_in` inside their own refresh; `tree_files` allocates per directory level: walk deepest-first and stop at the first known directory.
 
 ## Implementation
 

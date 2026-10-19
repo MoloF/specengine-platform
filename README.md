@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [root]
 owner: owner
-reviewed: 2026-10-16
+reviewed: 2026-10-19
 ---
 
 # SpecEngine
@@ -63,6 +63,15 @@ spec serve                  # in the project: open the listening URL, http://127
 
 UI work: `pnpm --dir ui dev` (`ui/README.md`). The gate never needs the daemon (ADR-0039); how it runs: `docs/canon/serve.md`, the UI it serves: `docs/canon/serve-ui.md`.
 
+## Layer C (optional)
+
+```bash
+cargo install --locked --force --path <clone>/crates/specengine-ra  # beside spec, same commit; rustc >= 1.98, rust-src
+spec resolve                # in the project: rust-analyzer's monikers, stored as an advisory snapshot
+```
+
+Only `spec resolve` runs it, one cold load per call (`docs/canon/layer-c.md`; the protocol: `docs/canon/layer-c-protocol.md`).
+
 ## Development
 
 All development goes through the Claude Code role pipeline (`.claude/agents/`, command `/feature`): analyst → spec writer → developer ⇄ reviewer and test engineer → documentation update.
@@ -73,7 +82,7 @@ cargo run -q -p specengine-cli -- export index    # regenerate docs/index.md
 cargo run -q -p specengine-cli -- check           # the documentation check; its summary shows the worst W
 ```
 
-Requires Rust ≥ 1.90 (≥ 1.98 for `specengine-eval --features ra`) and `cargo-nextest`.
+Requires Rust ≥ 1.90 (≥ 1.98 for `specengine-ra` and `specengine-eval --features ra`) and `cargo-nextest`.
 
 ## License
 

@@ -200,6 +200,35 @@ CREATE TABLE code_roles (
   line INTEGER NOT NULL,
   PRIMARY KEY (file, ord)
 ) STRICT;
+CREATE TABLE code_resolve (
+  wt INTEGER PRIMARY KEY REFERENCES code_worktrees ON DELETE CASCADE,
+  tree_fp TEXT NOT NULL,
+  protocol INTEGER NOT NULL,
+  ra_ap TEXT NOT NULL,
+  host TEXT NOT NULL,
+  toolchains TEXT NOT NULL,
+  degraded INTEGER NOT NULL,
+  workspaces INTEGER NOT NULL,
+  files INTEGER NOT NULL,
+  items INTEGER NOT NULL
+) STRICT;
+CREATE TABLE code_resolve_files (
+  wt INTEGER NOT NULL REFERENCES code_resolve ON DELETE CASCADE,
+  path TEXT NOT NULL,
+  blake3 TEXT,
+  in_crate INTEGER NOT NULL,
+  PRIMARY KEY (wt, path)
+) STRICT;
+CREATE TABLE code_monikers (
+  wt INTEGER NOT NULL REFERENCES code_resolve ON DELETE CASCADE,
+  path TEXT NOT NULL,
+  start INTEGER NOT NULL,
+  \"end\" INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  state TEXT NOT NULL,
+  moniker TEXT,
+  PRIMARY KEY (wt, path, start)
+) STRICT;
 CREATE INDEX nodes_by_id ON nodes (id);
 CREATE INDEX links_by_dst_id ON links (dst_id);
 CREATE INDEX aliases_by_alias ON aliases (alias);
@@ -209,6 +238,7 @@ CREATE INDEX symbols_by_name ON symbols (name);
 CREATE INDEX symbol_suffixes_by_suffix ON symbol_suffixes (suffix);
 CREATE INDEX code_decls_by_target ON code_decls (target);
 CREATE INDEX code_roles_by_subject_name ON code_roles (subject_name);
+CREATE INDEX code_monikers_by_moniker ON code_monikers (moniker);
 CREATE VIRTUAL TABLE nodes_fts USING fts5(
   id, title, own_text,
   content='nodes', content_rowid='node_id',
@@ -240,7 +270,9 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// removes one, as [`FORMAT_TRIGGERS`]. The code tables of format 9
 /// (`docs/canon/symbol-index.md` "Tables") come before `worktrees`, which
 /// `code_worktrees` references; format 10's `code_roles` before
-/// `code_files`, which it references.
+/// `code_files`, which it references; format 11's layer C snapshot
+/// (`code_monikers`, `code_resolve_files`, then `code_resolve`) before
+/// `code_worktrees`, which `code_resolve` references.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
@@ -257,6 +289,9 @@ const FORMAT_TABLES: &[&str] = &[
     "code_roles",
     "code_files",
     "code_packages",
+    "code_monikers",
+    "code_resolve_files",
+    "code_resolve",
     "code_worktrees",
     "worktrees",
 ];

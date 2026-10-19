@@ -1807,24 +1807,25 @@ fn bad_request_is_refused_before_discovery() {
 // ---------------------------------------------------------------------------
 
 /// How a watchdog ends a binary that leads its group: by SIGKILL
-/// (`kill(0, SIGKILL)`), or by exit 3. On macOS a group SIGKILL may land
-/// after `kill()` returns and the binary's own `exit(3)` wins; the group is
-/// gone either way (`docs/canon/layer-c-protocol.md` "Endings", known limit;
-/// fixed in 11a-2). The callers check the group gone on their own.
+/// (`kill(0, SIGKILL)`) only. Leading its group, the binary never exits on
+/// its own after the kill: `terminate` parks once `kill_own_group()` has
+/// returned, so the group's SIGKILL, however late it lands on macOS, is the
+/// one ending (docs/features/layer-c-resolve.md "Acceptance criteria",
+/// R13). The callers check the group gone on their own. M: `exit(3)`
+/// restored after the kill.
 fn assert_ended_by_its_watchdog(status: Option<ExitStatus>) {
-    let killed = status.and_then(|status| status.signal()) == Some(libc::SIGKILL);
-    let exited_3 = status.and_then(|status| status.code()) == Some(3);
-    assert!(
-        killed || exited_3,
-        "the binary ends its group, itself included, by SIGKILL (or exit 3 when its own exit wins the race): {status:?}"
+    assert_eq!(
+        status.and_then(|status| status.signal()),
+        Some(libc::SIGKILL),
+        "the binary ends its group, itself included, by SIGKILL, never by an exit of its own: {status:?}"
     );
 }
 
 /// B6: under `alarm`, the shims fork a sleeping grandchild and wait, so the
 /// binary hangs in discovery; once a grandchild exists, stdin is closed:
 /// the binary, its group and every grandchild are gone within 5 s, the
-/// binary by SIGKILL (`kill(0, SIGKILL)`, it leads its group) or exit 3
-/// ([`assert_ended_by_its_watchdog`]). M: no stdin watchdog.
+/// binary by SIGKILL (`kill(0, SIGKILL)`, it leads its group;
+/// [`assert_ended_by_its_watchdog`]). M: no stdin watchdog.
 #[test]
 fn binary_kills_its_group_when_stdin_closes() {
     let lab = Lab::new("stdin-eof", Shims::Block);
@@ -1846,7 +1847,7 @@ fn binary_kills_its_group_when_stdin_closes() {
 
 /// B6: as above with stdin held open and `budget_ms` 1000: the binary, its
 /// group and every grandchild are gone by the budget plus the 10 s grace
-/// plus 5 s of slack after the start, the binary by SIGKILL or exit 3
+/// plus 5 s of slack after the start, the binary by SIGKILL
 /// ([`assert_ended_by_its_watchdog`]). M: no budget watchdog.
 #[test]
 fn binary_kills_its_group_after_budget_and_grace() {

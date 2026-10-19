@@ -33,12 +33,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specengine_code::frameworks::{self, KNOWN, role_facts};
 use specengine_code::{
     Anchor, Binding, CODE_INDEX_FORMAT, Digest, FileRole, LevelHashes, LevelState, NamedFile,
-    PackageTargets, RustParser, TargetIndex, UnitKind, bind_tree, comment_anchors, item_levels,
-    item_signatures, level_header, markers_in, placed_name_file, qpath,
+    PackageTargets, RustParser, Target, TargetIndex, TargetSource, UnitKind, bind_tree,
+    comment_anchors, item_levels, item_signatures, level_header, markers_in, placed_name_file,
+    qpath,
 };
 use specengine_core::{CodeConfig, ProjectError};
 use specengine_model::{IdScheme, grammar};
@@ -193,6 +194,36 @@ fn targets_json(table: &PackageTargets) -> String {
         })
         .collect();
     serde_json::to_string(&rows).unwrap_or_default()
+}
+
+/// One target of `code_packages.targets`, read back.
+#[derive(Deserialize)]
+struct StoredTarget {
+    kind: String,
+    name: String,
+    root: String,
+}
+
+/// A stored package's target table ([`targets_json`]'s form) read back;
+/// `None` when it does not read.
+pub(crate) fn package_targets(row: &CodePackageRow) -> Option<PackageTargets> {
+    let targets: Vec<StoredTarget> = serde_json::from_str(&row.targets).ok()?;
+    let source = if row.source == TargetSource::Metadata.as_str() {
+        TargetSource::Metadata
+    } else {
+        TargetSource::Layout
+    };
+    Some(PackageTargets {
+        source,
+        targets: targets
+            .into_iter()
+            .map(|target| Target {
+                kind: target.kind,
+                name: target.name,
+                root: PathBuf::from(target.root),
+            })
+            .collect(),
+    })
 }
 
 /// The analyzer the store calls over one [`CodeFiles`].

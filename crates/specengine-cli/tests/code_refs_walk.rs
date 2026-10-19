@@ -19,6 +19,11 @@
 //! module holds a role word, a source or a framework name, all read from
 //! the code crate's data; the detector runs on the analyzer's one parse.
 //!
+//! docs/features/layer-c-resolve.md R11: `[code] scip` is retired, an
+//! unknown key (case 13 of `code_table_unknown_key_is_refused`, `EXEMPT`
+//! 4 -> 3), and every exemption names a literal its file still holds
+//! (`every_exempt_literal_occurs_in_its_file`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 mod code_index_common;
@@ -77,12 +82,15 @@ fn exit_2_quiet(run: &Run) {
 /// or naming no known framework is refused alike, `check` and `show`
 /// still answer; `frameworks = ["bevy"]` reads. M: `bevy` kept in
 /// `NOT_BUILT_KEYS`; `spec check` failing on the key.
+/// docs/features/layer-c-resolve.md R11 (its "Config", Q11): `scip` is
+/// retired, an unknown key with the unknown-key text (case 13). M: `scip`
+/// kept in `NOT_BUILT_KEYS`.
 #[test]
 fn code_table_unknown_key_is_refused() {
     let scratch = Scratch::new("code-table");
     let root = scratch.copy("code-a", "code-a");
     let home = scratch.home("h");
-    let cases: [(&str, &str, Option<&str>); 12] = [
+    let cases: [(&str, &str, Option<&str>); 13] = [
         ("[code]\nroots = [\"crates\"]\ncolour = 1\n", "colour", None),
         (
             "[code]\nroots = [\"crates\"]\nlanguages = [\"rust\"]\n",
@@ -126,6 +134,13 @@ fn code_table_unknown_key_is_refused() {
             "[code]\nroots = [\"crates\"]\nframeworks = [\"loom\"]\n",
             "frameworks",
             None,
+        ),
+        (
+            "[code]\nroots = [\"crates\"]\nscip = false\n",
+            "scip",
+            Some(
+                "`[code]` has no key `scip`: it takes `roots` and `exclude` and `frameworks` only",
+            ),
         ),
     ];
     for (table, key, message) in cases {
@@ -692,13 +707,14 @@ const STACK_WORDS: [&str; 14] = [
 
 /// Narrow exemptions, each a whole literal of one file: 07 s5's `[code]`
 /// keys, refused by name as not built (the spec's "The code table"; `bevy`
-/// dropped by docs/features/bevy-roles.md RD-4: an unknown key now), and
-/// the binding word `module` of "spec refs" (equal to `fixtures/spec-b`'s
-/// kind `module`, not taken from it).
-const EXEMPT: [(&str, &str); 4] = [
+/// dropped by docs/features/bevy-roles.md RD-4 and `scip` by
+/// docs/features/layer-c-resolve.md R11: unknown keys now), and the
+/// binding word `module` of "spec refs" (equal to `fixtures/spec-b`'s kind
+/// `module`, not taken from it). Each must still occur in its file:
+/// [`every_exempt_literal_occurs_in_its_file`].
+const EXEMPT: [(&str, &str); 3] = [
     ("crates/specengine-core/src/code_toml.rs", "languages"),
     ("crates/specengine-core/src/code_toml.rs", "crates"),
-    ("crates/specengine-core/src/code_toml.rs", "scip"),
     ("crates/specengine-cli/src/refs.rs", "module"),
 ];
 
@@ -1025,6 +1041,31 @@ fn new_modules_hold_no_fixture_prefix_kind_path_or_stack_word() {
     }
     assert!(scanned_literals > 50, "{scanned_literals} literals scanned");
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+/// docs/features/layer-c-resolve.md R11: every [`EXEMPT`] entry is a whole
+/// literal its file still holds, in the part the scan reads ([`scanned`]):
+/// an exemption outliving its literal widens the scan's hole for nothing,
+/// and the stack-word scan cannot see it (none of `languages`, `crates`,
+/// `scip`, `module` is a word it flags). M: `EXEMPT` kept at 4 once `scip`
+/// leaves `code_toml.rs`.
+#[test]
+fn every_exempt_literal_occurs_in_its_file() {
+    let mut stale = Vec::new();
+    for (file, literal) in EXEMPT {
+        let held = literals(&scanned(file));
+        if !held.iter().any(|text| text == literal) {
+            stale.push(format!(
+                "{file}: no literal {literal:?} (of {} scanned)",
+                held.len()
+            ));
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "EXEMPT names literals its files no longer hold:\n{}",
+        stale.join("\n")
+    );
 }
 
 /// Every `.rs` file under `dir` (relative to the repository), sorted.
