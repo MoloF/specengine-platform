@@ -1,12 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
+import { BASIN_NAME_DECOMPOSED, HOSTILE_TITLE } from "./harbor-sim/fixtures";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
 // Health over the real mock, as `pnpm dev` shows it (docs/features/ui-health.md AC-01, AC-03,
 // AC-04, AC-05, AC-09; "Owner's manual check" for cannot-check, empty, large, error and slow).
 // docs/features/health-left.md AC-U3 to AC-U6: row 3 over the mock's scenarios (W13).
+// docs/features/health-code-ui.md UI-1, UI-2, UI-4, UI-6: rows 4 and 5 over the mock's scenarios.
 
 const METHODS = [
   "getProjects",
@@ -47,6 +49,20 @@ async function loadedHealth(scenario: Scenario = "normal", slug = "harbor-sim") 
     expect(document.querySelectorAll('.health-region[aria-busy="false"]')).toHaveLength(4);
   });
   return rendered;
+}
+
+/** Row 4 or 5 of What is left: the code assuming a decision, the unbound nodes. */
+function codePart(row: "assumes" | "unbound"): HTMLElement {
+  const found = region("What is left").querySelector<HTMLElement>(`[data-row="${row}"]`);
+  if (found === null) {
+    throw new Error(`no ${row} part`);
+  }
+  return found;
+}
+
+/** The IDs of a code row's lines, as rendered. */
+function codeIds(row: "assumes" | "unbound"): (string | undefined)[] {
+  return Array.from(codePart(row).querySelectorAll<HTMLElement>(`[data-${row}]`), (line) => line.dataset[row]);
 }
 
 /** Row 3 of What is left: the unapplied amendments. */
@@ -147,12 +163,12 @@ describe("Health over the mock", () => {
     expect(region("Findings").querySelector(".finding-total")?.textContent).toBe("3000 findings, by code, errors first");
   });
 
-  it("error: each region in the daemon's words with a Retry, What is left one per read (AC-09; AC-U4 of health-left)", async () => {
+  it("error: each region in the daemon's words with a Retry, What is left one per part: the queue's and rows 3 to 5's (AC-09; AC-U4 of health-left; health-code-ui)", async () => {
     renderMock("error", "#/harbor-sim/health");
     await screen.findByRole("region", { name: "Debt and budgets" });
     for (const [name, reads] of [
       ["Check", 1],
-      ["What is left", 2],
+      ["What is left", 4],
       ["Findings", 1],
       ["Debt and budgets", 1],
     ] as const) {
@@ -168,9 +184,9 @@ describe("Health over the mock", () => {
     await screen.findByRole("region", { name: "Debt and budgets" });
     for (const name of ["Check", "What is left", "Findings", "Debt and budgets"]) {
       expect(region(name).getAttribute("aria-busy")).toBe("true");
-      // What is left: one skeleton per read, the queue's and the amendments' (AC-U4 of health-left).
+      // What is left: one skeleton per part, the queue's and rows 3 to 5's (AC-U4 of health-left; health-code-ui).
       const skeletons = within(region(name)).getAllByRole("status");
-      expect(skeletons).toHaveLength(name === "What is left" ? 2 : 1);
+      expect(skeletons).toHaveLength(name === "What is left" ? 4 : 1);
       expect(skeletons.map((skeleton) => skeleton.getAttribute("aria-busy"))).toEqual(skeletons.map(() => "true"));
     }
     await waitFor(() => {
@@ -246,5 +262,133 @@ describe("Health over the mock", () => {
     expect(within(amendments()).getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(amendments().querySelector(".health-value")).toBeNull();
     expect(region("What is left").querySelectorAll(".health-left-link").length).toBeGreaterThan(0);
+  });
+
+  // docs/features/health-code-ui.md, rows 4 and 5 over the mock's scenarios (UI-1, UI-2, UI-4, UI-6).
+
+  it("normal: harbor-sim's row 4 in the daemon's order, one line per state, by ID; its row 5 by path, never sorted here (UI-2)", async () => {
+    await loadedHealth();
+    expect(codePart("assumes").querySelector(".health-left-total")?.textContent).toBe("8 rows of 11 markers");
+    expect(codeIds("assumes")).toEqual(["MEC-OLD-QUAYS", "PR-0012", "PR-0019", "PR-0023", "PR-0027", "PR-0041", "PR-7", "RULE-BERTH-DRAFT"]);
+    expect(Array.from(codePart("assumes").querySelectorAll(".badge-label"), (label) => label.textContent)).toEqual([
+      "Archived",
+      "Applied",
+      "Decided as assumed",
+      "Decided otherwise",
+      "Rejected",
+      "Pending",
+      "No such item",
+      "In question",
+    ]);
+    expect(codePart("unbound").querySelector(".health-left-total")?.textContent).toBe("5 of 14 selected nodes");
+    expect(codeIds("unbound")).toEqual(["RULE-BASIN-NAME", "RULE-MOOR-CREW", "RULE-MOOR-NIGHT", "MEC-FAIRWAY", "RULE-PILOT-REQ"]);
+    expect(Array.from(codePart("unbound").querySelectorAll(".health-code-marker .badge-label"), (label) => label.textContent)).toEqual([
+      "Look-alike ID",
+      "Unanchored",
+      "Cannot verify",
+      "Another relation",
+    ]);
+  });
+
+  it("normal: the stored texts as the CLI prints them: the rejection's line feed a space, its override \\u{202e}; the pasted title as text, the basin's name in its script", async () => {
+    await loadedHealth();
+    const rejected = codePart("assumes").querySelector('[data-assumes="PR-0027"] .health-code-tail');
+    expect(rejected?.textContent).toBe("discrepancy rejected: Not a discrepancy: the pilot rule was right;\\u{202e} keep 15 minutes");
+    const night = codePart("unbound").querySelector('[data-unbound="RULE-MOOR-NIGHT"]');
+    expect(night?.querySelector(".health-code-title")?.textContent).toBe(HOSTILE_TITLE);
+    expect(night?.querySelector("img")).toBeNull();
+    expect(codePart("unbound").querySelector('[data-unbound="RULE-BASIN-NAME"] .health-code-title')?.textContent).toBe(BASIN_NAME_DECOMPOSED);
+  });
+
+  it("normal: an item's ID opens its inbox card (UI-6)", async () => {
+    await loadedHealth();
+    const link = codePart("assumes").querySelector<HTMLAnchorElement>('[data-assumes="PR-0041"] a.health-code-id');
+    const href = link?.getAttribute("href") ?? "";
+    expect(href).toBe("#/harbor-sim/inbox/PR-0041");
+    fireEvent.click(link as HTMLAnchorElement);
+    window.location.hash = href;
+    const card = await screen.findByRole("article");
+    expect(await within(card).findByText("Entry only inside the tide window")).toBeTruthy();
+  });
+
+  it.each([
+    ["assumes", "RULE-BERTH-DRAFT", "Draft limit at a berth"],
+    ["unbound", "RULE-MOOR-CREW", "Mooring crew"],
+  ] as const)("normal: %s's %s opens its node in the tree (UI-6)", async (row, id, title) => {
+    const { spies } = await loadedHealth();
+    const link = codePart(row).querySelector<HTMLAnchorElement>(`[data-${row}="${id}"] a.health-code-id`);
+    const href = link?.getAttribute("href") ?? "";
+    expect(href).toBe(`#/harbor-sim/tree/${id}`);
+    fireEvent.click(link as HTMLAnchorElement);
+    window.location.hash = href;
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(title);
+    });
+    expect(spies.getNode).toHaveBeenCalled();
+  });
+
+  it("normal, ledger-api: no [code] table, both rows not measured, the cause verbatim, no digit, no Retry", async () => {
+    await loadedHealth("normal", "ledger-api");
+    for (const row of ["assumes", "unbound"] as const) {
+      expect(codePart(row).querySelector(".health-code-off")?.textContent).toBe("Not measured: Code layer off");
+      expect(codePart(row).querySelector(".health-code-causes")?.textContent).toBe("specengine.toml has no [code] table: the code layer is off (add [code] with roots)");
+      expect(within(codePart(row)).queryByRole("button", { name: "Retry" })).toBeNull();
+      for (const value of Array.from(codePart(row).querySelectorAll(".health-value"), (cell) => cell.textContent)) {
+        expect(value).not.toMatch(/\d/);
+      }
+    }
+  });
+
+  it.each(["harbor-sim", "ledger-api"])("empty, %s: both rows None, over what they measured", async (slug) => {
+    await loadedHealth("empty", slug);
+    for (const row of ["assumes", "unbound"] as const) {
+      expect(codePart(row).querySelector(".health-code-none .health-value")?.textContent).toBe("None");
+    }
+    expect(codePart("assumes").querySelector(".health-amendments-scope")?.textContent).toMatch(/^Measured over \d+ markers in \d+ code files\.$/);
+    expect(codePart("unbound").querySelector(".health-amendments-scope")?.textContent).toMatch(/^Measured over \d+ selected nodes\.$/);
+  });
+
+  it("large: row 5's 3 000 by path, the first ten rendered until Show all 3000", async () => {
+    await loadedHealth("large");
+    expect(codePart("unbound").querySelector(".health-left-total")?.textContent).toBe("3000 of 3122 selected nodes");
+    expect(codeIds("unbound")).toHaveLength(10);
+    expect(codeIds("unbound").slice(0, 4)).toEqual(["RULE-BASIN-NAME", "RULE-MOOR-CREW", "RULE-MOOR-NIGHT", "MEC-FAIRWAY"]);
+    expect(within(codePart("unbound")).getByRole("button", { name: "Show all 3000" })).toBeTruthy();
+  });
+
+  it("code-cannot: rows 4-5 could not be measured, the causes as the CLI prints them, a Retry, no value; row 3 still measured", async () => {
+    const { spies } = await loadedHealth("code-cannot");
+    expect(Array.from(codePart("assumes").querySelectorAll(".health-code-causes li"), (item) => item.textContent)).toEqual([
+      "the code walk is incomplete: `src/sim/tide\\u{1b}[2J.rs` cannot be read (Permission denied (os error 13))",
+    ]);
+    expect(Array.from(codePart("unbound").querySelectorAll(".health-code-causes li"), (item) => item.textContent)).toHaveLength(2);
+    for (const row of ["assumes", "unbound"] as const) {
+      expect(codePart(row).querySelector(".health-code-cannot-title")?.textContent).toBe("Could not be measured");
+      expect(codePart(row).querySelector(".health-value")).toBeNull();
+      expect(within(codePart(row)).getByRole("button", { name: "Retry" })).toBeTruthy();
+    }
+    expect(amendments().querySelector(".health-left-total")?.textContent).toBe("2 unapplied amendments over 41 documents");
+    fireEvent.click(within(codePart("unbound")).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(spies.getHealth).toHaveBeenCalledTimes(2);
+    });
+    expect(spies.getCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it("not-configured: row 5 without a rule, not measured, its sentence verbatim; row 4 measured", async () => {
+    await loadedHealth("not-configured");
+    expect(codePart("unbound").querySelector(".health-code-off")?.textContent).toBe("Not measured: Not configured");
+    expect(codePart("unbound").querySelector(".health-code-causes")?.textContent).toBe("no [[health.bound]] rule: which nodes must be bound is the project's to declare");
+    expect(codePart("assumes").querySelector(".health-value")?.textContent).toBe("8");
+  });
+
+  it("cannot-check: rows 4-5 give the walk-gap 503 verbatim, shown, not spoken, each with a Retry", async () => {
+    await loadedHealth("cannot-check");
+    for (const row of ["assumes", "unbound"] as const) {
+      expect(within(codePart(row)).getByText(/^spec: the walk is incomplete: /)).toBeTruthy();
+      expect(within(codePart(row)).queryByRole("alert")).toBeNull();
+      expect(within(codePart(row)).getByRole("button", { name: "Retry" })).toBeTruthy();
+      expect(codePart(row).querySelector(".health-value")).toBeNull();
+    }
   });
 });

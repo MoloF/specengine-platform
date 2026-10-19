@@ -271,10 +271,12 @@ describe("source policy", () => {
     }
   });
 
-  it("compares no kind, class, status, state or link type in Health: the amendments are shown raw, never branched on (AC-U6 of health-left)", () => {
+  it("compares no kind, class, status, state, link type, reason, ID state, binding or relation in Health but in the label map: rows 3 to 5 shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui)", () => {
     const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
-    expect(Object.keys(sources).filter((path) => !outside(path))).toContain("/src/health/AmendmentsPart.tsx");
-    const field = "\\.(kind|class|status|state|type)\\b";
+    expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
+      expect.arrayContaining(["/src/health/AmendmentsPart.tsx", "/src/health/AssumesPart.tsx", "/src/health/UnboundPart.tsx", "/src/health/codeRows.tsx", "/src/health/labels.ts"]),
+    );
+    const field = "\\.(kind|class|status|state|type|reason|id_state|binding|relation)\\b";
     const equality = "([!=]==?)(?!=)";
     const absent = "(null|undefined)\\b";
     const compared = new RegExp(
@@ -296,6 +298,14 @@ describe("source policy", () => {
       '{amendment.class !== "decision" && <p />}',
       "const tone = TONES[amendment.status];",
       'if (amendment.kind === "amendment") {',
+      // UI-2 of health-code-ui: a row's state, a line's state, a reason, an ID state, a binding or a relation branched on.
+      'if (row.state === "measured") {',
+      'const record = line.state === "as_assumed" || line.state === "otherwise";',
+      'marker.reason === "cannot_verify" ? a : b',
+      "const word = WORDS[marker.id_state];",
+      'marker.binding !== "item" && <p />',
+      'rows.filter((line) => line.relation === "assumes")',
+      "switch (row.state) {",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }
@@ -304,6 +314,10 @@ describe("source policy", () => {
       "<Badge name=\"State\" look={linkStateLook(link.state)} />",
       "{amendment.status !== null && <span>{amendment.status}</span>}",
       "<dd className=\"mono\">{amendment.class}</dd>",
+      "<Badge name=\"State\" look={assumedLook(row.state).look} />",
+      "if (codeRowLook(row.state).measured && row.counts !== null && row.rows !== null) {",
+      "{item.reason !== null && <p>{item.reason}</p>}",
+      "<span className=\"kind-tag\">{oneLine(marker.relation)}</span>",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }

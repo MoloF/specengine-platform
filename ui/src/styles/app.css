@@ -463,6 +463,21 @@ textarea.field {
 .tone-finding-warning { --badge-color: var(--finding-warning); }
 .tone-finding-unknown { --badge-color: var(--finding-unknown); }
 
+.tone-assumed-pending { --badge-color: var(--assumed-pending); }
+.tone-assumed-as-assumed { --badge-color: var(--assumed-as-assumed); }
+.tone-assumed-otherwise { --badge-color: var(--assumed-otherwise); }
+.tone-assumed-applied { --badge-color: var(--assumed-applied); }
+.tone-assumed-rejected { --badge-color: var(--assumed-rejected); }
+.tone-assumed-missing { --badge-color: var(--assumed-missing); }
+.tone-assumed-archived { --badge-color: var(--assumed-archived); }
+.tone-assumed-in-question { --badge-color: var(--assumed-in-question); }
+.tone-assumed-unknown { --badge-color: var(--assumed-unknown); }
+.tone-unbound-homoglyph { --badge-color: var(--unbound-homoglyph); }
+.tone-unbound-unanchored { --badge-color: var(--unbound-unanchored); }
+.tone-unbound-cannot-verify { --badge-color: var(--unbound-cannot-verify); }
+.tone-unbound-relation { --badge-color: var(--unbound-relation); }
+.tone-unbound-unknown { --badge-color: var(--unbound-unknown); }
+
 .tone-severity-unknown,
 .tone-proposal-unknown,
 .tone-link-unknown,
@@ -471,12 +486,16 @@ textarea.field {
 .tone-run-unknown,
 .tone-stale-unknown,
 .tone-check-unknown,
-.tone-finding-unknown {
+.tone-finding-unknown,
+.tone-assumed-unknown,
+.tone-unbound-unknown {
   border-style: dashed;
 }
 
-/* cannot-check is never drawn like clean: a dotted border besides its own colour and icon. */
-.tone-check-cannot-check {
+/* cannot-check is never drawn like clean: a dotted border besides its own colour and icon; a
+   marker that cannot be verified likewise. */
+.tone-check-cannot-check,
+.tone-unbound-cannot-verify {
   border-style: dotted;
 }
 
@@ -3815,6 +3834,81 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
+}
+
+/* Rows 4 and 5 (docs/features/health-code-ui.md): each line's state, ID and place, its relation and
+   the CLI's tail; row 5's markers indented under their node, as row 3's links are. Paths, IDs and
+   titles of any script wrap anywhere, never widen the column. A row that could not be measured
+   draws its causes as the check's are, in cannot-verify's role, never ok's. */
+.health-code-head,
+.health-code-meta,
+.health-code-marker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.health-code-meta,
+.health-code-marker,
+.health-code-tail {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.health-code-id {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  font-weight: 600;
+}
+
+.health-code-id,
+.health-code-title,
+.health-code-place,
+.health-code-tail,
+.health-code-causes li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.health-code-title {
+  color: var(--text-primary);
+}
+
+.health-code-word {
+  color: var(--text-primary);
+}
+
+.health-code-markers {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--border-subtle);
+  list-style: none;
+}
+
+.health-code-cannot {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.health-code-cannot-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.health-code-cannot-title .icon {
+  color: var(--check-cannot-check);
+}
+
+.health-code-cannot .check-causes {
+  justify-self: stretch;
 }
 
 .health-pointer {

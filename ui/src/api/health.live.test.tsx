@@ -10,9 +10,10 @@ import { queryKeys, useHealth } from "./queries";
 
 // AC-U5 of docs/features/health-left.md over HttpClient, the daemon a stubbed `fetch` and
 // `EventSource`: the health read is made on entering Health and, while Health is on screen, after
-// `proposal.applied` or a stream gap; never on a stage, another proposal event, a `task.*` event,
-// window focus, a reconnect or an interval. A walk in flight is kept: an apply during it starts no
-// second one. Off screen, an apply marks it stale and entering Health reads it.
+// `proposal.applied`, `proposal.rejected` (UI-3 of docs/features/health-code-ui.md: row 4's
+// `rejected`) or a stream gap; never on a stage, another proposal event, a `task.*` event, window
+// focus, a reconnect or an interval. A walk in flight is kept: an apply or a rejection during it
+// starts no second one. Off screen, either marks it stale and entering Health reads it.
 
 const HEALTH = "/api/projects/alpha/health";
 const STREAM = "/api/projects/alpha/events";
@@ -154,7 +155,7 @@ describe("the health read on the live tail (AC-U5 of health-left)", () => {
   it("never on a stage, another proposal event, a task.* event, window focus or a reconnect", async () => {
     const { fetchStub } = await onHealth();
     let seq = 80;
-    for (const type of ["proposal.staged", "proposal.unstaged", "proposal.created", "proposal.approved", "proposal.rejected", "proposal.apply_failed"]) {
+    for (const type of ["proposal.staged", "proposal.unstaged", "proposal.created", "proposal.approved", "proposal.apply_failed"]) {
       seq += 1;
       emit(type, '{"id":"PR-0001","staged_at":"2026-10-09T10:00:00Z"}', String(seq));
     }
@@ -173,6 +174,49 @@ describe("the health read on the live tail (AC-U5 of health-left)", () => {
     await settle();
     await settle();
     expect(healthReads(fetchStub)).toEqual([]);
+  });
+
+  it("proposal.rejected while Health is on screen reads /health once more, never the check or another spec read (UI-3 of health-code-ui)", async () => {
+    const { fetchStub } = await onHealth();
+    emit("proposal.rejected", '{"id":"PR-0001","reason":"no"}', "85");
+    await waitFor(() => {
+      expect(healthReads(fetchStub)).toEqual([HEALTH]);
+    });
+    await healthAnswered();
+    await settle();
+    // The queue part's inbox, as on any proposal event, and the health read: no check, no other spec read.
+    expect(urlsOf(fetchStub).sort()).toEqual([HEALTH, "/api/projects/alpha/inbox"]);
+  });
+
+  it("a rejection while the read is in flight starts no second walk: one /health, its answer taken", async () => {
+    const hold: Hold = { next: null };
+    const { fetchStub } = await onHealth(hold);
+    let release: () => void = () => undefined;
+    hold.next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    emit("proposal.rejected", '{"id":"PR-0001","reason":"no"}', "86");
+    await waitFor(() => {
+      expect(healthReads(fetchStub)).toEqual([HEALTH]);
+    });
+    emit("proposal.rejected", '{"id":"PR-0002","reason":"no"}', "87");
+    release();
+    await healthAnswered();
+    await settle();
+    expect(healthReads(fetchStub)).toEqual([HEALTH]);
+  });
+
+  it("Health off screen: a rejection reads no /health; entering Health reads it once", async () => {
+    const { fetchStub } = await onHealth();
+    await go("#/alpha/inbox", "Inbox");
+    emit("proposal.rejected", '{"id":"PR-0001","reason":"no"}', "88");
+    await settle();
+    await settle();
+    expect(healthReads(fetchStub)).toEqual([]);
+    await go("#/alpha/health", "Health");
+    await healthAnswered();
+    await settle();
+    expect(healthReads(fetchStub)).toEqual([HEALTH]);
   });
 
   it("an apply while the read is in flight starts no second walk: one /health, its answer taken", async () => {

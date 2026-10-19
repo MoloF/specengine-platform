@@ -1,11 +1,27 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import { KNOWN_CHECK_VERDICTS, type CheckReport, type HealthReport, type Proposal } from "../api/types";
+import { KNOWN_CHECK_VERDICTS, type AssumesRow, type CheckReport, type HealthReport, type Proposal, type UnboundRow } from "../api/types";
 import { App } from "../app/App";
 import { sectionHash } from "../app/routes";
 import { queueOrder } from "../inbox/order";
-import { aCheckFinding, aCheckReport, aHealthReport, aLink, anAmendment, aProposal, entryOf } from "../test/builders";
+import {
+  aCheckFinding,
+  aCheckReport,
+  aCodeRow,
+  aHealthReport,
+  aLink,
+  anAmendment,
+  anAssumedNode,
+  anAssumedProposal,
+  anAssumesRow,
+  anUnboundMarker,
+  anUnboundRow,
+  aProposal,
+  entryOf,
+  measuredAssumes,
+  measuredUnbound,
+} from "../test/builders";
 import { callsOf } from "../test/homeStub";
 import { renderApp } from "../test/render";
 import { argsOf, stubClient } from "../test/stubClient";
@@ -16,6 +32,8 @@ import { argsOf, stubClient } from "../test/stubClient";
 // budgets), AC-09 (reads and states per region), AC-10 (keyboard). docs/features/health-left.md:
 // AC-U3 and AC-U4 (row 3, the unapplied amendments, its three states), AC-U5 (what entering and
 // Check again read), AC-U7 (rows 4 to 6; kind-amendment's AC-U2 tests replaced).
+// docs/features/health-code-ui.md: UI-1 (rows 4 and 5, four states apart each; row 6 alone not
+// measured yet), UI-6 (Show all hands the focus on; an item's ID to its inbox card, a node's to the tree).
 
 const LF = String.fromCharCode(10);
 
@@ -236,16 +254,12 @@ describe("nothing measured is never 0 (AC-04)", () => {
     expect(Array.from(region("Check").querySelectorAll(".check-count"), (item) => item.textContent)).toContain("New debt0");
   });
 
-  it("holds no digit in the value of rows 4 to 6 and of task W (narrowed from rows 3 to 6 by AC-U7 of health-left)", async () => {
+  it("holds no digit in the value of row 6 and of task W (narrowed from rows 4 to 6 by UI-1 of health-code-ui)", async () => {
     await openHealth();
     const values = Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.textContent);
-    expect(values).toEqual(["Not measured yet", "Not measured yet", "Not measured yet"]);
-    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-source"), (cell) => cell.textContent)).toEqual([
-      "Phase 3",
-      "Phase 3",
-      "Phase 3",
-    ]);
-    expect(region("What is left").querySelector('.health-unmeasured [data-row="amendments"]')).toBeNull();
+    expect(values).toEqual(["Not measured yet"]);
+    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-source"), (cell) => cell.textContent)).toEqual(["Phase 3"]);
+    expect(Array.from(region("What is left").querySelectorAll<HTMLElement>(".health-unmeasured [data-row]"), (row) => row.dataset.row)).toEqual(["drift"]);
     expect(region("Check").querySelector(".check-task-w")?.textContent).toBe("Not measured yet (the bundles log)");
     for (const text of [...values, region("Check").querySelector(".check-task-w")?.textContent ?? "0"]) {
       expect(text).not.toMatch(/\d/);
@@ -259,6 +273,8 @@ describe("what is left (AC-05)", () => {
     expect(Array.from(region("What is left").querySelectorAll("h3"), (heading) => heading.textContent)).toEqual([
       "Proposals in the queue",
       "Unapplied amendments",
+      "Code assuming a decision",
+      "Unbound nodes",
       "Not measured yet",
     ]);
   });
@@ -420,13 +436,9 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     expect(part().querySelector(".health-amendments-none code")?.textContent).toBe("amends");
     expect(part().querySelector(".health-amendments-scope")?.textContent).toBe("Measured over 41 documents.");
     expect(part().querySelector(".health-value")?.textContent).toBe("None");
-    // Measured, so drawn as a measured value, never as rows 4 to 6's "Not measured yet".
+    // Measured, so drawn as a measured value, never as row 6's "Not measured yet".
     expect(part().querySelector(".health-value")?.classList.contains("health-measured")).toBe(true);
-    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.classList.contains("health-measured"))).toEqual([
-      false,
-      false,
-      false,
-    ]);
+    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.classList.contains("health-measured"))).toEqual([false]);
     expect(part().textContent).not.toMatch(/nothing left|\b0\b/i);
     expect(amendmentRows()).toHaveLength(0);
   });
@@ -537,8 +549,358 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     await waitFor(() => {
       expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
     });
-    expect(region("What is left").querySelectorAll(".health-unmeasured-row")).toHaveLength(3);
+    expect(region("What is left").querySelectorAll(".health-unmeasured-row")).toHaveLength(1);
     expect(caught).toHaveBeenCalled();
+  });
+});
+
+describe("rows 4 and 5: code assuming a decision, unbound nodes (UI-1, UI-6 of health-code-ui)", () => {
+  const ESC = String.fromCharCode(0x1b);
+  const RLO = String.fromCodePoint(0x202e);
+
+  /** Row 4's lines, one per state, in no order the UI could sort them into: by ID, place or state. */
+  const ASSUMES: AssumesRow[] = [
+    // A reopened item keeps its choice in JSON; the tail prints a choice for a decided state alone.
+    anAssumesRow({ id: "PR-0041", state: "pending", path: "src/zz.rs", line: 17, column: 4, proposal: anAssumedProposal({ choice: { option: 0 } }) }),
+    anAssumesRow({
+      id: "PR-0019",
+      state: "as_assumed",
+      path: "src/aa.rs",
+      line: 8,
+      relation: "implements",
+      proposal: anAssumedProposal({ kind: "question", status: "applied", choice: { working_answer: true }, record_id: "DEC-0012", record_path: "docs/decisions/DEC-0012.md" }),
+    }),
+    anAssumesRow({ id: "PR-0023", state: "otherwise", path: "data/berths.ron", line: 6, column: 17, relation: "configures", proposal: anAssumedProposal({ status: "approved", choice: { answer: "No" } }) }),
+    anAssumesRow({ id: "PR-0012", state: "applied", path: "src/mm.rs", proposal: anAssumedProposal({ kind: "update", status: "applied" }) }),
+    anAssumesRow({ id: "PR-0027", state: "rejected", path: `src/pi${ESC}lot.rs`, proposal: anAssumedProposal({ status: "rejected", reason: `Not a discrepancy:${LF}keep${RLO} it` }) }),
+    anAssumesRow({ id: "PR-7", state: "unknown", path: "src/crew.rs", relation: "implements", proposal: null }),
+    anAssumesRow({
+      id: "MEC-OLD",
+      state: "archived",
+      path: "src/berths.rs",
+      proposal: null,
+      node: anAssumedNode({ id: "MEC-OLD-QUAYS", path: "docs/spec/archive/old.md", line: 1, status: "superseded-by MEC-NEW", successor: "MEC-NEW" }),
+    }),
+    anAssumesRow({
+      id: "RULE-BERTH",
+      state: "in_question",
+      path: "data/berths.ron",
+      proposal: null,
+      node: anAssumedNode({ id: "RULE-BERTH-DRAFT", path: "docs/spec/berths.md", line: 12, status: "draft", proposals: ["PR-0042", "PR-0044"] }),
+    }),
+  ];
+
+  /** Row 5's nodes in no sorted order: a marker of each reason, a hostile and a non-Latin title, a node no marker names. */
+  const UNBOUND: UnboundRow[] = [
+    anUnboundRow({
+      id: "RULE-ZED",
+      kind: "rule",
+      title: HOSTILE,
+      path: "docs/spec/zz.md",
+      line: 40,
+      rules: [1, 2],
+      mentions: 2,
+      markers: [
+        anUnboundMarker({ path: "src/zz.rs", line: 4, column: 8, relation: "implements", id_state: "homoglyph", binding: "item", reason: "homoglyph" }),
+        anUnboundMarker({ path: `src/z${ESC}z.rs`, line: 9, column: 4, relation: "implements", id_state: "resolved", binding: "unanchored", reason: "unanchored" }),
+      ],
+    }),
+    anUnboundRow({
+      id: "MEC-ALPHA",
+      kind: "mechanic",
+      title: "\u0417\u0430\u043b\u0438\u0432",
+      path: "docs/spec/aa.md",
+      line: 1,
+      rules: [2],
+      mentions: 1,
+      markers: [
+        anUnboundMarker({ path: "data/a.ron", line: 2, column: 5, relation: "configures", id_state: "alias", binding: "ron", reason: "relation" }),
+        anUnboundMarker({ path: "src/a.rs", line: 7, column: 4, relation: "implements", id_state: "ambiguous", binding: "cannot_verify", reason: "cannot_verify" }),
+      ],
+    }),
+    anUnboundRow({ id: "RULE-BARE", kind: null, title: null, path: "docs/spec/mm.md", line: 3 }),
+  ];
+
+  function healthOf(report: HealthReport) {
+    const client = healthClient();
+    client.getHealth.mockImplementation(() => Promise.resolve(structuredClone(report)));
+    return client;
+  }
+
+  function codePart(row: "assumes" | "unbound"): HTMLElement {
+    const found = region("What is left").querySelector<HTMLElement>(`[data-row="${row}"]`);
+    if (found === null) {
+      throw new Error(`no ${row} part`);
+    }
+    return found;
+  }
+
+  function lines(row: "assumes" | "unbound"): HTMLElement[] {
+    return Array.from(codePart(row).querySelectorAll<HTMLElement>(`[data-${row}]`));
+  }
+
+  function line(row: "assumes" | "unbound", at: number): HTMLElement {
+    const found = lines(row)[at];
+    if (found === undefined) {
+      throw new Error(`no line ${String(at)} in ${row}`);
+    }
+    return found;
+  }
+
+  const textOf = (element: Element | null | undefined) => element?.textContent ?? null;
+
+  it("measured: row 4's count of rows over its markers, its lines in the daemon's order, never sorted here", async () => {
+    await openHealth(healthOf(aHealthReport([], { code: { files: 9, rs: 7, ron: 2, skipped: 0 }, assumes: measuredAssumes(ASSUMES, 11) })));
+    expect(textOf(codePart("assumes").querySelector(".health-left-total"))).toBe("8 rows of 11 markers");
+    expect(textOf(codePart("assumes").querySelector(".health-value.health-measured"))).toBe("8");
+    expect(lines("assumes").map((row) => row.dataset.assumes)).toEqual(ASSUMES.map((row) => row.id));
+  });
+
+  it("measured: each row 4 line gives its state's label and icon, the ID linked (an item to its inbox card, a node to the tree, no item as text), the place, the relation raw", async () => {
+    await openHealth(healthOf(aHealthReport([], { assumes: measuredAssumes(ASSUMES) })));
+    const badges = lines("assumes").map((row) => [textOf(row.querySelector(".badge-label")), row.querySelector(".badge")?.getAttribute("data-tone"), row.querySelector(".badge svg") !== null]);
+    expect(badges).toEqual([
+      ["Pending", "assumed-pending", true],
+      ["Decided as assumed", "assumed-as-assumed", true],
+      ["Decided otherwise", "assumed-otherwise", true],
+      ["Applied", "assumed-applied", true],
+      ["Rejected", "assumed-rejected", true],
+      ["No such item", "assumed-missing", true],
+      ["Archived", "assumed-archived", true],
+      ["In question", "assumed-in-question", true],
+    ]);
+    const ids = lines("assumes").map((row) => {
+      const id = row.querySelector(".health-code-id");
+      return [textOf(id), id?.getAttribute("href") ?? null];
+    });
+    expect(ids).toEqual([
+      ["PR-0041", sectionHash("alpha", "inbox", "PR-0041")],
+      ["PR-0019", sectionHash("alpha", "inbox", "PR-0019")],
+      ["PR-0023", sectionHash("alpha", "inbox", "PR-0023")],
+      ["PR-0012", sectionHash("alpha", "inbox", "PR-0012")],
+      ["PR-0027", sectionHash("alpha", "inbox", "PR-0027")],
+      ["PR-7", null],
+      // The ID as written, linked to the node it names (its canonical ID).
+      ["MEC-OLD", sectionHash("alpha", "tree", "MEC-OLD-QUAYS")],
+      ["RULE-BERTH", sectionHash("alpha", "tree", "RULE-BERTH-DRAFT")],
+    ]);
+    expect(lines("assumes").map((row) => textOf(row.querySelector(".health-code-meta")))).toEqual([
+      "src/zz.rs:17:4assumes",
+      "src/aa.rs:8:4implements",
+      "data/berths.ron:6:17configures",
+      "src/mm.rs:3:4assumes",
+      "src/pi\\u{1b}lot.rs:3:4assumes",
+      "src/crew.rs:3:4implements",
+      "src/berths.rs:3:4assumes",
+      "data/berths.ron:3:4assumes",
+    ]);
+    // Paths are plain: only the ID is a link.
+    expect(lines("assumes").map((row) => row.querySelectorAll("a").length)).toEqual([1, 1, 1, 1, 1, 0, 1, 1]);
+  });
+
+  it("measured: each row 4 line ends with the CLI's tail, one-lined, controls written \\u{..}; choice and record for a decided state alone", async () => {
+    await openHealth(healthOf(aHealthReport([], { assumes: measuredAssumes(ASSUMES) })));
+    expect(lines("assumes").map((row) => textOf(row.querySelector(".health-code-tail")))).toEqual([
+      "discrepancy open",
+      'question applied {"working_answer":true} | record DEC-0012 docs/decisions/DEC-0012.md',
+      'discrepancy approved {"answer":"No"}',
+      "update applied",
+      "discrepancy rejected: Not a discrepancy: keep\\u{202e} it",
+      null,
+      "MEC-OLD-QUAYS | docs/spec/archive/old.md:1 | status superseded-by MEC-NEW | successor MEC-NEW",
+      "RULE-BERTH-DRAFT | docs/spec/berths.md:12 | under PR-0042, PR-0044",
+    ]);
+    expect(codePart("assumes").textContent).not.toMatch(/null|undefined/);
+  });
+
+  it("measured: row 5's unbound of selected nodes, its nodes in the daemon's order, never sorted here", async () => {
+    await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound(UNBOUND, 41, 2) })));
+    expect(textOf(codePart("unbound").querySelector(".health-left-total"))).toBe("3 of 41 selected nodes");
+    expect(textOf(codePart("unbound").querySelector(".health-value.health-measured"))).toBe("3");
+    expect(lines("unbound").map((row) => row.dataset.unbound)).toEqual(["RULE-ZED", "MEC-ALPHA", "RULE-BARE"]);
+  });
+
+  it("measured: each node's ID linked to the tree, kind and title raw (markup as text, any script), path:line plain, the rules it fails, its mentions", async () => {
+    await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound(UNBOUND, 41, 2) })));
+    const [zed, alpha, bare] = [line("unbound", 0), line("unbound", 1), line("unbound", 2)];
+    expect([textOf(zed.querySelector("a.health-code-id")), zed.querySelector("a.health-code-id")?.getAttribute("href")]).toEqual(["RULE-ZED", sectionHash("alpha", "tree", "RULE-ZED")]);
+    expect([textOf(zed.querySelector(".kind-tag")), textOf(zed.querySelector(".health-code-title"))]).toEqual(["rule", HOSTILE]);
+    expect(zed.querySelector("img")).toBeNull();
+    expect(textOf(alpha.querySelector(".health-code-title"))).toBe("\u0417\u0430\u043b\u0438\u0432");
+    expect(textOf(zed.querySelector(".health-code-meta"))).toBe("docs/spec/zz.md:40Rules failed: 1, 22 mentions");
+    expect(textOf(alpha.querySelector(".health-code-meta"))).toBe("docs/spec/aa.md:1Rules failed: 21 mention");
+    expect([bare.querySelector(".kind-tag .health-code-title"), bare.querySelector(".health-code-title"), bare.querySelector(".health-code-markers")]).toEqual([null, null, null]);
+    expect(textOf(bare.querySelector(".health-code-meta"))).toBe("docs/spec/mm.md:3Rules failed: 10 mentions");
+    expect(lines("unbound").map((row) => row.querySelectorAll("a").length)).toEqual([1, 1, 1]);
+  });
+
+  it("measured: beneath a node, each marker that binds it not: place, relation, ID state and binding in words, the reason's label; cannot verify in its own role, never ok's", async () => {
+    await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound(UNBOUND, 41, 2) })));
+    const markers = lines("unbound").flatMap((row) => Array.from(row.querySelectorAll(".health-code-marker")));
+    expect(
+      markers.map((marker) => [
+        textOf(marker.querySelector(".health-code-place")),
+        textOf(marker.querySelector(".kind-tag")),
+        Array.from(marker.querySelectorAll(".health-code-word"), (word) => word.textContent),
+        textOf(marker.querySelector(".badge-label")),
+        marker.querySelector(".badge")?.getAttribute("data-tone"),
+      ]),
+    ).toEqual([
+      ["src/zz.rs:4:8", "implements", ["Look-alike", "Item"], "Look-alike ID", "unbound-homoglyph"],
+      ["src/z\\u{1b}z.rs:9:4", "implements", ["Resolved", "Unanchored"], "Unanchored", "unbound-unanchored"],
+      ["data/a.ron:2:5", "configures", ["Alias", "RON field"], "Another relation", "unbound-relation"],
+      ["src/a.rs:7:4", "implements", ["Ambiguous", "Cannot verify"], "Cannot verify", "unbound-cannot-verify"],
+    ]);
+    expect(within(line("unbound", 0)).getByRole("list", { name: "Markers naming RULE-ZED without binding it" })).toBeTruthy();
+  });
+
+  it("zero: each row says None and what it measured over, never a bare 0, as a measured value", async () => {
+    await openHealth(
+      healthOf(aHealthReport([], { code: { files: 9, rs: 7, ron: 2, skipped: 0 }, assumes: measuredAssumes([], 12), unbound: measuredUnbound([], 41, 2) })),
+    );
+    expect(textOf(codePart("assumes").querySelector(".health-code-none"))).toBe("None: no code rests on a queue item, an archived node or a node in question.");
+    expect(textOf(codePart("assumes").querySelector(".health-amendments-scope"))).toBe("Measured over 12 markers in 9 code files.");
+    expect(textOf(codePart("unbound").querySelector(".health-code-none"))).toBe("None: every node the rules select is bound.");
+    expect(textOf(codePart("unbound").querySelector(".health-amendments-scope"))).toBe("Measured over 41 selected nodes.");
+    for (const row of ["assumes", "unbound"] as const) {
+      const value = codePart(row).querySelector(".health-value");
+      expect([row, textOf(value), value?.classList.contains("health-measured")]).toEqual([row, "None", true]);
+      expect(lines(row)).toHaveLength(0);
+      expect(codePart(row).textContent).not.toMatch(/\b0\b/);
+    }
+  });
+
+  it.each([
+    ["off", "Code layer off", "specengine.toml has no [code] table: the code layer is off (add [code] with roots)"],
+    ["not_configured", "Not configured", "no [[health.bound]] rule: which nodes must be bound is the project's to declare"],
+  ])("not measured (%s): Not measured, the state's words, each cause verbatim; no digit in the value, no Retry", async (state, label, cause) => {
+    const client = await openHealth(healthOf(aHealthReport([], { assumes: aCodeRow(state, [cause]), unbound: aCodeRow(state, [cause, `second${LF}cause`]) })));
+    for (const row of ["assumes", "unbound"] as const) {
+      expect([row, textOf(codePart(row).querySelector(".health-code-off"))]).toEqual([row, `Not measured: ${label}`]);
+      expect([row, Array.from(codePart(row).querySelectorAll(".health-value"), (value) => value.textContent)]).toEqual([row, ["Not measured"]]);
+      expect(within(codePart(row)).queryByRole("button", { name: "Retry" })).toBeNull();
+    }
+    expect(Array.from(within(codePart("unbound")).getByRole("list", { name: "Causes, as the daemon gives them" }).children, (item) => item.textContent)).toEqual([cause, "second cause"]);
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("could not be measured: the causes as the CLI prints them, no value, never 0; Retry reads getHealth alone, then focus on the part's heading; the other parts stand", async () => {
+    const cannot = aCodeRow("cannot", [`the code walk is incomplete: \`src/a${ESC}.rs\` cannot be read (os error 13)`, "the queue stands at schema 6; a queue command upgrades it"]);
+    const client = healthOf(aHealthReport([anAmendment({ path: "docs/features/a.md" })], { assumes: cannot, unbound: measuredUnbound(UNBOUND, 41, 2) }));
+    await openHealth(client);
+    const part = codePart("assumes");
+    expect(textOf(part.querySelector(".health-code-cannot-title"))).toBe("Could not be measured");
+    expect(Array.from(within(part).getByRole("list", { name: "Causes, as the daemon gives them" }).children, (item) => item.textContent)).toEqual([
+      "the code walk is incomplete: `src/a\\u{1b}.rs` cannot be read (os error 13)",
+      "the queue stands at schema 6; a queue command upgrades it",
+    ]);
+    expect(part.querySelector(".health-value")).toBeNull();
+    expect(part.querySelector(".health-left-total")).toBeNull();
+    expect(within(part).queryByRole("alert")).toBeNull();
+    // Rows 3 and 5 drawn as they are.
+    expect(textOf(region("What is left").querySelector('[data-row="amendments"] .health-left-total'))).toBe("1 unapplied amendment over 7 documents");
+    expect(lines("unbound")).toHaveLength(3);
+    client.getHealth.mockImplementation(() => Promise.resolve(aHealthReport([], { assumes: measuredAssumes([], 4), code: { files: 2, rs: 2, ron: 0, skipped: 0 } })));
+    const retry = within(part).getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(codePart("assumes").querySelector(".health-code-none")).not.toBeNull();
+    });
+    await focused(within(codePart("assumes")).getByRole("heading", { level: 3, name: "Code assuming a decision" }));
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(client.getCheck).toHaveBeenCalledTimes(1);
+    expect(client.getInbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("the read failing: each row the daemon's words verbatim, shown, not spoken (row 3 speaks them); no value; its Retry reads getHealth alone", async () => {
+    const message = "spec: the walk is incomplete: the directory `docs/spec/locks` cannot be listed: unapplied amendments not measured";
+    const client = healthClient();
+    client.getHealth.mockRejectedValueOnce(new ClientError({ status: 503, message }));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    await within(codePart("unbound")).findByText(message);
+    for (const row of ["assumes", "unbound"] as const) {
+      expect([row, textOf(codePart(row).querySelector(".error-title"))]).toEqual([row, row === "assumes" ? "The code assuming a decision could not be read" : "The unbound nodes could not be read"]);
+      expect(within(codePart(row)).queryByRole("alert")).toBeNull();
+      expect(codePart(row).querySelector(".health-value")).toBeNull();
+      expect(codePart(row).getAttribute("aria-busy")).toBe("false");
+    }
+    expect(within(region("What is left")).getAllByRole("alert").map((alert) => alert.textContent)).toEqual([`The unapplied amendments could not be read${message}`]);
+    fireEvent.click(within(codePart("unbound")).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(textOf(codePart("unbound").querySelector(".health-code-off"))).toBe("Not measured: Code layer off");
+    });
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(client.getCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it("being measured: a busy skeleton in each, no digit", async () => {
+    const client = healthClient();
+    client.getHealth.mockImplementation(() => new Promise(() => undefined));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    for (const row of ["assumes", "unbound"] as const) {
+      expect([row, codePart(row).getAttribute("aria-busy")]).toEqual([row, "true"]);
+      expect(within(codePart(row)).getByRole("status").getAttribute("aria-busy")).toBe("true");
+      expect(codePart(row).querySelector(".health-value")).toBeNull();
+      expect(codePart(row).textContent).not.toMatch(/\d/);
+    }
+  });
+
+  it("a word this UI does not know is shown raw, never fails the part: a row's state, a line's state, a reason, an ID state, a binding", async () => {
+    const report = aHealthReport([], {
+      assumes: measuredAssumes([anAssumesRow({ id: "PR-0001", state: "superseded_x" })]),
+      unbound: aCodeRow("stale", ["the index is older than the code"]),
+    });
+    await openHealth(healthOf(report));
+    expect([textOf(line("assumes", 0).querySelector(".badge-label")), line("assumes", 0).querySelector(".badge")?.getAttribute("data-tone")]).toEqual(["superseded_x", "assumed-unknown"]);
+    expect(textOf(codePart("unbound").querySelector(".health-code-off"))).toBe("Not measured: stale");
+    expect(within(codePart("unbound")).queryByRole("button", { name: "Retry" })).toBeNull();
+    cleanup();
+    await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound([anUnboundRow({ id: "R-1", markers: [anUnboundMarker({ id_state: "foreign", binding: "macro", reason: "shadowed" })] })]) })));
+    const marker = line("unbound", 0).querySelector(".health-code-marker");
+    expect([Array.from(marker?.querySelectorAll(".health-code-word") ?? [], (word) => word.textContent), textOf(marker?.querySelector(".badge-label"))]).toEqual([["foreign", "macro"], "shadowed"]);
+    expect(marker?.querySelector(".badge")?.getAttribute("data-tone")).toBe("unbound-unknown");
+  });
+
+  it.each(["assumes", "unbound"] as const)("%s over ten: the first ten rendered, Show all <n> renders the rest and hands the focus to the eleventh line, never left on the button; nothing read", async (row) => {
+    const assumes = Array.from({ length: 12 }, (_, index) => anAssumesRow({ id: `PR-${String(100 + index)}` }));
+    const unbound = Array.from({ length: 12 }, (_, index) => anUnboundRow({ id: `R-${String(100 + index)}`, line: index + 1 }));
+    const client = await openHealth(healthOf(aHealthReport([], { assumes: measuredAssumes(assumes), unbound: measuredUnbound(unbound) })));
+    expect(lines(row)).toHaveLength(10);
+    expect(textOf(codePart(row).querySelector(".health-amendments-scope"))).toBe(`The first 10 of 12, ${row === "assumes" ? "by ID" : "by path"}.`);
+    const button = within(codePart(row)).getByRole("button", { name: "Show all 12" });
+    button.focus();
+    fireEvent.click(button);
+    expect(lines(row)).toHaveLength(12);
+    await focused(line(row, 10));
+    expect(within(codePart(row)).queryByRole("button", { name: /^Show all/ })).toBeNull();
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("a row that fails to render fails its part alone: rows 3 and 5 stand beside it", async () => {
+    const broken = { ...aHealthReport([anAmendment({ path: "docs/features/a.md" })], { unbound: measuredUnbound(UNBOUND) }), assumes: null } as unknown as HealthReport;
+    const caught = vi.fn();
+    window.history.replaceState(null, "", "/#/alpha/health");
+    render(<App client={healthOf(broken)} scenario={null} />, { onCaughtError: caught });
+    await regionsShown();
+    expect(await within(codePart("assumes")).findByText(/The code assuming a decision could not be shown/)).toBeTruthy();
+    expect(within(codePart("assumes")).getByRole("heading", { level: 3, name: "Code assuming a decision" })).toBeTruthy();
+    expect(lines("unbound")).toHaveLength(3);
+    expect(region("What is left").querySelectorAll("[data-amendment]")).toHaveLength(1);
+    expect(caught).toHaveBeenCalled();
+  });
+
+  it("ten exactly: all ten, no Show all", async () => {
+    const ten = Array.from({ length: 10 }, (_, index) => anUnboundRow({ id: `R-${String(index)}` }));
+    await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound(ten) })));
+    expect(lines("unbound")).toHaveLength(10);
+    expect(within(codePart("unbound")).queryByRole("button", { name: /^Show all/ })).toBeNull();
   });
 });
 

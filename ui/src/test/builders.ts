@@ -1,4 +1,7 @@
 import type {
+  AssumedNode,
+  AssumedProposal,
+  AssumesRow,
   BundleItem,
   BundleLayers,
   BundleView,
@@ -26,6 +29,8 @@ import type {
   TreeNode,
   TreeView,
   UnappliedAmendment,
+  UnboundMarker,
+  UnboundRow,
 } from "../api/types";
 
 /** A whole review document for tests; omitted keys null or empty as the review JSON gives them. */
@@ -470,6 +475,66 @@ export function anAmendment(fields: Partial<UnappliedAmendment> & Pick<Unapplied
 /** Row 4 or 5 of `spec health --json` for tests, the code layer off (docs/features/health-code.md "Data"). */
 export function aCodeRowOff(): HealthAssumes & HealthUnbound {
   return { state: "off", causes: ["specengine.toml has no [code] table: the code layer is off (add [code] with roots)"], counts: null, rows: null };
+}
+
+/** Row 4 or 5 of `spec health --json` for tests in a state the daemon does not measure: its causes, no counts, no rows. */
+export function aCodeRow(state: string, causes: string[]): HealthAssumes & HealthUnbound {
+  return { state, causes, counts: null, rows: null };
+}
+
+/** The queue item a row 4 line names, for tests, keys in the JSON's order: an open discrepancy, nothing decided. */
+export function anAssumedProposal(fields: Partial<AssumedProposal> = {}): AssumedProposal {
+  return { kind: "discrepancy", status: "open", choice: null, record_id: null, record_path: null, reason: null, ...fields };
+}
+
+/** The node an `@assumes` names, for tests, keys in the JSON's order: accepted, no successor, no open item. */
+export function anAssumedNode(fields: Partial<AssumedNode> & Pick<AssumedNode, "id">): AssumedNode {
+  const { id, ...rest } = fields;
+  return { id, path: "docs/spec/rules.md", line: 7, status: "accepted", successor: null, proposals: [], ...rest };
+}
+
+/** One row 4 line for tests, keys in the JSON's order: an `@assumes` resting on an open discrepancy. */
+export function anAssumesRow(fields: Partial<AssumesRow> & Pick<AssumesRow, "id">): AssumesRow {
+  const { id, ...rest } = fields;
+  return { id, state: "pending", path: "src/lib.rs", line: 3, column: 4, relation: "assumes", proposal: anAssumedProposal(), node: null, ...rest };
+}
+
+/** Row 4 measured for tests: `rows` as given, over `markers` judged markers, one count per state as listed. */
+export function measuredAssumes(rows: AssumesRow[], markers: number = rows.length): HealthAssumes {
+  const of = (state: string) => rows.filter((row) => row.state === state).length;
+  return {
+    state: "measured",
+    causes: [],
+    counts: {
+      markers,
+      rows: rows.length,
+      pending: of("pending"),
+      as_assumed: of("as_assumed"),
+      otherwise: of("otherwise"),
+      applied: of("applied"),
+      rejected: of("rejected"),
+      unknown: of("unknown"),
+      archived: of("archived"),
+      in_question: of("in_question"),
+    },
+    rows,
+  };
+}
+
+/** A marker naming an unbound node without binding it, for tests, keys in the JSON's order: one that cannot be verified. */
+export function anUnboundMarker(fields: Partial<UnboundMarker> = {}): UnboundMarker {
+  return { path: "src/lib.rs", line: 9, column: 4, relation: "implements", id_state: "resolved", binding: "cannot_verify", reason: "cannot_verify", ...fields };
+}
+
+/** One unbound node for tests, keys in the JSON's order: a rule failing rule 1, no mention, no marker. */
+export function anUnboundRow(fields: Partial<UnboundRow> & Pick<UnboundRow, "id">): UnboundRow {
+  const { id, ...rest } = fields;
+  return { id, kind: "rule", title: `Rule ${id}`, path: "docs/spec/rules.md", line: 5, rules: [1], mentions: 0, markers: [], ...rest };
+}
+
+/** Row 5 measured for tests: `rows` unbound of `selected` nodes under `rules` rules. */
+export function measuredUnbound(rows: UnboundRow[], selected: number = rows.length + 3, rules = 1): HealthUnbound {
+  return { state: "measured", causes: [], counts: { rules, selected, bound: selected - rows.length, unbound: rows.length }, rows };
 }
 
 /** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-5 off. */

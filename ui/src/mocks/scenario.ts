@@ -5,9 +5,11 @@
  * incomplete walk (`docs/features/health-left.md` "Data"). `editorial`: every read as `normal` but
  * the lock entries an editorial approval refreshes, harbor-sim's counted and ledger-api's lock
  * unreadable, and a wording fix with an editorial approve staged (`docs/features/rev-discipline.md`
- * "UI"; src/mocks/editorial.ts).
+ * "UI"; src/mocks/editorial.ts). `code-cannot`: every read as `normal` but Health's rows 4-5, which
+ * could not be measured; `not-configured`: as `normal` but Health's row 5, which has no rule
+ * (`docs/features/health-code-ui.md` "Data"; src/mocks/health.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

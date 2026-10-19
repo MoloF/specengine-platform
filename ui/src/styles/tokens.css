@@ -103,6 +103,24 @@
   --finding-warning: var(--attention);
   --finding-unknown: var(--severity-unknown);
 
+  /* Health's code rows (docs/features/health-code-ui.md): row 4's states and row 5's reasons, none
+     of them a hold on work; a reason of cannot_verify takes cannot-verify's colour, never ok's, and
+     no reason takes ok's. */
+  --assumed-pending: var(--proposal-open);
+  --assumed-as-assumed: var(--sync-ok);
+  --assumed-otherwise: var(--sync-conflict);
+  --assumed-applied: var(--sync-spec-ahead);
+  --assumed-rejected: var(--proposal-rejected);
+  --assumed-missing: var(--sync-broken-binding);
+  --assumed-archived: var(--proposal-superseded);
+  --assumed-in-question: var(--attention);
+  --assumed-unknown: var(--severity-unknown);
+  --unbound-homoglyph: var(--sync-conflict);
+  --unbound-unanchored: var(--sync-unbound);
+  --unbound-cannot-verify: var(--sync-cannot-verify);
+  --unbound-relation: var(--attention);
+  --unbound-unknown: var(--severity-unknown);
+
   /* Tree marks: a root although its document names a parent. */
   --mark-dangling-parent: var(--sync-broken-binding);
   --mark-parent-cycle: var(--sync-predated);

@@ -63,7 +63,7 @@ export const queryKeys = {
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
-  /** The unapplied amendments, `spec health --json` (`docs/features/health-left.md` "Data"). */
+  /** `spec health --json`, rows 3 to 5 of What is left (`docs/features/health-left.md` "Data"; `docs/features/health-code-ui.md` "Data"). */
   health: (project: string) => ["health", project] as const,
   /** The round's sheet; `limit` null: the daemon's default (`docs/features/ui-round.md` "Data"). */
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
@@ -200,6 +200,12 @@ const WALKS: ReadonlySet<string> = new Set(["check", "health"]);
 /** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
 const APPLIED = "proposal.applied";
 
+/**
+ * The queue event of a rejection: no spec file changes, but code resting on that item is now
+ * row 4's `rejected` (`docs/features/health-code-ui.md` "Data"), so the health read alone is read again.
+ */
+const REJECTED = "proposal.rejected";
+
 /** A proposal's queue events (`docs/canon/proposal-queue.md` "States and events"). */
 const PROPOSAL_EVENT = "proposal.";
 
@@ -243,7 +249,8 @@ const TASK_EVENT = "task.";
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
  * every task of it (a task's open proposals and assumptions are the queue's); `proposal.applied`
  * also that project's trees, nodes, searches, bundles, graphs, check and unapplied amendments (a
- * spec file changed; `docs/features/ui-live.md` "Data"). A stage event, `proposal.staged` or `.unstaged`, reads only
+ * spec file changed; `docs/features/ui-live.md` "Data"); `proposal.rejected` also that project's
+ * health read, which row 4 shows (`docs/features/health-code-ui.md` "Data"). A stage event, `proposal.staged` or `.unstaged`, reads only
  * that project's inbox and that proposal again: a stage touches no task and no spec file
  * (`docs/canon/decision-staging.md` "Queue"); one no write of this tab accounts for is returned as
  * the outside change to show, until `dismiss` or the next one. A `task.*` event reads that
@@ -254,7 +261,7 @@ const TASK_EVENT = "task.";
  * other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads and the round sheets of the project again. Only the reads on screen are fetched, once each
- * (the check and the unapplied amendments only while Health shows them:
+ * (the check and the health read only while Health shows them:
  * `docs/features/health-left.md` "Description and interactions"); the rest are marked stale.
  */
 export function useLiveQueue(project: string | null): { outside: OutsideStage | null; dismiss: () => void } {
@@ -321,6 +328,10 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readTasksAgain();
         if (event.type === APPLIED) {
           readSpecAgain();
+        }
+        if (event.type === REJECTED) {
+          // A walk, as on an apply: one in flight is kept and its answer taken.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.health(project), exact: true }, { cancelRefetch: false });
         }
       },
       () => {
@@ -475,11 +486,11 @@ export function useCheck(project: string) {
 export type CheckQuery = ReturnType<typeof useCheck>;
 
 /**
- * The project's unapplied amendments, `spec health`, read as the check is
+ * The project's `spec health` (rows 3 to 5 of What is left), read as the check is
  * (`docs/features/health-left.md` "Description and interactions"): on entering Health, on "Check
- * again" (`refetch`) and,
- * while Health is on screen, after the live tail's apply or gap (useLiveQueue); never on window
- * focus, a reconnect, an interval, a stage or a `task.*` event. A walk of the whole tree: its
+ * again" (`refetch`) and, while Health is on screen, after the live tail's apply, rejection
+ * (`docs/features/health-code-ui.md` "Data") or gap (useLiveQueue); never on window focus, a
+ * reconnect, an interval, a stage, `proposal.created` or a `task.*` event. A walk of the whole tree: its
  * query's AbortSignal is never taken, a walk in flight is kept and its answer used. The home reads
  * none.
  */

@@ -87,6 +87,9 @@ const MARK = ["dangling-parent", "parent-cycle", "unknown"];
 // docs/features/ui-health.md: the check's verdicts (the third spelled as its tone) and a finding's severities.
 const CHECK = ["clean", "observed", "fails", "cannot-check", "unknown"];
 const FINDING = ["error", "warning", "unknown"];
+// docs/features/health-code-ui.md: row 4's states (`unknown` an item no queue holds, as `missing`) and row 5's reasons.
+const ASSUMED = ["pending", "as-assumed", "otherwise", "applied", "rejected", "missing", "archived", "in-question", "unknown"];
+const UNBOUND = ["homoglyph", "unanchored", "cannot-verify", "relation", "unknown"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
   ...LINK.map((value) => `--link-${value}`),
@@ -99,6 +102,8 @@ const STATUS = [
   ...SYNC.map((value) => `--sync-${value}`),
   ...CHECK.map((value) => `--check-${value}`),
   ...FINDING.map((value) => `--finding-${value}`),
+  ...ASSUMED.map((value) => `--assumed-${value}`),
+  ...UNBOUND.map((value) => `--unbound-${value}`),
   "--attention",
   // The graph canvas (docs/features/ui-graph.md): edges and minimap nodes are read against the surfaces.
   "--graph-edge",
@@ -178,6 +183,17 @@ describe("tokens.css (AC-09)", () => {
       expect([verdict, resolve(`--check-${verdict}`).toLowerCase() === own]).toEqual([verdict, false]);
     }
     expect(resolve("--check-clean").toLowerCase()).not.toBe(resolve("--check-fails").toLowerCase());
+  });
+
+  it("draws a marker that cannot be verified in cannot-verify's colour, and no reason a marker binds not in ok's (health-code-ui)", () => {
+    expect(resolve("--unbound-cannot-verify").toLowerCase()).toBe(resolve("--sync-cannot-verify").toLowerCase());
+    for (const reason of UNBOUND) {
+      expect([reason, resolve(`--unbound-${reason}`).toLowerCase() === resolve("--sync-ok").toLowerCase()]).toEqual([reason, false]);
+    }
+    const unknown = resolve("--assumed-unknown").toLowerCase();
+    for (const state of ASSUMED.filter((value) => value !== "unknown")) {
+      expect([state, resolve(`--assumed-${state}`).toLowerCase() === unknown]).toEqual([state, false]);
+    }
   });
 
   it("gives cannot-verify its own colour, never ok's or another sync state's", () => {
