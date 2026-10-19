@@ -1,4 +1,4 @@
-//! A stub `CodeAnalyzer` (docs/features/symbol-index.md "Crates": the
+//! A stub `CodeAnalyzer` (docs/canon/symbol-index.md "Crates and seams": the
 //! store owns compare, apply and the cross-file pass behind its trait
 //! `CodeAnalyzer` — list, packages, fingerprint, analyze; plain rows): the
 //! store has no dependency on `specengine-code`, so its own tests give it

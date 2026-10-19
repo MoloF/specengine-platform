@@ -1,4 +1,4 @@
-//! docs/features/proposal-apply.md, "Reject" and "Idempotence" as
+//! docs/canon/proposal-completion.md, "Reject", "Completion" as
 //! iteration 5 rules them (review of iteration 4: MAJOR — an orphan, a
 //! proposal whose recorded repository path is gone, counted a moved
 //! project too, and `reject` skipped the lookup and recorded `rejected`

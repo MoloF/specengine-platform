@@ -769,8 +769,7 @@ fn symbols_json_every_key_present() {
     }
 }
 
-/// The closed `ambiguity` words (docs/canon/code-bindings.md "Rust
-/// binding").
+/// The closed `ambiguity` words (docs/canon/code-bindings.md "Rust binding").
 const AMBIGUITIES: [&str; 3] = ["path_attribute", "unrooted", "duplicate"];
 
 /// `value` is a JSON integer.

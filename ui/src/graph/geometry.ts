@@ -1,8 +1,8 @@
 import { BOX_HEIGHT, BOX_WIDTH, COLUMN_STEP } from "./layout";
 
-// The canvas's drawing geometry (docs/features/ui-graph.md "Canvas"): pure numbers from the
-// layout's fixed grid, no drawing library. A link within one column bends into the gap on its
-// right; a fit keeps the boxes' text readable and the focus in sight.
+// The canvas's drawing geometry (docs/features/ui-graph.md "Implementation", Canvas): pure
+// numbers from the layout's fixed grid, no drawing library. A link within one column bends into
+// the gap on its right; a fit keeps the boxes' text readable and the focus in sight.
 
 /** The empty band between a column's boxes and the next column's. */
 export const COLUMN_GAP = COLUMN_STEP - BOX_WIDTH;

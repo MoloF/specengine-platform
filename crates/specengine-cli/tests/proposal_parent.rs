@@ -1,4 +1,4 @@
-//! docs/features/proposal-apply.md, "Idempotence" as iteration 5 rules it
+//! docs/canon/proposal-completion.md, "Completion" as iteration 5 rules it
 //! (review of iteration 4, MAJOR: `git merge-file` is not idempotent, so a
 //! rebased apply's own commit never completed and the next approve merged
 //! the proposal a second time; known limit: a commit tree without

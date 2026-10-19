@@ -114,7 +114,7 @@ fn config_causes_carry_only_the_name_passed_in() {
     assert!(setup.baseline.entries.is_empty());
 }
 
-/// docs/canon/spec-check-cli.md "Cannot check" (task spec-check-process,
+/// docs/canon/spec-check-cli.md "spec check" (Cannot check; task spec-check-process,
 /// iteration 3): a config error is reported in mode `enforce` — the mode
 /// is read only when all of `CheckConfig` is valid, so a `[budgets]`,
 /// `[classes]`, `[check]` or `[[check.rules]]` error beside a valid

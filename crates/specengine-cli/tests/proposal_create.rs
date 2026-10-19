@@ -586,9 +586,9 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
     assert_eq!(pair.proposal("PR-0001").diagnostics, []);
 }
 
-/// The Data keys of `review` in order (docs/features/decision-apply.md
-/// "Data", "Review document": the five of a decision record after
-/// `linked`).
+/// The Data keys of `review` in order (docs/canon/decision-record.md
+/// "Queue and documents", Review document: the five of a decision record
+/// after `linked`).
 const REVIEW_KEYS: [&str; 48] = [
     "id",
     "project",
@@ -639,7 +639,7 @@ const REVIEW_KEYS: [&str; 48] = [
     "choice",
     // docs/features/task-package.md "Data": after `choice`, 43 keys.
     "task_id",
-    // docs/features/decision-staging.md "Documents": between `task_id` and
+    // docs/canon/decision-staging.md "Documents": between `task_id` and
     // `notes`, 45 keys.
     "staged",
     "staged_at",
@@ -736,7 +736,7 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
                 "target_ids"
             ]
         );
-        // docs/features/decision-staging.md "Documents": `staged_at` after
+        // docs/canon/decision-staging.md "Documents": `staged_at` after
         // `record_id`, 12 keys; nothing staged: `null`.
         assert!(entry["staged_at"].is_null(), "{entry}");
         // D1 of docs/features/daemon-read.md: an update's `target_ids` is

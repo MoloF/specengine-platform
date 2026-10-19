@@ -29,11 +29,11 @@ import { arcOver, readableViewport } from "./geometry";
 import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE, patternAt, type Layout, type LayoutBox, type LayoutEdge } from "./layout";
 import { boxLabel, edgeLabel, isArchived, moreLabel } from "./lines";
 
-// The read-only canvas (docs/features/ui-graph.md "Canvas"): React Flow draws the layout's boxes
-// and edges; nothing drags, connects, selects or deletes. Every key prop is null (each default
-// listens on the document and prevents its key), React Flow's own keyboard and words are off or
-// replaced, and the boxes keep one tab stop that the arrow keys move. The wheel scrolls the page,
-// never zooms it: pinch and the zoom buttons do.
+// The read-only canvas (ui/README.md "Screen rules", Canvas): React Flow draws the layout's
+// boxes and edges; nothing drags, connects, selects or deletes. Every key prop is null (each
+// default listens on the document and prevents its key), React Flow's own keyboard and words are
+// off or replaced, and the boxes keep one tab stop that the arrow keys move. The wheel scrolls the
+// page, never zooms it: pinch and the zoom buttons do.
 
 /**
  * Every key of React Flow's `defaultAriaLabelConfig` (`@xyflow/system`), replaced: nothing here
@@ -285,9 +285,9 @@ function durationOf(token: string): number {
 }
 
 /**
- * The canvas's fit (docs/features/ui-graph.md "Canvas"): the whole graph when its text stays
- * readable, else the focus and its neighbours at the smallest readable zoom. Smooth where motion is
- * allowed. False while the canvas has no pan-zoom or size yet.
+ * The canvas's fit (docs/features/ui-graph.md "Implementation", Canvas): the whole graph when its
+ * text stays readable, else the focus and its neighbours at the smallest readable zoom. Smooth
+ * where motion is allowed. False while the canvas has no pan-zoom or size yet.
  */
 function useReadableFit(layout: Layout): () => boolean {
   const store = useStoreApi();

@@ -571,7 +571,7 @@ fn an_alias_with_look_alike_digits_is_no_homoglyph() {
 }
 
 // ------------------------------------------------------------ is_slug
-// docs/features/spec-check-scopes.md, "API": `is_slug` is the grammar's
+// docs/canon/spec-check-links.md, "API": `is_slug` is the grammar's
 // `slug`, `[a-z][a-z0-9-]*`, one rule for the `project:` and `slug/`
 // qualifiers and for the stem of a feature document (ADR-0026).
 

@@ -1,4 +1,4 @@
-//! docs/features/daemon-read.md "Data" "Query", iteration 2 of the daemon:
+//! crates/specengine-http/README.md "Endpoints", Query, iteration 2 of the daemon:
 //! the raw query string is decoded strictly, as a form. A `%` not followed
 //! by two hex digits, or bytes that are not UTF-8 once decoded, in a value
 //! or in a name, are a 400 naming the parameter (the raw name when the

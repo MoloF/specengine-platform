@@ -3,7 +3,7 @@
 //! method but GET, `HEAD` included, with a 405 whose `Allow` is `GET` and
 //! whose message is `method <M> is not served on <path>: only GET is
 //! served here`; the decision route (the stage route since
-//! docs/features/decision-staging.md "Daemon") answers any method but POST
+//! docs/canon/decision-staging.md "Daemon") answers any method but POST
 //! and DELETE with a 405 whose `Allow` is `POST, DELETE` and whose message
 //! says a staged choice is confirmed on a terminal; its POST and DELETE
 //! without `Sec-Fetch-Site: same-origin` are a 403, no `Allow`; an unknown

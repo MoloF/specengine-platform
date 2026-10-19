@@ -24,9 +24,9 @@ function EdgeLines({ edges }: { edges: readonly GraphEdge[] }) {
 }
 
 /**
- * The selected box's details (docs/features/ui-graph.md "Details"): a walked node's holders, its
- * distance and edges, and where to go next; a stub's state and edge, never a link; a more-box's
- * count and the way to the List. Esc closes it and puts focus back on the box.
+ * The selected box's details (docs/features/ui-graph.md "Implementation", Details): a walked
+ * node's holders, its distance and edges, and where to go next; a stub's state and edge, never a
+ * link; a more-box's count and the way to the List. Esc closes it and puts focus back on the box.
  */
 export function GraphDetails({
   project,

@@ -637,8 +637,8 @@ fn ac_r8_an_amendment_stages_an_approve_without_a_span_hash() {
 /// reservation of the open one restored. M: export skipping the kind.
 #[test]
 fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
-    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
-    // schema 8" (an amendment still adds none).
+    // Schema 8, 46 columns since docs/features/drift-queue.md
+    // "Queue schema 8" (an amendment still adds none).
     assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     let scratch = Scratch::new("qa-schema");

@@ -1,6 +1,6 @@
-// The Rendered/Source switch of a spec text (docs/features/ui-markdown.md "Description and interactions"): Rendered
-// is the default; Source is the text as sent, numbered (src/tree/TextView.tsx). The view holding
-// the choice keeps it from node to node.
+// The Rendered/Source switch of a spec text (ui/README.md "Screen rules", Text): Rendered is the
+// default; Source is the text as sent, numbered (src/tree/TextView.tsx). The view holding the
+// choice keeps it from node to node.
 
 export type TextMode = "rendered" | "source";
 

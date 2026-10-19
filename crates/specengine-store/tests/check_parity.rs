@@ -1,5 +1,5 @@
 //! This repository's own documents under its committed root
-//! `specengine.toml` (docs/features/spec-cli-switch.md, "Migrations": the
+//! `specengine.toml` (docs/features/spec-cli-switch.md, "Implementation", Migrations: the
 //! criteria that compared `spec check` with the retired second
 //! implementation now hold against the committed files; the config and the
 //! std walk live in `parity_config/mod.rs`, shared with the CLI's
@@ -208,8 +208,8 @@ const SKILL_FILES: [&str; 6] = [
     "plugin/specengine/skills/read-spec/SKILL.md",
 ];
 
-/// The plugin's five agent bodies (docs/features/plugin-roles.md "Data",
-/// "Files"): under `roots` through `plugin`, kept out of the walk by the
+/// The plugin's five agent bodies (docs/canon/plugin.md "Roles"): under
+/// `roots` through `plugin`, kept out of the walk by the
 /// second `exclude` glob alone (T-5).
 const AGENT_FILES: [&str; 5] = [
     "plugin/specengine/agents/analyst.md",

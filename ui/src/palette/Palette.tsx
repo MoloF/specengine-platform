@@ -79,8 +79,9 @@ function held<T>(data: T | undefined, failed: boolean): Held<T> {
 }
 
 /**
- * The jump palette (docs/features/ui-home.md "Palette"): a modal dialog with one combobox; focus
- * stays in it while the arrows, Home and End move the active option and Enter or a click takes it.
+ * The jump palette (docs/features/ui-home.md "Implementation", Palette): a modal dialog with one
+ * combobox; focus stays in it while the arrows, Home and End move the active option and Enter or a
+ * click takes it.
  * Esc, the Close button and a click on the scrim close it.
  * Tasks and the Inbox come from the cache, read once per opening only when missing or failed; the
  * node search runs once per activation. A jump goes to `onJump`; every failure is said under the list

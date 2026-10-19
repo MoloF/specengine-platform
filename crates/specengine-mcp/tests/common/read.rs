@@ -93,12 +93,12 @@ pub const TOOLS: [&str; 18] = [
     "unmapped",
 ];
 
-/// docs/features/code-tools.md "Form errors": `find_symbols` given not
+/// docs/canon/mcp-code.md "Tools", Forms: `find_symbols` given not
 /// exactly one of its four forms (a `null` is absent), as `get_task`'s.
 pub const FIND_SYMBOLS_ONE_FORM: &str =
     "spec: find_symbols takes exactly one of `query`, `node`, `file` and `at`\n";
 
-/// docs/features/code-tools.md "Form errors": `limit` beside a form other
+/// docs/canon/mcp-code.md "Tools", Forms: `limit` beside a form other
 /// than `query`.
 pub const FIND_SYMBOLS_LIMIT: &str = "spec: find_symbols takes `limit` with `query` only\n";
 
@@ -435,9 +435,9 @@ pub fn queue_library(
     expected(outcome)
 }
 
-/// The task tools' twins (docs/features/task-package.md "Description and
-/// interactions"), with the clock `now` and the caller's git environment
-/// `git`: `get_task` = `task show T | --next` (an answer naming no task is
+/// The task tools' twins (docs/features/task-package.md
+/// "Description and interactions"), with the clock `now` and the caller's
+/// git environment `git`: `get_task` = `task show T | --next` (an answer naming no task is
 /// an error result without `structuredContent`: the output schema is the
 /// package's; not exactly one of `task_id`, `next: true`: the tool's own
 /// error, no CLI twin), `claim_task` = `task claim`, `submit_plan` =
@@ -533,8 +533,8 @@ pub fn task_library(
     expected(outcome.map(|outcome| Outcome::Task(Box::new(outcome))))
 }
 
-/// The code tools' twins (docs/features/code-tools.md "Tools", "Form
-/// errors", "Results and exits"): `find_symbols` = `spec symbols` with
+/// The code tools' twins (docs/canon/mcp-code.md "Tools", Forms, Results):
+/// `find_symbols` = `spec symbols` with
 /// exactly one form, `query` one positional, `at` passed raw (MCP never
 /// splits it), `limit` with `query` only (else the tool's own error, no
 /// CLI twin, no document; the form count is judged first: reading L3 of

@@ -238,7 +238,7 @@ fn a_malformed_rule_is_cannot_check_at_its_line_in_every_mode() {
     }
 }
 
-/// docs/canon/spec-check-cli.md "Cannot check" (iteration 3): a config
+/// docs/canon/spec-check-cli.md "spec check" (Cannot check; iteration 3): a config
 /// error is reported in mode `enforce`, the mode being read only when all
 /// of `CheckConfig` is valid. `[budgets] tier0_bytes = 0` (no rule) and
 /// each malformed rule beside `[check] mode = "observe"` or

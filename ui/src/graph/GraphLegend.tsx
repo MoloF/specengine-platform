@@ -13,9 +13,10 @@ export function PatternSwatch({ position }: { position: number }) {
 }
 
 /**
- * The canvas's legend (docs/features/ui-graph.md "Legend"): what an arrow and a column mean; each
- * followed type in the answer's order with its pattern (by its place in the mode's chip `order`, as
- * the canvas draws it), direction icon and words; the marks; the drawing library's credit.
+ * The canvas's legend (docs/features/ui-graph.md "Implementation", Legend): what an arrow and a
+ * column mean; each followed type in the answer's order with its pattern (by its place in the
+ * mode's chip `order`, as the canvas draws it), direction icon and words; the marks; the drawing
+ * library's credit.
  */
 export function GraphLegend({ types, order }: { types: readonly FollowedType[]; order: readonly string[] }) {
   return (

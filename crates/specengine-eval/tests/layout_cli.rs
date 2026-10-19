@@ -29,8 +29,8 @@ const LAYOUT_FIXTURES: [&str; 2] = [ONE, TWO];
 /// after it).
 const TODAY: &str = "2026-10-04";
 
-/// The detail files beside the tree (docs/features/import-layout.md
-/// "stdout and detail").
+/// The detail files beside the tree (docs/canon/import-layout-verifier.md
+/// "Output").
 const DETAIL_FILES: [&str; 7] = [
     "emission.json",
     "records.json",

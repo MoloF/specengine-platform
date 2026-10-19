@@ -103,8 +103,9 @@ const KEYS = {
     record_id: true,
     staged_at: true,
   } satisfies Record<keyof InboxEntry, true>,
-  // docs/canon/proposal-queue.md "Commands" to `updated_at`, docs/canon/agent-intake.md "Review
-  // document" the eleven after it, docs/features/decision-apply.md "Data" the five after `linked`,
+  // docs/canon/proposal-queue.md "Commands" to `updated_at`,
+  // docs/canon/agent-intake.md "Review document" the eleven after it,
+  // docs/features/decision-apply.md "Data" the five after `linked`,
   // docs/canon/tasks.md "Task-bound proposals" (Review document) `task_id` after `choice`,
   // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`,
   // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`,
@@ -540,7 +541,7 @@ const UI_LIVE_TASKS: readonly Named[] = [
   "Author",
 ];
 
-/** decision-staging's two: the stage's shapes (docs/features/decision-staging.md "Data", "Documents"). */
+/** decision-staging's two: the stage's shapes (docs/canon/decision-staging.md "The stage", "Documents"). */
 const DECISION_STAGING: readonly Named[] = ["StagedApprove", "StagedReject"];
 
 /** ui-round's six: the sheet, an item, a target, a task, the answers document, an entry (docs/features/ui-round.md T-04). */

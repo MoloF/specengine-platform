@@ -1,9 +1,7 @@
 //! Comment pointers from code into the docs (docs/features/pointer-sweep.md
 //! AC-04, enforcing AC-01, AC-02 and AC-03): every `.rs` file under
 //! `crates/*/src` and `crates/*/tests` is scanned as text; the stale-pointer
-//! and Data-form checks also read every `.ts` and `.tsx` file under `ui/src`
-//! (docs/features/ui-shell.md "Roles", AC-06: each provisional type cites an
-//! existing heading).
+//! check also reads every `.ts` and `.tsx` file under `ui/src`.
 //!
 //! - No pointer to a spec section that now only delegates (the stale
 //!   patterns are assembled below so this file never matches itself).
@@ -11,10 +9,17 @@
 //!   detector and the schedule dump: exactly the "Stays" list of the spec.
 //! - A citation of the compacted layer-A task spec names an AC, never a
 //!   heading; the rewritten comments cite the canon instead.
-//! - Every citation in the spec's Data form (a backticked `.md` path, one
-//!   space, a double-quoted heading, further headings after `, `) names
-//!   headings that exist verbatim in that file, each quoted heading on one
-//!   line.
+//! - Comment citations (`docs/README.md` "Enforcement", Code pointers): in the
+//!   comment text of the walk (C4: the Rust sources and tests, `ui/src`'s
+//!   `.ts`, `.tsx` and `.css`, `ui/*.{ts,js}`, the `#` comments of the
+//!   `Cargo.toml` files), never in code (C7), a documentation path,
+//!   backticked or bare, then an optional `,`, one space and a quoted
+//!   heading, further ones after `, "` or across a line ending in `,`; the
+//!   first heading may open the next comment line when the path ends its
+//!   line (C1). Every quoted heading exists verbatim in that file, on one
+//!   line (C2); every documentation path names a file, but for fixture
+//!   data and the named allowlist (C3). The UI's provisional types cite
+//!   their sources this way (`ui/README.md` "Contract seam").
 //! - The CLI's form of a canon citation (its sources may not hold `docs/`,
 //!   CLI `genre.rs` AC-17): in a comment, `` canon `<name>`, "<h>"[, "<h>"] ``
 //!   is read as `docs/canon/<name>.md` and its headings checked alike; a
@@ -23,9 +28,10 @@
 //!   carry-over citations (canon `code-roles`, "Links") were unchecked.
 //!
 //! Named mutations: citing "RON bindings" in one row, or restoring one stale
-//! pointer, turns this red.
+//! pointer, turns this red; so do the grammar self-test's and the floors'
+//! (docs/features/citation-sweep.md AC-01 to AC-09).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -37,44 +43,65 @@ fn repository_root() -> PathBuf {
         .expect("repository root exists")
 }
 
-/// Every `.rs` file under `crates/*/src` and `crates/*/tests`, as
-/// (repository-relative path with `/`, text), sorted by path.
-fn rust_files() -> Vec<(String, String)> {
-    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
-        let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-            .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
-            .map(|entry| entry.expect("directory entry").path())
-            .collect();
-        entries.sort();
-        for path in entries {
-            if path.is_dir() {
-                walk(root, &path, out);
-            } else if path.extension().is_some_and(|ext| ext == "rs") {
-                let bytes = fs::read(&path).expect("readable source file");
-                let relative = path
-                    .strip_prefix(root)
-                    .expect("under the repository")
-                    .components()
-                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("/");
-                out.push((relative, String::from_utf8_lossy(&bytes).into_owned()));
+/// `path` as a repository-relative path with `/`.
+fn relative(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .expect("under the repository")
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// The text of the file at `path`, invalid UTF-8 replaced.
+fn read_text(path: &Path) -> String {
+    let bytes = fs::read(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Every file under `dir` with one of `extensions` (installed packages
+/// skipped), as (repository-relative path with `/`, text), sorted by path.
+fn walk(root: &Path, dir: &Path, extensions: &[&str], out: &mut Vec<(String, String)>) {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+        .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
+        .map(|entry| entry.expect("directory entry").path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        if path.is_dir() {
+            if path.file_name().is_some_and(|name| name != "node_modules") {
+                walk(root, &path, extensions, out);
             }
+        } else if path
+            .extension()
+            .is_some_and(|ext| extensions.iter().any(|wanted| ext == *wanted))
+        {
+            out.push((relative(root, &path), read_text(&path)));
         }
     }
-    let root = repository_root();
+}
+
+/// The crate directories under `crates/`, sorted.
+fn crate_dirs(root: &Path) -> Vec<PathBuf> {
     let mut crates: Vec<PathBuf> = fs::read_dir(root.join("crates"))
         .expect("crates/ readable")
         .map(|entry| entry.expect("crate entry").path())
         .filter(|path| path.is_dir())
         .collect();
     crates.sort();
+    crates
+}
+
+/// Every `.rs` file under `crates/*/src` and `crates/*/tests`, as
+/// (repository-relative path with `/`, text), sorted by path.
+fn rust_files() -> Vec<(String, String)> {
+    let root = repository_root();
     let mut out = Vec::new();
-    for krate in crates {
+    for krate in crate_dirs(&root) {
         for area in ["src", "tests"] {
             let dir = krate.join(area);
             if dir.is_dir() {
-                walk(&root, &dir, &mut out);
+                walk(&root, &dir, &["rs"], &mut out);
             }
         }
     }
@@ -89,36 +116,14 @@ fn rust_files() -> Vec<(String, String)> {
 /// Every `.ts` and `.tsx` file under `ui/src` (installed packages skipped),
 /// as (repository-relative path with `/`, text), sorted by path.
 fn ui_sources() -> Vec<(String, String)> {
-    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
-        let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-            .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
-            .map(|entry| entry.expect("directory entry").path())
-            .collect();
-        entries.sort();
-        for path in entries {
-            if path.is_dir() {
-                if path.file_name().is_some_and(|name| name != "node_modules") {
-                    walk(root, &path, out);
-                }
-            } else if path
-                .extension()
-                .is_some_and(|ext| ext == "ts" || ext == "tsx")
-            {
-                let bytes = fs::read(&path).expect("readable source file");
-                let relative = path
-                    .strip_prefix(root)
-                    .expect("under the repository")
-                    .components()
-                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("/");
-                out.push((relative, String::from_utf8_lossy(&bytes).into_owned()));
-            }
-        }
-    }
     let root = repository_root();
     let mut out = Vec::new();
-    walk(&root, &root.join("ui").join("src"), &mut out);
+    walk(
+        &root,
+        &root.join("ui").join("src"),
+        &["ts", "tsx"],
+        &mut out,
+    );
     assert!(
         out.iter()
             .any(|(path, _)| path == "ui/src/api/provisional.ts"),
@@ -132,6 +137,51 @@ fn ui_sources() -> Vec<(String, String)> {
 fn source_files() -> Vec<(String, String)> {
     let mut out = rust_files();
     out.extend(ui_sources());
+    out
+}
+
+/// The citation walk (C4): [`source_files`], then `ui/src/**/*.css`,
+/// `ui/*.{ts,js}`, the root `Cargo.toml` and `crates/*/Cargo.toml`.
+fn cited_files() -> Vec<(String, String)> {
+    let root = repository_root();
+    let mut out = source_files();
+    let mut styles = Vec::new();
+    walk(&root, &root.join("ui").join("src"), &["css"], &mut styles);
+    assert!(
+        styles
+            .iter()
+            .any(|(path, _)| path == "ui/src/styles/app.css"),
+        "the walk missed ui/src/styles/app.css ({} style files)",
+        styles.len()
+    );
+    out.extend(styles);
+    let mut configs: Vec<PathBuf> = fs::read_dir(root.join("ui"))
+        .expect("ui/ readable")
+        .map(|entry| entry.expect("ui entry").path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|ext| ext == "ts" || ext == "js")
+        })
+        .collect();
+    configs.sort();
+    configs.push(root.join("Cargo.toml"));
+    configs.extend(
+        crate_dirs(&root)
+            .into_iter()
+            .map(|krate| krate.join("Cargo.toml"))
+            .filter(|path| path.is_file()),
+    );
+    for path in configs {
+        out.push((relative(&root, &path), read_text(&path)));
+    }
+    for wanted in ["ui/vite.config.ts", "ui/eslint.config.js", "Cargo.toml"] {
+        assert!(
+            out.iter().any(|(path, _)| path == wanted),
+            "the walk missed {wanted}"
+        );
+    }
     out
 }
 
@@ -304,23 +354,215 @@ fn the_rewritten_comments_cite_the_canon() {
     );
 }
 
-/// A citation in the Data form: the cited file and its quoted headings.
+/// The documentation roots (C1): a path read in comment text is a citation
+/// only when it starts at one of these; `*` stands for one path segment's
+/// name, a trailing `/` for anything below. Fixture and sample layouts
+/// (`docs/spec/…`, `docs/records/…`, `book/…`, this file's own `a/…`
+/// samples) lie outside, and so does any other top-level `docs/` file: the
+/// tests' temporary corpora name a dozen (`docs/a.md`, `docs/s.md`, …).
+const DOC_ROOTS: [&str; 11] = [
+    "CLAUDE.md",
+    "README.md",
+    "docs/README.md",
+    "docs/index*.md",
+    "docs/archive/",
+    "docs/canon/",
+    "docs/decisions/",
+    "docs/features/",
+    "docs/specs/",
+    "crates/*/README.md",
+    "ui/README.md",
+];
+
+/// Whether `name` matches the one-segment pattern `pattern` (at most one
+/// `*`).
+fn segment_matches(pattern: &str, name: &str) -> bool {
+    match pattern.split_once('*') {
+        None => pattern == name,
+        Some((head, tail)) => {
+            name.len() >= head.len() + tail.len() && name.starts_with(head) && name.ends_with(tail)
+        }
+    }
+}
+
+/// Whether `path` starts at one of `roots` (see [`DOC_ROOTS`]); a path with
+/// an empty, `.` or `..` segment never does.
+fn in_roots(path: &str, roots: &[&str]) -> bool {
+    let segments: Vec<&str> = path.split('/').collect();
+    if segments
+        .iter()
+        .any(|segment| segment.is_empty() || *segment == "." || *segment == "..")
+    {
+        return false;
+    }
+    roots.iter().any(|root| match root.strip_suffix('/') {
+        Some(_) => path.starts_with(root),
+        None => {
+            let patterns: Vec<&str> = root.split('/').collect();
+            patterns.len() == segments.len()
+                && patterns
+                    .iter()
+                    .zip(&segments)
+                    .all(|(pattern, name)| segment_matches(pattern, name))
+        }
+    })
+}
+
+/// Whether `relative` names a file under `base`, each component spelled
+/// exactly as on disk (the owner's macOS folds case; the check must not).
+fn names_a_file(base: &Path, relative: &str) -> bool {
+    let mut path = base.to_path_buf();
+    for part in relative.split('/') {
+        let Ok(entries) = fs::read_dir(&path) else {
+            return false;
+        };
+        if !entries
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_str() == Some(part))
+        {
+            return false;
+        }
+        path.push(part);
+    }
+    path.is_file()
+}
+
+/// How a walked file writes its comments (C4).
+#[derive(Clone, Copy, PartialEq)]
+enum Syntax {
+    /// `.rs`, `.ts`, `.tsx`, `.js`: `//`, `///`, `//!`, `/*`, `/**`, and
+    /// the lines inside a `/* … */` opened on a comment line (a leading `*`
+    /// stripped there; outside one, a `*`-led line is code).
+    Slashes,
+    /// `.css`: `/* … */` only, its continuation lines with or without `*`.
+    Css,
+    /// `Cargo.toml`: a line-leading `#`.
+    Hash,
+}
+
+/// The comment text of each line of `text` (file `path`, C7): `Some` with
+/// what follows the marker, up to `*/`, on a comment line; `None` on code.
+fn comment_lines<'a>(path: &str, text: &'a str) -> Vec<Option<&'a str>> {
+    let syntax = if path.ends_with(".css") {
+        Syntax::Css
+    } else if path.ends_with(".toml") {
+        Syntax::Hash
+    } else {
+        Syntax::Slashes
+    };
+    let mut open = false;
+    text.lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            if syntax == Syntax::Hash {
+                return trimmed.strip_prefix('#').map(str::trim);
+            }
+            if open {
+                let body = match trimmed.strip_prefix('*') {
+                    Some(rest) if !rest.starts_with('/') => rest,
+                    _ => trimmed,
+                };
+                return Some(block_text(body, &mut open));
+            }
+            if let Some(rest) = trimmed.strip_prefix("/*") {
+                let rest = if rest.starts_with("*/") {
+                    rest
+                } else {
+                    rest.strip_prefix(['*', '!']).unwrap_or(rest)
+                };
+                open = true;
+                return Some(block_text(rest, &mut open));
+            }
+            match trimmed.strip_prefix("//") {
+                Some(rest) if syntax == Syntax::Slashes => {
+                    Some(rest.strip_prefix(['/', '!']).unwrap_or(rest).trim())
+                }
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// `body` up to its `*/` (which closes the block), trimmed.
+fn block_text<'a>(body: &'a str, open: &mut bool) -> &'a str {
+    match body.find("*/") {
+        Some(end) => {
+            *open = false;
+            body[..end].trim()
+        }
+        None => body.trim(),
+    }
+}
+
+/// Whether byte `b` may sit in a documentation path.
+fn path_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'/' | b'-')
+}
+
+/// The `.md` paths in comment text `text`, as byte ranges: a run of path
+/// bytes ending in `.md`, not continued by a name (`.mdx`, `.md.bak`,
+/// `x.md/`) and not part of a pattern (a `*`, `{`, `}`, `<` or `>` next to
+/// it).
+fn md_paths(text: &str) -> Vec<(usize, usize)> {
+    let bytes = text.as_bytes();
+    let pattern = |b: Option<&u8>| matches!(b, Some(b'*' | b'{' | b'}' | b'<' | b'>'));
+    let mut out = Vec::new();
+    for (at, _) in text.match_indices(".md") {
+        let end = at + ".md".len();
+        let continued = match bytes.get(end) {
+            Some(b'.') => bytes.get(end + 1).is_some_and(u8::is_ascii_alphanumeric),
+            Some(&b) => path_byte(b),
+            None => false,
+        };
+        let start = bytes[..at]
+            .iter()
+            .rposition(|&b| !path_byte(b))
+            .map_or(0, |before| before + 1);
+        if continued
+            || start == at
+            || pattern(bytes.get(end))
+            || (start > 0 && pattern(bytes.get(start - 1)))
+        {
+            continue;
+        }
+        out.push((start, end));
+    }
+    out
+}
+
+/// How a citation names its file.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Form {
+    /// `` `<path>` ``.
+    Backticked,
+    /// `<path>`.
+    Bare,
+    /// `` canon `<name>` ``, read as `docs/canon/<name>.md`.
+    Cli,
+}
+
+/// A citation in comment text: the cited file and its quoted headings
+/// (none: path-only).
+#[derive(Debug)]
 struct Citation {
+    /// `<source>:<line>`.
     at: String,
     file: String,
     headings: Vec<String>,
+    /// The 1-based line of each heading.
+    heading_lines: Vec<usize>,
+    form: Form,
+    /// The first heading opens the next comment line.
+    next_line: bool,
 }
 
-/// The comment text of `line`: after `//!`, `///`, `//` or a block
-/// comment's leading `*` when the line is a comment, else the whole line.
-fn comment_text(line: &str) -> &str {
-    let trimmed = line.trim_start();
-    for prefix in ["//!", "///", "//", "*"] {
-        if let Some(rest) = trimmed.strip_prefix(prefix) {
-            return rest.trim_start();
-        }
+impl Citation {
+    /// The citing source file.
+    fn source(&self) -> &str {
+        self.at
+            .rsplit_once(':')
+            .map_or(self.at.as_str(), |(source, _)| source)
     }
-    trimmed
 }
 
 /// `"Heading"` at the start of `text`: the heading and the rest of the line;
@@ -333,75 +575,110 @@ fn quoted(text: &str) -> Option<Result<(&str, &str), ()>> {
     })
 }
 
-/// Every Data-form citation in `text`; a quoted heading that does not close
-/// on its own line goes to `broken`.
-fn citations(path: &str, text: &str, broken: &mut Vec<String>) -> Vec<Citation> {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut out = Vec::new();
-    for (index, line) in lines.iter().enumerate() {
-        let mut search = 0;
-        while let Some(found) = line[search..].find(".md` \"") {
-            let end = search + found + ".md".len();
-            search = end;
-            let Some(open) = line[..end].rfind('`') else {
-                continue;
-            };
-            let file = &line[open + 1..end];
-            if file.is_empty() || file.contains(char::is_whitespace) {
-                continue;
-            }
-            let at = format!("{path}:{}", index + 1);
-            let mut headings = Vec::new();
-            let mut rest = &line[end + 2..];
-            let mut row = index;
-            loop {
-                match quoted(rest) {
-                    Some(Ok((heading, after))) => {
-                        headings.push(heading.to_owned());
-                        rest = after;
-                    }
-                    Some(Err(())) => {
-                        broken.push(format!(
-                            "{path}:{}: the quoted heading wraps: {}",
-                            row + 1,
-                            lines[row].trim()
-                        ));
-                        break;
-                    }
-                    None => break,
-                }
-                if rest.starts_with(", \"") {
-                    rest = &rest[", ".len()..];
-                } else if rest.trim_end() == "," && row + 1 < lines.len() {
-                    // A heading list may wrap between headings, never inside one.
-                    let next = comment_text(lines[row + 1]);
-                    if !next.starts_with('"') {
-                        break;
-                    }
-                    row += 1;
-                    rest = next;
-                } else {
-                    break;
-                }
-            }
-            out.push(Citation {
-                at,
-                file: file.to_owned(),
-                headings,
-            });
-        }
-        if is_comment(line) {
-            out.extend(cli_citations(path, &lines, index, broken));
-        }
-    }
-    out
+/// Line `row + 1`'s comment text when it opens with a quote.
+fn next_opening<'a>(comments: &[Option<&'a str>], row: usize) -> Option<(usize, &'a str)> {
+    comments
+        .get(row + 1)
+        .copied()
+        .flatten()
+        .filter(|text| text.starts_with('"'))
+        .map(|text| (row + 1, text))
 }
 
-/// Whether `line` is a comment line (`//`, `///`, `//!`, a block
-/// comment's `*`).
-fn is_comment(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("//") || trimmed.starts_with('*')
+/// The quoted headings from `rest` (on comment line `row`, opening with
+/// `"`), each with its 1-based line: further ones after `, "`, or on the
+/// next comment line after a line-ending `,`. A heading that does not close
+/// on its line goes to `broken` (C2).
+fn heading_list<'a>(
+    path: &str,
+    lines: &[&str],
+    comments: &[Option<&'a str>],
+    mut row: usize,
+    mut rest: &'a str,
+    broken: &mut Vec<String>,
+) -> Vec<(usize, String)> {
+    let mut headings = Vec::new();
+    loop {
+        match quoted(rest) {
+            Some(Ok((heading, after))) => {
+                headings.push((row + 1, heading.to_owned()));
+                rest = after;
+            }
+            Some(Err(())) => {
+                broken.push(format!(
+                    "{path}:{}: the quoted heading wraps: {}",
+                    row + 1,
+                    lines[row].trim()
+                ));
+                break;
+            }
+            None => break,
+        }
+        if let Some(next) = rest.strip_prefix(", ").filter(|next| next.starts_with('"')) {
+            rest = next;
+        } else if rest.trim_end() == "," {
+            match next_opening(comments, row) {
+                Some((next_row, next)) => {
+                    row = next_row;
+                    rest = next;
+                }
+                None => break,
+            }
+        } else {
+            break;
+        }
+    }
+    headings
+}
+
+/// Every citation in the comment text of `text` (file `path`): each
+/// documentation path under `roots` with its headings (C1, C2, C7), then
+/// the CLI form. A quoted heading that does not close goes to `broken`.
+fn citations(path: &str, text: &str, roots: &[&str], broken: &mut Vec<String>) -> Vec<Citation> {
+    let lines: Vec<&str> = text.lines().collect();
+    let comments = comment_lines(path, text);
+    let mut out = Vec::new();
+    for (index, comment) in comments.iter().enumerate() {
+        let Some(comment) = *comment else {
+            continue;
+        };
+        for (start, end) in md_paths(comment) {
+            let file = &comment[start..end];
+            if !in_roots(file, roots) {
+                continue;
+            }
+            let backticked = start > 0
+                && comment.as_bytes()[start - 1] == b'`'
+                && comment[end..].starts_with('`');
+            let rest = &comment[end + usize::from(backticked)..];
+            let rest = rest.strip_prefix(',').unwrap_or(rest);
+            let opening = match rest.strip_prefix(' ') {
+                Some(first) if first.starts_with('"') => Some((index, first)),
+                _ if rest.trim().is_empty() => next_opening(&comments, index),
+                _ => None,
+            };
+            let (heading_lines, headings) = opening
+                .map_or_else(Vec::new, |(row, first)| {
+                    heading_list(path, &lines, &comments, row, first, broken)
+                })
+                .into_iter()
+                .unzip();
+            out.push(Citation {
+                at: format!("{path}:{}", index + 1),
+                file: file.to_owned(),
+                headings,
+                heading_lines,
+                form: if backticked {
+                    Form::Backticked
+                } else {
+                    Form::Bare
+                },
+                next_line: opening.is_some_and(|(row, _)| row != index),
+            });
+        }
+        out.extend(cli_citations(path, &lines, &comments, index, broken));
+    }
+    out
 }
 
 /// The CLI form's opening: `canon` and a backticked canon name.
@@ -415,16 +692,14 @@ const CLI_FORM: &str = "canon `";
 fn cli_citations(
     path: &str,
     lines: &[&str],
+    comments: &[Option<&str>],
     index: usize,
     broken: &mut Vec<String>,
 ) -> Vec<Citation> {
-    let line = lines[index];
-    let next_comment = |row: usize| {
-        lines
-            .get(row + 1)
-            .filter(|next| is_comment(next))
-            .map(|next| comment_text(next))
+    let Some(line) = comments[index] else {
+        return Vec::new();
     };
+    let next_comment = |row: usize| comments.get(row + 1).copied().flatten();
     let mut out = Vec::new();
     let mut search = 0;
     while let Some(found) = line[search..].find(CLI_FORM) {
@@ -452,11 +727,14 @@ fn cli_citations(
             },
             _ => continue,
         };
+        let next_line = row != index;
         let mut headings = Vec::new();
+        let mut heading_lines = Vec::new();
         loop {
             match quoted(rest) {
                 Some(Ok((heading, after))) => {
                     headings.push(heading.to_owned());
+                    heading_lines.push(row + 1);
                     rest = after;
                 }
                 Some(Err(())) => {
@@ -471,6 +749,7 @@ fn cli_citations(
                         break;
                     };
                     headings.push(format!("{} {}", rest[1..].trim_end(), &next[..end]));
+                    heading_lines.push(row + 1);
                     row += 1;
                     rest = &next[end + 1..];
                 }
@@ -494,6 +773,9 @@ fn cli_citations(
             at: format!("{path}:{}", index + 1),
             file: format!("docs/canon/{name}.md"),
             headings,
+            heading_lines,
+            form: Form::Cli,
+            next_line,
         });
     }
     out
@@ -522,93 +804,231 @@ fn headings_of(file: &Path) -> Vec<String> {
     out
 }
 
-#[test]
-fn every_quoted_heading_of_a_data_form_citation_exists_in_its_file() {
-    let root = repository_root();
+/// The citations of the whole walk and the wrapped headings found.
+struct Scan {
+    citations: Vec<Citation>,
+    broken: Vec<String>,
+}
+
+fn scan_repository() -> Scan {
     let mut broken = Vec::new();
     let mut all = Vec::new();
-    for (path, text) in source_files() {
-        all.extend(citations(&path, &text, &mut broken));
+    for (path, text) in cited_files() {
+        all.extend(citations(&path, &text, &DOC_ROOTS, &mut broken));
     }
-    // The UI's provisional types cite their sources (ui-shell AC-06).
-    let ui_citations = all
-        .iter()
-        .filter(|citation| citation.at.starts_with("ui/src/api/provisional.ts:"))
-        .count();
-    assert!(
-        ui_citations >= 20,
-        "only {ui_citations} citations read in ui/src/api/provisional.ts"
-    );
+    Scan {
+        citations: all,
+        broken,
+    }
+}
+
+#[test]
+fn every_cited_heading_exists_verbatim_on_one_line() {
+    let root = repository_root();
+    let Scan { citations, broken } = scan_repository();
     let mut headings_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut missing = Vec::new();
-    let mut quoted_headings = 0;
-    for citation in &all {
-        let file = root.join(&citation.file);
-        if !file.is_file() {
-            broken.push(format!("{}: no file {}", citation.at, citation.file));
+    let mut missed_in = BTreeSet::new();
+    for citation in citations
+        .iter()
+        .filter(|citation| !citation.headings.is_empty())
+    {
+        // A file that is not there is the path check's finding.
+        if !names_a_file(&root, &citation.file) {
             continue;
         }
         let known = headings_by_file
             .entry(citation.file.clone())
-            .or_insert_with(|| headings_of(&file));
-        for heading in &citation.headings {
-            quoted_headings += 1;
+            .or_insert_with(|| headings_of(&root.join(&citation.file)));
+        for (heading, line) in citation.headings.iter().zip(&citation.heading_lines) {
             if !known.contains(heading) {
                 missing.push(format!(
-                    "{}: {:?} is not a heading of {}",
-                    citation.at, heading, citation.file
+                    "{}:{line}: {heading:?} is not a heading of {}",
+                    citation.source(),
+                    citation.file
                 ));
+                missed_in.insert(citation.file.clone());
             }
         }
     }
-    assert!(broken.is_empty(), "{}", broken.join("\n"));
-    assert!(
-        missing.is_empty(),
-        "{}\nheadings there: {headings_by_file:#?}",
-        missing.join("\n")
-    );
-    eprintln!(
-        "{} Data-form citations, {quoted_headings} quoted headings, files {:?}",
-        all.len(),
-        headings_by_file.keys().collect::<Vec<_>>()
-    );
-    assert!(
-        quoted_headings >= 23,
-        "only {quoted_headings} quoted headings in {} citations",
-        all.len()
-    );
-    // The CLI's sources hold no `docs/` (AC-17): each canon citation read
-    // there is in the CLI form, its headings checked above.
-    let cli_form = all
+    let there: BTreeMap<&String, &Vec<String>> = headings_by_file
         .iter()
-        .filter(|citation| {
-            citation.at.starts_with("crates/specengine-cli/src/")
-                && citation.file.starts_with("docs/canon/")
-                && !citation.headings.is_empty()
-        })
-        .count();
-    eprintln!("{cli_form} CLI-form citations with headings in the CLI's sources");
+        .filter(|(file, _)| missed_in.contains(*file))
+        .collect();
     assert!(
-        cli_form >= 24,
-        "only {cli_form} CLI-form citations read in the CLI's sources"
+        broken.is_empty() && missing.is_empty(),
+        "{}\nheadings there: {there:#?}",
+        broken
+            .iter()
+            .chain(&missing)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
+/// Documentation paths named on purpose though no such file exists (C3):
+/// (source file, cited path, why). An entry matching no citation fails.
+const DELIBERATE_MISSES: [(&str, &str, &str); 4] = [
+    (
+        "crates/specengine-core/tests/check_mentions.rs",
+        "docs/features/feat.md",
+        "the test's `feat/` mentions dangle because this file is absent",
+    ),
+    (
+        "crates/specengine-core/tests/check_scopes.rs",
+        "docs/features/c.md",
+        "a feature document of the test's own in-memory corpus",
+    ),
+    (
+        "crates/specengine-cli/tests/kind_amendment.rs",
+        "docs/features/regen-delay.md",
+        "the new spec the test's amendment creates in a temporary repository",
+    ),
+    (
+        "crates/specengine-mcp/tests/mcp_door.rs",
+        "docs/features/regen-delay.md",
+        "the new spec the test's refused amendment must never create",
+    ),
+];
+
 #[test]
-fn the_citation_scanner_reads_lists_and_rejects_a_wrapped_heading() {
-    let mut broken = Vec::new();
-    let text = concat!(
-        "//! (`a/b.md` \"One\", \"Two `x`\"; `c.md`, \"Not data form\")\n",
-        "/// `d.md` \"Three\",\n",
-        "/// \"Four\" and more\n",
-        "// `e.md` \"Wrapped\n",
-        "// heading\"\n",
-        " * Sources: `f.md` \"Five\";\n",
-        " * `g.md` \"Six\",\n",
-        " * \"Seven\".\n",
+fn every_documentation_path_names_a_file() {
+    let root = repository_root();
+    let fixtures = root.join("fixtures");
+    let mut corpora: Vec<PathBuf> = fs::read_dir(&fixtures)
+        .expect("fixtures/ readable")
+        .map(|entry| entry.expect("fixture entry").path())
+        .filter(|path| path.is_dir())
+        .collect();
+    corpora.sort();
+    let Scan { citations, .. } = scan_repository();
+    let mut exists: BTreeMap<String, bool> = BTreeMap::new();
+    let mut in_fixtures: BTreeMap<String, bool> = BTreeMap::new();
+    let mut missing = Vec::new();
+    let mut fixture_data = Vec::new();
+    let mut allowed = BTreeSet::new();
+    for citation in &citations {
+        let file = &citation.file;
+        if *exists
+            .entry(file.clone())
+            .or_insert_with(|| names_a_file(&root, file))
+        {
+            continue;
+        }
+        if *in_fixtures
+            .entry(file.clone())
+            .or_insert_with(|| corpora.iter().any(|corpus| names_a_file(corpus, file)))
+        {
+            fixture_data.push(citation.at.clone());
+            continue;
+        }
+        if let Some(entry) = DELIBERATE_MISSES
+            .iter()
+            .find(|(source, cited, _)| *source == citation.source() && *cited == file.as_str())
+        {
+            allowed.insert((entry.0, entry.1));
+            continue;
+        }
+        missing.push(format!("{}: no file {file}", citation.at));
+    }
+    eprintln!(
+        "{} citations; fixture data at {fixture_data:?}; allowlisted {allowed:?}",
+        citations.len()
     );
-    let found = citations("t.rs", text, &mut broken);
-    let shape: Vec<(&str, &str, Vec<&str>)> = found
+    assert!(missing.is_empty(), "{}", missing.join("\n"));
+    let dead: Vec<_> = DELIBERATE_MISSES
+        .iter()
+        .filter(|(source, cited, _)| !allowed.contains(&(*source, *cited)))
+        .collect();
+    assert!(
+        dead.is_empty(),
+        "allowlist entries matching no missing citation: {dead:?}"
+    );
+}
+
+/// The citation counts against their floors (docs/features/citation-sweep.md
+/// AC-08): a reader that stops reading a shape drops below one.
+#[test]
+fn the_citation_counts_hold_their_floors() {
+    let Scan { citations, .. } = scan_repository();
+    let headings = |keep: &dyn Fn(&Citation) -> bool| -> usize {
+        citations
+            .iter()
+            .filter(|citation| keep(citation))
+            .map(|citation| citation.headings.len())
+            .sum()
+    };
+    let bare_ui = headings(&|c| c.form == Form::Bare && c.at.starts_with("ui/src/"));
+    let bare_crates = headings(&|c| c.form == Form::Bare && c.at.starts_with("crates/"));
+    let backticked = headings(&|c| c.form == Form::Backticked);
+    let next_line = headings(&|c| c.next_line && c.form != Form::Cli);
+    let css = headings(&|c| c.source().ends_with(".css"));
+    let toml = headings(&|c| c.source().ends_with(".toml"));
+    let all_headings = headings(&|_| true);
+    let path_only: BTreeSet<&str> = citations
+        .iter()
+        .filter(|citation| citation.headings.is_empty() && citation.form != Form::Cli)
+        .map(|citation| citation.file.as_str())
+        .collect();
+    // The UI's provisional types cite their sources (`ui/README.md`
+    // "Contract seam").
+    let provisional = citations
+        .iter()
+        .filter(|citation| citation.at.starts_with("ui/src/api/provisional.ts:"))
+        .count();
+    // The CLI's sources hold no `docs/` (AC-17): each canon citation read
+    // there is in the CLI form.
+    let cli_form = citations
+        .iter()
+        .filter(|citation| {
+            citation.at.starts_with("crates/specengine-cli/src/")
+                && citation.form == Form::Cli
+                && !citation.headings.is_empty()
+        })
+        .count();
+    let counts = [
+        ("quoted headings", all_headings, FLOORS[0]),
+        ("bare-form headings in ui/src", bare_ui, FLOORS[1]),
+        ("bare-form headings in crates", bare_crates, FLOORS[2]),
+        ("backticked headings", backticked, FLOORS[3]),
+        ("first headings on the next line", next_line, FLOORS[4]),
+        (".css headings", css, FLOORS[5]),
+        ("Cargo.toml headings", toml, FLOORS[6]),
+        ("distinct path-only files", path_only.len(), FLOORS[7]),
+        (
+            "ui/src/api/provisional.ts citations",
+            provisional,
+            FLOORS[8],
+        ),
+        (
+            "CLI-form citations in the CLI's sources",
+            cli_form,
+            FLOORS[9],
+        ),
+    ];
+    for (name, count, floor) in counts {
+        eprintln!("{name}: measured {count}, floor {floor}");
+    }
+    let low: Vec<String> = counts
+        .iter()
+        .filter(|(_, count, floor)| count < floor)
+        .map(|(name, count, floor)| format!("{name}: {count} < {floor}"))
+        .collect();
+    assert!(low.is_empty(), "below the floor:\n{}", low.join("\n"));
+}
+
+/// The floors of [`the_citation_counts_hold_their_floors`], in its order:
+/// the first eight about 90 % of the count measured on the end state of
+/// docs/features/citation-sweep.md, rounded down (1235, 172, 253, 699, 71,
+/// 4, 9, 122; `.css` at least 3, AC-08), so a comment edit elsewhere does
+/// not trip them; the last two the floors this test held before (20, 24).
+/// The quoted headings' earlier floor, 23, lies below the first.
+const FLOORS: [usize; 10] = [1111, 154, 227, 629, 63, 3, 8, 109, 20, 24];
+
+/// `found` as (`<source>:<line>`, cited file, headings), for the self-tests.
+fn shape(found: &[Citation]) -> Vec<(&str, &str, Vec<&str>)> {
+    found
         .iter()
         .map(|c| {
             (
@@ -617,19 +1037,166 @@ fn the_citation_scanner_reads_lists_and_rejects_a_wrapped_heading() {
                 c.headings.iter().map(String::as_str).collect(),
             )
         })
-        .collect();
+        .collect()
+}
+
+/// docs/features/citation-sweep.md AC-07: every read shape and every
+/// negative case, in a `.rs`, a `.css` and a `Cargo.toml` text, under the
+/// real roots plus the samples' `a/`. M: code lines read too; `/**` taken
+/// as code.
+#[test]
+fn the_citation_grammar_reads_every_shape_and_nothing_else() {
+    let roots: Vec<&str> = DOC_ROOTS.iter().copied().chain(["a/"]).collect();
+    let rust = concat!(
+        "//! (`a/b.md` \"One\", \"Two `x`\"; `a/c.md`, \"Three\")\n",
+        "/// a/d.md \"Four\" and a/e.md, \"Five\"\n",
+        "// `a/f.md` \"Six\",\n",
+        "// \"Seven\" more\n",
+        "/** a/g.md \"Eight\" */\n",
+        "/* a/h.md, \"Nine\" */\n",
+        "/**\n",
+        " * Sources: a/i.md\n",
+        " * \"Ten\", \"Eleven\"\n",
+        " */\n",
+        "*x = r#\"a/y.md \"Deref\"\"#;\n",
+        "//! `a/j.md`,\n",
+        "//! \"Twelve\"\n",
+        "let s = r#\"a/k.md \"Code\"\"#;\n",
+        "// docs/spec/a.md \"Fixture\"; `b/c.md` \"Outside\"\n",
+        "// a/l.md AC-13 (\"Label\")\n",
+        "// a/m.md, as \"Prose\" says\n",
+        "// a/n.md \"A\" \"B\"; a/o.md \"C\" and \"D\"\n",
+        "// a/p.md#anchor \"Anchor\"\n",
+        "// \"Unbound\" (a/q.md)\n",
+        "// `a/r.md` \"Wrapped\n",
+        "// heading\"\n",
+        "// a/s.md\n",
+        "\"Not a heading\";\n",
+        "// a/t.mdx \"X\", a/u.md.bak \"Y\", a/*.md \"Z\", <a/v.md> \"W\"\n",
+        "/*\n",
+        "   a/w.md \"Thirteen\"\n",
+        "*/ let t = \"a/x.md \\\"Code\\\"\";\n",
+    );
+    let mut broken = Vec::new();
+    let found = citations("t.rs", rust, &roots, &mut broken);
     assert_eq!(
-        shape,
+        shape(&found),
         [
             ("t.rs:1", "a/b.md", vec!["One", "Two `x`"]),
-            ("t.rs:2", "d.md", vec!["Three", "Four"]),
-            ("t.rs:4", "e.md", vec![]),
-            ("t.rs:6", "f.md", vec!["Five"]),
-            ("t.rs:7", "g.md", vec!["Six", "Seven"]),
+            ("t.rs:1", "a/c.md", vec!["Three"]),
+            ("t.rs:2", "a/d.md", vec!["Four"]),
+            ("t.rs:2", "a/e.md", vec!["Five"]),
+            ("t.rs:3", "a/f.md", vec!["Six", "Seven"]),
+            ("t.rs:5", "a/g.md", vec!["Eight"]),
+            ("t.rs:6", "a/h.md", vec!["Nine"]),
+            ("t.rs:8", "a/i.md", vec!["Ten", "Eleven"]),
+            ("t.rs:12", "a/j.md", vec!["Twelve"]),
+            ("t.rs:16", "a/l.md", vec![]),
+            ("t.rs:17", "a/m.md", vec![]),
+            ("t.rs:18", "a/n.md", vec!["A"]),
+            ("t.rs:18", "a/o.md", vec!["C"]),
+            ("t.rs:19", "a/p.md", vec![]),
+            ("t.rs:20", "a/q.md", vec![]),
+            ("t.rs:21", "a/r.md", vec![]),
+            ("t.rs:23", "a/s.md", vec![]),
+            ("t.rs:27", "a/w.md", vec!["Thirteen"]),
         ]
     );
+    // A miss is named at the heading's own line.
+    let lines: Vec<&[usize]> = found.iter().map(|c| c.heading_lines.as_slice()).collect();
+    assert_eq!(
+        lines[..9],
+        [
+            &[1, 1][..],
+            &[1],
+            &[2],
+            &[2],
+            &[3, 4],
+            &[5],
+            &[6],
+            &[9, 9],
+            &[13]
+        ]
+    );
+    let forms: Vec<(Form, bool)> = found.iter().map(|c| (c.form, c.next_line)).collect();
+    assert_eq!(forms[0], (Form::Backticked, false));
+    assert_eq!(forms[2], (Form::Bare, false));
+    assert_eq!(forms[7], (Form::Bare, true));
+    assert_eq!(forms[8], (Form::Backticked, true));
+    assert_eq!(
+        broken,
+        ["t.rs:21: the quoted heading wraps: // `a/r.md` \"Wrapped"]
+    );
+
+    let css = concat!(
+        "* { box-sizing: border-box; }\n",
+        "/* Layout (a/b.md, \"One\"):\n",
+        "   the grid, a/c.md \"Two\"\n",
+        " * a/d.md \"Three\" */\n",
+        ".a::after { content: 'a/e.md \"Code\"'; }\n",
+        "// a/f.md \"Not CSS\"\n",
+        "/* a/g.md \"Four\" */ .b { }\n",
+    );
+    let found = citations("t.css", css, &roots, &mut broken);
+    assert_eq!(
+        shape(&found),
+        [
+            ("t.css:2", "a/b.md", vec!["One"]),
+            ("t.css:3", "a/c.md", vec!["Two"]),
+            ("t.css:4", "a/d.md", vec!["Three"]),
+            ("t.css:7", "a/g.md", vec!["Four"]),
+        ]
+    );
+
+    let toml = concat!(
+        "[package]\n",
+        "# the build (a/b.md, \"One\").\n",
+        "name = \"a/c.md \\\"Code\\\"\" # a/d.md \"Trailing\"\n",
+        "// a/e.md \"Not TOML\"\n",
+    );
+    let found = citations("Cargo.toml", toml, &roots, &mut broken);
+    assert_eq!(shape(&found), [("Cargo.toml:2", "a/b.md", vec!["One"])]);
     assert_eq!(broken.len(), 1, "{broken:?}");
-    assert!(broken[0].starts_with("t.rs:4: the quoted heading wraps"));
+}
+
+/// The roots read this repository's documentation, never a fixture's or a
+/// sample's layout.
+#[test]
+fn the_documentation_roots_are_this_repositorys() {
+    for inside in [
+        "CLAUDE.md",
+        "README.md",
+        "docs/README.md",
+        "docs/index-canon.md",
+        "docs/archive/initial-architecture-spec.md",
+        "docs/canon/spec-check.md",
+        "docs/decisions/ADR-0022-x.md",
+        "docs/features/ui-graph.md",
+        "docs/specs/specengine-platform/05-architecture.md",
+        "crates/specengine-cli/README.md",
+        "ui/README.md",
+    ] {
+        assert!(in_roots(inside, &DOC_ROOTS), "{inside} is outside");
+    }
+    for outside in [
+        "docs/a.md",
+        "docs/INDEX.md",
+        "docs/spec/a.md",
+        "docs/records/R-12.md",
+        "book/glossary.md",
+        "a/b.md",
+        "b.md",
+        "crates/specengine-cli/src/README.md",
+        "crates/README.md",
+        "ui/src/README.md",
+        "fixtures/spec-a/docs/features/stamina-tuning.md",
+        "plugin/specengine/skills/feature/SKILL.md",
+        "docs/features/../x.md",
+        "docs//x.md",
+        "./README.md",
+    ] {
+        assert!(!in_roots(outside, &DOC_ROOTS), "{outside} is inside");
+    }
 }
 
 /// The CLI form (`` canon `<name>`, "<h>" ``, docs/features/bevy-roles-reads.md
@@ -650,19 +1217,9 @@ fn the_citation_scanner_reads_the_cli_form() {
         "let s = \"canon `decision-record`, \";\n",
         "// canon `Not_A-name`, \"X\"; canon `round`: no heading\n",
     );
-    let found = citations("t.rs", text, &mut broken);
-    let shape: Vec<(&str, &str, Vec<&str>)> = found
-        .iter()
-        .map(|c| {
-            (
-                c.at.as_str(),
-                c.file.as_str(),
-                c.headings.iter().map(String::as_str).collect(),
-            )
-        })
-        .collect();
+    let found = citations("t.rs", text, &DOC_ROOTS, &mut broken);
     assert_eq!(
-        shape,
+        shape(&found),
         [
             ("t.rs:1", "docs/canon/code-roles.md", vec!["Links"]),
             (

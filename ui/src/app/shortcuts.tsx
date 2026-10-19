@@ -14,7 +14,7 @@ export function useOpenShortcuts(): () => void {
 
 type Shortcut = readonly [keys: readonly string[], action: string];
 
-/** The palette's chord, the one key that acts anywhere (docs/features/ui-home.md "Keys"); in every list. */
+/** The palette's chord, the one key that acts anywhere (ui/README.md "Screen rules", Keyboard); in every list. */
 const JUMP: Shortcut = [["Cmd-K", "Ctrl-K"], "Jump to a section, task, proposal, node or project"];
 
 /** Letter keys exactly as typed (lower case); the decisions with the words of their buttons. */
@@ -30,7 +30,7 @@ const INBOX_KEYS: readonly Shortcut[] = [
 /** No section (the home, a hash naming nothing): the chord, this list, Esc. */
 const GENERAL_KEYS: readonly Shortcut[] = [JUMP, [["?"], "Show this list"], [["Esc"], "Close a dialog"]];
 
-/** The Spec tree's keys (docs/features/ui-tree-node.md "Keys"): the tree, the tabs, the search. */
+/** The Spec tree's keys (docs/features/ui-tree-node.md "Implementation", Keys): the tree, the tabs, the search. */
 const TREE_KEYS: readonly Shortcut[] = [
   [["j", "Down arrow"], "Tree, hits: next row"],
   [["k", "Up arrow"], "Tree, hits: previous row"],
@@ -44,7 +44,7 @@ const TREE_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
-/** The Graph's keys (docs/features/ui-graph.md "Keyboard"): the canvas, the tabs, the REF field. */
+/** The Graph's keys (docs/features/ui-graph.md "Implementation", Keyboard): the canvas, the tabs, the REF field. */
 const GRAPH_KEYS: readonly Shortcut[] = [
   [["j", "Down arrow"], "Canvas: next box in the column"],
   [["k", "Up arrow"], "Canvas: previous box in the column"],
@@ -58,7 +58,7 @@ const GRAPH_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
-/** The Tasks screen's keys (docs/features/ui-tasks.md "Description and interactions", Keyboard): no key acts on a task. */
+/** The Tasks screen's keys (docs/features/ui-tasks.md "Implementation", List and Detail): no key acts on a task. */
 const TASKS_KEYS: readonly Shortcut[] = [
   [["j", "Down arrow"], "Task list: next task"],
   [["k", "Up arrow"], "Task list: previous task"],
@@ -83,7 +83,7 @@ const HEALTH_KEYS: readonly Shortcut[] = [
   [["Esc"], "Close a dialog"],
 ];
 
-/** Said in every intro: the chord is the one key that acts from anywhere (docs/features/ui-home.md "Keys"). */
+/** Said in every intro: the chord is the one key that acts from anywhere (docs/features/ui-home.md "Implementation", Keys). */
 const CHORD_EXCEPTED = "Cmd-K or Ctrl-K excepted: it opens Jump to from anywhere, a text field included.";
 
 const GENERAL_INTRO = `Keys act where focus is, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED}`;

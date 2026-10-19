@@ -1,6 +1,6 @@
-//! docs/features/decision-staging.md, the CLI's half ("Terminal",
-//! "Staleness", "Documents", "Backup"; `docs/canon/decision-staging.md`
-//! "Terminal"): a stage made through the CLI library's `stage` (the
+//! The CLI's half of docs/canon/decision-staging.md, "Terminal",
+//! "Staleness", "Documents" (the backup: docs/canon/queue-backup.md
+//! "Format"): a stage made through the CLI library's `stage` (the
 //! daemon's call, an injected clock), confirmed by `spec approve|reject`
 //! through the library with a consent callback, or through the binary on a
 //! pseudo-terminal where the terminal is the subject.
@@ -1018,8 +1018,8 @@ fn ac02_a_queue_of_a_newer_schema_exits_2_naming_both() {
     let pair = Pair::new("ds-ac02", "spec-a");
     let case = &CASES[0];
     pair.propose_edit(&pair.linked, case.target, case.first.0, case.first.1);
-    // This build's queue schema is 8 (docs/features/drift-queue.md "Queue
-    // schema 8"): 9 is newer.
+    // This build's queue schema is 8 (docs/features/drift-queue.md
+    // "Queue schema 8"): 9 is newer.
     pair.sql("PRAGMA user_version = 9;");
     for args in [vec!["inbox"], vec!["review", "PR-0001"]] {
         let run = pair.spec_piped(&pair.main, &args, b"");
@@ -1206,9 +1206,10 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
         fs::write(&file, format!("{}\n", rows.join("\n"))).unwrap();
         file
     };
-    // Format 2, schemas 6 and 7 (docs/features/drift-queue.md "Queue schema
-    // 8": import takes schemas 4-8): their 44 columns; restore, `drift` and
-    // `drift_hash` NULL, and re-export as the current dump.
+    // Format 2, schemas 6 and 7 (docs/features/drift-queue.md
+    // "Queue schema 8": import takes schemas 4-8): their 44 columns;
+    // restore, `drift` and `drift_hash` NULL, and re-export as the current
+    // dump.
     let drift = ",\"drift\":null,\"drift_hash\":null}}";
     for schema in [6, 7] {
         let mut older = v6.clone();

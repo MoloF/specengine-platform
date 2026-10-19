@@ -235,7 +235,7 @@ fn interrupted_meaning_apply_completes_with_the_raise() {
     assert_eq!(stored.applied_commit.as_deref(), Some(commit.as_str()));
 
     // A rebased meaning apply (its merge not idempotent on its own blob,
-    // docs/features/proposal-apply.md "Idempotence"): only step 5's text
+    // docs/canon/proposal-completion.md "Completion"): only step 5's text
     // on its parent with the raise completes it.
     let pair = Pair::new("rd4-meaning-rebased", "spec-a");
     let (hash, text) = pair.span(&pair.linked, EMPTY);
@@ -387,7 +387,7 @@ fn unraised_apply_commit_completes() {
 
     // A rebased apply made before 4b-1: the merge written without the
     // raise, where merging again on the commit's own blob is not that blob
-    // (docs/features/proposal-apply.md "Idempotence"): only step 5's text
+    // (docs/canon/proposal-completion.md "Completion"): only step 5's text
     // on its parent, as spliced, completes it.
     let pair = Pair::new("rd4-unraised-rebased", "spec-a");
     let paragraph = ("Q-031.\n", "Q-031.\n\nPlaytest note: stop at once.\n");

@@ -2,10 +2,10 @@ import type { GraphOptions } from "../api/client";
 import type { Direction, FollowedType } from "../api/types";
 import { WEAK_LINK_TYPE } from "../tree/labels";
 
-// The Graph's options (docs/features/ui-graph.md "Controls"): per project, in memory, never in the
-// hash (Back changes only the REF). The type chips are the mode's unfiltered `types`, in the
-// order of its latest answer without `types`, then `mentions`; all but `mentions` pressed sends
-// no `types`. The chip order also styles each type's line.
+// The Graph's options (docs/features/ui-graph.md "Implementation", Controls): per project, in
+// memory, never in the hash (Back changes only the REF). The type chips are the mode's unfiltered
+// `types`, in the order of its latest answer without `types`, then `mentions`; all but `mentions`
+// pressed sends no `types`. The chip order also styles each type's line.
 
 export type GraphTab = "canvas" | "list";
 

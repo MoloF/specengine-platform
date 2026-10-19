@@ -34,7 +34,8 @@ const T1: &str = "2026-10-06T08:00:00Z";
 const PROJECT: &str = "demo";
 
 /// The five columns step 3 appends, in table order
-/// (docs/features/decision-apply.md "Data", "Queue").
+/// (docs/features/decision-apply.md "Data"; docs/canon/decision-record.md
+/// "Queue and documents").
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
     "record_path",
@@ -473,8 +474,8 @@ INSERT INTO events (project, type, payload, at)
 /// column left out of step 2; schema 1 unknown.
 #[test]
 fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
-    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
-    // schema 8".
+    // Schema 8, 46 columns since docs/features/drift-queue.md
+    // "Queue schema 8".
     assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[24..35], INTAKE_COLUMNS);
@@ -497,8 +498,8 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(0), None);
-    // Schema 7 adds no column (docs/features/rev-discipline.md "Review
-    // document, stage, queue").
+    // Schema 7 adds no column (docs/features/rev-discipline.md
+    // "Review document, stage, queue").
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
     assert_eq!(proposal_columns(9), None);

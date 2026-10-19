@@ -257,8 +257,8 @@ fn three(db: &Path) -> SqliteQueue {
 /// schema 9 refused.
 #[test]
 fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
-    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
-    // schema 8".
+    // Schema 8, 46 columns since docs/features/drift-queue.md
+    // "Queue schema 8".
     assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(
@@ -275,8 +275,8 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     assert_eq!(proposal_columns(4), Some(&PROPOSAL_COLUMNS[..41]));
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
-    // Schema 7 adds no column (docs/features/rev-discipline.md "Review
-    // document, stage, queue").
+    // Schema 7 adds no column (docs/features/rev-discipline.md
+    // "Review document, stage, queue").
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
     assert_eq!(proposal_columns(9), None);

@@ -58,8 +58,8 @@ fn one_record_per_prefix_takes_its_kind_from_ids() {
         by_prefix.entry(prefix).or_default().push(path.clone());
     }
     // No `AC`: a feature-scoped criterion is a `{#ID}` section of its
-    // feature document, not a record (ADR-0026, docs/features/
-    // spec-check-scopes.md AC-09).
+    // feature document, not a record (ADR-0026,
+    // docs/features/spec-check-scopes.md AC-09).
     let record_prefixes = ["A", "DEC", "Q", "R", "TERM"];
     assert_eq!(
         by_prefix.keys().map(String::as_str).collect::<Vec<_>>(),

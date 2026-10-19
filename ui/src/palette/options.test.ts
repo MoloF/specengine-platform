@@ -4,8 +4,8 @@ import { anEntry, aSearchHit, aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { groupLabel, paletteGroups, type Held, type PaletteInput, type PaletteOption } from "./options";
 
-// docs/features/ui-home.md "Palette": groups in order, at most ten options each, NFC-folded
-// substring matching on the trimmed text, an exact ID's group first (AC-13).
+// docs/features/ui-home.md "Implementation" (Palette): groups in order, at most ten options each,
+// NFC-folded substring matching on the trimmed text, an exact ID's group first (AC-13).
 
 const PROJECTS: Project[] = [
   { slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" },

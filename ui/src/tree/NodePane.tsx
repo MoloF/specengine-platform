@@ -20,7 +20,7 @@ import { TextPanel, type TextTarget } from "./TextPanel";
 
 type TabId = "text" | "links" | "bundle" | "proposals";
 
-/** How the pane came to show its node, for where focus goes (docs/features/ui-tree-node.md "Keys"). */
+/** How the pane came to show its node, for where focus goes (docs/features/ui-tree-node.md "Implementation", Keys). */
 export type Arrival = "start" | "follow" | "change";
 
 /** One holder's header facts: kind, place, status, rev, size, span hash, flags. */

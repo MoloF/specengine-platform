@@ -620,8 +620,8 @@ fn a_corrupt_create_row_names_its_column() {
 /// docs/features/proposal-kinds.md, kept). M: a column or a schema bump.
 #[test]
 fn ac14_creates_keep_schema_3_and_40_columns() {
-    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
-    // schema 8".
+    // Schema 8, 46 columns since docs/features/drift-queue.md
+    // "Queue schema 8".
     assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);

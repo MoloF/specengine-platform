@@ -109,7 +109,7 @@ fn endpoints(port: u16) -> Vec<(&'static str, String)> {
 }
 
 /// What `GET /` answers on this tree's daemon: the page, or the 503 of a
-/// daemon compiled without `ui/dist` (docs/features/ui-embed.md "Routes").
+/// daemon compiled without `ui/dist` (docs/canon/serve-ui.md "Routes").
 fn page_status() -> u16 {
     if common::repository_root()
         .join("ui/dist/index.html")

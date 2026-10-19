@@ -6,9 +6,9 @@ import type * as OrderModule from "../inbox/order";
 import type * as GroupsModule from "../tasks/groups";
 import { paletteGroups, type PaletteInput } from "./options";
 
-// docs/features/ui-home.md "Palette": typing only filters. The Tasks screen's grouping and the
-// Inbox's queue order are wrapped to count how often the palette asks for them; the wrappers
-// return the real orders.
+// docs/features/ui-home.md "Implementation" (Palette): typing only filters. The Tasks screen's
+// grouping and the Inbox's queue order are wrapped to count how often the palette asks for them;
+// the wrappers return the real orders.
 
 const ordered = vi.hoisted(() => ({ groups: 0, queue: 0 }));
 

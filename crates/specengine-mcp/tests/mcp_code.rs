@@ -2363,8 +2363,8 @@ fn genre_code_sources_and_texts_hold_no_kind_or_rust_word() {
     assert!(offenders.is_empty(), "{offenders:#?}");
 }
 
-/// docs/features/bevy-roles-reads.md "find_symbols" and "Rules and edge
-/// cases", Genre: the doc comments of the role mirror become
+/// docs/features/bevy-roles-reads.md "find_symbols", "Rules and edge cases",
+/// Genre: the doc comments of the role mirror become
 /// `outputSchema` text, so every description under `find_symbols`'
 /// `symbols[].roles` holds no stack word, role word, source word or
 /// framework name, nor a language or fixture word, a code file suffix or

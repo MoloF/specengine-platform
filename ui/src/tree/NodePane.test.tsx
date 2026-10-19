@@ -33,7 +33,8 @@ async function openTab(name: string | RegExp): Promise<HTMLElement> {
 
 /**
  * The Text tab's Source view: the text verbatim, numbered. ui-markdown made Rendered the default
- * (docs/features/ui-markdown.md "Data", the shipped criteria it changes): AC-06's verbatim text is Source's.
+ * (docs/features/ui-markdown.md "Implementation", the shipped criteria it changes): AC-06's verbatim
+ * text is Source's.
  */
 function showSource() {
   fireEvent.click(within(screen.getByRole("group", { name: "Show the text as" })).getByRole("button", { name: "Source" }));

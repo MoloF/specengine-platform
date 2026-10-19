@@ -263,9 +263,9 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     runs: [aTaskRun({ run: 1, role: HOSTILE, ended_at: "2026-10-02T10:00:00Z", outcome: "completed", summary: " Run summary\n" })],
   });
 
-  // ui-markdown changed this by design (docs/features/ui-markdown.md "Data"): goal,
-  // criterion, note, plan and run summary render as markdown; their words stay, markup in them is
-  // text, and the row-like summaries stay exactly as sent.
+  // ui-markdown changed this by design (docs/features/ui-markdown.md "Implementation", the shipped
+  // criteria it changes): goal, criterion, note, plan and run summary render as markdown; their
+  // words stay, markup in them is text, and the row-like summaries stay exactly as sent.
   it("renders goal, criterion text, note, plan and run summary as markdown, their words kept; a proposal's summary exactly as sent", async () => {
     await openTask(pkg);
     const rendered = (selector: string) => document.querySelector(`${selector}.markdown:not(.markdown-pending)`);
@@ -756,7 +756,7 @@ describe("keyboard (AC-12)", () => {
     expect(within(dialog).getByText(/No key changes a task/)).toBeTruthy();
   });
 
-  // Amended by docs/features/ui-home.md "Amendment": exactly the shell's one listener, the chord's.
+  // Amended by ui-home (ui/README.md "Screen rules", Keyboard): exactly the shell's one listener, the chord's.
   it("adds no key listener to the document or the window but the shell's chord listener", async () => {
     const onDocument = vi.spyOn(document, "addEventListener");
     const onWindow = vi.spyOn(window, "addEventListener");

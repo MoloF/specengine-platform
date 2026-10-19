@@ -41,7 +41,7 @@ const CLI_LIB: &str = "crates/specengine-cli/src/lib.rs";
 const CLI_MAIN: &str = "crates/specengine-cli/src/main.rs";
 const STORE_SRC: &str = "crates/specengine-store/src/";
 
-/// The group core (docs/features/layer-c-resolve.md "Group core").
+/// The group core (docs/canon/layer-c.md "Run").
 const GROUP_SOURCE: &str = "crates/specengine-cli/src/group.rs";
 
 /// 8a-1's test runner: it spawns the project's test command on the group

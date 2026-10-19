@@ -233,7 +233,7 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
     assert_eq!(event.event.as_deref(), Some("proposal.created"));
     drop(stream);
 
-    // The decision POST (the stage route, docs/features/decision-staging.md
+    // The decision POST (the stage route, docs/canon/decision-staging.md
     // "Daemon"): from no page refused before its body is read (403); from a
     // same-origin page a body that is no stage refused with the CLI's line
     // (400); an ID that is no proposal's 404; DELETE with nothing staged

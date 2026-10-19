@@ -1122,9 +1122,8 @@ fn export_to(pair: &Pair, home: &Path, out: &Path, now: &str) -> Vec<u8> {
 
 /// AC-10: AC-01's update and AC-07's question (both path targets)
 /// exported and imported into a fresh `HOME`: `dump()` equal, the re-export
-/// byte-identical, format 2, `queue_schema` 6 (docs/features/task-package.md
-/// "Backup", docs/features/decision-staging.md "Backup",
-/// docs/features/kind-interpretation.md "Data"); the restored rows
+/// byte-identical, format 2, `queue_schema` 6 (docs/canon/queue-backup.md
+/// "Format"; docs/features/kind-interpretation.md "Data"); the restored rows
 /// read back by
 /// `review`. M: a read-time ID check on `target_id`.
 #[test]

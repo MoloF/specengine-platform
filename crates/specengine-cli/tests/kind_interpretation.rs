@@ -370,7 +370,7 @@ fn ac_r3_a_decision_that_is_not_live_and_accepted_is_refused() {
             "DEC-0007 is superseded by DEC-0023".to_owned(),
         ),
         // `@rev` and a wiki form: exit 1 naming the bare ID; `project:`
-        // exit 2 (docs/features/kind-interpretation.md "The decision").
+        // exit 2 (docs/canon/proposal-interpretation.md "The decision").
         (
             "DEC-0023@2",
             1,

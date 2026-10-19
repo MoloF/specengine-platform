@@ -5,8 +5,9 @@ import { queueOrder } from "../inbox/order";
 import { summaryOf } from "../inbox/summary";
 import { groupsOf } from "../tasks/groups";
 
-// The palette's options (docs/features/ui-home.md "Palette"): built from what the client holds and
-// the text typed, nothing read here. A match is a substring of the NFC, lower-case text.
+// The palette's options (docs/features/ui-home.md "Implementation", Palette): built from what the
+// client holds and the text typed, nothing read here. A match is a substring of the NFC, lower-case
+// text.
 
 /** Options shown per group; the label says "<name>, 10 of <n>" over it. */
 export const GROUP_LIMIT = 10;

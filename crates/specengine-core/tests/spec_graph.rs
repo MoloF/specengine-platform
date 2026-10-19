@@ -1,4 +1,4 @@
-//! docs/features/spec-cli-graph.md, "Core additions": `SpecGraph` over a
+//! docs/canon/spec-cli-graph.md, "API": `SpecGraph` over a
 //! `CheckInput` parsed by the real parser (in memory, the check's input
 //! type): containment (section nesting, `parent:` resolved from its file,
 //! several holders, dangling, `project:`, cycles broken at their first

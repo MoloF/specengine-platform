@@ -11,7 +11,7 @@ import {
   withoutComments,
 } from "./source";
 
-// The one remark plugin of the renderer (docs/features/ui-markdown.md "Description and interactions"): it
+// The one remark plugin of the renderer (docs/features/ui-markdown.md "Implementation"): it
 // rewrites the markdown tree before it becomes HTML elements, so nothing below needs to be trusted
 // to the library's defaults.
 // - Raw HTML is never interpreted: comments and empty named anchors (`<a id|name ...></a>`, `<a ... />`,

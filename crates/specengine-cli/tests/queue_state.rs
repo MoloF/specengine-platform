@@ -957,8 +957,8 @@ fn every_other_defect_of_step_2_names_its_line() {
 // ------------------------------------------------------------------ AC-06
 
 /// AC-06: `format` 3 and `queue_schema` 9 (newer than this build's 2 and
-/// 8, docs/canon/tasks.md "Backup", docs/features/drift-queue.md "Queue
-/// schema 8"): exit 2 with `upgrade
+/// 8, docs/canon/tasks.md "Backup", docs/features/drift-queue.md
+/// "Queue schema 8"): exit 2 with `upgrade
 /// SpecEngine`; a spec-b dump into spec-a: exit 2 naming both slugs; no
 /// prompt, the queue never made. M: either version check removed; the slug
 /// check removed.

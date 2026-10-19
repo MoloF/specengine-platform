@@ -129,7 +129,7 @@ describe("getNode", () => {
     expect([...(links?.outgoing ?? []), ...(links?.incoming ?? [])].some((link) => link.state === "resolved" && link.reason !== null)).toBe(true);
     const weak = (links?.outgoing ?? []).findIndex((link) => link.type === "mentions");
     expect((links?.outgoing ?? []).slice(weak).every((link) => link.type === "mentions")).toBe(true);
-    // The archived document's mention and its depends_on (docs/features/ui-graph.md "Mock").
+    // The archived document's mention and its depends_on (docs/features/ui-graph.md "Data", Mock).
     expect(links?.left_out.tier3).toBe(2);
     const archived = (await client.getNode("harbor-sim", "MEC-TIDES", { with: ["links"], archive: true })).nodes[0]?.links;
     expect(archived?.left_out.tier3).toBe(0);

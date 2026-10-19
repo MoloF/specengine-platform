@@ -1,8 +1,8 @@
 import { lazy, Suspense } from "react";
 import type { MarkdownProps } from "./Markdown";
 
-// What the views import (docs/features/ui-markdown.md "Data"): the renderer arrives in a chunk of
-// its own, like the graph canvas. Until it does, the text shows as it was sent, wrapped.
+// What the views import (docs/features/ui-markdown.md "Implementation"): the renderer arrives in a
+// chunk of its own, like the graph canvas. Until it does, the text shows as it was sent, wrapped.
 
 const Markdown = lazy(() => import("./Markdown").then((module) => ({ default: module.Markdown })));
 

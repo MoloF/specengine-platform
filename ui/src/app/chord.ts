@@ -1,6 +1,6 @@
-// The palette's chord, Cmd-K or Ctrl-K (docs/features/ui-home.md "Chord"): the one key that acts
-// anywhere, a text field included. The shell's single `document` keydown listener (capture) reads
-// it; every other key stays with the region that has focus.
+// The palette's chord, Cmd-K or Ctrl-K (ui/README.md "Screen rules", Keyboard): the one key that
+// acts anywhere, a text field included. The shell's single `document` keydown listener (capture)
+// reads it; every other key stays with the region that has focus.
 
 /** The key fields the chord is read from. */
 export type ChordEvent = Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing">;

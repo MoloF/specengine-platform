@@ -6,9 +6,10 @@ import { aProposal, aSearchHit, aSearchResults, aTaskEntry } from "../test/build
 import { callsOf, homeClient } from "../test/homeStub";
 import { renderApp } from "../test/render";
 
-// docs/features/ui-home.md "Palette" and "Chord" on a stub client: AC-09 (the chord), AC-10 (one
-// document listener), AC-11 (dialog and combobox), AC-12 (what opening, typing and a search read),
-// AC-13 (matching and jumps), AC-14 (failures in their group).
+// On a stub client, the palette (docs/features/ui-home.md "Implementation", Palette) and its chord
+// (ui/README.md "Screen rules", Keyboard): ui-home's AC-09 (the chord), AC-10 (one document
+// listener), AC-11 (dialog and combobox), AC-12 (what opening, typing and a search read), AC-13
+// (matching and jumps), AC-14 (failures in their group).
 
 /** Markup an author pasted; shown as text, never parsed (escaped so no source line spells a dialog call). */
 const HOSTILE = "<img src=x onerror=\u0061lert(1)>";

@@ -1,9 +1,9 @@
 //! This repository's documentation config and walk, shared by the store's
 //! `check_parity.rs` and the CLI's `parity.rs` (the latter through a
-//! `#[path]` module; docs/features/spec-cli-switch.md, "Migrations"): the
-//! committed root `specengine.toml` as read (never rebuilt here), the
-//! registered export and gate commands of its `[[generators]]` entry, and
-//! AC-03's independent std walk: every `*.md` under the root outside
+//! `#[path]` module; docs/features/spec-cli-switch.md, "Implementation",
+//! Migrations): the committed root `specengine.toml` as read (never rebuilt
+//! here), the registered export and gate commands of its `[[generators]]`
+//! entry, and AC-03's independent std walk: every `*.md` under the root outside
 //! `.`-named directories and the frozen [`SKIP_DIRS`], its name not
 //! starting with `_`, its path not matching the frozen [`SKIP_FILES`]
 //! (docs/features/plugin-skills.md AC-12; the agents glob since
@@ -66,9 +66,10 @@ pub const SKIP_DIRS: [&str; 5] = [
 /// The files the std walk never lists, by a root-relative glob whose `*`
 /// stands within one path segment (docs/features/plugin-skills.md AC-12;
 /// frozen beside [`SKIP_DIRS`]): the plugin's skill bodies and, since
-/// docs/features/plugin-roles.md "Data" "Files", its agent bodies, whose
-/// front-matter is Claude Code's (`name`, `description`, ...), not a
-/// document class. The root config's `exclude` holds the same globs.
+/// docs/features/plugin-roles.md, its agent bodies (docs/canon/plugin.md
+/// "Roles"), whose front-matter is Claude Code's (`name`, `description`,
+/// ...), not a document class. The root config's `exclude` holds the same
+/// globs.
 pub const SKIP_FILES: [&str; 2] = [
     "plugin/specengine/skills/*/SKILL.md",
     "plugin/specengine/agents/*.md",
@@ -147,7 +148,7 @@ pub fn claimed(glob: &str, relative: &str) -> bool {
 
 /// The live shard of [`INDEX_LIVE_SHARDS`] that places the root-relative
 /// `/` path `relative`: the first, in config order, whose claim matches it
-/// (docs/canon/spec-check-graph.md "Index render", **Shards**: the first
+/// (docs/canon/spec-check-graph.md "Index render (§9)", **Shards**: the first
 /// matching claim wins); `None` when no claim does.
 pub fn claiming_shard(relative: &str) -> Option<&'static str> {
     INDEX_LIVE_SHARDS

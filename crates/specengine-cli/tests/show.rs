@@ -35,7 +35,7 @@ fn tokens_of(parsed: &ParsedFile, id: &str) -> u32 {
         .tokens_est
 }
 
-/// docs/features/proposal-apply.md, "Data", `spec show`: `b3:` and the
+/// docs/canon/spec-cli-read.md, "Output", `spec show`: `b3:` and the
 /// BLAKE3 (the tests' own implementation) of exactly `bytes`.
 fn b3(bytes: &[u8]) -> String {
     format!("b3:{}", blake3_hex(bytes))
@@ -190,7 +190,7 @@ fn show_json_has_exactly_the_data_keys() {
             "sections",
             // docs/features/norm-hash.md, "spec show and mirrors".
             "norm_hash",
-            // docs/features/proposal-apply.md, "Data", `spec show`.
+            // docs/canon/spec-cli-read.md, "Output", `spec show`.
             "span_hash",
             "text",
             "truncated",

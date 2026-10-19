@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ARC_BEND, arcOver, COLUMN_GAP, FIT_MARGIN, FIT_MAX_ZOOM, FIT_MIN_ZOOM, readableViewport } from "./geometry";
 import { BOX_HEIGHT, BOX_WIDTH, COLUMN_STEP, ROW_STEP } from "./layout";
 
-// The canvas's geometry (docs/features/ui-graph.md "Canvas"), as numbers jsdom cannot draw: a
-// link within one column swings through the gap on its right, its label there; a fit never shrinks
-// the text past a readable zoom and keeps the focus in sight.
+// The canvas's geometry (docs/features/ui-graph.md "Implementation", Canvas), as numbers jsdom
+// cannot draw: a link within one column swings through the gap on its right, its label there; a
+// fit never shrinks the text past a readable zoom and keeps the focus in sight.
 
 /** The cubic's points from its path: start, two controls, end. */
 function points(path: string): [number, number][] {

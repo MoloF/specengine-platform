@@ -1100,7 +1100,7 @@ impl task_common::Tasks for RestoredHome<'_> {
 /// columns `NULL`, and re-export as format 2 (schema 3 here; 1 and 2:
 /// `intake_state.rs`, `decision_apply.rs`); a database still at schema 3
 /// (no `tasks`, `runs`, `task_id`, stage) exports as format 2, schema 5
-/// (docs/features/decision-staging.md "Backup") without stepping.
+/// (docs/canon/queue-backup.md "Format") without stepping.
 /// Refused, naming line 1, nothing made: a format-2 header of six keys or
 /// of `queue_schema` 3, a format-1 header of seven keys; a format-1 row
 /// holding `task_id`; a dump into a queue holding only a task. M: tasks

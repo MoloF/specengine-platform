@@ -249,8 +249,8 @@ fn ac06_a_start_that_cannot_serve_exits_2_before_listening() {
     drop(taken);
 
     // The taken port is found at the bind, after the data directory and
-    // its lock (docs/features/spec-serve.md "Description and
-    // interactions"): the empty `daemon.lock` stays, nothing is published.
+    // its lock (docs/features/spec-serve.md "Description and interactions"):
+    // the empty `daemon.lock` stays, nothing is published.
     assert!(
         common::beyond_daemon(&home).is_empty(),
         "a refused start opens nothing in the data directory: {:?}",

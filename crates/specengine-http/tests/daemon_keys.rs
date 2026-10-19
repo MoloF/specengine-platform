@@ -1120,8 +1120,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "{name}: {keys:?}"
         );
     }
-    // ui-live-tasks' seventeen (docs/features/ui-live-tasks.md "Key
-    // sets"), in that order, with their counts; the package's 25 keys in
+    // ui-live-tasks' seventeen (docs/features/ui-live-tasks.md
+    // "Key sets"), in that order, with their counts; the package's 25 keys in
     // the canon's order, its `runs` items the seven of a run.
     let counts: Vec<(&str, usize)> = sets[15..32]
         .iter()

@@ -447,7 +447,7 @@ pub fn os(text: &str) -> OsString {
 }
 
 /// The ` | span b3:<64 hex>` suffix every `spec show` text header ends with
-/// (docs/features/proposal-apply.md, "Data", `spec show`).
+/// (docs/canon/spec-cli-read.md, "Output", `spec show`).
 pub const SPAN_SUFFIX: &str = " | span b3:";
 
 /// The ` | norm b3:<64 hex>` a `spec show` text header carries right

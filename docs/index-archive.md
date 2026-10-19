@@ -19,6 +19,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/agent-intake.md](features/agent-intake.md) shipped
 - [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) shipped
 - [docs/features/bevy-roles.md](features/bevy-roles.md) shipped
+- [docs/features/citation-sweep.md](features/citation-sweep.md) shipped
 - [docs/features/code-refs.md](features/code-refs.md) shipped
 - [docs/features/code-tools.md](features/code-tools.md) shipped
 - [docs/features/constant-census.md](features/constant-census.md) shipped

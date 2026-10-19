@@ -1,4 +1,4 @@
-//! docs/features/proposal-apply.md, "Idempotence" and "Reject" as
+//! docs/canon/proposal-completion.md, "Completion", "Reject" as
 //! iteration 4 rules them (review of iteration 3, MAJOR: once the recorded
 //! worktree was removed, a proposal's own commit on its branch was never
 //! found again): the trailer lookup (the completion, `review`'s note,

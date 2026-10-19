@@ -1,5 +1,5 @@
-//! docs/features/proposal-apply.md, "Data": the proposal queue through its
-//! public API only (`ProposalQueue`, `SqliteQueue`): IDs `PR-NNNN` (the
+//! docs/canon/proposal-queue.md, "States and events", "Store": the proposal
+//! queue through its public API only (`ProposalQueue`, `SqliteQueue`): IDs `PR-NNNN` (the
 //! highest plus one, never reused), the states `open → approved → applied`,
 //! `open → rejected` with every other change refused, one event per state
 //! change in its transaction (AC-19's store half), `reopen`'s rule for

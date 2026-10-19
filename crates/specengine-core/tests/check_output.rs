@@ -383,8 +383,8 @@ fn the_one_table_covers_every_parser_code() {
     }
     // The check's own codes are the spec's (Data, "Finding"): increment 1's
     // 18 errors and the warning `name-skipped`, then increment 2's four
-    // §11.5–6 errors and three graph warnings (docs/features/
-    // spec-check-graph.md AC-12), then part 2's error `id-scope`
+    // §11.5–6 errors and three graph warnings
+    // (docs/features/spec-check-graph.md AC-12), then part 2's error `id-scope`
     // (docs/features/spec-check-scopes.md AC-08), then pass B's two file
     // link warnings (docs/features/spec-check-links.md AC-07), then
     // increment 4's five rule codes and the warning `parent-cycle`

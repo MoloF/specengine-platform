@@ -1,5 +1,5 @@
 // Pure readings of a text the renderer needs before and beside the markdown parse
-// (docs/features/ui-markdown.md "Description and interactions"):
+// (docs/features/ui-markdown.md "Implementation"):
 // - the front-matter block, split as the core splits it (`crates/specengine-core/src/front_matter.rs`
 //   `split`): the first line after an optional BOM exactly `---`, closed by the next line exactly
 //   `---`, `\n` or `\r\n` endings; unclosed, the whole text is body;

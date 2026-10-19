@@ -9,10 +9,10 @@ import { DEPTHS, type Chip, type GraphSettings } from "./settings";
 const ALL = "all";
 
 /**
- * The form "Graph options" (docs/features/ui-graph.md "Controls"): the REF field and Show, the
- * mode, the type chips, the depth and the archive. The typed REF is this form's own state: a
- * keystroke renders the form alone, never the canvas; Show moves the hash, each other control
- * changes the options at once (one read each).
+ * The form "Graph options" (docs/features/ui-graph.md "Implementation", Controls): the REF field
+ * and Show, the mode, the type chips, the depth and the archive. The typed REF is this form's own
+ * state: a keystroke renders the form alone, never the canvas; Show moves the hash, each other
+ * control changes the options at once (one read each).
  */
 export function GraphControls({
   project,

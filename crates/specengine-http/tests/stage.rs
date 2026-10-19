@@ -1111,8 +1111,8 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 8 (docs/features/drift-queue.md "Queue
-    // schema 8"): 9 is newer.
+    // This build's queue schema is 8 (docs/features/drift-queue.md
+    // "Queue schema 8"): 9 is newer.
     sqlite3(&db(&s.home), "PRAGMA user_version = 9;");
     let reply = server.stage(
         &decision(&s.report),

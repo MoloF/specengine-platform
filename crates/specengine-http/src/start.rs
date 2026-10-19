@@ -1,7 +1,7 @@
 //! The served projects, read once at start from the `--root` arguments
-//! (docs/features/daemon-read.md "Description and interactions"), and
-//! their data directory (docs/features/spec-serve.md "Description and
-//! interactions"): guarded against every root, then created.
+//! (docs/features/daemon-read.md "Description and interactions"), and their
+//! data directory (docs/features/spec-serve.md "Description and interactions"):
+//! guarded against every root, then created.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

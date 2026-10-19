@@ -100,14 +100,14 @@ const NAMES: [(&str, &[&str]); 6] = [
             "get_proposal",
             "distinct_from",
             "working_answer",
-            // docs/features/decision-apply.md "Data", "Plugin".
+            // docs/canon/plugin.md "Skills" (decision-apply).
             "record_id",
             // docs/features/drift-queue.md "report_drift and texts".
             "report_drift",
         ],
     ),
     ("propose-spec-change", &["propose_change", "span_hash"]),
-    // docs/features/plugin-gate.md "Data", "Skills", AC-15.
+    // docs/canon/plugin.md "Skills"; AC-15 of docs/features/plugin-gate.md.
     (
         "analyze",
         &[
@@ -1008,7 +1008,7 @@ fn bullets(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// docs/features/decision-apply.md "Data", "Plugin": `ask-owner` teaches
+/// docs/canon/plugin.md "Skills": `ask-owner` teaches
 /// a queue hit with a `record` (the owner's decision: `get_node` on it, off
 /// this branch `get_proposal` and its `choice`), one with only an
 /// `answer` (rejected, the owner's answer), and an applied item's

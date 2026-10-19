@@ -124,8 +124,8 @@ const REF_DOC: &str = "An ID, an alias, `slug/ID`, `ID#SECTION` or a root-relati
 const PATH_DOC: &str =
     "A `[code]` root, or a directory or code file under one. Absent: a row per root.";
 
-/// `find_symbols` given not exactly one form (docs/features/code-tools.md
-/// "Form errors").
+/// `find_symbols` given not exactly one form
+/// (`docs/canon/mcp-code.md` "Tools", Forms).
 const ONE_FORM: &str = "spec: find_symbols takes exactly one of `query`, `node`, `file` and `at`\n";
 
 /// `find_symbols` given `limit` beside a form other than `query`.

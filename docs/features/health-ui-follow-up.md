@@ -52,7 +52,7 @@ spec-writer:
 
 ## Out of scope
 
-A trigger on `proposal.created` (U3: a walk per proposal an agent raises; revisit with TE-7's timings); the check's in-flight rule; re-reading the tree or the check after a step-10 `apply_failed`; the 42 other code comments citing a heading without backticks (a sweep that also makes `doc_pointers` read them); `ui/README.md`; 9b's row 6; any crate, route, daemon key, type, package or mock scenario.
+A trigger on `proposal.created` (U3: a walk per proposal an agent raises; revisit with TE-7's timings); the check's in-flight rule; re-reading the tree or the check after a step-10 `apply_failed`; the 42 other code comments citing a heading without backticks (a sweep that also makes `doc_pointers` read them: `docs/features/citation-sweep.md`); `ui/README.md`; 9b's row 6; any crate, route, daemon key, type, package or mock scenario.
 
 ## Implementation
 

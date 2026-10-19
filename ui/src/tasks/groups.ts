@@ -1,8 +1,8 @@
 import type { KnownTaskStatus, TaskListEntry, TaskStatus } from "../api/types";
 import { isKnownTaskStatus, taskStatusLook } from "./labels";
 
-// The list's groups (docs/features/ui-tasks.md "Description and interactions", List), taken from
-// `status` and `stale` as the daemon sent them; nothing is computed or held here (ADR-0012).
+// The list's groups (docs/features/ui-tasks.md "Implementation", List), taken from `status` and
+// `stale` as the daemon sent them; nothing is computed or held here (ADR-0012).
 
 /**
  * Where each state's group stands. A plan in review always waits for the owner; a ready task waits

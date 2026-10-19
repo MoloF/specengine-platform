@@ -70,8 +70,9 @@ function StubRow({ stub }: { stub: StubEnd }) {
 }
 
 /**
- * The List (docs/features/ui-graph.md "List"): the whole answer as text, never limited like the
- * canvas: the nodes by distance in the answer's order, the stubs, every edge line.
+ * The List (docs/features/ui-graph.md "Implementation", List; ui/README.md "Screen rules", Canvas):
+ * the whole answer as text, never limited like the canvas: the nodes by distance in the answer's
+ * order, the stubs, every edge line.
  */
 export const GraphList = memo(function GraphList({ project, answer }: { project: string; answer: GraphView }) {
   const groups = useMemo(() => {

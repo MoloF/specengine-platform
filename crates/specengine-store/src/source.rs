@@ -15,10 +15,10 @@
 //! root's own components included), and byte-sorted.
 //!
 //! [`GitIndex`] walks the git index by the same rules
-//! (docs/features/spec-cli-staged.md, "Walk"): the stage-0 regular entries
-//! (`100644`, `100755`) as the files, symlinks (`120000`) and gitlinks
-//! (`160000`) skipped, a directory existing when an entry lies under it; a
-//! root is a directory only when a regular entry lies under it.
+//! (docs/canon/spec-check-git.md, "The staged check"): the stage-0 regular
+//! entries (`100644`, `100755`) as the files, symlinks (`120000`) and
+//! gitlinks (`160000`) skipped, a directory existing when an entry lies
+//! under it; a root is a directory only when a regular entry lies under it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;

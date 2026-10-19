@@ -4,7 +4,8 @@ import { anEntry, aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { kindCountsOf, otherOpenOf, proposalNoun, statusCountsOf, waitingOf } from "./tally";
 
-// docs/features/ui-home.md "Home": what the home counts and groups, nothing else (AC-03, AC-04).
+// docs/features/ui-home.md "Rules and edge cases", "Implementation" (Home): what the home counts and
+// groups, nothing else (AC-03, AC-04).
 
 describe("the Tasks region's counts (AC-03)", () => {
   it("takes what waits for you in the Tasks list's order", () => {

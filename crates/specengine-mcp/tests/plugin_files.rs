@@ -18,7 +18,7 @@
 //! - AC-02: `plugin.json` — `name` `specengine`, `version` `N.N.N`, keys
 //!   within the README's. M: a `hooks` key.
 //! - AC-03: exactly the README's ten files (scratch copy, the real walk;
-//!   docs/features/plugin-gate.md "Data", "Plugin": `hooks/hooks.json`,
+//!   docs/canon/plugin-files.md "Changing it", Files: `hooks/hooks.json`,
 //!   `hooks/gate.sh` and the skills `analyze`, `implement` join the six).
 //!   M: `specengine/hooks/x.sh`; `specengine/agents/x.md`; `README.md`;
 //!   `hooks/gate.sh` missing.
@@ -101,7 +101,7 @@ const PINS: &[(&str, &str)] = &[
         "0.1.2",
         "efc6d7c3fb789a15e48f6e56bb08687af2c3014b958d3a99f5a56a1af1c8500a",
     ),
-    // docs/features/decision-apply.md "Data", "Plugin": `ask-owner` teaches
+    // docs/canon/plugin.md "Skills": `ask-owner` teaches
     // a decided item's record (PATCH).
     (
         "0.1.3",
@@ -126,22 +126,23 @@ const PINS: &[(&str, &str)] = &[
         "0.1.6",
         "2c09c7549d1c78ed452af4e3e78d842bc8fc7a2d6b6a1bd2d38cc2b72b49d5e6",
     ),
-    // docs/features/plugin-gate.md "Data", "Plugin" (0.1.6 -> 0.2.0,
+    // docs/canon/plugin-files.md "Changing it", Version (0.1.6 -> 0.2.0,
     // MINOR): the task gate's hook and wrapper, the skills `analyze` and
     // `implement`.
     (
         "0.2.0",
         "6b6fa534635ed35a5d0de35206efcf462a98df677553a584eaf6a2c9979ef028",
     ),
-    // docs/features/plugin-roles.md "Data", R-2 (0.2.0 -> 0.3.0, MINOR):
+    // docs/canon/plugin.md "Roles", "Skills" (plugin-roles R-2; 0.2.0 -> 0.3.0, MINOR):
     // the five roles `agents/*.md` and the owner-invoked skill `feature`.
     (
         "0.3.0",
         "acb1bbdb64d85643a9b11271d8010ed10dc884fcabf8bf63a49c9fb119b9d023",
     ),
-    // docs/features/kind-interpretation.md "Description and interactions",
-    // "Plugin" (0.3.0 -> 0.4.0, MINOR): `propose-spec-change` teaches the
-    // kind `interpretation`, `spec-author` names it.
+    // docs/features/kind-interpretation.md "Description and interactions";
+    // docs/canon/plugin-files.md "Changing it", Version (0.3.0 -> 0.4.0,
+    // MINOR): `propose-spec-change` teaches the kind `interpretation`,
+    // `spec-author` names it.
     (
         "0.4.0",
         "d795e5d8aa66c003158d935216f2f050776154d4af0944399ba165e34a7faa54",
@@ -236,7 +237,7 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
-/// ten (its Files bullet) and docs/features/plugin-roles.md "Data" "Files"
+/// ten (its Files bullet) and docs/canon/plugin-files.md "Changing it", Files
 /// (the five agents and `skills/feature/SKILL.md`), sixteen.
 const FILES: [&str; 16] = [
     ".claude-plugin/marketplace.json",
@@ -758,8 +759,8 @@ struct Skill<'t> {
     body: &'t [u8],
 }
 
-/// The owner-invoked skill (docs/features/plugin-roles.md "Data", "Skill
-/// front-matter"): four keys in order, its description outside the
+/// The owner-invoked skill (docs/canon/plugin-files.md "Changing it", A
+/// skill): four keys in order, its description outside the
 /// 1 200 B sum (D5).
 const FEATURE: &str = "feature";
 

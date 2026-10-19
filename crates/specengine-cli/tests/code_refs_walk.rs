@@ -622,7 +622,7 @@ fn check_is_the_same_with_and_without_the_code() {
 // ------------------------------------------------------------------ TE-6
 
 /// The store's module of the code tables, the pass and the
-/// refresh (docs/features/symbol-index.md "Crates": the store owns compare,
+/// refresh (docs/canon/symbol-index.md "Crates and seams": the store owns compare,
 /// apply and the cross-file pass behind `CodeAnalyzer`).
 const STORE_CODE_MODULE: &str = "crates/specengine-store/src/code.rs";
 

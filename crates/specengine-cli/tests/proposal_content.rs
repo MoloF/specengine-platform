@@ -1,4 +1,4 @@
-//! docs/features/proposal-apply.md, "Idempotence" and "Reject" as
+//! docs/canon/proposal-completion.md, "Completion", "Reject" as
 //! iteration 4 rules them (review of iteration 3, minors):
 //!
 //! - a commit completes a proposal only when it carries the proposal's

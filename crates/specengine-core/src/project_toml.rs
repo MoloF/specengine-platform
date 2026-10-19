@@ -1,6 +1,6 @@
 //! `ProjectConfig::from_toml`: the one loader of `specengine.toml` for the
-//! `spec` commands (docs/features/spec-cli.md, "Data"). Pure: the text in,
-//! the checked values out.
+//! `spec` commands (`crates/specengine-core/README.md`, "API"). Pure: the
+//! text in, the checked values out.
 //!
 //! - `[project]` is closed: `slug` (a [`grammar::is_slug`] of at most
 //!   [`MAX_SLUG_BYTES`] bytes), `name`, `language`, `profile` (at most

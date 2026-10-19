@@ -15,8 +15,8 @@ serde-saphyr.workspace = true
 serde.workspace = true
 # The `[ids]` table of `specengine.toml`; already pinned for `specengine-import`.
 toml.workspace = true
-# `spec check`'s JSON report (docs/canon/spec-check.md, "Findings, debt,
-# verdict"); already in the workspace graph at this pin (store, eval, mcp).
+# `spec check`'s JSON report (docs/canon/spec-check.md, "Findings, debt, verdict");
+# already in the workspace graph at this pin (store, eval, mcp).
 serde_json.workspace = true
 # `depends-cycle`: strongly connected components (`tarjan_scc`) of the
 # `depends_on` graph; owner-approved (Q-C, docs/canon/spec-check-graph.md).

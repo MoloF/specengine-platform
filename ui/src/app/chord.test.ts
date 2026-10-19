@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { isJumpChord, type ChordEvent } from "./chord";
 
-// docs/features/ui-home.md "Chord" (AC-09): Cmd-K or Ctrl-K, the physical K only where `key` is
-// not one ASCII letter; never with Alt, Shift or during composition.
+// ui/README.md "Screen rules" (Keyboard) and AC-09 of docs/features/ui-home.md: Cmd-K or Ctrl-K,
+// the physical K only where `key` is not one ASCII letter; never with Alt, Shift or during
+// composition.
 
 function press(fields: Partial<ChordEvent>): boolean {
   return isJumpChord({ key: "k", code: "KeyK", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false, ...fields });

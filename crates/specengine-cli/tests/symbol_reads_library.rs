@@ -54,8 +54,7 @@ fn binary(home: &Path, root: &Path, args: &[&str]) -> (i32, Value) {
 }
 
 /// The bounds `search`'s `SEARCH_LIMIT_*` sit beside, as numbers MCP's
-/// descriptions assert at compile time (docs/features/code-tools.md
-/// "Descriptions").
+/// descriptions assert at compile time (docs/canon/mcp-code.md "Texts").
 #[test]
 fn symbols_limit_bounds_are_exported_constants() {
     assert_eq!(

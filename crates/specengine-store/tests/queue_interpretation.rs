@@ -341,15 +341,15 @@ fn ac_r4_controls_are_stored_raw() {
 /// M: step 6 omitted; `user_version` left 5.
 #[test]
 fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
-    // Schema 8, 46 columns since docs/features/drift-queue.md "Queue
-    // schema 8": `drift`, `drift_hash` after `interpretation`.
+    // Schema 8, 46 columns since docs/features/drift-queue.md
+    // "Queue schema 8": `drift`, `drift_hash` after `interpretation`.
     assert_eq!(QUEUE_SCHEMA_VERSION, 8);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[43], INTERPRETATION_KIND);
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
-    // Schema 7 adds no column (docs/features/rev-discipline.md "Review
-    // document, stage, queue").
+    // Schema 7 adds no column (docs/features/rev-discipline.md
+    // "Review document, stage, queue").
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
     assert_eq!(proposal_columns(9), None);

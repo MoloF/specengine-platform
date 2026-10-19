@@ -13,8 +13,8 @@ import { nodeKinds, specStatuses } from "./kinds";
 // in four states and mentions, both ways, with reasons; hostile markup in a title, a text and a
 // link's written form (escaped here so no source line spells a dialog call).
 //
-// The graph (docs/features/ui-graph.md "Mock"): a link of a type outside the twelve shared ones
-// (MEC-PILOTAGE `precedes` MEC-MOORING), a typed link in a nested section of MEC-TIDES
+// The graph (docs/features/ui-graph.md "Data", Mock): a link of a type outside the twelve shared
+// ones (MEC-PILOTAGE `precedes` MEC-MOORING), a typed link in a nested section of MEC-TIDES
 // (RULE-TIDE-WINDOW `adopts` RULE-HIGH-WATER), an Impact link landing on a nested section
 // (MEC-NIGHT-PASSAGE `depends_on` MEC-TIDES#RULE-TIDE-WINDOW), the archived document's
 // `depends_on` MEC-TIDES.
@@ -66,7 +66,7 @@ export const WEATHER_DECISION = "DEC-0012";
 const WEATHER_DECISION_FILE = "docs/spec/records/DEC-0012-simulated-weather.md";
 
 const CLOCK_TEXT = [
-  // A section named by a heading attribute (docs/features/ui-markdown.md "Data").
+  // A section named by a heading attribute (docs/features/ui-markdown.md "Implementation").
   "## One simulated clock {#RULE-HARBOR-CLOCK}",
   "",
   "One tick is one simulated minute. Systems run in a fixed order each tick:",
@@ -331,7 +331,7 @@ function harborCorpus(): MockCorpus {
         "Ships wait at anchor until a berth with enough depth and length is free.",
         "A berth holds one ship; mooring takes a crew of four and 20 simulated minutes.",
         "Deep ships also wait for the tide window (MEC-TIDES#RULE-TIDE-WINDOW).",
-        // Markdown links the rendered text anchors as the links read says (docs/features/ui-markdown.md "Data").
+        // Markdown links the rendered text anchors as the links read says (docs/features/ui-markdown.md "Implementation").
         "See [the tide cycle](../tides/tide-cycle.md) and the [quay plans](quays.md).",
         "",
         `## RULE-BASIN-NAME: ${BASIN_NAME_DECOMPOSED}`,

@@ -3,9 +3,9 @@ import type { IconName } from "../ui/Icon";
 import { directionLabel } from "../tree/labels";
 import type { Walked } from "./layout";
 
-// The words the graph screen says about one answer (docs/features/ui-graph.md "Canvas", "List",
-// "States"). Types and kinds are corpus vocabulary, shown as written; directions and link states
-// are closed tables.
+// The words the graph screen says about one answer (ui/README.md "Screen rules", Canvas and
+// States; docs/features/ui-graph.md "Implementation", List). Types and kinds are corpus
+// vocabulary, shown as written; directions and link states are closed tables.
 
 /**
  * An edge as one line: `<src, else -> --<type>--> <dst, else written> | <path>:<line>[ | <state>: <reason>]`,

@@ -3,10 +3,10 @@
 //! "Intake document", "Tools": the review and intake documents; the closed
 //! objects of `report_discrepancy`'s input) and of the task tools
 //! (`docs/canon/task-package.md` "Package", "MCP": the package, the task
-//! commands' document) and of the code tools (`docs/features/code-tools.md`
-//! "Output mirrors": `spec symbols`, `spec refs`, `spec unmapped`; a
-//! symbol target's `roles`, `docs/canon/mcp-code.md` "Mirrors", each key a
-//! free string or integer, never an enum of the code layer's words).
+//! commands' document) and of the code tools
+//! (`docs/canon/mcp-code.md` "Mirrors": `spec symbols`, `spec refs`,
+//! `spec unmapped`; a symbol target's `roles`, each key a free string or
+//! integer, never an enum of the code layer's words).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons

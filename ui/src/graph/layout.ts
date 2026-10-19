@@ -1,9 +1,10 @@
 import type { FollowedType, GraphEdge, GraphNode, GraphView } from "../api/types";
 
-// The canvas's layered layout (docs/features/ui-graph.md "Layout"), hand-written and pure: one
-// answer of `spec graph` in, boxes and edges out. Columns by distance, rows by four barycenter
-// sweeps, ties by (path, line); the input is sorted first, so the same answer in any order gives
-// the same picture. The walk itself stays in core: nothing here follows, unions or infers a link.
+// The canvas's layered layout (docs/features/ui-graph.md "Implementation", Layout), hand-written
+// and pure: one answer of `spec graph` in, boxes and edges out. Columns by distance, rows by four
+// barycenter sweeps, ties by (path, line); the input is sorted first, so the same answer in any
+// order gives the same picture. The walk itself stays in core: nothing here follows, unions or
+// infers a link.
 
 /** A box's size and the grid it sits on, in canvas pixels. */
 export const BOX_WIDTH = 240;
@@ -225,8 +226,9 @@ function positionsIn(order: readonly string[]): (type: string) => number {
 }
 
 /**
- * Lays out one answer (docs/features/ui-graph.md "Layout", steps 1-6). Pure and deterministic: the
- * input is sorted first; boxes are fixed 240 x 72 px, column c at x = 336c, row r at y = 88r.
+ * Lays out one answer (docs/features/ui-graph.md "Implementation", Layout, steps 1-6). Pure and
+ * deterministic: the input is sorted first; boxes are fixed 240 x 72 px, column c at x = 336c, row
+ * r at y = 88r.
  * `typeOrder` is the mode's chip order, which styles each type; by default the answer's `types`.
  */
 export function layoutGraph(

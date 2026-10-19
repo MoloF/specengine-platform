@@ -3,9 +3,9 @@ import { frontMatter, link, specFile, type MockDocument, type MockLink } from ".
 // The `large` scenario's addition to harbor-sim: 12 domains, 6 mechanics each, 6 sub-mechanics
 // each, every sub-mechanic with 2 rules nested three deep. 12 + 72 + 432 + 2 592 = 3 108 nodes,
 // depth 0 to 5, in harbor-sim's kinds; deterministic, and uncut as the browser reads it.
-// Front-matter `depends_on` (docs/features/ui-graph.md "Mock"): each mechanic on its domain, each
-// sub-mechanic on its mechanic, DOM-GEN-02...12 on DOM-GEN-01: Impact from DOM-GEN-01 reaches 17,
-// 102 and 396 nodes at distance 1 to 3 (516 with the REF).
+// Front-matter `depends_on` (docs/features/ui-graph.md "Data", Mock): each mechanic on its domain,
+// each sub-mechanic on its mechanic, DOM-GEN-02...12 on DOM-GEN-01: Impact from DOM-GEN-01 reaches
+// 17, 102 and 396 nodes at distance 1 to 3 (516 with the REF).
 
 const pad = (value: number) => String(value).padStart(2, "0");
 

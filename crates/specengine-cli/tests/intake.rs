@@ -3,9 +3,9 @@
 //! records that never apply, their dedup against what is decided and asked
 //! (Rules 6–7), the refusals (Rules 1–5), a proposed patch as a linked
 //! update, escaping, and settling (`approve` refused before any prompt
-//! where the root has no `[decision_records]`, as docs/features/
-//! decision-apply.md decides them; `reject` with the answer). AC-03 (the
-//! twin half), AC-04, AC-06, AC-07, AC-08, AC-09.
+//! where the root has no `[decision_records]`, as
+//! docs/features/decision-apply.md decides them; `reject` with the
+//! answer). AC-03 (the twin half), AC-04, AC-06, AC-07, AC-08, AC-09.
 //!
 //! Scratch git repositories of `fixtures/spec-a` as `common::proposal`
 //! makes them (the main worktree on `main`, a linked one on `t1`), a scratch

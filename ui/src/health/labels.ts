@@ -75,10 +75,11 @@ export function unknownModeLook(value: CheckMode): Look {
   return { label: value, tone: "check-unknown", icon: "unknown" };
 }
 
-// Rows 4-5 of What is left (docs/canon/health-code.md "Document", "Row 4: assumes", "Row 5:
-// unbound"): every state word the two parts show goes through one of the tables below, the only
-// place Health tells one word from another (docs/features/health-code-ui.md "Rules and edge
-// cases"); a word not listed is shown raw, never fails the part, and is drawn as nothing measured.
+// Rows 4-5 of What is left (docs/canon/health-code.md "Document", "Row 4: assumes",
+// "Row 5: unbound"): every state word the two parts show goes through one of the tables below,
+// the only place Health tells one word from another
+// (docs/features/health-code-ui.md "Rules and edge cases"); a word not listed is shown raw, never
+// fails the part, and is drawn as nothing measured.
 
 /** How a code row is drawn in its state: its words, whether it is measured, whether a Retry may change it. */
 export interface CodeRowLook {

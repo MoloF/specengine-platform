@@ -1392,7 +1392,7 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
 /// AC-12: a format-1 schema-2 dump (its 35 columns) restores, the five
 /// record columns, `task_id` and the stage `NULL`, and re-exports
 /// byte-identical as the current export (format 2, schema 6:
-/// docs/features/kind-interpretation.md "Backup"; a schema-1 dump:
+/// docs/canon/queue-backup.md "Format"; a schema-1 dump:
 /// `intake_state.rs`, re-exported as 6 too); a schema-2 row carrying the
 /// later columns is refused naming its line; a database still at schema 2
 /// (no `tasks`, `runs`, `task_id`, stage, interpretation either) exports as

@@ -1,4 +1,4 @@
-//! docs/features/proposal-apply.md, "Idempotence" as iteration 3 extends it
+//! docs/canon/proposal-completion.md, "Completion" as iteration 3 extends it
 //! (review of iteration 2, MAJOR: a proposal once `open` again could never
 //! be completed by its own commit), through the library with a consent
 //! callback:

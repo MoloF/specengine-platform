@@ -1,4 +1,4 @@
-//! docs/features/daemon-read.md "Data" "SSE", iteration 2 of the daemon's
+//! crates/specengine-http/README.md "Live tail", iteration 2 of the daemon's
 //! live tail:
 //! - the clamp: a `Last-Event-ID` above the highest `seq` (the database
 //!   wiped or made anew, or none yet) starts from the highest (0 when no

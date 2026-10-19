@@ -12,7 +12,7 @@ import {
   withoutComments,
 } from "./source";
 
-// The pure readings beside the parse (docs/features/ui-markdown.md "Description and interactions"): the
+// The pure readings beside the parse (docs/features/ui-markdown.md "Implementation"): the
 // front-matter split as the core's `front_matter.rs` `split`, the destination scan as the core's
 // `markdown.rs` (AC-04, AC-10).
 

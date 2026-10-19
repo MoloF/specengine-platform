@@ -985,10 +985,10 @@ fn plan(db: &Path, sql: &str) -> Vec<String> {
         .collect()
 }
 
-/// The developer's iteration 1 suggestion (docs/canon/code-roles.md "Known
-/// limits": `code_roles_by_subject_name` gains its reader). M: a statement
-/// that scans `code_roles` or `code_files`. The store's two targeted role
-/// statements, as its source writes them, planned by SQLite over a
+/// The developer's iteration 1 suggestion (docs/canon/code-roles.md
+/// "Known limits": `code_roles_by_subject_name` gains its reader). M: a
+/// statement that scans `code_roles` or `code_files`. The store's two
+/// targeted role statements, as its source writes them, planned by SQLite over a
 /// code-bevy index (no `ANALYZE`: the plan a large table gets):
 /// `NAMED_ROLES_SQL` searches `code_roles_by_subject_name`, then the file
 /// by its key; `FILE_ROLES_SQL` searches the file by its `(wt, path)` key,

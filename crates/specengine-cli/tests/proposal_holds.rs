@@ -1,4 +1,4 @@
-//! docs/features/proposal-apply.md, "Apply" 7–10 as iteration 3 rules them
+//! docs/canon/proposal-apply.md, "Apply steps" 7–10 as iteration 3 rules them
 //! (review of iteration 2, MAJOR and nit): a run reopens a proposal only
 //! when it set `approved` itself at step 7, and only while the row is still
 //! that state; a refusal before its own hold logs one `apply_failed` and
