@@ -97,7 +97,7 @@ tested | unverifiable spec_ahead | R-14
 
 ### The run's write
 
-WA-5..WA-8, into 8a's "Order":
+WA-5..WA-8, into 8a's "Order" (`spec-verify-tests.md`):
 
 - **Before the question** (after step 6): `spec.lock`, if present, tracked (else accept's exit 1); read at this build's `format` 2 or 3 and recipes, else exit 2 (format 1, other recipes: 5b's rebase hint); a first lock git ignores: exit 1; **text changed at R** (Q3): a verifiable selected node with an entry or a block at its R and another `spec_hash`: exit 1 naming each, accept's message, nothing run. Each verifiable node's `rev`, `spec_hash`, `bound_hash` from `HEAD`.
 - **The question** (step 7) names the write, the one consent for both (ADR-0044; no second question, no `--yes`): `run <n> bound tests of <k> nodes as <template> (timeout <t> s each) in <worktree> on <branch> at <commit>, then commit their evidence to spec.lock? [y/N]`.

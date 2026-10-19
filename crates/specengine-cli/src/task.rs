@@ -348,7 +348,7 @@ pub(crate) fn no_task(id: &str) -> String {
 }
 
 /// Exit 1 for what is no task ID.
-fn not_a_task(written: &str) -> String {
+pub(crate) fn not_a_task(written: &str) -> String {
     format!(
         "no task `{}`: a task ID is `T-` and 4 or more digits, as `spec task list` lists it",
         written.trim()

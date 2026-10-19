@@ -519,6 +519,42 @@ pub(crate) fn disk_packages(root: &Path, listing: &Listing, paths: &[&str]) -> D
     }
 }
 
+/// Where one Rust file of a walked tree was named from: its package
+/// directory (none: outside every package), the manifest's `[package]
+/// name` (none when the walk fell back to the directory's name, or for a
+/// virtual root) and the package's target table.
+pub(crate) struct FilePackage {
+    pub(crate) dir: Option<PathBuf>,
+    pub(crate) name: Option<String>,
+    pub(crate) table: Option<PackageTargets>,
+}
+
+/// Per Rust file of `tree` (same order), its [`FilePackage`]: the walk's
+/// packages found again from the manifests it recorded
+/// ([`CodeTree::manifests`]: every directory the naming asked), so each
+/// file's place is the one its names were made from; nothing read.
+pub(crate) fn tree_packages(tree: &CodeTree) -> Vec<FilePackage> {
+    let paths: Vec<&str> = tree.rust.iter().map(|file| file.path.as_str()).collect();
+    let mut recorded = BlobManifests {
+        by_dir: &tree.manifests,
+        seen: BTreeMap::new(),
+    };
+    let (dirs, tables) = package_tables(&paths, &mut recorded);
+    dirs.into_iter()
+        .map(|dir| {
+            let name = dir.as_ref().and_then(|dir| {
+                let seen = tree.manifests.get(dir.to_string_lossy().as_ref())?;
+                match manifest_of(seen) {
+                    Manifest::Named(name) => Some(name),
+                    Manifest::Virtual | Manifest::Unread => None,
+                }
+            });
+            let table = dir.as_ref().and_then(|dir| tables.get(dir).cloned());
+            FilePackage { dir, name, table }
+        })
+        .collect()
+}
+
 /// Per Rust file at `paths` its package directory, and per package its
 /// target table over its files among `paths`.
 fn package_tables(

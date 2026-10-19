@@ -17,7 +17,7 @@ Delivered: `spec verify --task T [--changed] [--json]`, plain verify's rows kept
 ## Description and interactions
 
 - **An agent** runs `spec verify --task T` before `report_run`; a Fix or cannot row fixed or raised with a working answer. **The owner** runs it at a task's review, with `--changed` to set aside what `HEAD` already has.
-- **Crates**: CLI `verify.rs` only: `--task` in `main.rs` and `VerifyRequest`; one filter between `judge_walk` and `verdict` in `run` (:551-564), over 8a-1's "The node set" (`verify-tests.md`); the summary prefix and the JSON key in `render_text` (:964) and the document. `verify_rows.rs`, core (`judge_row`, `verdict`), store, MCP, HTTP, UI unchanged.
+- **Crates**: CLI `verify.rs` only: `--task` in `main.rs` and `VerifyRequest`; one filter between `judge_walk` and `verdict` in `run` (:551-564), over 8a-1's "The node set" (`spec-verify-tests.md`); the summary prefix and the JSON key in `render_text` (:964) and the document. `verify_rows.rs`, core (`judge_row`, `verdict`), store, MCP, HTTP, UI unchanged.
 - **Unchanged**: plain, `--changed`, `--staged` verify's rows and text (their JSON gains `task` `null`); `spec check`, the hook, the gate, CI, `INDEX_FORMAT`, the queue schema. **Writes**: the data directory only (the index refresh, as plain); never `spec.lock`, a queue row, an event, the task (no `revision` raise) or a file under the root.
 - **Overridden at shipping** (SW-2): `spec-verify.md`'s opening command line; `spec-verify-output.md` "Text" (the summary prefix), "JSON" (`task`); 8a-1's `spec-verify-tests.md` (its `--task`-alone usage line); 07:105.
 

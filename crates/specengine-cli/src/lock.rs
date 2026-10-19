@@ -570,14 +570,14 @@ pub fn lock_accept(
 }
 
 /// The node `REF` names.
-struct NodeAt {
-    key: NodeKey,
+pub(crate) struct NodeAt {
+    pub(crate) key: NodeKey,
     /// Its file, root-relative.
-    path: String,
+    pub(crate) path: String,
     /// Its own ID.
-    id: String,
+    pub(crate) id: String,
     /// The canonical cited ID (`slug/ID` when feature-scoped).
-    canonical: String,
+    pub(crate) canonical: String,
 }
 
 /// `written` without a trailing `@rev` (1 to 9 digits), which `REF`'s read
@@ -998,30 +998,31 @@ fn accept(
 /// The node's bindings over its marker files' committed bytes, sorted by
 /// what they allow.
 #[derive(Default)]
-struct Bindings {
+pub(crate) struct Bindings {
     /// Lockable, one per key.
-    fresh: BTreeMap<EntryKey, Verified>,
+    pub(crate) fresh: BTreeMap<EntryKey, Verified>,
     /// Bound with a key, not lockable: the first refusal of its markers.
-    unlockable: BTreeMap<EntryKey, String>,
+    pub(crate) unlockable: BTreeMap<EntryKey, String>,
     /// Bound with no key, and the state.
-    keyless: BTreeSet<(RowPlace, String)>,
+    pub(crate) keyless: BTreeSet<(RowPlace, String)>,
     /// Some marker names the node.
-    any_marker: bool,
+    pub(crate) any_marker: bool,
 }
 
 /// What every fresh entry of one accept shares.
-struct Facts<'a> {
-    rev: u32,
-    spec_hash: &'a str,
-    commit: &'a str,
-    today: &'a str,
+pub(crate) struct Facts<'a> {
+    pub(crate) rev: u32,
+    pub(crate) spec_hash: &'a str,
+    pub(crate) commit: &'a str,
+    pub(crate) today: &'a str,
 }
 
 /// Each marker file read from `HEAD` (`blob_at`, no filter), bound (its
 /// items checked against the walk's, whose names they take), its markers
 /// of the node sorted ("Lockability"), the items lockable markers bind
-/// hashed: no other item is.
-fn committed_bindings(
+/// hashed: no other item is. `spec verify --tests` calls it as accept's
+/// own predicate (task spec `verify-tests`, "Verifiable").
+pub(crate) fn committed_bindings(
     repo: &Repo,
     tree: &CodeTree,
     marker_files: &BTreeSet<String>,
@@ -1319,7 +1320,7 @@ fn refusal(marker: &Marker, token: &str, state: IdState, rev: u32) -> Option<Str
 
 /// The node's revision and `norm_hash` from its file's `HEAD` blob;
 /// `Ok(Err)`: unreadable or null (exit 1).
-fn node_at_head(
+pub(crate) fn node_at_head(
     repo: &Repo,
     scheme: &IdScheme,
     node: &NodeAt,

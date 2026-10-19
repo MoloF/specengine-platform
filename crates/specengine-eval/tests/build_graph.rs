@@ -465,7 +465,9 @@ fn default_members_graph_has_no_rust_analyzer() {
 // Exact pins of 04 §6 (owner's decision 2026-09-29): `salsa`, `salsa-macros`,
 // `salsa-macro-rules` =0.28.2 and `unicode-ident` =1.0.24 as direct exact
 // dependencies of `specengine-ra`; `libc` =0.2.189 direct in `specengine-eval`
-// only behind feature `ra`; `fixtures/ra-mini` outside the workspace.
+// only behind feature `ra` (and, since docs/features/verify-tests.md P8, a
+// plain dependency of `specengine-cli`, its runner's process groups);
+// `fixtures/ra-mini` outside the workspace.
 // ---------------------------------------------------------------------------
 
 /// Transitive crates of `ra_ap_*` =0.0.352 held at exact versions.
@@ -629,6 +631,38 @@ fn libc_is_a_direct_dependency_of_specengine_eval_only_with_feature_ra() {
             .any(|(name, version)| name == "libc" && version == LIBC_PIN),
         "--features ra does not make libc v{LIBC_PIN} a direct dependency: {ra:?}"
     );
+    assert_eq!(locked_versions("libc"), [LIBC_PIN], "Cargo.lock libc");
+}
+
+/// docs/features/verify-tests.md (8a-1) RD-9 (P8): the CLI takes `libc` as
+/// a plain, non-optional normal dependency, the workspace pin (`=0.2.189`,
+/// the eval's), declared `libc.workspace = true` alone in `[dependencies]`,
+/// never under a `[target.'cfg(…)']` table; Cargo.lock keeps the one
+/// version. M: a target table, an optional entry or a pin of its own.
+#[test]
+fn cli_takes_libc_as_a_plain_workspace_dependency() {
+    let metadata = workspace_metadata();
+    let libc = declared_dependency(&metadata, "specengine-cli", "libc");
+    assert_eq!(libc["req"], format!("={LIBC_PIN}"), "{libc}");
+    assert_eq!(libc["optional"], false, "libc is not optional: {libc}");
+    assert!(
+        libc["kind"].is_null(),
+        "libc is a normal dependency: {libc}"
+    );
+    assert!(libc["target"].is_null(), "no target table: {libc}");
+    let text = std::fs::read_to_string(workspace_root().join("crates/specengine-cli/Cargo.toml"))
+        .expect("crates/specengine-cli/Cargo.toml");
+    let manifest: toml::Table = text.parse().expect("the CLI manifest is TOML");
+    let entry = manifest["dependencies"]["libc"]
+        .as_table()
+        .expect("libc = { workspace = true }");
+    assert_eq!(entry.len(), 1, "{entry:?}");
+    assert_eq!(
+        entry.get("workspace").and_then(toml::Value::as_bool),
+        Some(true),
+        "{entry:?}"
+    );
+    assert!(!manifest.contains_key("target"), "no target table");
     assert_eq!(locked_versions("libc"), [LIBC_PIN], "Cargo.lock libc");
 }
 
@@ -1313,6 +1347,7 @@ fn cli_reaches_rusqlite_only_through_the_store() {
 /// Every direct dependency of `specengine-cli` is either a path dependency
 /// on a workspace crate or a `[workspace.dependencies]` entry
 /// (`name.workspace = true`): no version is pinned in the member manifest.
+/// docs/features/verify-tests.md (8a-1) RD-9: `libc` joins the list.
 #[test]
 fn cli_direct_dependencies_are_all_workspace_entries() {
     let manifest_path = workspace_root().join("crates/specengine-cli/Cargo.toml");
@@ -1366,6 +1401,7 @@ fn cli_direct_dependencies_are_all_workspace_entries() {
         seen,
         [
             "clap",
+            "libc",
             "serde",
             "serde_json",
             "specengine-code",
@@ -1375,7 +1411,7 @@ fn cli_direct_dependencies_are_all_workspace_entries() {
             "toml",
         ],
         "the CLI's direct dependencies (docs/features/spec-cli.md, Crate; \
-         docs/features/code-refs.md TE-8)"
+         docs/features/code-refs.md TE-8; docs/features/verify-tests.md P8)"
     );
 }
 
@@ -1459,7 +1495,9 @@ fn git_or_process_crate(name: &str) -> bool {
 
 /// The store's and the CLI's normal dependencies stay 2a.1's: the same
 /// `[dependencies]` keys, no target-specific table, and no git library or
-/// process crate anywhere in their normal graphs.
+/// process crate anywhere in their normal graphs. docs/features/verify-tests.md
+/// (8a-1) RD-9 (P8): the CLI gains `libc` (its runner's process groups), a
+/// plain entry, never a `[target.'cfg(unix)']` table; the store nothing.
 #[test]
 fn store_and_cli_normal_dependencies_are_2a1_s() {
     for (package, expected) in [
@@ -1478,6 +1516,7 @@ fn store_and_cli_normal_dependencies_are_2a1_s() {
             "specengine-cli",
             &[
                 "clap",
+                "libc",
                 "serde",
                 "serde_json",
                 "specengine-code",
@@ -1842,8 +1881,9 @@ fn eval_direct_dependencies_gain_exactly_the_cli_library() {
 
 /// AC-09: the CLI's own direct dependencies are unchanged by `w`: the
 /// model, core and store, `clap`, `serde`, `serde_json` (and, since
-/// docs/features/code-refs.md TE-8, `specengine-code` and `toml`), nothing
-/// else of any kind (its normal graph is pinned by
+/// docs/features/code-refs.md TE-8, `specengine-code` and `toml`; since
+/// docs/features/verify-tests.md RD-9, `libc`), nothing else of any kind
+/// (its normal graph is pinned by
 /// `cli_normal_graph_is_model_core_store_without_measurement_mcp_or_rust_analyzer`,
 /// `CLI_FORBIDDEN` holding `specengine-eval`).
 #[test]
@@ -1859,6 +1899,7 @@ fn cli_direct_dependencies_are_unchanged_by_w() {
         normal,
         [
             "clap",
+            "libc",
             "serde",
             "serde_json",
             "specengine-code",

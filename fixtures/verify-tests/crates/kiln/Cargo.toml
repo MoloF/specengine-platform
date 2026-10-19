@@ -1,0 +1,11 @@
+# Package of the verify-tests fixture: parsed by the code walk, never built
+# (docs/features/verify-tests.md P10). Its `[package] name` differs from its
+# directory, so `{package}` and `{target}` show which one names them.
+# `[workspace]` keeps it out of the repository workspace.
+[package]
+name = "kiln-core"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

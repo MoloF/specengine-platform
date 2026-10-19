@@ -444,9 +444,12 @@ fn verify_without_code_table_is_exit_2() {
     );
 }
 
-/// RD-1: no `[verify]` table runs `observe`; `spec verify` reads the table
-/// closed: a `tests` key is cause 1 at its line, exit 2, the report
-/// printed. M: default `enforce`; `tests` accepted.
+/// RD-1, flipped by docs/features/verify-tests.md (8a-1) RD-1: no
+/// `[verify]` table runs `observe`; plain `spec verify` reads `tests` and
+/// `timeout` (a valid pair changes nothing) and reads the table closed: a
+/// `tests` that is no argv list is cause 1 at its line with the
+/// argv-list text, exit 2, the report printed. M: default `enforce`; a
+/// string `tests` accepted.
 #[test]
 fn verify_reads_its_table_closed() {
     let repo = ecs("verify-table");
@@ -456,10 +459,22 @@ fn verify_reads_its_table_closed() {
         (Some("observe"), 0)
     );
     let config = repo.read("specengine.toml");
+    repo.write(
+        "specengine.toml",
+        format!("{config}\n[verify]\ntests = [\"scripts/run-test\", \"{{test}}\"]\ntimeout = 30\n"),
+    );
+    let valid = verify(&repo, &[]);
+    assert_eq!(
+        (valid.json["mode"].as_str(), valid.code()),
+        (Some("observe"), 0),
+        "{}",
+        valid.text.show()
+    );
+    assert_eq!(valid.json["cannot"], json!([]));
     let line = config.lines().count() + 3;
     repo.write(
         "specengine.toml",
-        format!("{config}\n[verify]\ntests = [\"x\"]\n"),
+        format!("{config}\n[verify]\ntests = \"x {{test}}\"\n"),
     );
     let refused = verify(&repo, &[]);
     assert_eq!(refused.code(), 2, "{}", refused.text.show());
@@ -468,10 +483,11 @@ fn verify_reads_its_table_closed() {
     let cause = cannot[0].as_str().unwrap_or_default();
     assert!(
         cause.starts_with(&format!(
-            "specengine.toml:{line}: `[verify] tests` is not built"
+            "specengine.toml:{line}: [verify] tests must be an argv list, e.g. [\"scripts/run-test\", \"{{test}}\"]"
         )),
         "{cause}"
     );
+    assert!(!cause.contains("is not built"), "{cause}");
     assert_eq!(refused.json["mode"], Value::Null);
     refused.has_line(&format!("cannot: {cause}"));
     assert_eq!(

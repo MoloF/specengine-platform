@@ -1,0 +1,21 @@
+# Fixture corpus verify-tests (docs/features/verify-tests.md P10, TE-1;
+# shared with 8b, docs/features/tested-evidence.md): a small kiln-firing
+# library whose `@verifies` tests `spec verify --tests` runs through the
+# project's own command. Never built: the tests copy it to a scratch
+# repository and write a fake, self-terminating runner at `scripts/run-test`
+# there. Its prefixes, kinds and slug are its own; nothing in the core knows
+# them. What the tests expect: `expected.json`.
+
+[project]
+slug = "kiln-works"
+
+[ids]
+KILN = { kind = "kiln-stage",  shape = "name" }
+CONE = { kind = "cone-rating", width = 2, aliases_from = ["PYRO"] }
+GLZ  = { kind = "glaze-mark",  width = 2, scope = "feature" }
+
+[code]
+roots = ["crates"]
+
+[verify]
+tests = ["scripts/run-test", "{package}", "{target_kind}", "{target}", "{test}"]

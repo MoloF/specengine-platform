@@ -102,7 +102,8 @@ spec task approve T | changes T --note "..." | cancel T
 
 # code and drift
 spec symbols [--file F] [--unbound]
-spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md; --task/--tests 8a
+spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md; --task 8a-2
+spec verify --tests [--task T] [--json]             # shipped: docs/canon/spec-verify-tests.md; the owner's terminal, [y/N]
 spec bump [--staged] [--json]                       # read-only: nodes to raise (shipped: docs/canon/node-revision.md)
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md
 spec lock regen                                     # a merge conflicting in spec.lock: docs/canon/spec-lock.md
@@ -206,4 +207,9 @@ languages = ["rust", "ron"]
 crates = "cargo-metadata"    # refused, not built: only if 6a-2's TE-8 roles differ (docs/features/symbol-index.md Q2)
 frameworks = ["bevy"]       # built: docs/canon/code-roles.md (opt-in role facts; `bevy = true` is an unknown key)
 scip = false                # retired 2026-10-10 (ADR-0049): no key; layer C is `spec resolve` (docs/features/layer-c.md)
+
+[verify]                    # built: docs/canon/spec-verify.md (mode), docs/canon/spec-verify-tests.md (tests, timeout)
+mode = "observe"            # observe | enforce-introduced | enforce
+tests = ["scripts/run-test", "{package}", "{target_kind}", "{target}", "{test}"]  # argv, no shell; run only by the owner
+timeout = 600               # seconds per invocation, 1..86400
 ```

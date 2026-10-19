@@ -1084,22 +1084,27 @@ impl WorktreeGit {
         ];
         args.extend(specs.iter().map(String::as_str));
         let output = self.read(COMMAND, &args)?;
-        let mut entries = Vec::new();
-        for record in output.split(|&byte| byte == 0) {
-            if record.is_empty() {
-                continue;
-            }
-            // `XY SP <path>`.
-            let [index, worktree, b' ', path @ ..] = record else {
-                return Err(GitError::Unreadable { command: COMMAND });
-            };
-            entries.push(StatusEntry {
-                index: char::from(*index),
-                worktree: char::from(*worktree),
-                path: String::from_utf8_lossy(path).into_owned(),
-            });
-        }
-        Ok(entries)
+        status_records(COMMAND, &output)
+    }
+
+    /// The status of the whole worktree, untracked files too (`status
+    /// --porcelain=v1 -z --no-renames --untracked-files=all`, no pathspec;
+    /// task spec `verify-tests`, "Order" step 4): each entry as
+    /// [`Self::status_entries`] gives it; none: the tree is `HEAD`'s, but
+    /// for ignored files.
+    pub fn status_all(&self) -> Result<Vec<StatusEntry>, GitError> {
+        const COMMAND: &str = "status";
+        let output = self.read(
+            COMMAND,
+            &[
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--no-renames",
+                "--untracked-files=all",
+            ],
+        )?;
+        status_records(COMMAND, &output)
     }
 
     /// Git's ignore rules match `path`, relative to the handle's directory
@@ -1669,6 +1674,26 @@ fn failed(command: &'static str, output: &Output) -> GitError {
         code: output.status.code(),
         stderr,
     }
+}
+
+/// The records of `status --porcelain=v1 -z --no-renames`: `XY SP <path>`
+/// each, NUL-ended.
+fn status_records(command: &'static str, output: &[u8]) -> Result<Vec<StatusEntry>, GitError> {
+    let mut entries = Vec::new();
+    for record in output.split(|&byte| byte == 0) {
+        if record.is_empty() {
+            continue;
+        }
+        let [index, worktree, b' ', path @ ..] = record else {
+            return Err(GitError::Unreadable { command });
+        };
+        entries.push(StatusEntry {
+            index: char::from(*index),
+            worktree: char::from(*worktree),
+            path: String::from_utf8_lossy(path).into_owned(),
+        });
+    }
+    Ok(entries)
 }
 
 /// The one line of `output`: its trailing LF dropped; `None` when empty.

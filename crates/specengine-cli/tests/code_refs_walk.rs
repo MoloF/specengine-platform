@@ -1094,11 +1094,20 @@ const PATH_WORD_EXEMPT: [(&str, &str); 5] = [
     ("crates/specengine-store/src/write.rs", "src"),
 ];
 
+/// Whole literals of earlier modules that are no path classification:
+/// the event type `verify.tests` (store `queue.rs`,
+/// `docs/canon/spec-verify-tests.md` "Verdicts and event"). Only that
+/// literal is exempt; the word `tests` stays scanned in the rest of the
+/// file.
+const PATH_LITERAL_EXEMPT: [(&str, &str); 1] =
+    [("crates/specengine-store/src/queue.rs", "verify.tests")];
+
 /// docs/features/symbol-reads.md "spec unmapped" ("No path classified")
 /// and its "Rules and edge cases", Genre: no string literal of the store,
 /// core, or the `symbols` and `unmapped` modules holds the word `tests` or
 /// `src` (a directory read as tests or sources), but the narrow
-/// [`PATH_WORD_EXEMPT`]. M: `unmapped` sorts a `tests` directory apart.
+/// [`PATH_WORD_EXEMPT`] and [`PATH_LITERAL_EXEMPT`]. M: `unmapped` sorts a
+/// `tests` directory apart.
 #[test]
 fn store_core_and_new_modules_hold_no_tests_or_src_literal() {
     let mut files = sources_under("crates/specengine-store/src");
@@ -1115,6 +1124,9 @@ fn store_core_and_new_modules_hold_no_tests_or_src_literal() {
         let source = scanned(file);
         for literal in literals(&source) {
             scanned_literals += 1;
+            if PATH_LITERAL_EXEMPT.contains(&(file.as_str(), literal.as_str())) {
+                continue;
+            }
             for word in words(&literal) {
                 let low = word.to_lowercase();
                 if (low == "tests" || low == "src")

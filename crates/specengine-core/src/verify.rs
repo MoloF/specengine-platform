@@ -9,10 +9,18 @@
 //! index's OIDs, an indexed hash), so every caller gets the same state for
 //! the same facts.
 //!
-//! - **Table** ([`VerifyConfig::from_toml`]): closed, `mode` only
-//!   (`observe`, the default; `enforce-introduced`; `enforce`); `tests`
-//!   and `timeout` named as not built; a wrong type or value refused at
-//!   its line. `ProjectConfig` only name-checks `verify`.
+//! - **Table** ([`VerifyConfig::from_toml`]): closed, `mode` (`observe`,
+//!   the default; `enforce-introduced`; `enforce`), `tests` (the project's
+//!   own test command as an argv template, [`TestTemplate`]) and `timeout`
+//!   (seconds per invocation, 1 to [`TIMEOUT_MAX`], default
+//!   [`TIMEOUT_DEFAULT`]); a wrong type or value refused at its line.
+//!   `ProjectConfig` only name-checks `verify`.
+//! - **Bound tests** (task spec `verify-tests`): a template expanded over a
+//!   test's placeholder values ([`TestTemplate::expand`]: each value one
+//!   element's bytes, never split or joined, never a shell's), the probe's
+//!   test name ([`PROBE_TEST`]), and the verdicts of a test, a node and a
+//!   run ([`node_verdict`], [`tests_verdict`]). Which runner a project
+//!   uses is its own: nothing here names one.
 //! - **Key** ([`RowKey`]): a lock key ([`EntryKey`]) or a keyless
 //!   binding's place, ordered as `EntryKey`, a keyless binding (no kind,
 //!   symbol or item kind) first.
@@ -35,23 +43,39 @@ use crate::lock::{EntryKey, LockKind, LockRelation, Verified, key_problem};
 use crate::project_toml::ProjectError;
 
 /// The keys `[verify]` takes.
-const KEYS: [&str; 1] = ["mode"];
+const KEYS: [&str; 3] = ["mode", "tests", "timeout"];
 
-/// `[verify]` keys of later slices (`tests`, `timeout`: slice 8a), named as
-/// such when written.
-const NOT_BUILT_KEYS: [&str; 2] = ["tests", "timeout"];
+/// `[verify] timeout` when not written, seconds.
+pub const TIMEOUT_DEFAULT: u32 = 600;
+
+/// The longest `[verify] timeout`, seconds (one day).
+pub const TIMEOUT_MAX: u32 = 86_400;
+
+/// `{test}` of every probe: a test no project has, which the project's
+/// command must fail to find (task spec `verify-tests`, "Order" step 8).
+pub const PROBE_TEST: &str = "specengine_verify_probe_no_such_test";
+
+/// What `[verify] tests` must be, as its errors say.
+const ARGV_LIST: &str =
+    "[verify] tests must be an argv list, e.g. [\"scripts/run-test\", \"{test}\"]";
 
 /// The `[verify]` table, checked.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyConfig {
     /// `observe` when not written.
     pub mode: Mode,
+    /// The project's test command; `None` when not written.
+    pub tests: Option<TestTemplate>,
+    /// Seconds per invocation; [`TIMEOUT_DEFAULT`] when not written.
+    pub timeout: u32,
 }
 
 impl Default for VerifyConfig {
     fn default() -> Self {
         Self {
             mode: Mode::Observe,
+            tests: None,
+            timeout: TIMEOUT_DEFAULT,
         }
     }
 }
@@ -102,14 +126,12 @@ pub fn verify_from_toml(text: &str) -> Result<VerifyConfig, ProjectError> {
                         )
                     })?;
             }
-            other if NOT_BUILT_KEYS.contains(&other) => {
-                return Err(error_at(
-                    span,
-                    format!(
-                        "`[verify] {other}` is not built: `[verify]` takes `{}` only",
-                        KEYS.join("`, `")
-                    ),
-                ));
+            "tests" => {
+                config.tests =
+                    Some(TestTemplate::from_value(value.get_ref()).map_err(|m| error_at(span, m))?);
+            }
+            "timeout" => {
+                config.timeout = timeout_of(value.get_ref()).map_err(|m| error_at(span, m))?;
             }
             other => {
                 return Err(error_at(
@@ -139,6 +161,450 @@ fn line_of(text: &str, offset: usize) -> usize {
         .filter(|&&byte| byte == b'\n')
         .count()
         + 1
+}
+
+/// `[verify] timeout`: an integer from 1 to [`TIMEOUT_MAX`].
+fn timeout_of(value: &toml::Value) -> Result<u32, String> {
+    let toml::Value::Integer(seconds) = value else {
+        return Err(format!(
+            "[verify] timeout is a {}, not whole seconds from 1 to {TIMEOUT_MAX}",
+            value.type_str()
+        ));
+    };
+    u32::try_from(*seconds)
+        .ok()
+        .filter(|seconds| (1..=TIMEOUT_MAX).contains(seconds))
+        .ok_or_else(|| format!("[verify] timeout {seconds} is not from 1 to {TIMEOUT_MAX} seconds"))
+}
+
+// ------------------------------------------------------------ bound tests
+
+/// A value `[verify] tests` names: one of a bound test (task spec
+/// `verify-tests`, "Placeholder values").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Placeholder {
+    /// The test's file, root-relative.
+    File,
+    /// Its `qpath` without a twin's discriminator.
+    Qpath,
+    /// Its manifest's `[package] name`.
+    Package,
+    /// Its unit's Cargo kind.
+    TargetKind,
+    /// Its unit's Cargo target name.
+    Target,
+    /// Its module path and name, joined by `::`.
+    Test,
+}
+
+impl Placeholder {
+    /// Every placeholder, in the order the spec lists them.
+    pub const ALL: [Self; 6] = [
+        Self::File,
+        Self::Qpath,
+        Self::Package,
+        Self::TargetKind,
+        Self::Target,
+        Self::Test,
+    ];
+
+    /// Its name between the braces.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::Qpath => "qpath",
+            Self::Package => "package",
+            Self::TargetKind => "target_kind",
+            Self::Target => "target",
+            Self::Test => "test",
+        }
+    }
+}
+
+/// One part of a template element.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Part {
+    Text(String),
+    Value(Placeholder),
+}
+
+/// `[verify] tests`, checked: the elements as written and each one's
+/// parts. Element 0 is the program; each element stays one argument.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestTemplate {
+    written: Vec<String>,
+    elements: Vec<Vec<Part>>,
+}
+
+/// The values of one bound test's placeholders; `None`: it has none (an
+/// empty one counts as none).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PlaceholderValues {
+    pub file: Option<String>,
+    pub qpath: Option<String>,
+    pub package: Option<String>,
+    pub target_kind: Option<String>,
+    pub target: Option<String>,
+    pub test: Option<String>,
+}
+
+impl PlaceholderValues {
+    /// The value of `placeholder`, if it has a non-empty one.
+    pub fn get(&self, placeholder: Placeholder) -> Option<&str> {
+        let value = match placeholder {
+            Placeholder::File => &self.file,
+            Placeholder::Qpath => &self.qpath,
+            Placeholder::Package => &self.package,
+            Placeholder::TargetKind => &self.target_kind,
+            Placeholder::Target => &self.target,
+            Placeholder::Test => &self.test,
+        };
+        value.as_deref().filter(|value| !value.is_empty())
+    }
+}
+
+/// Why a bound test's argv cannot be made (task spec `verify-tests`,
+/// "Runnable"), the first that applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unexpandable {
+    /// A used placeholder's value holds U+0000-U+001F or U+007F.
+    ControlCharacter,
+    /// A used placeholder has no value.
+    NoValue(Placeholder),
+}
+
+impl fmt::Display for Unexpandable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ControlCharacter => f.write_str("control character"),
+            Self::NoValue(placeholder) => write!(f, "no value {{{}}}", placeholder.name()),
+        }
+    }
+}
+
+impl TestTemplate {
+    /// The template of `elements` (as `[verify] tests` writes them): at
+    /// least one, element 0 not empty; placeholders closed, `{{` and `}}`
+    /// literal braces, any other brace refused; `{test}` or `{qpath}`
+    /// used. `Err`: the message.
+    pub fn parse(elements: &[String]) -> Result<Self, String> {
+        if elements.is_empty() {
+            return Err(format!("[verify] tests is empty: {ARGV_LIST}"));
+        }
+        if elements[0].is_empty() {
+            return Err("[verify] tests[0], the program, is empty".to_owned());
+        }
+        let parsed = elements
+            .iter()
+            .enumerate()
+            .map(|(index, element)| {
+                parts(element)
+                    .map_err(|why| format!("[verify] tests[{index}] {}: {why}", quoted(element)))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let template = Self {
+            written: elements.to_vec(),
+            elements: parsed,
+        };
+        if !template.uses(Placeholder::Test) && !template.uses(Placeholder::Qpath) {
+            return Err(
+                "[verify] tests uses neither {test} nor {qpath}: the command cannot tell which \
+                 test to run"
+                    .to_owned(),
+            );
+        }
+        Ok(template)
+    }
+
+    /// The template of a TOML value: an array of strings.
+    fn from_value(value: &toml::Value) -> Result<Self, String> {
+        let toml::Value::Array(items) = value else {
+            return Err(ARGV_LIST.to_owned());
+        };
+        let elements = items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| match item {
+                toml::Value::String(text) => Ok(text.clone()),
+                other => Err(format!(
+                    "[verify] tests[{index}] is a {}, not a string: {ARGV_LIST}",
+                    other.type_str()
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::parse(&elements)
+    }
+
+    /// The elements as written.
+    pub fn written(&self) -> &[String] {
+        &self.written
+    }
+
+    /// Some element uses `placeholder`.
+    pub fn uses(&self, placeholder: Placeholder) -> bool {
+        self.elements
+            .iter()
+            .flatten()
+            .any(|part| *part == Part::Value(placeholder))
+    }
+
+    /// The argv of a test with `values`: each element its text with each
+    /// placeholder's value put in as bytes, one argument whatever it holds;
+    /// never split, joined or quoted. `Err`: the first reason it cannot be
+    /// made, a control character in any used value before a missing one
+    /// (in the order the template uses them).
+    pub fn expand(&self, values: &PlaceholderValues) -> Result<Vec<String>, Unexpandable> {
+        let used: Vec<Placeholder> = self
+            .elements
+            .iter()
+            .flatten()
+            .filter_map(|part| match part {
+                Part::Value(placeholder) => Some(*placeholder),
+                Part::Text(_) => None,
+            })
+            .collect();
+        if used
+            .iter()
+            .filter_map(|placeholder| values.get(*placeholder))
+            .any(has_control)
+        {
+            return Err(Unexpandable::ControlCharacter);
+        }
+        if let Some(missing) = used
+            .iter()
+            .find(|placeholder| values.get(**placeholder).is_none())
+        {
+            return Err(Unexpandable::NoValue(*missing));
+        }
+        Ok(self
+            .elements
+            .iter()
+            .map(|element| {
+                element
+                    .iter()
+                    .map(|part| match part {
+                        Part::Text(text) => text.as_str(),
+                        Part::Value(placeholder) => values.get(*placeholder).unwrap_or_default(),
+                    })
+                    .collect()
+            })
+            .collect())
+    }
+}
+
+/// A value holds U+0000-U+001F or U+007F.
+fn has_control(value: &str) -> bool {
+    value.chars().any(|c| c <= '\u{1f}' || c == '\u{7f}')
+}
+
+/// `element` as quoted in an error: backticks, control characters escaped.
+fn quoted(element: &str) -> String {
+    format!("`{}`", element.escape_debug())
+}
+
+/// The parts of one element: text, `{{` and `}}` as braces, `{<name>}` a
+/// placeholder; any other brace refused.
+fn parts(element: &str) -> Result<Vec<Part>, String> {
+    let mut out = Vec::new();
+    let mut text = String::new();
+    let mut rest = element;
+    while let Some(at) = rest.find(['{', '}']) {
+        text.push_str(&rest[..at]);
+        let tail = &rest[at..];
+        if let Some(after) = tail.strip_prefix("{{") {
+            text.push('{');
+            rest = after;
+        } else if let Some(after) = tail.strip_prefix("}}") {
+            text.push('}');
+            rest = after;
+        } else if let Some(after) = tail.strip_prefix('{') {
+            let Some(close) = after
+                .find(['{', '}'])
+                .filter(|&end| after[end..].starts_with('}'))
+            else {
+                return Err("a lone `{`: {{ writes a brace".to_owned());
+            };
+            let name = &after[..close];
+            let Some(placeholder) = Placeholder::ALL
+                .into_iter()
+                .find(|placeholder| placeholder.name() == name)
+            else {
+                let names: Vec<String> = Placeholder::ALL
+                    .iter()
+                    .map(|placeholder| format!("{{{}}}", placeholder.name()))
+                    .collect();
+                return Err(format!(
+                    "`{{{}}}` is no placeholder: {}; {{{{ and }}}} write a brace",
+                    name.escape_debug(),
+                    names.join(", ")
+                ));
+            };
+            if !text.is_empty() {
+                out.push(Part::Text(std::mem::take(&mut text)));
+            }
+            out.push(Part::Value(placeholder));
+            rest = &after[close + 1..];
+        } else {
+            return Err("a lone `}`: }} writes a brace".to_owned());
+        }
+    }
+    text.push_str(rest);
+    if !text.is_empty() || out.is_empty() {
+        out.push(Part::Text(text));
+    }
+    Ok(out)
+}
+
+/// How one bound test ended (task spec `verify-tests`, "Verdicts").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TestOutcome {
+    /// Exit 0 within the timeout.
+    Passed,
+    /// A non-zero exit or a signal.
+    Failed,
+    /// Still running at the timeout.
+    TimedOut,
+    /// Never started, or stopped by the run.
+    NotRun,
+}
+
+impl TestOutcome {
+    /// The JSON word.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::TimedOut => "timed_out",
+            Self::NotRun => "not_run",
+        }
+    }
+
+    /// The text word.
+    pub const fn words(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::TimedOut => "timed out",
+            Self::NotRun => "not run",
+        }
+    }
+}
+
+/// A node's verdict of one run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NodeVerdict {
+    /// One runnable test or more, all passed.
+    Verified,
+    /// A runnable test not passed.
+    Failed,
+    /// Accept's predicate refuses a binding of it.
+    NotVerifiable,
+    /// No test of it can run.
+    NoRunnableTest,
+}
+
+impl NodeVerdict {
+    /// The JSON word.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Failed => "failed",
+            Self::NotVerifiable => "not_verifiable",
+            Self::NoRunnableTest => "no_runnable_test",
+        }
+    }
+
+    /// The text words.
+    pub const fn words(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Failed => "failed",
+            Self::NotVerifiable => "not verifiable",
+            Self::NoRunnableTest => "no runnable test",
+        }
+    }
+}
+
+/// The verdict of a node: not verifiable first; then no runnable test;
+/// verified only when every one of its runnable tests passed.
+pub fn node_verdict(verifiable: bool, runnable: &[TestOutcome]) -> NodeVerdict {
+    if !verifiable {
+        NodeVerdict::NotVerifiable
+    } else if runnable.is_empty() {
+        NodeVerdict::NoRunnableTest
+    } else if runnable
+        .iter()
+        .all(|outcome| *outcome == TestOutcome::Passed)
+    {
+        NodeVerdict::Verified
+    } else {
+        NodeVerdict::Failed
+    }
+}
+
+/// The verdict of a whole `spec verify --tests` run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RunVerdict {
+    /// Every reported node verified.
+    Verified,
+    /// A reported node not verified.
+    Unverified,
+    /// The tree was not clean before the run.
+    Dirty,
+    /// Nothing to run.
+    Empty,
+    /// The owner did not consent.
+    Declined,
+    /// The tree or `HEAD` changed during the run.
+    Changed,
+    /// A probe passed or timed out, or a program could not start.
+    Refused,
+    /// A signal to `spec` stopped the run.
+    Interrupted,
+    /// The run could not be made.
+    Cannot,
+}
+
+impl RunVerdict {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Unverified => "unverified",
+            Self::Dirty => "dirty",
+            Self::Empty => "empty",
+            Self::Declined => "declined",
+            Self::Changed => "changed",
+            Self::Refused => "refused",
+            Self::Interrupted => "interrupted",
+            Self::Cannot => "cannot",
+        }
+    }
+
+    /// The exit code: 0 verified; 1 not verified (ADR-0044's command, never
+    /// a Fix finding of ADR-0042's judge); 2 refused, interrupted, cannot.
+    pub const fn exit_code(self) -> u8 {
+        match self {
+            Self::Verified => 0,
+            Self::Unverified | Self::Dirty | Self::Empty | Self::Declined | Self::Changed => 1,
+            Self::Refused | Self::Interrupted | Self::Cannot => 2,
+        }
+    }
+}
+
+/// The verdict of a completed run over its reported nodes' verdicts.
+pub fn tests_verdict(nodes: impl IntoIterator<Item = NodeVerdict>) -> RunVerdict {
+    let mut any = false;
+    for node in nodes {
+        any = true;
+        if node != NodeVerdict::Verified {
+            return RunVerdict::Unverified;
+        }
+    }
+    if any {
+        RunVerdict::Verified
+    } else {
+        RunVerdict::Unverified
+    }
 }
 
 // ------------------------------------------------------------------- key

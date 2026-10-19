@@ -8,7 +8,7 @@ reviewed: 2026-10-15
 
 # `spec verify`'s output: rows, hints, summary, JSON
 
-What `spec verify` prints for the rows, states and run causes of `docs/canon/spec-verify.md`. Deterministic: byte-identical stdout, stderr and JSON from any root, cwd or creation order; no timing, no absolute path; control characters escaped (CLI README "Exit codes and streams").
+What `spec verify` prints for the rows, states and run causes of `docs/canon/spec-verify.md`, and `--tests` for `spec-verify-tests.md` ("`--tests`"). Deterministic: byte-identical stdout, stderr and JSON from any root, cwd or creation order; no timing, no absolute path; control characters escaped (CLI README "Exit codes and streams").
 
 ## Text
 
@@ -59,3 +59,26 @@ One `hint: <state>[ <category>]: <step>` per (state, category) present, in state
 - `rows`: every row, `ok` too, in key order; a keyless row's `kind`, `symbol`, `item_kind` `null`; `markers` `[]` for a lock-only row, `rev` `null` when unversioned or malformed; `node_rev` `null` when unknown or gone; `lock` `null` without an entry; `class` `null` for `ok`; `compared` `blob`, `ast` or `null`. A run cause: `rows` `[]`.
 - `delta`: 05 s5.2's reply without `ms`, over the rows not Pre-existing: `bindings.lost` the `broken_binding` rows, `stale` `code_ahead` and `conflict`, `ambiguous` `cannot_verify ambiguous_*`, each a list of row keys (`node`, `relation`, `file`, `kind`, `symbol`, `item_kind`); `affected_nodes` the sorted distinct resolved nodes of non-`ok` rows; `bindings.moved` `null` until 5c, `tests_reaching` until 7a (`bundle-bindings`), `symbols` until 7b (`impact`).
 - `cannot`: the run causes' lines, in order; `notes`: the `note:` texts.
+
+## `--tests`
+
+stderr: the question, the runner's output live, `note:`, `warning:`; stdout: the report.
+
+- **Config** (`specengine.toml:<line>: [verify] …`): ``tests must be an argv list, e.g. ["scripts/run-test", "{test}"]``, `tests[<i>] is a <type>, not a string: <that>`, `tests is empty: <that>`, `tests[0], the program, is empty`, ``tests[<i>] `<elem>`: `{x}` is no placeholder: {file}, {qpath}, {package}, {target_kind}, {target}, {test}; {{ and }} write a brace`` (``… a lone `{`: {{ writes a brace``, `}` alike), `tests uses neither {test} nor {qpath}: the command cannot tell which test to run`, `timeout is a <type>, not whole seconds from 1 to 86400`, `timeout <n> is not from 1 to 86400 seconds`; no key: `[verify] tests is not set in specengine.toml`.
+- **Question**: per test `run | <file> | <kind> <symbol> | <nodes>` or `not run | … | <reason>`, per node `node <ID>: not verifiable <state>`, last `run <n> bound tests of <k> nodes as ["e0", …] (timeout <t> s each) in <worktree> on <branch> at <commit>? [y/N]`, elements JSON-quoted, control and bidi characters escaped.
+- **Reasons** (the summary's tail, JSON `reason`): `dirty` `the worktree differs from HEAD: <XY path>, …; commit them first`; `empty` `no @verifies binding names a node of the set` or `none of the <n> bound tests can run (each says why)`; `declined` `the owner declined; nothing ran`; `refused` `the [verify] tests command passed a test that does not exist; make it fail when no test matches`, `the [verify] tests command timed out after <t> s on a test that does not exist (the probe); make it end when no test matches`, ``the [verify] tests program `<elem0>` cannot start: <error>``; `interrupted` `a signal to spec stopped the run; the runner's processes were stopped`; `changed`, joined `; `: `HEAD moved from <a> to <b> during the run`, `the branch changed from <a> to <b> during the run`, `the worktree changed during the run: <XY path>, …; commit them first`, a git error. `cannot:` lines include `specengine.toml is not a file of HEAD: [verify] tests runs only a committed template` and ``the [verify] tests program `<program>` is not a file of HEAD: commit it first``.
+- **Text**: per test by (`file`, `symbol`) bytes `<passed|failed|timed out|not run> | <file> | <kind> <symbol> | <nodes>[ | <detail>]`, detail `exit <n>`, `signal <n>`, `after <t> s` or not run's reason (RON: `ron <field path>`; nodes by ID bytes, `, `); `node <ID>: <verdict>[ <state>]` by ID bytes; `cannot: <cause>`; the summary.
+
+```
+passed | crates/game/src/stamina.rs | item crates/game::stamina::tests::regen_stops_at_zero | R-12
+failed | crates/game/tests/stamina.rs | item crates/game::test:stamina::drain_is_clamped | R-12, R-13 | exit 101
+not run | crates/game/src/stamina.rs | item crates/game::stamina::Regen::check | R-14 | member
+node R-12: failed
+node R-13: failed
+node R-14: no runnable test
+verify --tests: unverified: 3 nodes (0 verified, 2 failed, 0 not verifiable, 1 no runnable test); 3 tests (1 passed, 1 failed, 0 timed out, 1 not run)
+```
+
+A summary with a reason: `verify --tests[ --task <T>]: <verdict>: <reason>`.
+
+- **JSON** (exits 0-2 after discovery), every key, no timing, hash, tail or worktree: `task`, `branch`, `commit`, `command`, `timeout`, `verdict`, `reason` (null: `verified`, `unverified`, `cannot`), `counts` (`nodes`: `verified`, `failed`, `not_verifiable`, `no_runnable_test`; `tests`: `passed`, `failed`, `timed_out`, `not_run`; `probes`, the planned count), `tests` (`file`, `kind`, `symbol`, `nodes`, `argv` (element 0 as written) or null, `outcome` `passed|failed|timed_out|not_run`, `exit`, `signal`, `reason`), `nodes` (`id`, `verdict` `verified|failed|not_verifiable|no_runnable_test`, `state`), `lock` (null until 8b), `cannot`, `notes`.

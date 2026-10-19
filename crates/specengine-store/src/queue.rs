@@ -278,6 +278,9 @@ pub const EVENT_APPLIED: &str = "proposal.applied";
 pub const EVENT_REJECTED: &str = "proposal.rejected";
 /// `proposal.apply_failed`, with `step` and `reason`.
 pub const EVENT_APPLY_FAILED: &str = "proposal.apply_failed";
+/// `verify.tests`: one `spec verify --tests` run that reached its probe
+/// ([`SqliteQueue::record_verify_tests`]).
+const EVENT_VERIFY_TESTS: &str = "verify.tests";
 
 /// What a proposal does ([`ProposalKind::family`]): `update`, `create`,
 /// `interpretation` and `amendment` apply (a file written and committed);
@@ -1542,6 +1545,29 @@ impl SqliteQueue {
             last_seq: Some(last_seq),
             full,
         })
+    }
+
+    /// Records one `verify.tests` of the bound project at `now` (task spec
+    /// `verify-tests`, "Event"; [`record_gate_observed`]'s twin): `payload`
+    /// as JSON, in one `Immediate` transaction, only into a queue at this
+    /// build's schema (else [`QueueError::SchemaTooNew`]). No state, task or
+    /// run row changes.
+    pub fn record_verify_tests<T: Serialize>(
+        &mut self,
+        payload: &T,
+        now: &str,
+    ) -> Result<(), QueueError> {
+        check_time(now)?;
+        let payload = to_json(payload)?;
+        let project = self.project.clone();
+        let tx = self.write()?;
+        let found = user_version(&tx)?;
+        if found != QUEUE_SCHEMA_VERSION {
+            return Err(QueueError::SchemaTooNew { found });
+        }
+        log_text(&tx, &project, EVENT_VERIFY_TESTS, &payload, now)?;
+        tx.commit().db()?;
+        Ok(())
     }
 
     fn write(&mut self) -> Result<Transaction<'_>, QueueError> {

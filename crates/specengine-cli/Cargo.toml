@@ -29,3 +29,6 @@ serde_json.workspace = true
 # A package's `[package] name` in `spec refs`' code walk; already in the
 # graph at this pin through `specengine-core`.
 toml.workspace = true
+# `spec verify --tests`' runner (Unix): `killpg`, `sigaction`, `waitid`
+# (task spec `verify-tests`, "Runner"); plain, as a target table is banned.
+libc.workspace = true

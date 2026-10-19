@@ -33,7 +33,7 @@ WA-1, WA-2, Q1-Q3. S: seconds 1..=3600, default 300. In order, each failure exit
 2. `flock` on `<data dir>/<slug>.ra/lock`, try-exclusive; `target/`, `tmp/` beside it.
 3. Lookup (`spec serve`'s): beside `current_exe()`, else the first `PATH` entry with an executable regular `specengine-ra`.
 4. Spawn, never exec: `--protocol 1`, cwd and `TMPDIR` `tmp/`, own process group, env minus eval's list (`RUSTUP_TOOLCHAIN`, `RUSTC`, `RUSTC_WRAPPER`, `CARGO_TARGET_DIR`, …); stderr copied live; stdin gets the request, stays open.
-5. stdout read to `done`, each line checked; at S: `SIGTERM` to the group, 5 s, `SIGKILL` (8a-1's runner, `verify-tests.md` "Runner").
+5. stdout read to `done`, each line checked; at S: `SIGTERM` to the group, 5 s, `SIGKILL` (8a-1's runner, `spec-verify-tests.md` "Runner").
 6. After `done` and exit 0: code index refreshed, `tree_fp` recomputed; equal: one Immediate transaction replaces the worktree's rows; else nothing stored.
 
 ### Protocol v1

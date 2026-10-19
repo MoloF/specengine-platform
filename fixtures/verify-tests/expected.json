@@ -1,0 +1,96 @@
+{
+ "_comment": "What docs/features/verify-tests.md (8a-1, refreshed 2026-10-16) says `spec verify --tests` gives on this corpus (P10, TE-1); shared with 8b (docs/features/tested-evidence.md). Built from the spec and the canon (code-identity.md 'Units and qpath', symbol-names.md 'Discriminator', code-targets.md 'Target table', code-bindings.md 'Rust binding', 'ID state', 'Revision state'), never from the command's output. The tests copy the corpus to a scratch repository (this file left out), write a fake self-terminating runner at `scripts/run-test` there and commit it as `the runner`; the corpus itself is never built. `tests`: every @verifies binding, in output order (file, then symbol, bytes), its set nodes by ID bytes, the value of each placeholder (P5: from the structured name, never by splitting the qpath), `argv` under the corpus' `[verify] tests` (null: not run), `reason` of one not run. `run_order`: each distinct argv once, by its first test (`peak_is_capped`'s cfg twins share one). `probes`: one per distinct probe argv ({test} = the probe name), all before any test. `listing`: the stderr lines before the question (step 7); `question`: `<template>`, `<worktree>`, `<commit>` stand for the scratch repository's. `all_passed`: what the run gives when every runnable test passes. `readings`: points of this file to confirm once the code lands.",
+ "slug": "kiln-works",
+ "command": ["scripts/run-test", "{package}", "{target_kind}", "{target}", "{test}"],
+ "timeout": 600,
+ "probe": "specengine_verify_probe_no_such_test",
+ "nodes": [
+   {"id": "CONE-01", "path": "docs/records/CONE-01.md", "rev": 1, "bindings": ["@verifies CONE-01 (cfg(unix) twin)", "@verifies PYRO-01 (alias, cfg(not(unix)) twin)"], "verifiable": true},
+   {"id": "CONE-02", "path": "docs/records/CONE-02.md", "rev": 1, "bindings": [], "verifiable": true, "note": "no binding: never reported; with CONE-03 it gives the corpus the five documents the store's own-text oracle wants"},
+   {"id": "CONE-03", "path": "docs/records/CONE-03.md", "rev": 1, "bindings": [], "verifiable": true, "note": "no binding: never reported"},
+   {"id": "KILN-COOL", "path": "docs/spec/kiln.md", "rev": 2, "bindings": ["@implements KILN-COOL@1 (spec_ahead)", "@verifies KILN-COOL@2"], "verifiable": false, "state": "spec_ahead"},
+   {"id": "KILN-FIRING", "path": "docs/spec/kiln.md", "rev": 1, "bindings": [], "verifiable": true, "note": "the document: contains KILN-RAMP, KILN-HOLD, KILN-COOL; no @verifies binding of its own"},
+   {"id": "KILN-HOLD", "path": "docs/spec/kiln.md", "rev": 1, "bindings": ["@verifies KILN-HOLD (module marker)", "@verifies KILN-HOLD (hold_follows_the_ramp)"], "verifiable": true},
+   {"id": "KILN-RAMP", "path": "docs/spec/kiln.md", "rev": 1, "bindings": ["@implements KILN-RAMP", "@verifies KILN-RAMP (ramp_stops_at_peak)", "@verifies KILN-RAMP (hold_follows_the_ramp)"], "verifiable": true},
+   {"id": "glaze-check/GLZ-01", "path": "docs/features/glaze-check.md", "rev": 1, "bindings": ["@verifies glaze-check/GLZ-01"], "verifiable": true}
+  ],
+ "tests": [
+   {"file": "crates/kiln/src/cool.rs", "kind": "item", "symbol": "crates/kiln::cool::tests::cooling_stops_at_zero", "nodes": ["KILN-COOL"],
+    "values": {"file": "crates/kiln/src/cool.rs", "qpath": "crates/kiln::cool::tests::cooling_stops_at_zero", "package": "kiln-core", "target_kind": "lib", "target": "kiln_core", "test": "cool::tests::cooling_stops_at_zero"},
+    "argv": null, "reason": "node not verifiable"},
+   {"file": "crates/kiln/src/ramp.rs", "kind": "item", "symbol": "crates/kiln::ramp::tests::peak_is_capped #cfg(test,not(unix))", "nodes": ["CONE-01"],
+    "values": {"file": "crates/kiln/src/ramp.rs", "qpath": "crates/kiln::ramp::tests::peak_is_capped", "package": "kiln-core", "target_kind": "lib", "target": "kiln_core", "test": "ramp::tests::peak_is_capped"},
+    "argv": ["scripts/run-test", "kiln-core", "lib", "kiln_core", "ramp::tests::peak_is_capped"], "reason": null},
+   {"file": "crates/kiln/src/ramp.rs", "kind": "item", "symbol": "crates/kiln::ramp::tests::peak_is_capped #cfg(test,unix)", "nodes": ["CONE-01"],
+    "values": {"file": "crates/kiln/src/ramp.rs", "qpath": "crates/kiln::ramp::tests::peak_is_capped", "package": "kiln-core", "target_kind": "lib", "target": "kiln_core", "test": "ramp::tests::peak_is_capped"},
+    "argv": ["scripts/run-test", "kiln-core", "lib", "kiln_core", "ramp::tests::peak_is_capped"], "reason": null},
+   {"file": "crates/kiln/src/ramp.rs", "kind": "item", "symbol": "crates/kiln::ramp::tests::ramp_stops_at_peak", "nodes": ["KILN-RAMP"],
+    "values": {"file": "crates/kiln/src/ramp.rs", "qpath": "crates/kiln::ramp::tests::ramp_stops_at_peak", "package": "kiln-core", "target_kind": "lib", "target": "kiln_core", "test": "ramp::tests::ramp_stops_at_peak"},
+    "argv": ["scripts/run-test", "kiln-core", "lib", "kiln_core", "ramp::tests::ramp_stops_at_peak"], "reason": null},
+   {"file": "crates/kiln/tests/schedule.rs", "kind": "module", "symbol": "crates/kiln::test:schedule", "nodes": ["KILN-HOLD"],
+    "values": null,
+    "argv": null, "reason": "module"},
+   {"file": "crates/kiln/tests/schedule.rs", "kind": "item", "symbol": "crates/kiln::test:schedule::glaze_survives_the_hold", "nodes": ["glaze-check/GLZ-01"],
+    "values": {"file": "crates/kiln/tests/schedule.rs", "qpath": "crates/kiln::test:schedule::glaze_survives_the_hold", "package": "kiln-core", "target_kind": "test", "target": "schedule", "test": "glaze_survives_the_hold"},
+    "argv": ["scripts/run-test", "kiln-core", "test", "schedule", "glaze_survives_the_hold"], "reason": null},
+   {"file": "crates/kiln/tests/schedule.rs", "kind": "item", "symbol": "crates/kiln::test:schedule::hold_follows_the_ramp", "nodes": ["KILN-HOLD", "KILN-RAMP"],
+    "values": {"file": "crates/kiln/tests/schedule.rs", "qpath": "crates/kiln::test:schedule::hold_follows_the_ramp", "package": "kiln-core", "target_kind": "test", "target": "schedule", "test": "hold_follows_the_ramp"},
+    "argv": ["scripts/run-test", "kiln-core", "test", "schedule", "hold_follows_the_ramp"], "reason": null}
+  ],
+ "run_order": [
+   ["scripts/run-test", "kiln-core", "lib", "kiln_core", "ramp::tests::peak_is_capped"],
+   ["scripts/run-test", "kiln-core", "lib", "kiln_core", "ramp::tests::ramp_stops_at_peak"],
+   ["scripts/run-test", "kiln-core", "test", "schedule", "glaze_survives_the_hold"],
+   ["scripts/run-test", "kiln-core", "test", "schedule", "hold_follows_the_ramp"]
+  ],
+ "probes": [
+   ["scripts/run-test", "kiln-core", "lib", "kiln_core", "specengine_verify_probe_no_such_test"],
+   ["scripts/run-test", "kiln-core", "test", "schedule", "specengine_verify_probe_no_such_test"]
+  ],
+ "listing": [
+   "not run | crates/kiln/src/cool.rs | item crates/kiln::cool::tests::cooling_stops_at_zero | KILN-COOL | node not verifiable",
+   "run | crates/kiln/src/ramp.rs | item crates/kiln::ramp::tests::peak_is_capped #cfg(test,not(unix)) | CONE-01",
+   "run | crates/kiln/src/ramp.rs | item crates/kiln::ramp::tests::peak_is_capped #cfg(test,unix) | CONE-01",
+   "run | crates/kiln/src/ramp.rs | item crates/kiln::ramp::tests::ramp_stops_at_peak | KILN-RAMP",
+   "not run | crates/kiln/tests/schedule.rs | module crates/kiln::test:schedule | KILN-HOLD | module",
+   "run | crates/kiln/tests/schedule.rs | item crates/kiln::test:schedule::glaze_survives_the_hold | glaze-check/GLZ-01",
+   "run | crates/kiln/tests/schedule.rs | item crates/kiln::test:schedule::hold_follows_the_ramp | KILN-HOLD, KILN-RAMP",
+   "node KILN-COOL: not verifiable spec_ahead"
+  ],
+ "question": "run 4 bound tests of 4 nodes as <template> (timeout 600 s each) in <worktree> on main at <commit>? [y/N]",
+ "all_passed": {
+   "verdict": "unverified",
+   "exit": 1,
+   "stdout": [
+     "not run | crates/kiln/src/cool.rs | item crates/kiln::cool::tests::cooling_stops_at_zero | KILN-COOL | node not verifiable",
+     "passed | crates/kiln/src/ramp.rs | item crates/kiln::ramp::tests::peak_is_capped #cfg(test,not(unix)) | CONE-01",
+     "passed | crates/kiln/src/ramp.rs | item crates/kiln::ramp::tests::peak_is_capped #cfg(test,unix) | CONE-01",
+     "passed | crates/kiln/src/ramp.rs | item crates/kiln::ramp::tests::ramp_stops_at_peak | KILN-RAMP",
+     "not run | crates/kiln/tests/schedule.rs | module crates/kiln::test:schedule | KILN-HOLD | module",
+     "passed | crates/kiln/tests/schedule.rs | item crates/kiln::test:schedule::glaze_survives_the_hold | glaze-check/GLZ-01",
+     "passed | crates/kiln/tests/schedule.rs | item crates/kiln::test:schedule::hold_follows_the_ramp | KILN-HOLD, KILN-RAMP",
+     "node CONE-01: verified",
+     "node KILN-COOL: not verifiable spec_ahead",
+     "node KILN-HOLD: verified",
+     "node KILN-RAMP: verified",
+     "node glaze-check/GLZ-01: verified",
+     "verify --tests: unverified: 5 nodes (4 verified, 0 failed, 1 not verifiable, 0 no runnable test); 7 tests (5 passed, 0 failed, 0 timed out, 2 not run)"
+    ],
+   "counts": {"nodes": {"verified": 4, "failed": 0, "not_verifiable": 1, "no_runnable_test": 0}, "tests": {"passed": 5, "failed": 0, "timed_out": 0, "not_run": 2}, "probes": 2},
+   "nodes": [
+     {"id": "CONE-01", "verdict": "verified", "state": null},
+     {"id": "KILN-COOL", "verdict": "not_verifiable", "state": "spec_ahead"},
+     {"id": "KILN-HOLD", "verdict": "verified", "state": null},
+     {"id": "KILN-RAMP", "verdict": "verified", "state": null},
+     {"id": "glaze-check/GLZ-01", "verdict": "verified", "state": null}
+    ]
+  },
+ "readings": [
+   "R1 the cfg twins' discriminators: the chain is the enclosing `mod tests`' `test` then the item's own, joined by `,` (symbol-names.md 'Discriminator' rule 1): `cfg(test,unix)`, `cfg(test,not(unix))`.",
+   "R2 probes: one run per distinct probe argv (4 test argv give 2), all before the first test; `counts.probes` is that number.",
+   "R3 JSON `argv` is the expanded template as written (element 0 `scripts/run-test`, not joined to the root): TE-7 wants one JSON from two roots; `command` is the template as a list.",
+   "R4 the module binding and a test of an unverifiable node are listed rows (`not run`) and counted in `tests`; `argv` of a row not run is not pinned.",
+   "R5 a test's nodes are its set nodes by ID bytes, joined by `, `; node lines by ID bytes (upper case before `glaze-check/`).",
+   "R6 `KILN-COOL`'s only refusal is the `@implements KILN-COOL@1` marker's `spec_ahead` (rev 2 written), a refusal 5b-1 keeps."
+  ]
+}

@@ -5,10 +5,10 @@
 //! no timing.
 //!
 //! The one check that stays here: `spec approve`, `spec reject`, `spec
-//! import-state`, `spec round answer` and the owner's `spec task
-//! approve|changes|cancel` run only when stdin is a terminal (else exit 2,
-//! nothing read or logged, `import-state`'s and `round answer`'s file not
-//! opened); the
+//! import-state`, `spec round answer`, the owner's `spec task
+//! approve|changes|cancel` and `spec verify --tests` run only when stdin is
+//! a terminal (else exit 2, nothing read or logged, `import-state`'s and
+//! `round answer`'s file not opened, no test run); the
 //! library asks its question through a callback, which prints it on stderr
 //! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
 //! (`now`, UTC) and the process's variables for git are passed in as well.
@@ -42,8 +42,8 @@ use specengine_cli::{
     RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
     SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
     TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
-    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest, render_json,
-    render_text,
+    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest, VerifyTestsRequest,
+    render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -205,7 +205,7 @@ enum Command {
         #[arg(value_name = "PATH")]
         path: Option<String>,
     },
-    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode.
+    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode. With --tests: run the tests `@verifies` binds through the project's `[verify] tests` command, on a terminal after one [y/N], over a clean committed tree; exit 0 verified, 1 not verified, 2 refused, interrupted or when it cannot run.
     Verify {
         /// Judge against HEAD too: a finding HEAD already has is pre-existing.
         #[arg(long)]
@@ -213,6 +213,12 @@ enum Command {
         /// Judge what `git commit` would record (the git index, its config unless --config) against HEAD: a finding HEAD already has is pre-existing.
         #[arg(long, conflicts_with = "changed")]
         staged: bool,
+        /// Run the bound tests (`@verifies`) with the project's `[verify] tests` command, after the owner's [y/N] on a terminal; Unix only.
+        #[arg(long, conflicts_with_all = ["changed", "staged"])]
+        tests: bool,
+        /// With --tests: only the tests of task T's nodes (its targets, criteria and affected nodes, and the sections they contain).
+        #[arg(long, value_name = "T", requires = "tests")]
+        task: Option<String>,
     },
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
@@ -727,6 +733,18 @@ fn main() -> ExitCode {
     {
         return usage_error(&stdout_json_conflict());
     }
+    // clap waives `--task`'s `requires = "tests"` when `--changed` or
+    // `--staged`, which conflict with `--tests`, is present.
+    if matches!(
+        cli.command,
+        Command::Verify {
+            tests: false,
+            task: Some(_),
+            ..
+        }
+    ) {
+        return usage_error(&task_without_tests());
+    }
     let globals = Globals {
         root: cli.root,
         config: cli.config,
@@ -889,7 +907,29 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &UnmappedRequest { path },
         )?)),
-        Command::Verify { changed, staged } => {
+        Command::Verify {
+            tests: true, task, ..
+        } => {
+            // Off Unix the library refuses before anything; on it, the
+            // terminal before any config, task or code read.
+            if cfg!(unix) {
+                require_terminal("verify --tests")?;
+            }
+            let mut consent = |text: &str| ask(text);
+            Outcome::VerifyTests(Box::new(specengine_cli::verify_tests(
+                env,
+                globals,
+                &VerifyTestsRequest {
+                    task,
+                    now: now(),
+                    git: process_git(env),
+                },
+                &mut consent,
+            )?))
+        }
+        Command::Verify {
+            changed, staged, ..
+        } => {
             // clap refuses `--staged` with `--changed`.
             let tree = if staged {
                 VerifiedTree::Staged
@@ -1789,9 +1829,9 @@ fn read_stdin(max: usize, what: &str) -> Result<Vec<u8>, CliError> {
     Ok(bytes)
 }
 
-/// `spec approve`, `spec reject`, `spec import-state`, `spec round answer`
-/// and the owner's `spec task approve|changes|cancel` decide on a terminal
-/// only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
+/// `spec approve`, `spec reject`, `spec import-state`, `spec round answer`,
+/// the owner's `spec task approve|changes|cancel` and `spec verify --tests`
+/// decide on a terminal only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
 /// before anything is read or logged.
 fn require_terminal(command: &str) -> Result<(), CliError> {
     if std::io::stdin().is_terminal() {
@@ -1893,6 +1933,18 @@ fn stdout_json_conflict() -> clap::Error {
     match index {
         Some(index) => index.error(ErrorKind::ArgumentConflict, MESSAGE),
         None => Cli::command().error(ErrorKind::ArgumentConflict, MESSAGE),
+    }
+}
+
+/// `verify --task` without `--tests`, whatever else is passed: clap's own
+/// text for the missing argument, its usage block `verify`'s.
+fn task_without_tests() -> clap::Error {
+    const MESSAGE: &str = "the following required arguments were not provided:\n  --tests";
+    let mut command = Cli::command();
+    command.build();
+    match command.find_subcommand_mut("verify") {
+        Some(verify) => verify.error(ErrorKind::MissingRequiredArgument, MESSAGE),
+        None => Cli::command().error(ErrorKind::MissingRequiredArgument, MESSAGE),
     }
 }
 

@@ -34,7 +34,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-node.md](features/verify-node.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/features/verify-task.md](features/verify-task.md) verify-task (8a-2): spec verify --task T · crates/specengine-cli · draft
-- [docs/features/verify-tests.md](features/verify-tests.md) verify-tests (8a-1): bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli, plugin, fixtures · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

@@ -117,6 +117,9 @@
 //! - [`verify`]: `spec verify [--changed]`, a state per lock key and
 //!   marker binding, Fix, Check or Pre-existing findings, the verdict under
 //!   `[verify] mode`; its run causes are in the report (exit 2);
+//!   [`verify_tests`]: `spec verify --tests [--task T]` (task spec
+//!   `verify-tests`), the `@verifies` tests run by the project's own
+//!   command after the owner's [`Consent`], Unix only;
 //! - [`symbols`], [`unmapped`]: `spec symbols` (task spec `symbol-reads`:
 //!   a QUERY's items in tiers, a node's, a file's or a line's targets,
 //!   each with its markers; a `--node` naming nothing is an outcome with
@@ -183,6 +186,7 @@ mod links;
 mod location;
 mod lock;
 mod lock_regen;
+mod node_set;
 mod package;
 mod preflight;
 mod project;
@@ -202,10 +206,13 @@ mod state;
 mod state_file;
 mod symbols;
 mod task;
+#[cfg(unix)]
+mod test_runner;
 mod tree;
 mod unmapped;
 mod verify;
 mod verify_rows;
+mod verify_tests;
 
 use std::ffi::OsString;
 use std::fmt;
@@ -345,6 +352,10 @@ pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_vie
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
     VerifiedTree, VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow, verify,
+};
+pub use verify_tests::{
+    VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest, VerifyTestsRow,
+    verify_tests,
 };
 
 /// The exit code of a command (the verdict scheme of `spec check`).
@@ -499,6 +510,8 @@ pub enum Outcome {
     LockRegen(Box<RegenOutcome>),
     /// `verify`: drift between `spec.lock` and the tree.
     Verify(Box<VerifyOutcome>),
+    /// `verify --tests`: the bound tests run by the project's command.
+    VerifyTests(Box<VerifyTestsOutcome>),
     Export(ExportOutcome),
     /// `propose`, `review`, `approve`, `reject`: the review document.
     Proposal(Box<ProposalOutcome>),
@@ -545,6 +558,7 @@ impl Outcome {
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
             Self::Verify(verify) => verify.exit(),
+            Self::VerifyTests(run) => run.exit(),
             Self::Check(check) => check.exit(),
             Self::Bump(bump) => bump.exit(),
             Self::Proposal(proposal) => proposal.exit(),
@@ -581,6 +595,7 @@ impl Outcome {
             Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::LockRegen(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Verify(outcome) => (&outcome.messages, None),
+            Self::VerifyTests(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -619,6 +634,7 @@ impl Outcome {
                 | Self::Lock(_)
                 | Self::LockRegen(_)
                 | Self::Verify(_)
+                | Self::VerifyTests(_)
                 | Self::Intake(_)
                 | Self::Drift(_)
                 | Self::Stage(_)
@@ -659,6 +675,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Lock(outcome) => lock::render_text(outcome),
         Outcome::LockRegen(outcome) => lock_regen::render_text(outcome),
         Outcome::Verify(outcome) => verify::render_text(outcome),
+        Outcome::VerifyTests(outcome) => verify_tests::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
         Outcome::Intake(outcome) => intake::render_text(outcome),
@@ -697,6 +714,7 @@ impl serde::Serialize for Outcome {
             Self::Lock(outcome) => outcome.serialize(serializer),
             Self::LockRegen(outcome) => outcome.serialize(serializer),
             Self::Verify(outcome) => outcome.serialize(serializer),
+            Self::VerifyTests(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),

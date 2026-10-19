@@ -106,22 +106,26 @@ fn verify_mode_defaults_to_observe() {
     }
 }
 
-/// RD-1: `[verify]` is closed: `tests` and `timeout` (slice 8a) named as
-/// not built, another key, a wrong type and a wrong value refused at their
-/// line. M: `tests` accepted.
+/// RD-1, flipped by docs/features/verify-tests.md (8a-1) RD-1: `[verify]`
+/// is closed: `mode`, `tests` and `timeout` read, nothing named "not
+/// built"; another key, a wrong type and a wrong value refused at their
+/// line, a string `tests` with the argv-list text, a `timeout` out of
+/// 1..86 400 naming the key. M: `tests` as a string accepted.
 #[test]
 fn verify_unknown_key_is_refused() {
+    for text in [
+        "[project]\nslug = \"x\"\n\n[verify]\ntests = [\"scripts/run-test\", \"{test}\"]\n",
+        "[verify]\nmode = \"observe\"\ntimeout = 30\ntests = [\"scripts/run-test\", \"{qpath}\"]\n",
+    ] {
+        verify_from_toml(text).unwrap_or_else(|error| panic!("{text:?}: {error:?}"));
+    }
     let cases = [
         (
-            "[project]\nslug = \"x\"\n\n[verify]\ntests = [\"cargo test\"]\n",
+            "[project]\nslug = \"x\"\n\n[verify]\ntests = \"scripts/run-test {test}\"\n",
             5,
-            "`[verify] tests` is not built",
+            "[verify] tests must be an argv list, e.g. [\"scripts/run-test\", \"{test}\"]",
         ),
-        (
-            "[verify]\nmode = \"observe\"\ntimeout = 30\n",
-            3,
-            "`[verify] timeout` is not built",
-        ),
+        ("[verify]\nmode = \"observe\"\ntimeout = 0\n", 3, "timeout"),
         (
             "[verify]\nstrict = true\n",
             2,
@@ -138,6 +142,11 @@ fn verify_unknown_key_is_refused() {
         let error = verify_from_toml(text).expect_err(text);
         assert_eq!(error.line, Some(line), "{text:?}: {error:?}");
         assert!(error.message.contains(words), "{text:?}: {}", error.message);
+        assert!(
+            !error.message.contains("is not built"),
+            "{text:?}: {}",
+            error.message
+        );
         assert!(
             error
                 .at("specengine.toml")

@@ -217,6 +217,27 @@ pub fn b3_hash(bytes: &[u8]) -> String {
     format!("b3:{}", rows::hash_bytes(bytes))
 }
 
+/// [`b3_hash`] of a stream fed in pieces (a test run's output, never held
+/// whole): the same `b3:` form as the pieces joined.
+#[derive(Debug, Clone, Default)]
+pub struct B3Stream(blake3::Hasher);
+
+impl B3Stream {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Feeds the next piece.
+    pub fn update(&mut self, bytes: &[u8]) {
+        self.0.update(bytes);
+    }
+
+    /// The hash of every piece fed so far.
+    pub fn finish(&self) -> String {
+        format!("b3:{}", self.0.finalize().to_hex())
+    }
+}
+
 /// Smallest and largest [`SearchQuery::limit`]; a limit outside is clamped.
 pub const SEARCH_LIMIT_MIN: usize = 1;
 pub const SEARCH_LIMIT_MAX: usize = 200;

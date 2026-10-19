@@ -41,7 +41,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `gate.observed`; `specengine-http` streams it.
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `gate.observed`, `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
 
 ## Store
 
