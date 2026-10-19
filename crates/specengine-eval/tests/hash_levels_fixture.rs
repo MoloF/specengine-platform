@@ -8,8 +8,10 @@
 //! - TE-3: every broken item and every broken file's module `CannotVerify`
 //!   with v2's categories, no digest shared by two broken units;
 //! - TE-6 (over TE-1's edits and the CRLF copies): `hash_item` changes
-//!   exactly when `sig` or `body` changes, N5 (`v2: n5` pairs) and the CR
-//!   rule (`cr_exceptions`) the only exceptions.
+//!   exactly when `sig` or `body` changes, N5 (`v2: n5` pairs), N6
+//!   (`v2: n6` pairs, docs/features/hash-levels-use-lists.md, 5a-1c: the
+//!   members of a `use` list sorted) and the CR rule (`cr_exceptions`) the
+//!   only exceptions.
 //!
 //! JSON is read here, in the eval crate, because `specengine-code` has no
 //! JSON dependency (as RD-1's grammar pin). TE-2, TE-4, TE-5 and the recipe
@@ -742,12 +744,13 @@ fn te3_broken_units_cannot_verify_with_v2_categories_and_share_no_digest() {
 // ---------------------------------------------------------------- TE-6
 
 /// Over every TE-1 edit of an item: v2 changes exactly when `sig` or `body`
-/// changes, the `v2: n5` pairs the only exception (v2 changes, levels hold).
+/// changes, the `v2: n5` and `v2: n6` pairs the only exceptions (v2
+/// changes, levels hold); each kind of exception occurs.
 #[test]
 fn te6_v2_changes_exactly_with_sig_or_body_over_the_pairs() {
     let expected = expected();
     let mut failures = Vec::new();
-    let mut exceptions = 0;
+    let mut exceptions: BTreeMap<String, usize> = BTreeMap::new();
     for pair in expected["pairs"].as_array().unwrap() {
         let id = pair["id"].as_str().unwrap();
         if locator(&pair["a"]).is_none() {
@@ -771,11 +774,16 @@ fn te6_v2_changes_exactly_with_sig_or_body_over_the_pairs() {
         let b = analyzed_b.units[ib].levels(id);
         let v2_changed = v2_digest(&analyzed_a, ia, id) != v2_digest(&analyzed_b, ib, id);
         let levels_changed = a.sig != b.sig || a.body != b.body;
-        if pair["v2"].as_str() == Some("n5") {
-            exceptions += 1;
+        if let Some(rule) = pair["v2"].as_str() {
+            assert!(
+                matches!(rule, "n5" | "n6"),
+                "{id}: `v2` names n5 or n6, got {rule:?}"
+            );
+            *exceptions.entry(rule.to_owned()).or_default() += 1;
             if !v2_changed || levels_changed {
                 failures.push(format!(
-                    "{id}: an N5 exception must change v2 ({v2_changed}) and keep sig and body ({})",
+                    "{id}: an {} exception must change v2 ({v2_changed}) and keep sig and body ({})",
+                    rule.to_uppercase(),
                     !levels_changed
                 ));
             }
@@ -785,7 +793,12 @@ fn te6_v2_changes_exactly_with_sig_or_body_over_the_pairs() {
             ));
         }
     }
-    assert!(exceptions > 0, "the fixture names its N5 exceptions");
+    for rule in ["n5", "n6"] {
+        assert!(
+            exceptions.get(rule).is_some_and(|n| *n > 0),
+            "the fixture names its {rule} exceptions on items: {exceptions:?}"
+        );
+    }
     assert!(failures.is_empty(), "TE-6:\n{}", failures.join("\n"));
 }
 

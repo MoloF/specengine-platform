@@ -7,13 +7,23 @@
 //!   parities, as 5a-2 measures it); each level changes under its own
 //!   targeted edit. M: a constant hash; a hash that reads a neighbour.
 //! - TE-6 over the same edits: `hash_item` (v2) changes exactly when `sig` or
-//!   `body` changes; the only exception met is N5 (rustfmt reorders `mod x;`
-//!   and `extern crate` runs, v2 does not sort them).
+//!   `body` changes; the only exceptions met are N5 (rustfmt reorders `mod x;`
+//!   and `extern crate` runs, v2 does not sort them) and N6
+//!   (docs/features/hash-levels-use-lists.md, 5a-1c: rustfmt sorts the
+//!   members of a `use` list, v2 does not), each where the item holds such a
+//!   run or list (`levels_common::has_n5_run`, `has_n6_list`).
 //! - The recipe re-stated by hand on v2's public walk, so the bytes of
 //!   `sig`, `body`, `deps`, `quote` and the count `body_bytes` are checked
 //!   against the spec rather than against the implementation (L1-L3 in
 //!   `levels_common`); `skeleton` has no public walk to restate and is held
 //!   by relations and RD-3's golden pin.
+//!
+//! - docs/features/hash-levels-use-lists.md (5a-1c) TE-1: every permutation
+//!   of a `use` list's members at every depth, in five shapes and four
+//!   layouts, at file level, in a function body and in an inline `mod`,
+//!   gives the item and the file module equal `sig`, `body`, `deps`,
+//!   `skeleton` and `body_bytes` (N6). Inputs generated here. M1 N6 removed;
+//!   M2 only depth-1 lists sorted.
 //!
 //! PHASE-B: `item_levels`, `module_levels`, `body_nodes`, `call_targets`,
 //! `level_header`, `LEVEL_RECIPE`, `TRIVIAL_BODY_BYTES`, `LevelState`,
@@ -26,10 +36,10 @@ use std::ops::Range;
 
 use levels_common::{
     Key, Levels, STABLE, Targeted, VARIANTS, base_files, body_by_hand, body_stream_by_hand,
-    changed, deps_after_header, digest_by_hand, header_by_hand, item_node,
-    leading_inner_attributes, leaf_text_bytes, new_parser, on_big_stack, parse, put,
-    quote_stream_by_hand, read, read_variant, sig_stream_by_hand, snapshot, targeted, v2_walk,
-    variant_files, with_cfg_before,
+    changed, deps_after_header, digest_by_hand, header_by_hand, index_named, item_node,
+    leading_inner_attributes, leaf_text_bytes, module, new_parser, on_big_stack, one, parse, put,
+    quote_stream_by_hand, read, read_variant, sig_stream_by_hand, snapshot, snapshot_with,
+    targeted, v2_walk, variant_files, with_cfg_before,
 };
 use specengine_code::comments::strip_comments;
 use specengine_code::hash::{RECIPE, recipe_header};
@@ -53,8 +63,9 @@ fn overlaps(a: &Range<usize>, b: &Range<usize>) -> bool {
 }
 
 /// TE-6 on one item and one perturbation: v2 changes exactly when `sig` or
-/// `body` does; a v2 change with both held is an N5 exception only where the
-/// item holds an N5 run. Returns whether it was such an exception.
+/// `body` does; a v2 change with both held is an N5 or N6 exception only
+/// where the item holds an N5 run or an N6 list (`sorted`). Returns whether
+/// it was such an exception.
 fn v2_follows_the_levels(
     what: &str,
     v2: (
@@ -63,17 +74,17 @@ fn v2_follows_the_levels(
     ),
     a: &Levels,
     b: &Levels,
-    n5_run: bool,
+    sorted: bool,
     failures: &mut Vec<String>,
 ) -> bool {
     let v2_moved = v2.0 != v2.1;
     let levels_moved = a.sig != b.sig || a.body != b.body;
     if v2_moved && !levels_moved {
-        if n5_run {
+        if sorted {
             return true;
         }
         failures.push(format!(
-            "{what}: v2 changed while sig and body held, and no N5 run: a leaf in v2 only"
+            "{what}: v2 changed while sig and body held, and no N5 run or N6 list: a leaf in v2 only"
         ));
     } else if v2_moved != levels_moved {
         failures.push(format!(
@@ -90,6 +101,8 @@ fn te2_levels_hold_under_the_committed_rustfmt_variants() {
     on_big_stack(|| {
         let mut failures = Vec::new();
         let mut n5_exceptions = Vec::new();
+        let mut n6_exceptions = Vec::new();
+        let mut modules_compared = 0;
         let mut compared = 0;
         for file in variant_files() {
             let base_text = read(&file);
@@ -127,14 +140,20 @@ fn te2_levels_hold_under_the_committed_rustfmt_variants() {
                         (base.v2_digest(index), other.v2_digest(at)),
                         a,
                         b,
-                        base.n5[index],
+                        base.n5[index] || base.n6[index],
                         &mut failures,
                     ) {
-                        n5_exceptions.push(what);
+                        if base.n6[index] {
+                            n6_exceptions.push(what.clone());
+                        }
+                        if base.n5[index] {
+                            n5_exceptions.push(what);
+                        }
                     }
                 }
                 match (base.module.levels(), other.module.levels()) {
                     (Some(a), Some(b)) => {
+                        modules_compared += 1;
                         let moved = changed(a, b, &STABLE);
                         if !moved.is_empty() {
                             failures.push(format!(
@@ -155,6 +174,30 @@ fn te2_levels_hold_under_the_committed_rustfmt_variants() {
             !n5_exceptions.is_empty(),
             "rustfmt reorders `mod hub`'s runs: the N5 exception must occur (non-vacuity)"
         );
+        // 5a-1c TE-2: the modules count (every variant of every file), and
+        // rustfmt sorts the members of `src/use_lists.rs`'s lists inside
+        // items: the N6 exception must occur in a function, an inline `mod`
+        // and a method.
+        assert_eq!(
+            modules_compared,
+            variant_files().len() * VARIANTS.len(),
+            "every file module of every variant compared"
+        );
+        for (kind, place) in [
+            ("function_item place_tile", "a function body"),
+            ("mod_item hall", "an inline mod"),
+            ("mod_item depths", "a nested inline mod"),
+            ("function_item reset (in Board)", "a method"),
+        ] {
+            assert!(
+                n6_exceptions
+                    .iter()
+                    .any(|what| what.starts_with("fmt-default/src/use_lists.rs: ")
+                        && what.contains(kind)),
+                "rustfmt sorts the use list in {place} ({kind}): the N6 exception must occur \
+                 (non-vacuity); N6 exceptions: {n6_exceptions:?}"
+            );
+        }
     });
 }
 
@@ -402,14 +445,15 @@ fn recipe_level_header_is_v3_beside_v2() {
 /// TE-6's ground, byte for byte (L2): `sig` is the v2 walk of the
 /// attributes and of the item without its name and body nodes, `body` the v2
 /// walk of the body nodes; together they read exactly the leaves `hash_item`
-/// reads. Items holding an N5 run are skipped (walk3 sorts what v2 does not).
+/// reads. Items holding an N5 run or an N6 list are skipped (walk3 sorts
+/// what v2 does not).
 #[test]
 fn recipe_sig_and_body_split_the_v2_walk() {
     on_big_stack(|| {
         let mut failures = Vec::new();
         let (mut checked, mut skipped) = (0, 0);
         each_hashed_item(&mut |file, key, node, text, levels| {
-            if levels_common::has_n5_run(node) {
+            if levels_common::has_n5_run(node) || levels_common::has_n6_list(node) {
                 skipped += 1;
                 return;
             }
@@ -630,7 +674,8 @@ fn recipe_body_nodes_follow_the_body_field_table() {
 }
 
 /// File module: `sig` is the v2 walk of the leading inner attributes;
-/// without inner attributes and N5 runs, `body` is v2's walk of the file;
+/// without inner attributes, N5 runs and N6 lists, `body` is v2's walk of
+/// the file;
 /// `body_bytes` counts the file's leaves outside that run.
 #[test]
 fn recipe_module_sig_body_and_body_bytes() {
@@ -661,7 +706,10 @@ fn recipe_module_sig_body_and_body_bytes() {
                     whole - in_sig
                 ));
             }
-            if run.is_empty() && !levels_common::has_n5_run(root) {
+            if run.is_empty()
+                && !levels_common::has_n5_run(root)
+                && !levels_common::has_n6_list(root)
+            {
                 bodies_checked += 1;
                 let body = v2_walk(root, &text, None);
                 if *module.body.as_bytes() != digest_by_hand("body", &body) {
@@ -673,6 +721,276 @@ fn recipe_module_sig_body_and_body_bytes() {
         assert!(
             bodies_checked >= 5,
             "module bodies checked: {bodies_checked}"
+        );
+    });
+}
+
+// ------------------------------------------------------- 5a-1c TE-1 (N6)
+
+/// A `use` tree of TE-1: a member's own text, or a path prefix and a brace
+/// list of members.
+#[derive(Debug, Clone)]
+enum UseTree {
+    Leaf(&'static str),
+    List(&'static str, Vec<UseTree>),
+}
+
+/// How a brace list is laid out: one line or one member per line, with a
+/// trailing `,` or none; `note` puts a line comment after the first member
+/// of every vertical list.
+#[derive(Debug, Clone, Copy)]
+struct Layout {
+    vertical: bool,
+    trailing: bool,
+    note: bool,
+}
+
+const LAYOUTS: [Layout; 5] = [
+    Layout {
+        vertical: false,
+        trailing: false,
+        note: false,
+    },
+    Layout {
+        vertical: false,
+        trailing: true,
+        note: false,
+    },
+    Layout {
+        vertical: true,
+        trailing: false,
+        note: false,
+    },
+    Layout {
+        vertical: true,
+        trailing: true,
+        note: false,
+    },
+    Layout {
+        vertical: true,
+        trailing: true,
+        note: true,
+    },
+];
+
+/// Every permutation of `0..n`, the identity first.
+fn permutations(n: usize) -> Vec<Vec<usize>> {
+    if n == 0 {
+        return vec![Vec::new()];
+    }
+    let mut out = Vec::new();
+    for rest in permutations(n - 1) {
+        for at in (0..=rest.len()).rev() {
+            let mut next = rest.clone();
+            next.insert(at, n - 1);
+            out.push(next);
+        }
+    }
+    out
+}
+
+/// `members` (rendered) as the brace list of `layout`.
+fn brace_list(prefix: &str, members: &[String], layout: Layout) -> String {
+    let path = if prefix.is_empty() {
+        String::new()
+    } else {
+        format!("{prefix}::")
+    };
+    if !layout.vertical {
+        let tail = if layout.trailing { "," } else { "" };
+        return format!("{path}{{{}{tail}}}", members.join(", "));
+    }
+    let mut out = format!("{path}{{\n");
+    for (index, member) in members.iter().enumerate() {
+        let last = index + 1 == members.len();
+        out.push_str("        ");
+        out.push_str(member);
+        if !last || layout.trailing {
+            out.push(',');
+        }
+        if index == 0 && layout.note {
+            out.push_str(" // the first member");
+        }
+        out.push('\n');
+    }
+    out.push_str("    }");
+    out
+}
+
+/// Every rendering of `tree` in `layout`: each list's members in every
+/// order, at every depth (the cartesian product), the identity order first.
+fn renderings(tree: &UseTree, layout: Layout) -> Vec<String> {
+    match tree {
+        UseTree::Leaf(text) => vec![(*text).to_owned()],
+        UseTree::List(prefix, members) => {
+            let each: Vec<Vec<String>> = members.iter().map(|m| renderings(m, layout)).collect();
+            let mut out = Vec::new();
+            for order in permutations(members.len()) {
+                let mut partial: Vec<Vec<String>> = vec![Vec::new()];
+                for &index in &order {
+                    let mut next = Vec::new();
+                    for prefix_members in &partial {
+                        for member in &each[index] {
+                            let mut grown = prefix_members.clone();
+                            grown.push(member.clone());
+                            next.push(grown);
+                        }
+                    }
+                    partial = next;
+                }
+                out.extend(partial.iter().map(|m| brace_list(prefix, m, layout)));
+            }
+            out
+        }
+    }
+}
+
+/// The source text of `tree` in `place`, and the item it sits in (none at
+/// file level).
+fn placed(place: &str, tree: &str) -> (String, Option<(&'static str, &'static str)>) {
+    match place {
+        "file level" => (format!("use {tree};\n\nfn tail() {{}}\n"), None),
+        "a function body" => (
+            format!("fn host() {{\n    use {tree};\n    let _ = 0;\n}}\n"),
+            Some(("function_item", "host")),
+        ),
+        "an inline mod" => (
+            format!("mod hub {{\n    use {tree};\n    fn g() {{}}\n}}\n"),
+            Some(("mod_item", "hub")),
+        ),
+        other => panic!("no place {other}"),
+    }
+}
+
+const PLACES: [&str; 3] = ["file level", "a function body", "an inline mod"];
+
+fn leaf(text: &'static str) -> UseTree {
+    UseTree::Leaf(text)
+}
+
+fn list(prefix: &'static str, members: Vec<UseTree>) -> UseTree {
+    UseTree::List(prefix, members)
+}
+
+/// TE-1's five shapes: (name, tree, its comment-free twin).
+fn te1_shapes() -> Vec<(&'static str, UseTree, UseTree)> {
+    let flat = list(
+        "crate::grid",
+        vec![leaf("d"), leaf("a"), leaf("c"), leaf("b")],
+    );
+    let mixed = list(
+        "crate::grid",
+        vec![
+            leaf("self"),
+            leaf("*"),
+            leaf("Border as Edge"),
+            leaf("path::Step"),
+            leaf("Zone"),
+        ],
+    );
+    let nested = list(
+        "crate::grid",
+        vec![
+            list("area", vec![leaf("r"), leaf("p"), leaf("q")]),
+            list("bound", vec![leaf("t"), leaf("s")]),
+            leaf("u"),
+        ],
+    );
+    let deep = list(
+        "",
+        vec![
+            list(
+                "k",
+                vec![list("m", vec![leaf("y"), leaf("w as v")]), leaf("n")],
+            ),
+            leaf("j"),
+            list("l", vec![leaf("self"), leaf("o::*")]),
+        ],
+    );
+    let commented = list(
+        "crate::grid",
+        vec![leaf("/* lead */ a"), leaf("b /* tail */"), leaf("c")],
+    );
+    let commented_plain = list("crate::grid", vec![leaf("a"), leaf("b"), leaf("c")]);
+    vec![
+        ("flat", flat.clone(), flat),
+        ("mixed self, *, as, paths", mixed.clone(), mixed),
+        ("nested", nested.clone(), nested),
+        ("nested three deep, no prefix", deep.clone(), deep),
+        ("a comment inside the braces", commented, commented_plain),
+    ]
+}
+
+/// 5a-1c TE-1: N6. Every permutation of every list at every depth, in every
+/// layout and place, against the shape's identity order on one line (for
+/// the comment shape: its comment-free twin): the item's and the module's
+/// `sig`, `body`, `deps`, `skeleton` and `body_bytes` are equal. Non-vacuity:
+/// the inputs parse cleanly and v2's `hash_item` (which keeps the members'
+/// order) tells some of them apart in each place holding an item.
+#[test]
+fn te1_use_list_permutations_keep_every_level_at_every_depth() {
+    on_big_stack(|| {
+        let mut parser = new_parser();
+        let mut failures = Vec::new();
+        let mut compared = 0;
+        for place in PLACES {
+            let mut v2_moved = 0;
+            for (shape, tree, plain) in te1_shapes() {
+                let canonical = &renderings(&plain, LAYOUTS[0])[0];
+                let (base_source, item) = placed(place, canonical);
+                let base = snapshot_with(&mut parser, &base_source);
+                assert!(!base.root_has_error, "{base_source}");
+                let base_item = item.map(|(kind, label)| {
+                    let index = index_named(&base, kind, label);
+                    (one(&base, kind, label), base.v2_digest(index))
+                });
+                let base_module = module(&base);
+                for layout in LAYOUTS {
+                    let all = renderings(&tree, layout);
+                    let distinct: BTreeSet<&String> = all.iter().collect();
+                    assert_eq!(distinct.len(), all.len(), "{shape}: distinct renderings");
+                    for rendering in &all {
+                        let (source, _) = placed(place, rendering);
+                        let snap = snapshot_with(&mut parser, &source);
+                        let what = format!("{place}, {shape}, {layout:?}:\n{source}");
+                        assert!(!snap.root_has_error, "{what}: parses cleanly");
+                        compared += 1;
+                        let moved = changed(&base_module, &module(&snap), &STABLE);
+                        if !moved.is_empty() {
+                            failures.push(format!("module {moved:?} changed: {what}"));
+                        }
+                        if let (Some((kind, label)), Some((levels, v2))) = (item, &base_item) {
+                            let index = index_named(&snap, kind, label);
+                            let other = one(&snap, kind, label);
+                            let moved = changed(levels, &other, &STABLE);
+                            if !moved.is_empty() {
+                                failures.push(format!("{kind} {label} {moved:?} changed: {what}"));
+                            }
+                            if snap.v2_digest(index) != *v2 {
+                                v2_moved += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            if place != "file level" {
+                assert!(
+                    v2_moved > 0,
+                    "{place}: v2 keeps the members' order, so some permutation moves it (non-vacuity)"
+                );
+            }
+        }
+        assert!(compared > 3_000, "renderings compared: {compared}");
+        let shown: Vec<&String> = failures.iter().take(8).collect();
+        assert!(
+            failures.is_empty(),
+            "{} unit(s) changed a level over {compared} renderings (first 8):\n{}",
+            failures.len(),
+            shown
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     });
 }

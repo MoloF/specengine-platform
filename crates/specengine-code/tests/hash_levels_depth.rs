@@ -9,8 +9,18 @@
 //!   three, as `marker_levels.rs`): a quote that scans for its context lines
 //!   per item is quadratic there.
 //!
+//! - docs/features/hash-levels-use-lists.md (5a-1c) TE-6:
+//!   `nested_use_lists_count_against_the_cap`: a `use` list of two or more
+//!   members is a run (N6) and counts against `MAX_USE_RUN_NESTING` with the
+//!   N4 and N5 runs around it; `hundred_thousand_nested_use_lists_are_refused_in_time`:
+//!   100 000 nested lists are refused on a 256 KiB thread within
+//!   [`DEEP_LIST_BOUND`]; `hundred_thousand_single_member_lists_are_hashed_in_time`:
+//!   a chain of 100 000 single-member lists forms no run and is hashed
+//!   within the same bound. M6 N6 runs not counted against the cap.
+//!
 //! Inputs are generated here, never committed.
 
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -169,4 +179,152 @@ fn quote_cost_is_linear() {
     );
     let packed = best_of_three(&one_line, ITEMS);
     assert_same_order("4 000 items on one line", packed, baseline, 10);
+}
+
+// ------------------------------------------------------- 5a-1c TE-6 (N6)
+
+/// `fn f() { use x::{z, a::{z, a::{ … {z, y} … }}}; <tail> }`: `lists` use
+/// lists nested one inside another, each of two members (an N6 run each).
+/// `tail` after the `use` (another `use` makes the declaration an N4 run).
+fn nested_use_lists(lists: usize, tail: &str) -> String {
+    assert!(lists >= 1);
+    format!(
+        "fn f() {{\n    use x::{}{{z, y}}{};\n    {tail}\n}}\n",
+        "{z, a::".repeat(lists - 1),
+        "}".repeat(lists - 1)
+    )
+}
+
+#[test]
+fn nested_use_lists_count_against_the_cap() {
+    let too_deep = LevelState::CannotVerify {
+        categories: vec![ErrorCategory::NestingTooDeep],
+    };
+    // Lists alone: MAX_USE_RUN_NESTING lists hash, one more is refused.
+    let (item, module, _) = levels_on(
+        nested_use_lists(MAX_USE_RUN_NESTING, "let _ = 0;"),
+        QUARTER_MB,
+    );
+    assert!(
+        matches!(item, LevelState::Hashed(_)),
+        "{MAX_USE_RUN_NESTING} nested lists are within the cap: {item:?}"
+    );
+    assert!(matches!(module, LevelState::Hashed(_)), "{module:?}");
+    for lists in [MAX_USE_RUN_NESTING + 1, MAX_USE_RUN_NESTING + 2, 2_000] {
+        let (item, module, has_error) =
+            levels_on(nested_use_lists(lists, "let _ = 0;"), QUARTER_MB);
+        assert!(!has_error);
+        assert_eq!(item, too_deep, "{lists} nested lists: the item");
+        assert_eq!(module, too_deep, "{lists} nested lists: the module");
+    }
+    // N4 and N6 counted together: the declaration and a second `use` are an
+    // N4 run, so one list fewer fits.
+    let (item, module, _) = levels_on(
+        nested_use_lists(MAX_USE_RUN_NESTING - 1, "use w;"),
+        QUARTER_MB,
+    );
+    assert!(
+        matches!(item, LevelState::Hashed(_)),
+        "an N4 run and {} lists: {item:?}",
+        MAX_USE_RUN_NESTING - 1
+    );
+    assert!(matches!(module, LevelState::Hashed(_)), "{module:?}");
+    let (item, module, _) = levels_on(nested_use_lists(MAX_USE_RUN_NESTING, "use w;"), QUARTER_MB);
+    assert_eq!(
+        item, too_deep,
+        "an N4 run and {MAX_USE_RUN_NESTING} lists: the item"
+    );
+    assert_eq!(module, too_deep, "the module");
+    // A list of one member is no run: it does not count.
+    let single = format!(
+        "fn f() {{\n    use x::{}{{z, y}}{};\n}}\n",
+        "{a::".repeat(500),
+        "}".repeat(500)
+    );
+    let (item, _, _) = levels_on(single, QUARTER_MB);
+    assert!(
+        matches!(item, LevelState::Hashed(_)),
+        "500 single-member lists around one run: {item:?}"
+    );
+}
+
+/// The level walks of 100 000 nested lists (parsing excluded) end within
+/// this bound, debug build included: a refusal at the cap walks 65 lists,
+/// a chain of single-member lists (no run) is walked once.
+const DEEP_LIST_BOUND: Duration = Duration::from_secs(5);
+
+/// Parses `source` and walks item 0's and the module's levels on a 256 KiB
+/// thread; the walks (not the parse) timed. Waits at most twelve times
+/// [`DEEP_LIST_BOUND`] for the thread, so a quadratic walk fails here
+/// instead of hanging the run.
+fn levels_in_time(what: &str, source: String) -> (LevelState, LevelState, Duration) {
+    let (sender, receiver) = mpsc::channel();
+    thread::Builder::new()
+        .name("level-lists".to_owned())
+        .stack_size(QUARTER_MB)
+        .spawn(move || {
+            let tree = RustParser::new()
+                .expect("grammar loads")
+                .parse(&source)
+                .expect("parse completes");
+            assert!(!tree.root_node().has_error(), "the input parses cleanly");
+            let start = Instant::now();
+            let item = item_levels(&tree, &source, &[0]).remove(0).expect("item 0");
+            let module = module_levels(&tree, &source);
+            let elapsed = start.elapsed();
+            let _ = sender.send((item, module, elapsed));
+        })
+        .expect("the thread spawns");
+    let (item, module, elapsed) = receiver
+        .recv_timeout(DEEP_LIST_BOUND * 12)
+        .unwrap_or_else(|error| {
+            panic!(
+                "{what}: the parse and the level walks must end within {:?}, without a panic: {error}",
+                DEEP_LIST_BOUND * 12
+            )
+        });
+    eprintln!("{what}: level walks {elapsed:?}");
+    assert!(
+        elapsed <= DEEP_LIST_BOUND,
+        "{what}: the level walks took {elapsed:?}, bound {DEEP_LIST_BOUND:?}"
+    );
+    (item, module, elapsed)
+}
+
+#[test]
+fn hundred_thousand_nested_use_lists_are_refused_in_time() {
+    // A walk past the cap (M6) copies every member's buffer up through
+    // every list and never ends in time.
+    let (item, module, _) = levels_in_time(
+        "100 000 nested two-member lists",
+        nested_use_lists(100_000, "let _ = 0;"),
+    );
+    let too_deep = LevelState::CannotVerify {
+        categories: vec![ErrorCategory::NestingTooDeep],
+    };
+    assert_eq!(item, too_deep, "the item");
+    assert_eq!(module, too_deep, "the module");
+}
+
+/// `fn f() { use x::{a::{a::{ … {z} … }}}; }`: `lists` single-member lists
+/// nested one inside another. None is a run (N6 needs two members), so the
+/// cap never trips: the item and the module are hashed, in linear time
+/// (a run search that copies the cursor per list is quadratic here).
+#[test]
+fn hundred_thousand_single_member_lists_are_hashed_in_time() {
+    const LISTS: usize = 100_000;
+    let source = format!(
+        "fn f() {{\n    use x::{}{{z}}{};\n}}\n",
+        "{a::".repeat(LISTS - 1),
+        "}".repeat(LISTS - 1)
+    );
+    let (item, module, _) = levels_in_time("100 000 nested single-member lists", source);
+    assert!(
+        matches!(item, LevelState::Hashed(_)),
+        "no run, no cap: the item {item:?}"
+    );
+    assert!(
+        matches!(module, LevelState::Hashed(_)),
+        "no run, no cap: the module {module:?}"
+    );
 }

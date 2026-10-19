@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [crates/specengine-code]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-20
 ---
 
 # specengine-code — layer A: Rust and RON parsing, AST hash, markers, Bevy detector
 
-Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A default workspace member in the core graph: it never depends on `ra_ap_*`, `syn` or Bevy (`specengine-eval` `tests/build_graph.rs` asserts it). Pins: `tree-sitter =0.27.0`, `tree-sitter-rust =0.24.2` (ABI 15), `blake3`. Callers: `specengine-eval`, the CLI (`spec index`, `spec refs`, `spec lock`, `spec verify`, `spec resolve`), `specengine-ra`'s tests (a dev-dependency: `layer_c`, `analyze_file`). `CODE_INDEX_FORMAT` (4) stamps every rule whose output the code index stores: `docs/canon/symbol-index.md` "Analyzer stamp". Target units, marker grammar, RON binding and ambiguity: `docs/canon/code-identity.md`; in-file twins and signatures: `docs/canon/symbol-names.md`; hashes: `docs/canon/code-hash.md`.
+Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A default workspace member in the core graph: it never depends on `ra_ap_*`, `syn` or Bevy (`specengine-eval` `tests/build_graph.rs` asserts it). Pins: `tree-sitter =0.27.0`, `tree-sitter-rust =0.24.2` (ABI 15), `blake3`. Callers: `specengine-eval`, the CLI (`spec index`, `spec refs`, `spec lock`, `spec verify`, `spec resolve`), `specengine-ra`'s tests (a dev-dependency: `layer_c`, `analyze_file`). `CODE_INDEX_FORMAT` (5) stamps every rule whose output the code index stores: `docs/canon/symbol-index.md` "Analyzer stamp". Target units, marker grammar, RON binding and ambiguity: `docs/canon/code-identity.md`; in-file twins and signatures: `docs/canon/symbol-names.md`; hashes: `docs/canon/code-hash.md`.
 
 ## Modules
 
@@ -16,7 +16,7 @@ Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A defaul
 |---|---|
 | `grammar` | `TREE_SITTER_VERSION`, `TREE_SITTER_RUST_VERSION` (a test checks them against the built artefact), `grammar_info()` (ABI), `RustParser`, `NODE_TYPES` (the body-table pin) |
 | `hash` | recipe `specengine-hash/v2` ("Hash recipe"): `RECIPE` header, iterative walk. `hash_item` → `HashState`: a `Digest`, or `cannot_verify` with an `ErrorCategory` for an item with `has_error()` or a `use` run nested past `MAX_USE_RUN_NESTING = 64` (`nesting_too_deep`) — never hashed; `NotHashed` only from the binder. `normalize` returns `false` for an incomplete stream |
-| `levels` | recipe `specengine-hash/v3`: `LevelState`, `LevelHashes` (`is_trivial`, `TRIVIAL_BODY_BYTES`), `module_levels`, `BODY_FIELDS` / `body_nodes`, `call_targets`; N5, the CR rule; one explicit-stack pass per unit |
+| `levels` | recipe `specengine-hash/v3`: `LevelState`, `LevelHashes` (`is_trivial`, `TRIVIAL_BODY_BYTES`), `module_levels`, `BODY_FIELDS` / `body_nodes`, `call_targets`; N5, N6, the CR rule; one explicit-stack pass per unit |
 | `comments` | `comment_ranges`, `strip_comments` (`///` included) — the comment perturbation |
 | `items` | `analyze_file` / `analyze_tree` → `FileAnalysis`: items (`ITEM_KINDS`; members `MEMBER_KINDS`) with their hash state, `mod` declarations (`MOD_KIND`), `#[path]` attributes; collected on an explicit stack; `hashed`; `ItemRecord.cfg`, the `#[cfg(..)]` chain outermost first |
 | `qpath` | `file_role` / `TargetIndex` (`primary()` too) over a caller's `PackageTargets` (`cargo metadata`, else `layout_targets`): `FileRole` (`CrateRoot`, `Module`, `Unrooted`) with its `Unit` — none for the primary target, `<kind>:<name>`, `shared:<dir>`; `qpath`, `resolve_path_attribute`; `QPath::segments`, `suffixes(discriminator)` (the index's suffix rows, never a split); one `Ambiguity` per item (`PathAttribute`, `Unrooted`, `Duplicate`), reported, never guessed |
@@ -38,7 +38,7 @@ Layer A of 05 §5.1: tree-sitter only — no build, no name resolution. A defaul
 
 ## Hash recipe
 
-`specengine-hash/v2`, the whole-item hash (`hash`), and `specengine-hash/v3`, an item's levels `sig`, `body`, `deps` and fingerprints `skeleton`, `quote`, `body_bytes` beside it (`levels`): `docs/canon/code-hash.md` (formulas, N1-N5, the CR rule, traps, limits). A RON value's hash (`ron::value_hashes`): `docs/canon/code-hash-ron.md`.
+`specengine-hash/v2`, the whole-item hash (`hash`), and `specengine-hash/v3`, an item's levels `sig`, `body`, `deps` and fingerprints `skeleton`, `quote`, `body_bytes` beside it (`levels`): `docs/canon/code-hash.md` (formulas, N1-N6, the CR rule, traps, limits). A RON value's hash (`ron::value_hashes`): `docs/canon/code-hash-ron.md`.
 
 ## Known limits and open minors
 

@@ -1328,7 +1328,9 @@ impl Child<'_> {
     }
 }
 
-/// The judged figures below 100.0 (L9), one line each.
+/// The judged figures below 100.0 (L9), one line each; from
+/// docs/features/hash-levels-use-lists.md (5a-1c, Q3) the module figures
+/// `levels.module_stable_pct.<p>.<f>` are judged too.
 fn shortfalls(levels: &Value, value_hash: &Value) -> Vec<String> {
     let mut out = Vec::new();
     for row in PERTURBATIONS {
@@ -1336,6 +1338,14 @@ fn shortfalls(levels: &Value, value_hash: &Value) -> Vec<String> {
             let value = &levels["stable_pct"][row][field];
             if value.as_f64() != Some(100.0) {
                 out.push(format!("levels.stable_pct.{row}.{field} = {value}"));
+            }
+        }
+    }
+    for row in MODULE_PERTURBATIONS {
+        for field in MODULE_FIELDS {
+            let value = &levels["module_stable_pct"][row][field];
+            if value.as_f64() != Some(100.0) {
+                out.push(format!("levels.module_stable_pct.{row}.{field} = {value}"));
             }
         }
     }
@@ -1548,4 +1558,166 @@ fn te1_pilot_a() {
 #[ignore = "TE-1: needs SPECENGINE_PILOT_B; manual, release, read-only run over a real corpus"]
 fn te1_pilot_b() {
     te1("pilot-b");
+}
+
+// ------------------------------------------------- 5a-1c TE-7, TE-10 (N6)
+//
+// docs/features/hash-levels-use-lists.md: the module figures are judged
+// (Q3), and the fixture `fixtures/hash-levels/src/` (its `use_lists.rs`
+// lists out of rustfmt's order) leaves no row in `levels-unstable.json`.
+
+/// `result.levels` with every judged figure at 100.0 and `renamed` kept in
+/// every field: what a clean TE-1 run prints.
+fn clean_levels() -> Value {
+    let mut stable = serde_json::Map::new();
+    for row in PERTURBATIONS {
+        let fields: serde_json::Map<String, Value> = FIELDS
+            .iter()
+            .map(|field| ((*field).to_owned(), json!(100.0)))
+            .collect();
+        stable.insert(row.to_owned(), Value::Object(fields));
+    }
+    let mut modules = serde_json::Map::new();
+    for row in MODULE_PERTURBATIONS {
+        let fields: serde_json::Map<String, Value> = MODULE_FIELDS
+            .iter()
+            .map(|field| ((*field).to_owned(), json!(100.0)))
+            .collect();
+        modules.insert(row.to_owned(), Value::Object(fields));
+    }
+    let kept: serde_json::Map<String, Value> = FIELDS
+        .iter()
+        .map(|field| ((*field).to_owned(), json!(7)))
+        .collect();
+    json!({
+        "stable_pct": stable,
+        "module_stable_pct": modules,
+        "rename": { "renamed": 7, "kept": kept },
+    })
+}
+
+/// TE-7 (Q3): `shortfalls` names every module figure below 100.0, and only
+/// those; a clean run has none. M7 the module loop removed.
+#[test]
+fn shortfalls_name_the_module_figures_below_100() {
+    let value_hash = json!({ "crlf_stable_pct": 100.0, "bound_stable_pct": null });
+    assert_eq!(
+        shortfalls(&clean_levels(), &value_hash),
+        Vec::<String>::new(),
+        "a clean run"
+    );
+    for row in MODULE_PERTURBATIONS {
+        for field in MODULE_FIELDS {
+            for (value, shown) in [(json!(79.6), "79.6"), (Value::Null, "null")] {
+                let mut levels = clean_levels();
+                levels["module_stable_pct"][row][field] = value;
+                assert_eq!(
+                    shortfalls(&levels, &value_hash),
+                    vec![format!("levels.module_stable_pct.{row}.{field} = {shown}")],
+                    "module_stable_pct.{row}.{field} at {shown}"
+                );
+            }
+        }
+    }
+    // pilot A's first TE-1 run (79.6 % module bodies under both rustfmt
+    // passes): two shortfalls, the item figures clean.
+    let mut levels = clean_levels();
+    for row in FMT_ROWS {
+        levels["module_stable_pct"][row]["body"] = json!(79.6);
+    }
+    assert_eq!(
+        shortfalls(&levels, &value_hash),
+        vec![
+            "levels.module_stable_pct.fmt_default.body = 79.6".to_owned(),
+            "levels.module_stable_pct.fmt_contrast.body = 79.6".to_owned(),
+        ]
+    );
+}
+
+/// TE-10: `ast-hash --pilot` over a scratch copy of
+/// `fixtures/hash-levels/src/` (unsorted `use` lists at file level, in
+/// function bodies, inline mods and a method) writes zero rows in
+/// `levels-unstable.json`, module rows included: every item and module
+/// field judged holds under both rustfmt passes, comment stripping and the
+/// neighbour edit. Needs rustfmt (`SPECENGINE_RUSTFMT` or `rustup which`).
+/// M1 N6 removed.
+#[test]
+#[ignore = "TE-10 (5a-1c): needs rustfmt; cargo nextest run -p specengine-eval --test hash_levels_eval te10 --run-ignored only"]
+fn te10_hash_levels_sources_leave_no_unstable_row() {
+    let rustfmt = toolchain_binary("SPECENGINE_RUSTFMT", "rustfmt");
+    let scratch = Scratch::new("te10");
+    let corpus = scratch.join("corpus");
+    let source = fixture("hash-levels").join("src");
+    fs::create_dir_all(&corpus).expect("the scratch corpus");
+    let mut files = 0;
+    for entry in fs::read_dir(&source).expect("fixtures/hash-levels/src") {
+        let path = entry.expect("entry").path();
+        if path.extension().is_some_and(|e| e == "rs") {
+            fs::copy(&path, corpus.join(path.file_name().expect("a name"))).expect("copy");
+            files += 1;
+        }
+    }
+    assert!(
+        corpus.join("use_lists.rs").is_file(),
+        "the N6 fixture file is in the corpus"
+    );
+    let out = scratch.join("out");
+    let output = eval()
+        .env("SPECENGINE_RUSTFMT", &rustfmt)
+        .args(["ast-hash", "--pilot"])
+        .arg(&corpus)
+        .arg("--out")
+        .arg(&out)
+        .output()
+        .expect("specengine-eval runs");
+    let envelope = envelope(
+        &output,
+        "ast-hash --pilot <copy of fixtures/hash-levels/src>",
+    );
+    let result = &envelope["result"];
+    assert_eq!(
+        result["detail"]["rustfmt"]["available"],
+        true,
+        "TE-10 counts only with rustfmt ({})",
+        rustfmt.display()
+    );
+    let levels = &result["levels"];
+    assert_eq!(
+        count(&levels["modules"]["hashed"], "levels.modules.hashed"),
+        files,
+        "every file module hashed"
+    );
+    assert!(
+        count(&levels["hashed"], "levels.hashed") >= 50,
+        "the fixture's items hashed: {}",
+        levels["hashed"]
+    );
+    let mut judged = Vec::new();
+    for row in MODULE_PERTURBATIONS {
+        for field in MODULE_FIELDS {
+            let value = &levels["module_stable_pct"][row][field];
+            if value.as_f64() != Some(100.0) {
+                judged.push(format!("levels.module_stable_pct.{row}.{field} = {value}"));
+            }
+        }
+    }
+    for row in PERTURBATIONS {
+        for field in JUDGED {
+            let value = &levels["stable_pct"][row][field];
+            if value.as_f64() != Some(100.0) {
+                judged.push(format!("levels.stable_pct.{row}.{field} = {value}"));
+            }
+        }
+    }
+    let rows = unstable_rows(&out, "pilot");
+    assert!(
+        rows == 0 && judged.is_empty(),
+        "levels-unstable.json: {rows} rows; judged figures below 100.0: {judged:?}\n{}",
+        fs::read_to_string(
+            out.join("ast-hash")
+                .join("pilot")
+                .join("levels-unstable.json")
+        )
+        .unwrap_or_default()
+    );
 }

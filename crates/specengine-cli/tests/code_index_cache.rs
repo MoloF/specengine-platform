@@ -414,13 +414,15 @@ fn code_format_history_pins_the_code_index_dump() {
 
 /// bevy-roles "Formats" (F1); bevy-roles-reads B5 (K2, the owner's
 /// pre-approval: a role subject's qualified type is stored compacted, so
-/// the stamp moves). M: `CODE_INDEX_FORMAT` kept at 3; an earlier line
-/// edited. The stamp is 4; the history is 6b-1's two lines and 10a-1's
-/// third verbatim and exactly one `4 <hash>`; its header names code-bevy as
-/// hashed after code-index.
+/// the stamp moved to 4); docs/features/hash-levels-use-lists.md TE-9
+/// (the level recipe amended in place under the same `level_header()`, so
+/// the stamp moves to 5). M: `CODE_INDEX_FORMAT` kept
+/// at 4; an earlier line edited. The stamp is 5; the history is 6b-1's two
+/// lines, 10a-1's third and bevy-roles-reads' fourth verbatim and exactly
+/// one `5 <hash>`; its header names code-bevy as hashed after code-index.
 #[test]
-fn code_format_history_keeps_lines_1_to_3_and_adds_4() {
-    assert_eq!(specengine_code::CODE_INDEX_FORMAT, 4);
+fn code_format_history_keeps_lines_1_to_4_and_adds_5() {
+    assert_eq!(specengine_code::CODE_INDEX_FORMAT, 5);
     let history = read_text(
         &repository_root(),
         "crates/specengine-cli/tests/code_format_history.txt",
@@ -438,22 +440,23 @@ fn code_format_history_keeps_lines_1_to_3_and_adds_4() {
         .lines()
         .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
         .collect();
-    assert_eq!(lines.len(), 4, "{history}");
+    assert_eq!(lines.len(), 5, "{history}");
     assert_eq!(
-        lines[..3],
+        lines[..4],
         [
             "1 3eac6715cece86e4385c82367d489ccc24d4a7896044accb18a713ec344a3a0e",
             "2 206f941120e31b317e822f026607d6bbccd5efdf77a30f338446578d7fdc275a",
             "3 49cfadfed7e012013a20e19453f7d70a6a4b50530c9febad2f602e2b86f4889a",
+            "4 8a7cd52d4c4e94d09697c39535e786037a36a60595a5ebf22f6a0a35cffef276",
         ],
-        "lines 1 to 3 verbatim"
+        "lines 1 to 4 verbatim"
     );
-    let (format, hash) = lines[3].split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "4", "{history}");
+    let (format, hash) = lines[4].split_once(' ').expect("`<format> <hash>`");
+    assert_eq!(format, "5", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {}",
-        lines[3]
+        lines[4]
     );
 }
 

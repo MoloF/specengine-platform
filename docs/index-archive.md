@@ -30,6 +30,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped
 - [docs/features/hash-levels-eval.md](features/hash-levels-eval.md) shipped
 - [docs/features/hash-levels-ron.md](features/hash-levels-ron.md) shipped
+- [docs/features/hash-levels-use-lists.md](features/hash-levels-use-lists.md) shipped
 - [docs/features/hash-levels.md](features/hash-levels.md) shipped
 - [docs/features/health-code-ui.md](features/health-code-ui.md) shipped
 - [docs/features/health-code.md](features/health-code.md) shipped

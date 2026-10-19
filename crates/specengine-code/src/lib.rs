@@ -173,4 +173,9 @@ pub use ron::{
 /// joined by ` as ` (`<Foo<A, B> as Tr>::f` stored `<Foo<A,B> as
 /// Tr>::f`), so a spaced one meets its suffix. Rows stored under 3
 /// re-derive once.
-pub const CODE_INDEX_FORMAT: u32 = 4;
+///
+/// 5: 5a-1c's N6: the level recipe was amended in place (sorted
+/// `use_list` members) under the same [`LEVEL_RECIPE`], so
+/// [`level_header`] did not move with it; cached level digests stored
+/// under 4 re-derive once.
+pub const CODE_INDEX_FORMAT: u32 = 5;

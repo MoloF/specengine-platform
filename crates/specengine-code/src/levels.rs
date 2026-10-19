@@ -20,8 +20,13 @@
 //!   attributes ‖ itself; a member carrying `#[macro_use]`, or a
 //!   `#[cfg_attr(pred, ..)]` with `macro_use` among the attributes after
 //!   `pred`, breaks the run and stays in place (macro scope follows textual
-//!   order). Runs nest at most [`MAX_USE_RUN_NESTING`] deep, else the unit
-//!   is `nesting_too_deep`.
+//!   order); and **N6**: the named non-comment children of a `use_list`,
+//!   when two or more, form a run emitted between the list's `{` and `}` in
+//!   the byte order of their own walks, each member's nested lists sorted
+//!   first; comments inside the braces stay invisible, and no member is
+//!   dropped, merged or rewritten (duplicates kept). Runs of every class
+//!   nest at most [`MAX_USE_RUN_NESTING`] deep, else the unit is
+//!   `nesting_too_deep`.
 //! - **CR rule**: in every stream here and in `body_bytes`, a CR right before
 //!   an LF inside a leaf's text (in `quote`, inside the quoted text) is
 //!   dropped, so an LF and a CRLF checkout read alike.
@@ -76,6 +81,10 @@ use crate::hash::{
 
 /// Name of the level recipe; changes only with the recipe itself, and once
 /// a lock records its digests, only together with a rebase of every lock.
+///
+/// History: sorted `use_list` members (N6) joined `v3` in place, before any
+/// lock recorded a level digest: every stream of an input without a
+/// `use_list` of two or more members is unchanged.
 pub const LEVEL_RECIPE: &str = "specengine-hash/v3";
 
 /// An item whose `body_bytes` is below this is trivial ([`LevelHashes::is_trivial`]).
@@ -589,6 +598,9 @@ enum Place {
 struct Open<'t> {
     frame: Frame<'t>,
     region: Region,
+    /// The ancestor itself when it is a `use_list`: its members (named
+    /// non-comment children) form a run when two or more (N6).
+    list: Option<Node<'t>>,
 }
 
 /// One root's walk: v2's iterative pre-order over a cursor that never
@@ -601,7 +613,8 @@ struct Walk<'t> {
     /// Still inside the file's leading inner attributes ([`Place::Module`]).
     leading: bool,
     open: Vec<Open<'t>>,
-    /// The cursor stands on a run's last declaration, the run walked: move on.
+    /// The cursor stands on a run's last declaration or member, the run
+    /// walked: move on.
     past_run: bool,
 }
 
@@ -651,7 +664,7 @@ impl<'t> Walk<'t> {
     }
 
     /// Moves the cursor along its siblings to the node `id` (a run's last
-    /// declaration), or to the last sibling.
+    /// declaration or member), or to the last sibling.
     fn move_to_sibling(&mut self, id: usize) {
         while self.cursor.node().id() != id && self.cursor.goto_next_sibling() {}
     }
@@ -675,7 +688,10 @@ impl<'t> Walk<'t> {
                         && parent.is_some_and(|open| open.frame.drops(current.kind()))
                     {
                         // `{` `}` of a transparent block or token tree, `;` of a transparent statement.
-                    } else if let Some(run) = parent.and_then(|_| run_at(current, source)) {
+                    } else if let Some(run) = parent.and_then(|open| match open.list {
+                        Some(list) => list_run(list, current),
+                        None => run_at(current, source),
+                    }) {
                         self.move_to_sibling(run.last);
                         self.past_run = true;
                         return Some(RunWalk::new(run, region));
@@ -683,9 +699,11 @@ impl<'t> Walk<'t> {
                         parent.filter(|open| open.frame.transparent_child(current, field))
                     {
                         if self.cursor.goto_first_child() {
+                            // A transparent wrapper is never a `use_list`.
                             self.open.push(Open {
                                 frame: open.frame.child(current, field, true),
                                 region,
+                                list: None,
                             });
                             continue;
                         }
@@ -698,7 +716,11 @@ impl<'t> Walk<'t> {
                                 Some(open) => open.frame.child(current, field, false),
                                 None => Frame::root(current.kind()),
                             };
-                            self.open.push(Open { frame, region });
+                            self.open.push(Open {
+                                frame,
+                                region,
+                                list: (current.kind() == "use_list").then_some(current),
+                            });
                             continue;
                         }
                         out.close(region);
@@ -825,8 +847,9 @@ fn first_code_child(node: Node) -> Option<Node> {
         .find(|child| !is_comment(*child))
 }
 
-/// A run to sort: each member's nodes (attributes, then the declaration)
-/// and the last declaration, after which the walk goes on.
+/// A run to sort: each member's nodes (attributes, then the declaration;
+/// a `use_list`'s member, its clause alone) and the last member's last
+/// node, after which the walk goes on.
 struct Run<'t> {
     members: Vec<Vec<Node<'t>>>,
     last: usize,
@@ -893,6 +916,38 @@ fn run_at<'t>(node: Node<'t>, source: &[u8]) -> Option<Run<'t>> {
 fn member<'t>(mut attributes: Vec<Node<'t>>, declaration: Node<'t>) -> Vec<Node<'t>> {
     attributes.push(declaration);
     attributes
+}
+
+/// N6: the run of `list`, a `use_list`, met at its child `first`, its first
+/// member (a later one is only ever reached inside the run): the list's
+/// named children from `first` on, comments skipped, when two or more; its
+/// `{`, `,` and `}` are anonymous. A list with fewer than two named children
+/// (a comment is named) is told apart in O(1); any other is read once,
+/// through a fresh cursor on the list: never a copy of the walk's cursor,
+/// whose stack is as deep as the input, and no node asks for its parent or
+/// its siblings.
+fn list_run<'t>(list: Node<'t>, first: Node<'t>) -> Option<Run<'t>> {
+    if !first.is_named() || is_comment(first) || list.named_child_count() < 2 {
+        return None;
+    }
+    let mut members: Vec<Vec<Node<'t>>> = Vec::new();
+    let mut last = first;
+    let mut cursor = list.walk();
+    let mut more = cursor.goto_first_child();
+    while more {
+        let candidate = cursor.node();
+        if candidate.id() == first.id() {
+            members.push(vec![first]);
+        } else if !members.is_empty() && candidate.is_named() && !is_comment(candidate) {
+            members.push(vec![candidate]);
+            last = candidate;
+        }
+        more = cursor.goto_next_sibling();
+    }
+    (members.len() > 1).then(|| Run {
+        members,
+        last: last.id(),
+    })
 }
 
 /// A run being walked: each member's nodes walked as roots into its own

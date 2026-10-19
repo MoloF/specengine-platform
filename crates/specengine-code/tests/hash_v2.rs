@@ -503,3 +503,42 @@ fn unattributed_use_run_stream_is_pinned() {
         literal(&stream)
     );
 }
+
+// ---------------------------------------------------------------- 5a-1c: v2 keeps a list's order
+
+/// docs/features/hash-levels-use-lists.md TE-5 (Q4): N6 is v3's alone. v2's
+/// `hash_item` still tells the members of a `use` list apart by their order,
+/// at every depth and in a function and an inline `mod`, and the digest of
+/// such an item is byte for byte `main`'s (pinned before 5a-1c, on the
+/// commit before it). M5 N6 added to `hash.rs`.
+#[test]
+fn use_list_member_order_still_moves_the_v2_hash() {
+    assert_different_pairs(&[
+        ("fn f() { use a::{b, c}; }", "fn f() { use a::{c, b}; }"),
+        ("mod m { use a::{b, c}; }", "mod m { use a::{c, b}; }"),
+        (
+            "fn f() { use a::{x::{b, c}, d}; }",
+            "fn f() { use a::{x::{c, b}, d}; }",
+        ),
+        (
+            "mod m { use a::{self, *, b as c}; }",
+            "mod m { use a::{b as c, *, self}; }",
+        ),
+    ]);
+    for (source, pinned) in [
+        (
+            "fn f() { use a::{c, b}; }",
+            "8aff13bbc880f05ca7f1cf1a3b347b65cfd7281314c698b0e05ecf67085ea3be",
+        ),
+        (
+            "mod m {\n    use a::{self, x::{c, b}, *, d as e};\n}",
+            "1b910288912fea1d6c9fd21fcdeaa169659ddcbdcfb2e7e01199c771a3473545",
+        ),
+    ] {
+        assert_eq!(
+            digest(source).to_hex(),
+            pinned,
+            "v2's digest of {source:?} moved: every recorded v2 digest of an item holding a use list changed"
+        );
+    }
+}

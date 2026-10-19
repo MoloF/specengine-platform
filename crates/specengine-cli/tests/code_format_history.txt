@@ -7,8 +7,10 @@
 # A changed code dump needs a new CODE_INDEX_FORMAT and a new line; earlier
 # lines stay verbatim. 4 (docs/features/bevy-roles-reads.md, B5, K2): the
 # same two dumps under the new stamp, a role subject's qualified type
-# compacted.
+# compacted. 5 (docs/features/hash-levels-use-lists.md, TE-9): the
+# same two dumps under the new stamp, the level recipe amended in place.
 1 3eac6715cece86e4385c82367d489ccc24d4a7896044accb18a713ec344a3a0e
 2 206f941120e31b317e822f026607d6bbccd5efdf77a30f338446578d7fdc275a
 3 49cfadfed7e012013a20e19453f7d70a6a4b50530c9febad2f602e2b86f4889a
 4 8a7cd52d4c4e94d09697c39535e786037a36a60595a5ebf22f6a0a35cffef276
+5 5ab64e6e779803b6708fd4f2750e701e11db3c92a1477710bc7ed9135973f640

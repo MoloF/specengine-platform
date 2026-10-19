@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-code, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-20
 ---
 
 # Symbol index: stored code rows, the refresh, `spec index`, `spec refs`
@@ -50,7 +50,7 @@ Indexes `symbols_by_qpath`, `symbols_by_name`, `symbol_suffixes_by_suffix`, `cod
 
 ## Analyzer stamp
 
-`CODE_INDEX_FORMAT` (`specengine-code`), 4: the binding, naming, discriminator, signature, marker, mention and role rules a row holds (`symbol-names.md`, `code-roles.md`); `\` becomes `/` in stored directories and package labels only where `MAIN_SEPARATOR` is `\`; any change to one bumps it (all re-derived); `level_header()` covers the levels. CLI `tests/code_format_history.txt`: `<CODE_INDEX_FORMAT> <BLAKE3 of fixtures/code-index's code-table dump, from 3 on then fixtures/code-bevy's, roots masked>`; a changed dump under a kept stamp is red. The store's `format_history.txt` lines 10-11 hash spec-a, spec-b and a stub analyzer's rows.
+`CODE_INDEX_FORMAT`, 5: the binding, naming, discriminator, signature, marker, mention and role rules a row holds (`symbol-names.md`, `code-roles.md`); `\` becomes `/` in stored directories and package labels only where `MAIN_SEPARATOR` is `\`; any change to one, or a level recipe amended in place, bumps it (all re-derived); `level_header()` covers a renamed one. CLI `tests/code_format_history.txt`: `<CODE_INDEX_FORMAT> <BLAKE3 of fixtures/code-index's code-table dump, from 3 on then fixtures/code-bevy's, roots masked>`; a changed dump under a kept stamp is red. The store's `format_history.txt` lines 10-11 hash spec-a, spec-b and a stub analyzer's rows.
 
 ## spec refs and spec index
 

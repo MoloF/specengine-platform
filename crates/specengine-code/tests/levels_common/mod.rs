@@ -221,6 +221,9 @@ pub struct Snapshot {
     /// The item's subtree holds an N5 run (two or more `mod x;` or
     /// `extern crate` siblings in a row): where v2's walk and v3's differ.
     pub n5: Vec<bool>,
+    /// The item's subtree holds an N6 list (a `use_list` of two or more
+    /// members): where v2's walk and v3's differ too (5a-1c).
+    pub n6: Vec<bool>,
     pub root_has_error: bool,
 }
 
@@ -254,6 +257,7 @@ pub fn snapshot_with(parser: &mut RustParser, source: &str) -> Snapshot {
     let mut keys: Vec<Key> = Vec::new();
     let mut spans = Vec::new();
     let mut n5 = Vec::new();
+    let mut n6 = Vec::new();
     for item in &analysis.items {
         let mut key = Key {
             kind: item.kind.clone(),
@@ -275,6 +279,7 @@ pub fn snapshot_with(parser: &mut RustParser, source: &str) -> Snapshot {
         let node = item_node(root, &item.byte_range, &item.kind);
         spans.push(span_of(node));
         n5.push(has_n5_run(node));
+        n6.push(has_n6_list(node));
     }
     Snapshot {
         keys,
@@ -297,6 +302,7 @@ pub fn snapshot_with(parser: &mut RustParser, source: &str) -> Snapshot {
         module: unit_of(&module_levels(&tree, source)),
         spans,
         n5,
+        n6,
         root_has_error: root.has_error(),
     }
 }
@@ -406,6 +412,28 @@ pub fn has_n5_run(node: Node) -> bool {
             }
             stack.push(child);
         }
+    }
+    false
+}
+
+/// A `use_list` with two or more members (named children, comments not
+/// counted) anywhere in `node`'s subtree: the N6 run (5a-1c), whose members
+/// walk3 emits in the byte order of their walks and v2 in source order.
+pub fn has_n6_list(node: Node) -> bool {
+    let mut stack = vec![node];
+    while let Some(parent) = stack.pop() {
+        let mut cursor = parent.walk();
+        if parent.kind() == "use_list"
+            && parent
+                .named_children(&mut cursor)
+                .filter(|child| !is_comment(*child))
+                .count()
+                >= 2
+        {
+            return true;
+        }
+        let mut cursor = parent.walk();
+        stack.extend(parent.children(&mut cursor));
     }
     false
 }

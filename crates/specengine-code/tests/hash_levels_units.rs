@@ -1420,3 +1420,169 @@ fn cfg_attr_breaks_the_run_only_for_a_macro_use_attribute() {
         assert!(!joins(attribute), "{attribute} breaks the run");
     }
 }
+
+// ======================================================= 5a-1c (N6) TE-3, TE-4, TE-8
+//
+// docs/features/hash-levels-use-lists.md: the members of a `use_list` are a
+// run (N6). TE-1 (every permutation keeps every level) and TE-2 (the
+// committed rustfmt variants) are `hash_levels_props.rs`'; TE-6 (depth) is
+// `hash_levels_depth.rs`'; TE-5 (v2 untouched) is `hash_v2.rs`'.
+
+/// An item by `kind` and `label`.
+type ItemName = (&'static str, &'static str);
+
+/// The places of a `use` tree: (what, source, the item holding it); the
+/// file-level place holds no item.
+fn use_places(tree: &str) -> [(&'static str, String, Option<ItemName>); 3] {
+    [
+        (
+            "file level",
+            format!("use {tree};\n\nfn tail() {{}}\n"),
+            None,
+        ),
+        (
+            "a function body",
+            format!("fn host() {{\n    use {tree};\n    let _ = 0;\n}}\n"),
+            Some(("function_item", "host")),
+        ),
+        (
+            "an inline mod",
+            format!("mod hub {{\n    use {tree};\n    fn g() {{}}\n}}\n"),
+            Some(("mod_item", "hub")),
+        ),
+    ]
+}
+
+/// Every unit holding `use {tree};` in each place: the item (if any) and the
+/// module, each with its name.
+fn use_units(tree: &str) -> Vec<(String, Levels)> {
+    let mut out = Vec::new();
+    for (place, source, item) in use_places(tree) {
+        let snap = snapshot(&source);
+        assert!(!snap.root_has_error, "{source}: parses cleanly");
+        if let Some((kind, label)) = item {
+            out.push((format!("{place}: {kind} {label}"), one(&snap, kind, label)));
+        }
+        out.push((format!("{place}: the module"), module(&snap)));
+    }
+    out
+}
+
+/// The fields among `names` that differ between the units of `a` and `b`,
+/// unit by unit.
+fn use_changes(a: &str, b: &str, names: &[&str]) -> Vec<(String, Vec<String>)> {
+    use_units(a)
+        .into_iter()
+        .zip(use_units(b))
+        .map(|((what, x), (_, y))| (what, changed(&x, &y, names)))
+        .collect()
+}
+
+/// TE-3: every edit that changes what a list imports changes `body` of the
+/// item and of the module, in every place, and nothing but the body
+/// streams (`sig` and `deps` hold: no call, no signature). M3 duplicates
+/// removed after sorting.
+#[test]
+fn te3_use_list_edits_change_the_body() {
+    for (edit, before, after) in [
+        ("a member removed", "x::{a, b, c}", "x::{a, b}"),
+        ("a member renamed", "x::{a, b, c}", "x::{a, b, d}"),
+        ("an alias changed", "x::{a as p, b}", "x::{a as q, b}"),
+        ("an alias dropped", "x::{a as p, b}", "x::{a, b}"),
+        ("a glob swapped for a name", "x::{a, *}", "x::{a, b}"),
+        ("self removed", "x::{self, a, b}", "x::{a, b}"),
+        (
+            "a member moved between nested lists",
+            "x::{a::{p, q}, b::{r, s}}",
+            "x::{a::{p, r}, b::{q, s}}",
+        ),
+        (
+            "a member moved one list out",
+            "x::{a::{p, q}, b}",
+            "x::{a::{p}, b, q}",
+        ),
+        ("a duplicate added", "x::{a, b}", "x::{a, b, b}"),
+        (
+            "a duplicate added out of order",
+            "x::{b, a}",
+            "x::{b, a, b}",
+        ),
+        ("the path of the list changed", "x::{a, b}", "y::{a, b}"),
+    ] {
+        for (what, moved) in use_changes(before, after, &ALL) {
+            assert!(
+                moved.iter().any(|f| f == "body"),
+                "{edit}, {what}: `{before}` -> `{after}` must change body, changed {moved:?}"
+            );
+            assert!(
+                !moved.iter().any(|f| f == "sig" || f == "deps"),
+                "{edit}, {what}: `{before}` -> `{after}` changed {moved:?}: only the body streams"
+            );
+        }
+    }
+}
+
+/// TE-4: `skeleton` sorts a list by its members' masked walks: two lists
+/// whose members mask alike are equal in `skeleton`, whatever their names'
+/// order, while `body` tells them apart. M4 the masked stream sorted by the
+/// normal walks.
+#[test]
+fn te4_use_list_skeleton_sorts_by_the_masked_walks() {
+    let base = "x::{a::{p, q}, b::{r}}";
+    for other in [
+        "x::{z::{p, q}, b::{r}}",
+        "x::{b::{r}, z::{p, q}}",
+        "x::{a::{q, p}, b::{r}}",
+        "x::{y::{r}, a::{p, q}}",
+    ] {
+        for (what, moved) in use_changes(base, other, &STABLE) {
+            assert!(
+                !moved.iter().any(|f| f == "skeleton"),
+                "{what}: `{base}` and `{other}` mask alike, yet skeleton changed"
+            );
+            if other != "x::{a::{q, p}, b::{r}}" {
+                assert!(
+                    moved.iter().any(|f| f == "body"),
+                    "{what}: `{base}` and `{other}` import different names: body must differ"
+                );
+            }
+        }
+    }
+    // Control: a list of another shape is another skeleton.
+    for (what, moved) in use_changes(base, "x::{a::{p, q}, b::{r, s}}", &STABLE) {
+        assert!(
+            moved.iter().any(|f| f == "skeleton"),
+            "{what}: one more member is a structural change"
+        );
+    }
+}
+
+/// TE-8, the named limits of Q2: N6 sorts, it never rewrites. A brace list
+/// of one member is not its unwrapped path (rustfmt unwraps it); an empty
+/// list is not its absence (rustfmt removes it); a duplicate is kept (rustfmt
+/// 1.9.0 may remove it; a duplicate import does not compile, E0252). M: a
+/// single-member unwrap.
+#[test]
+fn te8_single_member_and_empty_lists_are_not_normalised() {
+    for (braced, plain) in [
+        ("a::{b}", "a::b"),
+        ("a::{*}", "a::*"),
+        ("a::{b as c}", "a::b as c"),
+        ("a::{b::{c}}", "a::b::c"),
+        ("a::{b::{c}}", "a::{b::c}"),
+        ("a::{a, a}", "a::{a}"),
+    ] {
+        for (what, moved) in use_changes(braced, plain, &STABLE) {
+            assert!(
+                moved.iter().any(|f| f == "body"),
+                "{what}: `use {braced};` and `use {plain};` must differ in body (a named limit)"
+            );
+        }
+    }
+    let empty = module(&snapshot("use a::{};\n\nfn tail() {}\n"));
+    let absent = module(&snapshot("\nfn tail() {}\n"));
+    assert_ne!(
+        empty.body, absent.body,
+        "`use a::{{}};` is not normalised away (a named limit)"
+    );
+}
