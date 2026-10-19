@@ -14,7 +14,7 @@ Today (4a, `docs/canon/spec-verify.md` "States") a function renamed or moved tog
 
 Delivered: a read-only pairing inside verify's judge, on every side it judges (Q7). A lock entry whose key no marker gives any more is paired with a marker binding of the same node and relation that has no entry; equal digests, unique both ways, and the two become one row at the new key, judged against the old entry by 5b-1's levels: a rename only `ok`, a rename with edits `code_ahead code_changed <levels>` or `conflict`, a `[path]` binding `code_changed path`. The anchor answers "where is it", `sync` "does it still match" (05 s5.2, the anchor-state table). No writer, no new `state`, nothing stored, no ADR: ADR-0020 (the marker is the identity, `architecture.md#code-identity`), ADR-0018, ADR-0042 (nothing unverified is `ok`), ADR-0046 (never stored, `architecture-code.md#sync-in-reads`); ADR-0041, ADR-0050 stand; ADR-0012 is helped. Following code with no marker would amend ADR-0020: 12b's ground (08 s2).
 
-Order (08 s2; `code-tools.md` Q28): … 6b-1 -> 5b-1 -> 5b-2 -> **5c** -> 6b-2 -> 6c -> 7a; size M, not split ("Dependencies and ordering").
+Order (08 s2; `code-tools.md` Q28): … 6b-1 -> 5b-1a -> 5b-2 -> 5b-1b -> **5c** -> 6b-2 -> 6c -> 7a; size M, not split ("Dependencies and ordering").
 
 ## Description and interactions
 
@@ -187,16 +187,16 @@ Following a lost marker (`marker_gone`) or code without a marker (12b); ID renam
 | Q14 7b's `symbols.renamed` | 5c fills `bindings.moved` only; `renamed` stays 7b's, on Q13's function | 5c fills `renamed` over all code: whole-tree hashing every run, against Q2 |
 | Q15 the pin | its allow list gains `anchor`; B hashed by `item_levels(`, `module_levels(` in `verify_rows.rs` | the pin goes red, or hashing moves to an unpinned file |
 | Q16 the hint | "locks the new key and drops the old", between the per-state and drift hints ("Output") | "moves its entry": the owner expects the old verification to carry over |
-| Size, order (owner) | M, not split; on the commit after 5b-2 ships; no gate beyond 5b-1's | a split leaves no whole product: the sub-line is 6b-2's Q34, AMBIGUOUS falls out of the same check |
+| Size, order (owner) | M, not split; after 5b-1b ships (08 s2); no gate beyond 5b-1's | a split leaves no whole product: the sub-line is 6b-2's Q34, AMBIGUOUS falls out of the same check |
 
 Q1-Q6 (2026-10-12) and Q7-Q16, size and order (2026-10-16, the refresh `ref` names) decided under the owner's pre-approval, review open. S-n: that refresh's stale points; WA-n: the 2026-10-12 analysis' working answers, WA-5..WA-7 assumed; "SW refinement": the spec-writer's.
 
 ## Dependencies and ordering
 
-- **From 5b-1** (`lock-levels.md`): "Format 2"'s `levels`, digests and fingerprints; `parse_lock(…, Some(build))` ("Readers"); the judge's steps 1, 3, 4 and `levels` JSON ("Level-aware verify"); the lockability rows as a predicate for B ("Accept"); `verify_rows.rs`' `item_levels` re-parse and its pin; `HashedRow.code` ("Drift evidence"); the accept-made golden.
+- **From 5b-1** (`lock-levels.md`): "Format 2"'s `levels`, digests and fingerprints; `parse_lock(…, Some(build))` ("Readers"); the judge's steps 1, 3, 4 and `levels` JSON (5b-1b: `lock-levels-verify.md` "Level-aware verify"); the lockability rows as a predicate for B ("Accept"); `verify_rows.rs`' `item_levels` re-parse and its pin (5b-1b); `HashedRow.code` ("Drift evidence"); the accept-made golden.
 - **From 5b-2** (`lock-rebase.md`): "The base" (`HEAD` judged with the current lock, so its side pairs on format 2); `read_head`; keys kept byte for byte, so a rebase never pairs.
 - **From 5a-2's TE-1** (the owner's run; `code-hash-eval.md` "Measured": it gates 5b-1 and "AC-15's 124 before 5c"): the threshold (`trivial_at."<t>"` at 64-256); stability (`stable_pct.<p>.{skeleton, body_bytes}`, `rename.kept` at 100.0, else a 5a-1 recipe change before the first format-2 lock); tuning (`skeleton_groups_in_file`, `quote_separates`, `body_groups`, `rename.followable`); here 45.2 % trivial, 147 body groups. Everything structural is decided now; the figures may only drop the skeleton or quote step.
-- **Order**: on the commit after 5b-2 ships, which rewrites `verify_rows.rs` just before; no gate of its own (5b-1 waits for the whole TE-1: `lock-levels.md` Q9); then 6b-2, 6c, 7a. **Independent in code**: 4c, 8b, 9b.
+- **Order**: after 5b-1b ships (08 s2), which rewrites `verify_rows.rs` just before; no gate of its own (5b-1 waits for the whole TE-1: `lock-levels.md` Q9); then 6b-2, 6c, 7a. **Independent in code**: 4c, 8b, 9b.
 - **Assumptions** (2026-10-16): 5b-1, 5b-2 ship as refreshed that day; one constant, the code crate's; no real format-1 lock, no pilot marker (`code-hash-eval.md` "Known limits").
 
 ## Implementation

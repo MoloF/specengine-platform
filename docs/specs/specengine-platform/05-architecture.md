@@ -132,7 +132,7 @@ Layer A details:
 
 ### 5.2. Canonical AST hash
 
-The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 records, and **`specengine-hash/v3`** (5a-1 `hash-levels`), a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recording the levels and level-aware verify: 5b-1 `lock-levels.md`.
+The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 records, and **`specengine-hash/v3`** (5a-1 `hash-levels`), a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recording the levels: 5b-1a `lock-levels.md`; level-aware verify: 5b-1b `lock-levels-verify.md`.
 
 - Option `--deep`: hashes of called functions from the same crate are added, depth 1.
 

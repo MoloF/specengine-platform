@@ -151,8 +151,8 @@ Q5 (2026-10-10) and Q28-Q34 (2026-10-16) decided under the owner's pre-approval,
 
 ## Dependencies and ordering
 
-- **Needs**: 6b-1 `code-tools` (`code.rs`, the mirrors, `mcp-code.md`, the code line); 6a-2 `symbol-index` (the refresh as a named CLI function, the Q17 read, `code_markers`, RD-9's scope); 4a `spec-verify` (the judge, shipped); 5b-1 `lock-levels` (format 2, `levels`, the golden); 5c `anchor-states` (`anchor`, `delta.bindings.moved`, Q34); 8a-1 `verify-tests` ("The node set", P2); 8a-2 `verify-task` with or before this (`task` precedes `node`, P6).
-- **Order** (Q28, 08 s2): 6a-2 -> 6a-3 -> 6b-1 -> 5b-1 -> 5b-2 -> 5c -> 6b-2 (this) -> 6c -> 7a; on the commit after 5c ships. 8a-1 first (now), 8a-2 after 5b-1, with or before this. **Independent**: 9a, 9b.
+- **Needs**: 6b-1 `code-tools` (`code.rs`, the mirrors, `mcp-code.md`, the code line); 6a-2 `symbol-index` (the refresh as a named CLI function, the Q17 read, `code_markers`, RD-9's scope); 4a `spec-verify` (the judge, shipped); 5b-1 (`lock-levels`: format 2, the golden; `lock-levels-verify`: `levels`); 5c `anchor-states` (`anchor`, `delta.bindings.moved`, Q34); 8a-1 `verify-tests` ("The node set", P2); 8a-2 `verify-task` with or before this (`task` precedes `node`, P6).
+- **Order** (Q28, 08 s2): 6a-2 -> 6a-3 -> 6b-1 -> 5b-1a -> 5b-2 -> 5b-1b -> 5c -> 6b-2 (this) -> 6c -> 7a; on the commit after 5c ships. 8a-1 first (now), 8a-2 after 5b-1, with or before this. **Independent**: 9a, 9b.
 
 ## Implementation
 

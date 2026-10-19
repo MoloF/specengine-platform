@@ -51,7 +51,7 @@ The text that reads show for an item (05 §5.1 "Signature"). The code index stor
 
 ## Frozen names
 
-From the first `spec lock accept` of a twin, its discriminated qpath is a lock key (`spec-lock.md` "Entry", `symbol`), and `spec lock rebase` keeps it byte for byte (`docs/features/lock-levels.md`). No entry's bytes changed when this shipped: an ambiguous key was never locked, and the qpath is not hashed. Verify matches keys exactly, with no undiscriminated or ordinal fallback (`spec-verify.md` "States"):
+From the first `spec lock accept` of a twin, its discriminated qpath is a lock key (`spec-lock.md` "Entry", `symbol`), and `spec lock rebase` keeps it byte for byte (`docs/features/lock-rebase.md`). No entry's bytes changed when this shipped: an ambiguous key was never locked, and the qpath is not hashed. Verify matches keys exactly, with no undiscriminated or ordinal fallback (`spec-verify.md` "States"):
 
 - An item locked under a unique qpath that gains an in-file twin: its entry reads `broken_binding symbol_gone`, its marker's new key `unlocked`.
 - A group whose membership or a member's `cfg` changes (a twin inserted, removed or moved; rule 1 starting or ceasing to hold) may rename members. The vanished key reads `symbol_gone`, a key now naming an unmarked twin `marker_gone`, a key now naming another twin is compared with that twin's digest, and the moved marker's new key reads `unlocked`. Never all `ok`. 5c pairs only a vanished key, by `body` (`docs/features/anchor-states.md` "The pairing").

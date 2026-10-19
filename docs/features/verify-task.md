@@ -100,8 +100,8 @@ Decided 2026-10-16 under the owner's pre-approval, review open; P-n as numbered 
 
 ## Dependencies and ordering
 
-- **Needs**: 8a-1 `verify-tests` ("The node set", the `--task` flag's parsing); 5b-1 `lock-levels` (`levels` in rows).
-- **Order** (owner, 2026-10-16): 8a-1 -> 5b-1 -> 8a-2 (this), with or before 6b-2 (its JSON keys follow `task`), before 8b (`--task` scopes `tested`). Independent of 5b-2, 5c.
+- **Needs**: 8a-1 `verify-tests` ("The node set", the `--task` flag's parsing); 5b-1b `lock-levels-verify` (`levels` in rows).
+- **Order** (owner, 2026-10-16): 8a-1 -> 5b-1b -> 8a-2 (this), with or before 6b-2 (its JSON keys follow `task`), before 8b (`--task` scopes `tested`). Independent of 5b-2, 5c.
 
 ## Implementation
 
