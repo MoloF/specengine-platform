@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-19
 ---
 
 # Stack: toolchain and pinned crates
@@ -28,15 +28,15 @@ Edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc >= 1.98 (the `r
 | `rusqlite` | =0.40.2 (`bundled`: SQLite 3.53.2, FTS5) | the index; never `sqlx` or `refinery` beside it. Transitive, pending the owner (Q1, store README): `libsqlite3-sys` 0.38.2, `fallible-iterator` 0.3.0, `fallible-streaming-iterator` 0.1.9; build: `pkg-config` 0.3.34, `vcpkg` 0.2.15 (unused) |
 | `pulldown-cmark` | =0.13.4 (no default features) | heading attributes `{#ID}`, offset iterator for precise patches |
 | `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (why: 05 s9). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86), pending the owner (Q1, core README) |
-| `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 (`float_roundtrip`) | serialization; JSON output of tools and `specengine-eval`; a float read back bit for bit |
+| `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 (`float_roundtrip`) | serialization; JSON output of tools and `specengine-eval`, the `specengine-ra` protocol lines; a float read back bit for bit |
 | `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer; a direct CLI dependency for `Cargo.toml` package names) / importer ID patterns; `regex` already in the graph via tree-sitter |
 | `blake3` | =1.8.7 | node and AST hashes |
 | `petgraph` | =0.8.3 (no default features) | `depends-cycle` (`tarjan_scc`; owner, Q-C); new to the default members: `fixedbitset` 0.5.7, `hashbrown` 0.15.5, `foldhash` 0.1.5 |
 | `schemars` | 1.2.2 | JSON Schema 2020-12 for tools, via the `rmcp::schemars` re-export |
 | `clap` | =4.6.7 (`derive`) | CLI |
-| `ra_ap_*` (nine: `load-cargo`, `project_model`, `ide`, `ide_db`, `hir_expand`, `vfs`, `paths`, `syntax`, `proc_macro_api`) | =0.0.352 (2026-09-14), all together | `MonikerResult::from_def` for resolved identity (layer C); only in `specengine-ra`, outside `default-members`, so none enters the core graph; API without guarantees (`ra_ap_edition` is already 0.0.354: the set is skewed) |
+| `ra_ap_*` (nine: `load-cargo`, `project_model`, `ide`, `ide_db`, `hir_expand`, `vfs`, `paths`, `syntax`, `proc_macro_api`) | =0.0.352 (2026-09-14), all together | `MonikerResult::from_def` for resolved identity (layer C); only in `specengine-ra`, outside `default-members`, so none enters the core graph; API without guarantees (`ra_ap_edition` is already 0.0.354: the set is skewed). Its binary's normal graph: the daemon's licence set plus `CC0-1.0` (`notify` 8.2.0), asserted in `build_graph.rs` |
 | `salsa`, `salsa-macros`, `salsa-macro-rules` / `unicode-ident` | =0.28.2 / =1.0.24 | direct exact pins of `specengine-ra`: the `ra_ap` manifests ask `^`, and newer versions break the 0.0.352 build (salsa 0.28.5 changed `HashEqLike`; unicode-ident 1.0.26 is Unicode 18 against `unicode-properties` 0.1.4's 17). One lock file, so the `unicode-ident` pin governs the core graph too |
-| `libc` | =0.2.189 (`default-features = false`) | `specengine-cli`, a plain dependency: the `verify --tests` runner's process groups and signals (`test_runner.rs`); `specengine-eval` feature `ra`: peak RSS and process groups |
+| `libc` | =0.2.189 (`default-features = false`) | `specengine-cli`, a plain dependency: the `verify --tests` runner's process groups and signals (`test_runner.rs`); `specengine-eval` feature `ra`: peak RSS and process groups; the `specengine-ra` binary: `getrusage`, `getpgrp`, `kill` (`docs/canon/layer-c-protocol.md`) |
 | `syn` / `quote` / `proc-macro2` | =3.0.6 (+ `extra-traits`) / =1.0.47 / =1.0.107 | comparison only, behind `specengine-eval`'s `syn` feature: not an identity source (no name resolution) and not the digest (05 s5.2, ADR-0021) |
 
 ## Not taken

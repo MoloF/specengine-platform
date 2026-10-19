@@ -13,7 +13,7 @@ use ra_ap_ide::{
 };
 use ra_ap_ide_db::defs::Definition;
 use ra_ap_syntax::ast::{self, AstChildren, HasModuleItem, HasName};
-use ra_ap_syntax::{AstNode, Edition, SourceFile};
+use ra_ap_syntax::{AstNode, Edition, SourceFile, SyntaxKind, SyntaxNode};
 
 /// Kind of a collected item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -109,6 +109,13 @@ pub struct ItemRecord {
     pub name: Option<String>,
     /// 1-based line of the item's first token (attributes and doc comments included).
     pub line: usize,
+    /// Byte offset, in the file's raw text (CRLF kept), of the item's first
+    /// token after its outer attributes and the comments rust-analyzer
+    /// attaches to it: where layer A's item node starts (`specengine-code`
+    /// `ItemRecord::byte_range`, attributes and comments being its siblings).
+    pub start: usize,
+    /// Byte offset just past the item's last token (as layer A's range end).
+    pub end: usize,
     pub status: MonikerStatus,
 }
 
@@ -130,7 +137,9 @@ pub fn scan_unloaded(text: &str) -> FileScan {
         .map(|found| ItemRecord {
             kind: found.kind,
             name: found.name,
-            line: lines.line(found.offset),
+            line: lines.line(found.span.offset),
+            start: found.span.start,
+            end: found.span.end,
             status: MonikerStatus::NotLoaded,
         })
         .collect();
@@ -149,7 +158,9 @@ pub(crate) fn scan_loaded(db: &RootDatabase, file_id: FileId) -> FileScan {
         .into_iter()
         .map(|found| ItemRecord {
             kind: found.kind,
-            line: lines.line(found.offset),
+            line: lines.line(found.span.offset),
+            start: found.span.start,
+            end: found.span.end,
             status: resolve(&sema, db, &found.node),
             name: found.name,
         })
@@ -162,7 +173,7 @@ struct Found {
     kind: ItemKind,
     node: Node,
     name: Option<String>,
-    offset: u32,
+    span: Span,
 }
 
 enum Node {
@@ -177,6 +188,51 @@ enum Node {
     Macro(ast::Macro),
 }
 
+/// What may precede an item's first token inside its node: outer
+/// attributes, doc comments (a node of their own in this `ra_ap` release,
+/// beside attributes; their token kind too), the comments rust-analyzer
+/// attaches (a marker line) and whitespace. The same set rust-analyzer's own
+/// `remove_attrs_and_docs` strips.
+const LEADING: [SyntaxKind; 5] = [
+    SyntaxKind::ATTR,
+    SyntaxKind::DOC_COMMENT,
+    SyntaxKind::OUTER_DOC_COMMENT,
+    SyntaxKind::COMMENT,
+    SyntaxKind::WHITESPACE,
+];
+
+/// Where an item node lies in the file's raw text.
+#[derive(Clone, Copy)]
+struct Span {
+    /// The node's start: its outer attributes and attached comments included
+    /// (gives [`ItemRecord::line`]).
+    offset: u32,
+    /// [`ItemRecord::start`]: the first child not in [`LEADING`].
+    /// rust-analyzer puts an item's outer attributes and the comments it
+    /// attaches (doc comments, a marker line) inside the item node;
+    /// tree-sitter makes them siblings, so layer A's node starts at this
+    /// token (`docs/features/layer-c.md` "Binary").
+    start: usize,
+    /// [`ItemRecord::end`]: the node's end. rust-analyzer attaches leading
+    /// trivia only, so the node ends at its last token, as layer A's does.
+    end: usize,
+}
+
+impl Span {
+    fn of(node: &SyntaxNode) -> Span {
+        let range = node.text_range();
+        let start = node
+            .children_with_tokens()
+            .find(|child| !LEADING.contains(&child.kind()))
+            .map_or(range.start(), |child| child.text_range().start());
+        Span {
+            offset: u32::from(range.start()),
+            start: usize::from(start),
+            end: usize::from(range.end()),
+        }
+    }
+}
+
 /// The layer A item set of `tree`, in source order, on an explicit stack of
 /// item lists (the file, then each inline `mod` body) — no recursion.
 fn collect(tree: &SourceFile) -> Vec<Found> {
@@ -187,7 +243,7 @@ fn collect(tree: &SourceFile) -> Vec<Found> {
             stack.pop();
             continue;
         };
-        let offset = u32::from(item.syntax().text_range().start());
+        let span = Span::of(item.syntax());
         let (kind, name, node) = match item {
             ast::Item::Fn(it) => (ItemKind::Function, name_of(&it), Node::Fn(it)),
             ast::Item::Struct(it) => (
@@ -207,7 +263,7 @@ fn collect(tree: &SourceFile) -> Vec<Found> {
                     kind: ItemKind::Trait,
                     name: name_of(&it),
                     node: Node::Trait(it),
-                    offset,
+                    span,
                 });
                 push_methods(members, &mut found);
                 continue;
@@ -218,7 +274,7 @@ fn collect(tree: &SourceFile) -> Vec<Found> {
                     kind: ItemKind::Impl,
                     name: None,
                     node: Node::Impl(it),
-                    offset,
+                    span,
                 });
                 push_methods(members, &mut found);
                 continue;
@@ -232,7 +288,7 @@ fn collect(tree: &SourceFile) -> Vec<Found> {
                     kind: ItemKind::Module,
                     name: name_of(&it),
                     node: Node::Module(it),
-                    offset,
+                    span,
                 });
                 if let Some(body) = body {
                     stack.push(body.items());
@@ -255,7 +311,7 @@ fn collect(tree: &SourceFile) -> Vec<Found> {
             kind,
             node,
             name,
-            offset,
+            span,
         });
     }
     found
@@ -269,7 +325,7 @@ fn push_methods(members: Option<ast::AssocItemList>, found: &mut Vec<Found>) {
         if let ast::AssocItem::Fn(it) = member {
             found.push(Found {
                 kind: ItemKind::Method,
-                offset: u32::from(it.syntax().text_range().start()),
+                span: Span::of(it.syntax()),
                 name: name_of(&it),
                 node: Node::Fn(it),
             });

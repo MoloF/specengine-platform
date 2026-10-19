@@ -2859,6 +2859,7 @@ dependencies = [
 name = "specengine-ra"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "ra_ap_hir_expand",
  "ra_ap_ide",
  "ra_ap_ide_db",
@@ -2871,6 +2872,9 @@ dependencies = [
  "salsa",
  "salsa-macro-rules",
  "salsa-macros",
+ "serde",
+ "serde_json",
+ "specengine-code",
  "unicode-ident",
 ]
 

@@ -20,6 +20,11 @@
 //! proc macros are the project's own code and run with the project's
 //! permissions: layer C runs them only when proc macros are requested.
 //!
+//! The executable `specengine-ra` (`src/main.rs`) speaks protocol v1 over
+//! this library for `spec resolve` (`docs/features/layer-c.md`, ADR-0049):
+//! no proc macros, one workspace at a time, each item with its byte span
+//! ([`ItemRecord::start`], [`ItemRecord::end`]) and moniker status.
+//!
 //! This crate is not a default workspace member, so `ra_ap_*` never enters the
 //! core build graph (`crates/specengine-ra/README.md`, "Placement and pins";
 //! asserted by `specengine-eval` `tests/build_graph.rs`).

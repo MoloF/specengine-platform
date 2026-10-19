@@ -95,6 +95,11 @@
 //! - [`bevy`] — also reads role derives (`cfg_attr` too), `impl Component
 //!   for`, `add_message`, and each registration's subject; its shipped
 //!   lists and counts are unchanged.
+//!
+//! Phase 3 slice 11a-1 `layer-c` (`docs/features/layer-c.md` "Kind map"):
+//! [`layer_c`] — which layer A node kinds a layer C item kind stands for
+//! ([`KIND_MAP`], [`kind_matches`]): the kinds of the join on `(start,
+//! end)`.
 
 pub mod bevy;
 pub mod bind;
@@ -104,6 +109,7 @@ pub mod frameworks;
 pub mod grammar;
 pub mod hash;
 pub mod items;
+pub mod layer_c;
 pub mod levels;
 pub mod markers;
 pub mod naming;
@@ -119,6 +125,7 @@ pub use const_value::{ConstValue, NotValued, const_value};
 pub use grammar::{GrammarInfo, RustParser, grammar_info};
 pub use hash::{Digest, ErrorCategory, HashState, RECIPE, hash_item, normalize, recipe_header};
 pub use items::{FileAnalysis, ItemRecord, MOD_KIND, ModDeclaration, analyze_file, analyze_tree};
+pub use layer_c::{KIND_MAP, kind_matches, layer_a_kinds};
 pub use levels::{
     BODY_FIELDS, BodyField, BodySlot, LEVEL_RECIPE, LevelHashes, LevelState, TRIVIAL_BODY_BYTES,
     body_nodes, call_targets, level_header, module_levels,

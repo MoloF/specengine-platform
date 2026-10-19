@@ -1,7 +1,7 @@
 ---
 class: spec
 status: draft
-scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-core]
+scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-core, crates/specengine-ra]
 ref: Phase 3 plan 2026-10-10, slice 11a-2, split from 11a `layer-c.md` 2026-10-19 against 5b79b81 (drift 3-31; Q2-Q5, Q11 2026-10-10 under the owner's pre-approval; L3, L6 owner pre-approved 2026-10-19; review open); 05 s5.1; 07 s2, s5; 08 s2
 adrs: [ADR-0049]
 ---
@@ -16,7 +16,7 @@ adrs: [ADR-0049]
 
 - **Owner** or an agent: `spec resolve [--timeout S] [--json]`, one cold load. Not `id_state resolved`.
 - **Never implicit** (WA-3, ADR-0049): no read (`unmapped`, `health` too), no MCP tool, no daemon route (`GET health` too), no hook, gate, `index`, `check`, `verify` (any mode, `--tests`), `lock` or `propose drift` spawns the binary; a snapshot changes none of their outputs (11a-3 then changes only `spec symbols`' and `find_symbols`' keys and the `c`, `layer c:` lines).
-- **Crates**: CLI `resolve` and the group core shared with `verify --tests` (A2); store the three tables, `INDEX_FORMAT` 11; `specengine-code` the `tree_fp` file names, the join, `agrees`, the collision suffix beside 11a-1's kind map; core retires `scip`. No HTTP, UI, MCP, plugin, hook or CI change; `daemon_keys.rs` stays at 56 sets. **Writes**: the data directory only.
+- **Crates**: CLI `resolve` and the group core shared with `verify --tests` (A2); store the three tables, `INDEX_FORMAT` 11; `specengine-code` the `tree_fp` file names, the join, `agrees`, the collision suffix beside 11a-1's kind map; core retires `scip`; `specengine-ra` one fix carried from 11a-1: `src/main.rs` `terminate` parks after `kill_own_group()` and never calls `exit` while leading its group (`layer-c-protocol.md` "Endings": exit 3 can beat the group SIGKILL on macOS). No HTTP, UI, MCP, plugin, hook or CI change; `daemon_keys.rs` stays at 56 sets. **Writes**: the data directory only.
 - **Overridden live-spec lines** (dated notes in place, rewritten at shipping): 05:123; 07:111, :209; 08:41, :43.
 
 ## Data
@@ -108,6 +108,7 @@ M: mutation -> the test turning red. CLI `layer_c.rs`: fakes replaying 11a-1's g
 - [ ] R10 -- M: `agrees` split at `/` in the CLI, a `Cargo.lock` literal in the CLI -> `no_scip_or_cargo_literal_outside_code_and_ra` (store, core, the CLI).
 - [ ] R11 -- M: `scip` kept in `NOT_BUILT_KEYS` -> `code_table_unknown_key_is_refused` case 13 (`scip = false`); `EXEMPT` kept at 4 -> new `every_exempt_literal_occurs_in_its_file` (drift 21: the stack-word scan cannot turn red).
 - [ ] R12 -- `verify_tests_*` green; M: a moniker leaking into one -> `outputs_equal_with_and_without_a_snapshot`: `lock`, `verify`, `refs`, `bundle`, `check`, `health`, `symbols`, `unmapped` and the MCP code tools byte-identical; `daemon_keys` 56.
+- [ ] R13 -- carried from 11a-1: both B6 tests in `crates/specengine-ra/tests/protocol.rs` (`binary_kills_its_group_when_stdin_closes`, `..._after_budget_and_grace`) assert SIGKILL only again, the group-gone checks unchanged; 25 runs of each under load (12 `perl -e 'alarm 120; exec "yes"'`) green. M: `exit(3)` restored after the kill.
 
 test-engineer:
 
@@ -118,7 +119,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec, split from `layer-c.md` 2026-10-19.
-- [ ] SW-2 -- at shipping: `docs/canon/layer-c.md` (11a-1's): resolve, tables, freshness; `symbol-index.md` (12 234 of 12 288: detail down first; its refreshers plus resolve, `INDEX_FORMAT` 11 with a pointer, history); `architecture-code.md` (resolve); `code-bindings.md` (10 842: `scip` beside `bevy`); the CLI README (10 219 of 10 240, room first: Commands, API, Rules, the timing exception, the group module); the store README (10 216: rows detail out); the code README (the module row); the root README install line; 05:123, 07:111, :209, 08:41, :43; `CLAUDE.md` State.
+- [ ] SW-2 -- at shipping: a new Tier 2 `docs/canon/layer-c.md`: resolve, tables, freshness (protocol v1: 11a-1's `layer-c-protocol.md`, 12 218 B); `symbol-index.md` (12 234 of 12 288: detail down first; its refreshers plus resolve, `INDEX_FORMAT` 11 with a pointer, history); `architecture-code.md` (resolve); `code-bindings.md` (10 842: `scip` beside `bevy`); the CLI README (10 219 of 10 240, room first: Commands, API, Rules, the timing exception, the group module); the store README (10 216: rows detail out); the code README (the module row); the root README install line; 05:123, 07:111, :209, 08:41, :43; `CLAUDE.md` State.
 
 ## Out of scope
 

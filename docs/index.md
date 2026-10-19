@@ -25,8 +25,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/health-drift.md](features/health-drift.md) health-drift: Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/features/impact.md](features/impact.md) impact: the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
 - [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols, the next plugin MINOR · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
-- [docs/features/layer-c-resolve.md](features/layer-c-resolve.md) layer-c-resolve (11a-2): spec resolve and the layer C snapshot · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-core · draft
-- [docs/features/layer-c.md](features/layer-c.md) layer-c (11a-1): rust-analyzer in its own executable, protocol v1 · crates/specengine-ra, crates/specengine-code, crates/specengine-eval · draft
+- [docs/features/layer-c-resolve.md](features/layer-c-resolve.md) layer-c-resolve (11a-2): spec resolve and the layer C snapshot · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-core, crates/specengine-ra · draft
 - [docs/features/lock-levels.md](features/lock-levels.md) lock-levels (5b-1): spec.lock format 2 and level-aware verify · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/lock-rebase.md](features/lock-rebase.md) lock-rebase (5b-2): spec lock rebase · crates/specengine-core, crates/specengine-store, crates/specengine-code, crates/specengine-cli, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft

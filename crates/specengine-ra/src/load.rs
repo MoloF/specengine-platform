@@ -25,7 +25,10 @@ const CARGO_READ_ONLY_ARGS: [&str; 2] = ["--locked", "--offline"];
 /// What to load and where cargo may write.
 #[derive(Clone, Debug)]
 pub struct LoadOptions {
-    /// Workspace root: the directory holding `Cargo.toml`; absolute UTF-8.
+    /// The directory holding the `Cargo.toml` to start from: the workspace
+    /// root, or a member package's directory (cargo resolves its workspace:
+    /// [`Project::workspace_root`]); absolute UTF-8. [`Workspace::file`]
+    /// looks paths up relative to it.
     pub root: PathBuf,
     /// Target directory of every cargo invocation; absolute UTF-8, outside `root`.
     pub target_dir: PathBuf,
@@ -159,6 +162,29 @@ impl Project {
         })
     }
 
+    /// The workspace's root directory as cargo resolved it (`cargo
+    /// locate-project --workspace` from the manifest step 1 was given).
+    pub fn workspace_root(&self) -> PathBuf {
+        self.workspace.workspace_root().to_path_buf().into()
+    }
+
+    /// The `Cargo.toml` of the workspace root and of every member package:
+    /// the manifests this load answers for. Empty for a non-Cargo workspace.
+    pub fn member_manifests(&self) -> Vec<PathBuf> {
+        let ProjectWorkspaceKind::Cargo { cargo, .. } = &self.workspace.kind else {
+            return Vec::new();
+        };
+        let mut manifests: Vec<PathBuf> = cargo
+            .packages()
+            .filter(|&package| cargo[package].is_member)
+            .map(|package| cargo[package].manifest.to_path_buf().into())
+            .collect();
+        manifests.push(cargo.manifest_path().to_path_buf().into());
+        manifests.sort();
+        manifests.dedup();
+        manifests
+    }
+
     pub fn summary(&self) -> ProjectSummary {
         let metadata_error = match &self.workspace.kind {
             ProjectWorkspaceKind::Cargo {
@@ -270,7 +296,13 @@ impl Workspace {
     /// The loaded file at `relative` (to the workspace root), or `None` when
     /// rust-analyzer did not load it (outside every package root).
     pub fn file(&self, relative: &Path) -> Option<LoadedFile> {
-        let absolute = abs_utf8(&self.root.join(relative)).ok()?;
+        self.file_at(&self.root.join(relative))
+    }
+
+    /// The loaded file at an absolute path, or `None` when rust-analyzer did
+    /// not load it (outside every package root, excluded, or not absolute UTF-8).
+    pub fn file_at(&self, absolute: &Path) -> Option<LoadedFile> {
+        let absolute = abs_utf8(absolute).ok()?;
         match self.vfs.file_id(&VfsPath::from(absolute)) {
             Some((file_id, FileExcluded::No)) => Some(LoadedFile(file_id)),
             _ => None,

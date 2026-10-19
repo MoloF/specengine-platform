@@ -9,6 +9,12 @@ license.workspace = true
 publish = false
 description = "Layer C of SpecEngine: rust-analyzer as a library (ra_ap_* =0.0.352), read-only workspace loading and monikers"
 
+# The executable speaking protocol v1 (`docs/features/layer-c.md`, "Data"): the
+# only process that links `ra_ap_*` for `spec resolve` (ADR-0049).
+[[bin]]
+name = "specengine-ra"
+path = "src/main.rs"
+
 [dependencies]
 ra_ap_load-cargo.workspace = true
 ra_ap_project_model.workspace = true
@@ -32,3 +38,13 @@ salsa.workspace = true
 salsa-macros.workspace = true
 salsa-macro-rules.workspace = true
 unicode-ident.workspace = true
+# The binary: the request and the reply lines (protocol v1), and the POSIX calls
+# its watchdogs and stamp need (`getrusage`, `getpgrp`, `kill`). All three are
+# already pinned and locked once in the workspace.
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+# B4: each item's bytes and kind against layer A's on the same file.
+specengine-code = { path = "../specengine-code" }

@@ -20,7 +20,9 @@
 //! build directory, and `scripts/` only the hook installer. AC-08 of
 //! docs/features/daemon-read.md: `specengine-http` a default member, its
 //! `[dependencies]` and the `axum` / `futures-util` pins, the CLI never
-//! reaching it or an HTTP stack, and its normal graph's licences.
+//! reaching it or an HTTP stack, and its normal graph's licences. B1 of
+//! docs/features/layer-c.md: the `specengine-ra` executable's direct
+//! dependencies, exactly, and its normal graph's licences.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -2264,15 +2266,14 @@ fn licence_allowed(expression: &str, allowed: &[&str]) -> Result<bool, String> {
 /// `(name, version, licence)` of the daemon itself and every package of
 /// its normal graph, each once.
 fn http_graph_licences() -> Vec<(String, String, Option<String>)> {
+    graph_licences("specengine-http")
+}
+
+/// `(name, version, licence)` of `package` itself and every package of its
+/// normal graph, each once.
+fn graph_licences(package: &str) -> Vec<(String, String, Option<String>)> {
     let tree = cargo_tree(&[
-        "-p",
-        "specengine-http",
-        "-e",
-        "normal",
-        "--prefix",
-        "none",
-        "--format",
-        "{p}\t{l}",
+        "-p", package, "-e", "normal", "--prefix", "none", "--format", "{p}\t{l}",
     ]);
     let mut out: Vec<(String, String, Option<String>)> = Vec::new();
     for line in tree.lines() {
@@ -2378,6 +2379,188 @@ fn the_licence_expressions_read_as_spdx() {
     }
     assert!(licence_allowed("MIT OR", &allowed).is_err());
     assert!(licence_allowed("(MIT", &allowed).is_err());
+}
+
+// ---------------------------------------------------------------------------
+// docs/features/layer-c.md (11a-1) B1: the `specengine-ra` executable, its
+// direct dependencies and the licences of its normal graph.
+// ---------------------------------------------------------------------------
+
+/// The direct normal dependencies `specengine-ra` takes for its executable
+/// (`docs/features/layer-c.md` "Dependencies and install"): the protocol's
+/// JSON and the POSIX calls of its watchdogs and stamp, each at the
+/// workspace pin and locked once.
+const RA_BINARY_PINS: [(&str, &str); 3] = [
+    ("serde", "1.0.229"),
+    ("serde_json", "1.0.151"),
+    ("libc", LIBC_PIN),
+];
+
+/// The names of `declared` (see [`direct_dependencies`]) of `kind`.
+fn names_of_kind<'a>(declared: &'a [(String, String, bool)], kind: &str) -> Vec<&'a str> {
+    declared
+        .iter()
+        .filter(|(_, of, _)| of == kind)
+        .map(|(name, _, _)| name.as_str())
+        .collect()
+}
+
+/// docs/features/layer-c.md (11a-1) B1, Q12: `specengine-ra`'s direct
+/// normal dependencies are exactly 16, the nine [`RA_AP_DIRECT`], the four
+/// [`RA_TRANSITIVE_PINS`] and the three [`RA_BINARY_PINS`], none optional or
+/// under a target table; no build dependency; `specengine-code` its only
+/// dev-dependency (B4's layer A rows). Each of the three new ones is the
+/// workspace pin, locked once; resolved, the depth-1 normal graph is the
+/// same 16. M: `ra_ap_hir` added.
+#[test]
+fn specengine_ra_direct_dependencies_are_exactly_the_pinned_set() {
+    let mut wanted: Vec<&str> = RA_AP_DIRECT.to_vec();
+    wanted.extend(RA_TRANSITIVE_PINS.iter().map(|(name, _)| *name));
+    wanted.extend(RA_BINARY_PINS.iter().map(|(name, _)| *name));
+    wanted.sort_unstable();
+    assert_eq!(wanted.len(), 16, "{wanted:?}");
+
+    let metadata = workspace_metadata();
+    let declared = direct_dependencies(&metadata, "specengine-ra");
+    let normal = names_of_kind(&declared, "normal");
+    assert!(
+        !normal.contains(&"ra_ap_hir"),
+        "specengine-ra takes `ra_ap_hir` directly (Q12: it does not): {normal:?}"
+    );
+    assert_eq!(normal, wanted, "specengine-ra's direct normal dependencies");
+    assert_eq!(
+        names_of_kind(&declared, "dev"),
+        ["specengine-code"],
+        "specengine-ra's dev-dependencies"
+    );
+    assert_eq!(
+        names_of_kind(&declared, "build"),
+        Vec::<&str>::new(),
+        "specengine-ra's build dependencies"
+    );
+    let optional: Vec<&str> = declared
+        .iter()
+        .filter(|(_, _, optional)| *optional)
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    assert!(
+        optional.is_empty(),
+        "optional dependencies of specengine-ra: {optional:?}"
+    );
+    for name in &wanted {
+        let dependency = declared_dependency(&metadata, "specengine-ra", name);
+        assert!(
+            dependency["target"].is_null(),
+            "specengine-ra's {name} sits under a target table: {dependency}"
+        );
+    }
+    for (name, version) in RA_BINARY_PINS {
+        let dependency = declared_dependency(&metadata, "specengine-ra", name);
+        assert_eq!(
+            dependency["req"],
+            format!("={version}"),
+            "specengine-ra's {name} is not the workspace pin: {dependency}"
+        );
+        assert_eq!(
+            locked_versions(name),
+            [version],
+            "Cargo.lock does not hold {name} once, at {version}"
+        );
+    }
+
+    let resolved = tree_crates(&cargo_tree(&[
+        "-p",
+        "specengine-ra",
+        "-e",
+        "normal",
+        "--depth",
+        "1",
+    ]));
+    assert!(
+        resolved
+            .first()
+            .is_some_and(|(name, _)| name == "specengine-ra"),
+        "cargo tree lists specengine-ra first: {resolved:?}"
+    );
+    let mut edges: Vec<&str> = resolved
+        .iter()
+        .skip(1)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    edges.sort_unstable();
+    edges.dedup();
+    assert_eq!(
+        edges, wanted,
+        "specengine-ra's resolved direct normal edges"
+    );
+    for (name, version) in RA_BINARY_PINS {
+        assert!(
+            resolved.iter().any(|(n, v)| n == name && v == version),
+            "specengine-ra has no direct edge to {name} v{version}: {resolved:?}"
+        );
+    }
+}
+
+/// docs/features/layer-c.md (11a-1) B1, Q10: every package of the
+/// `specengine-ra` executable's normal graph is licensed within the
+/// daemon's [`ALLOWED_LICENCES`] plus `CC0-1.0`, an addition for this graph
+/// alone: the daemon's set holds no `CC0-1.0`, and `notify` (reached through
+/// `ra_ap_vfs-notify`) is outside it. M: CC0 dropped (red on `notify` 8.2.0).
+#[test]
+fn every_package_of_the_ra_binarys_normal_graph_is_licensed_within_the_allowed_set() {
+    assert!(
+        !ALLOWED_LICENCES.contains(&"CC0-1.0"),
+        "the daemon's licence set takes CC0-1.0: {ALLOWED_LICENCES:?}"
+    );
+    let mut allowed: Vec<&str> = ALLOWED_LICENCES.to_vec();
+    allowed.push("CC0-1.0");
+    let graph = graph_licences("specengine-ra");
+    assert!(
+        graph
+            .first()
+            .is_some_and(|(name, _, _)| name == "specengine-ra"),
+        "{graph:?}"
+    );
+    for wanted in [
+        "ra_ap_ide",
+        "ra_ap_load-cargo",
+        "ra_ap_vfs-notify",
+        "salsa",
+        "serde_json",
+        "libc",
+        "notify",
+    ] {
+        assert!(
+            graph.iter().any(|(name, _, _)| name == wanted),
+            "{wanted} is in specengine-ra's normal graph: {graph:?}"
+        );
+    }
+    let mut refused = Vec::new();
+    for (name, version, licence) in &graph {
+        match licence {
+            None => refused.push(format!("{name} {version}: no licence")),
+            Some(expression) => match licence_allowed(expression, &allowed) {
+                Ok(true) => {}
+                Ok(false) => refused.push(format!("{name} {version}: {expression}")),
+                Err(problem) => refused.push(format!("{name} {version}: {expression}: {problem}")),
+            },
+        }
+    }
+    assert!(
+        refused.is_empty(),
+        "outside {allowed:?} ({} packages checked): {refused:#?}",
+        graph.len()
+    );
+    let notify = graph
+        .iter()
+        .find(|(name, _, _)| name == "notify")
+        .and_then(|(_, _, licence)| licence.clone())
+        .expect("notify's licence");
+    assert_eq!(
+        licence_allowed(&notify, &ALLOWED_LICENCES),
+        Ok(false),
+        "notify needs the addition: {notify}"
+    );
 }
 
 // ---------------------------------------------------------------------------
