@@ -451,6 +451,16 @@ impl Sink for Stream {
     }
 }
 
+/// The empty set's `deps`, `level_header() ‖ put("deps")`: an item's
+/// `deps` with no call, and a RON value's `deps`, which `spec.lock` format
+/// 2 records as its `deps_hash` (`docs/canon/code-hash-ron.md` "RON value").
+/// Computed, never pinned: [`level_header`] carries the grammar's version
+/// and ABI.
+#[must_use]
+pub fn empty_deps_digest() -> Digest {
+    deps_digest(std::iter::empty())
+}
+
 /// `deps` over `targets`, given byte-sorted and deduplicated: no target is
 /// the empty set's digest.
 pub(crate) fn deps_digest<'a>(targets: impl IntoIterator<Item = &'a str>) -> Digest {

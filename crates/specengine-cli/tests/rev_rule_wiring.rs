@@ -31,7 +31,7 @@ use rev_rule_common::{
     stage_all, staged, with_top,
 };
 use serde_json::Value;
-use verify_common::{ecs, golden};
+use verify_common::{ecs, golden, golden_format_1};
 
 /// A lock no TOML reader takes.
 const GARBAGE: &str = "this is not a lock\n";
@@ -350,9 +350,12 @@ fn apply_commits_pass_the_revision_rule() {
 
 /// TE-2: on a fully staged tree `--changed` and `--staged` print the same
 /// bytes, text and JSON, findings of the rule included; on both fixtures.
+/// code-a holds the format-1 golden: its `GOAL-01` (two entries, one
+/// refreshed) and `cap-check/PASS-01` entries give the three findings
+/// (docs/features/lock-levels.md Q10: the rule reads format 1).
 #[test]
 fn changed_equals_staged_on_equal_trees() {
-    let repo = golden("te2-code-a");
+    let repo = golden_format_1("te2-code-a");
     repo.replace(COUNTER_MD, BOUND_EDIT.0, BOUND_EDIT.1);
     repo.replace(COUNTER_MD, STEP_EDIT.0, STEP_EDIT.1);
     repo.replace(GOAL_MD, GOAL_EDIT.0, GOAL_EDIT.1);

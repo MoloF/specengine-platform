@@ -1351,56 +1351,60 @@ fn manifests_name_packages_alike_from_any_root() {
 /// item's state is `HashState::NotHashed`, a value hashing never gives.
 /// Nothing outside `bind.rs` reads it: the walk, the naming and `refs`
 /// name no `HashState`, and every `.state` they read is a judgement's or a
-/// level list's. `spec lock accept`
-/// (`docs/canon/spec-lock-accept.md` "Steps") hashes the items it locks
-/// through `hash_bound_items` alone: `lock.rs` names
-/// `HashState` only for that function's results, and like `lock_regen.rs`
-/// reads no item's `.state` (a judgement's, a level list's or a printed
-/// row's only). docs/features/symbol-index.md RD-13: the code index's
-/// analyzer joins, hashing through `item_levels` alone (the pin names per
-/// file the entry it must call).
+/// level list's. docs/features/lock-levels.md RD-4 ("Rules": the pin,
+/// Q16, S6): `spec lock accept` (`docs/canon/spec-lock-accept.md` "Steps"
+/// 5) hashes the items and modules it locks through `item_levels` and
+/// `module_levels` alone: `lock.rs` calls both, never `hash_bound_items`,
+/// `hash_item` or `hash_node`, names no `HashState`, and like
+/// `lock_regen.rs` reads no item's `.state` (a judgement's, a level list's
+/// or a printed row's only). docs/features/symbol-index.md RD-13: the code
+/// index's analyzer joins, hashing through `item_levels` alone (the pin
+/// names per file the entries it must call). `verify_rows.rs` joins in
+/// 5b-1b (Q26), `lock_rebase.rs` in 5b-2.
 #[test]
 fn nothing_outside_the_binder_reads_an_items_state() {
-    for (file, entry) in [
-        ("crates/specengine-cli/src/code_walk.rs", None),
-        ("crates/specengine-cli/src/refs.rs", None),
-        ("crates/specengine-code/src/naming.rs", None),
+    const HASHING: [&str; 5] = [
+        "hash_item(",
+        "hash_node(",
+        "hash_bound_items(",
+        "item_levels(",
+        "module_levels(",
+    ];
+    let pinned: [(&str, &[&str]); 6] = [
+        ("crates/specengine-cli/src/code_walk.rs", &[]),
+        ("crates/specengine-cli/src/refs.rs", &[]),
+        ("crates/specengine-code/src/naming.rs", &[]),
         (
             "crates/specengine-cli/src/lock.rs",
-            Some("hash_bound_items("),
+            &["item_levels(", "module_levels("],
         ),
-        ("crates/specengine-cli/src/lock_regen.rs", None),
-        (ANALYZER_MODULE, Some("item_levels(")),
-    ] {
+        ("crates/specengine-cli/src/lock_regen.rs", &[]),
+        (ANALYZER_MODULE, &["item_levels("]),
+    ];
+    for (file, entries) in pinned {
         let source = scanned(file);
-        match entry {
-            Some(entry) => {
+        assert!(!source.contains("HashState"), "{file} names HashState");
+        for entry in entries {
+            assert!(
+                source.contains(entry),
+                "{file} hashes its units through `{entry}`"
+            );
+        }
+        if !entries.is_empty() {
+            for other in HASHING {
+                if entries.contains(&other) {
+                    continue;
+                }
+                // The analyzer hashes no file module: `module_levels(` is
+                // `lock.rs`' alone, absent from it as an entry, not banned.
+                if other == "module_levels(" {
+                    continue;
+                }
                 assert!(
-                    source.contains(entry),
-                    "{file} hashes its items through `{entry}`"
+                    !source.contains(other),
+                    "{file} hashes through `{other}`, not {entries:?}"
                 );
-                for other in [
-                    "hash_item(",
-                    "hash_node(",
-                    "hash_bound_items(",
-                    "item_levels(",
-                ] {
-                    if other == entry {
-                        continue;
-                    }
-                    if file.ends_with("/lock.rs") && other == "item_levels(" {
-                        continue;
-                    }
-                    assert!(
-                        !source.contains(other),
-                        "{file} hashes through `{other}`, not `{entry}`"
-                    );
-                }
-                if entry == "item_levels(" {
-                    assert!(!source.contains("HashState"), "{file} names HashState");
-                }
             }
-            None => assert!(!source.contains("HashState"), "{file} names HashState"),
         }
         let lock_file = file.contains("/lock");
         let mut from = 0;

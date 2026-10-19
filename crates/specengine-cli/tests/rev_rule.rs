@@ -27,7 +27,7 @@ use rev_rule_common::{
     unwritable_raises, with_field, with_spec_hash,
 };
 use serde_json::json;
-use verify_common::{ecs, golden};
+use verify_common::{ecs, golden, golden_format_1};
 
 /// No finding at all: exit 0, no rule finding.
 fn assert_silent(check: &rev_rule_common::Check, context: &str) {
@@ -95,11 +95,13 @@ fn refreshed_entries_pass_at_the_same_revision() {
 /// one: the finding, "The rule `rev-not-raised`" in full (its `id:` line,
 /// the subject, the message naming both ways out, the inserted `rev: 2`).
 /// `LAW-BOUND` with three of four refreshed: the same, its raised heading
-/// the fix. M: one of two refreshed passes.
+/// the fix. M: one of two refreshed passes. `GOAL-01`'s two entries are
+/// the format-1 golden's (format 2 locks one: its `[path, path]` binding
+/// is `bad_levels`, docs/features/lock-levels.md); the rule reads both.
 #[test]
 fn partial_refresh_is_a_finding() {
     for only in [0, 1] {
-        let repo = golden(&format!("rr1-partial-{only}"));
+        let repo = golden_format_1(&format!("rr1-partial-{only}"));
         repo.replace(GOAL_MD, GOAL_EDIT.0, GOAL_EDIT.1);
         refresh(&repo, GOAL, Some(only));
         stage_all(&repo);
@@ -274,10 +276,13 @@ fn pre_existing_lock_drift_is_out_of_scope() {
 /// RD-1: the feature-scoped `PASS-01` of `docs/features/cap-check.md` is
 /// locked as `cap-check/PASS-01`: its change is judged under that key
 /// (the subject, the message), its raised heading the fix; its entry
-/// refreshed under that key, no finding. M: a bare-ID key.
+/// refreshed under that key, no finding. M: a bare-ID key. Only the
+/// format-1 golden holds its entry (its one marker `[Sig]` is
+/// `bad_levels` under format 2: docs/features/lock-levels.md
+/// "Fixtures and the golden"); the rule reads format 1 (Q10).
 #[test]
 fn feature_scoped_node_is_judged_by_its_lock_key() {
-    let repo = golden("rr1-feature");
+    let repo = golden_format_1("rr1-feature");
     repo.replace(CAP_MD, PASS_EDIT.0, PASS_EDIT.1);
     stage_all(&repo);
     let check = staged(&repo);
@@ -296,6 +301,61 @@ fn feature_scoped_node_is_judged_by_its_lock_key() {
     refresh(&repo, PASS, None);
     stage_all(&repo);
     assert_silent(&staged(&repo), "cap-check/PASS-01 refreshed");
+}
+
+// ------------------------------------------------ lock-levels.md RD-2
+
+/// docs/features/lock-levels.md RD-2 **M3** (`parse_lock(None)` refusing
+/// format 1; 4b-2's carry-over, Q18): `HEAD` holds the format-1 golden
+/// (`fixtures/spec-lock/code-a.format-1.lock`), a project not yet
+/// rebased; `LAW-BOUND` and the feature-scoped `cap-check/PASS-01` changed
+/// and staged without a raise are each found `rev-not-raised` under the
+/// entries format 1 holds, exit 1; never a cannot-check. Refreshed by
+/// hand in the staged format-1 lock: silent.
+#[test]
+fn format_1_head_lock_is_read() {
+    let repo = golden_format_1("rr-format-1-head");
+    assert!(
+        repo.lock_text().contains("\nformat = 1\n"),
+        "the premise: HEAD's lock is format 1"
+    );
+    repo.replace(COUNTER_MD, BOUND_EDIT.0, BOUND_EDIT.1);
+    repo.replace(CAP_MD, PASS_EDIT.0, PASS_EDIT.1);
+    stage_all(&repo);
+    let check = staged(&repo);
+    assert_eq!(
+        check.causes(),
+        Vec::<String>::new(),
+        "no cannot-check:\n{}",
+        check.show()
+    );
+    assert_eq!(check.subjects(), [PASS, BOUND], "{}", check.show());
+    assert_eq!(check.code(), 1, "{}", check.show());
+    assert_finding(
+        &check,
+        COUNTER_MD,
+        BOUND_LINE,
+        BOUND,
+        false,
+        2,
+        3,
+        "## Bound {#LAW-BOUND rev=3}",
+    );
+    assert_finding(
+        &check,
+        CAP_MD,
+        PASS_LINE,
+        PASS,
+        false,
+        1,
+        2,
+        "### Stepping past the cap keeps the cap {#PASS-01 rev=2}",
+    );
+
+    refresh(&repo, BOUND, None);
+    refresh(&repo, PASS, None);
+    stage_all(&repo);
+    assert_silent(&staged(&repo), "format-1 entries refreshed");
 }
 
 // --------------------------------------------- no raise (iteration 2, W14)

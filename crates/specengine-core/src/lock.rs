@@ -1,25 +1,36 @@
-//! `spec.lock`'s model (`docs/canon/spec-lock.md` "The file", "Entry"):
-//! the reader, the canonical render, an accept's merge into one node's
-//! entries (`docs/canon/spec-lock-accept.md` "Steps", step 6), the
-//! editorial refresh (its "`--editorial`"), a gone node's drop (its "A gone
-//! node") and `spec lock regen`'s merge of a conflict's stages
-//! (`docs/canon/spec-lock.md` "`spec lock regen`"). Pure: the
-//! text in, the values out; no hash is computed and no file or git object
-//! read here (the CLI hashes, reads and writes). Writers: ADR-0041,
-//! `docs/canon/architecture-code.md#spec-lock`.
+//! `spec.lock`'s model (`docs/canon/spec-lock.md` "The file", "Entry";
+//! format 2: task spec `lock-levels`, "Format 2", "Readers"): the reader,
+//! the canonical render, an accept's merge into one node's entries
+//! (`docs/canon/spec-lock-accept.md` "Steps", step 6), the editorial
+//! refresh (its "`--editorial`"), a gone node's drop (its "A gone node")
+//! and `spec lock regen`'s merge of a conflict's stages
+//! (`docs/canon/spec-lock.md` "`spec lock regen`"). Pure: the text in, the
+//! values out; no hash is computed and no file or git object read here
+//! (the CLI hashes, reads and writes); the code side is digest strings, the
+//! four level names ([`LockLevel`]) and `body_bytes`. Writers: ADR-0041,
+//! ADR-0050, `docs/canon/architecture-code.md#spec-lock`.
 //!
+//! - **Formats** ([`LockFormat`]): this build writes format 2
+//!   ([`LOCK_FORMAT`]: each entry's `levels`, `sig_hash`, `body_hash`,
+//!   `deps_hash`, an item's or a module's fingerprints) and never format 1
+//!   (one v2 `ast_hash` per item). A [`Lock`] knows its format; no reader
+//!   upgrades one in memory.
 //! - **Bytes** ([`render_lock`]): the header comment, `format`,
 //!   `norm_recipe`, `code_recipe`, then one `[[binding]]` block per entry
 //!   in key order, an empty line before each; keys in the order of
-//!   [`ENTRY_KEYS`] (`item_kind`, `ast_hash` only for an item); LF and a
-//!   final LF; basic strings escaping only `"`, `\` and U+0000–U+001F,
-//!   U+007F. Never `toml`'s serializer.
+//!   [`ENTRY_KEYS`] (`item_kind` only for an item, the fingerprints only
+//!   for an item or a module); LF and a final LF; basic strings escaping
+//!   only `"`, `\` and U+0000–U+001F, U+007F. Never `toml`'s serializer.
 //! - **Key** ([`EntryKey`]): `node` bytes, `relation` as listed
 //!   ([`LockRelation`]), then `file`, `kind`, `symbol`, `item_kind` bytes.
 //! - **Reader** ([`parse_lock`]): any TOML layout; every refusal is a
-//!   [`LockError`] at its line, `spec.lock:<line>: <message>`. A key's
-//!   strings pass [`key_problem`], the writer's check too: whatever is
-//!   written reads back.
+//!   [`LockError`] at its line, `spec.lock:<line>: <message>`. Without the
+//!   build's recipes formats 1 and 2 are read, each by its own rules (a
+//!   reader of the spec side alone); with them, format 2 at those recipes
+//!   only, format 1 and another `code_recipe` refused by a text naming
+//!   `spec lock rebase` (every writer and code judge). A key's strings pass
+//!   [`key_problem`], the writer's check too: whatever is written reads
+//!   back.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,8 +46,14 @@ use super::walk_scope::is_clean_relative;
 /// The file's name, at the project root.
 pub const LOCK_FILE: &str = "spec.lock";
 
-/// The one format this build reads and writes.
-pub const LOCK_FORMAT: i64 = 1;
+/// The format this build writes, and the only one a writer or a code judge
+/// reads ([`parse_lock`] with the build's recipes).
+pub const LOCK_FORMAT: i64 = 2;
+
+/// The step every writer and code judge names for a lock of format 1 or of
+/// another `code_recipe` (task spec `lock-levels` Q11): one text, every
+/// caller alike.
+pub const REBASE_STEP: &str = "run spec lock rebase on a terminal";
 
 /// The comment opening every rendered lock.
 pub const LOCK_HEADER: &str = "# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit";
@@ -45,7 +62,7 @@ pub const LOCK_HEADER: &str = "# spec.lock: written only by SpecEngine (spec loc
 /// an entry (slice 8b's `[[tested]]`, a later format).
 pub const VERIFIED_BY: &str = "owner";
 
-/// The prefix of a `spec_hash` and an `ast_hash`.
+/// The prefix of a `spec_hash` and of every code digest.
 pub const HASH_PREFIX: &str = "b3:";
 
 /// The largest revision a lock holds.
@@ -54,8 +71,31 @@ pub const REV_MAX: u32 = 999_999_999;
 /// The top-level keys, in render order (`binding` the blocks).
 const TOP_KEYS: [&str; 4] = ["format", "norm_recipe", "code_recipe", "binding"];
 
-/// A binding block's keys, in render order.
-pub const ENTRY_KEYS: [&str; 13] = [
+/// A format-2 binding block's keys, in render order.
+pub const ENTRY_KEYS: [&str; 19] = [
+    "node",
+    "rev",
+    "spec_hash",
+    "relation",
+    "file",
+    "kind",
+    "symbol",
+    "item_kind",
+    "levels",
+    "sig_hash",
+    "body_hash",
+    "deps_hash",
+    "skeleton_hash",
+    "quote_hash",
+    "body_bytes",
+    "file_blob",
+    "commit",
+    "verified_by",
+    "verified_at",
+];
+
+/// A format-1 binding block's keys, in its render order (read only).
+pub const FORMAT_1_ENTRY_KEYS: [&str; 13] = [
     "node",
     "rev",
     "spec_hash",
@@ -71,8 +111,111 @@ pub const ENTRY_KEYS: [&str; 13] = [
     "verified_at",
 ];
 
-/// The keys an item's entry alone has.
-const ITEM_ONLY_KEYS: [&str; 2] = ["item_kind", "ast_hash"];
+/// The keys a format-1 item's entry alone has.
+const FORMAT_1_ITEM_ONLY_KEYS: [&str; 2] = ["item_kind", "ast_hash"];
+
+/// The fingerprint keys of a format-2 entry, an item's or a module's only.
+const FINGERPRINT_KEYS: [&str; 3] = ["skeleton_hash", "quote_hash", "body_bytes"];
+
+/// A lock's format: what its entries record of the code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LockFormat {
+    /// Format 1 (`docs/canon/spec-lock.md` "Entry"): an item's whole v2
+    /// digest (`ast_hash`), a module or a RON value by `file_blob` alone.
+    /// Read where only the spec side counts; never written.
+    One,
+    /// Format 2: every entry's levels and their digests, an item's or a
+    /// module's fingerprints. This build's ([`LOCK_FORMAT`]).
+    Two,
+}
+
+impl LockFormat {
+    /// The number written as `format`.
+    pub const fn number(self) -> i64 {
+        match self {
+            Self::One => 1,
+            Self::Two => 2,
+        }
+    }
+
+    /// The format numbered `number`.
+    pub const fn of(number: i64) -> Option<Self> {
+        match number {
+            1 => Some(Self::One),
+            2 => Some(Self::Two),
+            _ => None,
+        }
+    }
+}
+
+/// A level an entry records, in canonical order: the lock's own copy of
+/// the four names (core reads no code crate), as in
+/// `docs/canon/code-identity.md` "Marker grammar".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LockLevel {
+    Path,
+    Sig,
+    Body,
+    Deps,
+}
+
+impl LockLevel {
+    /// Every level, in canonical order.
+    pub const ALL: [Self; 4] = [Self::Path, Self::Sig, Self::Body, Self::Deps];
+
+    /// The name as a level list writes it.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Path => "path",
+            Self::Sig => "sig",
+            Self::Body => "body",
+            Self::Deps => "deps",
+        }
+    }
+
+    /// The level named `name`.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|level| level.as_str() == name)
+    }
+}
+
+/// An item's or a module's fingerprints: stored, never compared, never
+/// drift evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprints {
+    /// `b3:` + 64 lowercase hex.
+    pub skeleton_hash: String,
+    /// `b3:` + 64 lowercase hex.
+    pub quote_hash: String,
+    /// 0 to `u32::MAX`, written in decimal.
+    pub body_bytes: u32,
+}
+
+/// A format-2 entry's code side: the levels its markers name and every
+/// level's digest, in `levels` or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LevelCode {
+    /// Non-empty; the union of the effective levels of the markers giving
+    /// the key (a marker without a list: `sig`, `body`).
+    pub levels: BTreeSet<LockLevel>,
+    /// `b3:` + 64 lowercase hex each; a RON value's `sig` and `body` its
+    /// value hash, its `deps` the empty set's digest.
+    pub sig_hash: String,
+    pub body_hash: String,
+    pub deps_hash: String,
+    /// An item's and a module's; `None` for a RON value.
+    pub fingerprints: Option<Fingerprints>,
+}
+
+/// What an entry records of its code, as its lock's format records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntryCode {
+    /// Format 1: an item's whole v2 digest (`ast_hash`); `None` for a
+    /// module or a RON value.
+    Whole(Option<String>),
+    /// Format 2.
+    Levels(LevelCode),
+}
 
 /// The recipes a lock's hashes were made with: `norm_recipe` (the spec
 /// side's) and `code_recipe` (the code side's), as written.
@@ -188,16 +331,16 @@ impl PartialOrd for EntryKey {
 }
 
 /// What an entry vouches for: the node's revision and meaning hash, the
-/// code's hash and blob, at a commit, on a date. `verified_by` is always
-/// [`VERIFIED_BY`].
+/// code's digests and blob, at a commit, on a date. `verified_by` is
+/// always [`VERIFIED_BY`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verified {
     pub rev: u32,
     /// `b3:` + 64 lowercase hex: the node's `norm_hash`.
     pub spec_hash: String,
-    /// `b3:` + 64 lowercase hex: the whole item's hash; `None` but for an
-    /// item.
-    pub ast_hash: Option<String>,
+    /// The code side, as the lock's format records it: [`EntryCode::Levels`]
+    /// in a format-2 lock, [`EntryCode::Whole`] in a format-1 one.
+    pub code: EntryCode,
     /// The file's blob OID in the commit's tree (40 or 64 lowercase hex).
     pub file_blob: String,
     /// The commit's full OID.
@@ -206,17 +349,21 @@ pub struct Verified {
     pub verified_at: String,
 }
 
-/// A whole lock: its recipes and its entries by key.
+/// A whole lock: its format, its recipes and its entries by key. Every
+/// entry's code is of the lock's format ([`parse_lock`] reads it so; a
+/// writer gives format-2 entries to a format-2 lock only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lock {
+    pub format: LockFormat,
     pub recipes: Recipes,
     pub entries: BTreeMap<EntryKey, Verified>,
 }
 
 impl Lock {
-    /// A lock with no entry.
+    /// A format-2 lock with no entry.
     pub fn empty(recipes: Recipes) -> Self {
         Self {
+            format: LockFormat::Two,
             recipes,
             entries: BTreeMap::new(),
         }
@@ -260,10 +407,21 @@ struct RawBlocks {
     binding: Option<Vec<Spanned<RawTable>>>,
 }
 
-/// Reads a lock in any TOML layout. With `build`, recipes other than the
-/// build's are refused, both named. Refused: another `format`; an
-/// unknown, missing or repeated key; a duplicate entry key; a value of
+/// Reads a lock in any TOML layout. Refused: a `format` neither 1 nor 2;
+/// an unknown, missing or repeated key; a duplicate entry key; a value of
 /// the wrong form.
+///
+/// - `build` `None` (a reader of the spec side alone: the rule
+///   `rev-not-raised`, `spec bump`, a review's vouching count, an
+///   editorial approve, regen per stage): formats 1 and 2, each by its own
+///   rules, recipes never compared.
+/// - `Some(build)` (every writer and code judge): format 2 at the build's
+///   recipes only, checked in this order, the first failing one the error
+///   (task spec `lock-levels` Q27): (1) unreadable (the TOML, `format`, a
+///   recipe key) or a `format` neither 1 nor 2; (2) another
+///   `norm_recipe`, no step (no rebase crosses it); (3) format 1; (4)
+///   another `code_recipe`; (5) the entries. (3) and (4) name
+///   [`REBASE_STEP`].
 pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError> {
     let at = |span: Option<Range<usize>>, message: String| LockError {
         line: span.map(|span| line_of(text, span.start)),
@@ -285,22 +443,31 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
         message: format!("missing key `{name}`"),
     };
 
-    let format = value("format").ok_or_else(|| missing("format"))?;
-    match format.get_ref() {
-        toml::Value::Integer(LOCK_FORMAT) => {}
-        toml::Value::Integer(other) => {
-            return Err(at(
-                Some(format.span()),
-                format!("format {other} is not this build's: it reads format {LOCK_FORMAT}"),
-            ));
-        }
+    let format_value = value("format").ok_or_else(|| missing("format"))?;
+    let format_span = format_value.span();
+    let format = match format_value.get_ref() {
+        toml::Value::Integer(number) => match LockFormat::of(*number) {
+            Some(format) => format,
+            None if *number > LOCK_FORMAT => {
+                return Err(at(
+                    Some(format_span),
+                    format!("format {number} is newer than this build's {LOCK_FORMAT}"),
+                ));
+            }
+            None => {
+                return Err(at(
+                    Some(format_span),
+                    format!("format {number} is not this build's: it reads formats 1 and 2"),
+                ));
+            }
+        },
         other => {
             return Err(at(
-                Some(format.span()),
+                Some(format_span),
                 format!("`format` is a {}, not an integer", other.type_str()),
             ));
         }
-    }
+    };
     let recipe = |name: &str| -> Result<(String, Range<usize>), LockError> {
         let value = value(name).ok_or_else(|| missing(name))?;
         match value.get_ref() {
@@ -315,20 +482,35 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
     let (norm, norm_span) = recipe("norm_recipe")?;
     let (code, code_span) = recipe("code_recipe")?;
     if let Some(build) = build {
-        for (name, written, span, own) in [
-            ("norm_recipe", &norm, &norm_span, &build.norm),
-            ("code_recipe", &code, &code_span, &build.code),
-        ] {
-            if written != own {
-                return Err(at(
-                    Some(span.clone()),
-                    format!(
-                        "`{name}` is \"{written}\", this build's is \"{own}\": the lock was \
-                         written by another build (a grammar or recipe change re-hashes every \
-                         entry)"
-                    ),
-                ));
-            }
+        if norm != build.norm {
+            return Err(at(
+                Some(norm_span),
+                format!(
+                    "`norm_recipe` is \"{norm}\", this build's is \"{}\": the lock was written by \
+                     another build (a grammar or recipe change re-hashes every entry)",
+                    build.norm
+                ),
+            ));
+        }
+        if format != LockFormat::Two {
+            return Err(at(
+                Some(format_span),
+                format!(
+                    "format {} (\"{code}\"), this build's is {LOCK_FORMAT} (\"{}\"): \
+                     {REBASE_STEP}",
+                    format.number(),
+                    build.code
+                ),
+            ));
+        }
+        if code != build.code {
+            return Err(at(
+                Some(code_span),
+                format!(
+                    "`code_recipe` is \"{code}\", this build's is \"{}\": {REBASE_STEP}",
+                    build.code
+                ),
+            ));
         }
     }
 
@@ -337,7 +519,7 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
     let mut entries = BTreeMap::new();
     for block in blocks.binding.unwrap_or_default() {
         let span = block.span();
-        let (key, verified) = entry(text, block.get_ref(), span.clone())?;
+        let (key, verified) = entry(text, format, block.get_ref(), span.clone())?;
         if entries.contains_key(&key) {
             return Err(at(
                 Some(span),
@@ -358,14 +540,16 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
         entries.insert(key, verified);
     }
     Ok(Lock {
+        format,
         recipes: Recipes { norm, code },
         entries,
     })
 }
 
-/// One block read: its key and what it vouches for.
+/// One block of a lock of `format` read: its key and what it vouches for.
 fn entry(
     text: &str,
+    format: LockFormat,
     table: &RawTable,
     span: Range<usize>,
 ) -> Result<(EntryKey, Verified), LockError> {
@@ -373,8 +557,12 @@ fn entry(
         line: Some(line_of(text, span.start)),
         message,
     };
+    let known: &[&str] = match format {
+        LockFormat::One => &FORMAT_1_ENTRY_KEYS,
+        LockFormat::Two => &ENTRY_KEYS,
+    };
     for key in table.keys() {
-        if !ENTRY_KEYS.contains(&key.get_ref().as_str()) {
+        if !known.contains(&key.get_ref().as_str()) {
             return Err(at(
                 key.span(),
                 format!("unknown key `{}` in a [[binding]]", key.get_ref()),
@@ -455,38 +643,73 @@ fn entry(
         return Err(refused(problem, symbol, symbol_span));
     }
     let item_kind = string("item_kind")?;
-    let ast_hash = string("ast_hash")?;
-    let (item_kind, ast_hash) = match (kind, item_kind, ast_hash) {
-        (LockKind::Item, Some((item_kind, item_span)), Some((ast_hash, ast_span))) => {
-            if let Some(problem) = item_kind_problem(item_kind) {
-                return Err(refused(problem, item_kind, item_span));
+    let (item_kind, code) = match format {
+        LockFormat::One => {
+            let ast_hash = string("ast_hash")?;
+            match (kind, item_kind, ast_hash) {
+                (LockKind::Item, Some((item_kind, item_span)), Some((ast_hash, ast_span))) => {
+                    if let Some(problem) = item_kind_problem(item_kind) {
+                        return Err(refused(problem, item_kind, item_span));
+                    }
+                    hash_form("ast_hash", ast_hash).map_err(|message| at(ast_span, message))?;
+                    (
+                        Some(item_kind.to_owned()),
+                        EntryCode::Whole(Some(ast_hash.to_owned())),
+                    )
+                }
+                (LockKind::Item, item_kind, _) => {
+                    let absent = if item_kind.is_none() {
+                        "item_kind"
+                    } else {
+                        "ast_hash"
+                    };
+                    return Err(at(
+                        span.clone(),
+                        format!("an item's [[binding]] without `{absent}`"),
+                    ));
+                }
+                (other, item_kind, ast_hash) => {
+                    if let Some((_, extra)) = item_kind.or(ast_hash) {
+                        return Err(at(
+                            extra,
+                            format!(
+                                "a {} [[binding]] has no `{}`: only an item's has",
+                                other.as_str(),
+                                FORMAT_1_ITEM_ONLY_KEYS.join("` or `")
+                            ),
+                        ));
+                    }
+                    (None, EntryCode::Whole(None))
+                }
             }
-            hash_form("ast_hash", ast_hash).map_err(|message| at(ast_span, message))?;
-            (Some(item_kind.to_owned()), Some(ast_hash.to_owned()))
         }
-        (LockKind::Item, item_kind, _) => {
-            let absent = if item_kind.is_none() {
-                "item_kind"
-            } else {
-                "ast_hash"
+        LockFormat::Two => {
+            let item_kind = match (kind, item_kind) {
+                (LockKind::Item, Some((item_kind, item_span))) => {
+                    if let Some(problem) = item_kind_problem(item_kind) {
+                        return Err(refused(problem, item_kind, item_span));
+                    }
+                    Some(item_kind.to_owned())
+                }
+                (LockKind::Item, None) => {
+                    return Err(at(
+                        span.clone(),
+                        "an item's [[binding]] without `item_kind`".to_owned(),
+                    ));
+                }
+                (other, Some((_, extra))) => {
+                    return Err(at(
+                        extra,
+                        format!(
+                            "a {} [[binding]] has no `item_kind`: only an item's has",
+                            other.as_str()
+                        ),
+                    ));
+                }
+                (_, None) => None,
             };
-            return Err(at(
-                span.clone(),
-                format!("an item's [[binding]] without `{absent}`"),
-            ));
-        }
-        (other, item_kind, ast_hash) => {
-            if let Some((_, extra)) = item_kind.or(ast_hash) {
-                return Err(at(
-                    extra,
-                    format!(
-                        "a {} [[binding]] has no `{}`: only an item's has",
-                        other.as_str(),
-                        ITEM_ONLY_KEYS.join("` or `")
-                    ),
-                ));
-            }
-            (None, None)
+            let code = level_code(text, kind, table, span.clone())?;
+            (item_kind, EntryCode::Levels(code))
         }
     };
     let (file_blob, blob_span) = required("file_blob")?;
@@ -522,12 +745,159 @@ fn entry(
         Verified {
             rev,
             spec_hash: spec_hash.to_owned(),
-            ast_hash,
+            code,
             file_blob: file_blob.to_owned(),
             commit: commit.to_owned(),
             verified_at: verified_at.to_owned(),
         },
     ))
+}
+
+/// A format-2 block's code side, its keys in render order: `levels`
+/// (`levels: <empty|unknown <name>|duplicate <name>|order>` at its line),
+/// the three digests always, the fingerprints iff `kind` is an item or a
+/// module (`body_bytes` an integer 0 to `u32::MAX`).
+fn level_code(
+    text: &str,
+    kind: LockKind,
+    table: &RawTable,
+    span: Range<usize>,
+) -> Result<LevelCode, LockError> {
+    let at = |span: Range<usize>, message: String| LockError {
+        line: Some(line_of(text, span.start)),
+        message,
+    };
+    let owner = match kind {
+        LockKind::Item => "an item's",
+        LockKind::Module => "a module's",
+        LockKind::Ron => "a ron",
+    };
+    let levels = match table.get("levels") {
+        None => return Err(at(span, "a [[binding]] without `levels`".to_owned())),
+        Some(value) => match value.get_ref() {
+            toml::Value::Array(items) => level_list(items)
+                .map_err(|problem| at(value.span(), format!("levels: {problem}")))?,
+            other => {
+                return Err(at(
+                    value.span(),
+                    format!("`levels` is a {}, not an array", other.type_str()),
+                ));
+            }
+        },
+    };
+    let digest = |name: &str| -> Result<String, LockError> {
+        match table.get(name) {
+            None => Err(at(span.clone(), format!("a [[binding]] without `{name}`"))),
+            Some(value) => match value.get_ref() {
+                toml::Value::String(hash) => {
+                    hash_form(name, hash).map_err(|message| at(value.span(), message))?;
+                    Ok(hash.clone())
+                }
+                other => Err(at(
+                    value.span(),
+                    format!("`{name}` is a {}, not a string", other.type_str()),
+                )),
+            },
+        }
+    };
+    let sig_hash = digest("sig_hash")?;
+    let body_hash = digest("body_hash")?;
+    let deps_hash = digest("deps_hash")?;
+    let fingerprints = match kind {
+        LockKind::Item | LockKind::Module => {
+            let without = |name: &str| {
+                at(
+                    span.clone(),
+                    format!("{owner} [[binding]] without `{name}`"),
+                )
+            };
+            let fingerprint = |name: &str| match table.get(name) {
+                None => Err(without(name)),
+                Some(_) => digest(name),
+            };
+            let skeleton_hash = fingerprint("skeleton_hash")?;
+            let quote_hash = fingerprint("quote_hash")?;
+            let body_bytes = match table.get("body_bytes") {
+                None => return Err(without("body_bytes")),
+                Some(value) => match value.get_ref() {
+                    toml::Value::Integer(bytes) => u32::try_from(*bytes).map_err(|_| {
+                        at(
+                            value.span(),
+                            format!("`body_bytes` {bytes} is not 0 to {}", u32::MAX),
+                        )
+                    })?,
+                    other => {
+                        return Err(at(
+                            value.span(),
+                            format!("`body_bytes` is a {}, not an integer", other.type_str()),
+                        ));
+                    }
+                },
+            };
+            Some(Fingerprints {
+                skeleton_hash,
+                quote_hash,
+                body_bytes,
+            })
+        }
+        LockKind::Ron => {
+            if let Some((_, extra)) = FINGERPRINT_KEYS
+                .iter()
+                .find_map(|name| table.get_key_value(*name))
+            {
+                return Err(at(
+                    extra.span(),
+                    format!(
+                        "{owner} [[binding]] has no `{}`: only an item's or a module's has",
+                        FINGERPRINT_KEYS.join("`, `")
+                    ),
+                ));
+            }
+            None
+        }
+    };
+    Ok(LevelCode {
+        levels,
+        sig_hash,
+        body_hash,
+        deps_hash,
+        fingerprints,
+    })
+}
+
+/// A level list read: non-empty, each item a level name, none twice, in
+/// canonical order; else the first problem of `empty`, `unknown <name>`,
+/// `duplicate <name>`, `order`.
+fn level_list(items: &[toml::Value]) -> Result<BTreeSet<LockLevel>, String> {
+    if items.is_empty() {
+        return Err("empty".to_owned());
+    }
+    let mut levels = Vec::with_capacity(items.len());
+    for item in items {
+        let level = match item {
+            toml::Value::String(name) => LockLevel::from_name(name),
+            _ => None,
+        };
+        match (level, item) {
+            (Some(level), _) => levels.push(level),
+            (None, toml::Value::String(name)) => return Err(format!("unknown {name}")),
+            (None, toml::Value::Integer(number)) => return Err(format!("unknown {number}")),
+            (None, toml::Value::Float(number)) => return Err(format!("unknown {number}")),
+            (None, toml::Value::Boolean(flag)) => return Err(format!("unknown {flag}")),
+            (None, other) => return Err(format!("unknown {}", other.type_str())),
+        }
+    }
+    if let Some(twice) = levels
+        .iter()
+        .enumerate()
+        .find_map(|(at, level)| levels[..at].contains(level).then_some(*level))
+    {
+        return Err(format!("duplicate {}", twice.as_str()));
+    }
+    if levels.windows(2).any(|pair| pair[0] > pair[1]) {
+        return Err("order".to_owned());
+    }
+    Ok(levels.into_iter().collect())
 }
 
 /// Why a key's strings cannot be written and read back: the field and the
@@ -636,12 +1006,14 @@ fn line_of(text: &str, offset: usize) -> usize {
 
 // ---------------------------------------------------------------- render
 
-/// The lock's canonical bytes.
+/// The lock's canonical bytes, of its own format. A writer renders a
+/// format-2 lock only: one reading a format-1 lock refuses before it
+/// renders (task spec `lock-levels` "Readers").
 pub fn render_lock(lock: &Lock) -> String {
     let mut out = String::new();
     out.push_str(LOCK_HEADER);
     out.push('\n');
-    out.push_str(&format!("format = {LOCK_FORMAT}\n"));
+    out.push_str(&format!("format = {}\n", lock.format.number()));
     out.push_str(&format!("norm_recipe = {}\n", basic(&lock.recipes.norm)));
     out.push_str(&format!("code_recipe = {}\n", basic(&lock.recipes.code)));
     for (key, verified) in &lock.entries {
@@ -651,7 +1023,9 @@ pub fn render_lock(lock: &Lock) -> String {
     out
 }
 
-/// One entry's `[[binding]]` block, its last line ended.
+/// One entry's `[[binding]]` block, its last line ended: the keys of
+/// [`ENTRY_KEYS`] for a format-2 entry, of [`FORMAT_1_ENTRY_KEYS`] for a
+/// format-1 one.
 pub fn render_block(key: &EntryKey, verified: &Verified) -> String {
     let mut out = String::from("[[binding]]\n");
     let mut line = |name: &str, value: String| {
@@ -670,14 +1044,64 @@ pub fn render_block(key: &EntryKey, verified: &Verified) -> String {
     if let Some(item_kind) = &key.item_kind {
         line("item_kind", basic(item_kind));
     }
-    if let Some(ast_hash) = &verified.ast_hash {
-        line("ast_hash", basic(ast_hash));
+    match &verified.code {
+        EntryCode::Whole(ast_hash) => {
+            if let Some(ast_hash) = ast_hash {
+                line("ast_hash", basic(ast_hash));
+            }
+        }
+        EntryCode::Levels(code) => {
+            for (name, value) in level_lines(code) {
+                line(name, value);
+            }
+            if let Some(fingerprints) = &code.fingerprints {
+                line("skeleton_hash", basic(&fingerprints.skeleton_hash));
+                line("quote_hash", basic(&fingerprints.quote_hash));
+                line("body_bytes", fingerprints.body_bytes.to_string());
+            }
+        }
     }
     line("file_blob", basic(&verified.file_blob));
     line("commit", basic(&verified.commit));
     line("verified_by", basic(VERIFIED_BY));
     line("verified_at", basic(&verified.verified_at));
     out
+}
+
+/// The `levels` and three digest lines of a format-2 entry, name and
+/// rendered value, as [`render_block`] writes them.
+fn level_lines(code: &LevelCode) -> [(&'static str, String); 4] {
+    let levels: Vec<String> = code
+        .levels
+        .iter()
+        .map(|level| basic(level.as_str()))
+        .collect();
+    [
+        ("levels", format!("[{}]", levels.join(", "))),
+        ("sig_hash", basic(&code.sig_hash)),
+        ("body_hash", basic(&code.body_hash)),
+        ("deps_hash", basic(&code.deps_hash)),
+    ]
+}
+
+/// An entry's code as a `drift_hash` covers it (core
+/// `drift::HashedEntry::code`; task spec `lock-levels` "Drift evidence";
+/// `docs/canon/proposal-drift-item.md` "The item"): its `levels`,
+/// `sig_hash`, `body_hash` and `deps_hash` lines as [`render_lock`] writes
+/// them, LF-joined, no final LF, never a fingerprint or `body_bytes`
+/// (tuning one re-keys no item). A format-1 entry, which no code judge
+/// reads: its `ast_hash` line as rendered (empty for a module or a RON
+/// value).
+pub fn lock_code(verified: &Verified) -> String {
+    match &verified.code {
+        EntryCode::Whole(ast_hash) => ast_hash
+            .as_deref()
+            .map(|ast_hash| format!("ast_hash = {}", basic(ast_hash)))
+            .unwrap_or_default(),
+        EntryCode::Levels(code) => level_lines(code)
+            .map(|(name, value)| format!("{name} = {value}"))
+            .join("\n"),
+    }
 }
 
 /// A TOML basic string: `"`, `\` and U+0000–U+001F, U+007F escaped
@@ -713,10 +1137,10 @@ pub enum Change {
     /// Lockable now, no old entry: added.
     New,
     /// Lockable now, the old entry differs on `rev`, `spec_hash`,
-    /// `ast_hash` or `file_blob`: replaced.
+    /// `levels`, a level's digest or `file_blob`: replaced.
     Refreshed,
-    /// Lockable now and equal on all four: the old entry kept byte for
-    /// byte (`commit`, `verified_at` too).
+    /// Lockable now and equal on all of them: the old entry kept byte for
+    /// byte (`commit`, `verified_at`, the fingerprints too).
     Unchanged,
     /// Bound now but not lockable: the old entry kept.
     Kept,
@@ -846,10 +1270,13 @@ impl AcceptMerge {
 }
 
 /// Merges an accept into `old`'s entries of the node (step 6): a lockable
-/// binding fresh, or the old entry kept byte for byte when equal on `rev`,
-/// `spec_hash`, `ast_hash`, `file_blob`; one not lockable now keeps its
-/// old entry; one bound no more is dropped. Refused: an old entry at the
-/// revision with another `spec_hash`. Other nodes' entries are untouched.
+/// binding fresh, or the old entry kept byte for byte when the same pair
+/// (`rev`, `spec_hash`, `levels`, the three digests, `file_blob`; never a
+/// fingerprint); one not lockable now keeps its old entry; one bound no
+/// more is dropped. Refused: an old entry at the revision with another
+/// `spec_hash`. Other nodes' entries are untouched; the lock keeps `old`'s
+/// format, which a writer reads as format 2 (`parse_lock` with the build's
+/// recipes), so the fresh entries are of it.
 pub fn merge_accept(old: &Lock, input: &AcceptInput) -> Result<AcceptMerge, AcceptRefusal> {
     if let Some((key, verified)) = old
         .entries_of(&input.node)
@@ -921,11 +1348,23 @@ pub fn merge_accept(old: &Lock, input: &AcceptInput) -> Result<AcceptMerge, Acce
     Ok(AcceptMerge { lock, rows })
 }
 
-/// Equal on `rev`, `spec_hash`, `ast_hash` and `file_blob`.
+/// Equal on `rev`, `spec_hash`, the judged code and `file_blob`: format
+/// 2's `levels`, `sig_hash`, `body_hash`, `deps_hash`, never a fingerprint
+/// or `body_bytes` (task spec `lock-levels` Q12); format 1's `ast_hash`.
 fn same_pair(held: &Verified, now: &Verified) -> bool {
+    let same_code = match (&held.code, &now.code) {
+        (EntryCode::Levels(held), EntryCode::Levels(now)) => {
+            held.levels == now.levels
+                && held.sig_hash == now.sig_hash
+                && held.body_hash == now.body_hash
+                && held.deps_hash == now.deps_hash
+        }
+        (EntryCode::Whole(held), EntryCode::Whole(now)) => held == now,
+        _ => false,
+    };
     held.rev == now.rev
         && held.spec_hash == now.spec_hash
-        && held.ast_hash == now.ast_hash
+        && same_code
         && held.file_blob == now.file_blob
 }
 
@@ -1056,14 +1495,21 @@ impl Regen {
 pub enum RegenRefusal {
     /// No stage of ours or theirs.
     NoSides,
-    /// Two stages name different recipes.
+    /// Two stages name different `norm_recipe`s: no rebase crosses it.
     RecipesDiffer { first: Recipes, second: Recipes },
+    /// A stage is format 1, or two stages name different `code_recipe`s:
+    /// the lagging branch is rebased before the merge (task spec
+    /// `lock-levels` Q28).
+    Unrebased,
 }
 
 /// Merges the stages of a conflict per entry key (`base` absent: an
 /// add/add; a side absent: every entry deleted there). Side-symmetric:
 /// swapping `ours` and `theirs` gives the same lock. Reads no code, no
 /// spec, computes no hash: every entry kept is one an owner accepted.
+/// Every stage present is format 2 of one pair of recipes (the build's not
+/// required), the `norm_recipe` compared first; the merged lock is of
+/// them.
 pub fn merge_stages(
     base: Option<&Lock>,
     ours: Option<&Lock>,
@@ -1077,11 +1523,20 @@ pub fn merge_stages(
         .first()
         .map(|lock| lock.recipes.clone())
         .ok_or(RegenRefusal::NoSides)?;
-    if let Some(other) = present.iter().find(|lock| lock.recipes != recipes) {
+    if let Some(other) = present
+        .iter()
+        .find(|lock| lock.recipes.norm != recipes.norm)
+    {
         return Err(RegenRefusal::RecipesDiffer {
             first: recipes,
             second: other.recipes.clone(),
         });
+    }
+    if present
+        .iter()
+        .any(|lock| lock.format != LockFormat::Two || lock.recipes.code != recipes.code)
+    {
+        return Err(RegenRefusal::Unrebased);
     }
     let none = BTreeMap::new();
     let base = base.map_or(&none, |lock| &lock.entries);

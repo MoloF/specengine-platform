@@ -12,7 +12,7 @@ mod verify_common;
 
 use lock_common::LockRepo;
 use verify_common::{
-    BOUNDS, MODES, STAMINA, Verify, ecs, golden, golden_lock, item, set_mode, verify,
+    BOUNDS, COUNTER, MODES, STAMINA, Verify, ecs, golden, golden_lock, item, set_mode, verify,
 };
 
 /// Every mode, plain and `--changed`: exit 2, `cannot-verify`, the report
@@ -131,6 +131,62 @@ fn two_broken_items_are_never_compared() {
         );
         assert_eq!(regen(run).0, "cannot_verify", "{context}");
         assert_eq!(run.json["counts"]["cannot"], 4, "{context}");
+    });
+}
+
+/// docs/features/lock-levels.md TE-4 (AC-14 on the format-2 golden): two
+/// different bound items of code-a broken at once, `GOAL-01`'s
+/// `Tally::value` (`self.count +`) and `LAW-BOUND`'s `stops_at_cap`
+/// (`tally.step(;`): each entry reads `cannot_verify item_error` with its
+/// own first category, never compared (`compared` null), its marker now
+/// keyless; exit 2 in every mode, plain and `--changed`. M: a broken item
+/// compared against the entry's `sig_hash`/`body_hash`.
+#[test]
+fn two_broken_golden_items_are_never_compared() {
+    let repo = golden("verify-two-broken-golden");
+    repo.replace(
+        COUNTER,
+        "        self.count\n    }\n\n    // @implements GOAL-01@\n",
+        "        self.count +\n    }\n\n    // @implements GOAL-01@\n",
+    );
+    repo.replace(
+        BOUNDS,
+        "    for _ in 0..11 {\n        tally.step();",
+        "    for _ in 0..11 {\n        tally.step(;",
+    );
+    let value = item(
+        "GOAL-01",
+        "implements",
+        COUNTER,
+        "crates/tally::counter::Tally::value",
+        "function_item",
+    );
+    let stops = item(
+        "LAW-BOUND",
+        "verifies",
+        BOUNDS,
+        "crates/tally::test:bounds::stops_at_cap",
+        "function_item",
+    );
+    exits_2_everywhere(&repo, |run, context| {
+        let mut details = Vec::new();
+        for key in [value, stops] {
+            let row = run.row(key.node, key.relation, key.file, key.symbol);
+            assert_eq!(
+                (&row["state"], &row["category"], &row["compared"]),
+                (
+                    &"cannot_verify".into(),
+                    &"item_error".into(),
+                    &serde_json::Value::Null
+                ),
+                "{context} {key:?}"
+            );
+            assert_eq!(row["lock"], golden_lock(key), "{context} {key:?}");
+            assert_eq!(row["markers"], serde_json::json!([]), "{context} {key:?}");
+            details.push(row["detail"].clone());
+        }
+        assert_eq!(details[0], "missing", "{context}");
+        assert!(details[1].is_string(), "{context}: {details:?}");
     });
 }
 

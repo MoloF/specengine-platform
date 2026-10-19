@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-20
 ---
 
 # spec check against HEAD
@@ -41,7 +41,7 @@ reviewed: 2026-10-15
 
 ## The rule's locks
 
-The rule `rev-not-raised` (store `check.rs` `with_rule`) reads `HEAD:spec.lock` and the checked tree's root `spec.lock` only when `HEAD` holds one: none, nothing new is read and the output is unchanged (this repository). `--staged`: both blobs last in the one `cat-file` session, the index's through `GIT_INDEX_FILE` (the `--only` index of apply's, accept's and a drift approve's commits too); `--changed`: `HEAD`'s last in the session, the disk's file after it. A lock-only commit changes no `norm_hash`, so neither is parsed. When a node changed, each is read by core `check::rev_rule::rule_lock`: UTF-8, then `parse_lock(text, None)` (any layout it reads, every entry field validated; `code_recipe` never compared), then `norm_recipe` this build's. Causes: `not UTF-8: SpecEngine writes it`; `parse_lock`'s message; ``its norm_recipe is `X`, this build's `specengine-norm/v1`: its spec_hash values are not this build's``; `cannot be read: not a regular file`, `…: its blob is missing from the git object database`, `…: its object is not a blob`, `…: <io error>`. Named `HEAD:spec.lock[:line]` and `spec.lock[:line]`, `HEAD`'s first, then the checked run's: cannot check in the checked mode, no findings, as a partial base. Unmerged under `--staged`: the unmerged refusal above. Format 1 is read; 5b adds 2.
+The rule `rev-not-raised` (store `check.rs` `with_rule`) reads `HEAD:spec.lock` and the checked tree's root `spec.lock` only when `HEAD` holds one: none, nothing new is read and the output is unchanged (this repository). `--staged`: both blobs last in the one `cat-file` session, the index's through `GIT_INDEX_FILE` (the `--only` index of apply's, accept's and a drift approve's commits too); `--changed`: `HEAD`'s last in the session, the disk's file after it. A lock-only commit changes no `norm_hash`, so neither is parsed. When a node changed, each is read by core `check::rev_rule::rule_lock`: UTF-8, then `parse_lock(text, None)` (any layout it reads, every entry field validated; `code_recipe` never compared), then `norm_recipe` this build's. Causes: `not UTF-8: SpecEngine writes it`; `parse_lock`'s message; ``its norm_recipe is `X`, this build's `specengine-norm/v1`: its spec_hash values are not this build's``; `cannot be read: not a regular file`, `…: its blob is missing from the git object database`, `…: its object is not a blob`, `…: <io error>`. Named `HEAD:spec.lock[:line]` and `spec.lock[:line]`, `HEAD`'s first, then the checked run's: cannot check in the checked mode, no findings, as a partial base. Unmerged under `--staged`: the unmerged refusal above. Formats 1 and 2 are read.
 
 ## Next
 

@@ -428,6 +428,63 @@ fn verifiable_is_accepts_predicate() {
     assert!(kiln.repo.lock().is_none(), "no lock written");
 }
 
+/// docs/features/lock-levels.md TE-3 (S3): "Verifiable" is accept's
+/// predicate, so accept's new refusal reaches `--tests`: a node whose only
+/// `@verifies` marker carries an `Invalid` level list (`[Sig]`: unknown)
+/// reads `not verifiable bad_levels`, before the question and after the
+/// run; its test is `not run | … | node not verifiable`, never started;
+/// accept names the same state. M: `Invalid` locked as the default (the
+/// node verifiable, its test run).
+#[test]
+fn a_bad_levels_only_marker_is_not_verifiable() {
+    let kiln = Kiln::new("vt-bad-levels");
+    write_parts(&kiln);
+    kiln.repo.write(
+        "crates/kiln/tests/lid.rs",
+        "// @verifies KILN-LID [Sig]\n#[test]\nfn lid_holds() {}\n",
+    );
+    kiln.repo
+        .commit_all("a check of the lid under an invalid list");
+    let run = kiln.run();
+    assert_eq!(
+        run.node("KILN-LID"),
+        json!({"id": "KILN-LID", "verdict": "not_verifiable", "state": "bad_levels"})
+    );
+    let row = run.row("crates/kiln::test:lid::lid_holds");
+    assert_eq!(
+        (&row["outcome"], &row["reason"]),
+        (&json!("not_run"), &json!("node not verifiable")),
+        "{row}"
+    );
+    run.has_line("node KILN-LID: not verifiable bad_levels");
+    assert!(
+        run.listing()
+            .contains(&"node KILN-LID: not verifiable bad_levels".to_owned()),
+        "the listing names it before the question: {:?}",
+        run.listing()
+    );
+    assert!(
+        !tests_run(&kiln)
+            .iter()
+            .any(|test| test.contains("lid_holds")),
+        "{:?}",
+        kiln.log()
+    );
+    let attempt = kiln.repo.accept("KILN-LID", false);
+    let outcome = attempt
+        .outcome
+        .as_ref()
+        .unwrap_or_else(|error| panic!("accept KILN-LID: exit 2: {error}"));
+    let refused: Vec<&LockRow> = outcome
+        .rows
+        .iter()
+        .filter(|row| row.change == "not locked")
+        .collect();
+    assert_eq!(refused.len(), 1, "{:#?}", outcome.rows);
+    assert_eq!(refused[0].state.as_deref(), Some("bad_levels"));
+    assert!(kiln.repo.lock().is_none(), "no lock written");
+}
+
 // -------------------------------------------------------------------- TE-4
 
 /// TE-4 ("Runnable", "Order" step 7): a case of every reason but `control

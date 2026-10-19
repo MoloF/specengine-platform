@@ -60,7 +60,7 @@ The Rust levels and fingerprints (5a-1); the eval and pilot figures (5a-2); CLI,
 
 ## Open
 
-Decided under the owner's pre-approval: Q7 (2026-10-13) any `RonAnalysis` rejection refuses every value of the file, the detail the first `error_categories` entry (lexer errors only: a structure error can shift a value's range, a false `ok`); Q15 (2026-10-15) the value ranges internal to `ron`, `value_hashes` the one way out (a field on `RonMarker` or `CommentAnchor` breaks struct literals); R2, R2b, R3 (review 1, 2026-10-16): "Implementation". Q-numbers are shared with `hash-levels.md`. Left to 5b-1: a public source for the RON `deps` digest (`lock-levels.md` "Dependencies and ordering").
+Decided under the owner's pre-approval: Q7 (2026-10-13) any `RonAnalysis` rejection refuses every value of the file, the detail the first `error_categories` entry (lexer errors only: a structure error can shift a value's range, a false `ok`); Q15 (2026-10-15) the value ranges internal to `ron`, `value_hashes` the one way out (a field on `RonMarker` or `CommentAnchor` breaks struct literals); R2, R2b, R3 (review 1, 2026-10-16): "Implementation". Q-numbers are shared with `hash-levels.md`. Left to 5b-1: a public source for the RON `deps` digest (5b-1a: `empty_deps_digest()`, `lock-levels.md` "The empty set's `deps`").
 
 ## Implementation
 

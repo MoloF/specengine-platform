@@ -13,8 +13,11 @@
 //! `cannot:` lines in this order: (1) a config error, `[code]`'s or
 //! `[verify]`'s; (2) no `[code]`; (3) a walk gap; (4) no worktree, no
 //! `git`, a git failure; (5) `spec.lock` unmerged; (6) `spec.lock`
-//! unreadable, not UTF-8, invalid or of other recipes; (7) a partial base,
-//! `HEAD`'s lock invalid; (8) `HOME` or the data directory. Every check
+//! unreadable, not UTF-8, invalid, format 1 or of other recipes (core's
+//! text, naming `spec lock rebase` but for another `norm_recipe`: the step
+//! is the cause's text, no hint); (7) a partial base, `HEAD`'s lock
+//! invalid, format 1 or of other recipes; (8) `HOME` or the data
+//! directory. Every check
 //! that can run does (the walk whenever `[code]` reads), so the first
 //! `cannot:` line is the first cause in that order; the base is read only
 //! when no other cause is present. A run with a cause judges no row.

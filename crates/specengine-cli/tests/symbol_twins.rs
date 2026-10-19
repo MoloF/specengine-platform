@@ -22,7 +22,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use common::{Scratch, snapshot, spec, write};
-use lock_common::{LockRepo, blocks, item_hash, value};
+use lock_common::{LockRepo, blocks, item_code, value};
 use verify_common::{
     COUNTER, Key, STAMINA, Says, assert_row, ecs, golden, golden_lock, item, lock_entry, verify,
 };
@@ -97,7 +97,8 @@ fn nth_line(text: &str, line: &str, nth: usize) -> usize {
 
 /// RD-1 ("Who sees it", spec-lock "Lockability"): a marker on one of two
 /// adjacent `impl Tally` blocks is locked under its discriminated key
-/// (`impl Tally #1`, the whole item's v2 digest), the other twin's marker
+/// (`impl Tally #1`, its levels' digests by `item_levels`: docs/features/
+/// lock-levels.md "Format 2"), the other twin's marker
 /// (`@3a`) stays `not locked … bad_rev` under `#2`; verify reads the
 /// locked twin `ok` by blob. M: in-file twins kept ambiguous.
 #[test]
@@ -127,10 +128,20 @@ fn marked_adjacent_impl_is_lockable() {
     assert_eq!(twins.len(), 1, "{lock}");
     assert_eq!(value(&twins[0], "symbol"), Some(IMPL_1));
     assert_eq!(value(&twins[0], "item_kind"), Some("impl_item"));
-    assert_eq!(
-        value(&twins[0], "ast_hash"),
-        Some(item_hash(repo.read(COUNTER).as_bytes(), 22, "impl_item").as_str())
+    let code = item_code(
+        repo.read(COUNTER).as_bytes(),
+        22,
+        "impl_item",
+        &["sig", "body"],
     );
+    for (key, digest) in [
+        ("sig_hash", &code.sig),
+        ("body_hash", &code.body),
+        ("deps_hash", &code.deps),
+    ] {
+        assert_eq!(value(&twins[0], key), Some(digest.as_str()), "{key}");
+    }
+    assert_eq!(value(&twins[0], "ast_hash"), None);
     let run = verify(&repo, &[]);
     let first = item("LAW-BOUND", "implements", COUNTER, IMPL_1, "impl_item");
     assert_row(

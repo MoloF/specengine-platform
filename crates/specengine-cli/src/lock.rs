@@ -20,8 +20,9 @@
 //!    is refused), `[code]` (none: exit 2, `spec refs`' text); `REF` as
 //!    `spec show` reads it (several nodes: exit 1);
 //! 2. git: a worktree, `HEAD` born and on a branch, no operation in
-//!    progress; the lock read (exit 2 when unreadable or of other
-//!    recipes). `REF`'s bytes (a written `@rev` dropped) naming entries
+//!    progress; the lock read (exit 2 when unreadable, format 1 or of
+//!    other recipes: core's text names `spec lock rebase`, but for another
+//!    `norm_recipe`). `REF`'s bytes (a written `@rev` dropped) naming entries
 //!    while no node has that canonical ID: the gone node's drop, once
 //!    `HEAD` agrees (a changed spec file whose `HEAD` blob still holds the
 //!    ID is a dirty input, exit 1); else `REF` naming nothing: exit 1;
@@ -31,7 +32,11 @@
 //!    every `.rs` or `.ron` file the walk would read and every `Cargo.toml`
 //!    that names its files that differs from `HEAD` (names and `qpath`s
 //!    depend on them all: one commit, one lock); each marker file bound
-//!    and its items hashed from its `HEAD` blob, the node's revision and
+//!    and its lockable bindings hashed from its `HEAD` blob into lock
+//!    format 2 (task spec `lock-levels`, "Accept": an item's and a
+//!    module's levels and fingerprints, a RON value's hash; a malformed
+//!    level list `bad_levels`, a module file with a parse error or a RON
+//!    file its analysis rejects `cannot_verify`), the node's revision and
 //!    `norm_hash` from its file's `HEAD` blob; a binding whose key core's
 //!    [`key_problem`] refuses is not locked; merged into the node's
 //!    entries (core [`merge_accept`]);
@@ -73,22 +78,25 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::ops::Range;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use serde::Serialize;
 use specengine_code::{
-    Anchor, Binding, FileAnalysis, HashState, MOD_KIND, Marker, Name, RECIPE, Relation, RustParser,
-    bind_tree, comment_anchors, grammar_info, hash_bound_items, markers_in,
+    Anchor, Binding, Digest, FileAnalysis, LEVEL_RECIPE, Level, LevelHashes, LevelState, Levels,
+    MOD_KIND, Marker, Name, Relation, RonValues, RustParser, bind_tree, comment_anchors,
+    empty_deps_digest, grammar_info, item_levels, markers_in, module_levels, value_hashes,
 };
 use specengine_core::check::resolve::feature_stem;
 use specengine_core::check::{CheckInput, Resolver, canonical_id, feature_scoped};
 use specengine_core::lock::{
-    AcceptInput, AcceptRefusal, AcceptRow, Change, EntryKey, LOCK_FILE, Lock, LockKind,
-    LockRelation, Place as RowPlace, Recipes, Verified, drop_node, key_problem, merge_accept,
-    parse_lock, refresh_editorial, render_lock,
+    AcceptInput, AcceptRefusal, AcceptRow, Change, EntryCode, EntryKey, Fingerprints, HASH_PREFIX,
+    LOCK_FILE, LevelCode, Lock, LockKind, LockLevel, LockRelation, Place as RowPlace, Recipes,
+    Verified, drop_node, key_problem, merge_accept, parse_lock, refresh_editorial, render_lock,
 };
 use specengine_core::proposal::{EDITORIAL, LOCK_MODE_TRAILER, LOCK_TRAILER, PROPOSAL_TRAILER};
+use specengine_core::verify::BAD_LEVELS;
 use specengine_core::{
     CodeConfig, DOCUMENT_EXTENSION, NORM_RECIPE, Revision, is_under, norm_input, revision,
 };
@@ -304,13 +312,14 @@ impl LockOutcome {
 }
 
 /// The recipes of this build: `norm_recipe` the spec side's,
-/// `code_recipe` `<RECIPE> tree-sitter-rust/<version> abi/<n>`.
+/// `code_recipe` `<LEVEL_RECIPE> tree-sitter-rust/<version> abi/<n>`
+/// (format 2's levels).
 pub(crate) fn build_recipes() -> Recipes {
     let grammar = grammar_info();
     Recipes {
         norm: NORM_RECIPE.to_owned(),
         code: format!(
-            "{RECIPE} tree-sitter-rust/{} abi/{}",
+            "{LEVEL_RECIPE} tree-sitter-rust/{} abi/{}",
             grammar.tree_sitter_rust, grammar.abi
         ),
     }
@@ -407,7 +416,9 @@ pub(crate) struct ReadLock {
 }
 
 /// `<root>/spec.lock` read and parsed against this build's recipes (an
-/// absent file: an empty lock); exit 2 when it cannot be read.
+/// absent file: an empty lock); exit 2 when it cannot be read, is format 1
+/// or of another recipe (core's text, naming `spec lock rebase` but for
+/// another `norm_recipe`).
 pub(crate) fn read_lock(root: &Path, recipes: &Recipes) -> Result<ReadLock, CliError> {
     let bytes = read_lock_bytes(root)?;
     let lock = match &bytes {
@@ -681,9 +692,15 @@ pub(crate) fn canonical_ids(
 struct Found {
     relation: LockRelation,
     /// The first of the rows' states that refuses it (`id_state`,
-    /// `rev_state`), `None` when both allow.
+    /// `rev_state`, its level list), `None` when all allow.
     refused: Option<String>,
     target: Target,
+    /// Its effective levels (a marker without a list: `sig`, `body`);
+    /// empty for a malformed list, which [`Found::refused`] names.
+    levels: BTreeSet<LockLevel>,
+    /// Its comment's byte range in the file: a RON value's hash is paired
+    /// with its binding by it.
+    comment: Range<usize>,
 }
 
 /// What a marker binds, and the lock key it gives: the one key builder of
@@ -697,8 +714,10 @@ pub(crate) enum Target {
         item_kind: String,
         ambiguity: Option<&'static str>,
     },
-    /// A module (the file's or an inline `mod`'s), named.
+    /// A module, named: the file's (`item` none) or an inline `mod`'s (its
+    /// `mod_item`'s index, hashed as that item).
     Module {
+        item: Option<usize>,
         qpath: String,
         ambiguity: Option<&'static str>,
     },
@@ -742,12 +761,14 @@ impl Target {
                 }
             }
             Binding::Module(None) => Self::Module {
+                item: None,
                 qpath: module.map(|name| name.qpath.clone()).unwrap_or_default(),
                 ambiguity: ambiguity(module),
             },
             Binding::Module(Some(item)) => {
                 let name = names.get(item);
                 Self::Module {
+                    item: Some(item),
                     qpath: name.map(|name| name.qpath.clone()).unwrap_or_default(),
                     ambiguity: ambiguity(name),
                 }
@@ -1019,9 +1040,13 @@ pub(crate) struct Facts<'a> {
 
 /// Each marker file read from `HEAD` (`blob_at`, no filter), bound (its
 /// items checked against the walk's, whose names they take), its markers
-/// of the node sorted ("Lockability"), the items lockable markers bind
-/// hashed: no other item is. `spec verify --tests` calls it as accept's
-/// own predicate (task spec `verify-tests`, "Verifiable").
+/// of the node sorted ("Lockability": `id_state`, `rev_state`, the level
+/// list, the binding), what lockable markers bind hashed and no more: an
+/// item's levels (`item_levels`, an inline `mod` as its `mod_item`), the
+/// file's module's (`module_levels`), a RON file's value hashes paired
+/// with their comments by range (task spec `lock-levels`, "Accept").
+/// `spec verify --tests` calls it as accept's own predicate (task spec
+/// `verify-tests`, "Verifiable").
 pub(crate) fn committed_bindings(
     repo: &Repo,
     tree: &CodeTree,
@@ -1051,7 +1076,7 @@ pub(crate) fn committed_bindings(
         })?;
         let blob = repo.blob_oid(path)?;
         let mut found = Vec::new();
-        let mut hashes: BTreeMap<usize, HashState> = BTreeMap::new();
+        let mut codes = FileCodes::default();
         // The keys of this file's items with a parse error: a marker on
         // one binds `cannot_verify`, and the old entry of its key is kept.
         let mut broken: Vec<(LockKind, String, Option<String>)> = Vec::new();
@@ -1108,25 +1133,38 @@ pub(crate) fn committed_bindings(
                     continue;
                 };
                 let target = || Target::of_rust(comment.binding, &binding.analysis, names, module);
-                node_markers(comment_text, corpus, node.key, rev, &target, &mut found);
+                let at = CommentAt {
+                    comment: comment_text,
+                    range: comment.range.clone(),
+                    target: &target,
+                };
+                node_markers(&at, corpus, node.key, rev, &mut found);
             }
-            let wanted: Vec<usize> = found
-                .iter()
+            // Only what a lockable marker binds is hashed: an item's or an
+            // inline `mod`'s levels by its index, the file's module's once.
+            let lockable = || {
+                found
+                    .iter()
+                    .filter(|found| found.refused.is_none() && found.target.ambiguity().is_none())
+            };
+            let wanted: Vec<usize> = lockable()
                 .filter_map(|found| match found.target {
-                    Target::Item {
-                        index,
-                        ambiguity: None,
-                        ..
-                    } if found.refused.is_none() => Some(index),
+                    Target::Item { index, .. }
+                    | Target::Module {
+                        item: Some(index), ..
+                    } => Some(index),
                     _ => None,
                 })
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect();
-            for (index, state) in wanted.iter().zip(hash_bound_items(&parsed, &text, &wanted)) {
-                if let Some(state) = state {
-                    hashes.insert(*index, state);
+            for (index, levels) in wanted.iter().zip(item_levels(&parsed, &text, &wanted)) {
+                if let Some(levels) = levels {
+                    codes.items.insert(*index, levels);
                 }
+            }
+            if lockable().any(|found| matches!(found.target, Target::Module { item: None, .. })) {
+                codes.module = Some(module_levels(&parsed, &text));
             }
         } else if path.ends_with(RON_EXTENSION) {
             for anchor in comment_anchors(&text) {
@@ -1134,14 +1172,32 @@ pub(crate) fn committed_bindings(
                     continue;
                 };
                 let target = || Target::of_ron(&anchor.anchor);
-                node_markers(comment_text, corpus, node.key, rev, &target, &mut found);
+                let at = CommentAt {
+                    comment: comment_text,
+                    range: anchor.comment.clone(),
+                    target: &target,
+                };
+                node_markers(&at, corpus, node.key, rev, &mut found);
+            }
+            let wanted = found.iter().any(|found| {
+                found.refused.is_none()
+                    && matches!(
+                        found.target,
+                        Target::Ron {
+                            ambiguity: None,
+                            ..
+                        }
+                    )
+            });
+            if wanted {
+                codes.ron = Some(value_hashes(&text));
             }
         }
         bindings.any_marker |= !found.is_empty();
         keep_broken(&found, &broken, &node.canonical, path, old, &mut bindings);
         let pair = Pair { facts, blob: &blob };
         for found in found {
-            classify_found(found, &node.canonical, path, &pair, &hashes, &mut bindings);
+            classify_found(found, &node.canonical, path, &pair, &codes, &mut bindings);
         }
     }
     let Bindings {
@@ -1200,24 +1256,114 @@ struct Pair<'a> {
     blob: &'a str,
 }
 
+/// What one file's lockable bindings hashed to, by what they bind.
+#[derive(Default)]
+struct FileCodes {
+    /// An item's levels, or an inline `mod`'s (its `mod_item`), by index.
+    items: BTreeMap<usize, LevelState>,
+    /// The file's module's levels.
+    module: Option<LevelState>,
+    /// A RON file's value hashes by comment range, or its refusal.
+    ron: Option<RonValues>,
+}
+
+/// A lockable binding's digests: an item's or a module's levels and
+/// fingerprints, or a RON value's hash.
+enum Hashed<'a> {
+    Levels(&'a LevelHashes),
+    Ron(Digest),
+}
+
+impl FileCodes {
+    /// What `found` binds, hashed; `Err`: its `cannot_verify` state (a
+    /// parse error in the item, or anywhere in a module's file; a RON file
+    /// its analysis rejects).
+    fn of(&self, found: &Found) -> Result<Hashed<'_>, String> {
+        let refused = |category: Option<&str>| match category {
+            Some(category) => format!("{CANNOT_VERIFY} {category}"),
+            None => CANNOT_VERIFY.to_owned(),
+        };
+        let levels = match &found.target {
+            Target::Item { index, .. }
+            | Target::Module {
+                item: Some(index), ..
+            } => self.items.get(index),
+            Target::Module { item: None, .. } => self.module.as_ref(),
+            Target::Ron { .. } => {
+                return match &self.ron {
+                    Some(RonValues::Hashed(values)) => values
+                        .iter()
+                        .find(|(range, _)| *range == found.comment)
+                        .map(|(_, digest)| Hashed::Ron(*digest))
+                        .ok_or_else(|| refused(None)),
+                    Some(RonValues::CannotVerify(category)) => Err(refused(Some(category))),
+                    None => Err(refused(None)),
+                };
+            }
+            Target::Keyless { .. } => None,
+        };
+        match levels {
+            Some(LevelState::Hashed(levels)) => Ok(Hashed::Levels(levels)),
+            Some(LevelState::CannotVerify { categories }) => Err(refused(
+                categories.first().map(|category| category.as_str()),
+            )),
+            None => Err(refused(None)),
+        }
+    }
+}
+
+/// `b3:` and a digest's lowercase hex, as the lock writes it.
+fn lock_digest(digest: &Digest) -> String {
+    format!("{HASH_PREFIX}{}", digest.to_hex())
+}
+
+/// The lock's name of a marker's level.
+fn lock_level(level: Level) -> LockLevel {
+    match level {
+        Level::Path => LockLevel::Path,
+        Level::Sig => LockLevel::Sig,
+        Level::Body => LockLevel::Body,
+        Level::Deps => LockLevel::Deps,
+    }
+}
+
+/// A format-2 entry's code: `levels` and every level's digest (a RON
+/// value's `sig` and `body` its hash, its `deps` the empty set's, no
+/// fingerprint; canon `code-hash-ron`, "RON value").
+fn level_code(levels: BTreeSet<LockLevel>, hashed: &Hashed<'_>) -> LevelCode {
+    match hashed {
+        Hashed::Levels(hashes) => LevelCode {
+            levels,
+            sig_hash: lock_digest(&hashes.sig),
+            body_hash: lock_digest(&hashes.body),
+            deps_hash: lock_digest(&hashes.deps),
+            fingerprints: Some(Fingerprints {
+                skeleton_hash: lock_digest(&hashes.skeleton),
+                quote_hash: lock_digest(&hashes.quote),
+                body_bytes: hashes.body_bytes,
+            }),
+        },
+        Hashed::Ron(value) => LevelCode {
+            levels,
+            sig_hash: lock_digest(value),
+            body_hash: lock_digest(value),
+            deps_hash: lock_digest(&empty_deps_digest()),
+            fingerprints: None,
+        },
+    }
+}
+
 /// A marker of the node sorted into a fresh entry, a key not lockable or
-/// a keyless binding.
+/// a keyless binding. Markers giving one fresh key are one entry, its
+/// `levels` the union of theirs.
 fn classify_found(
     found: Found,
     node: &str,
     path: &str,
     pair: &Pair<'_>,
-    hashes: &BTreeMap<usize, HashState>,
+    codes: &FileCodes,
     bindings: &mut Bindings,
 ) {
-    let verified = |ast_hash: Option<String>| Verified {
-        rev: pair.facts.rev,
-        spec_hash: pair.facts.spec_hash.to_owned(),
-        ast_hash,
-        file_blob: pair.blob.to_owned(),
-        commit: pair.facts.commit.to_owned(),
-        verified_at: pair.facts.today.to_owned(),
-    };
     let key = match found.target.key(node, found.relation, path) {
         Ok(key) => key,
         Err(place) => {
@@ -1229,21 +1375,14 @@ fn classify_found(
     let result = match (&found.refused, found.target.ambiguity()) {
         (Some(state), _) => Err(state.clone()),
         (None, Some(reason)) => Err(format!("{AMBIGUOUS} {reason}")),
-        (None, None) => match &found.target {
-            Target::Item { index, .. } => match hashes.get(index) {
-                Some(HashState::Hashed(digest)) => {
-                    Ok(verified(Some(format!("b3:{}", digest.to_hex()))))
-                }
-                Some(HashState::CannotVerify { categories }) => {
-                    Err(categories.first().map_or_else(
-                        || CANNOT_VERIFY.to_owned(),
-                        |category| format!("{CANNOT_VERIFY} {}", category.as_str()),
-                    ))
-                }
-                Some(HashState::NotHashed) | None => Err(CANNOT_VERIFY.to_owned()),
-            },
-            _ => Ok(verified(None)),
-        },
+        (None, None) => codes.of(&found).map(|hashed| Verified {
+            rev: pair.facts.rev,
+            spec_hash: pair.facts.spec_hash.to_owned(),
+            code: EntryCode::Levels(level_code(found.levels.clone(), &hashed)),
+            file_blob: pair.blob.to_owned(),
+            commit: pair.facts.commit.to_owned(),
+            verified_at: pair.facts.today.to_owned(),
+        }),
     };
     // A key the lock could not read back (a path with a TAB) is never
     // written: core's one check, the reader's too.
@@ -1255,8 +1394,20 @@ fn classify_found(
         // Markers giving one key are one entry: lockable only when each
         // allows; the first refusal names it.
         Ok(verified) => {
-            if !bindings.unlockable.contains_key(&key) {
-                bindings.fresh.insert(key, verified);
+            if bindings.unlockable.contains_key(&key) {
+                return;
+            }
+            match bindings.fresh.get_mut(&key) {
+                Some(held) => {
+                    if let (EntryCode::Levels(held), EntryCode::Levels(now)) =
+                        (&mut held.code, verified.code)
+                    {
+                        held.levels.extend(now.levels);
+                    }
+                }
+                None => {
+                    bindings.fresh.insert(key, verified);
+                }
             }
         }
         Err(state) => {
@@ -1266,25 +1417,43 @@ fn classify_found(
     }
 }
 
-/// The markers of `comment` naming the node `key`, each with its target.
+/// One comment of a marker file: its text, its byte range, and what it
+/// binds.
+struct CommentAt<'a> {
+    comment: &'a str,
+    range: Range<usize>,
+    target: &'a dyn Fn() -> Target,
+}
+
+/// The markers of a comment naming the node `key`, each with its target
+/// and its effective levels.
 fn node_markers(
-    comment: &str,
+    at: &CommentAt<'_>,
     corpus: &mut Corpus<'_>,
     key: NodeKey,
     rev: u32,
-    target: &dyn Fn() -> Target,
     found: &mut Vec<Found>,
 ) {
-    for marker in markers_in(comment) {
+    for marker in markers_in(at.comment) {
         let judged = corpus.judge(&marker.id);
         if !judged.nodes.contains(&key) {
             continue;
         }
-        let token = marker.token(comment);
+        let token = marker.token(at.comment);
+        let levels = marker
+            .levels
+            .effective()
+            .unwrap_or_default()
+            .iter()
+            .copied()
+            .map(lock_level)
+            .collect();
         found.push(Found {
             relation: relation_of(&marker),
             refused: refusal(&marker, token, judged.state, rev),
-            target: target(),
+            target: (at.target)(),
+            levels,
+            comment: at.range.clone(),
         });
     }
 }
@@ -1306,16 +1475,19 @@ pub(crate) fn relation_of(marker: &Marker) -> LockRelation {
     }
 }
 
-/// The first of `id_state` and `rev_state` (against the node's revision
-/// at `HEAD`) that refuses a lock ("Lockability").
+/// The first of `id_state`, `rev_state` (against the node's revision at
+/// `HEAD`) and the level list that refuses a lock ("Lockability"): a
+/// malformed list (`unclosed`, `unknown`, `duplicate`, `empty`) is
+/// `bad_levels`, never the default levels.
 fn refusal(marker: &Marker, token: &str, state: IdState, rev: u32) -> Option<String> {
     if !matches!(state, IdState::Resolved | IdState::Alias) {
         return Some(state.as_str().to_owned());
     }
     match rev_state(marker, token, state, Revision::Written(rev)) {
-        "current" | "unversioned" => None,
-        other => Some(other.to_owned()),
+        "current" | "unversioned" => {}
+        other => return Some(other.to_owned()),
     }
+    matches!(marker.levels, Levels::Invalid(_)).then(|| BAD_LEVELS.to_owned())
 }
 
 /// The node's revision and `norm_hash` from its file's `HEAD` blob;

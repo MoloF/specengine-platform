@@ -6,12 +6,15 @@
 //! "Data" gives ("The rule `rev-not-raised`", "spec bump") built here,
 //! never from the command's own output.
 //!
-//! - `fixtures/code-a` with its golden lock (`fixtures/spec-lock/code-a.lock`)
-//!   committed (`verify_common::golden`): `GOAL-01` (a document, revision 1
-//!   unwritten, two entries), `LAW-BOUND` (a section at `rev=2`, four),
-//!   `PIECE-COUNTER` (a document at `rev: 3`, four) and the feature-scoped
-//!   `cap-check/PASS-01` (one) are locked; `LAW-STEP`, `LAW-ODD` and
-//!   `PIECE-LIMITS`' nodes are not.
+//! - `fixtures/code-a` with its golden lock (`fixtures/spec-lock/code-a.lock`,
+//!   format 2) committed (`verify_common::golden`): `GOAL-01` (a document,
+//!   revision 1 unwritten, one entry), `LAW-BOUND` (a section at `rev=2`,
+//!   four) and `PIECE-COUNTER` (a document at `rev: 3`, four) are locked;
+//!   `LAW-STEP`, `LAW-ODD`, `PIECE-LIMITS`' nodes and the feature-scoped
+//!   `cap-check/PASS-01` (its one marker `[Sig]`: `bad_levels`) are not.
+//!   The format-1 golden (`verify_common::golden_format_1`, the bytes before
+//!   docs/features/lock-levels.md) holds `GOAL-01`'s two entries and
+//!   `cap-check/PASS-01`'s one: the rule reads it too (Q10).
 //! - `fixtures/verify-ecs` (an ECS-style game crate) with its four nodes
 //!   accepted (`verify_common::ecs`).
 //!

@@ -47,6 +47,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/layer-a-identity.md](features/layer-a-identity.md) shipped
 - [docs/features/layer-c-resolve.md](features/layer-c-resolve.md) shipped
 - [docs/features/layer-c.md](features/layer-c.md) shipped
+- [docs/features/lock-levels.md](features/lock-levels.md) shipped
 - [docs/features/mcp-read.md](features/mcp-read.md) shipped
 - [docs/features/norm-hash.md](features/norm-hash.md) shipped
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) shipped

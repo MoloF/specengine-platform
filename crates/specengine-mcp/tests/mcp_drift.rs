@@ -42,7 +42,10 @@ use common::read::{
 use common::*;
 use git::Sandbox;
 use serde_json::{Value, json};
-use specengine_cli::{GitEnv, Globals, Outcome, ReviewRequest, review_brief};
+use specengine_cli::{
+    GitEnv, Globals, Outcome, ProposeRequest, ProposedText, ReviewRequest, ShowRequest, propose,
+    review_brief, show,
+};
 
 struct Repo {
     scratch: Scratch,
@@ -53,6 +56,13 @@ struct Repo {
 
 impl Repo {
     fn new(label: &str) -> Self {
+        Self::with_lock(label, "code-a.lock")
+    }
+
+    /// The repository with `fixtures/spec-lock/<lock>` as its lock (the
+    /// format-2 golden, or `code-a.format-1.lock`: a project not yet
+    /// rebased, docs/features/lock-levels.md).
+    fn with_lock(label: &str, lock: &str) -> Self {
         let scratch = Scratch::new(label);
         let git = Sandbox::new(scratch.path());
         let root = scratch.copy("code-a", "repo");
@@ -60,10 +70,7 @@ impl Repo {
         git.init(&root);
         git.add_all(&root);
         git.commit(&root, "the fixture");
-        copy_file(
-            fixture("spec-lock").join("code-a.lock"),
-            root.join("spec.lock"),
-        );
+        copy_file(fixture("spec-lock").join(lock), root.join("spec.lock"));
         git.add_all(&root);
         git.commit(&root, "the lock");
         replace(
@@ -375,6 +382,149 @@ fn get_proposal_keeps_a_later_builds_rows() {
     assert_eq!(drift["rows"][0]["anchor"]["to"]["line"], json!(12));
     assert_eq!(drift["rows"][0]["anchor"]["n"], json!(-1));
     assert_eq!(drift["rows"][0]["levels"], json!(["sig", "body"]));
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+}
+
+// ------------------------------------------------ lock-levels.md RD-2, TE-1
+
+/// The one text every writer and code judge refuses a format-1 lock with
+/// (docs/features/lock-levels.md "Readers", Q27 (3)).
+const FORMAT_1: &str = "spec.lock:2: format 1 (\"specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15\"), \
+    this build's is 2 (\"specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15\"): run spec lock rebase \
+    on a terminal";
+
+/// lock-levels.md RD-2 **M4**, MCP's case: `report_drift` reads `HEAD`'s
+/// lock with the build's recipes (`read_commit`), so over the format-1
+/// golden it is `spec propose drift`'s exit 2: `isError`, the content
+/// naming the one text with its step, no document, nothing stored in
+/// either queue, nothing written (AC-3). M: the step missing from one
+/// caller.
+#[test]
+fn report_drift_refuses_a_format_1_lock() {
+    let repo = Repo::with_lock("mcp-drift-format-1", "code-a.format-1.lock");
+    let twin_home = repo.scratch.home("twin");
+    let globals = Globals::default();
+    let twin_env = cli_env(&repo.root, Some(&twin_home));
+    let twin_git = GitEnv::new(repo.root.clone(), [("HOME", twin_home.as_os_str())]);
+    let before = repo.state();
+    let mut session = Session::open(Era::Stateless, &[], Some(&repo.root), Home::At(&repo.home));
+    let schemas = output_schemas(&session.tools());
+    let args = json!({"author_role": "tester"});
+    let reply = session.call("report_drift", args.clone());
+    let want = queue_library(
+        "report_drift",
+        &args,
+        &twin_env,
+        &globals,
+        "2026-10-14T09:00:00Z",
+        &twin_git,
+    );
+    assert_parity(
+        &reply,
+        &want,
+        &schemas["report_drift"],
+        "report_drift over format 1",
+    );
+    let result = result(&reply);
+    assert_eq!(result["isError"], json!(true), "{reply}");
+    let text = common::read::content_text(result);
+    assert!(text.contains(FORMAT_1), "{text}");
+    assert_eq!(repo.state(), before, "AC-3");
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+    for home in [&repo.home, &twin_home] {
+        let db = data_dir(home).join("code-a.db");
+        if db.exists() {
+            let output = std::process::Command::new("/usr/bin/sqlite3")
+                .env_clear()
+                .args(["-cmd", ".timeout 2000"])
+                .arg(&db)
+                .arg("SELECT count(*) FROM proposals;")
+                .output()
+                .expect("sqlite3 runs");
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                "0",
+                "nothing stored"
+            );
+        }
+    }
+}
+
+/// lock-levels.md TE-1 (Q10): `get_proposal` is a reader of the spec side
+/// alone: over the format-1 golden an update of `PIECE-COUNTER` (raised
+/// through the library, never through a lock) gives `spec review
+/// --brief`'s twin, its revision row counting the four entries format 1
+/// holds; nothing written.
+#[test]
+fn get_proposal_counts_format_1_entries() {
+    let repo = Repo::with_lock("mcp-drift-format-1-review", "code-a.format-1.lock");
+    let env = cli_env(&repo.root, Some(&repo.home));
+    let globals = Globals::default();
+    let git = GitEnv::new(repo.root.clone(), [("HOME", repo.home.as_os_str())]);
+    let shown = show(
+        &env,
+        &globals,
+        &ShowRequest {
+            reference: "PIECE-COUNTER".to_owned(),
+            links: false,
+            archive: false,
+        },
+    )
+    .expect("show PIECE-COUNTER");
+    let node = shown.nodes.into_iter().next().expect("one node");
+    let text = node.text.replacen(
+        "grows one step at a time",
+        "grows a single step at a time",
+        1,
+    );
+    assert_ne!(text, node.text, "the edit applies");
+    let proposed = propose(
+        &env,
+        &globals,
+        &ProposeRequest {
+            target: "PIECE-COUNTER".to_owned(),
+            base: node.span_hash.clone(),
+            text: ProposedText::Given(text.into_bytes()),
+            rationale: "Update PIECE-COUNTER.".to_owned(),
+            author_role: Some("spec-writer".to_owned()),
+            author_model: Some("claude-opus-5-5".to_owned()),
+            run: None,
+            now: "2026-10-14T09:00:00Z".to_owned(),
+            git: git.clone(),
+        },
+    )
+    .expect("proposed");
+    let id = proposed.document.id.clone().expect("an ID");
+    let before = repo.state();
+    let mut session = Session::open(Era::Stateless, &[], Some(&repo.root), Home::At(&repo.home));
+    let schemas = output_schemas(&session.tools());
+    let reply = session.call("get_proposal", json!({"proposal_id": id}));
+    let want = expected(
+        review_brief(
+            &env,
+            &globals,
+            &ReviewRequest {
+                id: id.clone(),
+                git: git.clone(),
+            },
+        )
+        .map(|outcome| Outcome::Proposal(Box::new(outcome))),
+    );
+    assert_parity(
+        &reply,
+        &want,
+        &schemas["get_proposal"],
+        "get_proposal over format 1",
+    );
+    let document = &result(&reply)["structuredContent"];
+    assert_eq!(
+        document["revisions"],
+        json!([{"id": "PIECE-COUNTER", "rev": 3, "to": 4, "lock_entries": 4, "refused": null}]),
+        "{document}"
+    );
+    assert_eq!(repo.state(), before, "AC-3");
     let done = session.finish();
     assert!(done.status.success(), "{}", done.stderr);
 }

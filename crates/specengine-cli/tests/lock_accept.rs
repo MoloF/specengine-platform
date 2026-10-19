@@ -1,18 +1,24 @@
 //! docs/features/spec-lock.md TE-1, TE-2, TE-4, TE-5 and the named RD
-//! tests of the accept itself (RD-5, RD-7, RD-8, RD-9, RD-17): `spec lock
+//! tests of the accept itself (RD-5, RD-7, RD-8, RD-9, RD-17), and
+//! docs/features/lock-levels.md RD-3 (with its M5) and TE-2: `spec lock
 //! accept` over scratch repositories of `fixtures/code-a`, through the
 //! library at an injected clock (the lock's bytes reproducible), the
 //! binary on a pseudo-terminal where the printed text is the subject.
 //!
-//! The golden (`fixtures/spec-lock/code-a.lock`) is the lock after
-//! accepting PIECE-COUNTER (a document, `rev: 3`; a `//!` marker; a RON
-//! `@configures`), LAW-BOUND (a section, `rev=2`), cap-check/PASS-01 (a
-//! feature-scoped AC under `@verifies`) and GOAL-01 (an alias marker,
-//! `AIM-01@1`), in that order, at [`CLOCK`]. Its keys and order are derived
-//! by hand from the spec's "Data" and `fixtures/code-a/expected.json`; its
-//! hashes and OIDs are recomputed here from their sources (git's blob and
-//! commit OIDs, `spec show`'s norm hash, `specengine-code`'s full
-//! analysis), and the file pins their values.
+//! The golden (`fixtures/spec-lock/code-a.lock`, format 2) is the lock
+//! after accepting PIECE-COUNTER (a document, `rev: 3`; a `//!` marker; a
+//! RON `@configures`), LAW-BOUND (a section, `rev=2`), cap-check/PASS-01
+//! (a feature-scoped AC under `@verifies`, its only marker `[Sig]`:
+//! `bad_levels`, nothing lockable, exit 1, no commit) and GOAL-01 (an
+//! alias marker, `AIM-01@1 [body]`; its `[path, path]` binding
+//! `bad_levels`), in that order, at [`CLOCK`]: 9 entries. Its keys and
+//! order are derived by hand from lock-levels.md "Format 2" and
+//! `fixtures/code-a/expected.json`; its digests and OIDs are recomputed
+//! here from their sources (git's blob and commit OIDs, `spec show`'s norm
+//! hash, `specengine-code`'s `item_levels`, `module_levels`,
+//! `ron::value_hashes` and the empty set's `deps`), and the file pins
+//! their values. The format-1 golden (`code-a.format-1.lock`) is the
+//! bytes before 5b-1a, verbatim.
 //!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
@@ -24,8 +30,8 @@ use std::path::Path;
 
 use common::{fixture, repository_root};
 use lock_common::{
-    CLOCK, DAY, DECIDER, HEADER, LockRepo, PREAMBLE, at, block, blocks, item_hash, lock_of,
-    node_blocks, value,
+    CLOCK, DAY, DECIDER, HEADER, LockRepo, PREAMBLE, at, block, blocks, entry_keys, item_code,
+    lock_of, module_code, node_blocks, ron_code, value,
 };
 
 const COUNTER: &str = "crates/tally/src/counter.rs";
@@ -35,35 +41,56 @@ const MAIN: &str = "crates/tally/src/main.rs";
 const BROKEN: &str = "crates/tally/src/broken.rs";
 const LIMITS: &str = "data/limits.ron";
 
-/// The four accepts of the golden, in order.
+/// The four accepts of the golden, in order; the third
+/// (`cap-check/PASS-01`) locks nothing.
 const GOLDEN_REFS: [&str; 4] = ["PIECE-COUNTER", "LAW-BOUND", "cap-check/PASS-01", "GOAL-01"];
+
+/// `cap-check/PASS-01`'s only binding, refused (`[Sig]`: `unknown`).
+const PASS_ROW: &str = "not locked | verifies | crates/tally/tests/bounds.rs | item crates/tally::test:bounds::steps_by_one function_item | bad_levels\n";
+
+/// The default levels of a marker without a list.
+const DEFAULT: [&str; 2] = ["sig", "body"];
 
 fn golden_file() -> std::path::PathBuf {
     fixture("spec-lock").join("code-a.lock")
 }
 
 /// The four accepts of the golden in `repo`: the commit each ran at.
+/// `cap-check/PASS-01`'s exits 1, nothing lockable, no question, no
+/// commit.
 fn accept_golden(repo: &LockRepo) -> [String; 4] {
     let mut commits = Vec::new();
     for reference in GOLDEN_REFS {
         commits.push(repo.head());
-        repo.accept_ok(reference);
+        if reference == "cap-check/PASS-01" {
+            let attempt = repo.accept(reference, true);
+            let refusal = attempt.refused(reference);
+            assert!(refusal.contains("can be locked"), "{refusal}");
+            assert!(attempt.prompts.is_empty(), "{reference} asked");
+            assert_eq!(attempt.rows(), PASS_ROW);
+        } else {
+            repo.accept_ok(reference);
+        }
     }
     commits.try_into().expect("four commits")
 }
 
 /// The golden lock of `repo` after [`accept_golden`] (`commits` the
-/// commits they ran at), every hash and OID recomputed from its source.
+/// commits they ran at), every digest and OID recomputed from its source.
 fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
     let c0 = &commits[0];
     let blob = |path: &str| repo.blob_at(c0, path);
-    let ast =
-        |path: &str, line: usize, kind: &str| item_hash(&repo.show_blob(c0, path), line, kind);
+    let source = |path: &str| repo.show_blob(c0, path);
+    let item = |path: &str, line: usize, kind: &str, levels: &[&str]| {
+        item_code(&source(path), line, kind, levels)
+    };
+    let module = |path: &str| module_code(&source(path), &DEFAULT);
+    let ron = |line: usize| ron_code(&source(LIMITS), line, &DEFAULT);
     let goal = repo.norm_hash("GOAL-01");
     let law = repo.norm_hash("LAW-BOUND");
     let piece = repo.norm_hash("PIECE-COUNTER");
-    let pass = repo.norm_hash("cap-check/PASS-01");
-    let (c_piece, c_law, c_pass, c_goal) = (&commits[0], &commits[1], &commits[2], &commits[3]);
+    let (c_piece, c_law, c_goal) = (&commits[0], &commits[1], &commits[3]);
+    assert_eq!(commits[2], commits[3], "PASS-01's accept commits nothing");
     lock_of(&[
         block(
             "GOAL-01",
@@ -73,20 +100,8 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             COUNTER,
             "item",
             "crates/tally::counter::Tally::value",
-            Some(("function_item", &ast(COUNTER, 30, "function_item"))),
-            &blob(COUNTER),
-            c_goal,
-            DAY,
-        ),
-        block(
-            "GOAL-01",
-            1,
-            &goal,
-            "verifies",
-            COUNTER,
-            "item",
-            "crates/tally::counter::inner::limit",
-            Some(("function_item", &ast(COUNTER, 78, "function_item"))),
+            Some("function_item"),
+            &item(COUNTER, 30, "function_item", &["body"]),
             &blob(COUNTER),
             c_goal,
             DAY,
@@ -99,7 +114,8 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             COUNTER,
             "item",
             "crates/tally::counter::<Tally as fmt::Display>::fmt",
-            Some(("function_item", &ast(COUNTER, 49, "function_item"))),
+            Some("function_item"),
+            &item(COUNTER, 49, "function_item", &DEFAULT),
             &blob(COUNTER),
             c_law,
             DAY,
@@ -112,7 +128,8 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             BOUNDS,
             "item",
             "crates/tally::test:bounds::stops_at_cap",
-            Some(("function_item", &ast(BOUNDS, 6, "function_item"))),
+            Some("function_item"),
+            &item(BOUNDS, 6, "function_item", &["body"]),
             &blob(BOUNDS),
             c_law,
             DAY,
@@ -125,7 +142,8 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             COUNTER,
             "item",
             "crates/tally::counter::CAP",
-            Some(("const_item", &ast(COUNTER, 8, "const_item"))),
+            Some("const_item"),
+            &item(COUNTER, 8, "const_item", &DEFAULT),
             &blob(COUNTER),
             c_law,
             DAY,
@@ -139,6 +157,7 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             "ron",
             "root.cap",
             None,
+            &ron(4),
             &blob(LIMITS),
             c_law,
             DAY,
@@ -151,7 +170,8 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             COUNTER,
             "item",
             "crates/tally::counter::Tally",
-            Some(("struct_item", &ast(COUNTER, 17, "struct_item"))),
+            Some("struct_item"),
+            &item(COUNTER, 17, "struct_item", &DEFAULT),
             &blob(COUNTER),
             c_piece,
             DAY,
@@ -165,6 +185,7 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             "module",
             "crates/tally",
             None,
+            &module(LIB),
             &blob(LIB),
             c_piece,
             DAY,
@@ -178,6 +199,7 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             "module",
             "crates/tally::test:bounds",
             None,
+            &module(BOUNDS),
             &blob(BOUNDS),
             c_piece,
             DAY,
@@ -191,21 +213,9 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
             "ron",
             "root",
             None,
+            &ron(2),
             &blob(LIMITS),
             c_piece,
-            DAY,
-        ),
-        block(
-            "cap-check/PASS-01",
-            1,
-            &pass,
-            "verifies",
-            BOUNDS,
-            "item",
-            "crates/tally::test:bounds::steps_by_one",
-            Some(("function_item", &ast(BOUNDS, 16, "function_item"))),
-            &blob(BOUNDS),
-            c_pass,
             DAY,
         ),
     ])
@@ -213,9 +223,13 @@ fn expected_golden(repo: &LockRepo, commits: &[String; 4]) -> String {
 
 // ------------------------------------------------------------------ TE-1
 
-/// TE-1: the lock after the golden's four accepts is, byte for byte, the
-/// hand-derived golden with every hash and OID recomputed from its source;
-/// and the committed golden file pins those values.
+/// TE-1, lock-levels.md RD-3: the lock after the golden's four accepts
+/// is, byte for byte, the hand-derived format-2 golden with every digest
+/// and OID recomputed from its source; and the committed golden file pins
+/// those values: 9 entries, `PIECE-COUNTER`'s 4 at the fixture's commit
+/// (`2ba8a3b…`, as in format 1), `LAW-BOUND`'s 4 and `GOAL-01`'s 1 at
+/// commits other than format 1's (`82f6593…`, `85a2c98…`), `verified_at`
+/// [`DAY`].
 #[test]
 fn golden_lock_of_code_a() {
     let repo = LockRepo::code_a("lock-golden");
@@ -226,35 +240,120 @@ fn golden_lock_of_code_a() {
         expected_golden(&repo, &commits),
         "the hand-derived golden"
     );
-    let golden = fs::read_to_string(golden_file()).expect("fixtures/spec-lock/code-a.lock");
-    assert_eq!(lock, golden, "the pinned golden");
+    // The pinned file is regenerated only from this accept, once it equals
+    // the hand-derived golden (digests are never hand-written).
+    if std::env::var_os("SPECENGINE_WRITE_LOCK_GOLDEN").is_some_and(|value| value == "1") {
+        fs::write(golden_file(), &lock).expect("write fixtures/spec-lock/code-a.lock");
+        return;
+    }
+    let golden = fs::read_to_string(golden_file()).unwrap_or_else(|error| {
+        panic!(
+            "fixtures/spec-lock/code-a.lock: {error}; regenerate it with \
+             SPECENGINE_WRITE_LOCK_GOLDEN=1 cargo nextest run -p specengine-cli --test \
+             lock_accept golden_lock_of_code_a"
+        )
+    });
+    assert_eq!(
+        lock, golden,
+        "the pinned golden (regenerate with SPECENGINE_WRITE_LOCK_GOLDEN=1)"
+    );
     assert!(lock.starts_with(&format!("{HEADER}\n{PREAMBLE}\n[[binding]]\n")));
+    let entries = blocks(&lock);
+    assert_eq!(entries.len(), 9);
+    let count = |node: &str| node_blocks(&lock, node).len();
+    assert_eq!(
+        (count("PIECE-COUNTER"), count("LAW-BOUND"), count("GOAL-01")),
+        (4, 4, 1)
+    );
+    assert_eq!(count("cap-check/PASS-01"), 0);
+    let commit_of = |node: &str| -> Vec<String> {
+        entries
+            .iter()
+            .filter(|block| value(block, "node") == Some(node))
+            .map(|block| value(block, "commit").expect("commit").to_owned())
+            .collect()
+    };
+    assert!(
+        commit_of("PIECE-COUNTER")
+            .iter()
+            .all(|commit| commit.starts_with("2ba8a3b")),
+        "{lock}"
+    );
+    for (node, format_1) in [("LAW-BOUND", "82f6593"), ("GOAL-01", "85a2c98")] {
+        assert!(
+            commit_of(node)
+                .iter()
+                .all(|commit| !commit.starts_with(format_1)),
+            "{node}: {lock}"
+        );
+    }
+    assert!(
+        entries
+            .iter()
+            .all(|block| value(block, "verified_at") == Some(DAY))
+    );
 }
 
-/// TE-1: what each accept of the golden asked, and the commits it made.
+/// lock-levels.md "Fixtures and the golden" (Q30): the format-1 golden is
+/// the bytes the golden held before 5b-1a, verbatim (its SHA-256 at the
+/// copy pinned), format 1 of v2's `code_recipe`, 11 entries; the format-2
+/// golden is not it.
+#[test]
+fn the_format_1_golden_is_kept_verbatim() {
+    let format_1 = fs::read(fixture("spec-lock").join("code-a.format-1.lock"))
+        .expect("fixtures/spec-lock/code-a.format-1.lock");
+    let text = String::from_utf8(format_1).expect("UTF-8");
+    assert!(
+        text.starts_with(&format!(
+            "{HEADER}\n{}\n[[binding]]\n",
+            lock_common::PREAMBLE_FORMAT_1
+        )),
+        "{text}"
+    );
+    assert_eq!(blocks(&text).len(), 11);
+    assert_eq!(
+        blocks(&text)
+            .iter()
+            .filter(|block| value(block, "ast_hash").is_some())
+            .count(),
+        7,
+        "an item's `ast_hash`"
+    );
+    let golden = fs::read_to_string(golden_file()).expect("the golden");
+    assert_ne!(golden, text);
+}
+
+/// TE-1: what each accept of the golden asked, and the commits it made;
+/// `cap-check/PASS-01`'s asked nothing and made none.
 #[test]
 fn golden_accepts_ask_and_commit_once_each() {
     let repo = LockRepo::code_a("lock-golden-ask");
     let expected = [
         (
             "PIECE-COUNTER",
-            "lock PIECE-COUNTER rev 3 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped)",
+            Some("lock PIECE-COUNTER rev 3 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped)"),
         ),
         (
             "LAW-BOUND",
-            "lock LAW-BOUND rev 2 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped)",
+            Some("lock LAW-BOUND rev 2 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped)"),
         ),
-        (
-            "cap-check/PASS-01",
-            "lock cap-check/PASS-01 rev 1 (accept: 1 new, 0 refreshed, 0 kept, 0 dropped)",
-        ),
+        ("cap-check/PASS-01", None),
         (
             "GOAL-01",
-            "lock GOAL-01 rev 1 (accept: 2 new, 0 refreshed, 0 kept, 0 dropped)",
+            Some("lock GOAL-01 rev 1 (accept: 1 new, 0 refreshed, 0 kept, 0 dropped)"),
         ),
     ];
     for (reference, head) in expected {
         let before = repo.head();
+        let Some(head) = head else {
+            let state = repo.state();
+            let attempt = repo.accept(reference, true);
+            attempt.refused(reference);
+            assert!(attempt.prompts.is_empty(), "{reference}");
+            assert_eq!(attempt.rows(), PASS_ROW);
+            assert_eq!(repo.state(), state, "{reference}: nothing written");
+            continue;
+        };
         let attempt = repo.accept(reference, true);
         let outcome = attempt.committed(reference);
         assert_eq!(
@@ -341,9 +440,11 @@ new | configures | data/limits.ron | ron root\n";
 // ------------------------------------------------------------------ TE-2
 
 /// TE-2, RD-7: every marker of PIECE-COUNTER, LAW-BOUND, GOAL-01, LAW-STEP
-/// and PREM-001 as a row, in key order: `item` with a v2 digest, `module`,
-/// `ron` locked (`new`); `spec_ahead`, `predated`, `bad_rev`,
-/// `ambiguous <reason>`, `unanchored`, `cannot_verify` not (hand-derived
+/// and PREM-001 as a row, in key order: `item`, `module` with levels
+/// hashed, `ron` with a value hash locked (`new`); `spec_ahead`,
+/// `predated`, `bad_rev`, `bad_levels` (lock-levels.md "Accept": GOAL-01's
+/// `[path, path]`), `ambiguous <reason>`, `unanchored`, `cannot_verify`
+/// not (hand-derived
 /// from `fixtures/code-a/expected.json` and "Lockability"). Since
 /// docs/features/symbol-discriminator.md (TE-1) the two adjacent
 /// `impl Tally` blocks are two keys, `#1` `predated` and `#2` `bad_rev`.
@@ -376,7 +477,7 @@ new | configures | data/limits.ron | ron root.cap
         ),
         (
             "GOAL-01",
-            "lock GOAL-01 rev 1 (accept: 2 new, 0 refreshed, 0 kept, 0 dropped)",
+            "lock GOAL-01 rev 1 (accept: 1 new, 0 refreshed, 0 kept, 0 dropped)",
             "not locked | implements | crates/tally/src/broken.rs | cannot_verify other | cannot_verify
 not locked | implements | crates/tally/src/counter.rs | item crates/tally::counter::Tally::reset function_item | bad_rev
 new | implements | crates/tally/src/counter.rs | item crates/tally::counter::Tally::value function_item
@@ -387,7 +488,7 @@ not locked | implements | crates/tally/src/counter.rs | unanchored not_an_item |
 not locked | implements | crates/tally/src/lib.rs | unanchored no_item | unanchored
 not locked | implements | crates/tally/src/lib.rs | unanchored not_an_item | unanchored
 not locked | implements | tools/loose.rs | module . | ambiguous unrooted
-new | verifies | crates/tally/src/counter.rs | item crates/tally::counter::inner::limit function_item
+not locked | verifies | crates/tally/src/counter.rs | item crates/tally::counter::inner::limit function_item | bad_levels
 not locked | configures | data/limits.ron | unanchored no_value | unanchored
 ",
         ),
@@ -532,12 +633,14 @@ fn ambiguous_binding_is_not_locked() {
     );
 }
 
-/// RD-7 (M: a RON `ast_hash`): a RON value's entry has no `item_kind` and
-/// no `ast_hash`; its `file_blob` is the file's blob at HEAD; a change
-/// anywhere in the file refreshes it (by `file_blob` alone), a change
-/// elsewhere leaves it unchanged.
+/// RD-7, lock-levels.md "Format 2": a RON value's entry has no
+/// `item_kind` and no fingerprint; its `sig_hash` and `body_hash` are the
+/// value hash (`ron::value_hashes`, keyed by the comment's range), its
+/// `deps_hash` the empty set's digest, its `file_blob` the file's blob at
+/// HEAD; another value of the file changing refreshes it (the root's value
+/// hash and the blob), a change elsewhere leaves it unchanged.
 #[test]
-fn ron_binding_is_locked_by_blob_only() {
+fn ron_binding_is_locked_by_its_value_hash() {
     let repo = LockRepo::code_a("lock-ron");
     repo.accept_ok("PIECE-COUNTER");
     let lock = repo.lock_text();
@@ -547,18 +650,36 @@ fn ron_binding_is_locked_by_blob_only() {
         .collect();
     assert_eq!(ron.len(), 1, "{lock}");
     let keys: Vec<&str> = ron[0].iter().map(|(key, _)| key.as_str()).collect();
-    let expected: Vec<&str> = lock_common::ENTRY_KEYS
-        .iter()
-        .copied()
-        .filter(|key| *key != "item_kind" && *key != "ast_hash")
-        .collect();
-    assert_eq!(keys, expected);
+    assert_eq!(keys, entry_keys("ron"));
     let head = repo.head();
     assert_eq!(
         value(&ron[0], "file_blob"),
         Some(repo.blob_at(&head, LIMITS).as_str())
     );
-    // A value the marker does not bind changes: the entry is refreshed.
+    let code = |repo: &LockRepo| ron_code(&repo.show_blob(&repo.head(), LIMITS), 2, &DEFAULT);
+    let want = code(&repo);
+    assert_eq!(want.sig, want.body);
+    assert_eq!(value(&ron[0], "sig_hash"), Some(want.sig.as_str()));
+    assert_eq!(value(&ron[0], "body_hash"), Some(want.body.as_str()));
+    assert_eq!(value(&ron[0], "deps_hash"), Some(want.deps.as_str()));
+    assert_eq!(
+        value(&ron[0], "levels"),
+        Some("[\"sig\", \"body\"]"),
+        "a marker without a list"
+    );
+    // A change elsewhere (a Rust file no RON entry names): unchanged.
+    repo.replace(MAIN, "fn main()", "fn main( )");
+    repo.commit_all("elsewhere");
+    let attempt = repo.accept("PIECE-COUNTER", true);
+    attempt.unchanged("a change elsewhere");
+    assert!(
+        attempt
+            .rows()
+            .contains("unchanged | configures | data/limits.ron | ron root"),
+        "{}",
+        attempt.rows()
+    );
+    // A value the root holds changes: the entry is refreshed.
     repo.replace(LIMITS, "step: 2,", "step: 3,");
     repo.commit_all("another step");
     let attempt = repo.accept("PIECE-COUNTER", true);
@@ -579,6 +700,9 @@ fn ron_binding_is_locked_by_blob_only() {
         value(&refreshed, "file_blob"),
         Some(repo.blob_at(&head, LIMITS).as_str())
     );
+    let now = ron_code(&repo.show_blob(&head, LIMITS), 2, &DEFAULT);
+    assert_ne!(now.sig, want.sig, "the root's value changed");
+    assert_eq!(value(&refreshed, "sig_hash"), Some(now.sig.as_str()));
     assert!(value(&refreshed, "ast_hash").is_none());
 }
 
@@ -662,7 +786,8 @@ fn a_path_with_a_tab_never_makes_the_lock_unreadable() {
 
 /// RD-5 (M: worktree bytes): with `*.rs ident` and `"$Id$"` in a bound
 /// `fn`, the worktree holds `$Id: <oid> $` and HEAD `$Id$`: the lock's
-/// `ast_hash` is the committed blob's item, its `file_blob` HEAD's.
+/// level digests are the committed blob's item (`item_levels` over HEAD's
+/// bytes), its `file_blob` HEAD's.
 #[test]
 fn lock_hashes_the_committed_blob() {
     let repo = LockRepo::code_a("lock-ident");
@@ -694,13 +819,18 @@ fn lock_hashes_the_committed_blob() {
         .position(|line| line.starts_with("fn stamp()"))
         .expect("stamp")
         + 1;
-    let from_head = item_hash(&committed, line, "function_item");
-    let from_worktree = item_hash(&worktree, line, "function_item");
+    let from_head = item_code(&committed, line, "function_item", &DEFAULT);
+    let from_worktree = item_code(&worktree, line, "function_item", &DEFAULT);
     assert_ne!(
-        from_head, from_worktree,
-        "the expansion changes the item's hash"
+        from_head.body, from_worktree.body,
+        "the expansion changes the item's body"
     );
-    assert_eq!(value(&entry, "ast_hash"), Some(from_head.as_str()));
+    let block_text = node_blocks(&lock, "LAW-DEFAULT")
+        .into_iter()
+        .next()
+        .expect("the block");
+    assert!(block_text.contains(&from_head.lines()), "{block_text}");
+    assert_eq!(value(&entry, "body_hash"), Some(from_head.body.as_str()));
     assert_eq!(
         value(&entry, "file_blob"),
         Some(repo.blob_at(&head, MAIN).as_str())
@@ -885,7 +1015,9 @@ fn alias_of_a_gone_id_drops_its_entries() {
         repo.accept_ok(reference);
     }
     let before = repo.lock_text();
-    assert_eq!(node_blocks(&before, "GOAL-01").len(), 2, "{before}");
+    // One entry: GOAL-01's `[path, path]` binding is `bad_levels`
+    // (docs/features/lock-levels.md "Fixtures and the golden").
+    assert_eq!(node_blocks(&before, "GOAL-01").len(), 1, "{before}");
     repo.replace(
         "docs/records/GOAL-01.md",
         "id: GOAL-01\n",
@@ -900,7 +1032,7 @@ fn alias_of_a_gone_id_drops_its_entries() {
     assert!(
         attempt
             .question()
-            .starts_with("lock GOAL-01 (gone: 2 dropped) at "),
+            .starts_with("lock GOAL-01 (gone: 1 dropped) at "),
         "{}",
         attempt.question()
     );
@@ -971,22 +1103,44 @@ fn a_code_path_starting_with_a_colon_is_read_literally() {
 
 // ------------------------------------------------------------------ TE-4
 
-/// TE-4 (M: a path in a hash input): one commit accepted from two roots,
-/// from another cwd, in a copy made in reverse creation order, with
-/// `core.autocrlf=true`, and through the alias REF (`AIM-01` for
-/// GOAL-01): identical bytes.
+/// What one golden run printed: per accept its rows (stdout) and its
+/// question or refusal (stderr), the worktree's path made `<worktree>`;
+/// then the lock's bytes.
+type Printed = (Vec<(String, String)>, Vec<u8>);
+
+/// The golden's accepts from `cwd` (GOAL-01 as `goal`), each at [`CLOCK`]:
+/// what they printed and the lock.
+fn golden_run(repo: &LockRepo, cwd: &Path, goal: &str) -> Printed {
+    let worktree = repo.root.display().to_string();
+    let mut printed = Vec::new();
+    for reference in ["PIECE-COUNTER", "LAW-BOUND", "cap-check/PASS-01", goal] {
+        let attempt = repo.attempt_at(cwd, reference, false, CLOCK, true);
+        let said = if reference == "cap-check/PASS-01" {
+            attempt.refused(reference)
+        } else {
+            attempt.committed(reference);
+            attempt.question().to_owned()
+        };
+        printed.push((attempt.rows(), said.replace(&worktree, "<worktree>")));
+    }
+    (printed, repo.lock().expect("a lock"))
+}
+
+/// TE-4 (M: a path in a hash input), lock-levels.md TE-2: one commit
+/// accepted from two roots, from another cwd, in a copy made in reverse
+/// creation order, with `core.autocrlf=true`, and through the alias REF
+/// (`AIM-01` for GOAL-01): identical lock bytes, rows (stdout) and
+/// questions and refusals (stderr).
 #[test]
 fn one_commit_gives_one_lock() {
-    let run = |repo: &LockRepo, cwd: &Path, goal: &str| {
-        for reference in ["PIECE-COUNTER", "LAW-BOUND", "cap-check/PASS-01", goal] {
-            repo.attempt_at(cwd, reference, false, CLOCK, true)
-                .committed(reference);
-        }
-        repo.lock().expect("a lock")
-    };
     let first = LockRepo::code_a("lock-det-a");
-    let reference = run(&first, &first.root, "GOAL-01");
-    let commit = first.git_text(&["rev-parse", "HEAD~4"]);
+    let reference = golden_run(&first, &first.root, "GOAL-01");
+    let commit = first.git_text(&["rev-parse", "HEAD~3"]);
+    assert_eq!(
+        reference.1,
+        fs::read(golden_file()).expect("the golden"),
+        "the golden"
+    );
 
     let second = LockRepo::of("lock-det-b", "code-a", "elsewhere/deeper", &[]);
     assert_eq!(
@@ -995,11 +1149,14 @@ fn one_commit_gives_one_lock() {
         "the same commit"
     );
     let sub = second.root.join("crates").join("tally");
+    let other = golden_run(&second, &sub, "AIM-01");
     assert_eq!(
-        run(&second, &sub, "AIM-01"),
-        reference,
-        "another root, cwd, alias REF"
+        other.1, reference.1,
+        "another root, cwd, alias REF: the lock"
     );
+    // The alias REF names itself in the question: compare the others.
+    assert_eq!(other.0[..3], reference.0[..3], "another root, cwd: printed");
+    assert_eq!(other.0[3].0, reference.0[3].0, "the alias REF's rows");
 
     // A copy made in reverse creation order.
     let third = LockRepo::uncommitted("lock-det-c");
@@ -1016,7 +1173,7 @@ fn one_commit_gives_one_lock() {
     third.commit_all("the fixture");
     assert_eq!(third.head(), commit, "the same commit");
     assert_eq!(
-        run(&third, &third.root, "GOAL-01"),
+        golden_run(&third, &third.root, "GOAL-01"),
         reference,
         "reverse creation order"
     );
@@ -1037,10 +1194,60 @@ fn one_commit_gives_one_lock() {
     );
     assert!(fourth.porcelain().is_empty(), "clean under autocrlf");
     assert_eq!(
-        run(&fourth, &fourth.root, "GOAL-01"),
+        golden_run(&fourth, &fourth.root, "GOAL-01"),
         reference,
         "core.autocrlf=true"
     );
+}
+
+/// lock-levels.md TE-2: an accept over a lock whose entries are written in
+/// reverse key order (committed so) gives the bytes, rows and question an
+/// accept over the canonical lock gives: the merge renders in key order,
+/// whatever order it read. Each run's `HEAD` before GOAL-01's accept (the
+/// one place the two histories differ) is made `<head>`.
+#[test]
+fn reversed_entries_give_the_same_lock() {
+    let mut runs = Vec::new();
+    for (label, reverse) in [("lock-rev-canonical", false), ("lock-rev-reversed", true)] {
+        let repo = LockRepo::code_a(label);
+        repo.accept_ok("PIECE-COUNTER");
+        repo.accept_ok("LAW-BOUND");
+        let text = repo.lock_text();
+        let mut chunks: Vec<&str> = text.split("\n[[binding]]\n").collect();
+        let preamble = chunks.remove(0);
+        if reverse {
+            chunks.reverse();
+        }
+        let mut written = preamble.to_owned();
+        for chunk in &chunks {
+            written.push_str("\n[[binding]]\n");
+            written.push_str(chunk.trim_end_matches('\n'));
+            written.push('\n');
+        }
+        // Both histories commit once more: the reversed lock, or a note.
+        if reverse {
+            assert_ne!(written, text, "reversed");
+            repo.write("spec.lock", &written);
+        } else {
+            assert_eq!(written, text, "canonical");
+            repo.write("NOTES.txt", "a note\n");
+        }
+        repo.commit_all("one more commit");
+        let head = repo.head();
+        let attempt = repo.accept("GOAL-01", true);
+        attempt.committed("GOAL-01");
+        let normalize = |text: &str| {
+            text.replace(&head, "<head>")
+                .replace(&repo.root.display().to_string(), "<worktree>")
+        };
+        runs.push((
+            normalize(&attempt.rows()),
+            normalize(attempt.question()),
+            normalize(&repo.lock_text()),
+        ));
+    }
+    assert_eq!(runs[1], runs[0]);
+    assert!(runs[0].2.contains("commit = \"<head>\""), "{}", runs[0].2);
 }
 
 /// TE-4: a SHA-256 repository gives 64-hex `file_blob` and `commit`, the
@@ -1078,7 +1285,8 @@ fn a_sha256_repository_gives_the_same_hashes() {
 
 /// TE-5 (M: a line): the lock holds no absolute path, name, e-mail, time
 /// of day, abbreviated OID, line or column: every block has exactly the
-/// keys of "Entry", `file` a clean relative path, every OID 40 or 64 hex,
+/// keys of its kind (lock-levels.md "Format 2"), `file` a clean relative
+/// path, every OID 40 or 64 hex,
 /// `verified_at` a bare date.
 #[test]
 fn lock_has_no_positions() {
@@ -1113,13 +1321,8 @@ fn lock_has_no_positions() {
     }
     for block in blocks(&lock) {
         let keys: Vec<&str> = block.iter().map(|(key, _)| key.as_str()).collect();
-        let item = value(&block, "kind") == Some("item");
-        let expected: Vec<&str> = lock_common::ENTRY_KEYS
-            .iter()
-            .copied()
-            .filter(|key| item || (*key != "item_kind" && *key != "ast_hash"))
-            .collect();
-        assert_eq!(keys, expected, "{block:?}");
+        let kind = value(&block, "kind").expect("kind");
+        assert_eq!(keys, entry_keys(kind), "{block:?}");
         let file = value(&block, "file").expect("file");
         assert!(
             !file.starts_with('/')
@@ -1152,6 +1355,324 @@ fn lock_has_no_positions() {
         assert_eq!(date, DAY);
         assert_eq!(value(&block, "verified_by"), Some("owner"));
     }
+}
+
+// --------------------------------------------- lock-levels.md RD-3
+
+/// `stops_at_cap`'s marker as code-a writes it.
+const STOPS_MARKER: &str = "// @verifies LAW-BOUND@2 [body] mutation: drop the cap";
+
+/// `stops_at_cap`'s row tail.
+const STOPS: &str = "verifies | crates/tally/tests/bounds.rs | item crates/tally::test:bounds::stops_at_cap function_item";
+
+/// The block of `node`'s entry whose `symbol` is `symbol`.
+fn block_of(lock: &str, node: &str, symbol: &str) -> String {
+    let found: Vec<String> = node_blocks(lock, node)
+        .into_iter()
+        .filter(|block| block.contains(&format!("\nsymbol = \"{symbol}\"\n")))
+        .collect();
+    assert_eq!(found.len(), 1, "one {node} {symbol}:\n{lock}");
+    found[0].clone()
+}
+
+/// RD-3 (`levels_are_the_union_of_the_markers`): an entry's `levels` is
+/// the union of the effective levels of the markers giving its key, in
+/// canonical order, a marker without a list as `sig, body`; its digests
+/// every level's whatever the list; a list that changes the union
+/// refreshes the entry.
+#[test]
+fn levels_are_the_union_of_the_markers() {
+    let repo = LockRepo::code_a("lock-levels-union");
+    repo.replace(
+        BOUNDS,
+        STOPS_MARKER,
+        &format!("// @verifies LAW-BOUND@2 [deps, path]\n{STOPS_MARKER}"),
+    );
+    repo.replace(
+        COUNTER,
+        "/// The largest count; see LAW-BOUND.\npub const CAP",
+        "/// The largest count; see LAW-BOUND.\n// @configures LAW-BOUND@2 [deps]\npub const CAP",
+    );
+    repo.commit_all("more markers");
+    let attempt = repo.accept("LAW-BOUND", true);
+    attempt.committed("LAW-BOUND");
+    assert!(
+        attempt
+            .question()
+            .starts_with("lock LAW-BOUND rev 2 (accept: 4 new, 0 refreshed, 0 kept, 0 dropped)"),
+        "{}",
+        attempt.question()
+    );
+    let head = repo.head();
+    let lock = repo.lock_text();
+    let counter = repo.show_blob(&head, COUNTER);
+    let bounds = repo.show_blob(&head, BOUNDS);
+    let line_of = |source: &[u8], start: &str| {
+        String::from_utf8_lossy(source)
+            .lines()
+            .position(|line| line.starts_with(start))
+            .expect("the item")
+            + 1
+    };
+    for (symbol, source, start, kind, levels) in [
+        (
+            "crates/tally::test:bounds::stops_at_cap",
+            &bounds,
+            "fn stops_at_cap",
+            "function_item",
+            &["path", "body", "deps"][..],
+        ),
+        (
+            "crates/tally::counter::CAP",
+            &counter,
+            "pub const CAP",
+            "const_item",
+            &["sig", "body", "deps"][..],
+        ),
+        (
+            "crates/tally::counter::<Tally as fmt::Display>::fmt",
+            &counter,
+            "    fn fmt(",
+            "function_item",
+            &DEFAULT[..],
+        ),
+    ] {
+        let block = block_of(&lock, "LAW-BOUND", symbol);
+        let code = item_code(source, line_of(source, start), kind, levels);
+        assert!(block.contains(&code.lines()), "{symbol}:\n{block}");
+    }
+    let ron = block_of(&lock, "LAW-BOUND", "root.cap");
+    assert!(ron.contains("\nlevels = [\"sig\", \"body\"]\n"), "{ron}");
+
+    // The `[deps, path]` marker made `[path]`: the union `path, body`, a
+    // refresh of that entry alone.
+    repo.replace(BOUNDS, "[deps, path]", "[path]");
+    repo.commit_all("a narrower list");
+    let attempt = repo.accept("LAW-BOUND", true);
+    attempt.committed("the narrower union");
+    assert!(
+        attempt
+            .question()
+            .starts_with("lock LAW-BOUND rev 2 (accept: 0 new, 1 refreshed, 0 kept, 0 dropped)"),
+        "{}",
+        attempt.question()
+    );
+    assert!(
+        attempt.rows().contains(&format!("refreshed | {STOPS}\n")),
+        "{}",
+        attempt.rows()
+    );
+    let block = block_of(
+        &repo.lock_text(),
+        "LAW-BOUND",
+        "crates/tally::test:bounds::stops_at_cap",
+    );
+    assert!(
+        block.contains("\nlevels = [\"path\", \"body\"]\n"),
+        "{block}"
+    );
+}
+
+/// RD-3 **M5** (`Invalid` locked as the default): a binding whose markers
+/// carry an `Invalid` level list (`unclosed`, `unknown`, `duplicate`,
+/// `empty`) is never locked: `not locked … | bad_levels`;
+/// `cap-check/PASS-01`'s only marker `[Sig]` leaves nothing lockable (exit
+/// 1, no question, nothing written); one invalid marker among valid ones
+/// for a key refuses it; an entry locked while its list was valid is
+/// `kept`, byte for byte, whichever way the list breaks.
+#[test]
+fn invalid_levels_are_not_locked() {
+    let repo = LockRepo::code_a("lock-levels-invalid");
+    let state = repo.state();
+    let attempt = repo.accept("cap-check/PASS-01", true);
+    let refusal = attempt.refused("PASS-01");
+    assert!(refusal.contains("can be locked"), "{refusal}");
+    assert!(attempt.prompts.is_empty());
+    assert_eq!(attempt.rows(), PASS_ROW);
+    assert_eq!(repo.state(), state, "nothing written");
+    assert!(repo.lock().is_none());
+
+    repo.accept_ok("GOAL-01");
+    let lock = repo.lock_text();
+    assert_eq!(node_blocks(&lock, "GOAL-01").len(), 1, "{lock}");
+    assert!(!lock.contains("inner::limit"), "{lock}");
+
+    repo.accept_ok("LAW-BOUND");
+    let locked = block_of(
+        &repo.lock_text(),
+        "LAW-BOUND",
+        "crates/tally::test:bounds::stops_at_cap",
+    );
+    assert!(locked.contains("\nlevels = [\"body\"]\n"), "{locked}");
+    let mut current = STOPS_MARKER.to_owned();
+    for (label, marker) in [
+        (
+            "unclosed",
+            "// @verifies LAW-BOUND@2 [body mutation: drop the cap",
+        ),
+        (
+            "unknown",
+            "// @verifies LAW-BOUND@2 [Body] mutation: drop the cap",
+        ),
+        (
+            "duplicate",
+            "// @verifies LAW-BOUND@2 [body, body] mutation: drop the cap",
+        ),
+        (
+            "empty",
+            "// @verifies LAW-BOUND@2 [] mutation: drop the cap",
+        ),
+    ] {
+        repo.replace(BOUNDS, &current, marker);
+        current = marker.to_owned();
+        repo.commit_all(label);
+        let attempt = repo.accept("LAW-BOUND", true);
+        let rows = attempt.rows();
+        assert!(
+            rows.contains(&format!("kept | {STOPS} | bad_levels\n")),
+            "{label}:\n{rows}"
+        );
+        let outcome = attempt
+            .outcome
+            .as_ref()
+            .unwrap_or_else(|error| panic!("{label}: {error}"));
+        assert!(outcome.commit.is_none(), "{label}: {outcome:?}");
+        assert_eq!(
+            block_of(
+                &repo.lock_text(),
+                "LAW-BOUND",
+                "crates/tally::test:bounds::stops_at_cap"
+            ),
+            locked,
+            "{label}: kept byte for byte"
+        );
+    }
+
+    // One key from two markers, the first `[Sig]`: the key refused.
+    let two = LockRepo::code_a("lock-levels-invalid-two");
+    two.replace(
+        BOUNDS,
+        STOPS_MARKER,
+        &format!("// @verifies LAW-BOUND@2 [Sig]\n{STOPS_MARKER}"),
+    );
+    two.commit_all("an invalid marker first");
+    let attempt = two.accept("LAW-BOUND", true);
+    attempt.committed("LAW-BOUND");
+    assert!(
+        attempt
+            .rows()
+            .contains(&format!("not locked | {STOPS} | bad_levels\n")),
+        "{}",
+        attempt.rows()
+    );
+    assert!(
+        attempt
+            .question()
+            .starts_with("lock LAW-BOUND rev 2 (accept: 3 new, 0 refreshed, 0 kept, 0 dropped)"),
+        "{}",
+        attempt.question()
+    );
+    assert!(!two.lock_text().contains("stops_at_cap"));
+}
+
+/// The row of `attempt` naming `place`, its state the last field.
+fn row_naming<'a>(rows: &'a str, place: &str) -> &'a str {
+    let found: Vec<&str> = rows.lines().filter(|row| row.contains(place)).collect();
+    assert_eq!(found.len(), 1, "one row naming {place}:\n{rows}");
+    found[0]
+}
+
+/// RD-3 (Q31): a `module` whose file has any parse error is never locked,
+/// `not locked … | cannot_verify <category>`; an entry locked while the
+/// file parsed is `kept`, byte for byte.
+#[test]
+fn module_file_with_a_parse_error_is_not_locked() {
+    let module = "verifies | crates/tally/tests/bounds.rs | module crates/tally::test:bounds";
+    let broken = "\nfn broken( {\n";
+
+    let repo = LockRepo::code_a("lock-module-error");
+    repo.accept_ok("PIECE-COUNTER");
+    let locked = block_of(
+        &repo.lock_text(),
+        "PIECE-COUNTER",
+        "crates/tally::test:bounds",
+    );
+    repo.append(BOUNDS, broken);
+    repo.commit_all("an error in bounds.rs");
+    let attempt = repo.accept("PIECE-COUNTER", true);
+    let rows = attempt.rows();
+    let row = row_naming(&rows, module);
+    let state = row
+        .strip_prefix(&format!("kept | {module} | "))
+        .unwrap_or_else(|| panic!("kept: {row}"));
+    assert!(
+        state.starts_with("cannot_verify ") && state.len() > "cannot_verify ".len(),
+        "a category: {row}"
+    );
+    let outcome = attempt.outcome.as_ref().expect("an answer");
+    assert!(outcome.commit.is_none(), "{outcome:?}");
+    assert_eq!(
+        block_of(
+            &repo.lock_text(),
+            "PIECE-COUNTER",
+            "crates/tally::test:bounds"
+        ),
+        locked
+    );
+
+    let fresh = LockRepo::code_a("lock-module-error-fresh");
+    fresh.append(BOUNDS, broken);
+    fresh.commit_all("an error in bounds.rs");
+    let attempt = fresh.accept("PIECE-COUNTER", true);
+    attempt.committed("the other three");
+    let rows = attempt.rows();
+    let row = row_naming(&rows, module);
+    assert!(
+        row.starts_with(&format!("not locked | {module} | cannot_verify ")),
+        "{row}"
+    );
+    assert!(
+        !fresh
+            .lock_text()
+            .contains("symbol = \"crates/tally::test:bounds\"\n"),
+        "the broken module locked"
+    );
+}
+
+/// RD-3 (Q31): a `ron` value of a file `RonAnalysis` rejects (trailing
+/// content) is never locked, `not locked … | cannot_verify
+/// trailing_content`; an entry locked while the file was read is `kept`,
+/// byte for byte.
+#[test]
+fn ron_value_of_a_rejected_file_is_not_locked() {
+    let ron = "configures | data/limits.ron | ron root";
+
+    let repo = LockRepo::code_a("lock-ron-rejected");
+    repo.accept_ok("PIECE-COUNTER");
+    let locked = block_of(&repo.lock_text(), "PIECE-COUNTER", "root");
+    repo.append(LIMITS, "extra\n");
+    repo.commit_all("trailing content");
+    let attempt = repo.accept("PIECE-COUNTER", true);
+    let rows = attempt.rows();
+    assert_eq!(
+        row_naming(&rows, &format!("{ron} ")),
+        format!("kept | {ron} | cannot_verify trailing_content")
+    );
+    let outcome = attempt.outcome.as_ref().expect("an answer");
+    assert!(outcome.commit.is_none(), "{outcome:?}");
+    assert_eq!(block_of(&repo.lock_text(), "PIECE-COUNTER", "root"), locked);
+
+    let fresh = LockRepo::code_a("lock-ron-rejected-fresh");
+    fresh.append(LIMITS, "extra\n");
+    fresh.commit_all("trailing content");
+    let attempt = fresh.accept("PIECE-COUNTER", true);
+    attempt.committed("the other three");
+    let rows = attempt.rows();
+    assert_eq!(
+        row_naming(&rows, &format!("{ron} ")),
+        format!("not locked | {ron} | cannot_verify trailing_content")
+    );
+    assert!(!fresh.lock_text().contains("kind = \"ron\""));
 }
 
 /// The golden file is the repository's: not under a walked `[paths]` root

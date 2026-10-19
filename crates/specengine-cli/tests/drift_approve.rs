@@ -590,14 +590,29 @@ fn editorial_blocks(label: &str, prepare: impl FnOnce(&LockRepo)) -> (Blocks, Bl
 }
 
 /// RD-8: an editorial approve keeps every LAW-BOUND entry's code fields
-/// (`ast_hash`, `file_blob`, the key, `rev`), its spec hash the new text's.
-/// M: code hashes refreshed.
+/// (format 2: `levels`, the three level digests, an item's fingerprints
+/// and `body_bytes`; `file_blob`, the key, `rev`), its spec hash the new
+/// text's. M: code hashes refreshed.
 #[test]
 fn drift_editorial_keeps_code_hashes() {
     let (before, after, norm) = editorial_blocks("da-editorial-code", |_| {});
     for (old_fields, new_fields) in before.iter().zip(&after) {
         assert_eq!(value(new_fields, "spec_hash"), Some(norm.as_str()));
-        for key in ["ast_hash", "file_blob", "symbol", "file", "relation", "rev"] {
+        assert!(value(old_fields, "sig_hash").is_some(), "{old_fields:?}");
+        for key in [
+            "levels",
+            "sig_hash",
+            "body_hash",
+            "deps_hash",
+            "skeleton_hash",
+            "quote_hash",
+            "body_bytes",
+            "file_blob",
+            "symbol",
+            "file",
+            "relation",
+            "rev",
+        ] {
             assert_eq!(value(new_fields, key), value(old_fields, key), "{key}");
         }
     }

@@ -27,13 +27,16 @@
 //! - **Spec side**: R by [`revision`], H the `norm_hash` of a fresh parse
 //!   of the bytes read (`norm_input`, `b3_hash`), never the index's
 //!   column.
-//! - **Cascade**: a bound row with an entry compares the file's blob OID
-//!   (on disk one `hash-object` for every such file; at a commit its
-//!   tree's OID); equal: unchanged, nothing parsed; else a `module` or
-//!   `ron` changed, an item's file re-parsed from the walk's text and its
-//!   whole item hashed (`hash_bound_items`). The judge gets the outcome;
-//!   the row keeps the current fact a change was found by (an item's
-//!   digest, a `module`'s or `ron`'s blob), and the node's H.
+//! - **Cascade**: a bound row with an entry (lock format 2, the only one a
+//!   code judge reads) compares the file's blob OID (on disk one
+//!   `hash-object` for every such file; at a commit its tree's OID); equal:
+//!   unchanged, nothing parsed; else a `module` or `ron` changed, an item's
+//!   file re-parsed from the walk's text and its levels made
+//!   (`item_levels`), `sig` and `body` compared with the entry's whatever
+//!   its levels (task spec `lock-levels`, "Verify on format 2"). The judge
+//!   gets the outcome; the row keeps the current fact a change was found by
+//!   (an item's changed levels, `<level>:<digest>`; a `module`'s or `ron`'s
+//!   blob), and the node's H.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -41,9 +44,13 @@ use std::io;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
-use specengine_code::{HashState, Levels, MOD_KIND, RustParser, hash_bound_items, markers_in};
+use specengine_code::{
+    Digest, HashState, LevelState, Levels, MOD_KIND, RustParser, item_levels, markers_in,
+};
 use specengine_core::check::{CheckFile, CheckInput, Mode, canonical_id};
-use specengine_core::lock::{LOCK_FILE, Lock, LockKind, Verified, parse_lock};
+use specengine_core::lock::{
+    EntryCode, HASH_PREFIX, LOCK_FILE, Lock, LockKind, LockLevel, Verified, parse_lock,
+};
 use specengine_core::verify::{
     CodeFact, Compared, Comparison, Judgement, MarkerFact, MarkerRev, NodeFact, RowBinding,
     RowFacts, RowKey, Unbound, is_pre_existing, judge_row, verify_from_toml,
@@ -136,8 +143,10 @@ pub(crate) struct Row {
     /// The row names one node.
     pub resolved: bool,
     /// The cascade's current fact when it found a change: an item compared
-    /// changed by its hash, its digest (`b3:`); a `module` or `ron` row
-    /// changed by its blob, the blob's OID; else `None`.
+    /// changed by its levels, `<level>:<digest>` per changed level of
+    /// `sig`, `body`, `,`-joined in canonical order (`body:b3:…`); a
+    /// `module` or `ron` row changed by its blob, the blob's OID; else
+    /// `None`.
     pub code: Option<String>,
 }
 
@@ -683,8 +692,9 @@ fn first_category(state: &HashState) -> String {
 type Compare<'a> = (&'a RowKey, &'a Verified, Option<(usize, usize)>);
 
 /// The cascade: each bound row with an entry compared with it, by the
-/// file's blob, then for a changed item by its whole hash; with each, the
-/// current fact a change was found by (the blob's OID, the item's digest).
+/// file's blob, then for a changed item by its `sig` and `body` digests
+/// whatever the levels (5b-1b narrows it); with each, the current fact a
+/// change was found by (the blob's OID, the item's changed levels).
 fn cascade(
     side: &Side<'_>,
     building: &BTreeMap<RowKey, Building>,
@@ -734,8 +744,8 @@ fn cascade(
         }
     }
     // Level 3: only the bound files whose blob changed are parsed again
-    // (the walk keeps no tree), only their compared items hashed.
-    let mut hashes: BTreeMap<(usize, usize), Option<HashState>> = BTreeMap::new();
+    // (the walk keeps no tree), only their compared items' levels made.
+    let mut made: BTreeMap<(usize, usize), Option<LevelState>> = BTreeMap::new();
     if !to_hash.is_empty() {
         let mut parser = RustParser::new().map_err(|error| {
             RunCause::new(
@@ -746,12 +756,12 @@ fn cascade(
         for (file, indexes) in &to_hash {
             let text = &side.tree.rust[*file].text;
             let indexes: Vec<usize> = indexes.iter().copied().collect();
-            let states = match parser.parse(text) {
-                Some(tree) => hash_bound_items(&tree, text, &indexes),
+            let levels = match parser.parse(text) {
+                Some(tree) => item_levels(&tree, text, &indexes),
                 None => vec![None; indexes.len()],
             };
-            for (index, state) in indexes.into_iter().zip(states) {
-                hashes.insert((*file, index), state);
+            for (index, levels) in indexes.into_iter().zip(levels) {
+                made.insert((*file, index), levels);
             }
         }
     }
@@ -762,23 +772,40 @@ fn cascade(
         let Some(at) = item else {
             continue;
         };
-        let comparison = match hashes.get(&at) {
-            Some(Some(HashState::Hashed(digest))) => {
-                let now = format!("b3:{}", digest.to_hex());
-                if Some(&now) == entry.ast_hash.as_ref() {
+        let comparison = match (made.get(&at), &entry.code) {
+            (Some(Some(LevelState::Hashed(now))), EntryCode::Levels(held)) => {
+                let changed: Vec<String> = [
+                    (LockLevel::Sig, &now.sig, &held.sig_hash),
+                    (LockLevel::Body, &now.body, &held.body_hash),
+                ]
+                .into_iter()
+                .filter_map(|(level, now, held)| {
+                    let now = lock_digest(now);
+                    (now != *held).then(|| format!("{}:{now}", level.as_str()))
+                })
+                .collect();
+                if changed.is_empty() {
                     (Comparison::Equal(Compared::Ast), None)
                 } else {
-                    (Comparison::Changed(Compared::Ast), Some(now))
+                    (Comparison::Changed(Compared::Ast), Some(changed.join(",")))
                 }
             }
-            Some(Some(state @ HashState::CannotVerify { .. })) => {
-                (Comparison::CannotVerify(first_category(state)), None)
+            (Some(Some(LevelState::CannotVerify { categories })), _) => {
+                let category = categories
+                    .first()
+                    .map_or("other", |category| category.as_str());
+                (Comparison::CannotVerify(category.to_owned()), None)
             }
             _ => (Comparison::NotHashed, None),
         };
         out.insert(key.clone(), comparison);
     }
     Ok(out)
+}
+
+/// `b3:` and a digest's lowercase hex, as the lock writes it.
+fn lock_digest(digest: &Digest) -> String {
+    format!("{HASH_PREFIX}{}", digest.to_hex())
 }
 
 /// Line starts of one text: a byte offset's 1-based line.

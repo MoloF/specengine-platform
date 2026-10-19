@@ -28,7 +28,7 @@ use rev_rule_common::{
     close_goal, fake_hash, refresh, spec_at, stage_all, unwritable_raises, with_spec_hash,
 };
 use serde_json::{Value, json};
-use verify_common::golden;
+use verify_common::{golden, golden_format_1};
 
 /// The keys of a JSON row, in order ("spec bump").
 const ROW_KEYS: [&str; 8] = [
@@ -84,8 +84,10 @@ fn row(
 
 // ------------------------------------------------------------------ TE-4
 
-/// TE-4: the disk against `HEAD`: `GOAL-01` changed with both entries
-/// refreshed (`suggested`, its `rev: 2` inserted), `LAW-BOUND` changed
+/// TE-4: the disk against `HEAD`: `GOAL-01` changed with its entry
+/// refreshed (`suggested`, its `rev: 2` inserted; one entry since
+/// docs/features/lock-levels.md: its `[path, path]` binding is
+/// `bad_levels`), `LAW-BOUND` changed
 /// (`required`: four entries vouch, none refreshed), the unlocked
 /// `LAW-STEP` (`suggested`, no entry), `LAW-ODD` at an unreadable `rev=0`
 /// (`suggested`, `rev`, `to` and `write` null); `PIECE-COUNTER` raised by
@@ -109,7 +111,7 @@ fn bump_rows_list_unraised_changes_by_path_and_line() {
     let run = bump(&repo, &[]);
     assert_eq!(run.code(), 0, "{}", run.show());
 
-    let goal = bump_line("suggested", GOAL, GOAL_MD, GOAL_LINE, 1, 2, 2, "rev: 2");
+    let goal = bump_line("suggested", GOAL, GOAL_MD, GOAL_LINE, 1, 2, 1, "rev: 2");
     let bound = bump_line(
         "required",
         BOUND,
@@ -165,7 +167,7 @@ fn bump_rows_list_unraised_changes_by_path_and_line() {
     assert_eq!(
         rows[..3],
         [
-            &row("suggested", GOAL, GOAL_MD, GOAL_LINE, 1, 2, 2, "rev: 2"),
+            &row("suggested", GOAL, GOAL_MD, GOAL_LINE, 1, 2, 1, "rev: 2"),
             &row(
                 "required",
                 BOUND,
@@ -349,10 +351,13 @@ fn bump_writes_nothing() {
 /// `GOAL-01` (one of two); `suggested` for `cap-check/PASS-01` (its entry
 /// refreshed), `PIECE-COUNTER` (`HEAD`'s entries vouch for another text:
 /// none in scope, 0 entries) and the unlocked `LAW-STEP`. M: a vouched
-/// node marked `suggested`, or any changed one `required`.
+/// node marked `suggested`, or any changed one `required`. Over the
+/// format-1 golden, which holds `GOAL-01`'s two entries and
+/// `cap-check/PASS-01`'s one (docs/features/lock-levels.md Q10: bump
+/// reads it).
 #[test]
 fn bump_marks_vouched_nodes_required() {
-    let repo = golden("rd4-required");
+    let repo = golden_format_1("rd4-required");
     let tampered = with_spec_hash(&repo.lock_text(), PIECE, None, &fake_hash());
     repo.write(LOCK, tampered);
     repo.commit_all("PIECE-COUNTER's entries vouch for another text");
@@ -496,7 +501,7 @@ fn row_alone(need: &str, id: &str, path: &str, line: u64, rev: u32, entries: usi
 
 /// W14 (iteration 2): `GOAL-01` a document of the closed class `decision`
 /// (`close_goal`), changed on the disk without a raise: its row
-/// `required`, `rev 1` alone, `2 lock entries`, write `-`; JSON `to` and
+/// `required`, `rev 1` alone, `1 lock entry` (format 2), write `-`; JSON `to` and
 /// `write` null (both keys there). `LAW-BOUND` changed with it keeps
 /// `rev 2 -> 3` and its raised heading. M: the closed class not consulted
 /// (`rev 1 -> 2 | … | rev: 2`).
@@ -512,7 +517,7 @@ fn closed_class_bump_row_is_rev_alone() {
     assert_eq!(
         run.row_lines(),
         [
-            bump_line_alone("required", GOAL, GOAL_MD, GOAL_LINE, 1, 2),
+            bump_line_alone("required", GOAL, GOAL_MD, GOAL_LINE, 1, 1),
             bump_line("required", BOUND, COUNTER_MD, BOUND_LINE, 2, 3, 4, heading),
         ],
         "{}",
@@ -521,7 +526,7 @@ fn closed_class_bump_row_is_rev_alone() {
     assert_eq!(
         run.rows(),
         [
-            &row_alone("required", GOAL, GOAL_MD, GOAL_LINE, 1, 2),
+            &row_alone("required", GOAL, GOAL_MD, GOAL_LINE, 1, 1),
             &row("required", BOUND, COUNTER_MD, BOUND_LINE, 2, 3, 4, heading),
         ],
         "{}",
@@ -579,7 +584,7 @@ fn unwritable_raise_bump_row_is_rev_alone() {
     assert_eq!(
         run.row_lines(),
         [
-            bump_line_alone("required", GOAL, GOAL_MD, goal_line, 1, 2),
+            bump_line_alone("required", GOAL, GOAL_MD, goal_line, 1, 1),
             bump_line_alone("required", PIECE, COUNTER_MD, PIECE_LINE, 3, 4),
             bump_line("required", BOUND, COUNTER_MD, BOUND_LINE, 2, 3, 4, heading),
         ],
@@ -589,7 +594,7 @@ fn unwritable_raise_bump_row_is_rev_alone() {
     assert_eq!(
         run.rows(),
         [
-            &row_alone("required", GOAL, GOAL_MD, goal_line, 1, 2),
+            &row_alone("required", GOAL, GOAL_MD, goal_line, 1, 1),
             &row_alone("required", PIECE, COUNTER_MD, PIECE_LINE, 3, 4),
             &row("required", BOUND, COUNTER_MD, BOUND_LINE, 2, 3, 4, heading),
         ],

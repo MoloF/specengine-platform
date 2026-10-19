@@ -689,7 +689,8 @@ fn an_unreadable_lock_or_other_recipes_is_exit_2() {
         "crates/tally/src/main.rs",
         "item",
         "crates/tally::bin:tally-kit::main",
-        Some(("function_item", &fake_b3('b'))),
+        Some("function_item"),
+        &lock_common::Code::fake('b', true),
         &fake_oid('c'),
         &fake_oid('d'),
         "2026-10-01",
@@ -707,17 +708,19 @@ fn an_unreadable_lock_or_other_recipes_is_exit_2() {
                 "verified_by = \"owner\"\n",
                 "verified_by = \"owner\"\nline = 12\n",
             ),
-            &["spec.lock:19:", "line"],
+            &["spec.lock:25:", "line"],
         ),
         (
             "other recipes",
             valid.replace(
-                "specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15",
+                "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15",
                 "specengine-hash/v1 tree-sitter-rust/0.23.0 abi/14",
             ),
             &[
+                "spec.lock:4: ",
                 "specengine-hash/v1 tree-sitter-rust/0.23.0 abi/14",
-                "specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15",
+                "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15",
+                "run spec lock rebase on a terminal",
             ],
         ),
     ];

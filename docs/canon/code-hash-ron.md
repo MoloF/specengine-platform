@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-code, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-16
+reviewed: 2026-10-20
 ---
 
 # Code hash: the RON value
 
-The hash of the value a RON comment anchors (`code-identity.md` "RON binding"): what judges a `ron` binding from 5b-1 on (`lock-levels.md` "Format 2"), in place of format 1's `file_blob`. v3's header, `put` and CR rule (`code-hash.md` "Levels"), its own tag. Nothing records it yet; `code-hash-eval.md` measures it. A recorded digest changes only with `LEVEL_RECIPE` and a rebase of every lock (ADR-0050).
+The hash of the value a RON comment anchors (`code-identity.md` "RON binding"): a `ron` entry's `sig_hash` and `body_hash` in `spec.lock` format 2 (`spec-lock.md` "Entry"), judged from 5b-1b (`lock-levels-verify.md`; by `file_blob` until then). v3's header, `put` and CR rule (`code-hash.md` "Levels"), its own tag; `code-hash-eval.md` measures it. A recorded digest changes only with `LEVEL_RECIPE` and a rebase of every lock (ADR-0050).
 
 ## Entry point
 
@@ -30,7 +30,7 @@ for each lexer token `t` of the anchored value, its first through its last:
 - **Span**: an entry's value after its `:` (field name or map key and `:` outside); an element; the root value after `#![enable(..)]` and the comments before it. A container runs through its closer, a struct name included (`player: Player( // m` hashes the whole `Player(..)`); the `,` after a value is outside.
 - **Drops**: comments (one inside a value that anchors a path gets its own entry); a `,` whose next non-comment token is a closer. Every other token's text verbatim but for the CR rule: a CR right before an LF dropped (only a string holds one; a lone CR is text).
 - **Which value**: the one the comment's `Path` names (rules 1-5). A comment the walk anchors to a map entry while its key is parsed names the entry's value, not the key; one inside the key's own elements (`{ (/* m */ 0, 0): 1 }`, path `root{…}.0`) names that element.
-- **Levels**: `sig` = `body` = `value_hash`; `deps` = the empty set's digest, `level_header() ‖ put("deps")`, an item's `deps` with no call (crate-private `levels::deps_digest`: 5b-1 decides its public form); no fingerprint, never followed.
+- **Levels**: `sig` = `body` = `value_hash`; `deps` = the empty set's digest, `level_header() ‖ put("deps")`, an item's `deps` with no call, public as `empty_deps_digest()`, a `ron` entry's `deps_hash`; no fingerprint, never followed.
 
 Example:
 
@@ -43,7 +43,7 @@ Example:
 
 ## Pins and cost
 
-- The RON lexer is outside `code_recipe` (`lock-levels.md` "Risks"): `ron_value_stream_is_pinned` (code `tests/hash_levels_ron.rs`) catches a stream change, which bumps `LEVEL_RECIPE`.
+- The RON lexer is outside `code_recipe`: `ron_value_stream_is_pinned` (code `tests/hash_levels_ron.rs`) catches a stream change, which bumps `LEVEL_RECIPE`.
 - The value pass is one flat loop over a token slice and adds no recursion. The walk is `analyze`'s, unchanged: one call per container, capped at `MAX_DEPTH` 512 within a 2 MB stack (`ron_values_at_max_depth_hash_on_a_two_megabyte_stack`).
 - No path, line, offset or time enters a stream: equal bytes, equal digests, in any run or file order.
 
@@ -51,6 +51,6 @@ Example:
 
 - Nested anchored values overlap: O(n × depth), capped by `MAX_DEPTH`.
 - One rejection refuses every value of the file (08 AC-14, by design).
-- The key-comment choices above, like every stream byte, freeze with 5b-1's first lock.
+- The key-comment choices above, like every stream byte, froze with the first format-2 lock.
 - The pilots hold no RON marker: bound values are proven on fixtures (`fixtures/hash-levels/ron/`); `code-hash-eval.md` measures every `Path`-anchored comment.
 - `analyze`'s own RON limits apply (`crates/specengine-code/README.md` "Known limits and open minors").

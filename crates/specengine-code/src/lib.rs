@@ -39,7 +39,7 @@
 //! - [`bind`] — every comment of a Rust file bound to an item, a module,
 //!   nothing (with a category) or `cannot_verify`, and where a mention in
 //!   it belongs; [`ron::comment_anchors`] the same for every RON comment;
-//!   [`hash_bound_items`] the hashes of chosen bound items (the lock's
+//!   [`hash_bound_items`] the hashes of chosen bound items (lock format 1's
 //!   `ast_hash`: `docs/canon/spec-lock.md` "Entry"), the binding itself
 //!   hashing none;
 //! - [`naming`] — a tree's items and modules named at once: `qpath` and
@@ -56,7 +56,9 @@
 //!   ([`module_levels`]); the body of every item kind as data
 //!   ([`BODY_FIELDS`], [`body_nodes`]) and the calls `deps` hashes
 //!   ([`call_targets`]); [`item_levels`] the twin of [`hash_bound_items`]
-//!   for chosen bound items. Nothing records these digests yet.
+//!   for chosen bound items; [`empty_deps_digest`] the empty set's `deps`.
+//!   `spec.lock` format 2 records these digests (task spec `lock-levels`,
+//!   "Format 2").
 //!
 //! Phase 3 slice 5a-1b `hash-levels-ron` (the same section):
 //!
@@ -128,7 +130,7 @@ pub use items::{FileAnalysis, ItemRecord, MOD_KIND, ModDeclaration, analyze_file
 pub use layer_c::{KIND_MAP, kind_matches, layer_a_kinds};
 pub use levels::{
     BODY_FIELDS, BodyField, BodySlot, LEVEL_RECIPE, LevelHashes, LevelState, TRIVIAL_BODY_BYTES,
-    body_nodes, call_targets, level_header, module_levels,
+    body_nodes, call_targets, empty_deps_digest, level_header, module_levels,
 };
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
 pub use naming::{

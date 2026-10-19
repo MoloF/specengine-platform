@@ -306,9 +306,11 @@ pub fn drift_summary<'a>(rows: impl IntoIterator<Item = (&'a str, Option<&'a str
 pub struct HashedEntry<'a> {
     pub rev: u32,
     pub spec_hash: &'a str,
-    /// Format 1: the entry's `ast_hash` (`None` for a `module` or `ron`
-    /// entry); format 2 (5b): its code fields as the render writes them,
-    /// one string (`lock-levels.md` Q7).
+    /// The entry's [`crate::lock::lock_code`]: its `levels`, `sig_hash`,
+    /// `body_hash` and `deps_hash` lines as the render writes them,
+    /// LF-joined, never a fingerprint or `body_bytes`, every kind (task
+    /// spec `lock-levels` Q7, Q12). A format-1 lock is never judged, so
+    /// never hashed.
     pub code: Option<&'a str>,
     pub file_blob: &'a str,
 }
@@ -334,10 +336,11 @@ pub struct HashedRow<'a> {
     /// The node's revision R and `norm_hash` H at the commit judged.
     pub rev: Option<u32>,
     pub norm_hash: Option<&'a str>,
-    /// The cascade's current fact: an item compared changed by its hash,
-    /// its digest; a `module` or `ron` row changed by its blob, the blob's
-    /// OID; else `None`. No item's file blob: an edit beside the item is
-    /// the same drift.
+    /// The cascade's current fact: an item compared changed by its levels,
+    /// `<level>:<digest>` per changed level of `sig`, `body`, `,`-joined in
+    /// canonical order (`body:b3:…`); a `module` or `ron` row changed by
+    /// its blob, the blob's OID; else `None`. No item's file blob: an edit
+    /// beside the item is the same drift.
     pub code: Option<&'a str>,
 }
 

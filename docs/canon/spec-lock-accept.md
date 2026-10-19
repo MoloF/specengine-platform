@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-20
 ---
 
 # `spec lock accept`: the owner's lock commit
@@ -14,16 +14,16 @@ reviewed: 2026-10-15
 
 1. Not a terminal: exit 2, before anything is read.
 2. The project, its root `specengine.toml`, `[code]` (none: exit 2, `spec refs`' text); REF as `spec show` reads it, a written `@rev` dropped with a `note:`.
-3. Git: a worktree, HEAD born, on a branch (`branch` given: that one, else exit 1 ``HEAD left `<branch>` after PR-0012's place was checked; nothing written``), no operation in progress; the lock read. REF naming entries while no node has that canonical ID: "A gone node".
+3. Git: a worktree, HEAD born, on a branch (`branch` given: that one, else exit 1 ``HEAD left `<branch>` after PR-0012's place was checked; nothing written``), no operation in progress; the lock read (`parse_lock` with the build's recipes: format 1 or another recipe, exit 2, `spec-lock.md` "Entry"). REF naming entries while no node has that canonical ID: "A gone node".
 4. The code walk finds the node's markers. **Inputs**, tracked and equal to HEAD, else each named with its state (`modified`, `staged`, `untracked`, `deleted`, `not tracked`), exit 1 `…: commit them first; nothing written`: the node's file, its markers' files, `specengine.toml`, `spec.lock`; every `.rs`/`.ron` the walk reads that is modified, staged, deleted or untracked; every `Cargo.toml` under a code root or in a directory at or above one, up to the project root (its manifest whenever it exists). Names, `qpath`s, ambiguity depend on them all: one commit, one lock.
-5. Each marker file bound, its bound items hashed (`hash_bound_items`), from its HEAD blob's raw bytes (`blob_at`, no filters: `*.rs ident`, `$Id$` stay unexpanded); OIDs from HEAD's tree; the node's revision and `norm_hash` from its file's HEAD blob.
-6. **Merge** (`merge_accept`): a lockable binding `new`/`refreshed`, or `unchanged` when equal on `rev`, `spec_hash`, `ast_hash`, `file_blob` (byte-identical, `commit` and `verified_at` too); a binding with a key not lockable now keeps its entry (`kept`); a vanished key is `dropped`. An old entry at R with another `spec_hash` refuses, exit 1 (a meaning change without a raise: "raise its `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`)"; an approve raises it itself, `proposal-revisions.md`). Other nodes' entries keep their bytes.
+5. Each marker file bound and what its lockable markers bind hashed into format 2 (`spec-lock.md` "Entry"): an item by `item_levels`, an inline `mod` by its `mod_item`'s, the file's module by `module_levels` (once), a RON file's values by `ron::value_hashes`, each paired with its marker's comment by range; from its HEAD blob's raw bytes (`blob_at`, no filters: `*.rs ident`, `$Id$` stay unexpanded); OIDs from HEAD's tree; the node's revision and `norm_hash` from its file's HEAD blob.
+6. **Merge** (`merge_accept`): a lockable binding `new`/`refreshed`, or `unchanged` when equal on `rev`, `spec_hash`, `levels`, the three digests, `file_blob` (core `same_pair`, never a fingerprint or `body_bytes`; byte-identical, `commit` and `verified_at` too); a binding with a key not lockable now keeps its entry (`kept`); a vanished key is `dropped`. An old entry at R with another `spec_hash` refuses, exit 1 (a meaning change without a raise: "raise its `rev` by hand, commit, then accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`)"; an approve raises it itself, `proposal-revisions.md`). Other nodes' entries keep their bytes.
 7. Nothing to change: no question; exit 0 `nothing to change` if some binding is locked as it is, else exit 1 saying why none can be; the outcome's `nothing` keeps why.
 8. Before asking: the committer identity, a first lock git ignores, the data directory. Rows on stdout in key order, `<change> | <relation> | <file> | <kind> <symbol>[ <item_kind>][ | <state>]`, change `new`, `refreshed`, `unchanged`, `kept`, `dropped`, `not locked` (keyless: kind `unanchored`/`cannot_verify`, symbol its category); stderr `lock R-12 rev 3 (accept: 2 new, 1 refreshed, 1 kept, 1 dropped) at <commit> on <branch> in <worktree>? [y/N]`, all four counts always; only `y`, `yes`; no `--yes`.
 9. HEAD, the branch, the lock's bytes read again; a change: exit 1 `spec.lock changed while being accepted; nothing written`.
 10. "The lock commit".
 
-Each accept walks the code tree, hashing the node's items only.
+Each accept walks the code tree, hashing only what the node's lockable markers bind.
 
 ## The lock commit
 
@@ -65,7 +65,7 @@ One-line messages (CLI README "Exit codes and streams"); after a refusal HEAD, r
 |---|---|
 | 0 | a verified commit; nothing to change |
 | 1 | REF names nothing (no gone entries) or several; no marker names the node; nothing lockable; a dirty input; a gone ID held at HEAD; revision unreadable or `norm_hash` null; text changed at R; `--editorial` without an entry at R or on a gone ID; an ignored first lock; not `y`; another branch than `branch`; changed while accepting; the commit failed, failing a check or unverified |
-| 2 | not a terminal; usage; discovery, config, `--config` naming another file; no `[code]`; a walk gap; no worktree; unborn or detached HEAD; an operation in progress; an unreadable lock, other recipes; a HEAD blob not UTF-8, or giving other items than the working tree's (a filter); a parser panic at HEAD; no committer identity |
+| 2 | not a terminal; usage; discovery, config, `--config` naming another file; no `[code]`; a walk gap; no worktree; unborn or detached HEAD; an operation in progress; an unreadable lock, format 1 or other recipes (`spec lock rebase` named, but for `norm_recipe`); a HEAD blob not UTF-8, or giving other items than the working tree's (a filter); a parser panic at HEAD; no committer identity |
 
 `--json`: one document mirroring the outcome, eight keys (`reference`, `node`, `rev`, `mode`, `rows`, `commit`, `unchanged`, `refusal`; `written`, `nothing` serde-skipped), pinned by `lock_accept_json_keeps_its_keys`.
 

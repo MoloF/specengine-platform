@@ -278,10 +278,13 @@ fn autocrlf_checkout(repo: &LockRepo, paths: &[&str]) {
     assert!(repo.porcelain().is_empty(), "clean under autocrlf");
 }
 
-/// TE-5, `docs/canon/spec-verify.md` "Known limits": under `core.autocrlf`
-/// every locked item hashes as under LF (`ok` by its hash); a comment edit
-/// `ok`, a body edit `code_ahead`; the one named item limit, a multi-line
-/// string literal holding the CRLF, reads `code_ahead`.
+/// TE-5: under `core.autocrlf` every locked item hashes as under LF (`ok`
+/// by its hash); a comment edit `ok`, a body edit `code_ahead`. The item
+/// limit `docs/canon/spec-verify.md` "Known limits" named before format 2,
+/// a multi-line string literal holding the CRLF, is gone: format 2 judges
+/// `sig` and `body`, which apply the CR rule (docs/features/lock-levels.md
+/// "Description and interactions": "a CRLF checkout's CR … now reads
+/// `ok`"), so the literal reads `ok` by its hash too.
 #[test]
 fn autocrlf_items_verify_as_lf_but_the_literal() {
     let repo = ecs("verify-autocrlf-items");
@@ -317,8 +320,8 @@ fn autocrlf_items_verify_as_lf_but_the_literal() {
     }
     assert_eq!(
         regen(&run, "crates/game::stamina::REGEN_HELP"),
-        (json!("code_ahead"), json!("code_changed"), json!("ast")),
-        "the literal limit"
+        (json!("ok"), json!(null), json!("ast")),
+        "the literal limit lifted by the CR rule"
     );
     repo.replace(
         STAMINA,

@@ -87,9 +87,11 @@ refreshed | configures | data/limits.ron | ron root\n"
         .unchanged("plain accept after it");
 }
 
-/// RD-10 (M: `ast_hash` refreshed): the text and the bound code both
+/// RD-10 (M: a code field refreshed): the text and the bound code both
 /// changed and committed: `--editorial` changes only `spec_hash`; every
-/// `ast_hash`, `file_blob`, `commit`, `verified_at` stays the old one.
+/// code field (format 2: `levels`, the level digests, the fingerprints,
+/// `body_bytes`; docs/features/lock-levels.md "Accept"), `file_blob`,
+/// `commit`, `verified_at` stays the old one.
 #[test]
 fn editorial_keeps_code_hashes() {
     let repo = LockRepo::code_a("lock-ed-code");
@@ -210,6 +212,15 @@ fn editorial_ignores_dirty_code() {
 #[test]
 fn lock_commit_trailers_parse() {
     let repo = LockRepo::code_a("lock-trailers");
+    // Its only marker made lockable (`[Sig]` is `bad_levels` under
+    // docs/features/lock-levels.md "Accept"): the feature-scoped ID's
+    // trailers are the subject.
+    repo.replace(
+        "crates/tally/tests/bounds.rs",
+        "@verifies cap-check/PASS-01 [Sig]",
+        "@verifies cap-check/PASS-01 [sig]",
+    );
+    repo.commit_all("a valid level list");
     let outcome = repo.accept_ok("cap-check/PASS-01");
     let commit = outcome.commit.expect("a commit");
     assert_eq!(

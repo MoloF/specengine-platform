@@ -6,7 +6,7 @@
 //! (ADR-0008):
 //!
 //! - `fixtures/code-a` (a Rust library) with the golden lock
-//!   `fixtures/spec-lock/code-a.lock` committed on top
+//!   `fixtures/spec-lock/code-a.lock` (format 2) committed on top
 //!   (`verify_common::golden`): `PIECE-COUNTER`, a document at `rev: 3`,
 //!   holds four entries vouching for its text;
 //! - `fixtures/verify-ecs` (an ECS-style game crate) with its four nodes
@@ -169,10 +169,10 @@ fn editorial_apply_is_one_commit_of_text_and_lock() {
 }
 
 /// RD-2: the refresh sets `spec_hash` on the vouching entries and nothing
-/// else: the code fields (`ast_hash`), `file_blob`, `commit`, `verified_*`,
-/// every other node's entries and the header byte for byte; the lock is
-/// the old one with exactly that value replaced.
-/// M: a code field touched (`ast_hash` recomputed).
+/// else: the code fields (format 2's `levels`, digests, fingerprints,
+/// `body_bytes`), `file_blob`, `commit`, `verified_*`, every other node's
+/// entries and the header byte for byte; the lock is the old one with
+/// exactly that value replaced. M: a code field touched (recomputed).
 #[test]
 fn editorial_refresh_keeps_code_hashes_and_commit() {
     let repo = golden("rd2-code-kept");
@@ -218,15 +218,16 @@ fn only_vouching_entries_are_refreshed() {
 }
 
 /// RD-2: the refresh reads the lock without the build's code recipe: a
-/// lock written under another `code_recipe` is refreshed, that line kept;
-/// another `norm_recipe` or `format` exits 2 naming the lock's and this
-/// build's, nothing written. M: accept's `read_lock` (any other recipe
-/// refused).
+/// format-2 lock written under another `code_recipe` is refreshed, that
+/// line kept (docs/features/lock-levels.md "Readers", Q29: "refreshed:
+/// code fields, `code_recipe` kept"); another `norm_recipe` or a `format`
+/// past 2 exits 2 naming the lock's and this build's, nothing written. M:
+/// accept's `read_lock` (any other recipe refused).
 #[test]
 fn editorial_refresh_ignores_code_recipe() {
     let repo = golden("rd2-code-recipe");
-    let other = "code_recipe = \"specengine-hash/v1 tree-sitter-rust/0.20.0 abi/14\"";
-    let current = "code_recipe = \"specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15\"";
+    let other = "code_recipe = \"specengine-hash/v3 tree-sitter-rust/0.20.0 abi/14\"";
+    let current = "code_recipe = \"specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15\"";
     let text = repo.lock_text().replacen(current, other, 1);
     repo.write(LOCK, &text);
     repo.commit_all("a lock of another code recipe");
@@ -243,7 +244,7 @@ fn editorial_refresh_ignores_code_recipe() {
             "norm_recipe = \"specengine-norm/v0\"",
             ["specengine-norm/v0", "specengine-norm/v1"],
         ),
-        ("format", "format = 1", "format = 9", ["9", "format"]),
+        ("format", "format = 2", "format = 9", ["9", "format"]),
     ] {
         let repo = golden(&format!("rd2-recipe-{label}"));
         let text = repo.lock_text().replacen(from, to, 1);

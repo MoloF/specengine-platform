@@ -31,7 +31,9 @@ use drift_common::{
 };
 use lock_common::LockRepo;
 use serde_json::{Value, json};
+use specengine_core::drift::{HashedEntry, HashedRow, drift_hash_input};
 use specengine_core::intake::IntakeSeverity;
+use specengine_core::verify::{MarkerRev, State};
 use specengine_store::{Proposal, ProposalKind, ProposalStatus};
 use verify_common::{clone_dir, golden};
 
@@ -525,6 +527,172 @@ fn ecs_system_changed_raises_a_normal_item() {
     let drift = item.drift.expect("drift");
     assert_eq!(drift.severity, IntakeSeverity::Normal);
     assert_eq!(drift.summary, "code_ahead code_changed");
+}
+
+// --------------------------------------------- lock-levels.md TE-4
+
+/// `regen_system`'s symbol in verify-ecs.
+const REGEN_SYMBOL: &str = "crates/game::stamina::regen_system";
+
+/// `regen_system`'s first line in `source`.
+fn regen_line(source: &[u8]) -> usize {
+    String::from_utf8_lossy(source)
+        .lines()
+        .position(|line| line.starts_with("pub fn regen_system("))
+        .expect("regen_system")
+        + 1
+}
+
+/// The `drift_hash` docs/features/lock-levels.md "Drift evidence" gives
+/// `PERK-REGEN`'s item when its one non-`ok` row is `regen_system`'s
+/// `code_ahead code_changed` at `HEAD` (its `@1` marker), built here from
+/// the lock at `HEAD` (`lock_code`: the entry's `levels`, `sig_hash`,
+/// `body_hash`, `deps_hash` lines as written, LF-joined) and `code`, the
+/// row's fact.
+fn regen_drift_hash(repo: &LockRepo, code: &str) -> String {
+    let lock = repo.lock_text();
+    let block = lock_common::node_blocks(&lock, "PERK-REGEN")
+        .into_iter()
+        .find(|block| block.contains(&format!("\nsymbol = \"{REGEN_SYMBOL}\"\n")))
+        .expect("regen_system's entry");
+    let field = |key: &str| {
+        block
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{key} = ")))
+            .unwrap_or_else(|| panic!("no {key}"))
+            .to_owned()
+    };
+    let lock_code: Vec<&str> = block
+        .lines()
+        .filter(|line| {
+            ["levels = ", "sig_hash = ", "body_hash = ", "deps_hash = "]
+                .iter()
+                .any(|prefix| line.starts_with(prefix))
+        })
+        .collect();
+    assert_eq!(lock_code.len(), 4, "{block}");
+    let lock_code = lock_code.join("\n");
+    let rev: u32 = field("rev").parse().expect("a revision");
+    let spec_hash = field("spec_hash").trim_matches('"').to_owned();
+    let file_blob = field("file_blob").trim_matches('"').to_owned();
+    let norm = repo.norm_hash("PERK-REGEN");
+    let row = HashedRow {
+        node: "PERK-REGEN",
+        relation: "implements",
+        file: STAMINA,
+        kind: Some("item"),
+        symbol: Some(REGEN_SYMBOL),
+        item_kind: Some("function_item"),
+        state: State::CodeAhead,
+        category: Some("code_changed"),
+        detail: None,
+        marker_revs: vec![MarkerRev::Written(1)],
+        entry: Some(HashedEntry {
+            rev,
+            spec_hash: &spec_hash,
+            code: Some(&lock_code),
+            file_blob: &file_blob,
+        }),
+        rev: Some(1),
+        norm_hash: Some(&norm),
+        code: Some(code),
+    };
+    specengine_store::b3_hash(drift_hash_input(&[row]).as_bytes())
+}
+
+/// lock-levels.md TE-4 (`item_code_names_its_changed_levels`; Q13): an
+/// item compared changed stores, in its row's `code`, `<level>:<digest>`
+/// per changed level of `sig` and `body`, this run's digest, `,`-joined
+/// in canonical order: a body edit `body:<digest>`, a signature edit
+/// `sig:<digest>`, an edit of both `sig:<digest>,body:<digest>`; the
+/// entry's evidence (`lock_code`) its `levels` and three digest lines,
+/// never a fingerprint. The item's `drift_hash` is checked against the
+/// hash built from those facts by hand; never the item's whole digest.
+#[test]
+fn item_code_names_its_changed_levels() {
+    let cases: [(&str, &str, &str, &[&str]); 3] = [
+        (
+            "body",
+            "(stamina.current + rate * dt).min(stamina.max)",
+            "(stamina.current + rate * dt * 2.0).min(stamina.max)",
+            &["body"],
+        ),
+        (
+            "sig",
+            "pub fn regen_system(stamina: &mut Stamina, rate: f32, dt: f32)",
+            "pub fn regen_system(stamina: &mut Stamina, rate: f32, dt: f64)",
+            &["sig"],
+        ),
+        (
+            "both",
+            "pub fn regen_system(stamina: &mut Stamina, rate: f32, dt: f32) {\n    // Rest restores a fixed amount per second.\n    stamina.current = (stamina.current + rate * dt)",
+            "pub fn regen_system(stamina: &mut Stamina, rate: f32, step: f32) {\n    // Rest restores a fixed amount per second.\n    stamina.current = (stamina.current + rate * step)",
+            &["sig", "body"],
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (label, from, to, changed) in cases {
+        let repo = ecs_drifted(&format!("dr-levels-{label}"), |repo| {
+            repo.replace(STAMINA, from, to);
+        });
+        let head = repo.head();
+        let before = repo.show_blob(&format!("{head}~1"), STAMINA);
+        let after = repo.show_blob(&head, STAMINA);
+        let old = lock_common::item_code(
+            &before,
+            regen_line(&before),
+            "function_item",
+            &["sig", "body"],
+        );
+        let new = lock_common::item_code(
+            &after,
+            regen_line(&after),
+            "function_item",
+            &["sig", "body"],
+        );
+        // The premise: exactly the named levels changed.
+        let differs = [("sig", old.sig != new.sig), ("body", old.body != new.body)];
+        let named: Vec<&str> = differs
+            .iter()
+            .filter(|(_, differs)| *differs)
+            .map(|(level, _)| *level)
+            .collect();
+        assert_eq!(named, changed, "{label}: the premise");
+        let code: Vec<String> = changed
+            .iter()
+            .map(|level| match *level {
+                "sig" => format!("sig:{}", new.sig),
+                _ => format!("body:{}", new.body),
+            })
+            .collect();
+        let code = code.join(",");
+
+        let raised = raised(&repo, &[]);
+        assert_eq!(
+            raised.created_nodes(),
+            ["PERK-REGEN"],
+            "{label}: {}",
+            raised.text()
+        );
+        let item = assert_item(
+            &repo,
+            &raised,
+            "verify-ecs",
+            "PERK-REGEN",
+            &["code_ahead code_changed"],
+        );
+        let stored = item.drift.expect("drift").hash;
+        let want = regen_drift_hash(&repo, &code);
+        if stored != want {
+            failures.push(format!(
+                "{label}: code {code}: stored {stored}, built {want}"
+            ));
+        }
+        // Never the whole digest, nor the blob.
+        let whole = regen_drift_hash(&repo, &new.body);
+        assert_ne!(stored, whole, "{label}: a digest without its level");
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 // ------------------------------------------------------------------ RD-2

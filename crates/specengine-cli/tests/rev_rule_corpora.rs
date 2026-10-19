@@ -6,6 +6,10 @@
 //! another root, another cwd and a repository built in reverse creation
 //! order: "Rules and edge cases").
 //!
+//! Its locks are format 1, as they were written (docs/features/lock-levels.md
+//! Q10: the rule reads a lock not yet rebased): TE-7's hand-made one and
+//! TE-8's golden, the format-1 golden (`code-a.format-1.lock`).
+//!
 //! This repository is only read: its `HEAD` through `git archive` into a
 //! scratch file, its hook file. The source scans of TE-7 are the genre
 //! scans (core `genre.rs`, CLI `genre.rs`, store `genre.rs`), which walk
@@ -24,13 +28,13 @@ use std::process::Command;
 
 use common::git::Sandbox;
 use common::{Scratch, repository_root, snapshot};
-use lock_common::{LockRepo, block, fake_oid, lock_of};
+use lock_common::{LockRepo, block_format_1, fake_oid, golden_format_1_text, lock_of_format_1};
 use rev_rule_common::{
     BOUND, BOUND_EDIT, CAP_MD, COUNTER_MD, GOAL, GOAL_EDIT, GOAL_MD, LOCK, PASS, PASS_EDIT,
     STEP_EDIT, bump_at, changed, check_at, message, refresh, stage_all, staged,
 };
 use serde_json::Value;
-use verify_common::{clone_dir, golden, golden_file};
+use verify_common::{clone_dir, golden_format_1};
 
 // ------------------------------------------------------------------ TE-6
 
@@ -131,7 +135,7 @@ fn te7_spec_c_no_lock_no_finding_and_a_lock_judges_by_id() {
 
     let locked = LockRepo::of("te7-spec-c-locked", "spec-c", "repo", &[]);
     let hash = locked.norm_hash("FEE-DAY-CAP");
-    let entry = block(
+    let entry = block_format_1(
         "FEE-DAY-CAP",
         1,
         &hash,
@@ -144,7 +148,7 @@ fn te7_spec_c_no_lock_no_finding_and_a_lock_judges_by_id() {
         &fake_oid('b'),
         "2026-10-08",
     );
-    locked.write(LOCK, lock_of(&[entry]));
+    locked.write(LOCK, lock_of_format_1(&[entry]));
     locked.commit_all("a lock");
     locked.replace(fees, cap_edit.0, cap_edit.1);
     stage_all(&locked);
@@ -211,7 +215,7 @@ fn printed(repo: &LockRepo, cwd: &Path, root: &[&str]) -> Vec<(String, i32, Stri
 /// into the findings or rows.
 #[test]
 fn te8_findings_and_rows_are_byte_identical_across_roots_and_order() {
-    let repo = golden("te8-same");
+    let repo = golden_format_1("te8-same");
     let head = repo.head();
     scenario(&repo);
     let reference = printed(&repo, &repo.root, &[]);
@@ -259,7 +263,7 @@ fn te8_findings_and_rows_are_byte_identical_across_roots_and_order() {
     reversed.git.init(&reversed.root);
     reversed.git.add_all(&reversed.root);
     reversed.git.commit(&reversed.root, "the fixture");
-    reversed.write(LOCK, fs::read(golden_file()).expect("the golden lock"));
+    reversed.write(LOCK, golden_format_1_text());
     reversed.commit_all("the lock");
     assert_eq!(reversed.head(), head, "the same commits");
     scenario(&reversed);

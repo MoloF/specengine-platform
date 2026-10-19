@@ -8,7 +8,7 @@ reviewed: 2026-10-20
 
 # Code hash: recipe v2 and the v3 levels
 
-Layer A's digests, tree-sitter only. **v2** (`hash.rs`), one per item: what `spec.lock` format 1 records (`spec-lock.md` "Entry"). **v3** (`levels.rs`): an item's levels and fingerprints beside v2, no v2 byte changed; recorded from 5b-1 (`lock-levels.md`). A recorded digest changes only with its recipe name and a rebase of every lock (ADR-0050).
+Layer A's digests, tree-sitter only. **v2** (`hash.rs`), one per item, `spec.lock` format 1's. **v3** (`levels.rs`), format 2's (`spec-lock.md`): an item's levels and fingerprints beside v2, no v2 byte changed. A recorded digest changes only with its recipe name and a rebase of every lock (ADR-0050).
 
 ## Recipe v2
 
@@ -49,7 +49,7 @@ v3, at the crate root (module `levels`); digests are `Digest`. Callers keep a fi
 | `call_targets(node, source)` | the texts `deps` hashes, sorted; on `source_file` every call in the file |
 | `grammar::NODE_TYPES` | `tree_sitter_rust::NODE_TYPES` for the body pin: the crate reads no JSON |
 
-The RON value hash (`ron::value_hashes`): `docs/canon/code-hash-ron.md`, over the crate-private `hash::put`, `levels::{cr_rule, Stream::tagged, deps_digest}`.
+The RON value hash (`ron::value_hashes`): `docs/canon/code-hash-ron.md`, over the crate-private `hash::put`, `levels::{cr_rule, Stream::tagged, deps_digest}` (over none: public `empty_deps_digest()`).
 
 ## Levels
 

@@ -11,19 +11,43 @@ mod lock_common;
 
 use std::fs;
 
-use lock_common::{LockRepo, block, fake_b3, fake_oid, lock_of};
+use lock_common::{
+    Code, LockRepo, REGEN_TEXT, block, block_format_1, fake_b3, fake_oid, lock_of, lock_of_format_1,
+};
 use specengine_cli::LockPrompt;
 
 const NEXT: &str = "next: git add spec.lock, then commit the merge";
 
-/// One synthetic item entry of `node`, version `v` (its digests, blob and
-/// commit made of `v`), verified on `date`.
+/// One synthetic format-2 item entry of `node`, version `v` (its digests,
+/// fingerprints, blob and commit made of `v`), verified on `date`.
 fn entry(node: &str, v: char, date: &str) -> String {
     let symbol = format!(
         "crates/tally::{}",
         node.to_ascii_lowercase().replace('-', "_")
     );
     block(
+        node,
+        1,
+        &fake_b3(v),
+        "implements",
+        "crates/tally/src/lib.rs",
+        "item",
+        &symbol,
+        Some("function_item"),
+        &Code::fake(v, true),
+        &fake_oid(v),
+        &fake_oid(v),
+        date,
+    )
+}
+
+/// [`entry`] as a format-1 block (`ast_hash`).
+fn entry_format_1(node: &str, v: char, date: &str) -> String {
+    let symbol = format!(
+        "crates/tally::{}",
+        node.to_ascii_lowercase().replace('-', "_")
+    );
+    block_format_1(
         node,
         1,
         &fake_b3(v),
@@ -393,33 +417,83 @@ fn regen_without_a_conflict_is_exit_1() {
     assert_eq!(repo.state(), before);
 }
 
-/// TE-7, TE-3: a stage written by another build (other recipes) or that
-/// cannot be read: exit 2, nothing written.
+/// TE-7, TE-3, docs/features/lock-levels.md Q28: a stage of format 1, or
+/// stages differing in `code_recipe`, exit 2 with regen's one text (`git
+/// merge --abort`, `spec lock rebase` on the lagging branch, merge again),
+/// before any question, nothing written; a stage that cannot be read
+/// exits 2 naming `spec.lock`. Each side: ours or theirs the odd one.
 #[test]
 fn regen_refuses_other_headers_and_unreadable_stages() {
-    let other = lock_of(&[entry("XXX-01", '2', "2026-10-02")]).replace(
-        "specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15",
-        "specengine-hash/v1 tree-sitter-rust/0.23.0 abi/14",
+    let other_code = lock_of(&[entry("XXX-01", '2', "2026-10-02")]).replace(
+        "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15",
+        "specengine-hash/v3 tree-sitter-rust/0.25.0 abi/15",
     );
-    let unreadable = "format = 1\nthis is not a lock\n".to_owned();
-    for (context, theirs, named) in [
-        ("other recipes", other, "specengine-hash/v1"),
-        ("unreadable", unreadable, "spec.lock"),
+    let format_1 = lock_of_format_1(&[entry_format_1("XXX-01", '2', "2026-10-02")]);
+    let unreadable = "format = 2\nthis is not a lock\n".to_owned();
+    let mut failures = Vec::new();
+    for (context, odd, named) in [
+        ("another code_recipe", &other_code, REGEN_TEXT),
+        ("format 1", &format_1, REGEN_TEXT),
+        ("unreadable", &unreadable, "spec.lock"),
     ] {
-        let case = Case {
-            base: Some(lock_of(&[entry("XXX-01", '1', BASE_DAY)])),
-            ours: Some(lock_of(&[entry("XXX-01", '3', "2026-10-03")])),
-            theirs: Some(theirs),
-        };
-        let (repo, clean) = merged("lock-regen-header", &case, "main");
-        assert!(!clean, "{context}: conflicts");
-        let before = repo.state();
-        let attempt = repo.regen(true);
-        let message = attempt.cannot(context);
-        assert!(message.contains(named), "{context}: {message}");
-        assert!(attempt.prompts.is_empty(), "{context}");
-        assert_eq!(repo.state(), before, "{context}");
+        for odd_side in ["theirs", "ours"] {
+            let normal = lock_of(&[entry("XXX-01", '3', "2026-10-03")]);
+            let (ours, theirs) = if odd_side == "theirs" {
+                (normal, odd.clone())
+            } else {
+                (odd.clone(), normal)
+            };
+            let case = Case {
+                base: Some(lock_of(&[entry("XXX-01", '1', BASE_DAY)])),
+                ours: Some(ours),
+                theirs: Some(theirs),
+            };
+            let label = format!("lock-regen-header-{}", context.replace(' ', "-"));
+            let (repo, clean) = merged(&label, &case, "main");
+            assert!(!clean, "{context}: conflicts");
+            let before = repo.state();
+            let attempt = repo.regen(true);
+            let message = attempt.cannot(context);
+            let ok = if named == REGEN_TEXT {
+                message == REGEN_TEXT
+            } else {
+                message.contains(named)
+            };
+            if !ok {
+                failures.push(format!("{context} ({odd_side}): {message}"));
+            }
+            assert!(attempt.prompts.is_empty(), "{context} ({odd_side})");
+            assert_eq!(repo.state(), before, "{context} ({odd_side})");
+        }
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Q28: stages of format 2 sharing one `code_recipe` merge as today even
+/// when it is not this build's (regen hashes nothing: ADR-0041), the
+/// header kept as the stages wrote it.
+#[test]
+fn regen_merges_stages_of_another_shared_code_recipe() {
+    let other = |text: String| {
+        text.replace(
+            "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15",
+            "specengine-hash/v3 tree-sitter-rust/0.25.0 abi/15",
+        )
+    };
+    let case = Case {
+        base: Some(other(lock_of(&[entry("XXX-01", '1', BASE_DAY)]))),
+        ours: Some(other(lock_of(&[entry("XXX-01", '2', "2026-10-02")]))),
+        theirs: Some(other(lock_of(&[entry("XXX-01", '3', "2026-10-03")]))),
+    };
+    let (repo, clean) = merged("lock-regen-shared-other", &case, "main");
+    assert!(!clean, "conflicts");
+    let attempt = repo.regen(true);
+    attempt.written("another shared code_recipe");
+    assert_eq!(
+        repo.lock_text(),
+        other(lock_of(&[entry("XXX-01", '3', "2026-10-03")])),
+        "the later verified_at, the header the stages'"
+    );
 }
 
 /// TE-3: regen declined, or the file changed while the question waits:

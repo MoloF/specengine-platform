@@ -4,8 +4,9 @@
 //! (`LockRepo`: every git process sandboxed, fixed dates, a scratch `HOME`)
 //! from two fixtures of different nature:
 //!
-//! - `fixtures/code-a` with slice 3's golden lock
-//!   (`fixtures/spec-lock/code-a.lock`) committed on top: a library whose
+//! - `fixtures/code-a` with the golden lock
+//!   (`fixtures/spec-lock/code-a.lock`, format 2 since
+//!   docs/features/lock-levels.md) committed on top: a library whose
 //!   markers carry every binding problem the canon names (TE-1);
 //! - `fixtures/verify-ecs`: an ECS-style game crate (systems, a plugin, RON
 //!   tuning data) whose every binding is sound, its four nodes accepted
@@ -91,6 +92,21 @@ pub fn golden(label: &str) -> LockRepo {
     repo.write(
         "spec.lock",
         fs::read(golden_file()).expect("fixtures/spec-lock/code-a.lock"),
+    );
+    repo.commit_all("the lock");
+    repo
+}
+
+/// `fixtures/code-a` committed as `the fixture`, the format-1 golden
+/// (`fixtures/spec-lock/code-a.format-1.lock`: the golden's bytes before
+/// docs/features/lock-levels.md) committed on top as `the lock`: what a
+/// project not yet rebased holds (Q10).
+pub fn golden_format_1(label: &str) -> LockRepo {
+    let repo = LockRepo::code_a(label);
+    repo.write(
+        "spec.lock",
+        fs::read(fixture("spec-lock").join("code-a.format-1.lock"))
+            .expect("fixtures/spec-lock/code-a.format-1.lock"),
     );
     repo.commit_all("the lock");
     repo

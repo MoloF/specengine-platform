@@ -33,7 +33,10 @@ use specengine_cli::{
     CliError, Env, Exit, Globals, LockAcceptRequest, LockOutcome, LockPrompt, LockRegenRequest,
     RegenOutcome, lock_accept, lock_regen,
 };
-use specengine_code::{RustParser, analyze_file};
+use specengine_code::{
+    LevelState, RonValues, RustParser, analyze_file, analyze_tree, item_levels, module_levels,
+    value_hashes,
+};
 use specengine_store::GitEnv;
 
 use crate::common::git::Sandbox;
@@ -53,10 +56,146 @@ pub const LATER: &str = "2026-10-09T23:59:59Z";
 /// The lock's first line ("The file").
 pub const HEADER: &str = "# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit";
 
-/// The lines after the header ("The file"; `code_recipe` from
-/// `recipe_header()`'s parts: `RECIPE`, `TREE_SITTER_RUST_VERSION`,
-/// `abi_version()`).
-pub const PREAMBLE: &str = "format = 1\nnorm_recipe = \"specengine-norm/v1\"\ncode_recipe = \"specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15\"\n";
+/// This build's `norm_recipe`.
+pub const NORM_RECIPE: &str = "specengine-norm/v1";
+
+/// This build's `code_recipe` (docs/features/lock-levels.md "Format 2":
+/// `<LEVEL_RECIPE> tree-sitter-rust/<version> abi/<n>`).
+pub const CODE_RECIPE: &str = "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15";
+
+/// The `code_recipe` every format-1 lock of this grammar holds (v2's
+/// `RECIPE`).
+pub const CODE_RECIPE_FORMAT_1: &str = "specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15";
+
+/// The lines after the header (lock-levels.md "Format 2").
+pub const PREAMBLE: &str = "format = 2\nnorm_recipe = \"specengine-norm/v1\"\ncode_recipe = \"specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15\"\n";
+
+/// A format-1 lock's lines after the header (`docs/canon/spec-lock.md`
+/// "The file" before 5b-1a): the evidence of the readers that still read
+/// it (Q10).
+pub const PREAMBLE_FORMAT_1: &str = "format = 1\nnorm_recipe = \"specengine-norm/v1\"\ncode_recipe = \"specengine-hash/v2 tree-sitter-rust/0.24.2 abi/15\"\n";
+
+/// The format-1 golden (`fixtures/spec-lock/code-a.format-1.lock`): the
+/// bytes of `code-a.lock` before 5b-1a, verbatim (lock-levels.md
+/// "Fixtures and the golden").
+pub const GOLDEN_FORMAT_1: &str = "code-a.format-1.lock";
+
+/// The text every writer and code judge refuses a format-1 lock with
+/// (lock-levels.md "Readers", Q27 (3)), after `spec.lock:<line>: `.
+pub fn format_1_text(its_code_recipe: &str) -> String {
+    format!(
+        "format 1 (\"{its_code_recipe}\"), this build's is 2 (\"{CODE_RECIPE}\"): run spec lock rebase on a terminal"
+    )
+}
+
+/// Q27 (4): a format-2 lock of another `code_recipe`.
+pub fn code_recipe_text(its: &str) -> String {
+    format!(
+        "`code_recipe` is \"{its}\", this build's is \"{CODE_RECIPE}\": run spec lock rebase on a terminal"
+    )
+}
+
+/// Q27 (2): another `norm_recipe`, today's text, no step.
+pub fn norm_recipe_text(its: &str) -> String {
+    format!(
+        "`norm_recipe` is \"{its}\", this build's is \"{NORM_RECIPE}\": the lock was written by another build (a grammar or recipe change re-hashes every entry)"
+    )
+}
+
+/// Q27 (1): a `format` above 2.
+pub fn newer_format_text(format: i64) -> String {
+    format!("format {format} is newer than this build's 2")
+}
+
+/// Q27 (1): a `format` below 1.
+pub fn older_format_text(format: i64) -> String {
+    format!("format {format} is not this build's: it reads formats 1 and 2")
+}
+
+/// Regen's one text (Q28) for a format-1 stage and for stages of two
+/// `code_recipe`s.
+pub const REGEN_TEXT: &str = "spec.lock: a stage is format 1, or the stages differ in `code_recipe`: run git merge --abort, spec lock rebase on the lagging branch, and merge again";
+
+/// A lock text's four refusal variants of TE-1, each with the message
+/// `parse_lock(text, Some(build))` must give: Q27's first failing check
+/// as `LockError` renders it (`spec.lock:<line>: …`, the canonical
+/// layout: `format` on line 2, `norm_recipe` 3, `code_recipe` 4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Variant {
+    /// The format-1 golden's bytes.
+    Format1,
+    /// A format-2 lock, its `code_recipe` another grammar's.
+    OtherCode,
+    /// A format-2 lock, its `norm_recipe` another.
+    OtherNorm,
+    /// A format-2 lock claiming `format = 3`.
+    Format3,
+}
+
+impl Variant {
+    pub const ALL: [Self; 4] = [
+        Self::Format1,
+        Self::OtherCode,
+        Self::OtherNorm,
+        Self::Format3,
+    ];
+
+    /// Another grammar's `code_recipe` (OtherCode).
+    pub const OTHER_CODE: &'static str = "specengine-hash/v3 tree-sitter-rust/0.24.1 abi/15";
+
+    /// Another `norm_recipe` (OtherNorm).
+    pub const OTHER_NORM: &'static str = "specengine-norm/v0";
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Format1 => "format 1",
+            Self::OtherCode => "another code_recipe",
+            Self::OtherNorm => "another norm_recipe",
+            Self::Format3 => "format 3",
+        }
+    }
+
+    /// The variant's bytes made from `format_2` (a format-2 lock in the
+    /// canonical layout) or, for [`Variant::Format1`], the format-1 golden.
+    pub fn text(self, format_2: &str) -> String {
+        assert!(
+            format_2.starts_with(&format!("{HEADER}\n{PREAMBLE}")),
+            "a format-2 lock of this build:\n{format_2}"
+        );
+        match self {
+            Self::Format1 => golden_format_1_text(),
+            Self::OtherCode => format_2.replacen(CODE_RECIPE, Self::OTHER_CODE, 1),
+            Self::OtherNorm => format_2.replacen(NORM_RECIPE, Self::OTHER_NORM, 1),
+            Self::Format3 => format_2.replacen("\nformat = 2\n", "\nformat = 3\n", 1),
+        }
+    }
+
+    /// The whole message: `spec.lock:<line>: <text>`.
+    pub fn message(self) -> String {
+        match self {
+            Self::Format1 => format!("spec.lock:2: {}", format_1_text(CODE_RECIPE_FORMAT_1)),
+            Self::OtherCode => format!("spec.lock:4: {}", code_recipe_text(Self::OTHER_CODE)),
+            Self::OtherNorm => format!("spec.lock:3: {}", norm_recipe_text(Self::OTHER_NORM)),
+            Self::Format3 => format!("spec.lock:2: {}", newer_format_text(3)),
+        }
+    }
+
+    /// The message's text after `spec.lock:<line>: `.
+    pub fn body(self) -> String {
+        let message = self.message();
+        let (_, body) = message
+            .strip_prefix("spec.lock:")
+            .and_then(|rest| rest.split_once(": "))
+            .expect("spec.lock:<line>: ");
+        body.to_owned()
+    }
+}
+
+/// The format-1 golden's text.
+pub fn golden_format_1_text() -> String {
+    fs::read_to_string(crate::common::fixture("spec-lock").join(GOLDEN_FORMAT_1))
+        .expect("fixtures/spec-lock/code-a.format-1.lock")
+}
 
 /// The committer of every scratch commit, as `Decided-by:` names it.
 pub const DECIDER: &str = "Scratch Committer <committer@example.invalid>";
@@ -64,8 +203,34 @@ pub const DECIDER: &str = "Scratch Committer <committer@example.invalid>";
 /// The fixture every scenario starts from.
 pub const FIXTURE: &str = "code-a";
 
-/// The keys of a `[[binding]]` block, in order ("Entry").
-pub const ENTRY_KEYS: [&str; 13] = [
+/// The keys of a format-2 `[[binding]]` block, in order (lock-levels.md
+/// "Format 2", WA-4): `item_kind` an `item`'s only; `skeleton_hash`,
+/// `quote_hash`, `body_bytes` an `item`'s or a `module`'s only.
+pub const ENTRY_KEYS: [&str; 19] = [
+    "node",
+    "rev",
+    "spec_hash",
+    "relation",
+    "file",
+    "kind",
+    "symbol",
+    "item_kind",
+    "levels",
+    "sig_hash",
+    "body_hash",
+    "deps_hash",
+    "skeleton_hash",
+    "quote_hash",
+    "body_bytes",
+    "file_blob",
+    "commit",
+    "verified_by",
+    "verified_at",
+];
+
+/// The keys of a format-1 `[[binding]]` block, in order (`spec-lock.md`
+/// "Entry" before 5b-1a): `item_kind`, `ast_hash` an `item`'s only.
+pub const ENTRY_KEYS_FORMAT_1: [&str; 13] = [
     "node",
     "rev",
     "spec_hash",
@@ -80,6 +245,19 @@ pub const ENTRY_KEYS: [&str; 13] = [
     "verified_by",
     "verified_at",
 ];
+
+/// The keys a format-2 block of `kind` holds, in order.
+pub fn entry_keys(kind: &str) -> Vec<&'static str> {
+    ENTRY_KEYS
+        .iter()
+        .copied()
+        .filter(|key| match *key {
+            "item_kind" => kind == "item",
+            "skeleton_hash" | "quote_hash" | "body_bytes" => kind != "ron",
+            _ => true,
+        })
+        .collect()
+}
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -709,25 +887,6 @@ impl LockRepo {
     }
 }
 
-/// The `b3:` digest of the item of kind `item_kind` starting on 1-based
-/// `line` of `source`, as `specengine-code`'s full analysis hashes it.
-pub fn item_hash(source: &[u8], line: usize, item_kind: &str) -> String {
-    let source = std::str::from_utf8(source).expect("UTF-8 source");
-    let mut parser = RustParser::new().expect("the Rust grammar");
-    let analysis = analyze_file(&mut parser, source).expect("a tree");
-    let items: Vec<_> = analysis
-        .items
-        .iter()
-        .filter(|item| item.line == line && item.kind == item_kind)
-        .collect();
-    assert_eq!(items.len(), 1, "one {item_kind} on line {line}: {items:?}");
-    let digest = items[0]
-        .state
-        .digest()
-        .unwrap_or_else(|| panic!("the {item_kind} on line {line} has no digest"));
-    format!("b3:{}", digest.to_hex())
-}
-
 /// The `[[binding]]` blocks of a lock's text, each as its `key = value`
 /// lines (the header and top keys dropped).
 pub fn blocks(text: &str) -> Vec<Vec<(String, String)>> {
@@ -779,7 +938,7 @@ pub fn at(head: &str, branch: &str, worktree: &Path) -> String {
     format!(" at {head} on {branch} in {}? [y/N]", worktree.display())
 }
 
-/// The canonical lock of `entries` (each a block's 11-13 `key = value`
+/// The canonical format-2 lock of `entries` (each a block's `key = value`
 /// lines, LF-ended, no `[[binding]]` line).
 pub fn lock_of(entries: &[String]) -> String {
     let mut out = format!("{HEADER}\n{PREAMBLE}");
@@ -790,9 +949,241 @@ pub fn lock_of(entries: &[String]) -> String {
     out
 }
 
-/// One block's lines in the order of "Entry".
+/// The canonical format-1 lock of `entries` ([`block_format_1`]'s).
+pub fn lock_of_format_1(entries: &[String]) -> String {
+    let mut out = format!("{HEADER}\n{PREAMBLE_FORMAT_1}");
+    for entry in entries {
+        out.push_str("\n[[binding]]\n");
+        out.push_str(entry);
+    }
+    out
+}
+
+/// The code fields of a format-2 block (lock-levels.md "Format 2"),
+/// between `item_kind` and `file_blob`: `levels`, the three level
+/// digests (every kind), and an `item`'s or a `module`'s fingerprints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Code {
+    /// Canonical order, as written.
+    pub levels: Vec<String>,
+    pub sig: String,
+    pub body: String,
+    pub deps: String,
+    /// `skeleton_hash`, `quote_hash`, `body_bytes`: `None` for a `ron`
+    /// entry.
+    pub fingerprints: Option<(String, String, u32)>,
+}
+
+impl Code {
+    /// Made-up digests of the right form (regen's entries, which no hash
+    /// is computed for): every digest `b3:` and `digit`, `levels` the
+    /// default, fingerprints when `fingerprints`.
+    pub fn fake(digit: char, fingerprints: bool) -> Self {
+        Self {
+            levels: vec!["sig".to_owned(), "body".to_owned()],
+            sig: fake_b3(digit),
+            body: fake_b3(digit),
+            deps: fake_b3(digit),
+            fingerprints: fingerprints.then(|| (fake_b3(digit), fake_b3(digit), 212)),
+        }
+    }
+
+    /// The same digests under other `levels`.
+    pub fn with_levels(mut self, levels: &[&str]) -> Self {
+        self.levels = levels.iter().map(|level| (*level).to_owned()).collect();
+        self
+    }
+
+    /// The block's lines, LF-ended.
+    pub fn lines(&self) -> String {
+        let mut out = format!(
+            "{}\nsig_hash = \"{}\"\nbody_hash = \"{}\"\ndeps_hash = \"{}\"\n",
+            levels_line(&self.levels),
+            self.sig,
+            self.body,
+            self.deps
+        );
+        if let Some((skeleton, quote, body_bytes)) = &self.fingerprints {
+            out.push_str(&format!(
+                "skeleton_hash = \"{skeleton}\"\nquote_hash = \"{quote}\"\nbody_bytes = {body_bytes}\n"
+            ));
+        }
+        out
+    }
+
+    /// `lock_code` (lock-levels.md "Drift evidence"): the `levels`,
+    /// `sig_hash`, `body_hash`, `deps_hash` lines as the render writes
+    /// them, LF-joined, no final LF; never a fingerprint.
+    pub fn lock_code(&self) -> String {
+        format!(
+            "{}\nsig_hash = \"{}\"\nbody_hash = \"{}\"\ndeps_hash = \"{}\"",
+            levels_line(&self.levels),
+            self.sig,
+            self.body,
+            self.deps
+        )
+    }
+}
+
+/// `levels = ["sig", "body"]`: basic strings, `", "` between, no
+/// trailing comma.
+pub fn levels_line<S: AsRef<str>>(levels: &[S]) -> String {
+    let items: Vec<String> = levels
+        .iter()
+        .map(|level| format!("\"{}\"", level.as_ref()))
+        .collect();
+    format!("levels = [{}]", items.join(", "))
+}
+
+/// `b3:` and a digest's hex.
+pub fn b3(digest: &specengine_code::Digest) -> String {
+    format!("b3:{}", digest.to_hex())
+}
+
+fn hashed(state: &LevelState, what: &str) -> (String, String, String, (String, String, u32)) {
+    match state {
+        LevelState::Hashed(hashes) => (
+            b3(&hashes.sig),
+            b3(&hashes.body),
+            b3(&hashes.deps),
+            (b3(&hashes.skeleton), b3(&hashes.quote), hashes.body_bytes),
+        ),
+        LevelState::CannotVerify { categories } => {
+            panic!("{what} cannot be hashed: {categories:?}")
+        }
+    }
+}
+
+fn owned(levels: &[&str]) -> Vec<String> {
+    levels.iter().map(|level| (*level).to_owned()).collect()
+}
+
+/// The code fields of the item of kind `item_kind` starting on 1-based
+/// `line` of `source`, through `specengine-code`'s `item_levels` (an
+/// index into `analyze_tree`'s items), under `levels`.
+pub fn item_code(source: &[u8], line: usize, item_kind: &str, levels: &[&str]) -> Code {
+    let source = std::str::from_utf8(source).expect("UTF-8 source");
+    let mut parser = RustParser::new().expect("the Rust grammar");
+    let tree = parser.parse(source).expect("a tree");
+    let analysis = analyze_tree(&tree, source);
+    let indexes: Vec<usize> = analysis
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.line == line && item.kind == item_kind)
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(
+        indexes.len(),
+        1,
+        "one {item_kind} on line {line}: {indexes:?}"
+    );
+    let states = item_levels(&tree, source, &indexes);
+    let state = states[0]
+        .as_ref()
+        .unwrap_or_else(|| panic!("no levels for the {item_kind} on line {line}"));
+    let (sig, body, deps, fingerprints) = hashed(state, item_kind);
+    Code {
+        levels: owned(levels),
+        sig,
+        body,
+        deps,
+        fingerprints: Some(fingerprints),
+    }
+}
+
+/// The code fields of `source`'s file module, through `module_levels`.
+pub fn module_code(source: &[u8], levels: &[&str]) -> Code {
+    let source = std::str::from_utf8(source).expect("UTF-8 source");
+    let mut parser = RustParser::new().expect("the Rust grammar");
+    let tree = parser.parse(source).expect("a tree");
+    let (sig, body, deps, fingerprints) = hashed(&module_levels(&tree, source), "the module");
+    Code {
+        levels: owned(levels),
+        sig,
+        body,
+        deps,
+        fingerprints: Some(fingerprints),
+    }
+}
+
+/// The code fields of the RON value the comment starting on 1-based
+/// `line` of `source` anchors to, through `ron::value_hashes` (keyed by
+/// the comment's range): `sig` = `body` = the value hash, `deps` the empty
+/// set's digest (Q24), no fingerprint.
+pub fn ron_code(source: &[u8], line: usize, levels: &[&str]) -> Code {
+    let source = std::str::from_utf8(source).expect("UTF-8 source");
+    let RonValues::Hashed(values) = value_hashes(source) else {
+        panic!("the RON file is rejected")
+    };
+    let found: Vec<_> = values
+        .iter()
+        .filter(|(range, _)| source[..range.start].matches('\n').count() + 1 == line)
+        .collect();
+    assert_eq!(found.len(), 1, "one anchored comment on line {line}");
+    let value = b3(&found[0].1);
+    Code {
+        levels: owned(levels),
+        sig: value.clone(),
+        body: value,
+        deps: b3(&specengine_code::empty_deps_digest()),
+        fingerprints: None,
+    }
+}
+
+/// The v2 `b3:` digest of the item of kind `item_kind` starting on
+/// 1-based `line` of `source`, as `specengine-code`'s full analysis hashes
+/// it (a format-1 entry's `ast_hash`).
+pub fn item_hash(source: &[u8], line: usize, item_kind: &str) -> String {
+    let source = std::str::from_utf8(source).expect("UTF-8 source");
+    let mut parser = RustParser::new().expect("the Rust grammar");
+    let analysis = analyze_file(&mut parser, source).expect("a tree");
+    let items: Vec<_> = analysis
+        .items
+        .iter()
+        .filter(|item| item.line == line && item.kind == item_kind)
+        .collect();
+    assert_eq!(items.len(), 1, "one {item_kind} on line {line}: {items:?}");
+    let digest = items[0]
+        .state
+        .digest()
+        .unwrap_or_else(|| panic!("the {item_kind} on line {line} has no digest"));
+    format!("b3:{}", digest.to_hex())
+}
+
+/// One format-2 block's lines in the order of "Format 2"; `item_kind` an
+/// `item`'s.
 #[allow(clippy::too_many_arguments)]
 pub fn block(
+    node: &str,
+    rev: u32,
+    spec_hash: &str,
+    relation: &str,
+    file: &str,
+    kind: &str,
+    symbol: &str,
+    item_kind: Option<&str>,
+    code: &Code,
+    file_blob: &str,
+    commit: &str,
+    verified_at: &str,
+) -> String {
+    let mut out = format!(
+        "node = \"{node}\"\nrev = {rev}\nspec_hash = \"{spec_hash}\"\nrelation = \"{relation}\"\nfile = \"{file}\"\nkind = \"{kind}\"\nsymbol = \"{symbol}\"\n"
+    );
+    if let Some(item_kind) = item_kind {
+        out.push_str(&format!("item_kind = \"{item_kind}\"\n"));
+    }
+    out.push_str(&code.lines());
+    out.push_str(&format!(
+        "file_blob = \"{file_blob}\"\ncommit = \"{commit}\"\nverified_by = \"owner\"\nverified_at = \"{verified_at}\"\n"
+    ));
+    out
+}
+
+/// One format-1 block's lines in the order of format 1's "Entry".
+#[allow(clippy::too_many_arguments)]
+pub fn block_format_1(
     node: &str,
     rev: u32,
     spec_hash: &str,

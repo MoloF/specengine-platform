@@ -52,7 +52,7 @@ use specengine_core::drift::{
     drift_hash_input, drift_summary, raises,
 };
 use specengine_core::intake::{IntakeSeverity, NODE_IDS_MAX};
-use specengine_core::lock::LOCK_FILE;
+use specengine_core::lock::{LOCK_FILE, lock_code};
 use specengine_core::proposal::Author;
 use specengine_core::verify::{Class, KEY_PROBLEM, RowBinding, State};
 use specengine_store::{
@@ -568,7 +568,15 @@ fn new_drift(
     };
     let evidence = serde_json::to_string(&evidence)
         .map_err(|error| CliError::spec(format!("cannot encode the drift rows: {error}")))?;
-    let hashed: Vec<HashedRow<'_>> = findings.iter().map(|row| hashed_row(row)).collect();
+    let codes: Vec<Option<String>> = findings
+        .iter()
+        .map(|row| row.entry.as_ref().map(lock_code))
+        .collect();
+    let hashed: Vec<HashedRow<'_>> = findings
+        .iter()
+        .zip(&codes)
+        .map(|(row, code)| hashed_row(row, code.as_deref()))
+        .collect();
     let hash = b3_hash(drift_hash_input(&hashed).as_bytes());
     let severity = if findings
         .iter()
@@ -630,8 +638,9 @@ fn drift_row(row: &VerifyRow) -> DriftRow {
 }
 
 /// A judged row as its item's hash covers it (no line, no time, no
-/// commit).
-fn hashed_row(row: &Row) -> HashedRow<'_> {
+/// commit); `lock_code` its entry's code as core's `lock_code` gives it
+/// (format 2: `levels` and the three digests, no fingerprint).
+fn hashed_row<'a>(row: &'a Row, lock_code: Option<&'a str>) -> HashedRow<'a> {
     let (kind, symbol, item_kind) = match &row.key.binding {
         RowBinding::Keyed {
             kind,
@@ -658,7 +667,7 @@ fn hashed_row(row: &Row) -> HashedRow<'_> {
         entry: row.entry.as_ref().map(|entry| HashedEntry {
             rev: entry.rev,
             spec_hash: &entry.spec_hash,
-            code: entry.ast_hash.as_deref(),
+            code: lock_code,
             file_blob: &entry.file_blob,
         }),
         rev: row.node_rev,

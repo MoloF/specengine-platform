@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture, crates/specengine-code, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-20
 ---
 
 # SpecEngine architecture rules: the code layer
@@ -44,7 +44,7 @@ Rule: `architecture.md#apply`. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 Each but a merge's and an editorial apply's is its own commit with provenance. Never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit.
 
-As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. As built (slice 4b-1): the approve writer, its vouching entries refreshed in the apply commit, in `docs/canon/proposal-revisions.md` "Editorial approve". As built (slice 4c-1): a `drift` item's approve running accept, in `docs/canon/proposal-drift.md` "Approve". The rebase (`docs/features/lock-rebase.md`) and `verify --tests` writers are not built yet.
+As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. As built (slice 4b-1): the approve writer, its vouching entries refreshed in the apply commit, in `docs/canon/proposal-revisions.md` "Editorial approve". As built (slice 4c-1): a `drift` item's approve running accept, in `docs/canon/proposal-drift.md` "Approve". As built (5b-1a): format 2, the only one written, and format 1 read only where the spec side alone counts, in `spec-lock.md` "Entry". The rebase (`docs/features/lock-rebase.md`) and `verify --tests` writers are not built yet.
 
 <a id="verify"></a>
 ## Drift: `spec verify`
@@ -55,7 +55,7 @@ Rule: `architecture.md#control`. ADR-0042, ADR-0045, ADR-0050.
 - Only a project's own `[verify] mode` (`enforce-introduced`, `enforce`; default `observe`) makes its CI or hook stop on Fix. Otherwise `spec propose drift` queues the findings as items that stop nothing (ADR-0045), reads show the same states as `sync` (`#sync-in-reads`) and Health lists them (`#health`).
 - A binding it cannot verify is never `ok`: exit 2 in every mode; a lock of another format or recipe too, until `spec lock rebase` carries it over (`#spec-lock`).
 
-As built (slice 4a): rows, states, the cascade, the base and the run causes in `docs/canon/spec-verify.md`; text, hints and JSON in `docs/canon/spec-verify-output.md`. As built (slice 4c-1): `spec propose drift` and approve in `docs/canon/proposal-drift.md`, its items and dedup in `proposal-drift-item.md`; its one-commit judge in `docs/canon/spec-verify.md` "Base". As built (slice 4b-2): `verify --staged` in `docs/canon/spec-verify.md` "Base".
+As built (slice 4a): rows, states, the cascade, the base and the run causes in `docs/canon/spec-verify.md`; text, hints and JSON in `docs/canon/spec-verify-output.md`. As built (slice 4c-1): `spec propose drift` and approve in `docs/canon/proposal-drift.md`, its items and dedup in `proposal-drift-item.md`; its one-commit judge in `docs/canon/spec-verify.md` "Base". As built (slice 4b-2): `verify --staged` in `docs/canon/spec-verify.md` "Base". As built (5b-1a): an item judged by `sig` and `body` on format 2, a format-1 lock run cause (6), in its "States", "Cascade".
 
 <a id="sync-in-reads"></a>
 ## Sync in reads

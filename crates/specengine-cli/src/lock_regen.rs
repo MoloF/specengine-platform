@@ -1,14 +1,16 @@
 //! `spec lock regen` (canon `spec-lock`, "`spec lock regen`"): a
 //! merge that conflicts in `spec.lock` resolved on the owner's terminal (canon
 //! `architecture-code`, "`spec.lock` writers"). Only while `spec.lock` is
-//! unmerged (`ls-files -u`): each stage present read (another format, a
-//! key or a form refused: exit 2),
-//! all of one pair of recipes (else exit 2), merged per entry key by core's
-//! [`merge_stages`] (side-symmetric; no code or spec file read, no hash
-//! computed: every entry kept is one an owner accepted, so drift may
-//! follow, never a false `ok`). After the one `[y/N]` and the stages and
-//! the file read again (a change: exit 1), the worktree file alone is
-//! written; the owner adds it and commits the merge.
+//! unmerged (`ls-files -u`): each stage present read without the build's
+//! recipes (a format neither 1 nor 2, a key or a form refused: exit 2),
+//! all of one `norm_recipe` (else exit 2), then all format 2 of one
+//! `code_recipe` (else exit 2, [`UNREBASED`]: the lagging branch is
+//! rebased before the merge, task spec `lock-levels` Q28), merged per entry
+//! key by core's [`merge_stages`] (side-symmetric; no code or spec file
+//! read, no hash computed: every entry kept is one an owner accepted, so
+//! drift may follow, never a false `ok`). After the one `[y/N]` and the
+//! stages and the file read again (a change: exit 1), the worktree file
+//! alone is written; the owner adds it and commits the merge.
 
 use serde::Serialize;
 use specengine_core::lock::{LOCK_FILE, Lock, RegenRefusal, merge_stages, parse_lock, render_lock};
@@ -22,6 +24,13 @@ use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// What the owner does after a regen.
 const NEXT: &str = "next: git add spec.lock, then commit the merge";
+
+/// Regen's refusal of a format-1 stage, or of stages of two
+/// `code_recipe`s (Q28): a merge cannot carry either over, and `spec lock
+/// rebase` reads no unmerged lock.
+const UNREBASED: &str = "spec.lock: a stage is format 1, or the stages differ in \
+                                    `code_recipe`: run git merge --abort, spec lock rebase on \
+                                    the lagging branch, and merge again";
 
 /// `spec lock regen` options.
 #[derive(Debug, Clone)]
@@ -176,6 +185,7 @@ pub fn lock_regen(
                 first.norm, first.code, second.norm, second.code
             )));
         }
+        Err(RegenRefusal::Unrebased) => return Err(CliError::cannot(UNREBASED)),
     };
     outcome.rows = merged
         .rows

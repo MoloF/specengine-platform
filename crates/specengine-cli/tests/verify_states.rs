@@ -1,6 +1,7 @@
 //! docs/features/spec-verify.md TE-1, TE-2, RD-2's CLI-level named tests
 //! and RD-10's golden: `spec verify` over scratch repositories of
-//! `fixtures/code-a` with slice 3's golden lock committed, one scenario per
+//! `fixtures/code-a` with the golden lock (format 2 since
+//! docs/features/lock-levels.md) committed, one scenario per
 //! "States" row and category, each pinning its row's JSON (every key) and
 //! its text line, and naming the mutation that turns it red (`M:`).
 //!
@@ -74,8 +75,11 @@ type GoldenRow = (
     u32,
 );
 
-/// The eleven keys of the golden lock, with what each says over the
-/// unchanged fixture.
+/// The nine keys of the golden lock and the two keys format 2 never locks
+/// (their markers' level lists `Invalid`: `counter.rs:77` `[path, path]`,
+/// `bounds.rs:14` `[Sig]`; docs/features/lock-levels.md
+/// "Fixtures and the golden"), with what each says over the unchanged
+/// fixture. A row with `bad_levels` has no entry.
 fn golden_rows() -> Vec<GoldenRow> {
     let fmt = "crates/tally::counter::<Tally as fmt::Display>::fmt";
     vec![
@@ -204,10 +208,10 @@ fn golden_rows() -> Vec<GoldenRow> {
 
 /// RD-10 (seam: keys by accept's own builder), orchestrator's decision on
 /// deviation 1: the golden lock over the fixture it was accepted from gives
-/// one row per entry, nine `ok` by blob and the two markers with invalid
+/// one row per entry, nine `ok` by blob, and the two markers with invalid
 /// level lists (`counter.rs:77` `[path, path]`, `bounds.rs:14` `[Sig]`)
-/// `bad_marker bad_levels`; no entry reads `marker_gone` or `unlocked`
-/// beside it. M: keys built apart from accept's (the cited token, not the
+/// `bad_marker bad_levels` with no entry (format 2 never locks them); no
+/// entry reads `marker_gone` or `unlocked` beside it. M: keys built apart from accept's (the cited token, not the
 /// canonical ID).
 #[test]
 fn golden_lock_verifies_ok_but_bad_levels() {
@@ -215,8 +219,13 @@ fn golden_lock_verifies_ok_but_bad_levels() {
     let run = verify(&repo, &[]);
     let text = fs::read_to_string(verify_common::golden_file()).expect("golden");
     let expected = golden_rows();
-    assert_eq!(run.lock_rows().len(), expected.len(), "{}", run.text.show());
+    assert_eq!(run.lock_rows().len(), 9, "{}", run.text.show());
     for (key, state, category, markers, rev) in &expected {
+        let lock = if *category == Some("bad_levels") {
+            Value::Null
+        } else {
+            lock_entry(&text, *key)
+        };
         assert_row(
             &run,
             *key,
@@ -227,7 +236,7 @@ fn golden_lock_verifies_ok_but_bad_levels() {
                 pre_existing: false,
                 markers,
                 node_rev: Some(*rev),
-                lock: lock_entry(&text, *key),
+                lock,
                 compared: (*state == "ok").then_some("blob"),
             },
             None,
@@ -534,7 +543,21 @@ fn adjacent_impls_are_two_rows() {
 /// first node picked.
 #[test]
 fn ambiguous_id_cannot_verify() {
-    let (_repo, run) = scenario("verify-ambiguous-id", |repo| {
+    let (repo, run) = scenario("verify-ambiguous-id", |repo| {
+        // An entry of `cap-check/PASS-01` first: its marker's list made
+        // valid (`[sig]`) and accepted, as format 2 locks it.
+        repo.replace(
+            BOUNDS,
+            "@verifies cap-check/PASS-01 [Sig]",
+            "@verifies cap-check/PASS-01 [sig]",
+        );
+        repo.commit_all("a valid list");
+        repo.accept_ok("cap-check/PASS-01");
+        repo.replace(
+            BOUNDS,
+            "@verifies cap-check/PASS-01 [sig]",
+            "@verifies cap-check/PASS-01 [Sig]",
+        );
         repo.write(
             "docs/features/step-check.md",
             "---\nclass: spec\nstatus: draft\nscope: [crates/tally]\n---\n\n# Step check\n\n## Acceptance criteria\n\n### One step adds one {#PASS-01}\n\nStep once from zero: it reads 1.\n",
@@ -569,7 +592,7 @@ fn ambiguous_id_cannot_verify() {
         &run,
         entry,
         &Says {
-            lock: golden_lock(entry),
+            lock: lock_entry(&repo.lock_text(), entry),
             ..says("broken_binding", Some("marker_gone"), None, &[], Some(1))
         },
         None,
@@ -677,16 +700,6 @@ fn files_outside_code_or_unreadable_cannot_verify() {
                 ),
                 3,
             ),
-            (
-                item(
-                    "cap-check/PASS-01",
-                    "verifies",
-                    BOUNDS,
-                    "crates/tally::test:bounds::steps_by_one",
-                    "function_item",
-                ),
-                1,
-            ),
         ] {
             assert_row(
                 run,
@@ -706,6 +719,13 @@ fn files_outside_code_or_unreadable_cannot_verify() {
         }
     };
     rows(&run, "outside_code");
+    // `cap-check/PASS-01`, never locked (`[Sig]`), has no row there.
+    assert!(
+        run.rows_where(|row| row["node"] == "cap-check/PASS-01")
+            .is_empty(),
+        "{}",
+        run.text.show()
+    );
     has_hint(&run, "cannot_verify unreadable");
     let tests = repo.root.join("crates/tally/tests");
     fs::set_permissions(&tests, fs::Permissions::from_mode(0o000)).expect("chmod");
@@ -1972,9 +1992,12 @@ fn crlf_tree_verifies_as_lf() {
     repo.git.init(&repo.root);
     to_crlf(&repo);
     repo.commit_all("the fixture, CRLF");
-    for reference in ["PIECE-COUNTER", "LAW-BOUND", "cap-check/PASS-01", "GOAL-01"] {
+    for reference in ["PIECE-COUNTER", "LAW-BOUND", "GOAL-01"] {
         repo.accept_ok(reference);
     }
+    // `cap-check/PASS-01`'s only marker is `[Sig]`: nothing lockable.
+    repo.accept("cap-check/PASS-01", true)
+        .refused("cap-check/PASS-01");
     let lock = repo.lock_text();
     let strip = |text: &str| {
         text.lines()
@@ -1991,6 +2014,11 @@ fn crlf_tree_verifies_as_lf() {
 
     let base = verify(&repo, &[]);
     for (key, state, category, markers, rev) in golden_rows() {
+        let locked = if category == Some("bad_levels") {
+            Value::Null
+        } else {
+            lock_entry(&lock, key)
+        };
         assert_row(
             &base,
             key,
@@ -2001,7 +2029,7 @@ fn crlf_tree_verifies_as_lf() {
                 pre_existing: false,
                 markers: &markers,
                 node_rev: Some(rev),
-                lock: lock_entry(&lock, key),
+                lock: locked,
                 compared: (state == "ok").then_some("blob"),
             },
             None,

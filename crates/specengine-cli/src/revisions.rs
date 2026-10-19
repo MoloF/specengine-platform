@@ -19,11 +19,14 @@
 //!   writes (task spec `rev-discipline` Q15). `--editorial` keeps them.
 //! - **Step 3 under `--editorial`** ([`step_3_lock`]): `<root>/spec.lock`
 //!   read: none, the text alone; else tracked and equal to `HEAD` (exit
-//!   1), parsed without the build's recipes and its `norm_recipe` compared
-//!   (exit 2); `code_recipe` is not read: the refresh writes no code field.
-//!   At step 6 each changed node's vouching entries (at its revision, its
-//!   old `spec_hash`) take the new one (core `refresh_editorial` with the
-//!   vouching filter); any other entry stays byte for byte.
+//!   1), parsed without the build's recipes (formats 1 and 2) and its
+//!   `norm_recipe` compared (exit 2); `code_recipe` is not compared: the
+//!   refresh writes no code field. At step 6 each changed node's vouching
+//!   entries (at its revision, its old `spec_hash`) take the new one (core
+//!   `refresh_editorial` with the vouching filter); any other entry stays
+//!   byte for byte. A format-1 lock is never rendered: when an entry would
+//!   be refreshed, exit 2 with the writers' text naming `spec lock rebase`
+//!   (task spec `lock-levels` Q29); else it is left untouched.
 //! - **Steps 8 to 10**: the lock re-read and written after the text, both
 //!   committed in one commit, restored by accept's rules on a failure
 //!   ([`restore`]), and checked at step 10 ([`lock_in_commit`]).
@@ -37,7 +40,9 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use specengine_core::check::CheckConfig;
-use specengine_core::lock::{LOCK_FILE, Lock, parse_lock, refresh_editorial, render_lock, vouches};
+use specengine_core::lock::{
+    LOCK_FILE, Lock, LockFormat, REBASE_STEP, parse_lock, refresh_editorial, render_lock, vouches,
+};
 use specengine_core::patch::{is_section, span_bytes, splice, update_text};
 use specengine_core::proposal::{
     ApplyTrailers, EDITORIAL, LOCK_MODE_TRAILER, LOCK_TRAILER, Revised,
@@ -50,6 +55,7 @@ use specengine_core::{NORM_RECIPE, norm_input};
 use specengine_model::{IdScheme, Node, ParsedFile};
 use specengine_store::{WorktreeGit, b3_hash, replace_file};
 
+use crate::lock::build_recipes;
 use crate::preflight::StepFailure;
 use crate::project::CONFIG_FILE;
 use crate::{Message, one_line, pathspec_word};
@@ -128,6 +134,11 @@ pub(crate) struct LockRead {
     pub top_path: String,
     pub bytes: Vec<u8>,
     pub lock: Lock,
+    /// A format-1 lock's refusal, the text every writer gives (core's
+    /// `parse_lock` with this build's recipes, naming `spec lock rebase`):
+    /// step 6 refuses with it before rendering, only when an entry would be
+    /// refreshed (task spec `lock-levels` Q29). `None` for format 2.
+    pub unrebased: Option<String>,
 }
 
 /// The lock an editorial apply writes beside its text.
@@ -249,8 +260,9 @@ pub(crate) fn apply_trailers<'a>(
 /// worktree's top), its state against `head`. None in the worktree nor at
 /// `head`: `None`, the text alone. Tracked and equal to `head`, else exit
 /// 1 naming its state; read by core's `parse_lock` without the build's
-/// recipes, its `norm_recipe` this build's, else exit 2 (`code_recipe` is
-/// not read: the refresh writes no code field).
+/// recipes (formats 1 and 2), its `norm_recipe` this build's, else exit 2
+/// (`code_recipe` is not compared: the refresh writes no code field); a
+/// format-1 lock's refusal kept for step 6 ([`LockRead::unrebased`]).
 pub(crate) fn step_3_lock(
     git: &WorktreeGit,
     head: &str,
@@ -313,11 +325,21 @@ pub(crate) fn step_3_lock(
             ),
         ));
     }
+    // Format 1 is read (its spec side counts) but never rendered: its
+    // refusal kept for step 6.
+    let unrebased = match lock.format {
+        LockFormat::Two => None,
+        LockFormat::One => Some(match parse_lock(text, Some(&build_recipes())) {
+            Err(error) => error.to_string(),
+            Ok(_) => format!("{LOCK_FILE}: format 1: {REBASE_STEP}"),
+        }),
+    };
     Ok(Some(LockRead {
         path,
         top_path: top_path.to_owned(),
         bytes,
         lock,
+        unrebased,
     }))
 }
 
@@ -434,7 +456,7 @@ pub(crate) fn step_6(given: Step6<'_>) -> Result<Revisions, StepFailure> {
     }
     let refused = nodes.iter().any(|node| matches!(node.raise, Some(Err(_))));
     let lock = match (&given.lock, given.editorial) {
-        (Some(read), true) => editorial_refresh(read, &nodes),
+        (Some(read), true) => editorial_refresh(read, &nodes)?,
         _ => None,
     };
     Ok(Revisions {
@@ -459,8 +481,13 @@ fn read_classes(root: &Path) -> Result<CheckConfig, StepFailure> {
 /// Each changed node's vouching entries (at its revision, its old
 /// `spec_hash`) set to its new `norm_hash`; `None` when none changes (the
 /// text alone is committed). A node whose old or new hash is null has
-/// none to refresh.
-fn editorial_refresh(read: &LockRead, nodes: &[NodeRevision]) -> Option<LockWrite> {
+/// none to refresh. The code fields and `code_recipe` are kept byte for
+/// byte; a format-1 lock with an entry to refresh refuses, exit 2, before
+/// it is rendered (Q29).
+fn editorial_refresh(
+    read: &LockRead,
+    nodes: &[NodeRevision],
+) -> Result<Option<LockWrite>, StepFailure> {
     let mut lock = read.lock.clone();
     let mut locked = Vec::new();
     let mut count = 0;
@@ -475,14 +502,20 @@ fn editorial_refresh(read: &LockRead, nodes: &[NodeRevision]) -> Option<LockWrit
             lock = refreshed.lock;
         }
     }
-    (count > 0).then(|| LockWrite {
+    if count == 0 {
+        return Ok(None);
+    }
+    if let Some(unrebased) = &read.unrebased {
+        return Err(StepFailure::cannot(6, unrebased.clone()));
+    }
+    Ok(Some(LockWrite {
         path: read.path.clone(),
         top_path: read.top_path.clone(),
         bytes: read.bytes.clone(),
         rendered: render_lock(&lock),
         locked,
         entries: count,
-    })
+    }))
 }
 
 /// Step 8 under `--editorial`: the lock read again, still step 3's bytes;

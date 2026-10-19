@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use specengine_core::ProjectConfig;
 use specengine_core::check::{CHECK_CODES, Mode};
-use specengine_core::lock::{EntryKey, LockKind, LockRelation, Verified};
+use specengine_core::lock::{EntryKey, LockKind, LockRelation, Verified, parse_lock};
 use specengine_core::verify::{
     Class, CodeFact, Compared, Comparison, Finding, Judgement, MarkerFact, MarkerRev, NodeFact,
     RowBinding, RowFacts, RowKey, State, Unbound, Verdict, VerifyConfig, is_pre_existing,
@@ -32,15 +32,29 @@ fn key() -> RowKey {
     }
 }
 
+/// A format-2 entry of `N-1`'s item at `rev` vouching for `hash`, its
+/// level digests made of `digit`: read from the lock's text, so the facts
+/// name no field of the code side (docs/features/lock-levels.md
+/// "Format 2"; the judge reads the entry's revision and spec hash alone).
+fn entry_with(rev: u32, hash: &str, digit: char) -> Verified {
+    let digest = format!("b3:{}", digit.to_string().repeat(64));
+    let text = format!(
+        "format = 2\nnorm_recipe = \"specengine-norm/v1\"\ncode_recipe = \"specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15\"\n\n\
+         [[binding]]\nnode = \"N-1\"\nrev = {rev}\nspec_hash = \"{hash}\"\nrelation = \"implements\"\n\
+         file = \"src/a.rs\"\nkind = \"item\"\nsymbol = \"a::f\"\nitem_kind = \"function_item\"\n\
+         levels = [\"sig\", \"body\"]\nsig_hash = \"{digest}\"\nbody_hash = \"{digest}\"\n\
+         deps_hash = \"{digest}\"\nskeleton_hash = \"{digest}\"\nquote_hash = \"{digest}\"\n\
+         body_bytes = 12\nfile_blob = \"{}\"\ncommit = \"{}\"\nverified_by = \"owner\"\n\
+         verified_at = \"2026-10-08\"\n",
+        "a".repeat(40),
+        "b".repeat(40)
+    );
+    let mut lock = parse_lock(&text, None).unwrap_or_else(|error| panic!("{error}\n{text}"));
+    lock.entries.pop_first().expect("one entry").1
+}
+
 fn entry(rev: u32, hash: &str) -> Verified {
-    Verified {
-        rev,
-        spec_hash: hash.to_owned(),
-        ast_hash: Some(H1.to_owned()),
-        file_blob: "a".repeat(40),
-        commit: "b".repeat(40),
-        verified_at: "2026-10-08".to_owned(),
-    }
+    entry_with(rev, hash, '1')
 }
 
 fn marker(rev: MarkerRev) -> MarkerFact {
@@ -544,10 +558,16 @@ fn judge_is_source_neutral() {
                     fact.line += 100;
                 }
                 let entry = moved.entry.as_mut().expect("an entry");
+                // Every level digest another (a fresh parse), then the
+                // fields only a source sets.
+                *entry = Verified {
+                    rev: entry.rev,
+                    spec_hash: entry.spec_hash.clone(),
+                    ..entry_with(1, H1, '2')
+                };
                 entry.commit = "c".repeat(64);
                 entry.verified_at = "2030-01-01".to_owned();
                 entry.file_blob = "d".repeat(64);
-                entry.ast_hash = Some(H2.to_owned());
                 assert_eq!(judge_row(&moved), by_blob, "{moved:?}");
                 seen += 1;
             }

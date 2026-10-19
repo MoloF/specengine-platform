@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-16
+reviewed: 2026-10-20
 ---
 
 # `spec verify`: drift between `spec.lock` and the tree
@@ -25,7 +25,7 @@ One row per lock key (`spec-lock.md` "Entry": `node`, `relation`, `file`, `kind`
 
 ## States
 
-Per row: R, H the node's revision and `norm_hash` (`norm_input` + `b3_hash` over a fresh parse of the bytes read, `HEAD`'s blob for the base; never the index's column; IDs by `spec show`'s resolver); E its lock entry (`rev_L`, `spec_hash_L`, `file_blob`, `ast_hash`); N each marker's `@N`. **Code changed**: E exists, the file's blob OID differs from `file_blob` and, for an `item`, the re-hashed item from `ast_hash` (`module`, `ron`: the blob alone). **Spec changed**: (R, H) differs from (`rev_L`, `spec_hash_L`). **Raised**: a marker names R > `rev_L`. **Lagging**: a marker N < R. The first row that applies:
+Per row: R, H the node's revision and `norm_hash` (`norm_input` + `b3_hash` over a fresh parse of the bytes read, `HEAD`'s blob for the base; never the index's column; IDs by `spec show`'s resolver); E its lock entry (`rev_L`, `spec_hash_L`, `file_blob`, `sig_hash`, `body_hash`); N each marker's `@N`. **Code changed**: E exists, the file's blob OID differs from `file_blob` and, for an `item`, its `sig` or `body` from E's (`module`, `ron`: the blob alone). **Spec changed**: (R, H) differs from (`rev_L`, `spec_hash_L`). **Raised**: a marker names R > `rev_L`. **Lagging**: a marker N < R. The first row that applies:
 
 | State | Category (detail) | When | Class |
 |---|---|---|---|
@@ -47,7 +47,7 @@ Per row: R, H the node's revision and `norm_hash` (`norm_input` + `b3_hash` over
 
 ## Cascade
 
-Level 1, the blob OID: on disk one `git hash-object --no-filters --stdin-paths` (never `-w`) over the files of rows with an E; at a commit its tree's OID. Equal: unchanged, nothing parsed or hashed. Level 3, an `item` whose blob changed: its file re-parsed from the walk's text and the whole item hashed (`hash_bound_items`, levels ignored until 5b), never the walk's item state. No text level: 05 s5.3's fallback would pass an unparseable item. One code walk (`read_tree`) per call; only bound files whose blob changed are parsed again.
+Level 1, the blob OID: on disk one `git hash-object --no-filters --stdin-paths` (never `-w`) over the files of rows with an E; at a commit its tree's OID. Equal: unchanged, nothing parsed or hashed. Level 3, an `item` whose blob changed: its file re-parsed from the walk's text, `sig` and `body` by `item_levels` against E's whatever its `levels`, never the walk's item state. No text level: 05 s5.3's fallback would pass an unparseable item. One code walk (`read_tree`) per call; only bound files whose blob changed are parsed again.
 
 ## Base
 
@@ -66,7 +66,7 @@ Level 1, the blob OID: on disk one `git hash-object --no-filters --stdin-paths` 
 | `blocked` | 1 | `enforce`: a Fix row; `enforce-introduced`: a Fix row not Pre-existing |
 | `cannot-verify` | 2 | a Cannot row or a run cause, in every mode |
 
-Check rows never block. Plain, `enforce-introduced` has no base and is judged as `enforce`, with ``note: mode `enforce-introduced` has no base without --changed: judged as `enforce` ``. Usage or discovery failing: exit 2, stdout empty. After discovery every failure is a **run cause**: the report, no row judged, its `cannot:` lines in this order: (1) a config error, `[code]`'s or `[verify]`'s; (2) no `[code]` (`code-bindings.md` "The `[code]` table"'s text); (3) a walk gap, a walked file `fs::read` cannot read included; (4) no worktree, no `git`, a git failure; (5) `spec.lock is unmerged: run spec lock regen`; (6) `read_lock`'s: `cannot read spec.lock: <error>`, `spec.lock: not UTF-8: SpecEngine writes it`, `spec.lock:<line>: <message>`, another `format` or recipe (both named); (7) a partial base, `HEAD`'s lock invalid; (8) `HOME` or the data directory. Every check that can run does (the walk whenever `[code]` reads), so the first line is the first cause present; 7a's degraded read names it (`bundle-bindings.md` "Degrade").
+Check rows never block. Plain, `enforce-introduced` has no base and is judged as `enforce`, with ``note: mode `enforce-introduced` has no base without --changed: judged as `enforce` ``. Usage or discovery failing: exit 2, stdout empty. After discovery every failure is a **run cause**: the report, no row judged, its `cannot:` lines in this order: (1) a config error, `[code]`'s or `[verify]`'s; (2) no `[code]` (`code-bindings.md` "The `[code]` table"'s text); (3) a walk gap, a walked file `fs::read` cannot read included; (4) no worktree, no `git`, a git failure; (5) `spec.lock is unmerged: run spec lock regen`; (6) `read_lock`'s: `cannot read spec.lock: <error>`, `spec.lock: not UTF-8: SpecEngine writes it`, `spec.lock:<line>: <message>` (format 1, other recipes: `spec-lock.md`); (7) a partial base, `HEAD`'s lock invalid; (8) `HOME` or the data directory. Every check that can run does (the walk whenever `[code]` reads), so the first line is the first cause present; 7a's degraded read names it (`bundle-bindings.md` "Degrade").
 
 ## A project's hook
 
@@ -74,7 +74,7 @@ A project hooking verify into its commits runs `spec verify --staged` under `enf
 
 ## Known limits
 
-- Under `core.autocrlf` or `eol` attributes, `module` and `ron` rows read `code_ahead code_changed` by blob (`--no-filters` hashes the disk's CRLF, the lock holds `HEAD`'s LF blob), as does an item whose multi-line literal holds CRLF; other items verify. 5b's digests lift it (`lock-levels.md`). `--staged` reads clean index blobs: the limit does not apply.
+- Under `core.autocrlf` or `eol` attributes, `module` and `ron` rows read `code_ahead code_changed` by blob (`--no-filters` hashes the disk's CRLF, the lock holds `HEAD`'s LF blob); items verify (CR rule). 5b-1b lifts it (`lock-levels-verify.md`). `--staged` reads clean index blobs: the limit does not apply.
 - Under `ident` or LFS an expanded `$Id$` in a bound item, an LFS file read `code_ahead`: accept hashes `HEAD`'s raw blob, verify the disk.
 - A RON entry without its marker is `marker_gone`, never `symbol_gone` (the walk keeps comment anchors only). An unclosed `impl X {` before a locked fn re-parents it: `symbol_gone` plus `unlocked`, not exit 2. A stray line between a marker and its item is skipped by the binding.
-- A grammar bump, or a bound item among the ~1 % of valid Rust tree-sitter-rust fails, holds exit 2 until 5b's rebase or the marker moves. `[sig]` is hashed whole until 5b. On adoption every binding is `unlocked`.
+- A grammar bump, a format-1 lock, or a bound item among the ~1 % of valid Rust tree-sitter-rust fails, holds exit 2 until `spec lock rebase` (5b-2) or the marker moves. `[sig]` reads `sig` and `body` until 5b-1b. On adoption every binding is `unlocked`.

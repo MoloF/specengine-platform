@@ -96,7 +96,7 @@ verified_by = "owner"       # owner only (CI writes nothing) — review record: 
 verified_at = "2026-09-28"
 ```
 
-Committed with the code, written only on the owner's terminal (ADR-0041), by `apply_proposal` only under `--editorial` (ADR-0043); `spec lock regen` resolves its conflicts. Shipped as `format = 1` (`norm_recipe`, `code_recipe`, more keys per binding): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
+Committed with the code, written only on the owner's terminal (ADR-0041), by `apply_proposal` only under `--editorial` (ADR-0043); `spec lock regen` resolves its conflicts. Shipped as `format = 1`, now `format = 2` (`norm_recipe`, `code_recipe`; per binding its `levels` and every level's digest in place of `ast_hash`): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
 
 **What goes into `norm_hash`** (after Doorstop): the section text and semantic fields (`links`, for records `working_answer` etc.). **Excluded** are presentational and process fields: `title`, `status`, `tier`, `owner`, `reviewed`. Renaming a heading must not invalidate coverage. Shipped as recipe `specengine-norm/v1`, with the revision rule (ADR-0040): `docs/canon/node-revision.md`.
 
@@ -132,7 +132,7 @@ Layer A details:
 
 ### 5.2. Canonical AST hash
 
-The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 records, and **`specengine-hash/v3`** (5a-1 `hash-levels`), a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recording the levels: 5b-1a `lock-levels.md`; level-aware verify: 5b-1b `lock-levels-verify.md`.
+The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 recorded, and **`specengine-hash/v3`** (5a-1 `hash-levels`), format 2's: a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recorded since 5b-1a (`docs/canon/spec-lock.md` "Entry"); level-aware verify: 5b-1b `lock-levels-verify.md`.
 
 - Option `--deep`: hashes of called functions from the same crate are added, depth 1.
 

@@ -771,12 +771,13 @@ pub struct MarkerFact {
 /// judge never compares hashes itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Comparison {
-    /// Equal to the entry, by the file's blob or by the item's hash.
+    /// Equal to the entry, by the file's blob or by the item's `sig` and
+    /// `body` digests.
     Equal(Compared),
     /// Changed since the entry, by the blob (`module`, `ron`) or by the
-    /// item's hash after the blob differed.
+    /// item's `sig` or `body` digest after the blob differed.
     Changed(Compared),
-    /// The item's hash refused: its first error category, snake case.
+    /// The item's levels refused: its first error category, snake case.
     CannotVerify(String),
     /// Not compared: no entry to compare with, or no hash made.
     NotHashed,
@@ -824,7 +825,7 @@ pub enum CodeFact {
 pub struct RowFacts {
     pub key: RowKey,
     pub node: NodeFact,
-    /// The row's lock entry E.
+    /// The row's lock entry E (format 2: a code judge reads no other).
     pub entry: Option<Verified>,
     /// The markers giving the key, in file order; none for an entry alone.
     pub markers: Vec<MarkerFact>,
@@ -901,7 +902,8 @@ impl Class {
 }
 
 /// How the code side was compared with the entry: by the file's blob
-/// alone, or by the item's hash after the blob differed.
+/// alone, or by the item's digests after the blob differed (`ast`: format
+/// 2's `sig` and `body`, whatever the levels; the name kept, no new key).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Compared {
     Blob,
