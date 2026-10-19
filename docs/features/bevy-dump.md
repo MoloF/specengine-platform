@@ -12,7 +12,7 @@ adrs: [ADR-0048]
 
 Layer A cannot enumerate the instances of one generic system registered from one site, its only miss on the pilots (05:121: 93.4-100 % of dumped own-crate systems found). Bevy's `schedule_data` dump lists every system per group (schedule) with its full `type_name`; only `specengine-eval bevy-detector --dump` reads it.
 
-**10b** (this) reads the project's own dump, named in `[[code.dump]]`, with the eval's reader moved into `specengine-code`, and annotates 6a's symbols with layer B role rows (group, instances, match category), B first on what is registered where, plus two staleness counts. Minimal (Q9): systems, instances, counts; **built right before slice 12 `machine-bindings`**, its first consumer, after 10a (`bevy-roles.md`). ADR-0048: a layer B fact is a file the project writes; it annotates, never binds.
+**10b** (this) reads the project's own dump, named in `[[code.dump]]`, with the eval's reader moved into `specengine-code`, and annotates 6a's symbols with layer B role rows (group, instances, match category), B first on what is registered where, plus two staleness counts. Minimal (Q9): systems, instances, counts; after 10a (`bevy-roles.md`); **parked** ("Dependencies and ordering"): slice 12, its planned consumer, no longer reads the dump. ADR-0048: a layer B fact is a file the project writes; it annotates, never binds.
 
 ## Description and interactions
 
@@ -44,7 +44,7 @@ format = "bevy-0.19-schedule"
 
 ### Reader
 
-WA-3. `specengine-code` `bevy::dump`, moved: a pure function over `&str` (the store reads the bytes), the own RON lexer, an explicit stack to `MAX_DEPTH` 64, errors naming the line. Read: `schedules[].name`, `systems[].{name, apply_deferred}`; `system_sets`, `hierarchy`, `dependency`, `components`, `conflicts`, `exclusive`, `deferred` skipped token by token, no value built (slice 12's input); a field outside the 0.19 schema counted (`unknown_fields`), one absent too (`missing_fields`). `DUMP_CAP_BYTES` 33 554 432 [A; TE-7 records pilot sizes]: over it, not parsed. `DUMP_READER_FORMAT`, a stamp: bumped, every dump re-read.
+WA-3. `specengine-code` `bevy::dump`, moved: a pure function over `&str` (the store reads the bytes), the own RON lexer, an explicit stack to `MAX_DEPTH` 64, errors naming the line. Read: `schedules[].name`, `systems[].{name, apply_deferred}`; `system_sets`, `hierarchy`, `dependency`, `components`, `conflicts`, `exclusive`, `deferred` skipped token by token, no value built (05 s5.5 level 2's input: no slice yet); a field outside the 0.19 schema counted (`unknown_fields`), one absent too (`missing_fields`). `DUMP_CAP_BYTES` 33 554 432 [A; TE-7 records pilot sizes]: over it, not parsed. `DUMP_READER_FORMAT`, a stamp: bumped, every dump re-read.
 
 `type_name` parse and label rule, moved from `compare.rs` (no `::` split outside `specengine-code`, WA-11): `{unit, segments, name, args, form}`.
 
@@ -152,11 +152,11 @@ spec-writer:
 
 ## Risks
 
-R3: a rustc changing `type_name` turns entries `not_in_source` (counted). R4: a stale dump trusted: rows tagged `b`, counts beside, never evidence. R5: the schema changes across minors (08 :127): a format name and reader per minor. R6: `specengine-code` at three dependencies, no Bevy in the core graph, eval output byte-identical. R7: a dump is a project-side instrumented build (minutes, GBs), never in tests; parse on change only, the cap. R8: pilots read-only, dumps outside the repository. R10: 6a's `layer` never overloaded. Value: ≤ 6.6 % of own systems gain instances until slice 12.
+R3: a rustc changing `type_name` turns entries `not_in_source` (counted). R4: a stale dump trusted: rows tagged `b`, counts beside, never evidence. R5: the schema changes across minors (08 :127): a format name and reader per minor. R6: `specengine-code` at three dependencies, no Bevy in the core graph, eval output byte-identical. R7: a dump is a project-side instrumented build (minutes, GBs), never in tests; parse on change only, the cap. R8: pilots read-only, dumps outside the repository. R10: 6a's `layer` never overloaded. Value: ≤ 6.6 % of own systems gain instances until a level 2 consumer (none yet).
 
 ## Out of scope
 
-Producing a dump (build, run, patch, command, helper crate); `system_sets`, `hierarchy`, `dependency`, conditions, `conflicts`, `#[require(..)]` (slice 12); observers, plugins from the dump; resolved types (slice 11); another schema, `bevy_mod_debugdump`; a 0.20 format; linking `args` to symbols; an inferred node layer; `refs`, `unmapped`, bundle, impact, health, lock, verify, check, HTTP, UI; time-based staleness; writing markers.
+Producing a dump (build, run, patch, command, helper crate); `system_sets`, `hierarchy`, `dependency`, conditions, `conflicts`, `#[require(..)]` (05 s5.5 level 2: no slice yet, `constant-census.md` D9); observers, plugins from the dump; resolved types (slice 11); another schema, `bevy_mod_debugdump`; a 0.20 format; linking `args` to symbols; an inferred node layer; `refs`, `unmapped`, bundle, impact, health, lock, verify, check, HTTP, UI; time-based staleness; writing markers.
 
 ## Open
 
@@ -168,14 +168,14 @@ Producing a dump (build, run, patch, command, helper crate); `system_sets`, `hie
 | Q5 merge | annotation; exact, unique name, else `ambiguous` or a miss; B first | B rows as symbols: 6a's purity broken, `unmapped` inflated |
 | Q6 broken dump | a state line, exit unchanged; bad config exit 2 | one stale dump stops every code read |
 | Q7 dependency | none (own RON lexer, `stack.md` :27) | an owner pin, a second RON reader |
-| Q8, Q9 | ADR-0048; minimal, right before slice 12 | precedence re-decided by 11, 12; a review now for ≤ 6.6 % |
+| Q8, Q9 | ADR-0048; minimal; Q9's "right before slice 12" superseded: parked | precedence re-decided by 11, 12; a review now for ≤ 6.6 % |
 | SW | match per read; 32 MiB cap; flags with a read dump; a format needs its framework | a pass per symbol change; unbounded memory |
 
 WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.
 
 ## Working answers
 
-[P] checked, [A] assumed. WA-2 [P] ADR-0013, ADR-0044; eval README "never patches, builds or runs". WA-3 [P] `dump.rs` (schema, lexer, `MAX_DEPTH`, line errors), `compare.rs` (`type_name` keys). WA-5 [P/A] bytes, not mtime; content order. WA-6 [P] the marker is the identity; 6a's targets, tiers. WA-7 [P] 05:119 "the truth for registrations". WA-10 [P] 05:121; slice 12 needs `dependency`. A1 pilots on 0.19; A2 `type_name` best effort per rustc.
+[P] checked, [A] assumed. WA-2 [P] ADR-0013, ADR-0044; eval README "never patches, builds or runs". WA-3 [P] `dump.rs` (schema, lexer, `MAX_DEPTH`, line errors), `compare.rs` (`type_name` keys). WA-5 [P/A] bytes, not mtime; content order. WA-6 [P] the marker is the identity; 6a's targets, tiers. WA-7 [P] 05:119 "the truth for registrations". WA-10 [P] 05:121; slice 12 no longer needs `dependency` (05 s5.5 level 2: no slice yet). A1 pilots on 0.19; A2 `type_name` best effort per rustc.
 
 ## Dependencies and ordering
 

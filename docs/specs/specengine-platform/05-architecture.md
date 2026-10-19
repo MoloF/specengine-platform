@@ -194,7 +194,7 @@ Computed, shown in the UI and the context bundle. The answer to "agents get thei
 | Level | Evidence |
 |---|---|
 | 1 | a bound **passing test** (`@verifies`) run by SpecEngine (`spec verify --tests`; recorded from 8b) |
-| 2 | a **deterministic machine assertion**: e.g. "system X in schedule Update after Y", "component Z requires W" — checked by extracting `add_systems`/`#[require]` |
+| 2 | a **deterministic machine assertion**: e.g. "system X in schedule Update after Y", "component Z requires W" — checked by extracting `add_systems`/`#[require]`; no slice yet (`constant-census.md` D9) |
 | 3 | a fresh binding to a symbol (AST hash matches) |
 | 4 | an LLM-audit verdict with a `file:line` quote |
 | 5 | prose only |
