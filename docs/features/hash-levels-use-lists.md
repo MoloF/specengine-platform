@@ -2,7 +2,7 @@
 class: spec
 status: shipped
 scope: [crates/specengine-code, crates/specengine-eval, fixtures]
-ref: Phase 3 slice 5a-1c, from 5a-2's first TE-1 (the owner's run, 2026-10-19); Q1-Q4 decided 2026-10-19 under the owner's pre-approval (Q2 flagged for the owner); 05 s5.2; 08 s2, AC-2, AC-10, AC-14; developer 2 iterations, review 1 accepted, iteration 2 re-reviewed accepted; OW-1 the owner's
+ref: Phase 3 slice 5a-1c, from 5a-2's first TE-1 (the owner's run, 2026-10-19); Q1-Q4 decided 2026-10-19 under the owner's pre-approval (Q2 flagged for the owner); 05 s5.2; 08 s2, AC-2, AC-10, AC-14; developer 2 iterations, review 1 accepted, iteration 2 re-reviewed accepted; OW-1 the owner's, passed 2026-10-20
 shipped: 2026-10-20
 adrs: []
 ---
@@ -35,7 +35,7 @@ test-engineer:
 
 owner:
 
-- [ ] OW-1 -- 5a-2's TE-1 rerun on pilots A and B by its method (`code-hash-eval.md` "Runs and cost"): zero `levels-unstable.json` rows on each, every judged figure 100.0, `module_stable_pct` included; `cost.levels_ms_per_kloc` within 6.67. A row left is a finding routed as this slice was. Closes `hash-levels-eval.md` TE-1; opens 5b-1.
+- [x] OW-1 -- 5a-2's TE-1 rerun on pilots A and B by its method (`code-hash-eval.md` "Runs and cost"): zero `levels-unstable.json` rows on each, every judged figure 100.0, `module_stable_pct` included; `cost.levels_ms_per_kloc` within 6.67. A row left is a finding routed as this slice was. Closes `hash-levels-eval.md` TE-1; opens 5b-1. Passed 2026-10-20 (the owner's run on `e07c352`, release, 2 of 2): 0 rows on both pilots, every judged figure 100.0, module included; `cost` 4.09 / 4.17 ms/kLOC; figures in `code-hash-eval.md` "Measured".
 
 spec-writer:
 
@@ -60,6 +60,6 @@ Divergences: A1 was wrong. Default rustfmt 1.9.0 may drop a duplicated member (`
 
 Iteration 2 (review finding 1): iteration 1's `list_run` copied the walk's cursor per list, quadratic on a single-member chain (100 000 levels: 6 s release, 13.36 s in TE-6 against 5 s); now 72 ms, linear, digests byte-identical over 1.1 M items.
 
-Figures, the orchestrator's read-only diagnostic eval, not OW-1: pilot A every judged figure 100.0, module included, 0 rows, `cost` 4.02 ms/kLOC (before N6: module `body` 79.6, 80 rows); pilot B all 100.0, 0 rows, 4.0. On `effcd01`, without N6: the N6 tests red, TE-10 14 rows.
+Figures: the orchestrator's read-only diagnostic, pilot A every judged figure 100.0, module included, 0 rows, 4.02 ms/kLOC (before N6: module `body` 79.6, 80 rows), pilot B the same, 4.0; OW-1, the owner's rerun (2026-10-20), A / B 0 rows, all 100.0, 4.09 / 4.17. On `effcd01`, without N6: the N6 tests red, TE-10 14 rows.
 
 Tests: code 327 of 327, eval and CLI 50 of 50 (3 skipped), TE-10 1 of 1; clippy (code, eval, CLI) clean. Mutations 7 of 7 killed: M1 N6 removed (te1, te2, te4, the cap pair, eval te1_pairs and te6, TE-10); M2 depth-1 only (te1: 2 700 of 4 050 renderings, te2, eval te1_pairs and te6, cap); M3 dedup after sort (te3, te8, eval `ul-fn-duplicate`, te6); M4 masked by normal walks (te4); M5 N6 in v2's `use_run` (TE-5, te1, te2, eval te6); M6 runs not counted against the cap (cap pair); M7 module loop out of `shortfalls()` (`shortfalls_name_the_module_figures_below_100`).
