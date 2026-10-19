@@ -12,6 +12,7 @@ mod bevy;
 mod census;
 mod check;
 mod code_index;
+mod constants;
 mod harness;
 mod import;
 mod index;
@@ -61,6 +62,13 @@ enum Measurement {
     /// Config from `--config` as `census` (default for `--label pilot-a` /
     /// `pilot-b`: `SPECENGINE_CENSUS_CONFIG_A` / `_B` when set).
     Import(CommonArgs),
+    /// Which free string constants of the census `[code] roots` carry a code
+    /// of the corpus's records (`docs/features/constant-census.md`): each
+    /// `const` and `static` item's value, matched whole against the
+    /// import's IDs, aliases and hyphenless patterns. Read-only; config
+    /// from `--config` as `census` (`SPECENGINE_CENSUS_CONFIG_A` / `_B` for
+    /// `--label pilot-a` / `pilot-b` when set); no `[code] roots`: refused.
+    Constants(CommonArgs),
     /// The spec parser of `specengine-core` over the census's documents:
     /// front-matter, `{#ID}` sections, references, token estimates. Files
     /// from `--config` as `census` (default for `--label pilot-a` / `pilot-b`:
@@ -246,7 +254,7 @@ pub struct CommonArgs {
     #[arg(long, value_name = "LABEL")]
     pub label: Option<String>,
     /// Measurement-specific configuration (TOML): the corpus convention of
-    /// `census`, `import` and `parse` (default `census.toml` at the corpus
+    /// `census`, `import`, `parse` and `constants` (default `census.toml` at the corpus
     /// root; all first take `SPECENGINE_CENSUS_CONFIG_A` / `_B` for `--label
     /// pilot-a` / `pilot-b` when set); `ast-hash`, `ron`, `bevy-detector` and `ra` take none;
     /// `index` and `check` refuse it (exit 2): their configuration is `--scheme`.
@@ -294,6 +302,17 @@ fn main() -> ExitCode {
                 import::FIXTURE,
                 move |root: &Path| census::load_config(config.as_deref(), root, label.as_deref()),
                 import::run,
+            )
+        }
+        Measurement::Constants(args) => {
+            let config = args.config.clone();
+            let label = args.label.clone();
+            measure_with(
+                constants::MEASUREMENT,
+                &args,
+                constants::FIXTURE,
+                move |root: &Path| constants::prepare(root, config.as_deref(), label.as_deref()),
+                constants::run,
             )
         }
         Measurement::Parse(args) => {

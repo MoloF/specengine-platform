@@ -1,0 +1,58 @@
+{
+  "_comment": "docs/features/constant-census.md (12a) TE-1: what `specengine-eval constants` (no --pilot: this fixture, label `fixtures`) must report, derived by hand from the spec's Data, never read back from a run; checked by crates/specengine-eval/tests/constants_cli.rs. `result` is the stdout result without `constants_ms`; `constants` every row of constants.json, `skipped` every row of skipped.json. Files (D1): `[code] roots` firmware, firmware/zones (nested: zones/north.rs read once) and drivers (missing: roots_missing 1, a `root_missing` row); listed .rs files codes.rs, faults.rs, latin1.rs (not UTF-8: skipped), zones/north.rs = 4; not listed: generated/table.rs (exclude), target/stale.rs (build directory), .cache/old.rs (hidden), notes.txt (not .rs). Items (D6): file level and inline mod `const`/`static` only; Alarm's variants, the associated FROST_CODE and the fn-body INNER are no items, and each of them, like every unlisted file, holds a value an item holds, so reading it would turn that item `two_items`. Records (D7): definitions only; IRR-003 is defined twice (an Import.duplicates entry: two_records), ACC-001 once in each of two feature documents (two records: two_records), WTR-007 is IRR-007's alias; rules/index.md only refers to VLV-001 and IRR-005, which stay one definition each (VALVE_LOW_PRESSURE reads `id`; DAWN_START reads `two_items`, never `two_records`). Hyphenless `H[0-9]{3}`: H204 whole (hyphenless), H2041 only by its prefix (unmatched). Markers (D6): two comments above VALVE_LOW_PRESSURE give `marked` in source order, IDs verbatim without the revision; JOINED's marker makes a row's `marked` but no count (not valued); NORTH_VALVE's `@configures` counts (any relation). `records` names the IDs the value names (an alias: its record's ID) whatever the match, [] for hyphenless, unmatched and not-valued rows (reading L12).",
+  "result": {
+    "files": 4,
+    "skipped": 1,
+    "roots_missing": 1,
+    "items": 23,
+    "valued": 15,
+    "not_valued": {
+      "broken": 1,
+      "macro": 1,
+      "byte_string": 1,
+      "escaped": 1,
+      "multi_line": 1,
+      "other": 3
+    },
+    "matched": {
+      "id": 5,
+      "alias": 1
+    },
+    "hyphenless": 1,
+    "unmatched": 2,
+    "ambiguous": {
+      "two_records": 2,
+      "two_items": 4
+    },
+    "marked": 2
+  },
+  "constants": [
+    {"path": "firmware/codes.rs", "line": 5, "name": "VALVE_LOW_PRESSURE", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "VLV-001", "not_valued": null, "match": "id", "records": ["VLV-001"], "marked": ["VLV-001", "VLV-002"]},
+    {"path": "firmware/codes.rs", "line": 7, "name": "VALVE_WINDOW", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "VLV-002", "not_valued": null, "match": "id", "records": ["VLV-002"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 9, "name": "AFTER_RAIN", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "WTR-007", "not_valued": null, "match": "alias", "records": ["IRR-007"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 11, "name": "TWICE_A_DAY", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "IRR-003", "not_valued": null, "match": "two_records", "records": ["IRR-003"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 13, "name": "MIST_FLOOR", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "ACC-001", "not_valued": null, "match": "two_records", "records": ["ACC-001"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 15, "name": "HUMIDITY_HIGH", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "H204", "not_valued": null, "match": "hyphenless", "records": [], "marked": []},
+    {"path": "firmware/codes.rs", "line": 17, "name": "HUMIDITY_SENSOR", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "H2041", "not_valued": null, "match": "unmatched", "records": [], "marked": []},
+    {"path": "firmware/codes.rs", "line": 19, "name": "DAWN_START", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "IRR-005", "not_valued": null, "match": "two_items", "records": ["IRR-005"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 21, "name": "PUMP_IDLE", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "pump idle", "not_valued": null, "match": "unmatched", "records": [], "marked": []},
+    {"path": "firmware/codes.rs", "line": 23, "name": "ESCAPED", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "escaped", "match": null, "records": [], "marked": []},
+    {"path": "firmware/codes.rs", "line": 25, "name": "RAW_BYTES", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "byte_string", "match": null, "records": [], "marked": []},
+    {"path": "firmware/codes.rs", "line": 28, "name": "JOINED", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "macro", "match": null, "records": [], "marked": ["VLV-002"]},
+    {"path": "firmware/codes.rs", "line": 30, "name": "RETRIES", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": []},
+    {"path": "firmware/codes.rs", "line": 32, "name": "LAST_VALVE", "mod_path": [], "cfg": [], "item_kind": "static_item", "value": "VLV-006", "not_valued": null, "match": "id", "records": ["VLV-006"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 35, "name": "FROST_DELAY", "mod_path": ["frost"], "cfg": [], "item_kind": "const_item", "value": "IRR-009", "not_valued": null, "match": "id", "records": ["IRR-009"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 39, "name": "ZONE_COUNT", "mod_path": [], "cfg": ["feature=\"north\""], "item_kind": "const_item", "value": "VLV-004", "not_valued": null, "match": "two_items", "records": ["VLV-004"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 42, "name": "ZONE_COUNT", "mod_path": [], "cfg": ["not(feature=\"north\")"], "item_kind": "const_item", "value": "VLV-004", "not_valued": null, "match": "two_items", "records": ["VLV-004"], "marked": []},
+    {"path": "firmware/codes.rs", "line": 44, "name": "NOTICE", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "multi_line", "match": null, "records": [], "marked": []},
+    {"path": "firmware/faults.rs", "line": 3, "name": "FAULT_LIMIT", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": []},
+    {"path": "firmware/faults.rs", "line": 5, "name": "FAULT_BLOCK", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": []},
+    {"path": "firmware/faults.rs", "line": 7, "name": "FAULT_STUCK", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "broken", "match": null, "records": [], "marked": []},
+    {"path": "firmware/zones/north.rs", "line": 3, "name": "NORTH_DAWN", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "IRR-005", "not_valued": null, "match": "two_items", "records": ["IRR-005"], "marked": []},
+    {"path": "firmware/zones/north.rs", "line": 6, "name": "NORTH_VALVE", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "VLV-010", "not_valued": null, "match": "id", "records": ["VLV-010"], "marked": ["VLV-010"]}
+  ],
+  "skipped": [
+    {"path": "drivers", "cause": "root_missing"},
+    {"path": "firmware/latin1.rs", "cause": "not_utf8"}
+  ]
+}

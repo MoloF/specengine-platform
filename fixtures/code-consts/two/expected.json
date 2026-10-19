@@ -1,0 +1,60 @@
+{
+  "_comment": "docs/features/constant-census.md (12a) TE-1: what `specengine-eval constants --pilot fixtures/code-consts/two` (label `pilot`) must report, derived by hand from the spec's Data, never read back from a run; checked by crates/specengine-eval/tests/constants_cli.rs. `result` is the stdout result without `constants_ms`; `constants` every row of constants.json, `skipped` every row of skipped.json. Files (D1): `[code] roots` panel (a directory), winch/limits.rs (a .rs file root, kept as is), panel/lifts.rs (a file root under the directory: read once) and spare (missing: roots_missing 1, a `root_missing` row); `extensions = [\"txt\"]` narrows nothing; listed: panel/latin1.rs (not UTF-8: skipped), panel/lifts.rs, winch/limits.rs = 3; not listed: panel/legacy_codes.rs (exclude `panel/legacy_*.rs`), panel/target.old/build.rs (build directory), panel/.backup/lifts.rs (hidden), winch/drum.rs (beside a file root), panel/night.txt (not .rs). Items (D6): Signal's variants, the trait's CODE and the fn-body static INNER are no items; each of them, like every unlisted file, holds CR-0001, so reading it would turn HOOK_SPEED `two_items`. Not valued: a call (String::new(), brake_code()) and include_str! read `macro`, c\"...\" and a char `byte_string`, \\u{30} `escaped`, a raw literal across two lines `multi_line`, `&[..]`, parentheses, no initializer and a path `other`; WINCH_FAULT has a parse error (`broken`), so its marker binds `cannot_verify`, never the item: its row's `marked` is [] (reading L15). Records (D7): CR-0002 is defined twice (a section and a list item: two_records), TS-0001 once in each of two feature documents (two_records), JB-0005 is LD-0005's alias. Hyphenless `\\bW[0-9]{2}\\b` (W17) and `LOAD[0-9]+` (LOAD12). LD-000 is a prefix of three IDs and names none (unmatched). The cfg twins of `mod night` and the cross-file pair WEIGH_FIRST / WINCH_WEIGH read `two_items`.",
+  "result": {
+    "files": 3,
+    "skipped": 1,
+    "roots_missing": 1,
+    "items": 25,
+    "valued": 13,
+    "not_valued": {
+      "broken": 1,
+      "macro": 3,
+      "byte_string": 2,
+      "escaped": 1,
+      "multi_line": 1,
+      "other": 4
+    },
+    "matched": {
+      "id": 2,
+      "alias": 1
+    },
+    "hyphenless": 2,
+    "unmatched": 2,
+    "ambiguous": {
+      "two_records": 2,
+      "two_items": 4
+    },
+    "marked": 2
+  },
+  "constants": [
+    {"path": "panel/lifts.rs", "line": 4, "name": "HOOK_SPEED", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "CR-0001", "not_valued": null, "match": "id", "records": ["CR-0001"], "marked": ["CR-0001"]},
+    {"path": "panel/lifts.rs", "line": 6, "name": "WIND_STOP", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "CR-0002", "not_valued": null, "match": "two_records", "records": ["CR-0002"], "marked": []},
+    {"path": "panel/lifts.rs", "line": 8, "name": "JIB_SWING", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "JB-0005", "not_valued": null, "match": "alias", "records": ["LD-0005"], "marked": []},
+    {"path": "panel/lifts.rs", "line": 10, "name": "PARKED", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "TS-0001", "not_valued": null, "match": "two_records", "records": ["TS-0001"], "marked": []},
+    {"path": "panel/lifts.rs", "line": 12, "name": "GUST", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "W17", "not_valued": null, "match": "hyphenless", "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 14, "name": "OVERLOAD", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "LOAD12", "not_valued": null, "match": "hyphenless", "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 16, "name": "WEIGH_FIRST", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "LD-0004", "not_valued": null, "match": "two_items", "records": ["LD-0004"], "marked": []},
+    {"path": "panel/lifts.rs", "line": 18, "name": "HORN", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "horn", "not_valued": null, "match": "unmatched", "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 20, "name": "SPOTTER", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "LD-000", "not_valued": null, "match": "unmatched", "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 22, "name": "SPEED_TEXT", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "macro", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 24, "name": "NIGHT", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "macro", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 26, "name": "LIMIT_TAB", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "escaped", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 28, "name": "HOOK_BYTES", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "byte_string", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 30, "name": "FIRST_LETTER", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "byte_string", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 32, "name": "ALL_LIFTS", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 35, "name": "SHORT_HOLD", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": ["LD-0006"]},
+    {"path": "panel/lifts.rs", "line": 37, "name": "PENDING", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 39, "name": "SAME_AS_HOOK", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "other", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 41, "name": "STORM_NOTE", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "multi_line", "match": null, "records": [], "marked": []},
+    {"path": "panel/lifts.rs", "line": 44, "name": "QUAY_LIMIT", "mod_path": [], "cfg": [], "item_kind": "static_item", "value": "LD-0006", "not_valued": null, "match": "id", "records": ["LD-0006"], "marked": []},
+    {"path": "panel/lifts.rs", "line": 48, "name": "LIGHTS", "mod_path": ["night"], "cfg": ["test"], "item_kind": "const_item", "value": "CR-0007", "not_valued": null, "match": "two_items", "records": ["CR-0007"], "marked": []},
+    {"path": "panel/lifts.rs", "line": 51, "name": "LIGHTS", "mod_path": ["night"], "cfg": ["not(test)"], "item_kind": "const_item", "value": "CR-0007", "not_valued": null, "match": "two_items", "records": ["CR-0007"], "marked": []},
+    {"path": "winch/limits.rs", "line": 4, "name": "WINCH_WEIGH", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": "LD-0004", "not_valued": null, "match": "two_items", "records": ["LD-0004"], "marked": ["LD-0004"]},
+    {"path": "winch/limits.rs", "line": 6, "name": "WINCH_BRAKE", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "macro", "match": null, "records": [], "marked": []},
+    {"path": "winch/limits.rs", "line": 9, "name": "WINCH_FAULT", "mod_path": [], "cfg": [], "item_kind": "const_item", "value": null, "not_valued": "broken", "match": null, "records": [], "marked": []}
+  ],
+  "skipped": [
+    {"path": "panel/latin1.rs", "cause": "not_utf8"},
+    {"path": "spare", "cause": "root_missing"}
+  ]
+}

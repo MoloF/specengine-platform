@@ -1,0 +1,23 @@
+# Census config of the code-consts/one fixture (docs/features/constant-census.md
+# TE-1): an invented greenhouse-irrigation convention. Records are rows of
+# `Code` tables under `rules/`; `ACC` criteria are unique per document; `WTR`
+# is the legacy prefix of `IRR`; humidity alarms are hyphenless `H` codes;
+# `rules/index.md` only refers to rules. Code: two nested directory roots and
+# a missing one, one `**` exclude glob, no extensions. The default corpus of
+# `specengine-eval constants`; expected.json is its `result` without
+# `constants_ms`, and every detail row.
+[corpus]
+roots = ["rules"]
+[ids]
+regex = '^(?P<prefix>[A-Z]{3})-[0-9]{3}$'
+feature_prefixes = ["ACC"]
+hyphenless = ['H[0-9]{3}']
+[ids.legacy]
+"WTR" = "IRR"
+[tables]
+id_header = '^Code$'
+[definitions]
+reference_paths = ["rules/index.md"]
+[code]
+roots = ["firmware", "firmware/zones", "drivers"]
+exclude = ["firmware/generated/**"]

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-ra]
 owner: owner
-reviewed: 2026-10-16
+reviewed: 2026-10-19
 ---
 
 # specengine-ra — layer C: rust-analyzer as a library
@@ -25,6 +25,10 @@ Layer C of 05 §5.1 (ADR-0020): loads a Cargo workspace read-only into rust-anal
 3. `Project::into_workspace` — files and crate graph into the database, the proc-macro server when asked (`ProcMacroServer`: `disabled`, `running`, `failed`; `ProcMacroCrates` loaded / not loaded) → `Workspace`.
 
 `specengine-eval ra` times them: `cold_ms` = metadata + build scripts + database + first pass; `warm_ms` = an in-memory appended function + a full pass; `metadata_degraded` = `--locked` failed, `--no-deps` used; `target_dir_fresh` = no build output in the target directory beforehand.
+
+Each load runs in the eval's hidden `ra-worker` subcommand, leading its own process group, under the load's budget; on overrun the whole group (cargo, rustc, build scripts, proc macros) is killed and unreported fields become `"timeout"`, as does a worker outliving its last report by 10 s. `status`: `ok`, `timeout`, `crashed` (`detail.exit`), `load_failed` (`detail.load_error`). `without` skips build scripts too.
+
+**RSS verdict rule**: `max(group_peak_rss_mb, group_peak_rss_floor_mb)` vs 4096 MiB. The peak: the largest summed RSS of the load's process group, sampled every 100 ms (macOS, Linux; `null` elsewhere); the floor: the max of that peak and the worker's and largest child's `getrusage` peaks, a lower bound if sampling misses a spike.
 
 `Workspace::{file, scan, append, close}`: look a file up, scan its items, append text in memory (the warm edit), and **`close` shuts the proc-macro server down** — call it before reporting, so no server outlives the load. A failed step is a `LoadError` (`path`, `metadata`, `build_scripts`, `database` via `category()`); its message may name paths, so it belongs in per-run detail only.
 

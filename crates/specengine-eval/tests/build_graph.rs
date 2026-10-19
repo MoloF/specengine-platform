@@ -2379,3 +2379,49 @@ fn the_licence_expressions_read_as_spdx() {
     assert!(licence_allowed("MIT OR", &allowed).is_err());
     assert!(licence_allowed("(MIT", &allowed).is_err());
 }
+
+// ---------------------------------------------------------------------------
+// docs/features/constant-census.md (12a) RD-5: the census reads code through
+// `specengine-code` in eval, never in the importer.
+// ---------------------------------------------------------------------------
+
+/// docs/features/constant-census.md (12a) RD-5 (D4): `specengine-import`
+/// reads code as bytes only. Neither `specengine-code` nor a `tree-sitter`
+/// crate is its direct dependency of any kind, nor in its graph over the
+/// default edge kinds (normal, build, dev): the value reader lives in
+/// `specengine-code` and the census wiring in eval, whose own direct
+/// dependencies `eval_direct_dependencies_gain_exactly_the_cli_library`
+/// pins (no direct `tree-sitter`). The same scan sees `tree-sitter` in
+/// `specengine-code`'s graph, so it is not vacuous. M: `specengine-code` or
+/// `tree-sitter` added to `specengine-import`.
+#[test]
+fn import_reads_code_as_bytes_only() {
+    let reads_code = |name: &str| name == "specengine-code" || name.starts_with("tree-sitter");
+    let metadata = workspace_metadata();
+    let declared: Vec<(String, String, bool)> = direct_dependencies(&metadata, "specengine-import")
+        .into_iter()
+        .filter(|(name, _, _)| reads_code(name))
+        .collect();
+    assert!(
+        declared.is_empty(),
+        "specengine-import declares {declared:?}"
+    );
+    let graph = tree_crates(&cargo_tree(&["-p", "specengine-import"]));
+    assert!(
+        graph
+            .first()
+            .is_some_and(|(name, _)| name == "specengine-import"),
+        "cargo tree lists specengine-import first: {graph:?}"
+    );
+    let reached: Vec<&(String, String)> =
+        graph.iter().filter(|(name, _)| reads_code(name)).collect();
+    assert!(
+        reached.is_empty(),
+        "specengine-import's graph reaches {reached:?}"
+    );
+    let code = normal_graph("specengine-code");
+    assert!(
+        code.iter().any(|(name, _)| name.starts_with("tree-sitter")),
+        "the scan sees tree-sitter in specengine-code's graph: {code:?}"
+    );
+}

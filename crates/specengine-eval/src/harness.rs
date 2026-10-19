@@ -38,7 +38,7 @@ pub const PILOT_CORPUS: PilotVariable = PilotVariable(["SPECENGINE_PILOT_A", "SP
 /// The ID scheme of `parse`, `index` and `check` (`--scheme`).
 pub const PILOT_SCHEME: PilotVariable =
     PilotVariable(["SPECENGINE_SCHEME_A", "SPECENGINE_SCHEME_B"]);
-/// The census config of `census` and `parse` (`--config`).
+/// The census config of `census`, `import`, `parse` and `constants` (`--config`).
 pub const PILOT_CENSUS_CONFIG: PilotVariable =
     PilotVariable(["SPECENGINE_CENSUS_CONFIG_A", "SPECENGINE_CENSUS_CONFIG_B"]);
 /// The tasks config of `w` (`--tasks`).

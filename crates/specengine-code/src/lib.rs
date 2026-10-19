@@ -99,6 +99,7 @@
 pub mod bevy;
 pub mod bind;
 pub mod comments;
+pub mod const_value;
 pub mod frameworks;
 pub mod grammar;
 pub mod hash;
@@ -114,6 +115,7 @@ pub use bind::{
     Binding, BoundComment, RustBinding, SIGNATURE_CAP_BYTES, Unanchored, bind_file, bind_tree,
     hash_bound_items, item_levels, item_signatures,
 };
+pub use const_value::{ConstValue, NotValued, const_value};
 pub use grammar::{GrammarInfo, RustParser, grammar_info};
 pub use hash::{Digest, ErrorCategory, HashState, RECIPE, hash_item, normalize, recipe_header};
 pub use items::{FileAnalysis, ItemRecord, MOD_KIND, ModDeclaration, analyze_file, analyze_tree};

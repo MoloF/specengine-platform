@@ -23,6 +23,16 @@
 //! docs/features/pilot-w.md AC-09 extends the scan to the eval `w` module
 //! and the forbidden set to both `fixtures/pilot-w/*` census configs and
 //! tasks configs (their globs, key, paths and `[tier1.paths]` values).
+//!
+//! docs/features/constant-census.md RD-6 extends the scan to the eval
+//! `constants` module and the code value reader (`specengine-code`'s
+//! `const_value.rs`), and the forbidden set to both
+//! `fixtures/code-consts/*/census.toml` configs, the record prefixes and
+//! hyphenless patterns of their runs, and the words no core census may
+//! hold: `check` (a kind) and 12b's template placeholders `{id}`,
+//! `{prefix}`, `{body}` (in those two files not even inside a longer
+//! literal); each `constants` outcome is non-zero in both constants
+//! fixtures' `expected.json`.
 
 mod import_support;
 
@@ -38,7 +48,22 @@ const LAYOUT_FIXTURES: [&str; 2] = ["import-layout/one", "import-layout/two"];
 /// The two invented conventions of docs/features/pilot-w.md.
 const W_FIXTURES: [&str; 2] = ["pilot-w/one", "pilot-w/two"];
 
-/// Every `.rs` file of the import engine, and the eval `import` module.
+/// The two invented conventions of docs/features/constant-census.md.
+const CONSTANTS_FIXTURES: [&str; 2] = ["code-consts/one", "code-consts/two"];
+
+/// The two sources of docs/features/constant-census.md RD-6 (PHASE-B: the
+/// spec's names).
+const CONSTANTS_SOURCES: [&str; 2] = [
+    "crates/specengine-eval/src/constants.rs",
+    "crates/specengine-code/src/const_value.rs",
+];
+
+/// What no core census may name (docs/features/constant-census.md RD-6):
+/// a kind, and 12b's template placeholders.
+const CONSTANTS_WORDS: [&str; 4] = ["check", "{id}", "{prefix}", "{body}"];
+
+/// Every `.rs` file of the import engine, the eval `import`, `layout`, `w`
+/// and `constants` modules, and the code value reader.
 fn scanned_sources() -> Vec<PathBuf> {
     let root = repository_root();
     let mut sources = Vec::new();
@@ -56,6 +81,9 @@ fn scanned_sources() -> Vec<PathBuf> {
     sources.push(root.join("crates/specengine-eval/src/import.rs"));
     sources.push(root.join("crates/specengine-eval/src/layout.rs"));
     sources.push(root.join("crates/specengine-eval/src/w.rs"));
+    for source in CONSTANTS_SOURCES {
+        sources.push(root.join(source));
+    }
     sources.sort();
     sources
 }
@@ -213,8 +241,14 @@ fn forbidden() -> BTreeSet<String> {
             &fs::read_to_string(fixture_dir(name).join("tasks.toml")).expect("tasks config"),
         ));
     }
+    for name in CONSTANTS_FIXTURES {
+        strings.extend(convention_strings(
+            &fs::read_to_string(fixture_config(name)).expect("constants fixture config"),
+        ));
+    }
+    strings.extend(CONSTANTS_WORDS.iter().map(|word| (*word).to_owned()));
     let scratch = Scratch::new("genre");
-    for name in FIXTURES {
+    for name in FIXTURES.iter().chain(&CONSTANTS_FIXTURES) {
         let run = ImportRun::new(&fixture_dir(name), &scratch, name, &[]);
         let labels = run.file("labels.json");
         for group in ["classes", "prefixes", "patterns"] {
@@ -682,4 +716,173 @@ fn the_scan_covers_the_w_module_and_the_tasks_configs() {
             "{sample:?} is in the forbidden set"
         );
     }
+}
+
+// ---------------------------------------- docs/features/constant-census.md
+
+/// RD-6: the scan reads the eval `constants` module and the code value
+/// reader (a literal only each holds is found: `skipped.json`, the detail
+/// file, and `byte_string`, a category name; PHASE-B reading L22), and the
+/// forbidden set holds both constants fixtures' convention strings, the
+/// record prefixes of their runs and the words no core census may hold —
+/// so a fixture prefix, root, glob or pattern, `check`, or a bare
+/// placeholder written into either file turns
+/// `no_literal_of_the_engine_names_a_fixture_convention` red.
+#[test]
+fn the_scan_covers_the_constants_module_and_the_value_reader() {
+    let scanned: Vec<String> = scanned_sources()
+        .iter()
+        .map(|path| relative(path))
+        .collect();
+    for wanted in CONSTANTS_SOURCES {
+        assert!(
+            scanned.iter().any(|path| path == wanted),
+            "{wanted} is not scanned: {scanned:?}"
+        );
+    }
+    for (probe, file) in [
+        ("skipped.json", CONSTANTS_SOURCES[0]),
+        ("byte_string", CONSTANTS_SOURCES[1]),
+    ] {
+        let (found, _) = convention_literals(&BTreeSet::from([probe.to_owned()]));
+        assert!(
+            found.iter().any(|hit| hit.starts_with(&format!("{file}:"))),
+            "{probe:?} is found in {file}: {found:?}"
+        );
+    }
+    let forbidden = forbidden();
+    for sample in [
+        "firmware",                         // code root (one)
+        "firmware/zones",                   // nested code root (one)
+        "drivers",                          // missing code root (one)
+        "firmware/generated/**",            // code exclude (one)
+        "rules/index.md",                   // reference path (one)
+        "WTR",                              // legacy prefix (one)
+        "ACC",                              // feature prefix (one)
+        "^Code$",                           // ID header (one)
+        "H[0-9]{3}",                        // hyphenless pattern (one)
+        "VLV",                              // a record prefix of the run (one)
+        "panel",                            // code root (two)
+        "winch/limits.rs",                  // file root (two)
+        "spare",                            // missing code root (two)
+        "panel/legacy_*.rs",                // code exclude (two)
+        "txt",                              // code extension (two)
+        "JB",                               // legacy prefix (two)
+        "TS",                               // feature prefix (two)
+        r"\bW[0-9]{2}\b",                   // hyphenless pattern (two)
+        "CR",                               // a record prefix of the run (two)
+        r"^(?P<prefix>[A-Z]{2})-[0-9]{4}$", // ID regex (two)
+        "check",                            // a kind
+        "{id}",                             // a 12b placeholder
+        "{prefix}",                         // a 12b placeholder
+        "{body}",                           // a 12b placeholder
+    ] {
+        assert!(
+            forbidden.contains(sample),
+            "{sample:?} is in the forbidden set"
+        );
+    }
+}
+
+/// RD-6: no string literal of the eval `constants` module or the code value
+/// reader holds a 12b template placeholder, not even inside a longer text
+/// (a format string included: name the argument otherwise). M: `{id}`,
+/// `{prefix}` or `{body}` in either file.
+#[test]
+fn the_constants_census_holds_no_template_placeholder() {
+    let root = repository_root();
+    let mut offending = Vec::new();
+    let mut total = 0;
+    for file in CONSTANTS_SOURCES {
+        let source = fs::read_to_string(root.join(file)).expect("source readable");
+        for (line, literal) in string_literals(&source) {
+            total += 1;
+            let value = unescaped(&literal).to_lowercase();
+            for placeholder in &CONSTANTS_WORDS[1..] {
+                if value.contains(placeholder) {
+                    offending.push(format!("{file}:{line}: {literal:?} holds {placeholder}"));
+                }
+            }
+        }
+    }
+    assert!(total >= 10, "the lexer found only {total} literals");
+    assert!(offending.is_empty(), "{}", offending.join("\n"));
+}
+
+/// The `constants` counts each constants fixture must show non-zero: every
+/// `result` key but `not_valued`'s and `constants_ms` (TE-1).
+const CONSTANTS_OUTCOMES: [&str; 12] = [
+    "files",
+    "skipped",
+    "roots_missing",
+    "items",
+    "valued",
+    "matched/id",
+    "matched/alias",
+    "hyphenless",
+    "unmatched",
+    "ambiguous/two_records",
+    "ambiguous/two_items",
+    "marked",
+];
+
+/// The six `not_valued` categories: each non-zero in at least one fixture.
+const NOT_VALUED: [&str; 6] = [
+    "broken",
+    "macro",
+    "byte_string",
+    "escaped",
+    "multi_line",
+    "other",
+];
+
+/// RD-6, TE-1. M: an outcome zero in one fixture. Each outcome is non-zero
+/// in both constants fixtures' `expected.json`, each `not_valued` category
+/// in at least one, the invariants hold there, and neither pins a timing.
+#[test]
+fn every_constants_outcome_is_non_zero_in_both_fixtures() {
+    let mut categories = BTreeSet::new();
+    for name in CONSTANTS_FIXTURES {
+        let expected = read_json(&fixture_dir(name).join("expected.json"));
+        let result = &expected["result"];
+        let count = |path: &str| layout_count(result, path, name);
+        let zero: Vec<&str> = CONSTANTS_OUTCOMES
+            .iter()
+            .copied()
+            .filter(|&path| count(path) == 0)
+            .collect();
+        assert!(zero.is_empty(), "{name}: zero outcomes {zero:?}");
+        let mut not_valued = 0;
+        for category in NOT_VALUED {
+            let n = count(&format!("not_valued/{category}"));
+            if n > 0 {
+                categories.insert(category);
+            }
+            not_valued += n;
+        }
+        assert_eq!(
+            count("items"),
+            count("valued") + not_valued,
+            "{name}: items"
+        );
+        let classified = count("matched/id")
+            + count("matched/alias")
+            + count("hyphenless")
+            + count("unmatched")
+            + count("ambiguous/two_records")
+            + count("ambiguous/two_items");
+        assert_eq!(count("valued"), classified, "{name}: valued");
+        assert!(count("marked") <= count("valued"), "{name}: marked");
+        assert!(count("skipped") <= count("files"), "{name}: skipped");
+        assert_ne!(count("ambiguous/two_items"), 1, "{name}: two_items");
+        assert!(
+            result.get("constants_ms").is_none(),
+            "{name}: expected.json pins no timing"
+        );
+    }
+    assert_eq!(
+        categories.len(),
+        NOT_VALUED.len(),
+        "every not_valued category in at least one fixture: {categories:?}"
+    );
 }

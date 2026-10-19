@@ -1,0 +1,25 @@
+# Census config of the code-consts/two fixture (docs/features/constant-census.md
+# TE-1): an invented harbour-crane convention, unlike code-consts/one in each
+# rule. Records are `{#ID}` sections and bold list lead-ins under `manual/`,
+# two letters and four digits; `TS` checks are unique per document; `JB` is
+# the legacy prefix of `LD`; gusts and overloads are hyphenless, by two
+# patterns. Code: a directory root, two file roots (one of them also under the
+# directory) and a missing one, a `*` exclude glob, and `extensions` that
+# would leave no `.rs` file if they narrowed the census. expected.json is the
+# `result` of `specengine-eval constants --pilot fixtures/code-consts/two`
+# without `constants_ms`, and every detail row.
+[corpus]
+roots = ["manual"]
+[ids]
+regex = '^(?P<prefix>[A-Z]{2})-[0-9]{4}$'
+feature_prefixes = ["TS"]
+hyphenless = ['\bW[0-9]{2}\b', 'LOAD[0-9]+']
+[ids.legacy]
+"JB" = "LD"
+[lists]
+lead_in = true
+separators = [":"]
+[code]
+roots = ["panel", "winch/limits.rs", "panel/lifts.rs", "spare"]
+extensions = ["txt"]
+exclude = ["panel/legacy_*.rs"]

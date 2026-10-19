@@ -6,6 +6,8 @@
 //!
 //! `ra` exists only with feature `ra`; its cases run under
 //! `cargo nextest run -p specengine-eval --features ra --test label_cli`.
+//! `constants` (docs/features/constant-census.md: labels as `census`) runs
+//! over a copy of `fixtures/code-consts/one`.
 
 #![cfg(unix)]
 
@@ -40,6 +42,7 @@ fn subcommands() -> Vec<(&'static str, &'static str)> {
         ("check", "spec-a"),
         ("bevy-detector", "bevy-mini"),
         ("bevy", "bevy-mini"),
+        ("constants", "code-consts/one"),
     ];
     #[cfg(feature = "ra")]
     list.push(("ra", "ra-mini"));

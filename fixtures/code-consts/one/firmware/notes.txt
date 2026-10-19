@@ -1,0 +1,2 @@
+Not a Rust file: never listed, whatever it holds.
+pub const NOTE_PRESSURE: &str = "VLV-001";
