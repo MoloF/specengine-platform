@@ -22,6 +22,10 @@
 //! `cannot:` line is the first cause in that order; the base is read only
 //! when no other cause is present. A run with a cause judges no row.
 //!
+//! Each row with an entry shows its anchor (canon `spec-verify-anchors`,
+//! "Output"): a moved row its old place, an ambiguous one its candidates,
+//! in the text under the row and in the JSON, with `delta.bindings.moved`.
+//!
 //! The rows come from [`crate::verify_rows`]'s judge over the one walk;
 //! `--changed` reads `HEAD` through the same git session, the stricter of
 //! the current and `HEAD`'s modes applying. Plain, `enforce-introduced`
@@ -45,7 +49,7 @@ use std::fs;
 use serde::Serialize;
 use specengine_core::check::Mode;
 use specengine_core::drift::raises;
-use specengine_core::lock::{LOCK_FILE, LockLevel, key_problem};
+use specengine_core::lock::{EntryKey, LOCK_FILE, LockLevel, key_problem};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
 use specengine_core::{CodeConfig, ProjectConfig};
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
@@ -55,7 +59,7 @@ use crate::corpus::indexed;
 use crate::lock::{build_recipes, read_lock};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text, locate};
 use crate::verify_rows::{
-    CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
+    Anchor, CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
     IndexShare, Judged, Row, RunCause, Walked, judge_commit, judge_walk, read_commit, read_head,
 };
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
@@ -113,6 +117,33 @@ pub struct VerifyLevels {
     pub changed: Option<Vec<&'static str>>,
 }
 
+/// Where a row's binding is (canon `spec-verify-anchors`,
+/// "Anchors per row"): `state` `exact`, `moved`, `ambiguous` or `lost`;
+/// `from` a moved row's old place, `candidates` an ambiguous row's, in key
+/// order, else `null`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct VerifyAnchor {
+    pub state: &'static str,
+    pub from: Option<VerifyPlace>,
+    pub candidates: Option<Vec<VerifyPlace>>,
+}
+
+/// A binding's place as an anchor names it: its key without the node and
+/// relation, which are the row's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct VerifyPlace {
+    pub file: String,
+    pub kind: &'static str,
+    pub symbol: String,
+    pub item_kind: Option<String>,
+}
+
+/// The anchor states a row shows.
+const EXACT: &str = "exact";
+const MOVED: &str = "moved";
+const AMBIGUOUS: &str = "ambiguous";
+const LOST: &str = "lost";
+
 /// One row: a lock key (keyless: `kind`, `symbol`, `item_kind` null), its
 /// state, class and facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -140,6 +171,8 @@ pub struct VerifyRow {
     /// `None` without an entry or a bound marker, or with a marker's list
     /// malformed.
     pub levels: Option<VerifyLevels>,
+    /// `None` without an entry, or when the row cannot be verified.
+    pub anchor: Option<VerifyAnchor>,
     /// A keyless binding's word (`unanchored`, `cannot_verify`) and
     /// category, as the text prints them.
     #[serde(skip)]
@@ -719,6 +752,28 @@ pub(crate) fn shown(row: &Row) -> VerifyRow {
             markers: level_names(&levels.markers),
             changed: levels.changed.as_ref().map(level_names),
         }),
+        anchor: row.anchor.as_ref().map(|anchor| match anchor {
+            Anchor::Exact => VerifyAnchor {
+                state: EXACT,
+                from: None,
+                candidates: None,
+            },
+            Anchor::Moved(from) => VerifyAnchor {
+                state: MOVED,
+                from: Some(place(from)),
+                candidates: None,
+            },
+            Anchor::Ambiguous(candidates) => VerifyAnchor {
+                state: AMBIGUOUS,
+                from: None,
+                candidates: Some(candidates.iter().map(place).collect()),
+            },
+            Anchor::Lost => VerifyAnchor {
+                state: LOST,
+                from: None,
+                candidates: None,
+            },
+        }),
         keyless,
         resolved: row.resolved,
         key_problem: row
@@ -728,6 +783,21 @@ pub(crate) fn shown(row: &Row) -> VerifyRow {
             .and_then(key_problem)
             .map(|problem| problem.to_string()),
     }
+}
+
+/// A lock key's place, as an anchor shows it.
+fn place(key: &EntryKey) -> VerifyPlace {
+    VerifyPlace {
+        file: key.file.clone(),
+        kind: key.kind.as_str(),
+        symbol: key.symbol.clone(),
+        item_kind: key.item_kind.clone(),
+    }
+}
+
+/// The row's anchor state.
+fn anchor_state(row: &VerifyRow) -> Option<&'static str> {
+    row.anchor.as_ref().map(|anchor| anchor.state)
 }
 
 /// Levels' names, in their order.
@@ -866,16 +936,25 @@ const SAME_REVISION_STEP: &str = "the node's text changed at its locked revision
      accept; or `--editorial` for an editorial change (`spec lock accept <ID> --editorial`); \
      accept refuses text changed at a revision";
 
+/// The hint after the per-state ones when a row moved, `ok` too (canon
+/// `spec-verify-anchors`, "Output"): accept re-keys its entry.
+const MOVED_HINT: &str = "hint: moved: commit, then spec lock accept <ID> on a terminal locks the \
+     new key and drops the old";
+
 /// The hint after the others when a row is drift a queue item takes (task
 /// spec `drift-queue`, "report_drift and texts").
 const DRIFT_HINT: &str = "hint: drift: commit first; spec propose drift queues HEAD's drift for \
      the owner";
 
 /// One hint per state and category present (`unlocked key_problem` apart):
-/// the next step, as accept takes it; then, once, the drift hint when a row
-/// raises an item in a sweep (`drift::raises`, no node named).
+/// the next step, as accept takes it; then, once, the moved hint when a row
+/// moved; then, once, the drift hint when a row raises an item in a sweep
+/// (`drift::raises`, no node named).
 fn hints(rows: &[VerifyRow]) -> Vec<String> {
     let mut hints = state_hints(rows);
+    if rows.iter().any(|row| anchor_state(row) == Some(MOVED)) {
+        hints.push(MOVED_HINT.to_owned());
+    }
     let drifting = rows
         .iter()
         .any(|row| raises(row.state, row.detail.as_deref(), false));
@@ -991,13 +1070,26 @@ fn state_hints(rows: &[VerifyRow]) -> Vec<String> {
         .collect()
 }
 
-/// The text report: the non-`ok` rows in key order, the `cannot:` lines,
-/// the hints, the summary.
+/// The text report: the non-`ok` rows in key order, each followed by its
+/// moved row's old place or its ambiguous row's candidates, the `cannot:`
+/// lines, the hints, the summary.
 pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     let mut out = String::new();
     for row in outcome.rows.iter().filter(|row| row.class.is_some()) {
         out.push_str(&row_line(row));
         out.push('\n');
+        if let Some(anchor) = &row.anchor {
+            for (word, place) in anchor.from.iter().map(|from| ("moved from", from)).chain(
+                anchor
+                    .candidates
+                    .iter()
+                    .flatten()
+                    .map(|to| ("candidate", to)),
+            ) {
+                out.push_str(&place_line(word, place));
+                out.push('\n');
+            }
+        }
     }
     for cause in &outcome.cannot {
         out.push_str(&format!("cannot: {}\n", one_line(cause)));
@@ -1016,9 +1108,19 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     } else {
         String::new()
     };
+    let moved = outcome
+        .rows
+        .iter()
+        .filter(|row| row.class.is_none() && anchor_state(row) == Some(MOVED))
+        .count();
+    let moved = if moved > 0 {
+        format!(" ({moved} moved)")
+    } else {
+        String::new()
+    };
     out.push_str(&format!(
-        "verify: {}{mode}: {} fix, {} check{pre_existing}, {} cannot, {} ok; {} by blob, {} by \
-         ast; {} skipped\n",
+        "verify: {}{mode}: {} fix, {} check{pre_existing}, {} cannot, {} ok{moved}; {} by blob, \
+         {} by ast; {} skipped\n",
         outcome.verdict.as_str(),
         counts.fix,
         counts.check,
@@ -1029,6 +1131,18 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
         outcome.skipped
     ));
     escape_controls(&out)
+}
+
+/// A sub-line under a row: `  <word> <file> | <kind> <symbol>[
+/// <item_kind>]`.
+fn place_line(word: &str, place: &VerifyPlace) -> String {
+    let binding = keyed_binding(
+        Some(place.kind),
+        Some(&place.symbol),
+        place.item_kind.as_deref(),
+    )
+    .unwrap_or_default();
+    format!("  {word} {} | {binding}", one_line(&place.file))
 }
 
 /// A row's key in the JSON's `delta`.
@@ -1072,9 +1186,16 @@ struct CascadeJson {
     by_ast: usize,
 }
 
+/// A moved row in the JSON's `delta`: its entry's key and its own.
+#[derive(Serialize)]
+struct MovedJson<'a> {
+    from: KeyJson<'a>,
+    to: KeyJson<'a>,
+}
+
 #[derive(Serialize)]
 struct BindingsJson<'a> {
-    moved: Option<()>,
+    moved: Vec<MovedJson<'a>>,
     ambiguous: Vec<KeyJson<'a>>,
     lost: Vec<KeyJson<'a>>,
     stale: Vec<KeyJson<'a>>,
@@ -1140,15 +1261,34 @@ impl Serialize for VerifyOutcome {
             delta: DeltaJson {
                 symbols: None,
                 bindings: BindingsJson {
-                    moved: None,
+                    moved: introduced
+                        .iter()
+                        .filter_map(|row| {
+                            let from = row.anchor.as_ref()?.from.as_ref()?;
+                            Some(MovedJson {
+                                from: KeyJson {
+                                    node: &row.node,
+                                    relation: row.relation,
+                                    file: &from.file,
+                                    kind: Some(from.kind),
+                                    symbol: Some(&from.symbol),
+                                    item_kind: from.item_kind.as_deref(),
+                                },
+                                to: KeyJson::of(row),
+                            })
+                        })
+                        .collect(),
                     ambiguous: keys(&|row| {
-                        row.state == State::CannotVerify
+                        let symbol = row.state == State::CannotVerify
                             && row
                                 .category
                                 .as_deref()
-                                .is_some_and(|category| category.starts_with("ambiguous_"))
+                                .is_some_and(|category| category.starts_with("ambiguous_"));
+                        symbol || anchor_state(row) == Some(AMBIGUOUS)
                     }),
-                    lost: keys(&|row| row.state == State::BrokenBinding),
+                    lost: keys(&|row| {
+                        row.state == State::BrokenBinding && anchor_state(row) != Some(AMBIGUOUS)
+                    }),
                     stale: keys(&|row| {
                         row.state == State::CodeAhead || row.state == State::Conflict
                     }),

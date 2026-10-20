@@ -57,7 +57,7 @@ One `[[binding]]` per lockable marker binding; markers giving one key are one en
 | `item_kind` | items only: the tree-sitter kind |
 | `levels` | the markers' effective levels (no list: `sig, body`) united, canonical order `path, sig, body, deps` (`code-identity.md` "Marker grammar") |
 | `sig_hash`, `body_hash`, `deps_hash` | every kind and level, listed or not: `item_levels` (an inline `mod` by its `mod_item`), `module_levels` (`code-hash.md` "File module"); `ron` sig = body = the value hash, deps `empty_deps_digest()` (`code-hash-ron.md` "RON value") |
-| `skeleton_hash`, `quote_hash`, `body_bytes` | `item`, `module` only (`code-hash.md` "Fingerprints"; `body_bytes` a u32): for 5c, never compared or drift evidence |
+| `skeleton_hash`, `quote_hash`, `body_bytes` | `item`, `module` only (`code-hash.md` "Fingerprints"; `body_bytes` a u32): read by verify's pairing alone, never drift evidence |
 | `file_blob`, `commit` | the file's blob OID in HEAD's tree; HEAD's full OID |
 | `verified_by`, `verified_at` | `"owner"`, never a test run; `YYYY-MM-DD` |
 

@@ -7,8 +7,13 @@
 //! docs/features/lock-levels-verify.md TE-7: the determinism gains a
 //! levels scenario (a narrowed marker over a body edit, a `levels_changed`
 //! row) over the lock's entries reversed; every row's `levels` object
-//! keyed and ordered as **JSON** gives it.
+//! keyed and ordered as **JSON** gives it. docs/features/anchor-states.md
+//! TE-3: the determinism gains a moved and an ambiguous scenario over
+//! `fixtures/anchor-states` (two roots, the lock's entries reversed, a CRLF
+//! checkout under `core.autocrlf=true`); every row's `anchor` keyed as
+//! **JSON** gives it, `delta.bindings.moved` `[]` with no move.
 
+mod anchor_common;
 mod common;
 mod lock_common;
 mod verify_common;
@@ -242,6 +247,159 @@ fn verify_is_byte_identical_across_roots_and_order() {
             "no absolute path printed"
         );
     }
+    anchors_are_byte_identical();
+}
+
+/// TE-3's scenarios: a pure rename (`ok`, moved), equal-quote twins
+/// renamed (two ambiguous Fix rows), a rename with an edit (`code_ahead`,
+/// moved, its `moved from` line).
+const ANCHOR_SCENARIOS: [&str; 3] = [
+    "rename within the file",
+    "twins, equal quotes, both renamed",
+    "rename plus a local renamed (skeleton step)",
+];
+
+/// The files [`ANCHOR_SCENARIOS`] change; nothing else is locked in them.
+const ANCHOR_FILES: [&str; 3] = [
+    anchor_common::RENAME,
+    anchor_common::CLONES,
+    anchor_common::SKETCH,
+];
+
+/// `fixtures/anchor-states`' base at `<scratch>/<dir>`, [`ANCHOR_SCENARIOS`]
+/// applied and committed (the lock not accepted again).
+fn anchor_scenario(label: &str, dir: &str) -> LockRepo {
+    let repo = anchor_common::base_with(label, dir, |_| {});
+    for name in ANCHOR_SCENARIOS {
+        anchor_common::change(&repo, name);
+    }
+    repo.commit_all("moved and ambiguous");
+    repo
+}
+
+/// docs/features/anchor-states.md TE-3: over [`anchor_scenario`], a repeat
+/// run, another root (`elsewhere/deeper`), another cwd, the lock's entries
+/// reversed and a CRLF checkout of the changed files under
+/// `core.autocrlf=true` give the same bytes, text and JSON, plain and
+/// `--changed`. M: a follow decided by walk or entry order, a fingerprint
+/// read with its CR.
+fn anchors_are_byte_identical() {
+    let first = anchor_scenario("verify-det-anchor-a", "repo");
+    let second = anchor_scenario("verify-det-anchor-b", "elsewhere/deeper");
+    assert_eq!(second.head(), first.head(), "the same commits");
+
+    let reversed = clone_dir(&first, "reversed-anchor-lock");
+    let lock = fs::read_to_string(reversed.join("spec.lock")).expect("the lock");
+    let backwards = lock_common::rebase::reversed(&lock);
+    assert_ne!(backwards, lock, "the premise: the order differs");
+    fs::write(reversed.join("spec.lock"), &backwards).expect("the reversed lock");
+    first.git.git(&reversed, &["add", "spec.lock"]);
+    first.git.commit(&reversed, "the lock reversed");
+
+    let crlf = clone_dir(&first, "crlf-anchors");
+    first.git.git(&crlf, &["config", "core.autocrlf", "true"]);
+    for path in ANCHOR_FILES {
+        fs::remove_file(crlf.join(path)).expect("remove");
+        first.git.git(&crlf, &["checkout", "--", path]);
+        assert!(
+            fs::read(crlf.join(path))
+                .expect("checked out")
+                .windows(2)
+                .any(|pair| pair == b"\r\n"),
+            "CRLF in the worktree: {path}"
+        );
+    }
+    assert!(
+        first
+            .git
+            .git(
+                &crlf,
+                &["status", "--porcelain=v1", "-z", "--untracked-files=all"]
+            )
+            .is_empty(),
+        "clean under autocrlf"
+    );
+
+    for extra in [&[][..], &["--changed"][..]] {
+        let reference = verify(&first, extra);
+        assert_key_order(&reference);
+        let anchors: Vec<&Value> = reference
+            .rows()
+            .into_iter()
+            .map(|row| &row["anchor"]["state"])
+            .collect();
+        assert_eq!(
+            anchors.iter().filter(|state| **state == "moved").count(),
+            2,
+            "the premise: two moved rows {extra:?}\n{}",
+            reference.text.show()
+        );
+        assert_eq!(
+            anchors
+                .iter()
+                .filter(|state| **state == "ambiguous")
+                .count(),
+            2,
+            "the premise: two ambiguous rows {extra:?}\n{}",
+            reference.text.show()
+        );
+        assert!(
+            reference
+                .lines()
+                .iter()
+                .any(|line| line.starts_with("  moved from "))
+                && reference
+                    .lines()
+                    .iter()
+                    .any(|line| line.starts_with("  candidate ")),
+            "{}",
+            reference.text.show()
+        );
+        // Every anchor object keyed `state`, `from`, `candidates`; every
+        // place `file`, `kind`, `symbol`, `item_kind`; in that order.
+        let raw = &reference.json_run.stdout;
+        let objects = reference
+            .rows()
+            .into_iter()
+            .filter(|row| row["anchor"].is_object())
+            .count();
+        let opened: Vec<usize> = raw
+            .match_indices("\"anchor\":{")
+            .map(|(at, text)| at + text.len() - 1)
+            .collect();
+        assert_eq!(opened.len(), objects, "{raw}");
+        for open in opened {
+            assert_eq!(raw_order(raw, open), ["state", "from", "candidates"]);
+        }
+        for (at, text) in raw.match_indices("\"from\":{\"file\"") {
+            let open = at + "\"from\":".len();
+            assert!(text.ends_with("file\""));
+            assert_eq!(
+                raw_order(raw, open),
+                ["file", "kind", "symbol", "item_kind"]
+            );
+        }
+        let runs = [
+            ("a repeat run", verify(&first, extra)),
+            ("another root", verify(&second, extra)),
+            (
+                "another cwd",
+                verify_at(&second, &second.root.join("crates").join("sky"), extra),
+            ),
+            (
+                "the lock's entries reversed",
+                verify_at(&first, &reversed, extra),
+            ),
+            ("a CRLF checkout", verify_at(&first, &crlf, extra)),
+        ];
+        for (context, run) in runs {
+            assert_eq!(
+                bytes(&run),
+                bytes(&reference),
+                "anchors: {context} {extra:?}"
+            );
+        }
+    }
 }
 
 /// Every key of an object, recursively, as `path.key`.
@@ -394,7 +552,9 @@ fn verify_json_every_key_present() {
         object_keys(&json["delta"]["bindings"]),
         sorted(&["moved", "ambiguous", "lost", "stale"])
     );
-    assert_eq!(json["delta"]["bindings"]["moved"], Value::Null);
+    // docs/features/anchor-states.md "Output": `[]` when nothing moved,
+    // else `{"from", "to"}` pairs of six key fields each.
+    assert_eq!(json["delta"]["bindings"]["moved"], serde_json::json!([]));
     for list in ["ambiguous", "lost", "stale"] {
         for key in json["delta"]["bindings"][list].as_array().expect("a list") {
             assert_eq!(

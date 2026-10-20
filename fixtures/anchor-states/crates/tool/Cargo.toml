@@ -1,0 +1,9 @@
+# The flight planner of the anchor-states fixture: a binary alone until a
+# scenario adds its library. Parsed by the code walk, never built.
+[package]
+name = "tool"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

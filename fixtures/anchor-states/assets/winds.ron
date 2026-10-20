@@ -1,0 +1,5 @@
+// Wind tuning.
+Winds(
+    gust_cap: 12.5, // @configures KITE-WIND@1
+    calm_floor: 0.5,
+)

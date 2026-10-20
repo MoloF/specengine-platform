@@ -59,7 +59,7 @@ Two siblings of one struct or map whose segments render alike (cut at the cap, w
 
 ## Eval outputs
 
-`ast-hash` stdout: `detail.qpath_units` (items per unit kind: `primary`, `shared`, `unrooted` always, each Cargo kind met), `detail.targets_from` `{metadata, layout}` (package dirs). `--out` `manifest.json` files: `unit` (`"primary"`, `"bin:tool"`, `"shared:tests/common"`, `null` if unrooted), `targets` (`metadata | layout`, `null` outside a package). `ast-hash`'s `duplicate` keys items by undiscriminated `qpath` (`ast_hash/mod.rs`), so it counts in-file twins too.
+`ast-hash` stdout: `detail.qpath_units` (items per unit kind: `primary`, `shared`, `unrooted` always, each Cargo kind met), `detail.targets_from` `{metadata, layout}` (package dirs). `--out` `manifest.json` files: `unit` (`"primary"`, `"bin:tool"`, `"shared:tests/common"`, `null` if unrooted), `targets` (`metadata | layout`, `null` outside a package). `ast-hash`'s `duplicate` keys items by undiscriminated `qpath`, so it counts in-file twins too.
 
 `ron` stdout: `markers.ambiguous` (`{grammar: null, lexer}`; `nested` counts `Path` only), `markers.id_empty`, `markers.levels` `{default, declared, invalid}`, `detail.levels_invalid` `{<category>: n}`, `detail.colliding_groups`. `markers.json` rows: `levels` (the effective list, `["sig","body"]` for the default; `null` only when invalid), `levels_state` (`default`, `declared`, a category), `ambiguous` (`lexer` keeps the path text). The removed grammar path's fields stay: `false` / `null`, `recommendation` `lexer`.
 
@@ -71,13 +71,13 @@ v3 levels, fingerprints and the RON value hash (`result.levels`, `result.value_h
 
 ## Measured
 
-Pilots (read-only): A 0.2 % of 11 852 items ambiguous by the eval's count — `duplicate` 29 in 11 groups, each within one file, which `spec refs` now names apart; `path_attribute` 0. B 0.0 % — 2 of 7 599, 1 group within one file. Both all `metadata`, 0 unrooted. Phase 0, without units: 16.5–32.2 %.
+Pilots: A 0.2 % of 11 852 items ambiguous by the eval's count — `duplicate` 29 in 11 groups, each within one file, now named apart; `path_attribute` 0. B 0.0 % — 2 of 7 599, 1 group within one file. Both all `metadata`, 0 unrooted. Phase 0, without units: 16.5–32.2 %.
 
 ## Known limits
 
 - Under a deeper root modules count below `<n>/`: `src/bin/m/cli/args.rs` → `cli::args` (rustc `args`).
 - Several bins, none at `src/main.rs`, no lib → no primary (`default-run` unread).
-- A module of `src/main.rs` beside a lib is named a lib module; stray `src/` files are named modules; adding a lib renames `main.rs` items.
+- A module of `src/main.rs` beside a lib is named a lib module; stray `src/` files are named modules; adding a lib renames `main.rs` items (verify follows: `spec-verify-anchors.md`).
 - `#[path]` targets outside shared units stay `path_attribute`.
 - The kill reaches only the direct child: a `SPECENGINE_CARGO` wrapper that does not `exec` can leave a grandchild.
 - The scrub misses cargo's `path+file:///<root>` (stderr only).

@@ -1,0 +1,17 @@
+# Fixture corpus anchor-states (docs/features/anchor-states.md, TE-1): a
+# small kite-flying game crate (`crates/sky`: a library of systems), a
+# flight planner binary (`crates/tool`) and wind tuning data, one node per
+# scenario of the renamed or moved binding. Its prefixes and kinds are its
+# own; nothing in the core knows them. The tests copy it into a scratch
+# repository, accept its nodes (format 2), commit, then change it; the
+# expected rows: `expected.json`.
+
+[project]
+slug = "anchor-states"
+
+[ids]
+KITE = { kind = "glide",  shape = "name" }
+WISP = { kind = "breeze", width = 2 }
+
+[code]
+roots = ["crates", "assets"]

@@ -344,6 +344,20 @@ pub struct HashedRow<'a> {
     /// Never a file's blob OID: an edit beside the unit, a sibling RON
     /// value's or a neighbour item's, is the same drift.
     pub code: Option<&'a str>,
+    /// A moved row's old place (its anchor's `from`, canon
+    /// `spec-verify-anchors`, "Drift evidence"): the entry's key it was
+    /// judged against; `None` for every other row.
+    pub moved_from: Option<MovedFrom<'a>>,
+}
+
+/// The key a moved row's entry had: its `file`, `kind`, `symbol` and
+/// `item_kind` (its node and relation are the row's).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MovedFrom<'a> {
+    pub file: &'a str,
+    pub kind: &'a str,
+    pub symbol: &'a str,
+    pub item_kind: Option<&'a str>,
 }
 
 /// The bytes of a `drift_hash`: [`DRIFT_HASH_DOMAIN`], LF, then compact
@@ -352,8 +366,8 @@ pub struct HashedRow<'a> {
 /// detail, marker_revs, lock_rev, lock_spec_hash, lock_code,
 /// lock_file_blob, rev, norm_hash, code, moved_from]`. `marker_revs`:
 /// `null` (unversioned) first, the `@N` ascending, then `"bad"`;
-/// `moved_from` `null` (reserved for 5c's `anchor.from`, so the recipe
-/// stays `v1`).
+/// `moved_from` a moved row's `[file, kind, symbol, item_kind]`, else
+/// `null` (the recipe stays `v1`).
 pub fn drift_hash_input(rows: &[HashedRow<'_>]) -> String {
     let arrays: Vec<Value> = rows.iter().map(row_array).collect();
     format!("{DRIFT_HASH_DOMAIN}\n{}", Value::Array(arrays))
@@ -394,6 +408,13 @@ fn row_array(row: &HashedRow<'_>) -> Value {
         row.rev.map_or(Value::Null, Value::from),
         text(row.norm_hash),
         text(row.code),
-        Value::Null,
+        row.moved_from.map_or(Value::Null, |from| {
+            Value::Array(vec![
+                Value::from(from.file),
+                Value::from(from.kind),
+                Value::from(from.symbol),
+                text(from.item_kind),
+            ])
+        }),
     ])
 }

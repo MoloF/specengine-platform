@@ -136,22 +136,22 @@ The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/
 
 - Option `--deep`: hashes of called functions from the same crate are added, depth 1.
 
-**Following renames and moves — the anchor-state vocabulary of code-graph-rag (cgr)**, which agents already see via MCP. No need to invent our own:
+**Following renames and moves — the anchor-state vocabulary of code-graph-rag (cgr)**, which agents already see via MCP:
 
 | Anchor state | When |
 |---|---|
 | `EXACT` | marker in place, symbol found (reverting the edit returns the state to `EXACT`) |
-| `MOVED` (+ `moved_from`) | marker lost, but exactly one definition in the project matches by fingerprint; the binding follows it |
-| `AMBIGUOUS` (+ `candidates`) | several definitions match; the owner decides |
+| `MOVED` (+ `moved_from`) | a key gone, its marker on one new key of its node matching by fingerprint, one to one |
+| `AMBIGUOUS` (+ `candidates`) | several match, either side; the owner decides |
 | `LOST` | nothing found |
 
 cgr's `STALE` (body changed) is our `code_ahead`. The anchor state answers "where is the symbol"; `sync` (§5.3) answers "does the meaning still match".
 
-Following a rename and telling copies apart takes three fingerprints, not one (cgr technique; `code-hash.md` "Fingerprints"): `body` for drift, `skeleton` (survives a rename, coincides for copies), `quote` (tells copies with one skeleton apart); per-branch skeletons giving a change ratio are Phase 4. A body under the triviality threshold (`code-hash.md` "Triviality", limpet's 124 B) is **not followed**: "a missed follow heals as STALE, a false follow lies forever". A rename is detected as the pair "symbol vanished + a symbol with the same skeleton appeared in the same file" (one to one). With identical `qpath`s in one file a discriminator applies (`docs/canon/symbol-names.md` "Discriminator"), and resolution does not depend on row order in the DB.
+Following a rename and telling copies apart takes three fingerprints, not one (cgr technique; `code-hash.md` "Fingerprints"): `body` for drift, `skeleton` (survives a rename, coincides for copies), `quote` (tells copies with one skeleton apart); per-branch skeletons giving a change ratio are Phase 4. A body under the triviality threshold (`code-hash.md` "Triviality", limpet's 124 B) is **not followed**: "a missed follow heals as STALE, a false follow lies forever". A rename is "symbol vanished + a marked one with its body, or its skeleton in its file, appeared", one to one (`docs/canon/spec-verify-anchors.md`). With identical `qpath`s in one file a discriminator applies (`docs/canon/symbol-names.md` "Discriminator"), and resolution does not depend on row order in the DB.
 
 **`qpath` lookup** — through a suffix index from day one (stored: `docs/canon/symbol-index.md` "Tables"; the tiers: `docs/canon/symbol-reads.md` "Lookup"): in cgr a linear scan of the name registry ate 48 % CPU; the index sped this up 178–382×. `find_symbols` accepts both a name and `path:line` (returns the definitions covering the line, innermost first); ranking: exact → path suffix → same name. Every resolved link carries a resolution confidence (`exact | heuristic`), and destructive operations (rebinding, ID rename) **refuse** to act on a heuristic without an explicit flag.
 
-**Reply to every write** (cgr "structural delta" contract): `spec verify --json` returns `delta` `{symbols: {added, removed, renamed, changed}, bindings: {moved, ambiguous, lost, stale}, affected_nodes, tests_reaching}`, no `ms` (no timing in output); `symbols` from 7b, `moved` 5c, `tests_reaching` 7a (built: `docs/canon/spec-verify-output.md` "JSON"). No `spec check --base <ref>`: a project's pre-commit or CI runs `spec verify --changed`.
+**Reply to every write** (cgr "structural delta" contract): `spec verify --json` returns `delta` `{symbols: {added, removed, renamed, changed}, bindings: {moved, ambiguous, lost, stale}, affected_nodes, tests_reaching}`, no `ms` (no timing in output); `symbols` from 7b, `tests_reaching` 7a (built: `docs/canon/spec-verify-output.md` "JSON"). No `spec check --base <ref>`: a project's pre-commit or CI runs `spec verify --changed`.
 
 **Performance is not a concern** (research, several hundred kLOC, 14 cores): parse + hash ~112 MB/s with rayon and one `Parser` per thread (`thread_local!`); no caching or incremental parsing for the hash layer, the complexity goes into correctness (the code index re-derives only files whose key moved: `symbol-index.md` "Cache key and cross-file pass").
 
@@ -174,7 +174,7 @@ Following a rename and telling copies apart takes three fingerprints, not one (c
 | yes | no | `spec_ahead` | a `drift` item (`docs/canon/proposal-drift.md`): approve, `--editorial` for `same_revision`, or reject; a "bring code to spec" task: `reject --follow-up code` (`docs/canon/proposal-completion.md` "Reject") |
 | no | yes | `code_ahead` | a `drift` item: approve accepts the code (lock) or reject (`--follow-up code`: a task to fix the code; `--follow-up spec`: a task to propose a spec edit) |
 | yes | yes | `conflict` | UI: spec-section and symbol-span diffs since `lock.commit`, side by side |
-| — | symbol not found | `broken_binding` | marker removed or symbol renamed; a `drift` item, its approve locking what accept finds |
+| — | symbol not found | `broken_binding` | marker removed or symbol renamed, not followed (§5.2); a `drift` item, its approve locking what accept finds |
 | node accepted, no bindings | | `unbound` | `spec health` row 5, the nodes `[[health.bound]]` selects (`docs/canon/health-code.md`) |
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
 | unparseable / symbol ambiguous | | `cannot_verify` | **never counted as `ok`**; shown separately |

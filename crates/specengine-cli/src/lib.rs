@@ -378,8 +378,8 @@ pub use task::{
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
-    VerifiedTree, VerifyLevels, VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow,
-    verify,
+    VerifiedTree, VerifyAnchor, VerifyLevels, VerifyLock, VerifyMarker, VerifyOutcome, VerifyPlace,
+    VerifyRequest, VerifyRow, verify,
 };
 pub use verify_tests::{
     VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest, VerifyTestsRow,

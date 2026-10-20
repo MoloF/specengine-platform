@@ -20,10 +20,17 @@
 //! per changed level in its `drift_hash`'s `code`, whatever its kind, never
 //! a blob OID, and step 4's detail in place 9.
 //!
+//! docs/features/anchor-states.md RD-3 ("Drift evidence", M7): a moved
+//! row's `drift_hash` carries its entry's place in place 18
+//! (`moved_from`), its `lock_*` the entry's; a stored row holds verify's
+//! 17 keys, `anchor` included, which core's `DriftRow` view reads past
+//! (Q22).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
+mod anchor_common;
 mod common;
 mod drift_common;
 mod lock_common;
@@ -67,7 +74,7 @@ fn verify_rows(repo: &LockRepo, node: &str) -> Vec<Value> {
 
 /// An item's rows as stored (`DriftItem.stored_rows`: each row as `spec
 /// verify --json` writes it, docs/features/lock-levels-verify.md Q44),
-/// each checked to hold "Output"'s 16 keys in order.
+/// each checked to hold "Output"'s 17 keys in order.
 fn stored_rows(item: &DriftItem) -> Vec<Value> {
     item.stored_rows
         .iter()
@@ -83,7 +90,8 @@ fn stored_rows(item: &DriftItem) -> Vec<Value> {
 }
 
 /// An item's rows through core's read view (`DriftRow`), which reads past
-/// `levels` (Q44: no field): verify's rows without it.
+/// `levels` (Q44: no field) and `anchor` (docs/features/anchor-states.md
+/// Q22): verify's rows without them.
 fn view_rows(item: &DriftItem) -> Vec<Value> {
     item.evidence
         .rows
@@ -92,12 +100,15 @@ fn view_rows(item: &DriftItem) -> Vec<Value> {
         .collect()
 }
 
-/// `rows` without their `levels` key: what [`view_rows`] gives.
+/// `rows` without their `levels` and `anchor` keys: what [`view_rows`]
+/// gives.
 fn without_levels(rows: &[Value]) -> Vec<Value> {
     rows.iter()
         .map(|row| {
             let mut row = row.clone();
-            row.as_object_mut().expect("a row").remove("levels");
+            let object = row.as_object_mut().expect("a row");
+            object.remove("levels");
+            object.remove("anchor");
             row
         })
         .collect()
@@ -660,6 +671,7 @@ fn regen_drift_hash(repo: &LockRepo, detail: &str, code: &str) -> String {
         rev: Some(1),
         norm_hash: Some(&norm),
         code: Some(code),
+        moved_from: None,
     };
     specengine_store::b3_hash(drift_hash_input(&[row]).as_bytes())
 }
@@ -769,6 +781,115 @@ fn item_code_names_its_changed_levels() {
         assert_ne!(stored, whole, "{label}: a digest without its level");
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+// ------------------------------------------------- anchor-states RD-3
+
+/// docs/features/anchor-states.md RD-3, M7 (place 18 left null): over
+/// `fixtures/anchor-states`, `KITE-SKETCH`'s function renamed with a
+/// local renamed (the skeleton step), committed and raised: one item, its
+/// one row the merged `code_ahead code_changed body` row at the new key,
+/// `moved` from the old one, `anchor` stored as evidence; its
+/// `drift_hash` rebuilt by hand as [`regen_drift_hash`] builds one: the
+/// row's key, state and markers, the entry's `lock_*` ("`lock_*` are
+/// e's"), `code` `body:<the new body digest>` (through `item_levels`),
+/// and place 18 the entry's `[file, kind, symbol, item_kind]`, written
+/// into core's rendered input by hand; never the hash with place 18 null.
+#[test]
+fn moved_row_hash_carries_moved_from() {
+    const OLD: &str = "crates/sky::skeleton::tail_angle";
+    const NEW: &str = "crates/sky::skeleton::tail_pitch";
+    let repo = anchor_common::base("dr-anchor-moved");
+    anchor_common::change(&repo, "rename plus a local renamed (skeleton step)");
+    repo.commit_all("tail renamed, a local renamed");
+    let raised = raised(&repo, &["KITE-SKETCH"]);
+    let item = assert_item(
+        &repo,
+        &raised,
+        "anchor-states",
+        "KITE-SKETCH",
+        &["code_ahead code_changed"],
+    );
+    let drift = item.drift.expect("drift");
+    let rows = stored_rows(&drift);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(
+        (&rows[0]["symbol"], &rows[0]["detail"], &rows[0]["anchor"]),
+        (
+            &json!(NEW),
+            &json!("body"),
+            &json!({"state": "moved", "candidates": null, "from": {
+                "file": anchor_common::SKETCH, "kind": "item", "symbol": OLD,
+                "item_kind": "function_item"}})
+        )
+    );
+
+    let lock = repo.lock_text();
+    let blocks = lock_common::node_blocks(&lock, "KITE-SKETCH");
+    assert_eq!(blocks.len(), 1, "{lock}");
+    assert!(blocks[0].contains(&format!("\nsymbol = \"{OLD}\"\n")));
+    let field = |key: &str| {
+        blocks[0]
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{key} = ")))
+            .unwrap_or_else(|| panic!("no {key}"))
+            .trim_matches('"')
+            .to_owned()
+    };
+    let lock_code = blocks[0]
+        .lines()
+        .filter(|line| {
+            ["levels = ", "sig_hash = ", "body_hash = ", "deps_hash = "]
+                .iter()
+                .any(|prefix| line.starts_with(prefix))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (spec_hash, file_blob) = (field("spec_hash"), field("file_blob"));
+    let source = repo.show_blob(&repo.head(), anchor_common::SKETCH);
+    let text = String::from_utf8(source.clone()).expect("UTF-8");
+    let new = lock_common::item_code(
+        &source,
+        anchor_common::line_of(&text, "pub fn tail_pitch("),
+        "function_item",
+        &["sig", "body"],
+    );
+    let code = format!("body:{}", new.body);
+    let norm = repo.norm_hash("KITE-SKETCH");
+    let row = HashedRow {
+        node: "KITE-SKETCH",
+        relation: "implements",
+        file: anchor_common::SKETCH,
+        kind: Some("item"),
+        symbol: Some(NEW),
+        item_kind: Some("function_item"),
+        state: State::CodeAhead,
+        category: Some("code_changed"),
+        detail: Some("body"),
+        marker_revs: vec![MarkerRev::Written(1)],
+        entry: Some(HashedEntry {
+            rev: field("rev").parse().expect("a revision"),
+            spec_hash: &spec_hash,
+            code: Some(&lock_code),
+            file_blob: &file_blob,
+        }),
+        rev: Some(1),
+        norm_hash: Some(&norm),
+        code: Some(&code),
+        moved_from: None,
+    };
+    let unmoved = drift_hash_input(&[row]);
+    let (domain, arrays) = unmoved.split_once('\n').expect("the domain line");
+    let mut arrays: Value = serde_json::from_str(arrays).expect("the rows");
+    assert_eq!(arrays[0][17], Value::Null, "{unmoved}");
+    arrays[0][17] = json!([anchor_common::SKETCH, "item", OLD, "function_item"]);
+    let want = specengine_store::b3_hash(format!("{domain}\n{arrays}").as_bytes());
+    assert_eq!(drift.hash, want, "place 18 the entry's place");
+    assert_ne!(
+        drift.hash,
+        specengine_store::b3_hash(unmoved.as_bytes()),
+        "never null for a moved row"
+    );
 }
 
 // -------------------------------------------- lock-levels-verify RD-7

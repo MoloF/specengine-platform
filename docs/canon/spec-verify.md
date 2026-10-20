@@ -21,7 +21,7 @@ Closed: `mode`, `tests`, `timeout` (`spec-verify-tests.md`); another key, a wron
 
 ## Rows
 
-One row per lock key (`spec-lock.md` "Entry") from a lock entry or a marker binding of the walk; markers giving one key are one row. Keys come from accept's builder (CLI `lock::Target`): the canonical cited ID, never an alias. An unresolved ID (dangling, look-alike, ambiguous) keys on its ID part, without `@rev`: `X@2` and `X@3` on one item are one row, a gone node's leftover marker joins its entry's row; a bare `// @implements` has node `""`; a marker resolving to a node without an ID keys on its token and stays `unlocked`. A keyless marker (`unanchored`, a Rust `cannot_verify`) is one row per node, relation, file, state and category, without kind, symbol or item kind. Order: core `EntryKey`'s, keyless first. Skipped and counted: `queue`, `other_project` IDs. Mentions never make a row; nodes without bindings are not listed (Health rows 4-5).
+One row per lock key (`spec-lock.md` "Entry") from a lock entry or a marker binding of the walk; markers giving one key are one row. Keys come from accept's builder (CLI `lock::Target`): the canonical cited ID, never an alias. An unresolved ID (dangling, look-alike, ambiguous) keys on its ID part, without `@rev`: `X@2` and `X@3` on one item are one row, a gone node's leftover marker joins its entry's row; a bare `// @implements` has node `""`; a marker resolving to a node without an ID keys on its token and stays `unlocked`. A keyless marker (`unanchored`, a Rust `cannot_verify`) is one row per node, relation, file, state and category, without kind, symbol or item kind. Order: core `EntryKey`'s, keyless first. Skipped and counted: `queue`, `other_project` IDs. Mentions never make a row; nodes without bindings are not listed (Health rows 4-5). A followed rename or move is one row (`spec-verify-anchors.md`).
 
 ## States
 
@@ -47,7 +47,7 @@ Per row: R, H the node's revision and `norm_hash` (`norm_input` + `b3_hash` over
 
 ## Cascade
 
-Per bound row with an E, the first step that applies: (1) a marker's level list `Invalid`: not compared (`bad_marker bad_levels`); (2) the blob OID (on disk one `git hash-object --no-filters --stdin-paths`, never `-w`; at a commit its tree's) equals `file_blob`: no digest differs, nothing parsed, `compared` `blob`; (3) C = ∅ (both `[path]`): nothing parsed; an edit moves only `compared`, `blob` to null; (4) C's digests made as accept makes them (`spec-lock.md` "Entry"; CLI `lock.rs` `level_code`), each changed file parsed once from the walk's text (a `[deps]` RON value never drifts), against E's by core `changed_levels`, `compared` `ast`; refused: `cannot_verify`. Never the walk's item state, a fingerprint, `body_bytes` or a text level (05 s5.3's fallback passes an unparseable item). One code walk (`read_tree`) per call.
+Per bound row with an E, the first step that applies: (1) a marker's level list `Invalid`: not compared (`bad_marker bad_levels`); (2) the blob OID (on disk one `git hash-object --no-filters --stdin-paths`, never `-w`; at a commit its tree's) equals `file_blob`: no digest differs, nothing parsed, `compared` `blob`; (3) C = ∅ (both `[path]`): nothing parsed; an edit moves only `compared`, `blob` to null (a move: `spec-verify-anchors.md`); (4) C's digests made as accept makes them (`spec-lock.md` "Entry"; CLI `lock.rs` `level_code`), each changed file parsed once from the walk's text (a `[deps]` RON value never drifts), against E's by core `changed_levels`, `compared` `ast`; refused: `cannot_verify`. Never the walk's item state or a text level (05 s5.3's fallback passes an unparseable item); fingerprints, `body_bytes` only pair. One code walk (`read_tree`) per call.
 
 ## Base
 
@@ -75,5 +75,5 @@ A project hooking verify into its commits runs `spec verify --staged` under `enf
 ## Known limits
 
 - Under `ident` or LFS an expanded `$Id$` in a bound item, an LFS file read `code_ahead`: accept hashes `HEAD`'s raw blob, verify the disk.
-- A RON entry without its marker is `marker_gone`, never `symbol_gone` (the walk keeps comment anchors only). An unclosed `impl X {` before a locked fn re-parents it: `symbol_gone` plus `unlocked`, not exit 2. A stray line between a marker and its item is skipped by the binding.
+- A RON entry without its marker is `marker_gone`, never `symbol_gone` (the walk keeps comment anchors only). An unclosed `impl X {` before a locked fn re-parents it: `symbol_gone` plus `unlocked`, never followed (a broken file), not exit 2. A stray line between a marker and its item is skipped by the binding.
 - A grammar bump, a format-1 lock, or a bound item among the ~1 % of valid Rust tree-sitter-rust fails, holds exit 2 until `spec lock rebase` (`spec-lock-rebase.md`) or the marker moves; so does, once its blob changed, a bound module's or RON value's file with any error (accept refuses both). On adoption every binding is `unlocked`.

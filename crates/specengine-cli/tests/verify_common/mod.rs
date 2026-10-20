@@ -62,8 +62,9 @@ pub const TOP_KEYS: [&str; 9] = [
 ];
 
 /// The keys of a row, in order ("Output"; `levels` after `compared` since
-/// docs/features/lock-levels-verify.md "Level-aware verify", **JSON**).
-pub const ROW_KEYS: [&str; 16] = [
+/// docs/features/lock-levels-verify.md "Level-aware verify", **JSON**;
+/// `anchor` after `levels` since docs/features/anchor-states.md "Output").
+pub const ROW_KEYS: [&str; 17] = [
     "node",
     "relation",
     "file",
@@ -80,6 +81,7 @@ pub const ROW_KEYS: [&str; 16] = [
     "lock",
     "compared",
     "levels",
+    "anchor",
 ];
 
 /// The keys of a row's `levels` object, in order
@@ -431,7 +433,25 @@ pub fn row_json(key: Key<'_>, says: &Says<'_>) -> Value {
         "lock": says.lock,
         "compared": says.compared,
         "levels": says.levels,
+        "anchor": default_anchor(says),
     })
+}
+
+/// The `anchor` docs/features/anchor-states.md "Anchors per row" gives a
+/// row nothing renamed or moved: `null` without an entry or on
+/// `cannot_verify`; `exact` with an entry and a marker at its key; else
+/// (an entry, no binding at its key, not followed) `lost`. A moved or
+/// ambiguous row's anchor is the anchor tests' own.
+pub fn default_anchor(says: &Says<'_>) -> Value {
+    if says.lock.is_null() || says.state == "cannot_verify" {
+        return Value::Null;
+    }
+    let state = if says.markers.is_empty() {
+        "lost"
+    } else {
+        "exact"
+    };
+    json!({"state": state, "from": null, "candidates": null})
 }
 
 /// A row's `levels` object (docs/features/lock-levels-verify.md

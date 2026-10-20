@@ -73,10 +73,15 @@
 //!   (`docs/canon/spec-verify.md` "The `[verify]` table", "States",
 //!   "Verdict and exit"): the `[verify]` table read apart from the reads,
 //!   the row key, the judge over one row's facts from any source, the
-//!   classes and the verdict.
+//!   classes and the verdict;
+//! - [`anchor`] — the pairing of a renamed or moved binding with its old
+//!   lock entry (canon `spec-verify-anchors`, "The pairing"): opaque group
+//!   keys and fingerprint strings in, one follow per entry out, the
+//!   triviality threshold the caller's.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
+pub mod anchor;
 pub mod check;
 pub mod code_toml;
 pub mod create;

@@ -1,0 +1,1271 @@
+{
+  "about": "docs/features/anchor-states.md TE-1: per scenario every row's state, class and anchor. `baseline` holds the rows after every node but KITE-DECOY is accepted (format 2) and committed; a scenario's `rows` replace the rows of its `nodes`. A row's `levels` and `compared`, when given, are pinned too.",
+  "baseline": [
+    {
+      "node": "KITE-STEADY",
+      "relation": "implements",
+      "file": "crates/sky/src/steady.rs",
+      "kind": "item",
+      "symbol": "crates/sky::steady::hold_steady",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-RENAME",
+      "relation": "implements",
+      "file": "crates/sky/src/rename.rs",
+      "kind": "item",
+      "symbol": "crates/sky::rename::lift_force",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-DECOY",
+      "relation": "implements",
+      "file": "crates/sky/src/decoy.rs",
+      "kind": "item",
+      "symbol": "crates/sky::decoy::lift_echo",
+      "item_kind": "function_item",
+      "state": "unlocked",
+      "category": null,
+      "detail": null,
+      "class": "check",
+      "anchor": null
+    },
+    {
+      "node": "KITE-CARRY",
+      "relation": "implements",
+      "file": "crates/sky/src/carry.rs",
+      "kind": "item",
+      "symbol": "crates/sky::carry::drag_force",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-SKETCH",
+      "relation": "implements",
+      "file": "crates/sky/src/skeleton.rs",
+      "kind": "item",
+      "symbol": "crates/sky::skeleton::tail_angle",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-STRAY",
+      "relation": "implements",
+      "file": "crates/sky/src/stray.rs",
+      "kind": "item",
+      "symbol": "crates/sky::stray::gust_peak",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-TRIM",
+      "relation": "implements",
+      "file": "crates/sky/src/sized.rs",
+      "kind": "item",
+      "symbol": "crates/sky::sized::trim_exact",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-TRIM",
+      "relation": "implements",
+      "file": "crates/sky/src/sized.rs",
+      "kind": "item",
+      "symbol": "crates/sky::sized::trim_short",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-PAIR",
+      "relation": "implements",
+      "file": "crates/sky/src/twins.rs",
+      "kind": "item",
+      "symbol": "crates/sky::twins::pull_north",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-PAIR",
+      "relation": "implements",
+      "file": "crates/sky/src/twins.rs",
+      "kind": "item",
+      "symbol": "crates/sky::twins::pull_south",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-CLONE",
+      "relation": "implements",
+      "file": "crates/sky/src/clones.rs",
+      "kind": "item",
+      "symbol": "crates/sky::clones::gust_left",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-CLONE",
+      "relation": "implements",
+      "file": "crates/sky/src/clones.rs",
+      "kind": "item",
+      "symbol": "crates/sky::clones::gust_right",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-CONTEST",
+      "relation": "implements",
+      "file": "crates/sky/src/contest.rs",
+      "kind": "item",
+      "symbol": "crates/sky::contest::reel_high",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-CONTEST",
+      "relation": "implements",
+      "file": "crates/sky/src/contest.rs",
+      "kind": "item",
+      "symbol": "crates/sky::contest::reel_low",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-MARK",
+      "relation": "implements",
+      "file": "crates/sky/src/marker.rs",
+      "kind": "item",
+      "symbol": "crates/sky::marker::spin_rate",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-RIG",
+      "relation": "implements",
+      "file": "crates/sky/src/rig.rs",
+      "kind": "item",
+      "symbol": "crates/sky::rig::impl Rig",
+      "item_kind": "impl_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-GAUGE",
+      "relation": "implements",
+      "file": "crates/sky/src/gauge.rs",
+      "kind": "item",
+      "symbol": "crates/sky::gauge::impl Gauge #1",
+      "item_kind": "impl_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-GAUGE",
+      "relation": "implements",
+      "file": "crates/sky/src/gauge.rs",
+      "kind": "item",
+      "symbol": "crates/sky::gauge::impl Gauge #2",
+      "item_kind": "impl_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-WIND",
+      "relation": "configures",
+      "file": "assets/winds.ron",
+      "kind": "ron",
+      "symbol": "root.gust_cap",
+      "item_kind": null,
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-BANNER",
+      "relation": "implements",
+      "file": "crates/sky/src/banner.rs",
+      "kind": "module",
+      "symbol": "crates/sky::banner",
+      "item_kind": null,
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-TETHER",
+      "relation": "implements",
+      "file": "crates/sky/src/tether.rs",
+      "kind": "item",
+      "symbol": "crates/sky::tether::line_tension",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      },
+      "levels": {
+        "lock": [
+          "path"
+        ],
+        "markers": [
+          "path"
+        ],
+        "changed": null
+      }
+    },
+    {
+      "node": "KITE-TOOL",
+      "relation": "implements",
+      "file": "crates/tool/src/main.rs",
+      "kind": "item",
+      "symbol": "crates/tool::plan_rest",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-TOOL",
+      "relation": "implements",
+      "file": "crates/tool/src/main.rs",
+      "kind": "item",
+      "symbol": "crates/tool::plan_route",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-LAG",
+      "relation": "implements",
+      "file": "crates/sky/src/lag.rs",
+      "kind": "item",
+      "symbol": "crates/sky::lag::reel_speed",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "KITE-FOG",
+      "relation": "implements",
+      "file": "crates/sky/src/fog.rs",
+      "kind": "item",
+      "symbol": "crates/sky::fog::fog_density",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    },
+    {
+      "node": "WISP-01",
+      "relation": "implements",
+      "file": "crates/sky/src/breeze.rs",
+      "kind": "item",
+      "symbol": "crates/sky::breeze::breeze_push",
+      "item_kind": "function_item",
+      "state": "ok",
+      "category": null,
+      "detail": null,
+      "class": null,
+      "anchor": {
+        "state": "exact",
+        "from": null,
+        "candidates": null
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "rename within the file",
+      "nodes": [
+        "KITE-RENAME"
+      ],
+      "rows": [
+        {
+          "node": "KITE-RENAME",
+          "relation": "implements",
+          "file": "crates/sky/src/rename.rs",
+          "kind": "item",
+          "symbol": "crates/sky::rename::lift_power",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/rename.rs",
+              "kind": "item",
+              "symbol": "crates/sky::rename::lift_force",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          },
+          "compared": "ast",
+          "levels": {
+            "lock": [
+              "sig",
+              "body"
+            ],
+            "markers": [
+              "sig",
+              "body"
+            ],
+            "changed": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "move to another file, the old file kept",
+      "nodes": [
+        "KITE-CARRY"
+      ],
+      "rows": [
+        {
+          "node": "KITE-CARRY",
+          "relation": "implements",
+          "file": "crates/sky/src/haul.rs",
+          "kind": "item",
+          "symbol": "crates/sky::haul::drag_force",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/carry.rs",
+              "kind": "item",
+              "symbol": "crates/sky::carry::drag_force",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          },
+          "compared": "ast"
+        }
+      ]
+    },
+    {
+      "name": "rename plus a local renamed (skeleton step)",
+      "nodes": [
+        "KITE-SKETCH"
+      ],
+      "rows": [
+        {
+          "node": "KITE-SKETCH",
+          "relation": "implements",
+          "file": "crates/sky/src/skeleton.rs",
+          "kind": "item",
+          "symbol": "crates/sky::skeleton::tail_pitch",
+          "item_kind": "function_item",
+          "state": "code_ahead",
+          "category": "code_changed",
+          "detail": "body",
+          "class": "check",
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/skeleton.rs",
+              "kind": "item",
+              "symbol": "crates/sky::skeleton::tail_angle",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          },
+          "compared": "ast",
+          "levels": {
+            "lock": [
+              "sig",
+              "body"
+            ],
+            "markers": [
+              "sig",
+              "body"
+            ],
+            "changed": [
+              "body"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "move across files plus an edit",
+      "nodes": [
+        "KITE-STRAY"
+      ],
+      "rows": [
+        {
+          "node": "KITE-STRAY",
+          "relation": "implements",
+          "file": "crates/sky/src/haul.rs",
+          "kind": "item",
+          "symbol": "crates/sky::haul::gust_peak",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        },
+        {
+          "node": "KITE-STRAY",
+          "relation": "implements",
+          "file": "crates/sky/src/stray.rs",
+          "kind": "item",
+          "symbol": "crates/sky::stray::gust_peak",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "symbol_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "lost",
+            "from": null,
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "bodies of T-1 and T body_bytes, renamed",
+      "nodes": [
+        "KITE-TRIM"
+      ],
+      "rows": [
+        {
+          "node": "KITE-TRIM",
+          "relation": "implements",
+          "file": "crates/sky/src/sized.rs",
+          "kind": "item",
+          "symbol": "crates/sky::sized::trim_brief",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        },
+        {
+          "node": "KITE-TRIM",
+          "relation": "implements",
+          "file": "crates/sky/src/sized.rs",
+          "kind": "item",
+          "symbol": "crates/sky::sized::trim_level",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/sized.rs",
+              "kind": "item",
+              "symbol": "crates/sky::sized::trim_exact",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          }
+        },
+        {
+          "node": "KITE-TRIM",
+          "relation": "implements",
+          "file": "crates/sky/src/sized.rs",
+          "kind": "item",
+          "symbol": "crates/sky::sized::trim_short",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "symbol_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "lost",
+            "from": null,
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "twins, distinct quotes, both renamed",
+      "nodes": [
+        "KITE-PAIR"
+      ],
+      "rows": [
+        {
+          "node": "KITE-PAIR",
+          "relation": "implements",
+          "file": "crates/sky/src/twins.rs",
+          "kind": "item",
+          "symbol": "crates/sky::twins::tug_north",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/twins.rs",
+              "kind": "item",
+              "symbol": "crates/sky::twins::pull_north",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          }
+        },
+        {
+          "node": "KITE-PAIR",
+          "relation": "implements",
+          "file": "crates/sky/src/twins.rs",
+          "kind": "item",
+          "symbol": "crates/sky::twins::tug_south",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/twins.rs",
+              "kind": "item",
+              "symbol": "crates/sky::twins::pull_south",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "twins, equal quotes, both renamed",
+      "nodes": [
+        "KITE-CLONE"
+      ],
+      "rows": [
+        {
+          "node": "KITE-CLONE",
+          "relation": "implements",
+          "file": "crates/sky/src/clones.rs",
+          "kind": "item",
+          "symbol": "crates/sky::clones::gust_east",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        },
+        {
+          "node": "KITE-CLONE",
+          "relation": "implements",
+          "file": "crates/sky/src/clones.rs",
+          "kind": "item",
+          "symbol": "crates/sky::clones::gust_left",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "symbol_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "ambiguous",
+            "from": null,
+            "candidates": [
+              {
+                "file": "crates/sky/src/clones.rs",
+                "kind": "item",
+                "symbol": "crates/sky::clones::gust_east",
+                "item_kind": "function_item"
+              },
+              {
+                "file": "crates/sky/src/clones.rs",
+                "kind": "item",
+                "symbol": "crates/sky::clones::gust_west",
+                "item_kind": "function_item"
+              }
+            ]
+          }
+        },
+        {
+          "node": "KITE-CLONE",
+          "relation": "implements",
+          "file": "crates/sky/src/clones.rs",
+          "kind": "item",
+          "symbol": "crates/sky::clones::gust_right",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "symbol_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "ambiguous",
+            "from": null,
+            "candidates": [
+              {
+                "file": "crates/sky/src/clones.rs",
+                "kind": "item",
+                "symbol": "crates/sky::clones::gust_east",
+                "item_kind": "function_item"
+              },
+              {
+                "file": "crates/sky/src/clones.rs",
+                "kind": "item",
+                "symbol": "crates/sky::clones::gust_west",
+                "item_kind": "function_item"
+              }
+            ]
+          }
+        },
+        {
+          "node": "KITE-CLONE",
+          "relation": "implements",
+          "file": "crates/sky/src/clones.rs",
+          "kind": "item",
+          "symbol": "crates/sky::clones::gust_west",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        }
+      ]
+    },
+    {
+      "name": "a contested candidate",
+      "nodes": [
+        "KITE-CONTEST"
+      ],
+      "rows": [
+        {
+          "node": "KITE-CONTEST",
+          "relation": "implements",
+          "file": "crates/sky/src/contest.rs",
+          "kind": "item",
+          "symbol": "crates/sky::contest::reel_high",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "symbol_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "ambiguous",
+            "from": null,
+            "candidates": [
+              {
+                "file": "crates/sky/src/contest.rs",
+                "kind": "item",
+                "symbol": "crates/sky::contest::reel_mid",
+                "item_kind": "function_item"
+              }
+            ]
+          }
+        },
+        {
+          "node": "KITE-CONTEST",
+          "relation": "implements",
+          "file": "crates/sky/src/contest.rs",
+          "kind": "item",
+          "symbol": "crates/sky::contest::reel_low",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "symbol_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "ambiguous",
+            "from": null,
+            "candidates": [
+              {
+                "file": "crates/sky/src/contest.rs",
+                "kind": "item",
+                "symbol": "crates/sky::contest::reel_mid",
+                "item_kind": "function_item"
+              }
+            ]
+          }
+        },
+        {
+          "node": "KITE-CONTEST",
+          "relation": "implements",
+          "file": "crates/sky/src/contest.rs",
+          "kind": "item",
+          "symbol": "crates/sky::contest::reel_mid",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        }
+      ]
+    },
+    {
+      "name": "a marker moved, the old item stays",
+      "nodes": [
+        "KITE-MARK"
+      ],
+      "rows": [
+        {
+          "node": "KITE-MARK",
+          "relation": "implements",
+          "file": "crates/sky/src/marker.rs",
+          "kind": "item",
+          "symbol": "crates/sky::marker::spin_decay",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        },
+        {
+          "node": "KITE-MARK",
+          "relation": "implements",
+          "file": "crates/sky/src/marker.rs",
+          "kind": "item",
+          "symbol": "crates/sky::marker::spin_rate",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "marker_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "lost",
+            "from": null,
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "a locked impl gaining an unmarked in-file twin",
+      "nodes": [
+        "KITE-RIG"
+      ],
+      "rows": [
+        {
+          "node": "KITE-RIG",
+          "relation": "implements",
+          "file": "crates/sky/src/rig.rs",
+          "kind": "item",
+          "symbol": "crates/sky::rig::impl Rig #1",
+          "item_kind": "impl_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/rig.rs",
+              "kind": "item",
+              "symbol": "crates/sky::rig::impl Rig",
+              "item_kind": "impl_item"
+            },
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "an ordinal shift",
+      "nodes": [
+        "KITE-GAUGE"
+      ],
+      "rows": [
+        {
+          "node": "KITE-GAUGE",
+          "relation": "implements",
+          "file": "crates/sky/src/gauge.rs",
+          "kind": "item",
+          "symbol": "crates/sky::gauge::impl Gauge #1",
+          "item_kind": "impl_item",
+          "state": "broken_binding",
+          "category": "marker_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "lost",
+            "from": null,
+            "candidates": null
+          }
+        },
+        {
+          "node": "KITE-GAUGE",
+          "relation": "implements",
+          "file": "crates/sky/src/gauge.rs",
+          "kind": "item",
+          "symbol": "crates/sky::gauge::impl Gauge #2",
+          "item_kind": "impl_item",
+          "state": "code_ahead",
+          "category": "code_changed",
+          "detail": "body",
+          "class": "check",
+          "anchor": {
+            "state": "exact",
+            "from": null,
+            "candidates": null
+          }
+        },
+        {
+          "node": "KITE-GAUGE",
+          "relation": "implements",
+          "file": "crates/sky/src/gauge.rs",
+          "kind": "item",
+          "symbol": "crates/sky::gauge::impl Gauge #3",
+          "item_kind": "impl_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        }
+      ]
+    },
+    {
+      "name": "a RON path renamed",
+      "nodes": [
+        "KITE-WIND"
+      ],
+      "rows": [
+        {
+          "node": "KITE-WIND",
+          "relation": "configures",
+          "file": "assets/winds.ron",
+          "kind": "ron",
+          "symbol": "root.gust_cap",
+          "item_kind": null,
+          "state": "broken_binding",
+          "category": "marker_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "lost",
+            "from": null,
+            "candidates": null
+          }
+        },
+        {
+          "node": "KITE-WIND",
+          "relation": "configures",
+          "file": "assets/winds.ron",
+          "kind": "ron",
+          "symbol": "root.gust_limit",
+          "item_kind": null,
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        }
+      ]
+    },
+    {
+      "name": "a //! file renamed",
+      "nodes": [
+        "KITE-BANNER"
+      ],
+      "rows": [
+        {
+          "node": "KITE-BANNER",
+          "relation": "implements",
+          "file": "crates/sky/src/pennant.rs",
+          "kind": "module",
+          "symbol": "crates/sky::pennant",
+          "item_kind": null,
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/banner.rs",
+              "kind": "module",
+              "symbol": "crates/sky::banner",
+              "item_kind": null
+            },
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "a [path] binding moved",
+      "nodes": [
+        "KITE-TETHER"
+      ],
+      "rows": [
+        {
+          "node": "KITE-TETHER",
+          "relation": "implements",
+          "file": "crates/sky/src/spool.rs",
+          "kind": "item",
+          "symbol": "crates/sky::spool::line_tension",
+          "item_kind": "function_item",
+          "state": "code_ahead",
+          "category": "code_changed",
+          "detail": "path",
+          "class": "check",
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/tether.rs",
+              "kind": "item",
+              "symbol": "crates/sky::tether::line_tension",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          },
+          "compared": "ast",
+          "levels": {
+            "lock": [
+              "path"
+            ],
+            "markers": [
+              "path"
+            ],
+            "changed": [
+              "path"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "a rename by the manifest only (a lib added)",
+      "nodes": [
+        "KITE-TOOL"
+      ],
+      "rows": [
+        {
+          "node": "KITE-TOOL",
+          "relation": "implements",
+          "file": "crates/tool/src/main.rs",
+          "kind": "item",
+          "symbol": "crates/tool::bin:tool::plan_rest",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/tool/src/main.rs",
+              "kind": "item",
+              "symbol": "crates/tool::plan_rest",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          }
+        },
+        {
+          "node": "KITE-TOOL",
+          "relation": "implements",
+          "file": "crates/tool/src/main.rs",
+          "kind": "item",
+          "symbol": "crates/tool::bin:tool::plan_route",
+          "item_kind": "function_item",
+          "state": "ok",
+          "category": null,
+          "detail": null,
+          "class": null,
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/tool/src/main.rs",
+              "kind": "item",
+              "symbol": "crates/tool::plan_route",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "a lagging marker, renamed",
+      "nodes": [
+        "KITE-LAG"
+      ],
+      "rows": [
+        {
+          "node": "KITE-LAG",
+          "relation": "implements",
+          "file": "crates/sky/src/lag.rs",
+          "kind": "item",
+          "symbol": "crates/sky::lag::reel_pace",
+          "item_kind": "function_item",
+          "state": "spec_ahead",
+          "category": "marker_behind",
+          "detail": null,
+          "class": "check",
+          "anchor": {
+            "state": "moved",
+            "from": {
+              "file": "crates/sky/src/lag.rs",
+              "kind": "item",
+              "symbol": "crates/sky::lag::reel_speed",
+              "item_kind": "function_item"
+            },
+            "candidates": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "an ID renamed to an alias",
+      "nodes": [
+        "WISP-01"
+      ],
+      "rows": [
+        {
+          "node": "WISP-01",
+          "relation": "implements",
+          "file": "crates/sky/src/breeze.rs",
+          "kind": "item",
+          "symbol": "crates/sky::breeze::breeze_push",
+          "item_kind": "function_item",
+          "state": "broken_binding",
+          "category": "node_gone",
+          "detail": null,
+          "class": "fix",
+          "anchor": {
+            "state": "lost",
+            "from": null,
+            "candidates": null
+          }
+        },
+        {
+          "node": "WISP-02",
+          "relation": "implements",
+          "file": "crates/sky/src/breeze.rs",
+          "kind": "item",
+          "symbol": "crates/sky::breeze::breeze_push",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        }
+      ]
+    },
+    {
+      "name": "a symbol gone from a file with an orphan parse error",
+      "nodes": [
+        "KITE-FOG"
+      ],
+      "rows": [
+        {
+          "node": "KITE-FOG",
+          "relation": "implements",
+          "file": "crates/sky/src/fog.rs",
+          "kind": "item",
+          "symbol": "crates/sky::fog::fog_density",
+          "item_kind": "function_item",
+          "state": "cannot_verify",
+          "category": "hidden_by_error",
+          "detail": null,
+          "class": "cannot",
+          "anchor": null
+        },
+        {
+          "node": "KITE-FOG",
+          "relation": "implements",
+          "file": "crates/sky/src/fog.rs",
+          "kind": "item",
+          "symbol": "crates/sky::fog::fog_thickness",
+          "item_kind": "function_item",
+          "state": "unlocked",
+          "category": null,
+          "detail": null,
+          "class": "check",
+          "anchor": null
+        }
+      ]
+    }
+  ]
+}

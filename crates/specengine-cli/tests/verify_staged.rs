@@ -11,9 +11,14 @@
 //! The lock commits of `spec lock accept` and of a drift item's approve
 //! under a `spec verify --staged` hook: `drift_approve.rs`
 //! `lock_commit_under_spec_verify_hooks`.
+//!
+//! docs/features/anchor-states.md TE-2 (AC-15), the index: a pure rename
+//! staged under `enforce-introduced` passes `--staged` and its hook, over
+//! `fixtures/anchor-states` (`anchor_common`).
 
 #![cfg(unix)]
 
+mod anchor_common;
 mod common;
 mod lock_common;
 mod rev_rule_common;
@@ -28,7 +33,7 @@ use common::staged::GitLog;
 use lock_common::LockRepo;
 use rev_rule_common::{LOCK, commit_hooked, shown, spec_at};
 use serde_json::{Value, json};
-use verify_common::{ECS_LIB, MOVEMENT, STAMINA, STAMINA_MD, ecs, ecs_unlocked, verify};
+use verify_common::{ECS_LIB, MOVEMENT, STAMINA, STAMINA_MD, ecs, ecs_unlocked, set_mode, verify};
 
 /// `PERK-REGEN`'s system body changed: its row `code_ahead code_changed`.
 const REGEN_BODY: (&str, &str) = (
@@ -537,4 +542,49 @@ fn intent_to_add_lock_left_by_a_refused_accept_never_stops_the_next_commit() {
     assert!(output.status.success(), "{}", shown(&output));
     assert_ne!(repo.head(), head);
     assert_eq!(repo.changed(&repo.head()), ["docs/spec/movement.md"]);
+}
+
+// ------------------------------------------------- anchor-states TE-2
+
+/// docs/features/anchor-states.md TE-2 (AC-15), the index: a function
+/// renamed within its file (its body over the threshold) and staged,
+/// under `enforce-introduced`: `spec verify --staged` exits 0, the row `ok`
+/// and `moved`, no Fix; a project `pre-commit` hook running `spec verify
+/// --staged` lets the commit through. Before 5c: `broken_binding
+/// symbol_gone` introduced, exit 1, the commit refused. M: no pairing on
+/// the index's side.
+#[test]
+fn staged_pure_rename_passes_the_hook() {
+    let repo = anchor_common::base_with("anchor-staged", "repo", |repo| {
+        set_mode(&repo.root, "enforce-introduced");
+    });
+    anchor_common::change(&repo, "rename within the file");
+    repo.git(&["add", "--", anchor_common::RENAME]);
+    let run = verify(&repo, &["--staged"]);
+    assert_eq!(run.code(), 0, "{}", run.text.show());
+    assert_eq!(run.json["counts"]["fix"], 0, "{}", run.text.show());
+    let rows: Vec<&Value> = run.rows_where(|row| row["node"] == "KITE-RENAME");
+    assert_eq!(rows.len(), 1, "{}", run.text.show());
+    assert_eq!(
+        (
+            &rows[0]["symbol"],
+            &rows[0]["state"],
+            &rows[0]["anchor"]["state"]
+        ),
+        (
+            &json!("crates/sky::rename::lift_power"),
+            &json!("ok"),
+            &json!("moved")
+        )
+    );
+    let hook_home = repo.scratch.home("hook");
+    repo.hook(
+        "pre-commit",
+        &format!("HOME='{}' '{SPEC}' verify --staged", hook_home.display()),
+    );
+    let head = repo.head();
+    let output = commit_hooked(&repo, "lift renamed");
+    assert!(output.status.success(), "{}", shown(&output));
+    assert_ne!(repo.head(), head);
+    assert_eq!(repo.changed(&repo.head()), [anchor_common::RENAME]);
 }

@@ -1401,9 +1401,10 @@ fn lock_restore_commands_quote_the_path() {
 /// stored it: its `code_ahead` row (`CAP`) twice, first with its keys reversed (a
 /// non-alphabetical order, neither verify's nor the view's), then in
 /// verify's order; each with its own `levels` (stored as verify writes it
-/// since docs/features/lock-levels-verify.md, Q44: `code_changed body`)
-/// and 5c's `anchor` (a nested object) after it. Returns the column and
-/// the two rows' texts.
+/// since docs/features/lock-levels-verify.md, Q44: `code_changed body`),
+/// its `anchor` (stored since docs/features/anchor-states.md, S9: `exact`)
+/// and a later build's key holding a nested object after it. Returns the
+/// column and the two rows' texts.
 fn rows_of_a_later_build(repo: &LockRepo, id: &str) -> (String, [String; 2]) {
     let column = sql(
         repo,
@@ -1415,14 +1416,15 @@ fn rows_of_a_later_build(repo: &LockRepo, id: &str) -> (String, [String; 2]) {
                 \"file\":\"crates/tally/src/counter.rs\",\"kind\":\"item\",\
                 \"symbol\":\"crates/tally::counter::CAP\",";
     let tail = "\"compared\":\"ast\",\"levels\":{\"lock\":[\"sig\",\"body\"],\
-                \"markers\":[\"sig\",\"body\"],\"changed\":[\"body\"]}}";
+                \"markers\":[\"sig\",\"body\"],\"changed\":[\"body\"]},\
+                \"anchor\":{\"state\":\"exact\",\"from\":null,\"candidates\":null}}";
     let from = column
         .find(head)
         .unwrap_or_else(|| panic!("CAP's row: {column}"));
     let to = from
         + column[from..]
             .find(tail)
-            .unwrap_or_else(|| panic!("its end, `levels` last: {column}"))
+            .unwrap_or_else(|| panic!("its end, `anchor` last: {column}"))
         + tail.len();
     let row = &column[from..to];
     assert!(
@@ -1435,11 +1437,12 @@ fn rows_of_a_later_build(repo: &LockRepo, id: &str) -> (String, [String; 2]) {
     );
     let commit_at = row.find("\"commit\":\"").expect("its lock's commit") + 10;
     let commit = &row[commit_at..commit_at + 40];
-    let later = "\"anchor\":{\"to\":{\"line\":12,\"rev\":3},\"from\":null,\"n\":-1}";
+    let later = "\"later\":{\"to\":{\"line\":12,\"rev\":3},\"from\":null,\"n\":-1}";
     let in_order = format!("{},{later}}}", row.strip_suffix('}').expect("an object"));
     // The same row, its keys reversed (nested ones too).
     let reversed = format!(
-        "{{\"levels\":{{\"changed\":[\"body\"],\"markers\":[\"sig\",\"body\"],\
+        "{{\"anchor\":{{\"candidates\":null,\"from\":null,\"state\":\"exact\"}},\
+         \"levels\":{{\"changed\":[\"body\"],\"markers\":[\"sig\",\"body\"],\
          \"lock\":[\"sig\",\"body\"]}},\"compared\":\"ast\",\"lock\":{{\"verified_at\":\"2026-10-08\",\
          \"commit\":\"{commit}\",\"rev\":2}},\"node_rev\":2,\"markers\":[{{\"rev\":2,\
          \"line\":8}}],\"pre_existing\":true,\"class\":\"check\",\"detail\":\"body\",\
@@ -1492,7 +1495,7 @@ fn review_gives_the_rows_as_stored() {
         "drift.rows as stored:\n want {want}\n got  {json_text}"
     );
     assert_eq!(
-        document["drift"]["rows"][0]["anchor"]["to"]["line"],
+        document["drift"]["rows"][0]["later"]["to"]["line"],
         json!(12)
     );
     assert_eq!(document["drift"]["rows"][1]["markers"][0]["rev"], json!(2));

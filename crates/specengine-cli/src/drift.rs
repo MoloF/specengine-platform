@@ -48,7 +48,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 use specengine_core::check::canonical_id;
 use specengine_core::drift::{
-    DRIFT_ROWS_MAX, HashedEntry, HashedRow, drift_hash_input, drift_summary, raises,
+    DRIFT_ROWS_MAX, HashedEntry, HashedRow, MovedFrom, drift_hash_input, drift_summary, raises,
 };
 use specengine_core::intake::{IntakeSeverity, NODE_IDS_MAX};
 use specengine_core::lock::{LOCK_FILE, lock_code};
@@ -67,7 +67,9 @@ use crate::refs::Corpus;
 use crate::show::classify;
 use crate::task::bound_task;
 use crate::verify::{VerifyRow, shown};
-use crate::verify_rows::{CommitSide, Row, RunCause, commit_config, judge_commit, read_commit};
+use crate::verify_rows::{
+    Anchor, CommitSide, Row, RunCause, commit_config, judge_commit, read_commit,
+};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// Why a written `@rev` is ignored (the note's end).
@@ -615,7 +617,9 @@ struct StoredEvidence<'a> {
 
 /// A judged row as its item's hash covers it (no line, no time, no
 /// commit); `lock_code` its entry's code as core's `lock_code` gives it
-/// (format 2: `levels` and the three digests, no fingerprint).
+/// (format 2: `levels` and the three digests, no fingerprint); a moved
+/// row's old place its last fact (canon `spec-verify-anchors`,
+/// "Drift evidence").
 fn hashed_row<'a>(row: &'a Row, lock_code: Option<&'a str>) -> HashedRow<'a> {
     let (kind, symbol, item_kind) = match &row.key.binding {
         RowBinding::Keyed {
@@ -649,6 +653,15 @@ fn hashed_row<'a>(row: &'a Row, lock_code: Option<&'a str>) -> HashedRow<'a> {
         rev: row.node_rev,
         norm_hash: row.norm_hash.as_deref(),
         code: row.code.as_deref(),
+        moved_from: match &row.anchor {
+            Some(Anchor::Moved(from)) => Some(MovedFrom {
+                file: &from.file,
+                kind: from.kind.as_str(),
+                symbol: &from.symbol,
+                item_kind: from.item_kind.as_deref(),
+            }),
+            _ => None,
+        },
     }
 }
 

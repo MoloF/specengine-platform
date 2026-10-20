@@ -491,6 +491,7 @@ fn built_hash(
         rev: Some(rev),
         norm_hash: Some(&norm),
         code,
+        moved_from: None,
     };
     specengine_store::b3_hash(drift_hash_input(&[row]).as_bytes())
 }
