@@ -45,7 +45,7 @@ use std::fs;
 use serde::Serialize;
 use specengine_core::check::Mode;
 use specengine_core::drift::raises;
-use specengine_core::lock::{LOCK_FILE, key_problem};
+use specengine_core::lock::{LOCK_FILE, LockLevel, key_problem};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
 use specengine_core::{CodeConfig, ProjectConfig};
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
@@ -102,6 +102,17 @@ pub struct VerifyLock {
     pub verified_at: String,
 }
 
+/// A row's levels as judged (canon `spec-verify`, "States"): `lock` the
+/// entry's, `markers` its markers' effective levels united, `changed` the
+/// compared levels whose digest changed (`null` when no digest was
+/// compared), each in canonical order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct VerifyLevels {
+    pub lock: Vec<&'static str>,
+    pub markers: Vec<&'static str>,
+    pub changed: Option<Vec<&'static str>>,
+}
+
 /// One row: a lock key (keyless: `kind`, `symbol`, `item_kind` null), its
 /// state, class and facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -123,8 +134,12 @@ pub struct VerifyRow {
     /// The node's revision; `None` unknown or no node.
     pub node_rev: Option<u32>,
     pub lock: Option<VerifyLock>,
-    /// `blob`, `ast`; `None` without an entry or decided earlier.
+    /// `blob`, `ast`; `None` without an entry, decided earlier, or nothing
+    /// to compare (both sides `[path]`).
     pub compared: Option<&'static str>,
+    /// `None` without an entry or a bound marker, or with a marker's list
+    /// malformed.
+    pub levels: Option<VerifyLevels>,
     /// A keyless binding's word (`unanchored`, `cannot_verify`) and
     /// category, as the text prints them.
     #[serde(skip)]
@@ -699,6 +714,11 @@ pub(crate) fn shown(row: &Row) -> VerifyRow {
             verified_at: entry.verified_at.clone(),
         }),
         compared: judgement.compared.map(|compared| compared.as_str()),
+        levels: row.levels.as_ref().map(|levels| VerifyLevels {
+            lock: level_names(&levels.lock),
+            markers: level_names(&levels.markers),
+            changed: levels.changed.as_ref().map(level_names),
+        }),
         keyless,
         resolved: row.resolved,
         key_problem: row
@@ -708,6 +728,11 @@ pub(crate) fn shown(row: &Row) -> VerifyRow {
             .and_then(key_problem)
             .map(|problem| problem.to_string()),
     }
+}
+
+/// Levels' names, in their order.
+fn level_names<'a>(levels: impl IntoIterator<Item = &'a LockLevel>) -> Vec<&'static str> {
+    levels.into_iter().map(|level| level.as_str()).collect()
 }
 
 // ---------------------------------------------------------------- output

@@ -31,6 +31,12 @@ const REQUIRED_HINT: &str = "hint: required: spec.lock vouches for the old text:
      line shown and commit (a raise), or send the change through the queue (spec propose update) \
      and have the owner approve it with --editorial";
 
+/// The hint after `required` rows none of which has a line to write (each
+/// shows `-`): the queue is the only way out.
+const REQUIRED_EDITORIAL_HINT: &str = "hint: required: spec.lock vouches for the old text: send \
+     the change through the queue (spec propose update) and have the owner approve it with \
+     --editorial";
+
 /// The hint after `suggested` rows.
 const SUGGESTED_HINT: &str = "hint: suggested: raising it makes markers naming it lag";
 
@@ -129,8 +135,19 @@ pub(crate) fn render_text(outcome: &BumpOutcome) -> String {
     for cause in &outcome.cannot {
         out.push_str(&format!("cannot: {}\n", one_line(cause)));
     }
-    if outcome.rows.iter().any(|row| row.need == Need::Required) {
-        out.push_str(REQUIRED_HINT);
+    let mut required = outcome
+        .rows
+        .iter()
+        .filter(|row| row.need == Need::Required)
+        .peekable();
+    if required.peek().is_some() {
+        // A raise is a way out only where a line can be written.
+        let hint = if required.all(|row| row.write.is_none()) {
+            REQUIRED_EDITORIAL_HINT
+        } else {
+            REQUIRED_HINT
+        };
+        out.push_str(hint);
         out.push('\n');
     }
     if outcome.rows.iter().any(|row| row.need == Need::Suggested) {

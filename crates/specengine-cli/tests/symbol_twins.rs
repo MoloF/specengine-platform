@@ -24,7 +24,8 @@ use serde_json::Value;
 use common::{Scratch, snapshot, spec, write};
 use lock_common::{LockRepo, blocks, item_code, value};
 use verify_common::{
-    COUNTER, Key, STAMINA, Says, assert_row, ecs, golden, golden_lock, item, lock_entry, verify,
+    COUNTER, Key, STAMINA, Says, assert_row, ecs, golden, golden_lock, item, lock_entry,
+    same_levels, verify,
 };
 
 /// Says with no entry and no comparison.
@@ -44,6 +45,7 @@ fn says<'a>(
         node_rev,
         lock: Value::Null,
         compared: None,
+        levels: Value::Null,
     }
 }
 
@@ -150,6 +152,9 @@ fn marked_adjacent_impl_is_lockable() {
         &Says {
             lock: lock_entry(&lock, first),
             compared: Some("blob"),
+            // docs/features/lock-levels-verify.md "Level-aware verify":
+            // the default marker, locked under its levels, by blob.
+            levels: same_levels(&["sig", "body"]),
             ..says("ok", None, None, &[(22, Some(2))], Some(2))
         },
         None,
@@ -424,6 +429,7 @@ fn ecs_system_cfg_twins_lock_and_verify_clean() {
             &Says {
                 lock: lock_of(&lock, key),
                 compared: Some("blob"),
+                levels: same_levels(&["sig", "body"]),
                 ..says("ok", None, None, &[(line, Some(1))], Some(1))
             },
             None,

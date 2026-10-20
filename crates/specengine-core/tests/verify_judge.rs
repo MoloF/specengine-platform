@@ -4,16 +4,23 @@
 //! exit", Pre-existing, the row key's order, and the seam that the judge is
 //! neutral to where its facts came from. Each test names the mutation that
 //! turns it red (`M:`).
+//!
+//! docs/features/lock-levels-verify.md RD-5 ("Level-aware verify"): the
+//! pure level comparison (C = (L_lock union L_mark) minus `path`, step
+//! 4's changed levels in canonical order) and the judge's mapping of steps
+//! 2-4 to a category and a detail, over level names and digest strings
+//! alone; M6 (`sig` and `body` compared whatever the levels) turns
+//! `sig_marker_ignores_a_body_edit` red.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_core::ProjectConfig;
 use specengine_core::check::{CHECK_CODES, Mode};
-use specengine_core::lock::{EntryKey, LockKind, LockRelation, Verified, parse_lock};
+use specengine_core::lock::{EntryKey, LockKind, LockLevel, LockRelation, Verified, parse_lock};
 use specengine_core::verify::{
-    Class, CodeFact, Compared, Comparison, Finding, Judgement, MarkerFact, MarkerRev, NodeFact,
-    RowBinding, RowFacts, RowKey, State, Unbound, Verdict, VerifyConfig, is_pre_existing,
-    judge_row, verdict, verify_from_toml,
+    Class, CodeFact, Compared, Comparison, Finding, Judgement, LevelDigests, MarkerFact, MarkerRev,
+    NodeFact, RowBinding, RowFacts, RowKey, RowLevels, State, Unbound, Verdict, VerifyConfig,
+    changed_levels, is_pre_existing, judge_row, verdict, verify_from_toml,
 };
 
 const H1: &str = "b3:1111111111111111111111111111111111111111111111111111111111111111";
@@ -98,6 +105,40 @@ fn named(
         category.map(str::to_owned),
         detail.map(str::to_owned),
     )
+}
+
+/// Level names as a set.
+fn set(names: &[&str]) -> BTreeSet<LockLevel> {
+    names
+        .iter()
+        .map(|name| LockLevel::from_name(name).unwrap_or_else(|| panic!("no level {name}")))
+        .collect()
+}
+
+/// L_lock and L_mark by their names.
+fn row_levels(lock: &[&str], markers: &[&str]) -> RowLevels {
+    RowLevels {
+        lock: set(lock),
+        markers: set(markers),
+    }
+}
+
+/// The default on both sides: `sig`, `body`.
+fn same() -> RowLevels {
+    row_levels(&["sig", "body"], &["sig", "body"])
+}
+
+/// Step 2, the blob equal, the levels the same: unchanged by `blob`.
+fn by_blob() -> CodeFact {
+    CodeFact::Bound(Comparison::Blob(same()))
+}
+
+/// Step 4 over the default levels, `changed` the levels that differ.
+fn by_digests(changed: &[LockLevel]) -> CodeFact {
+    CodeFact::Bound(Comparison::Digests {
+        levels: same(),
+        changed: changed.to_vec(),
+    })
 }
 
 // --------------------------------------------------------------------- RD-1
@@ -209,7 +250,7 @@ fn cannot_verify_is_never_ok() {
         (
             RowFacts {
                 node: NodeFact::Ambiguous,
-                ..locked(CodeFact::Bound(Comparison::Equal(Compared::Blob)))
+                ..locked(by_blob())
             },
             "ambiguous_id",
             None,
@@ -220,7 +261,7 @@ fn cannot_verify_is_never_ok() {
                     rev: None,
                     hash: Some(H1.into()),
                 },
-                ..locked(CodeFact::Bound(Comparison::Equal(Compared::Blob)))
+                ..locked(by_blob())
             },
             "rev_unknown",
             None,
@@ -231,7 +272,7 @@ fn cannot_verify_is_never_ok() {
                     rev: Some(2),
                     hash: None,
                 },
-                ..locked(CodeFact::Bound(Comparison::Equal(Compared::Blob)))
+                ..locked(by_blob())
             },
             "hash_null",
             None,
@@ -363,7 +404,7 @@ fn states_apply_in_the_tables_order() {
             bad_levels: true,
             ..marker(MarkerRev::Written(2))
         }],
-        ..locked(CodeFact::Bound(Comparison::Equal(Compared::Blob)))
+        ..locked(by_blob())
     };
     assert_eq!(
         state(&facts),
@@ -416,8 +457,8 @@ fn states_apply_in_the_tables_order() {
 /// marker names R; lagging with equal hashes `ok`.
 #[test]
 fn comparison_states_follow_the_table() {
-    let equal = CodeFact::Bound(Comparison::Equal(Compared::Ast));
-    let changed = CodeFact::Bound(Comparison::Changed(Compared::Ast));
+    let equal = by_digests(&[]);
+    let changed = by_digests(&[LockLevel::Body]);
     let with = |node: NodeFact, markers: Vec<MarkerRev>, code: &CodeFact| RowFacts {
         node,
         markers: markers.into_iter().map(marker).collect(),
@@ -448,10 +489,10 @@ fn comparison_states_follow_the_table() {
             with(found(3, H2), vec![MarkerRev::Unversioned], &equal),
             named(State::SpecAhead, Some("spec_changed"), None),
         ),
-        // code changed, spec unchanged
+        // code changed, spec unchanged: the changed levels the detail
         (
             with(found(2, H1), vec![MarkerRev::Written(2)], &changed),
-            named(State::CodeAhead, Some("code_changed"), None),
+            named(State::CodeAhead, Some("code_changed"), Some("body")),
         ),
         // spec raised and a marker names R: code unchanged, then changed
         (
@@ -503,8 +544,10 @@ fn comparison_states_follow_the_table() {
 /// same facts give the same state whether the code was compared by the
 /// blob (4b's index OIDs) or by the item's hash (7a's indexed hash), and
 /// no field the source alone sets (the marker's line, the entry's commit,
-/// date, blob or hash) moves a state. M: facts from another source change
-/// a state.
+/// date, blob or hash) moves a state. Since docs/features/lock-levels-verify.md
+/// the one change both sources can carry is the levels' (`levels_changed`:
+/// L_lock differs from L_mark, by step 2 or step 4 alike). M: facts from
+/// another source change a state.
 #[test]
 fn judge_is_source_neutral() {
     let nodes = [found(2, H1), found(2, H2), found(3, H2), found(1, H1)];
@@ -521,10 +564,17 @@ fn judge_is_source_neutral() {
         for marks in &markers {
             for changed in [false, true] {
                 let code = |by: Compared| {
-                    CodeFact::Bound(if changed {
-                        Comparison::Changed(by)
+                    let levels = if changed {
+                        row_levels(&["sig", "body"], &["sig"])
                     } else {
-                        Comparison::Equal(by)
+                        same()
+                    };
+                    CodeFact::Bound(match by {
+                        Compared::Blob => Comparison::Blob(levels),
+                        Compared::Ast => Comparison::Digests {
+                            levels,
+                            changed: vec![],
+                        },
                     })
                 };
                 let base = RowFacts {
@@ -809,4 +859,342 @@ fn check_codes_stay_35() {
         CHECK_CODES.iter().all(|code| !code.contains("verify")),
         "{CHECK_CODES:?}"
     );
+}
+
+// ------------------------------------------- lock-levels-verify RD-5
+
+const S1: &str = "b3:5151515151515151515151515151515151515151515151515151515151515151";
+const S2: &str = "b3:5252525252525252525252525252525252525252525252525252525252525252";
+const B1: &str = "b3:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1";
+const B2: &str = "b3:b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2";
+const D1: &str = "b3:d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1";
+const D2: &str = "b3:d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2";
+
+/// `(sig, body, deps)` as one side's digests.
+fn digests<'a>((sig, body, deps): (&'a str, &'a str, &'a str)) -> LevelDigests<'a> {
+    LevelDigests { sig, body, deps }
+}
+
+/// What a judged row says: state, category, detail and `compared`.
+type Said = (State, Option<String>, Option<String>, Option<Compared>);
+
+fn said(
+    state: State,
+    category: Option<&str>,
+    detail: Option<&str>,
+    compared: Option<Compared>,
+) -> Said {
+    (
+        state,
+        category.map(str::to_owned),
+        detail.map(str::to_owned),
+        compared,
+    )
+}
+
+fn judged(code: CodeFact) -> Said {
+    let judged = judge_row(&locked(code));
+    (
+        judged.state,
+        judged.category,
+        judged.detail,
+        judged.compared,
+    )
+}
+
+/// Step 4 over level names and digest strings alone (docs/features/
+/// lock-levels-verify.md "Level-aware verify"): the pure comparison of C's
+/// digests (`changed_levels`), then the judge over its outcome, the spec
+/// side unchanged (the row `locked`: revision 2, `H1`, a marker `@2`).
+fn step_4(
+    lock: &[&str],
+    markers: &[&str],
+    entry: (&str, &str, &str),
+    now: (&str, &str, &str),
+) -> Said {
+    let levels = row_levels(lock, markers);
+    let changed = changed_levels(&levels, &digests(entry), &digests(now));
+    judged(CodeFact::Bound(Comparison::Digests { levels, changed }))
+}
+
+/// RD-5, M6: a `[sig]` marker, locked `[sig]`, over a body edit: C is
+/// `{sig}`, the body's digest is never compared, the row `ok` by `ast`;
+/// a signature edit still drifts it. M6: `sig` and `body` compared
+/// whatever the levels (the row `code_changed body`).
+#[test]
+fn sig_marker_ignores_a_body_edit() {
+    let sig = &["sig"][..];
+    assert_eq!(row_levels(sig, sig).compared(), set(sig));
+    assert_eq!(
+        changed_levels(
+            &row_levels(sig, sig),
+            &digests((S1, B1, D1)),
+            &digests((S1, B2, D2))
+        ),
+        []
+    );
+    assert_eq!(
+        step_4(sig, sig, (S1, B1, D1), (S1, B2, D1)),
+        said(State::Ok, None, None, Some(Compared::Ast))
+    );
+    assert_eq!(
+        step_4(sig, sig, (S1, B1, D1), (S2, B2, D1)),
+        said(
+            State::CodeAhead,
+            Some("code_changed"),
+            Some("sig"),
+            Some(Compared::Ast)
+        )
+    );
+}
+
+/// RD-5 (Q5): a marker narrowed to `[sig]` while the lock holds `sig,
+/// body`: C is the union, so a body edit is `code_changed body` until
+/// accept records the narrower set. M: L_mark alone compared (the edit
+/// hidden).
+#[test]
+fn narrowed_marker_with_a_body_edit_is_code_changed() {
+    let lock = &["sig", "body"][..];
+    let narrowed = &["sig"][..];
+    assert_eq!(row_levels(lock, narrowed).compared(), set(lock));
+    assert_eq!(
+        step_4(lock, narrowed, (S1, B1, D1), (S1, B2, D1)),
+        said(
+            State::CodeAhead,
+            Some("code_changed"),
+            Some("body"),
+            Some(Compared::Ast)
+        )
+    );
+    // No edit: the sets differ, every digest equal: `levels_changed`,
+    // L_lock -> L_mark, each whole.
+    assert_eq!(
+        step_4(lock, narrowed, (S1, B1, D1), (S1, B1, D1)),
+        said(
+            State::CodeAhead,
+            Some("levels_changed"),
+            Some("sig,body->sig"),
+            Some(Compared::Ast)
+        )
+    );
+}
+
+/// RD-5 (Q5, Q6): a marker widened to `sig, body` over a `[sig]` entry,
+/// no edit: the entry holds every level's digest, none differs, the sets
+/// do: `code_ahead levels_changed sig->sig,body`, class Check. A body edit
+/// under the widened marker is `code_changed body` (the entry's recorded
+/// `body` digest compared). M: a widened marker read `ok`.
+#[test]
+fn widened_marker_is_levels_changed() {
+    let lock = &["sig"][..];
+    let widened = &["sig", "body"][..];
+    let row = step_4(lock, widened, (S1, B1, D1), (S1, B1, D1));
+    assert_eq!(
+        row,
+        said(
+            State::CodeAhead,
+            Some("levels_changed"),
+            Some("sig->sig,body"),
+            Some(Compared::Ast)
+        )
+    );
+    assert_eq!(row.0.class(), Some(Class::Check));
+    assert_eq!(
+        step_4(lock, widened, (S1, B1, D1), (S1, B2, D1)),
+        said(
+            State::CodeAhead,
+            Some("code_changed"),
+            Some("body"),
+            Some(Compared::Ast)
+        )
+    );
+}
+
+/// RD-5 (Q42): both sides `[path]`: C is empty, nothing compared whatever
+/// the digests: the producer's step 3 (`Comparison::PathOnly`) reads `ok`,
+/// `compared` null. M: a `[path]` binding compared (`code_changed`), or
+/// given a `compared`.
+#[test]
+fn path_only_compares_nothing() {
+    let path = &["path"][..];
+    let levels = row_levels(path, path);
+    assert!(levels.compared().is_empty());
+    assert!(!levels.differ());
+    assert_eq!(
+        changed_levels(&levels, &digests((S1, B1, D1)), &digests((S2, B2, D2))),
+        []
+    );
+    assert_eq!(
+        judged(CodeFact::Bound(Comparison::PathOnly)),
+        said(State::Ok, None, None, None)
+    );
+    // `path` beside other levels is never compared, but it is named in a
+    // `levels_changed` detail.
+    assert_eq!(
+        row_levels(&["path", "sig"], &["sig"]).compared(),
+        set(&["sig"])
+    );
+    assert_eq!(
+        step_4(&["path", "sig"], &["sig"], (S1, B1, D1), (S1, B2, D2)),
+        said(
+            State::CodeAhead,
+            Some("levels_changed"),
+            Some("path,sig->sig"),
+            Some(Compared::Ast)
+        )
+    );
+}
+
+/// RD-5 (step 2): the blob equal to `file_blob`, nothing parsed: the same
+/// sets read `ok` by `blob`; L_lock and L_mark apart (an ID resolving to
+/// the node anew) `code_ahead levels_changed sig,body->sig` by `blob`. M:
+/// a `levels_changed` row needing a digest.
+#[test]
+fn blob_equal_with_other_levels_is_levels_changed_by_blob() {
+    assert_eq!(
+        judged(by_blob()),
+        said(State::Ok, None, None, Some(Compared::Blob))
+    );
+    assert_eq!(
+        judged(CodeFact::Bound(Comparison::Blob(row_levels(
+            &["sig", "body"],
+            &["sig"]
+        )))),
+        said(
+            State::CodeAhead,
+            Some("levels_changed"),
+            Some("sig,body->sig"),
+            Some(Compared::Blob)
+        )
+    );
+}
+
+/// RD-5: step 4's `changed` in canonical order (`path`, `sig`, `body`,
+/// `deps`), `,`-joined in the detail; `deps` only when in C; a RON value
+/// (`sig` = `body` = its value hash, `deps` the empty set's: Q46) changes
+/// `sig,body`, so a `[deps]` RON binding never drifts. M: `changed` in
+/// another order; `deps` compared outside C.
+#[test]
+fn changed_levels_follow_the_canonical_order() {
+    let all = &["sig", "body", "deps"][..];
+    assert_eq!(
+        changed_levels(
+            &row_levels(all, all),
+            &digests((S1, B1, D1)),
+            &digests((S2, B1, D2))
+        ),
+        [LockLevel::Sig, LockLevel::Deps]
+    );
+    assert_eq!(
+        step_4(all, all, (S1, B1, D1), (S1, B2, D2)).2.as_deref(),
+        Some("body,deps")
+    );
+    // A call added (body and deps changed) under the default: `body`.
+    assert_eq!(
+        step_4(
+            &["sig", "body"],
+            &["sig", "body"],
+            (S1, B1, D1),
+            (S1, B2, D2)
+        )
+        .2
+        .as_deref(),
+        Some("body")
+    );
+    // Two markers on one key, `[sig]` and `[deps]`: C `sig, deps`.
+    assert_eq!(
+        step_4(
+            &["sig", "deps"],
+            &["sig", "deps"],
+            (S1, B1, D1),
+            (S1, B2, D2)
+        )
+        .2
+        .as_deref(),
+        Some("deps")
+    );
+    // A RON value: sig = body = the value hash.
+    let (v1, v2, empty) = (S1, S2, D1);
+    assert_eq!(
+        step_4(
+            &["sig", "body"],
+            &["sig", "body"],
+            (v1, v1, empty),
+            (v2, v2, empty)
+        )
+        .2
+        .as_deref(),
+        Some("sig,body")
+    );
+    assert_eq!(
+        step_4(&["deps"], &["deps"], (v1, v1, empty), (v2, v2, empty)),
+        said(State::Ok, None, None, Some(Compared::Ast))
+    );
+}
+
+/// RD-5 with 4a's matrix: a level change is "code changed": the spec
+/// changed and raised reads `code_ahead raised`, changed and not raised
+/// `conflict`, neither carrying a detail; lagging with a level change is
+/// not lagging's row. M: `levels_changed` beside a spec change read
+/// `spec_ahead`.
+#[test]
+fn level_changes_follow_the_comparison_table() {
+    let narrowed = CodeFact::Bound(Comparison::Digests {
+        levels: row_levels(&["sig", "body"], &["sig"]),
+        changed: vec![],
+    });
+    let body = by_digests(&[LockLevel::Body]);
+    let with = |node: NodeFact, rev: MarkerRev, code: &CodeFact| {
+        let judged = judge_row(&RowFacts {
+            node,
+            markers: vec![marker(rev)],
+            ..locked(code.clone())
+        });
+        (
+            judged.state,
+            judged.category,
+            judged.detail,
+            judged.compared,
+        )
+    };
+    for code in [&narrowed, &body] {
+        assert_eq!(
+            with(found(3, H2), MarkerRev::Written(3), code),
+            said(State::CodeAhead, Some("raised"), None, Some(Compared::Ast))
+        );
+        assert_eq!(
+            with(found(2, H2), MarkerRev::Written(2), code),
+            said(State::Conflict, None, None, Some(Compared::Ast))
+        );
+        assert_eq!(
+            with(found(3, H2), MarkerRev::Written(2), code),
+            said(State::Conflict, None, None, Some(Compared::Ast))
+        );
+    }
+}
+
+/// RD-5 ("Pre-existing compares the category only"): a row whose detail
+/// moved (`code_changed body` at `HEAD`, `code_changed body,deps` now) is
+/// still Pre-existing; another category (`levels_changed`) is not. M: the
+/// detail compared.
+#[test]
+fn a_new_detail_is_not_introduced() {
+    let judged = |category: &str, detail: &str| Judgement {
+        state: State::CodeAhead,
+        category: Some(category.to_owned()),
+        detail: Some(detail.to_owned()),
+        compared: Some(Compared::Ast),
+    };
+    let mut head = BTreeMap::new();
+    head.insert(key(), judged("code_changed", "body"));
+    assert!(is_pre_existing(
+        &key(),
+        &judged("code_changed", "body,deps"),
+        &head
+    ));
+    assert!(!is_pre_existing(
+        &key(),
+        &judged("levels_changed", "sig,body->sig"),
+        &head
+    ));
 }

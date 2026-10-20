@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-20
 ---
 
 # Node revision and meaning hash
@@ -49,7 +49,7 @@ error  docs/spec/combat.md:14: rev-not-raised: `R-12` changed at rev 3, which sp
 required | R-12 | docs/spec/combat.md:14 | rev 3 -> 4 | 2 lock entries | ## Cost {#R-12 rev=4}
 ```
 
-  `rev ?` for an unreadable revision; `rev N` alone and `-` (JSON `to`, `write` null) where no raise can be written: `REV_MAX`, a document of a closed class admitting no `rev`, a line that cannot be written. Then `hint: required: …` (both ways out), `hint: suggested: raising it makes markers naming it lag`; none: `nothing to raise`. JSON `{rows: [{need, id, path, line, rev, to, lock_entries, write}]}`, `cannot` when not empty. Exit 0 when run; 2 on the check's causes (`cannot: <path>: <message>`); `--editorial` a usage error.
+  `rev ?` for an unreadable revision; `rev N` alone and `-` (JSON `to`, `write` null) where no raise can be written: `REV_MAX`, a document of a closed class admitting no `rev`, a line that cannot be written. Then `hint: required: …` (its ways out), `hint: suggested: raising it makes markers naming it lag`; none: `nothing to raise`. JSON `{rows: [{need, id, path, line, rev, to, lock_entries, write}]}`, `cannot` when not empty. Exit 0 when run; 2 on the check's causes (`cannot: <path>: <message>`); `--editorial` a usage error.
 
 ## The recipe
 

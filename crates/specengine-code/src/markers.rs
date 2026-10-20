@@ -135,7 +135,7 @@ pub enum Levels {
     Default,
     /// A well-formed list, in canonical order, without repeats.
     Declared(Vec<Level>),
-    /// A malformed list: the levels are untrusted (Phase 3: `cannot_verify`).
+    /// A malformed list: the levels are untrusted (`bad_levels`).
     Invalid(LevelError),
 }
 

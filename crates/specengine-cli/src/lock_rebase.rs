@@ -19,8 +19,8 @@
 //! 5. every entry's blob read by its OID in one session
 //!    ([`VerifyGit::read_blobs`]: raw, no filter, never fetched), never
 //!    `HEAD`'s tree, the index, the working tree or the entry's `commit`; a
-//!    blob parsed once however many entries name it (a parser panic or no
-//!    tree: exit 2 naming the file and the OID, nothing written);
+//!    blob parsed once however many entries name it (a panic re-deriving it
+//!    or no tree: exit 2 naming the file and the OID, nothing written);
 //! 6. each entry, in key order, located in its blob ("Location" below),
 //!    given its levels and hashed into format 2, or dropped with the first
 //!    reason that applies (core [`DropReason`]); core's [`plan_rebase`]
@@ -79,9 +79,9 @@ use specengine_store::{GitEnv, ObjectBlob, VerifyGit};
 
 use crate::corpus::indexed;
 use crate::lock::{
-    Hashed, LockConsent, LockOutcome, LockSubject, LockWritten, ReadLock, Repo, Target,
-    build_recipes, dirty_inputs, dirty_reason, git_error, level_code, lock_digest, lock_level,
-    read_lock_bytes, relation_of, write_and_commit,
+    Hashed, LockConsent, LockOutcome, LockSubject, ReadLock, Repo, Target, build_recipes,
+    dirty_inputs, dirty_reason, git_error, level_code, lock_digest, lock_level, read_lock_bytes,
+    relation_of, write_and_commit,
 };
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text};
 use crate::proposals::require_root_config;
@@ -159,9 +159,6 @@ pub struct RebaseOutcome {
     /// The rows' text still to print; `None` once the prompt showed it.
     #[serde(skip)]
     pub report: Option<String>,
-    /// What the run left written.
-    #[serde(skip)]
-    pub written: LockWritten,
 }
 
 impl RebaseOutcome {
@@ -179,7 +176,6 @@ impl RebaseOutcome {
             refusal: None,
             messages: Vec::new(),
             report: None,
-            written: LockWritten::None,
         }
     }
 
@@ -392,7 +388,6 @@ pub fn lock_rebase(
     outcome.commit = committed.commit;
     outcome.refusal = committed.refusal;
     outcome.report = committed.report;
-    outcome.written = committed.written;
     outcome.messages.extend(committed.messages);
     Ok(outcome)
 }
@@ -590,9 +585,10 @@ enum Found {
     },
 }
 
-/// The entries of one Rust blob, re-derived from it: parsed once (a panic
-/// or no tree: exit 2), named in no package, each entry located, its
-/// levels taken and its unit hashed, every item's levels in one call.
+/// The entries of one Rust blob, re-derived from it: parsed once (no tree:
+/// exit 2), named in no package, each entry located, its levels taken and
+/// its unit hashed, every item's levels in one call; a panic in any of it:
+/// exit 2, ``re-deriving `<file>` at blob <oid> failed``.
 fn rederive_rust(
     blob: &Blob<'_>,
     parser: &mut RustParser,
@@ -806,8 +802,9 @@ fn rederive_rust(
             "`{}` at blob {} cannot be parsed (the parser gave no tree); nothing written",
             blob.file, blob.oid
         ))),
+        // A panic parsing, binding, naming or hashing alike.
         Err(_) => Err(CliError::spec(format!(
-            "the Rust parser failed on `{}` at blob {}; nothing written",
+            "re-deriving `{}` at blob {} failed; nothing written",
             blob.file, blob.oid
         ))),
     }

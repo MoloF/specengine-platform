@@ -4,6 +4,10 @@
 //! timing; `spec verify` writes nothing under the root (the worktree,
 //! `.git`, `spec.lock` and its time stamp) and no queue row or event; and
 //! `spec check` is unchanged by drift, this repository's hook untouched.
+//! docs/features/lock-levels-verify.md TE-7: the determinism gains a
+//! levels scenario (a narrowed marker over a body edit, a `levels_changed`
+//! row) over the lock's entries reversed; every row's `levels` object
+//! keyed and ordered as **JSON** gives it.
 
 mod common;
 mod lock_common;
@@ -19,8 +23,8 @@ use lock_common::LockRepo;
 use serde_json::Value;
 use specengine_store::{ProposalFilter, ProposalQueue as _, SqliteQueue};
 use verify_common::{
-    COUNTER, COUNTER_MD, ROW_KEYS, STAMINA, TOP_KEYS, Verify, ecs, golden, golden_file, set_mode,
-    verify, verify_at,
+    COUNTER, COUNTER_MD, LEVELS_KEYS, ROW_KEYS, STAMINA, TOP_KEYS, Verify, clone_dir, ecs, golden,
+    golden_file, set_mode, verify, verify_at,
 };
 
 /// Drift of every kind over the golden, and a note: `CAP` and the RON cap
@@ -41,6 +45,26 @@ fn drift(repo: &LockRepo) {
     );
     repo.write("crates/tally/src/odd.rs", b"// \xff\n".as_slice());
     set_mode(&repo.root, "enforce-introduced");
+}
+
+/// docs/features/lock-levels-verify.md TE-7's levels scenario over the
+/// golden: `PIECE-COUNTER`'s `Tally` marker narrowed from `[sig, body]` to
+/// `[sig]` with its body edited (`code_ahead code_changed body`, the union
+/// with the lock's levels compared), and `GOAL-01`'s `Tally::value`
+/// marker widened from `[body]` to `[body, deps]`, its code unchanged
+/// (`code_ahead levels_changed body->body,deps`).
+fn levels_drift(repo: &LockRepo) {
+    repo.replace(
+        COUNTER,
+        "// @implements PIECE-COUNTER@3 [sig, body]",
+        "// @implements PIECE-COUNTER@3 [sig]",
+    );
+    repo.replace(COUNTER, "    count: u32,\n}", "    count: u64,\n}");
+    repo.replace(
+        COUNTER,
+        "// @implements AIM-01@1 [body] mutation",
+        "// @implements AIM-01@1 [body, deps] mutation",
+    );
 }
 
 /// The golden's lock written over `repo` (at its first commit) and
@@ -103,15 +127,20 @@ fn assert_key_order(run: &Verify) {
 /// TE-6 / RD-7: two roots (`repo`, `elsewhere/deeper`), another cwd (a
 /// subdirectory) and a copy made in reverse creation order give the same
 /// bytes on stdout and stderr, text and JSON, plain and `--changed`; a
-/// repeat run too; rows in key order. M: walk order (an order not the
-/// key's, a hash order).
+/// repeat run too; rows in key order. docs/features/lock-levels-verify.md
+/// TE-7: with [`levels_drift`] applied, and over a copy whose committed
+/// `spec.lock` holds the same entries reversed, byte-identical too. M:
+/// walk order (an order not the key's, a hash order); the lock's entry
+/// order read into the union or the `levels` object.
 #[test]
 fn verify_is_byte_identical_across_roots_and_order() {
     let first = golden("verify-det-a");
     drift(&first);
+    levels_drift(&first);
     let second = LockRepo::of("verify-det-b", "code-a", "elsewhere/deeper", &[]);
     lock_it(&second);
     drift(&second);
+    levels_drift(&second);
     assert_eq!(second.head(), first.head(), "the same commits");
 
     let third = LockRepo::uncommitted("verify-det-c");
@@ -128,7 +157,17 @@ fn verify_is_byte_identical_across_roots_and_order() {
     third.commit_all("the fixture");
     lock_it(&third);
     drift(&third);
+    levels_drift(&third);
     assert_eq!(third.head(), first.head(), "the same commits");
+
+    // The lock's entries reversed, committed alone over a copy of `first`.
+    let reversed = clone_dir(&first, "reversed-lock");
+    let lock = fs::read_to_string(reversed.join("spec.lock")).expect("the lock");
+    let backwards = lock_common::rebase::reversed(&lock);
+    assert_ne!(backwards, lock, "the premise: the order differs");
+    fs::write(reversed.join("spec.lock"), &backwards).expect("the reversed lock");
+    first.git.git(&reversed, &["add", "spec.lock"]);
+    first.git.commit(&reversed, "the lock reversed");
 
     for extra in [&[][..], &["--changed"][..]] {
         let reference = verify(&first, extra);
@@ -137,6 +176,48 @@ fn verify_is_byte_identical_across_roots_and_order() {
             "the scenario prints notes"
         );
         assert_key_order(&reference);
+        // The levels scenario's premise: a narrowed marker's body edit and
+        // a widened marker, as "Level-aware verify" step 4 gives them.
+        let tally = reference.row(
+            "PIECE-COUNTER",
+            "implements",
+            COUNTER,
+            Some("crates/tally::counter::Tally"),
+        );
+        assert_eq!(
+            (&tally["state"], &tally["category"], &tally["detail"]),
+            (
+                &Value::from("code_ahead"),
+                &Value::from("code_changed"),
+                &Value::from("body")
+            ),
+            "{}",
+            reference.text.show()
+        );
+        assert_eq!(
+            tally["levels"],
+            serde_json::json!({"lock": ["sig", "body"], "markers": ["sig"], "changed": ["body"]})
+        );
+        let value = reference.row(
+            "GOAL-01",
+            "implements",
+            COUNTER,
+            Some("crates/tally::counter::Tally::value"),
+        );
+        assert_eq!(
+            (&value["state"], &value["category"], &value["detail"]),
+            (
+                &Value::from("code_ahead"),
+                &Value::from("levels_changed"),
+                &Value::from("body->body,deps")
+            ),
+            "{}",
+            reference.text.show()
+        );
+        assert_eq!(
+            value["levels"],
+            serde_json::json!({"lock": ["body"], "markers": ["body", "deps"], "changed": []})
+        );
         let runs = [
             ("a repeat run", verify(&first, extra)),
             ("another root", verify(&second, extra)),
@@ -145,6 +226,10 @@ fn verify_is_byte_identical_across_roots_and_order() {
                 verify_at(&second, &second.root.join("crates").join("tally"), extra),
             ),
             ("reverse creation order", verify(&third, extra)),
+            (
+                "the lock's entries reversed",
+                verify_at(&first, &reversed, extra),
+            ),
         ];
         for (context, run) in runs {
             assert_eq!(bytes(&run), bytes(&reference), "{context} {extra:?}");
@@ -347,6 +432,41 @@ fn verify_json_every_key_present() {
         for marker in row["markers"].as_array().expect("markers") {
             assert_eq!(object_keys(marker), sorted(&["line", "rev"]));
         }
+        // docs/features/lock-levels-verify.md **JSON**: `levels` null
+        // without an entry or a bound marker; else its three keys, the
+        // level lists in canonical order, `changed` a list exactly when
+        // the digests were compared (`ast`).
+        let levels = &row["levels"];
+        if row["lock"].is_null() || row["markers"].as_array().is_some_and(Vec::is_empty) {
+            assert!(levels.is_null(), "{row}");
+        }
+        if !levels.is_null() {
+            assert_eq!(object_keys(levels), sorted(&LEVELS_KEYS), "{row}");
+            for list in ["lock", "markers"] {
+                let names: Vec<&str> = levels[list]
+                    .as_array()
+                    .unwrap_or_else(|| panic!("`levels.{list}` is a list: {row}"))
+                    .iter()
+                    .map(|name| name.as_str().expect("a level name"))
+                    .collect();
+                let rank = |name: &&str| {
+                    ["path", "sig", "body", "deps"]
+                        .iter()
+                        .position(|known| known == name)
+                        .unwrap_or_else(|| panic!("no level {name}: {row}"))
+                };
+                assert!(
+                    !names.is_empty()
+                        && names.windows(2).all(|pair| rank(&pair[0]) < rank(&pair[1])),
+                    "`levels.{list}` in canonical order: {row}"
+                );
+            }
+            assert_eq!(
+                levels["changed"].is_array(),
+                row["compared"] == "ast",
+                "`changed` a list iff compared by ast: {row}"
+            );
+        }
     }
     assert_eq!(
         seen.keys().copied().collect::<Vec<_>>(),
@@ -356,6 +476,9 @@ fn verify_json_every_key_present() {
     // The first row's keys in "Output"'s order.
     let rows_at = raw.find("\"rows\":[{").expect("rows") + "\"rows\":[".len();
     assert_eq!(raw_order(raw, rows_at), ROW_KEYS);
+    // The first `levels` object's keys in **JSON**'s order.
+    let levels_at = raw.find("\"levels\":{").expect("a levels object") + "\"levels\":".len();
+    assert_eq!(raw_order(raw, levels_at), LEVELS_KEYS);
     assert_eq!(
         raw_order(raw, value_at(raw, "delta")),
         ["symbols", "bindings", "affected_nodes", "tests_reaching"]

@@ -927,10 +927,19 @@ fn drift_review_has_no_preview() {
     for key in ["diff", "conflict", "base_text", "new_text", "revisions"] {
         assert_eq!(document[key], Value::Null, "{key}");
     }
+    // The rows as stored: verify's own rows, `levels` included
+    // (docs/features/lock-levels-verify.md Q44), not core's read view.
     assert_eq!(
         document["drift"],
-        json!({"hash": item.hash, "rows": item.evidence.rows, "more": item.evidence.more})
+        json!({"hash": item.hash, "rows": item.stored_rows, "more": item.evidence.more})
     );
+    for row in document["drift"]["rows"].as_array().expect("rows") {
+        assert!(
+            row.as_object()
+                .is_some_and(|row| row.contains_key("levels")),
+            "a stored row holds `levels`: {row}"
+        );
+    }
     assert!(
         json_text.contains(&format!(
             "\"drift\":{{\"hash\":\"{}\",\"rows\":[",
@@ -1391,8 +1400,10 @@ fn lock_restore_commands_quote_the_path() {
 /// The item's stored `drift` column rewritten as a later build could have
 /// stored it: its `code_ahead` row (`CAP`) twice, first with its keys reversed (a
 /// non-alphabetical order, neither verify's nor the view's), then in
-/// verify's order; each with 5b's `levels` and 5c's `anchor` (a nested
-/// object) after `compared`. Returns the column and the two rows' texts.
+/// verify's order; each with its own `levels` (stored as verify writes it
+/// since docs/features/lock-levels-verify.md, Q44: `code_changed body`)
+/// and 5c's `anchor` (a nested object) after it. Returns the column and
+/// the two rows' texts.
 fn rows_of_a_later_build(repo: &LockRepo, id: &str) -> (String, [String; 2]) {
     let column = sql(
         repo,
@@ -1403,26 +1414,35 @@ fn rows_of_a_later_build(repo: &LockRepo, id: &str) -> (String, [String; 2]) {
     let head = "{\"node\":\"LAW-BOUND\",\"relation\":\"configures\",\
                 \"file\":\"crates/tally/src/counter.rs\",\"kind\":\"item\",\
                 \"symbol\":\"crates/tally::counter::CAP\",";
-    let tail = "\"compared\":\"ast\"}";
+    let tail = "\"compared\":\"ast\",\"levels\":{\"lock\":[\"sig\",\"body\"],\
+                \"markers\":[\"sig\",\"body\"],\"changed\":[\"body\"]}}";
     let from = column
         .find(head)
         .unwrap_or_else(|| panic!("CAP's row: {column}"));
-    let to = from + column[from..].find(tail).expect("its end") + tail.len();
+    let to = from
+        + column[from..]
+            .find(tail)
+            .unwrap_or_else(|| panic!("its end, `levels` last: {column}"))
+        + tail.len();
     let row = &column[from..to];
+    assert!(
+        row.contains("\"category\":\"code_changed\",\"detail\":\"body\","),
+        "the detail stored: {row}"
+    );
     assert!(
         row.contains("\"markers\":[{\"line\":8,\"rev\":2}],\"node_rev\":2,"),
         "integers as written: {row}"
     );
     let commit_at = row.find("\"commit\":\"").expect("its lock's commit") + 10;
     let commit = &row[commit_at..commit_at + 40];
-    let later = "\"levels\":[\"sig\",\"body\"],\"anchor\":{\"to\":{\"line\":12,\"rev\":3},\
-                 \"from\":null,\"n\":-1}";
+    let later = "\"anchor\":{\"to\":{\"line\":12,\"rev\":3},\"from\":null,\"n\":-1}";
     let in_order = format!("{},{later}}}", row.strip_suffix('}').expect("an object"));
     // The same row, its keys reversed (nested ones too).
     let reversed = format!(
-        "{{\"compared\":\"ast\",\"lock\":{{\"verified_at\":\"2026-10-08\",\
+        "{{\"levels\":{{\"changed\":[\"body\"],\"markers\":[\"sig\",\"body\"],\
+         \"lock\":[\"sig\",\"body\"]}},\"compared\":\"ast\",\"lock\":{{\"verified_at\":\"2026-10-08\",\
          \"commit\":\"{commit}\",\"rev\":2}},\"node_rev\":2,\"markers\":[{{\"rev\":2,\
-         \"line\":8}}],\"pre_existing\":true,\"class\":\"check\",\"detail\":null,\
+         \"line\":8}}],\"pre_existing\":true,\"class\":\"check\",\"detail\":\"body\",\
          \"category\":\"code_changed\",\"state\":\"code_ahead\",\"item_kind\":\"const_item\",\
          \"symbol\":\"crates/tally::counter::CAP\",\"kind\":\"item\",\
          \"file\":\"crates/tally/src/counter.rs\",\"relation\":\"configures\",\
@@ -1449,8 +1469,8 @@ fn rows_of_a_later_build(repo: &LockRepo, id: &str) -> (String, [String; 2]) {
 /// RD-12, "Review, inbox, round, stage" (`drift` `{hash, rows, more}` as
 /// stored; Q-A): `spec review --json` gives `drift.rows` byte for byte as
 /// the column stores them: each row's keys in their stored order (one
-/// reversed, one in verify's), a later key and a nested object after
-/// `compared` kept, the integers (`line`, `rev`, `node_rev`, a negative
+/// reversed, one in verify's), its `levels` and a later key holding a
+/// nested object kept, the integers (`line`, `rev`, `node_rev`, a negative
 /// one) as written; the text prints the rows read (`drift: 2 row(s)`, 4a's
 /// form); a row with a known key `null` reads too. M: `StoredJson`
 /// sorting an object's keys; `StoredJson` dropping a key; the review's

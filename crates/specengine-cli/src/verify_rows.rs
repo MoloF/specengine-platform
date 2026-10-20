@@ -27,39 +27,50 @@
 //! - **Spec side**: R by [`revision`], H the `norm_hash` of a fresh parse
 //!   of the bytes read (`norm_input`, `b3_hash`), never the index's
 //!   column.
-//! - **Cascade**: a bound row with an entry (lock format 2, the only one a
-//!   code judge reads) compares the file's blob OID (on disk one
-//!   `hash-object` for every such file; at a commit its tree's OID); equal:
-//!   unchanged, nothing parsed; else a `module` or `ron` changed, an item's
-//!   file re-parsed from the walk's text and its levels made
-//!   (`item_levels`), `sig` and `body` compared with the entry's whatever
-//!   its levels (task spec `lock-levels`, "Verify on format 2"). The judge
-//!   gets the outcome; the row keeps the current fact a change was found by
-//!   (an item's changed levels, `<level>:<digest>`; a `module`'s or `ron`'s
-//!   blob), and the node's H.
+//! - **Cascade** (canon `spec-verify`, "States", "Cascade"): a bound row
+//!   with an entry (lock format 2, the only one a code judge reads) is
+//!   judged by its levels, L_lock the entry's, L_mark its markers' united,
+//!   C their union without `path`. A marker's list malformed: not
+//!   compared (`bad_marker bad_levels`). Then the file's blob OID (on disk
+//!   one `hash-object` for every such file; at a commit its tree's OID);
+//!   equal: nothing parsed, only the two sets compared. C empty: nothing
+//!   parsed or compared. Else C's digests made by accept's own functions,
+//!   each changed file parsed once from the walk's text: an item by
+//!   `item_levels` at its index, an inline `mod` at its `mod_item`'s, the
+//!   file's module by `module_levels`, a RON value by `value_hashes` paired
+//!   by its comment's range, rendered by `lock.rs`' `level_code`; core's
+//!   `changed_levels` names those that differ. The judge gets the outcome;
+//!   the row keeps the levels judged, the current fact a changed digest was
+//!   found by (`<level>:<digest>` per changed level, never a blob OID) and
+//!   the node's H.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::ops::Range;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use specengine_code::{
-    Digest, HashState, LevelState, Levels, MOD_KIND, RustParser, item_levels, markers_in,
+    HashState, LevelState, MOD_KIND, RonValues, RustParser, item_levels, markers_in, module_levels,
+    value_hashes,
 };
 use specengine_core::check::{CheckFile, CheckInput, Mode, canonical_id};
 use specengine_core::lock::{
-    EntryCode, HASH_PREFIX, LOCK_FILE, Lock, LockFormat, LockKind, LockLevel, Verified, parse_lock,
+    EntryCode, LOCK_FILE, LevelCode, Lock, LockKind, LockLevel, Verified, parse_lock,
 };
 use specengine_core::verify::{
-    CodeFact, Compared, Comparison, Judgement, MarkerFact, MarkerRev, NodeFact, RowBinding,
-    RowFacts, RowKey, Unbound, is_pre_existing, judge_row, verify_from_toml,
+    CodeFact, Compared, Comparison, Judgement, LevelDigests, MarkerFact, MarkerRev, NodeFact,
+    RowBinding, RowFacts, RowKey, RowLevels, Unbound, changed_levels, is_pre_existing, judge_row,
+    verify_from_toml,
 };
 use specengine_core::{CodeConfig, norm_input, revision};
 use specengine_store::{CommitEntryKind, CommitFile, CommitListing, VerifyGit, b3_hash};
 
 use crate::code_walk::{CodeTree, MANIFEST, ManifestSeen, RustFile, tree_of_blobs};
-use crate::lock::{Target, build_recipes, is_code_path, is_manifest, relation_of};
+use crate::lock::{
+    Hashed, Target, build_recipes, is_code_path, is_manifest, level_code, lock_level, relation_of,
+};
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::refs::{CANNOT_VERIFY, Corpus, IdState, NodeKey, UNANCHORED};
 
@@ -146,12 +157,25 @@ pub(crate) struct Row {
     pub entry: Option<Verified>,
     /// The row names one node.
     pub resolved: bool,
-    /// The cascade's current fact when it found a change: an item compared
-    /// changed by its levels, `<level>:<digest>` per changed level of
-    /// `sig`, `body`, `,`-joined in canonical order (`body:b3:…`); a
-    /// `module` or `ron` row changed by its blob, the blob's OID; else
-    /// `None`.
+    /// The levels judged; `None` without an entry or a bound marker, or
+    /// with a marker's list malformed.
+    pub levels: Option<JudgedLevels>,
+    /// The cascade's current fact on a row whose digests were compared
+    /// (`compared` `ast`) and found changed, any kind and state:
+    /// `<level>:<digest>` per changed level, this run's digest, `,`-joined
+    /// in canonical order (`body:b3:…,deps:b3:…`); else `None`. Never a
+    /// blob OID.
     pub code: Option<String>,
+}
+
+/// A bound row's levels as judged: L_lock, L_mark and, when C's digests
+/// were compared (`compared` `ast`), those that changed, in canonical
+/// order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct JudgedLevels {
+    pub lock: BTreeSet<LockLevel>,
+    pub markers: BTreeSet<LockLevel>,
+    pub changed: Option<Vec<LockLevel>>,
 }
 
 /// The rows of a walk, in key order, and the markers skipped.
@@ -241,14 +265,25 @@ enum NodeRef {
 /// What a row's markers bind.
 #[derive(Debug, Clone)]
 enum CodeRef {
-    /// A key's binding, not ambiguous: the item (Rust file and item
-    /// index) when it is one.
-    Bound {
-        item: Option<(usize, usize)>,
-    },
+    /// A key's binding, not ambiguous: the unit its digests are made of.
+    Bound(Unit),
     Ambiguous(&'static str),
     Unanchored(&'static str),
     ItemError(&'static str),
+}
+
+/// A bound unit, one variant per kind, as accept hashes it.
+#[derive(Debug, Clone)]
+enum Unit {
+    /// An item: its Rust file's index in the walk and its own.
+    Item { file: usize, index: usize },
+    /// An inline `mod`: its Rust file's index and its `mod_item`'s.
+    InlineMod { file: usize, index: usize },
+    /// A file's module: its Rust file's index.
+    FileModule { file: usize },
+    /// A RON value: its RON file's index and its comment's byte range, by
+    /// which its hash is paired.
+    Ron { file: usize, comment: Range<usize> },
 }
 
 /// A row before it is judged.
@@ -256,7 +291,22 @@ struct Building {
     node: Option<NodeRef>,
     code: Option<CodeRef>,
     markers: Vec<MarkerFact>,
+    /// L_mark: the markers' effective levels united (a malformed list adds
+    /// none; its marker's `bad_levels` stops the comparison).
+    levels: BTreeSet<LockLevel>,
     entry: Option<Verified>,
+}
+
+impl Building {
+    fn new() -> Self {
+        Self {
+            node: None,
+            code: None,
+            markers: Vec::new(),
+            levels: BTreeSet::new(),
+            entry: None,
+        }
+    }
 }
 
 /// Every row of one side, judged, and the markers skipped.
@@ -285,7 +335,20 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
                 continue;
             }
             let target = Target::of_rust(comment.binding, &file.binding.analysis, names, module);
-            let code_ref = code_ref(&target, Some(index));
+            let code_ref = code_ref(&target, || match &target {
+                Target::Item { index: item, .. } => Unit::Item {
+                    file: index,
+                    index: *item,
+                },
+                Target::Module {
+                    item: Some(item), ..
+                } => Unit::InlineMod {
+                    file: index,
+                    index: *item,
+                },
+                // The file's module: a Rust comment binds no RON value.
+                _ => Unit::FileModule { file: index },
+            });
             for marker in &markers {
                 let found = MarkerAt {
                     marker,
@@ -309,7 +372,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             }
         }
     }
-    for file in &side.tree.ron {
+    for (index, file) in side.tree.ron.iter().enumerate() {
         let lines = LineStarts::new(&file.text);
         for anchor in &file.anchors {
             let Some(text) = file.text.get(anchor.comment.clone()) else {
@@ -320,7 +383,10 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
                 continue;
             }
             let target = Target::of_ron(&anchor.anchor);
-            let code_ref = code_ref(&target, None);
+            let code_ref = code_ref(&target, || Unit::Ron {
+                file: index,
+                comment: anchor.comment.clone(),
+            });
             for marker in &markers {
                 let found = MarkerAt {
                     marker,
@@ -339,16 +405,11 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
     for (key, verified) in &side.lock.entries {
         building
             .entry(RowKey::of_entry(key))
-            .or_insert_with(|| Building {
-                node: None,
-                code: None,
-                markers: Vec::new(),
-                entry: None,
-            })
+            .or_insert_with(Building::new)
             .entry = Some(verified.clone());
     }
 
-    let comparisons = cascade(side, &building)?;
+    let mut comparisons = cascade(side, &building)?;
     let canonical = canonical_nodes(&corpus, project);
     let mut spec_side: BTreeMap<NodeKey, (Option<u32>, Option<String>)> = BTreeMap::new();
     let mut rows = Vec::with_capacity(building.len());
@@ -386,15 +447,16 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             NodeRef::Dangling => (NodeFact::Dangling, None, None),
         };
         let resolved = matches!(node, NodeRef::Found(_));
-        let mut current = None;
+        let mut cascaded = None;
         let code_fact = match &row.code {
             Some(CodeRef::Ambiguous(reason)) => CodeFact::Ambiguous((*reason).to_owned()),
             Some(CodeRef::Unanchored(category)) => CodeFact::Unanchored((*category).to_owned()),
             Some(CodeRef::ItemError(category)) => CodeFact::ItemError((*category).to_owned()),
-            Some(CodeRef::Bound { .. }) => CodeFact::Bound(match comparisons.get(&key) {
-                Some((comparison, fact)) => {
-                    current.clone_from(fact);
-                    comparison.clone()
+            Some(CodeRef::Bound(_)) => CodeFact::Bound(match comparisons.remove(&key) {
+                Some(found) => {
+                    let comparison = found.comparison.clone();
+                    cascaded = Some(found);
+                    comparison
                 }
                 None => Comparison::NotHashed,
             }),
@@ -407,21 +469,44 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             markers: row.markers,
             code: code_fact,
         };
-        rows.push(judged(facts, node_rev, norm_hash, current, resolved));
+        rows.push(judged(facts, node_rev, norm_hash, cascaded, resolved));
     }
     rows.sort_by(|a, b| a.key.cmp(&b.key));
     Ok((rows, skipped))
 }
 
-/// A row judged.
+/// A row judged; `cascaded` its cascade's outcome when it was bound and
+/// had an entry to compare. Its changed levels and current fact are kept
+/// only when the judge compared C's digests (`compared` `ast`): a state
+/// decided before that compares nothing.
 fn judged(
     facts: RowFacts,
     node_rev: Option<u32>,
     norm_hash: Option<String>,
-    code: Option<String>,
+    cascaded: Option<Cascaded>,
     resolved: bool,
 ) -> Row {
     let judgement = judge_row(&facts);
+    let by_digests = judgement.compared == Some(Compared::Ast);
+    let (levels, code) = match cascaded {
+        Some(Cascaded {
+            comparison,
+            levels,
+            code,
+        }) => {
+            let changed = match comparison {
+                Comparison::Digests { changed, .. } if by_digests => Some(changed),
+                _ => None,
+            };
+            let levels = JudgedLevels {
+                lock: levels.lock,
+                markers: levels.markers,
+                changed,
+            };
+            (Some(levels), code.filter(|_| by_digests))
+        }
+        None => (None, None),
+    };
     Row {
         key: facts.key,
         judgement,
@@ -431,6 +516,7 @@ fn judged(
         norm_hash,
         entry: facts.entry,
         resolved,
+        levels,
         code,
     }
 }
@@ -494,18 +580,13 @@ fn add(
     code: CodeRef,
     found: &MarkerAt<'_>,
 ) {
-    let row = building.entry(key).or_insert_with(|| Building {
-        node: None,
-        code: None,
-        markers: Vec::new(),
-        entry: None,
-    });
+    let row = building.entry(key).or_insert_with(Building::new);
     if row.node.is_none() {
         row.node = Some(node);
     }
     // An ambiguous binding of any marker makes the row's.
     match (&row.code, &code) {
-        (None, _) | (Some(CodeRef::Bound { .. }), CodeRef::Ambiguous(_)) => row.code = Some(code),
+        (None, _) | (Some(CodeRef::Bound(_)), CodeRef::Ambiguous(_)) => row.code = Some(code),
         _ => {}
     }
     let marker = found.marker;
@@ -515,23 +596,27 @@ fn add(
     } else {
         marker.rev.map_or(MarkerRev::Bad, MarkerRev::Written)
     };
+    // Its effective levels (no list: `sig`, `body`) join L_mark; a
+    // malformed list has none.
+    let effective = marker.levels.effective();
+    if let Some(levels) = effective {
+        row.levels.extend(levels.iter().copied().map(lock_level));
+    }
     row.markers.push(MarkerFact {
         line: found.line,
         rev,
-        bad_levels: matches!(marker.levels, Levels::Invalid(_)),
+        bad_levels: effective.is_none(),
     });
 }
 
-/// What a target gives a row's code side; `rust`: the Rust file's index.
-fn code_ref(target: &Target, rust: Option<usize>) -> CodeRef {
+/// What a target gives a row's code side: its ambiguity, a keyless
+/// binding's category, else the unit `unit` names.
+fn code_ref(target: &Target, unit: impl FnOnce() -> Unit) -> CodeRef {
     if let Some(reason) = target.ambiguity() {
         return CodeRef::Ambiguous(reason);
     }
     match target {
-        Target::Item { index, .. } => CodeRef::Bound {
-            item: rust.map(|file| (file, *index)),
-        },
-        Target::Module { .. } | Target::Ron { .. } => CodeRef::Bound { item: None },
+        Target::Item { .. } | Target::Module { .. } | Target::Ron { .. } => CodeRef::Bound(unit()),
         Target::Keyless { state, category } if *state == UNANCHORED => {
             CodeRef::Unanchored(category)
         }
@@ -691,26 +776,81 @@ fn first_category(state: &HashState) -> String {
     }
 }
 
-/// A bound row to compare: its key, its entry, its item (Rust file and
-/// item index) when it binds one.
-type Compare<'a> = (&'a RowKey, &'a Verified, Option<(usize, usize)>);
+/// A bound row to compare: its key, its entry, the entry's format-2 code,
+/// the levels it is judged by and the unit it binds.
+struct Compare<'a> {
+    key: &'a RowKey,
+    entry: &'a Verified,
+    held: &'a LevelCode,
+    levels: RowLevels,
+    unit: &'a Unit,
+}
 
-/// The cascade: each bound row with an entry compared with it, by the
-/// file's blob, then for a changed item by its `sig` and `body` digests
-/// whatever the levels (5b-1b narrows it); with each, the current fact a
-/// change was found by (the blob's OID, the item's changed levels).
+/// A bound row's cascade: its comparison, the levels it was judged by, and
+/// the current fact a changed digest was found by (`<level>:<digest>` per
+/// changed level, this run's digest).
+#[derive(Debug, Clone)]
+struct Cascaded {
+    comparison: Comparison,
+    levels: RowLevels,
+    code: Option<String>,
+}
+
+/// What one side's changed files gave, each parsed or read once: an item's
+/// or an inline `mod`'s levels by (Rust file, item index), a file
+/// module's by Rust file, a RON file's value hashes by RON file.
+#[derive(Default)]
+struct Made {
+    items: BTreeMap<(usize, usize), Option<LevelState>>,
+    modules: BTreeMap<usize, LevelState>,
+    ron: BTreeMap<usize, RonValues>,
+}
+
+/// The cascade (canon `spec-verify`, "States"): each bound row with a
+/// format-2 entry judged by its levels, the first step that applies. (1)
+/// A marker's list malformed: not compared (the judge reads `bad_marker
+/// bad_levels`). (2) The file's blob equals `file_blob`: nothing parsed,
+/// only L_lock and L_mark compared. (3) C empty: nothing parsed or
+/// compared. (4) C's digests made as accept makes them, each changed file
+/// parsed once (an item and an inline `mod` by `item_levels`, the file's
+/// module by `module_levels`, a RON value by `value_hashes` paired by its
+/// comment's range), rendered by `level_code`, compared by core's
+/// `changed_levels`; refused: the unit's first error category; no tree or
+/// no RON pair: not hashed.
 fn cascade(
     side: &Side<'_>,
     building: &BTreeMap<RowKey, Building>,
-) -> Result<BTreeMap<RowKey, (Comparison, Option<String>)>, RunCause> {
+) -> Result<BTreeMap<RowKey, Cascaded>, RunCause> {
     let compared: Vec<Compare<'_>> = building
         .iter()
-        .filter_map(|(key, row)| match (&row.code, &row.entry) {
-            (Some(CodeRef::Bound { item }), Some(entry)) => Some((key, entry, *item)),
-            _ => None,
+        .filter_map(|(key, row)| {
+            let (Some(CodeRef::Bound(unit)), Some(entry)) = (&row.code, &row.entry) else {
+                return None;
+            };
+            // Format 2 is the only lock a code judge reads.
+            let EntryCode::Levels(held) = &entry.code else {
+                return None;
+            };
+            // Step 1.
+            if row.markers.iter().any(|marker| marker.bad_levels) {
+                return None;
+            }
+            Some(Compare {
+                key,
+                entry,
+                held,
+                levels: RowLevels {
+                    lock: held.levels.clone(),
+                    markers: row.levels.clone(),
+                },
+                unit,
+            })
         })
         .collect();
-    let files: BTreeSet<&str> = compared.iter().map(|(key, ..)| key.file.as_str()).collect();
+    let files: BTreeSet<&str> = compared
+        .iter()
+        .map(|compare| compare.key.file.as_str())
+        .collect();
     let blobs: BTreeMap<&str, String> = match &side.files {
         Files::Disk { git, .. } => {
             let paths: Vec<&str> = files.iter().copied().collect();
@@ -724,92 +864,169 @@ fn cascade(
             .filter_map(|path| listing.entry(path).map(|entry| (*path, entry.oid)))
             .collect(),
     };
+
+    // Steps 2 and 3; the rest wait for their digests.
     let mut out = BTreeMap::new();
-    let mut to_hash: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
-    for (key, entry, item) in &compared {
-        let Some(blob) = blobs.get(key.file.as_str()) else {
-            out.insert((*key).clone(), (Comparison::NotHashed, None));
-            continue;
-        };
-        if *blob == entry.file_blob {
-            out.insert((*key).clone(), (Comparison::Equal(Compared::Blob), None));
-            continue;
-        }
-        match item {
-            None => {
-                out.insert(
-                    (*key).clone(),
-                    (Comparison::Changed(Compared::Blob), Some(blob.clone())),
-                );
+    let mut hashed: Vec<Compare<'_>> = Vec::new();
+    for compare in compared {
+        let comparison = match blobs.get(compare.key.file.as_str()) {
+            None => Comparison::NotHashed,
+            Some(blob) if *blob == compare.entry.file_blob => {
+                Comparison::Blob(compare.levels.clone())
             }
-            Some((file, index)) => {
-                to_hash.entry(*file).or_default().insert(*index);
+            Some(_) if compare.levels.compared().is_empty() => Comparison::PathOnly,
+            Some(_) => {
+                hashed.push(compare);
+                continue;
+            }
+        };
+        out.insert(
+            compare.key.clone(),
+            Cascaded {
+                comparison,
+                levels: compare.levels,
+                code: None,
+            },
+        );
+    }
+
+    // Step 4: only the bound files whose blob changed are parsed or read
+    // again (the walk keeps no tree), only their compared units hashed.
+    let made = made(side, &hashed)?;
+    for compare in hashed {
+        let (comparison, code) = match digests_of(&made, compare.unit) {
+            Ok(hashed) => {
+                // As accept would record it now: L_mark and every digest.
+                let rendered = level_code(compare.levels.markers.clone(), &hashed);
+                let now = LevelDigests::of(&rendered);
+                let changed =
+                    changed_levels(&compare.levels, &LevelDigests::of(compare.held), &now);
+                let code = (!changed.is_empty()).then(|| {
+                    changed
+                        .iter()
+                        .filter_map(|level| {
+                            now.level(*level)
+                                .map(|digest| format!("{}:{digest}", level.as_str()))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",")
+                });
+                (
+                    Comparison::Digests {
+                        levels: compare.levels.clone(),
+                        changed,
+                    },
+                    code,
+                )
+            }
+            Err(Some(category)) => (Comparison::CannotVerify(category), None),
+            Err(None) => (Comparison::NotHashed, None),
+        };
+        out.insert(
+            compare.key.clone(),
+            Cascaded {
+                comparison,
+                levels: compare.levels,
+                code,
+            },
+        );
+    }
+    Ok(out)
+}
+
+/// The levels and value hashes step 4 needs: each Rust file of `hashed`
+/// parsed once (its items' and inline `mod`s' levels in one call, its
+/// module's once), each RON file's values hashed once. A Rust file the
+/// parser gives no tree yields nothing.
+fn made(side: &Side<'_>, hashed: &[Compare<'_>]) -> Result<Made, RunCause> {
+    let mut items: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
+    let mut modules: BTreeSet<usize> = BTreeSet::new();
+    let mut ron: BTreeSet<usize> = BTreeSet::new();
+    for compare in hashed {
+        match compare.unit {
+            Unit::Item { file, index } | Unit::InlineMod { file, index } => {
+                items.entry(*file).or_default().insert(*index);
+            }
+            Unit::FileModule { file } => {
+                modules.insert(*file);
+            }
+            Unit::Ron { file, .. } => {
+                ron.insert(*file);
             }
         }
     }
-    // Level 3: only the bound files whose blob changed are parsed again
-    // (the walk keeps no tree), only their compared items' levels made.
-    let mut made: BTreeMap<(usize, usize), Option<LevelState>> = BTreeMap::new();
-    if !to_hash.is_empty() {
+    let mut made = Made::default();
+    let rust: BTreeSet<usize> = items
+        .keys()
+        .copied()
+        .chain(modules.iter().copied())
+        .collect();
+    if !rust.is_empty() {
         let mut parser = RustParser::new().map_err(|error| {
             RunCause::new(
                 CAUSE_WALK,
                 format!("the code walk is incomplete: the Rust grammar cannot be loaded: {error}"),
             )
         })?;
-        for (file, indexes) in &to_hash {
-            let text = &side.tree.rust[*file].text;
-            let indexes: Vec<usize> = indexes.iter().copied().collect();
-            let levels = match parser.parse(text) {
-                Some(tree) => item_levels(&tree, text, &indexes),
-                None => vec![None; indexes.len()],
+        for file in rust {
+            let Some(walked) = side.tree.rust.get(file) else {
+                continue;
             };
-            for (index, levels) in indexes.into_iter().zip(levels) {
-                made.insert((*file, index), levels);
-            }
-        }
-    }
-    for (key, entry, item) in compared {
-        if out.contains_key(key) {
-            continue;
-        }
-        let Some(at) = item else {
-            continue;
-        };
-        let comparison = match (made.get(&at), &entry.code) {
-            (Some(Some(LevelState::Hashed(now))), EntryCode::Levels(held)) => {
-                let changed: Vec<String> = [
-                    (LockLevel::Sig, &now.sig, &held.sig_hash),
-                    (LockLevel::Body, &now.body, &held.body_hash),
-                ]
-                .into_iter()
-                .filter_map(|(level, now, held)| {
-                    let now = lock_digest(now);
-                    (now != *held).then(|| format!("{}:{now}", level.as_str()))
-                })
-                .collect();
-                if changed.is_empty() {
-                    (Comparison::Equal(Compared::Ast), None)
-                } else {
-                    (Comparison::Changed(Compared::Ast), Some(changed.join(",")))
+            let text = &walked.text;
+            let Some(tree) = parser.parse(text) else {
+                continue;
+            };
+            if let Some(indexes) = items.get(&file) {
+                let indexes: Vec<usize> = indexes.iter().copied().collect();
+                let levels = item_levels(&tree, text, &indexes);
+                for (index, levels) in indexes.into_iter().zip(levels) {
+                    made.items.insert((file, index), levels);
                 }
             }
-            (Some(Some(LevelState::CannotVerify { categories })), _) => {
-                let category = categories
-                    .first()
-                    .map_or("other", |category| category.as_str());
-                (Comparison::CannotVerify(category.to_owned()), None)
+            if modules.contains(&file) {
+                made.modules.insert(file, module_levels(&tree, text));
             }
-            _ => (Comparison::NotHashed, None),
-        };
-        out.insert(key.clone(), comparison);
+        }
     }
-    Ok(out)
+    for file in ron {
+        if let Some(walked) = side.tree.ron.get(file) {
+            made.ron.insert(file, value_hashes(&walked.text));
+        }
+    }
+    Ok(made)
 }
 
-/// `b3:` and a digest's lowercase hex, as the lock writes it.
-fn lock_digest(digest: &Digest) -> String {
-    format!("{HASH_PREFIX}{}", digest.to_hex())
+/// A unit's digests as `made` holds them, as accept pairs them (canon
+/// `code-hash-ron`, "Entry point"); `Err`: refused with its first error
+/// category, or none made (no tree, no RON pair).
+fn digests_of<'a>(made: &'a Made, unit: &Unit) -> Result<Hashed<'a>, Option<String>> {
+    let levels = match unit {
+        Unit::Item { file, index } | Unit::InlineMod { file, index } => {
+            made.items.get(&(*file, *index)).and_then(Option::as_ref)
+        }
+        Unit::FileModule { file } => made.modules.get(file),
+        Unit::Ron { file, comment } => {
+            return match made.ron.get(file) {
+                Some(RonValues::Hashed(values)) => values
+                    .iter()
+                    .find(|(range, _)| range == comment)
+                    .map(|(_, digest)| Hashed::Ron(*digest))
+                    .ok_or(None),
+                Some(RonValues::CannotVerify(category)) => Err(Some((*category).to_owned())),
+                None => Err(None),
+            };
+        }
+    };
+    match levels {
+        Some(LevelState::Hashed(levels)) => Ok(Hashed::Levels(levels)),
+        Some(LevelState::CannotVerify { categories }) => Err(Some(
+            categories
+                .first()
+                .map_or("other", |category| category.as_str())
+                .to_owned(),
+        )),
+        None => Err(None),
+    }
 }
 
 /// Line starts of one text: a byte offset's 1-based line.
@@ -1059,12 +1276,13 @@ pub(crate) fn read_head(
 /// `HEAD`'s lock, read in a rebase's order (task spec `lock-rebase`,
 /// "The base"): this build's, as it is; else, at this build's
 /// `norm_recipe`, a format-1 lock or one of another `code_recipe` gives way
-/// to `judged` (the disk's lock, the index's under `--staged`) when that
-/// one is this build's, so a rebase's commit, which changes no key, `rev`,
+/// to `judged` (the disk's lock, the index's under `--staged`, read at this
+/// build's recipes), so a rebase's commit, which changes no key, `rev`,
 /// `spec_hash` or `file_blob`, reads as at `HEAD`: `judged` and the note
 /// saying so.
-/// `HEAD`'s lock unreadable, of another `norm_recipe`, or beside a judged
-/// lock not this build's: cause (7), the strict reader's text.
+///
+/// `HEAD`'s lock unreadable or of another `norm_recipe`: cause (7), the
+/// strict reader's text.
 fn head_lock(text: &str, judged: &Lock) -> Result<(Lock, Option<String>), RunCause> {
     let build = build_recipes();
     let strict = match parse_lock(text, Some(&build)) {
@@ -1074,8 +1292,7 @@ fn head_lock(text: &str, judged: &Lock) -> Result<(Lock, Option<String>), RunCau
     let Ok(old) = parse_lock(text, None) else {
         return Err(strict);
     };
-    if old.recipes.norm != build.norm || judged.format != LockFormat::Two || judged.recipes != build
-    {
+    if old.recipes.norm != build.norm {
         return Err(strict);
     }
     let note = format!(

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-20
 ---
 
 # Proposal kind `drift`: lock drift in the owner's queue
@@ -65,5 +65,5 @@ The inbox card keys off the review's `drift`, never the kind: "Drift evidence" f
 ## Known limits
 
 - `HEAD moved since PR was raised` also fires when `HEAD` moved backwards.
-- A partial fix re-raises; a removed worktree's items are only rejected; 5b's rebase re-raises rejected items once.
+- A partial fix re-raises; a removed worktree's items are only rejected; 5b's rebase re-raises rejected items once; 5b-1b's detail and `code` re-key an item with a `code_changed` row or a `module`/`ron` `code` once: open, `evidence changed`; rejected, raised again.
 - `StoredJson` relies on serde_json's `arbitrary_precision` staying off.

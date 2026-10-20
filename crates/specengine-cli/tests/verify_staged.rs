@@ -430,21 +430,30 @@ fn verify_staged_reads_a_shared_root_manifest_once() {
 
 // ------------------------------------------------------------------ TE-5
 
-/// TE-5: under `core.autocrlf` (CRLF in the worktree, LF committed) the
-/// plain run reads the module and the RON value `code_ahead` (4a's known
-/// limit, `docs/canon/spec-verify.md` "Known limits"); `--staged` compares
-/// the index's clean blobs: `clean`, every row `ok` by its blob.
+/// TE-5: under `core.autocrlf` (CRLF in the worktree, LF committed)
+/// `--staged` compares the index's clean blobs: `clean`, every row `ok` by
+/// its blob. The plain run reads the disk's CRLF blobs, which differ from
+/// `file_blob`: since docs/features/lock-levels-verify.md (TE-7, 4a's
+/// known limit lifted) every row, the module and the RON value too, reads
+/// `ok` by its digests (`ast`), `clean`.
 #[test]
 fn verify_staged_reads_clean_blobs_under_autocrlf() {
     let repo = ecs("te5-autocrlf");
     autocrlf_checkout(&repo, &[STAMINA, ECS_LIB, MOVEMENT]);
     let plain = verify(&repo, &[]);
     assert_eq!(
-        plain.rows_where(|row| row["state"] == "code_ahead").len(),
-        2,
-        "the limit: {}",
+        (plain.verdict(), plain.code()),
+        ("clean", 0),
+        "the limit lifted: {}",
         plain.text.show()
     );
+    for row in plain.rows() {
+        assert_eq!(
+            (&row["state"], &row["compared"]),
+            (&json!("ok"), &json!("ast")),
+            "{row}"
+        );
+    }
     let from_index = verify(&repo, &["--staged"]);
     assert_eq!(
         (from_index.verdict(), from_index.code()),

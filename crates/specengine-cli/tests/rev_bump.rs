@@ -602,3 +602,100 @@ fn unwritable_raise_bump_row_is_rev_alone() {
         run.show()
     );
 }
+
+// ------------------------------- lock-levels-verify RD-9 (a), RD-12 (Q17)
+
+/// The `required` hint when a row shows a line to write (both ways out).
+const REQUIRED_HINT: &str = "hint: required: spec.lock vouches for the old text: write the line \
+     shown and commit (a raise), or send the change through the queue (spec propose update) and \
+     have the owner approve it with --editorial";
+
+/// The `required` hint when no `required` row has a `write` (each shows
+/// `-`): the queue alone.
+const REQUIRED_HINT_EDITORIAL: &str = "hint: required: spec.lock vouches for the old text: send \
+     the change through the queue (spec propose update) and have the owner approve it with \
+     --editorial";
+
+/// The run's `hint: required: …` line, exactly one.
+fn required_hint(run: &rev_rule_common::Bump) -> String {
+    let hints: Vec<&str> = run
+        .all_lines()
+        .into_iter()
+        .filter(|line| line.starts_with("hint: required: "))
+        .collect();
+    assert_eq!(hints.len(), 1, "one required hint:\n{}", run.show());
+    hints[0].to_owned()
+}
+
+/// docs/features/lock-levels-verify.md RD-9 (a), RD-12 (Q17): when no
+/// `required` row has a line to write (`LAW-BOUND` at `REV_MAX`; a closed
+/// class's `GOAL-01`; the unwritable raises of `GOAL-01` and
+/// `PIECE-COUNTER`), the hint names the queue and `--editorial` alone, the
+/// whole text pinned; as soon as one `required` row shows a line, both ways
+/// out, today's whole text. M: the raise named where no line can be written
+/// (both ways out), or dropped where one can (either way out named fails it).
+#[test]
+fn required_hint_without_a_line_names_only_editorial() {
+    // REV_MAX: the one required row has no line.
+    let max = golden("rd12-hint-max");
+    bound_at_max(&max);
+    max.replace(COUNTER_MD, BOUND_EDIT.0, BOUND_EDIT.1);
+    let run = bump(&max, &[]);
+    assert_eq!(run.code(), 0, "{}", run.show());
+    assert!(
+        run.rows().iter().all(|row| row["write"].is_null()),
+        "the premise: no line to write\n{}",
+        run.show()
+    );
+    assert_eq!(required_hint(&run), REQUIRED_HINT_EDITORIAL, "REV_MAX");
+
+    // A closed class alone, then beside a writable raise.
+    let closed = golden("rd12-hint-closed");
+    close_goal(&closed);
+    closed.replace(GOAL_MD, GOAL_EDIT.0, GOAL_EDIT.1);
+    let alone = bump(&closed, &[]);
+    assert_eq!(alone.code(), 0, "{}", alone.show());
+    assert_eq!(
+        alone.row_lines(),
+        [bump_line_alone("required", GOAL, GOAL_MD, GOAL_LINE, 1, 1)],
+        "{}",
+        alone.show()
+    );
+    assert_eq!(
+        required_hint(&alone),
+        REQUIRED_HINT_EDITORIAL,
+        "a closed class"
+    );
+    closed.replace(COUNTER_MD, BOUND_EDIT.0, BOUND_EDIT.1);
+    let beside = bump(&closed, &[]);
+    assert!(
+        beside
+            .rows()
+            .iter()
+            .any(|row| row["need"] == "required" && row["write"].is_string()),
+        "the premise: a line to write\n{}",
+        beside.show()
+    );
+    assert_eq!(required_hint(&beside), REQUIRED_HINT, "a line shown");
+
+    // Unwritable raises alone.
+    let unwritable = golden("rd12-hint-unwritable");
+    unwritable_raises(&unwritable);
+    unwritable.replace(GOAL_MD, GOAL_EDIT.0, GOAL_EDIT.1);
+    unwritable.replace(COUNTER_MD, PIECE_EDIT.0, PIECE_EDIT.1);
+    let run = bump(&unwritable, &[]);
+    assert_eq!(run.code(), 0, "{}", run.show());
+    assert!(
+        run.rows()
+            .iter()
+            .filter(|row| row["need"] == "required")
+            .all(|row| row["write"].is_null()),
+        "the premise\n{}",
+        run.show()
+    );
+    assert_eq!(
+        required_hint(&run),
+        REQUIRED_HINT_EDITORIAL,
+        "unwritable raises"
+    );
+}

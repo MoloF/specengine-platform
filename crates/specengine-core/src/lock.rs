@@ -1018,6 +1018,13 @@ pub fn render_lock(lock: &Lock) -> String {
     out.push_str(&format!("norm_recipe = {}\n", basic(&lock.recipes.norm)));
     out.push_str(&format!("code_recipe = {}\n", basic(&lock.recipes.code)));
     for (key, verified) in &lock.entries {
+        debug_assert!(
+            matches!(
+                (lock.format, &verified.code),
+                (LockFormat::One, EntryCode::Whole(_)) | (LockFormat::Two, EntryCode::Levels(_))
+            ),
+            "an entry of another format than its lock's"
+        );
         out.push('\n');
         out.push_str(&render_block(key, verified));
     }
@@ -1026,8 +1033,25 @@ pub fn render_lock(lock: &Lock) -> String {
 
 /// One entry's `[[binding]]` block, its last line ended: the keys of
 /// [`ENTRY_KEYS`] for a format-2 entry, of [`FORMAT_1_ENTRY_KEYS`] for a
-/// format-1 one.
+/// format-1 one. What it writes reads back: its kind's keys as its format
+/// holds them (format 1: `ast_hash` iff `item`; format 2: fingerprints iff
+/// `item` or `module`), `levels` never empty.
 pub fn render_block(key: &EntryKey, verified: &Verified) -> String {
+    match &verified.code {
+        EntryCode::Whole(ast_hash) => debug_assert_eq!(
+            ast_hash.is_some(),
+            key.kind == LockKind::Item,
+            "a format-1 entry's `ast_hash` is an item's alone"
+        ),
+        EntryCode::Levels(code) => {
+            debug_assert!(!code.levels.is_empty(), "a format-2 entry with no level");
+            debug_assert_eq!(
+                code.fingerprints.is_some(),
+                key.kind != LockKind::Ron,
+                "a format-2 entry's fingerprints are an item's or a module's alone"
+            );
+        }
+    }
     let mut out = String::from("[[binding]]\n");
     let mut line = |name: &str, value: String| {
         out.push_str(name);
@@ -1445,7 +1469,7 @@ pub fn drop_node(old: &Lock, node: &str) -> (Lock, Vec<EntryKey>) {
 /// Why `spec lock rebase` drops an entry (task spec `lock-rebase`): the
 /// first that applies, in this order. A dropped entry is named, never
 /// guessed; the binding then reads `unlocked`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DropReason {
     /// No object of the entry's `file_blob` (gc, a partial or shallow
     /// clone), or an object of another type.

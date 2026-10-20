@@ -331,6 +331,9 @@ pub(crate) fn step_3_lock(
         LockFormat::Two => None,
         LockFormat::One => Some(match parse_lock(text, Some(&build_recipes())) {
             Err(error) => error.to_string(),
+            // Not reached: the strict reader refuses every format-1 lock
+            // (its own text naming the rebase); kept so a reader that did
+            // not would still refuse it here.
             Ok(_) => format!("{LOCK_FILE}: format 1: {REBASE_STEP}"),
         }),
     };

@@ -1364,8 +1364,14 @@ fn manifests_name_packages_alike_from_any_root() {
 /// through `item_levels`, `module_levels` and, for the v2 cross-check,
 /// `hash_bound_items` (read by `.digest()`), never `hash_item` or
 /// `hash_node`, naming no `HashState`, reading no `.state` but a
-/// judgement's, a level list's or a printed row's. `verify_rows.rs` joins
-/// in 5b-1b (Q26).
+/// judgement's, a level list's or a printed row's.
+/// docs/features/lock-levels-verify.md RD-8 ("The pin", Q26):
+/// `verify_rows.rs` joins, verify's digests made through `item_levels` and
+/// `module_levels` (accept's functions), never `hash_item`, `hash_node` or
+/// `hash_bound_items`; for this file alone `HashState` (`unbound()`'s
+/// `first_category`) and `item.state` (an unparseable item's first error
+/// category) are allowed. Its `#[cfg(test)] mod` lies outside what is
+/// scanned. M: `verify_rows.rs` hashing through `hash_bound_items`.
 #[test]
 fn nothing_outside_the_binder_reads_an_items_state() {
     const HASHING: [&str; 5] = [
@@ -1375,7 +1381,9 @@ fn nothing_outside_the_binder_reads_an_items_state() {
         "item_levels(",
         "module_levels(",
     ];
-    let pinned: [(&str, &[&str]); 7] = [
+    // The one file allowed `HashState` and `item.state` (Q26).
+    const VERIFY_ROWS: &str = "crates/specengine-cli/src/verify_rows.rs";
+    let pinned: [(&str, &[&str]); 8] = [
         ("crates/specengine-cli/src/code_walk.rs", &[]),
         ("crates/specengine-cli/src/refs.rs", &[]),
         ("crates/specengine-code/src/naming.rs", &[]),
@@ -1389,10 +1397,15 @@ fn nothing_outside_the_binder_reads_an_items_state() {
             &["item_levels(", "module_levels(", "hash_bound_items("],
         ),
         (ANALYZER_MODULE, &["item_levels("]),
+        (VERIFY_ROWS, &["item_levels(", "module_levels("]),
     ];
     for (file, entries) in pinned {
         let source = scanned(file);
-        assert!(!source.contains("HashState"), "{file} names HashState");
+        let verify_rows = file == VERIFY_ROWS;
+        assert!(
+            verify_rows || !source.contains("HashState"),
+            "{file} names HashState"
+        );
         for entry in entries {
             assert!(
                 source.contains(entry),
@@ -1433,7 +1446,10 @@ fn nothing_outside_the_binder_reads_an_items_state() {
                 .rev()
                 .collect();
             assert!(
-                before == "judged" || before == "levels" || (lock_file && before == "row"),
+                before == "judged"
+                    || before == "levels"
+                    || (lock_file && before == "row")
+                    || (verify_rows && before == "item"),
                 "{file}: `{before}.state` reads a state"
             );
         }

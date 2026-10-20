@@ -364,8 +364,20 @@ fn observe_never_exits_1() {
             run.text.show()
         );
         assert_eq!(run.json["counts"]["fix"], 3, "{extra:?}");
-        // The regen body edit; lib.rs's module row, compared by its blob.
-        assert_eq!(run.json["counts"]["check"], 2, "{extra:?}");
+        // The regen body edit alone: lib.rs's module row, its file changed
+        // by a removed marker comment only, reads `ok` by its digests
+        // (docs/features/lock-levels-verify.md "Level-aware verify", A3).
+        assert_eq!(run.json["counts"]["check"], 1, "{extra:?}");
+        let module = run.row("PERK-STAMINA", "implements", ECS_LIB, Some("crates/game"));
+        assert_eq!(
+            (
+                &module["state"],
+                &module["compared"],
+                &module["levels"]["changed"]
+            ),
+            (&json!("ok"), &json!("ast"), &json!([])),
+            "{extra:?}"
+        );
     }
 }
 

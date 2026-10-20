@@ -38,8 +38,8 @@ use specengine_code::frameworks::{self, KNOWN, role_facts};
 use specengine_code::{
     Anchor, Binding, CODE_INDEX_FORMAT, Digest, FileRole, LevelHashes, LevelState, NamedFile,
     PackageTargets, RustParser, Target, TargetIndex, TargetSource, UnitKind, bind_tree,
-    comment_anchors, item_levels, item_signatures, level_header, markers_in, placed_name_file,
-    qpath,
+    comment_anchors, dir_text, item_levels, item_signatures, level_header, markers_in,
+    placed_name_file, qpath,
 };
 use specengine_core::{CodeConfig, ProjectError};
 use specengine_model::{IdScheme, grammar};
@@ -159,18 +159,6 @@ impl CodeFiles {
             packages,
             notes,
         }
-    }
-}
-
-/// A root-relative directory as stored: `/`-separated, `""` the root.
-/// Only where `\` separates components is it rewritten: on Unix it is a
-/// character of a name, kept as the walk keeps it.
-fn dir_text(dir: &Path) -> String {
-    let text = dir.to_string_lossy();
-    if std::path::MAIN_SEPARATOR == '\\' {
-        text.replace('\\', "/")
-    } else {
-        text.into_owned()
     }
 }
 

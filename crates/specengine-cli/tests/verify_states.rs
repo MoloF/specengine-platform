@@ -21,8 +21,8 @@ use std::os::unix::fs::PermissionsExt as _;
 use lock_common::LockRepo;
 use serde_json::{Value, json};
 use verify_common::{
-    BOUNDS, BROKEN, COUNTER, COUNTER_MD, GOAL_MD, LIB, LIMITS, Says, Verify, assert_row, golden,
-    golden_lock, item, keyless, lock_entry, module, ron, verify,
+    BOUNDS, BROKEN, COUNTER, COUNTER_MD, GOAL_MD, LIB, LIMITS, Says, Verify, assert_row,
+    entry_levels, golden, golden_lock, item, keyless, levels, lock_entry, module, ron, verify,
 };
 
 /// A golden repository, `edit` applied to its worktree, verified plain.
@@ -50,6 +50,7 @@ fn says<'a>(
         node_rev,
         lock: Value::Null,
         compared: None,
+        levels: Value::Null,
     }
 }
 
@@ -65,15 +66,51 @@ fn has_hint(run: &Verify, head: &str) -> String {
     hits[0].to_owned()
 }
 
-/// A golden row: its key, state, category, markers `(line, rev)` and the
-/// node's revision.
+/// A golden row: its key, state, category, markers `(line, rev)`, the
+/// node's revision and its markers' effective levels as the fixture writes
+/// them (`None`: an `Invalid` list; docs/features/lock-levels-verify.md
+/// "Level-aware verify").
 type GoldenRow = (
     verify_common::Key<'static>,
     &'static str,
     Option<&'static str>,
     Vec<(usize, Option<u32>)>,
     u32,
+    Option<&'static [&'static str]>,
 );
+
+/// No level list: `sig`, `body`.
+const DEFAULT: &[&str] = &["sig", "body"];
+/// `[body]`.
+const BODY: &[&str] = &["body"];
+
+/// The `levels` object of a row whose entry is `text`'s for `key` and whose
+/// markers name `marks` (`None`: an `Invalid` list, so `null`), `changed`
+/// the compared levels that differ (`None`: nothing compared by digest;
+/// docs/features/lock-levels-verify.md "Level-aware verify", **JSON**).
+fn golden_levels(
+    text: &str,
+    key: verify_common::Key<'_>,
+    marks: Option<&[&str]>,
+    changed: Option<&[&str]>,
+) -> Value {
+    let Some(marks) = marks else {
+        return Value::Null;
+    };
+    let lock = entry_levels(text, key);
+    let lock: Vec<&str> = lock.iter().map(String::as_str).collect();
+    levels(&lock, marks, changed)
+}
+
+/// [`golden_levels`] over the golden lock.
+fn golden_levels_of(
+    key: verify_common::Key<'_>,
+    marks: &[&str],
+    changed: Option<&[&str]>,
+) -> Value {
+    let text = fs::read_to_string(verify_common::golden_file()).expect("golden");
+    golden_levels(&text, key, Some(marks), changed)
+}
 
 /// The nine keys of the golden lock and the two keys format 2 never locks
 /// (their markers' level lists `Invalid`: `counter.rs:77` `[path, path]`,
@@ -95,6 +132,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(29, Some(1))],
             1,
+            Some(BODY),
         ),
         (
             item(
@@ -108,6 +146,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             Some("bad_levels"),
             vec![(77, None)],
             1,
+            None,
         ),
         (
             item("LAW-BOUND", "implements", COUNTER, fmt, "function_item"),
@@ -115,6 +154,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(48, Some(2))],
             2,
+            Some(DEFAULT),
         ),
         (
             item(
@@ -128,6 +168,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(4, Some(2))],
             2,
+            Some(BODY),
         ),
         (
             item(
@@ -141,6 +182,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(8, Some(2))],
             2,
+            Some(DEFAULT),
         ),
         (
             ron("LAW-BOUND", "configures", LIMITS, "root.cap"),
@@ -148,6 +190,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(4, Some(2))],
             2,
+            Some(DEFAULT),
         ),
         (
             item(
@@ -161,6 +204,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(13, Some(3))],
             3,
+            Some(DEFAULT),
         ),
         (
             module("PIECE-COUNTER", "implements", LIB, "crates/tally"),
@@ -168,6 +212,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(2, Some(3))],
             3,
+            Some(DEFAULT),
         ),
         (
             module(
@@ -180,6 +225,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(1, None)],
             3,
+            Some(DEFAULT),
         ),
         (
             ron("PIECE-COUNTER", "configures", LIMITS, "root"),
@@ -187,6 +233,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             None,
             vec![(2, Some(3))],
             3,
+            Some(DEFAULT),
         ),
         (
             item(
@@ -200,6 +247,7 @@ fn golden_rows() -> Vec<GoldenRow> {
             Some("bad_levels"),
             vec![(14, None)],
             1,
+            None,
         ),
     ]
 }
@@ -220,7 +268,7 @@ fn golden_lock_verifies_ok_but_bad_levels() {
     let text = fs::read_to_string(verify_common::golden_file()).expect("golden");
     let expected = golden_rows();
     assert_eq!(run.lock_rows().len(), 9, "{}", run.text.show());
-    for (key, state, category, markers, rev) in &expected {
+    for (key, state, category, markers, rev, marks) in &expected {
         let lock = if *category == Some("bad_levels") {
             Value::Null
         } else {
@@ -238,6 +286,7 @@ fn golden_lock_verifies_ok_but_bad_levels() {
                 node_rev: Some(*rev),
                 lock,
                 compared: (*state == "ok").then_some("blob"),
+                levels: golden_levels(&text, *key, *marks, None),
             },
             None,
         );
@@ -651,6 +700,8 @@ fn null_meaning_hash_cannot_verify() {
         key,
         &Says {
             lock: golden_lock(key),
+            // An entry and a bound marker: `levels` there, nothing compared.
+            levels: golden_levels_of(key, BODY, None),
             ..says(
                 "cannot_verify",
                 Some("hash_null"),
@@ -761,6 +812,7 @@ fn marker_ahead_of_its_node_is_predated() {
         key,
         &Says {
             lock: golden_lock(key),
+            levels: golden_levels_of(key, DEFAULT, None),
             ..says("predated", None, None, &[(8, Some(3))], Some(2))
         },
         None,
@@ -1012,6 +1064,7 @@ fn renamed_node_leftover_markers_are_bad_marker_then_node_gone() {
                 "function_item",
             ),
             4,
+            BODY,
         ),
         (
             item(
@@ -1022,15 +1075,22 @@ fn renamed_node_leftover_markers_are_bad_marker_then_node_gone() {
                 "const_item",
             ),
             8,
+            DEFAULT,
         ),
-        (ron("LAW-BOUND", "configures", LIMITS, "root.cap"), 4),
+        (
+            ron("LAW-BOUND", "configures", LIMITS, "root.cap"),
+            4,
+            DEFAULT,
+        ),
     ];
-    for (key, line) in leftovers {
+    for (key, line, marks) in leftovers {
         assert_row(
             &run,
             key,
             &Says {
                 lock: golden_lock(key),
+                // The leftover marker still binds: `levels` there.
+                levels: golden_levels_of(key, marks, None),
                 ..says(
                     "bad_marker",
                     Some("dangling"),
@@ -1427,6 +1487,9 @@ fn lagging_marker_is_spec_ahead() {
         &Says {
             lock: golden_lock(key),
             compared: Some("ast"),
+            // The marker's edit changed the blob: every level of C
+            // compared, none differs.
+            levels: golden_levels_of(key, DEFAULT, Some(&[])),
             ..says(
                 "spec_ahead",
                 Some("marker_behind"),
@@ -1466,6 +1529,7 @@ fn raised_revision_without_raised_markers_is_spec_ahead() {
         &Says {
             lock: golden_lock(key),
             compared: Some("blob"),
+            levels: golden_levels_of(key, DEFAULT, None),
             ..says(
                 "spec_ahead",
                 Some("spec_changed"),
@@ -1499,6 +1563,7 @@ fn raised_revision_without_raised_markers_is_spec_ahead() {
             &Says {
                 lock: golden_lock(key),
                 compared: Some("blob"),
+                levels: golden_levels_of(key, DEFAULT, None),
                 ..says(
                     "spec_ahead",
                     Some("marker_behind"),
@@ -1564,6 +1629,12 @@ fn text_changed_at_its_revision_is_spec_ahead_same_revision() {
             &Says {
                 lock: golden_lock(key),
                 compared: Some("blob"),
+                // `stops_at_cap`'s marker is `[body]`.
+                levels: golden_levels_of(
+                    key,
+                    if key.file == BOUNDS { BODY } else { DEFAULT },
+                    None,
+                ),
                 ..says(
                     "spec_ahead",
                     Some("same_revision"),
@@ -1581,45 +1652,52 @@ fn text_changed_at_its_revision_is_spec_ahead_same_revision() {
 
 // --------------------------------------------------------------- code_ahead
 
-/// TE-1 `code_ahead code_changed`: the locked `CAP` edited (by its hash)
-/// and the locked RON value edited (by its blob); `delta.bindings.stale`
-/// lists both. M: a changed item judged `ok`.
+/// TE-1 `code_ahead code_changed`: the locked `CAP` edited and the locked
+/// RON value edited, each compared by its levels' digests
+/// (docs/features/lock-levels-verify.md "Level-aware verify" step 4): the
+/// item `code_changed body`, the RON value `code_changed sig,body` (its
+/// `sig` = `body` = the value hash, Q46), both by `ast`, their text lines
+/// carrying the detail; the RON root entry holding the cap changed alike;
+/// `delta.bindings.stale` lists the three. M: a changed item judged `ok`;
+/// a RON value judged by its blob (`compared` `blob`).
 #[test]
 fn changed_code_is_code_ahead() {
     let (_repo, run) = scenario("verify-code-changed", |repo| {
         repo.replace(COUNTER, "CAP: u32 = 10;", "CAP: u32 = 12;");
         repo.replace(LIMITS, "cap: 10,", "cap: 12,");
     });
-    for (key, compared) in [
-        (
-            item(
-                "LAW-BOUND",
-                "configures",
-                COUNTER,
-                "crates/tally::counter::CAP",
-                "const_item",
-            ),
-            "ast",
-        ),
-        (ron("LAW-BOUND", "configures", LIMITS, "root.cap"), "blob"),
+    let cap = item(
+        "LAW-BOUND",
+        "configures",
+        COUNTER,
+        "crates/tally::counter::CAP",
+        "const_item",
+    );
+    let ron_cap = ron("LAW-BOUND", "configures", LIMITS, "root.cap");
+    for (key, line, detail, changed) in [
+        (cap, 8, "body", &["body"][..]),
+        (ron_cap, 4, "sig,body", &["sig", "body"][..]),
     ] {
         assert_row(
             &run,
             key,
             &Says {
                 lock: golden_lock(key),
-                compared: Some(compared),
+                compared: Some("ast"),
+                levels: golden_levels_of(key, DEFAULT, Some(changed)),
                 ..says(
                     "code_ahead",
                     Some("code_changed"),
-                    None,
-                    &[(if compared == "ast" { 8 } else { 4 }, Some(2))],
+                    Some(detail),
+                    &[(line, Some(2))],
                     Some(2),
                 )
             },
             None,
         );
     }
+    run.has_line("check | code_ahead code_changed body | LAW-BOUND | configures | crates/tally/src/counter.rs | item crates/tally::counter::CAP const_item");
+    run.has_line("check | code_ahead code_changed sig,body | LAW-BOUND | configures | data/limits.ron | ron root.cap");
     // The other entries of the changed files: hashed, unchanged.
     for key in [
         item(
@@ -1643,9 +1721,25 @@ fn changed_code_is_code_ahead() {
             (Some("ok"), Some("ast"))
         );
     }
-    // The RON root entry: compared by its blob alone, changed.
-    let root = run.row("PIECE-COUNTER", "configures", LIMITS, Some("root"));
-    assert_eq!(root["state"], "code_ahead");
+    // The RON root entry: its value holds the cap, changed by its digest.
+    let root_key = ron("PIECE-COUNTER", "configures", LIMITS, "root");
+    assert_row(
+        &run,
+        root_key,
+        &Says {
+            lock: golden_lock(root_key),
+            compared: Some("ast"),
+            levels: golden_levels_of(root_key, DEFAULT, Some(&["sig", "body"])),
+            ..says(
+                "code_ahead",
+                Some("code_changed"),
+                Some("sig,body"),
+                &[(2, Some(3))],
+                Some(3),
+            )
+        },
+        None,
+    );
     let stale = run.json["delta"]["bindings"]["stale"]
         .as_array()
         .expect("stale");
@@ -1686,6 +1780,10 @@ fn raised_marker_with_both_changed_is_code_ahead() {
         &Says {
             lock: golden_lock(key),
             compared: Some("ast"),
+            // Step 4 found `body` changed; the category is `raised`, no
+            // detail (docs/features/lock-levels-verify.md: the detail is
+            // `code_changed`'s and `levels_changed`'s).
+            levels: golden_levels_of(key, DEFAULT, Some(&["body"])),
             ..says("code_ahead", Some("raised"), None, &[(8, Some(3))], Some(3))
         },
         None,
@@ -1721,6 +1819,7 @@ fn spec_and_code_changed_is_conflict() {
         &Says {
             lock: golden_lock(key),
             compared: Some("ast"),
+            levels: golden_levels_of(key, DEFAULT, Some(&["body"])),
             ..says("conflict", None, None, &[(8, Some(2))], Some(2))
         },
         None,
@@ -2013,7 +2112,7 @@ fn crlf_tree_verifies_as_lf() {
     );
 
     let base = verify(&repo, &[]);
-    for (key, state, category, markers, rev) in golden_rows() {
+    for (key, state, category, markers, rev, marks) in golden_rows() {
         let locked = if category == Some("bad_levels") {
             Value::Null
         } else {
@@ -2031,6 +2130,7 @@ fn crlf_tree_verifies_as_lf() {
                 node_rev: Some(rev),
                 lock: locked,
                 compared: (state == "ok").then_some("blob"),
+                levels: golden_levels(&lock, key, marks, None),
             },
             None,
         );
@@ -2056,8 +2156,11 @@ fn crlf_tree_verifies_as_lf() {
             row["category"].as_str().map(str::to_owned),
             row["compared"].as_str().map(str::to_owned),
             row["markers"].clone(),
+            row["detail"].clone(),
+            row["levels"].clone(),
         )
     };
+    let both = levels(DEFAULT, DEFAULT, Some(&[]));
     repo.replace(
         COUNTER,
         "/// The largest count; see LAW-BOUND.",
@@ -2070,7 +2173,9 @@ fn crlf_tree_verifies_as_lf() {
             Some("ok".into()),
             None,
             Some("ast".into()),
-            json!([{"line": 8, "rev": 2}])
+            json!([{"line": 8, "rev": 2}]),
+            Value::Null,
+            both.clone(),
         )
     );
     repo.replace(COUNTER, "CAP: u32 = 10;", "CAP: u32 = 12;");
@@ -2081,7 +2186,9 @@ fn crlf_tree_verifies_as_lf() {
             Some("code_ahead".into()),
             Some("code_changed".into()),
             Some("ast".into()),
-            json!([{"line": 8, "rev": 2}])
+            json!([{"line": 8, "rev": 2}]),
+            json!("body"),
+            levels(DEFAULT, DEFAULT, Some(&["body"])),
         )
     );
     repo.replace(COUNTER, "CAP: u32 = 12;", "CAP: u32 = 10;");
@@ -2097,7 +2204,9 @@ fn crlf_tree_verifies_as_lf() {
             Some("spec_ahead".into()),
             Some("same_revision".into()),
             Some("ast".into()),
-            json!([{"line": 8, "rev": 2}])
+            json!([{"line": 8, "rev": 2}]),
+            Value::Null,
+            both,
         )
     );
     repo.replace(
@@ -2113,37 +2222,56 @@ fn crlf_tree_verifies_as_lf() {
             Some("broken_binding".into()),
             Some("marker_gone".into()),
             None,
-            json!([])
+            json!([]),
+            Value::Null,
+            Value::Null,
         )
     );
 }
 
-/// TE-2: the LF golden lock over the fixture converted to CRLF and
-/// committed: every item hashed equal (`ok` by `ast`); a module or RON
-/// entry, compared by its blob alone, reads `code_ahead`; the spec side
-/// unchanged. M: a CRLF item judged changed.
+/// TE-2, docs/features/lock-levels-verify.md TE-7 (CRLF inverted): the LF
+/// golden lock over the fixture converted to CRLF and committed: every
+/// item, module and RON value judged by its levels' digests (the CR rule:
+/// `code-hash.md` "Levels", `code-hash-ron.md` "RON value") reads LF's
+/// state, category and detail, `ok`, by `ast` (the CRLF blob differs from
+/// `file_blob`), `changed` empty; the spec side unchanged; 4a's limit (a
+/// module or RON row `code_ahead` by blob) gone. M: a CRLF item judged
+/// changed; a module or RON row judged by its blob.
 #[test]
 fn lf_lock_over_a_crlf_tree_hashes_items_equal() {
     let repo = golden("verify-crlf-after");
     to_crlf(&repo);
     repo.commit_all("CRLF");
     let run = verify(&repo, &[]);
-    for (key, state, category, _, _) in golden_rows() {
+    let text = fs::read_to_string(verify_common::golden_file()).expect("golden");
+    for (key, state, category, _, _, marks) in golden_rows() {
         let row = run.row(key.node, key.relation, key.file, key.symbol);
-        let expected = match (state, key.kind) {
-            ("ok", Some("item")) => ("ok", None, Some("ast")),
-            ("ok", _) => ("code_ahead", Some("code_changed"), Some("blob")),
-            (other, _) => (other, category, None),
+        let (expected, changed) = match state {
+            "ok" => (("ok", None, None, Some("ast")), Some(&[][..])),
+            other => ((other, category, None, None), None),
         };
         assert_eq!(
             (
                 row["state"].as_str().unwrap_or_default(),
                 row["category"].as_str(),
+                row["detail"].as_str(),
                 row["compared"].as_str()
             ),
             expected,
+            "{key:?}:\n{}",
+            run.text.show()
+        );
+        assert_eq!(
+            row["levels"],
+            golden_levels(&text, key, marks, changed),
             "{key:?}"
         );
     }
-    assert_eq!(run.json["cascade"], json!({"by_blob": 4, "by_ast": 5}));
+    assert_eq!(run.json["cascade"], json!({"by_blob": 0, "by_ast": 9}));
+    assert!(
+        run.rows_where(|row| row["state"] == "code_ahead")
+            .is_empty(),
+        "{}",
+        run.text.show()
+    );
 }

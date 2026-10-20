@@ -5,14 +5,23 @@
 //! exit is the scenario's alone; the hidden symbol over code-a's golden.
 //! TE-3's own mutations: an `is_extra()` filter (an `ERROR` node read as a
 //! comment, the broken item hashed); `cannot_verify` -> `ok`.
+//!
+//! docs/features/lock-levels-verify.md RD-6 and TE-6 (AC-14 for `module`
+//! and `ron`): a bound file module whose file has a parse error elsewhere,
+//! and a bound RON value of a file `RonAnalysis` rejects (the error after
+//! the marked comment, so its anchor stays `Path`), each `cannot_verify
+//! item_error` with its first category, exit 2 in every mode.
 
 mod common;
 mod lock_common;
 mod verify_common;
 
 use lock_common::LockRepo;
+use serde_json::json;
+use specengine_code::{LevelState, RonValues, RustParser, module_levels, value_hashes};
 use verify_common::{
-    BOUNDS, COUNTER, MODES, STAMINA, Verify, ecs, golden, golden_lock, item, set_mode, verify,
+    BOUNDS, COUNTER, ECS_LIB, MODES, MOVEMENT, STAMINA, Says, Verify, ecs, golden, golden_lock,
+    item, levels, lock_entry, module, ron, row_json, set_mode, verify,
 };
 
 /// Every mode, plain and `--changed`: exit 2, `cannot-verify`, the report
@@ -41,10 +50,14 @@ fn exits_2_everywhere(repo: &LockRepo, check: impl Fn(&Verify, &str)) {
                 "{context}: {}",
                 run.summary()
             );
+            // An `ok` row was compared, unless both sides are `[path]`
+            // (C empty: docs/features/lock-levels-verify.md Q42).
             assert!(
                 run.rows_where(|row| row["state"] == "ok"
                     && row["class"].is_null()
-                    && row["compared"].is_null())
+                    && row["compared"].is_null()
+                    && !(row["levels"]["lock"] == json!(["path"])
+                        && row["levels"]["markers"] == json!(["path"])))
                     .is_empty(),
                 "{context}: an ok row never compared"
             );
@@ -224,6 +237,7 @@ fn symbol_hidden_by_a_parse_error_cannot_verify() {
                     node_rev: Some(2),
                     lock: golden_lock(key),
                     compared: None,
+                    levels: serde_json::Value::Null,
                 }
             ),
             "{context}"
@@ -332,5 +346,142 @@ fn lock_of_another_recipe_exits_2() {
         );
         assert!(run.rows().is_empty(), "{context}");
         run.has_line(&format!("cannot: {cause}"));
+    });
+}
+
+// ------------------------------------------- lock-levels-verify RD-6, TE-6
+
+/// The first error category `module_levels` refuses `source`'s file
+/// module with (`code-hash.md` "File module"): the premise that the file is
+/// refused, and the detail verify must print.
+fn module_error(source: &str) -> String {
+    let mut parser = RustParser::new().expect("the Rust grammar");
+    let tree = parser.parse(source).expect("a tree");
+    match module_levels(&tree, source) {
+        LevelState::CannotVerify { categories } => categories
+            .first()
+            .expect("a refusal names its categories")
+            .as_str()
+            .to_owned(),
+        LevelState::Hashed(_) => panic!("the premise: the module's file is refused"),
+    }
+}
+
+/// The detail `ron::value_hashes` refuses `source` with
+/// (`code-hash-ron.md` "Entry point"): the premise and the detail.
+fn ron_error(source: &str) -> String {
+    match value_hashes(source) {
+        RonValues::CannotVerify(detail) => detail.to_owned(),
+        RonValues::Hashed(_) => panic!("the premise: the RON file is rejected"),
+    }
+}
+
+/// docs/features/lock-levels-verify.md RD-6 / TE-6 (AC-14, Q31): verify-ecs'
+/// bound file module (`lib.rs`'s `//! @implements PERK-STAMINA@2`, no list:
+/// `sig`, `body` in C) with a parse error in an unbound neighbour appended
+/// to its file: its levels refused, so `cannot_verify item_error` with the
+/// whole file's first category (step 3), `compared` null, `levels.changed`
+/// null, never `ok` or `code_ahead`; the error-free `build` beside it `ok`
+/// by `ast`; exit 2 in every mode, plain and `--changed`, the row printed.
+/// M: a module judged by its blob (`code_ahead code_changed`), or its
+/// digests taken through the error.
+#[test]
+fn module_file_error_elsewhere_cannot_verify() {
+    let repo = ecs("verify-module-error");
+    let lock = repo.lock_text();
+    repo.append(ECS_LIB, "\npub fn broken_helper() -> u32 {\n    1 +\n}\n");
+    let detail = module_error(&repo.read(ECS_LIB));
+    let key = module("PERK-STAMINA", "implements", ECS_LIB, "crates/game");
+    let default = ["sig", "body"];
+    exits_2_everywhere(&repo, |run, context| {
+        let row = run.row(key.node, key.relation, key.file, key.symbol);
+        assert_eq!(
+            row,
+            &row_json(
+                key,
+                &Says {
+                    state: "cannot_verify",
+                    category: Some("item_error"),
+                    detail: Some(&detail),
+                    pre_existing: false,
+                    markers: &[(2, Some(2))],
+                    node_rev: Some(2),
+                    lock: lock_entry(&lock, key),
+                    compared: None,
+                    levels: levels(&default, &default, None),
+                },
+            ),
+            "{context}"
+        );
+        run.has_line(&format!(
+            "cannot | cannot_verify item_error {detail} | PERK-STAMINA | implements | crates/game/src/lib.rs | module crates/game"
+        ));
+        let build = run.row(
+            "PERK-STAMINA",
+            "implements",
+            ECS_LIB,
+            Some("crates/game::StaminaPlugin::build"),
+        );
+        assert_eq!(
+            (&build["state"], &build["compared"]),
+            (&json!("ok"), &json!("ast")),
+            "{context}: the error-free item beside it"
+        );
+        assert_eq!(run.json["counts"]["cannot"], 1, "{context}");
+    });
+}
+
+/// docs/features/lock-levels-verify.md RD-6 / TE-6 (AC-14, Q31):
+/// verify-ecs' bound RON value (`regen_per_second`, `TUNE-01@1`) in a file
+/// `RonAnalysis` rejects, the error (content after the root value) below the
+/// marked comment so its anchor stays `Path` and the row keeps its key:
+/// `cannot_verify item_error` with `RonValues::CannotVerify`'s detail (the
+/// file's first error category), `compared` and `levels.changed` null;
+/// `BASE_REGEN`, the node's other binding, `ok` by blob; exit 2 in every
+/// mode, plain and `--changed`. M: a RON value judged by its blob
+/// (`code_ahead code_changed`), or hashed through the error.
+#[test]
+fn broken_ron_file_binding_cannot_verify() {
+    let repo = ecs("verify-ron-error");
+    let lock = repo.lock_text();
+    repo.append(MOVEMENT, "0\n");
+    let detail = ron_error(&repo.read(MOVEMENT));
+    let key = ron("TUNE-01", "configures", MOVEMENT, "root.regen_per_second");
+    let default = ["sig", "body"];
+    exits_2_everywhere(&repo, |run, context| {
+        let row = run.row(key.node, key.relation, key.file, key.symbol);
+        assert_eq!(
+            row,
+            &row_json(
+                key,
+                &Says {
+                    state: "cannot_verify",
+                    category: Some("item_error"),
+                    detail: Some(&detail),
+                    pre_existing: false,
+                    markers: &[(3, Some(1))],
+                    node_rev: Some(1),
+                    lock: lock_entry(&lock, key),
+                    compared: None,
+                    levels: levels(&default, &default, None),
+                },
+            ),
+            "{context}"
+        );
+        run.has_line(&format!(
+            "cannot | cannot_verify item_error {detail} | TUNE-01 | configures | assets/data/movement.ron | ron root.regen_per_second"
+        ));
+        let base = run.row(
+            "TUNE-01",
+            "configures",
+            STAMINA,
+            Some("crates/game::stamina::BASE_REGEN"),
+        );
+        assert_eq!(
+            (&base["state"], &base["compared"]),
+            (&json!("ok"), &json!("blob")),
+            "{context}"
+        );
+        assert_eq!(run.json["counts"]["cannot"], 1, "{context}");
     });
 }

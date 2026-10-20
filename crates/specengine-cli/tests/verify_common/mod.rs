@@ -61,8 +61,9 @@ pub const TOP_KEYS: [&str; 9] = [
     "mode", "base", "verdict", "counts", "cascade", "rows", "delta", "cannot", "notes",
 ];
 
-/// The keys of a row, in order ("Output").
-pub const ROW_KEYS: [&str; 15] = [
+/// The keys of a row, in order ("Output"; `levels` after `compared` since
+/// docs/features/lock-levels-verify.md "Level-aware verify", **JSON**).
+pub const ROW_KEYS: [&str; 16] = [
     "node",
     "relation",
     "file",
@@ -78,7 +79,12 @@ pub const ROW_KEYS: [&str; 15] = [
     "node_rev",
     "lock",
     "compared",
+    "levels",
 ];
+
+/// The keys of a row's `levels` object, in order
+/// (docs/features/lock-levels-verify.md "Level-aware verify", **JSON**).
+pub const LEVELS_KEYS: [&str; 3] = ["lock", "markers", "changed"];
 
 /// The golden lock's path.
 pub fn golden_file() -> std::path::PathBuf {
@@ -397,6 +403,9 @@ pub struct Says<'a> {
     pub node_rev: Option<u32>,
     pub lock: Value,
     pub compared: Option<&'a str>,
+    /// The row's `levels` object ([`levels`]), `null` without an entry or a
+    /// bound marker, or with an `Invalid` list.
+    pub levels: Value,
 }
 
 /// The full JSON row of `key` saying `says`.
@@ -421,7 +430,55 @@ pub fn row_json(key: Key<'_>, says: &Says<'_>) -> Value {
         "node_rev": says.node_rev,
         "lock": says.lock,
         "compared": says.compared,
+        "levels": says.levels,
     })
+}
+
+/// A row's `levels` object (docs/features/lock-levels-verify.md
+/// "Level-aware verify", **JSON**): `lock` the entry's `levels`, `markers`
+/// the union of the bound markers' effective levels (no list: `sig`,
+/// `body`), `changed` the compared levels whose digests differ, in
+/// canonical order (`None`: no digest compared, so `null`).
+pub fn levels(lock: &[&str], markers: &[&str], changed: Option<&[&str]>) -> Value {
+    json!({"lock": lock, "markers": markers, "changed": changed})
+}
+
+/// [`levels`] of a row whose entry and markers name the same levels and
+/// whose digests were not compared (`ok` by `blob`, or a state decided
+/// before the comparison).
+pub fn same_levels(both: &[&str]) -> Value {
+    levels(both, both, None)
+}
+
+/// The `levels` line of `text`'s entry for `key`, its names in order.
+pub fn entry_levels(text: &str, key: Key<'_>) -> Vec<String> {
+    let found: Vec<_> = blocks(text)
+        .into_iter()
+        .filter(|block| {
+            value(block, "node") == Some(key.node)
+                && value(block, "relation") == Some(key.relation)
+                && value(block, "file") == Some(key.file)
+                && value(block, "kind") == key.kind
+                && value(block, "symbol") == key.symbol
+                && value(block, "item_kind") == key.item_kind
+        })
+        .collect();
+    assert_eq!(found.len(), 1, "one entry for {key:?}");
+    let line = found[0]
+        .iter()
+        .find(|(name, _)| name == "levels")
+        .map(|(_, list)| list.clone())
+        .unwrap_or_else(|| panic!("no `levels` in the entry for {key:?}"));
+    let inner = line
+        .trim()
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or_else(|| panic!("`levels = {line}` is no list"));
+    inner
+        .split(',')
+        .map(|name| name.trim().trim_matches('"').to_owned())
+        .filter(|name| !name.is_empty())
+        .collect()
 }
 
 /// The text line "Output" gives the row (`class | state[ category][

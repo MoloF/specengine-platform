@@ -13,6 +13,13 @@
 //! summary` ("Data": "The item", "Triggers", "Output"). The expected texts
 //! of notes and refusals are the spec's.
 //!
+//! docs/features/lock-levels-verify.md RD-7 ("Drift evidence", Q44,
+//! Q45): an item stores each row as `spec verify --json` writes it, its
+//! `levels` included (`DriftItem.stored_rows`), the core `DriftRow` view
+//! reading past it; a row step 4 found changed carries `<level>:<digest>`
+//! per changed level in its `drift_hash`'s `code`, whatever its kind, never
+//! a blob OID, and step 4's detail in place 9.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -31,11 +38,12 @@ use drift_common::{
 };
 use lock_common::LockRepo;
 use serde_json::{Value, json};
-use specengine_core::drift::{HashedEntry, HashedRow, drift_hash_input};
+use specengine_core::drift::{HashedEntry, HashedRow, StoredJson, drift_hash_input};
 use specengine_core::intake::IntakeSeverity;
 use specengine_core::verify::{MarkerRev, State};
+use specengine_store::DriftItem;
 use specengine_store::{Proposal, ProposalKind, ProposalStatus};
-use verify_common::{clone_dir, golden};
+use verify_common::{ECS, ECS_LIB, ECS_REFS, MOVEMENT, ROW_KEYS, clone_dir, golden};
 
 const SLUG: &str = "code-a";
 
@@ -52,6 +60,44 @@ fn verify_rows(repo: &LockRepo, node: &str) -> Vec<Value> {
         .cloned()
         .map(|mut row| {
             row["pre_existing"] = json!(true);
+            row
+        })
+        .collect()
+}
+
+/// An item's rows as stored (`DriftItem.stored_rows`: each row as `spec
+/// verify --json` writes it, docs/features/lock-levels-verify.md Q44),
+/// each checked to hold "Output"'s 16 keys in order.
+fn stored_rows(item: &DriftItem) -> Vec<Value> {
+    item.stored_rows
+        .iter()
+        .map(|row| {
+            let StoredJson::Object(pairs) = row else {
+                panic!("a stored row is an object: {row:?}")
+            };
+            let keys: Vec<&str> = pairs.iter().map(|(key, _)| key.as_str()).collect();
+            assert_eq!(keys, ROW_KEYS, "a stored row's keys, in verify's order");
+            serde_json::to_value(row).expect("a row")
+        })
+        .collect()
+}
+
+/// An item's rows through core's read view (`DriftRow`), which reads past
+/// `levels` (Q44: no field): verify's rows without it.
+fn view_rows(item: &DriftItem) -> Vec<Value> {
+    item.evidence
+        .rows
+        .iter()
+        .map(|row| serde_json::to_value(row).expect("a row"))
+        .collect()
+}
+
+/// `rows` without their `levels` key: what [`view_rows`] gives.
+fn without_levels(rows: &[Value]) -> Vec<Value> {
+    rows.iter()
+        .map(|row| {
+            let mut row = row.clone();
+            row.as_object_mut().expect("a row").remove("levels");
             row
         })
         .collect()
@@ -93,16 +139,16 @@ fn assert_item(
     assert!(stored.intake.is_none() && stored.record.is_none(), "{id}");
     assert_eq!(stored.diagnostics, [], "{id}");
     let item = stored.drift.as_ref().expect("a drift item's evidence");
-    let rows: Vec<Value> = item
-        .evidence
-        .rows
-        .iter()
-        .map(|row| serde_json::to_value(row).expect("a row"))
-        .collect();
+    let rows = stored_rows(item);
+    let verified = verify_rows(repo, node);
     assert_eq!(
-        rows,
-        verify_rows(repo, node),
-        "{id}: verify's rows of {node}"
+        rows, verified,
+        "{id}: verify's rows of {node}, `levels` included"
+    );
+    assert_eq!(
+        view_rows(item),
+        without_levels(&verified),
+        "{id}: the read view reads past `levels`"
     );
     assert_eq!(item.evidence.more, 0, "{id}");
     let mut seen: Vec<String> = Vec::new();
@@ -255,8 +301,10 @@ fn code_changed_raises_its_node() {
     );
 }
 
-/// TE-1 `code_ahead code_changed` of a RON value (by its blob) and its
-/// file's root entry: `LAW-BOUND` and `PIECE-COUNTER`.
+/// TE-1 `code_ahead code_changed` of a RON value and its file's root
+/// entry, each by its value's digests (docs/features/lock-levels-verify.md
+/// RD-6: `code_changed sig,body`): `LAW-BOUND` and `PIECE-COUNTER`, each
+/// stored row's `levels` naming `sig` and `body` changed.
 #[test]
 fn ron_value_changed_raises_its_nodes() {
     let repo = drifted("dr-ron-changed", |repo| {
@@ -271,12 +319,27 @@ fn ron_value_changed_raises_its_nodes() {
         "LAW-BOUND",
         &["code_ahead code_changed"],
     );
-    assert_item(
+    let piece = assert_item(
         &repo,
         &raised,
         SLUG,
         "PIECE-COUNTER",
         &["code_ahead code_changed"],
+    );
+    let rows = stored_rows(piece.drift.as_ref().expect("drift"));
+    let root: Vec<&Value> = rows
+        .iter()
+        .filter(|row| row["kind"] == "ron" && row["symbol"] == "root")
+        .collect();
+    assert_eq!(root.len(), 1, "{rows:?}");
+    assert_eq!(
+        (
+            &root[0]["detail"],
+            &root[0]["compared"],
+            &root[0]["levels"]["changed"]
+        ),
+        (&json!("sig,body"), &json!("ast"), &json!(["sig", "body"])),
+        "{rows:?}"
     );
 }
 
@@ -545,11 +608,12 @@ fn regen_line(source: &[u8]) -> usize {
 
 /// The `drift_hash` docs/features/lock-levels.md "Drift evidence" gives
 /// `PERK-REGEN`'s item when its one non-`ok` row is `regen_system`'s
-/// `code_ahead code_changed` at `HEAD` (its `@1` marker), built here from
-/// the lock at `HEAD` (`lock_code`: the entry's `levels`, `sig_hash`,
-/// `body_hash`, `deps_hash` lines as written, LF-joined) and `code`, the
-/// row's fact.
-fn regen_drift_hash(repo: &LockRepo, code: &str) -> String {
+/// `code_ahead code_changed <detail>` at `HEAD` (its `@1` marker; the
+/// detail in place 9 since docs/features/lock-levels-verify.md
+/// "Drift evidence"), built here from the lock at `HEAD` (`lock_code`: the
+/// entry's `levels`, `sig_hash`, `body_hash`, `deps_hash` lines as written,
+/// LF-joined) and `code`, the row's fact.
+fn regen_drift_hash(repo: &LockRepo, detail: &str, code: &str) -> String {
     let lock = repo.lock_text();
     let block = lock_common::node_blocks(&lock, "PERK-REGEN")
         .into_iter()
@@ -585,7 +649,7 @@ fn regen_drift_hash(repo: &LockRepo, code: &str) -> String {
         item_kind: Some("function_item"),
         state: State::CodeAhead,
         category: Some("code_changed"),
-        detail: None,
+        detail: Some(detail),
         marker_revs: vec![MarkerRev::Written(1)],
         entry: Some(HashedEntry {
             rev,
@@ -608,6 +672,9 @@ fn regen_drift_hash(repo: &LockRepo, code: &str) -> String {
 /// entry's evidence (`lock_code`) its `levels` and three digest lines,
 /// never a fingerprint. The item's `drift_hash` is checked against the
 /// hash built from those facts by hand; never the item's whole digest.
+/// docs/features/lock-levels-verify.md RD-7: the row's detail (place 9)
+/// names the changed levels (`body`, `sig`, `sig,body`), the stored row
+/// too.
 #[test]
 fn item_code_names_its_changed_levels() {
     let cases: [(&str, &str, &str, &[&str]); 3] = [
@@ -681,18 +748,161 @@ fn item_code_names_its_changed_levels() {
             "PERK-REGEN",
             &["code_ahead code_changed"],
         );
-        let stored = item.drift.expect("drift").hash;
-        let want = regen_drift_hash(&repo, &code);
+        let drift = item.drift.expect("drift");
+        let detail = changed.join(",");
+        let rows = stored_rows(&drift);
+        assert_eq!(rows.len(), 1, "{label}: {rows:?}");
+        assert_eq!(
+            (&rows[0]["detail"], &rows[0]["levels"]["changed"]),
+            (&json!(detail), &json!(changed)),
+            "{label}"
+        );
+        let stored = drift.hash;
+        let want = regen_drift_hash(&repo, &detail, &code);
         if stored != want {
             failures.push(format!(
                 "{label}: code {code}: stored {stored}, built {want}"
             ));
         }
         // Never the whole digest, nor the blob.
-        let whole = regen_drift_hash(&repo, &new.body);
+        let whole = regen_drift_hash(&repo, &detail, &new.body);
         assert_ne!(stored, whole, "{label}: a digest without its level");
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+// -------------------------------------------- lock-levels-verify RD-7
+
+/// The one stored row of `node`'s item `id` (its `detail`, `levels`).
+fn only_row(repo: &LockRepo, id: &str) -> Value {
+    let rows = stored_rows(&proposal(repo, "verify-ecs", id).drift.expect("drift"));
+    assert_eq!(rows.len(), 1, "{id}: {rows:?}");
+    rows[0].clone()
+}
+
+/// docs/features/lock-levels-verify.md RD-7, M8 (Q13, Q45): a module's
+/// and a RON value's `code` is `<level>:<digest>` per changed level, never
+/// its file's blob OID, so an edit its levels do not see is the same drift.
+/// verify-ecs' file module bound `[sig]` (`//! @implements PERK-STAMINA@2
+/// [sig]`, accepted) drifted by an inner attribute (`code_changed sig`)
+/// and its RON value (`regen_per_second`) drifted (`code_changed
+/// sig,body`), raised; then a body edit in the module's file (a field in
+/// `App`), committed: raised again, `PERK-STAMINA` `same evidence`; then
+/// the RON value's sibling (`sprint_cost`) edited, committed: raised again,
+/// `TUNE-01` `same evidence`. M8: a blob OID as a module's or RON row's
+/// `code` (each raise again `evidence changed since it was raised`).
+#[test]
+fn module_neighbour_edit_keeps_the_drift_hash() {
+    let repo = LockRepo::of("dr-module-neighbour", ECS, "repo", &[]);
+    repo.replace(
+        ECS_LIB,
+        "//! @implements PERK-STAMINA@2\n",
+        "//! @implements PERK-STAMINA@2 [sig]\n",
+    );
+    repo.commit_all("the module bound by its signature");
+    for reference in ECS_REFS {
+        repo.accept_ok(reference);
+    }
+    repo.replace(
+        ECS_LIB,
+        "//! @implements PERK-STAMINA@2 [sig]\n",
+        "//! @implements PERK-STAMINA@2 [sig]\n#![allow(dead_code)]\n",
+    );
+    repo.replace(MOVEMENT, "regen_per_second: 2.5,", "regen_per_second: 3.0,");
+    repo.commit_all("an inner attribute, the regen rate");
+    let first = raised(&repo, &[]);
+    assert_eq!(
+        first.created_nodes(),
+        ["PERK-STAMINA", "TUNE-01"],
+        "{}",
+        first.text()
+    );
+    let id_of = |node: &str| {
+        first
+            .created()
+            .into_iter()
+            .find(|(_, created)| created == node)
+            .map(|(id, _)| id)
+            .unwrap_or_else(|| panic!("no item for {node}"))
+    };
+    let (stamina, tune) = (id_of("PERK-STAMINA"), id_of("TUNE-01"));
+    let module_row = only_row(&repo, &stamina);
+    assert_eq!(
+        (
+            &module_row["kind"],
+            &module_row["category"],
+            &module_row["detail"],
+            &module_row["levels"]
+        ),
+        (
+            &json!("module"),
+            &json!("code_changed"),
+            &json!("sig"),
+            &json!({"lock": ["sig"], "markers": ["sig"], "changed": ["sig"]})
+        ),
+        "the premise: the module drifted by its signature"
+    );
+    let ron_row = only_row(&repo, &tune);
+    assert_eq!(
+        (&ron_row["kind"], &ron_row["detail"], &ron_row["compared"]),
+        (&json!("ron"), &json!("sig,body"), &json!("ast")),
+        "the premise: the RON value drifted by its digest"
+    );
+
+    // A body edit in the `[sig]` module's file: the same drift.
+    repo.replace(
+        ECS_LIB,
+        "pub systems: Vec<&'static str>,",
+        "pub systems: Vec<&'static str>,\n    pub paused: bool,",
+    );
+    repo.commit_all("a field beside the module's signature");
+    let module_again = raised(&repo, &[]);
+    assert_eq!(module_again.created(), [], "{}", module_again.text());
+    assert_eq!(
+        module_again.hits(),
+        [
+            (
+                stamina.clone(),
+                "PERK-STAMINA".to_owned(),
+                "open".to_owned(),
+                true
+            ),
+            (tune.clone(), "TUNE-01".to_owned(), "open".to_owned(), true),
+        ],
+        "{}",
+        module_again.text()
+    );
+    assert!(
+        module_again
+            .text()
+            .lines()
+            .any(|line| line == format!("queued {stamina} | PERK-STAMINA | open | same evidence")),
+        "{}",
+        module_again.text()
+    );
+
+    // The RON value's sibling edited: the same drift.
+    repo.replace(MOVEMENT, "sprint_cost: 4.0,", "sprint_cost: 5.0,");
+    repo.commit_all("the sprint cost");
+    let ron_again = raised(&repo, &[]);
+    assert_eq!(ron_again.created(), [], "{}", ron_again.text());
+    assert_eq!(
+        ron_again.hits(),
+        [
+            (stamina, "PERK-STAMINA".to_owned(), "open".to_owned(), true),
+            (tune.clone(), "TUNE-01".to_owned(), "open".to_owned(), true),
+        ],
+        "{}",
+        ron_again.text()
+    );
+    assert!(
+        ron_again
+            .text()
+            .lines()
+            .any(|line| line == format!("queued {tune} | TUNE-01 | open | same evidence")),
+        "{}",
+        ron_again.text()
+    );
 }
 
 // ------------------------------------------------------------------ RD-2
@@ -798,13 +1008,8 @@ fn the_first_64_rows_are_stored_the_rest_counted() {
     let named = raised(&repo, &["LAW-STEP"]);
     let (id, _) = named.created().remove(0);
     let item = proposal(&repo, SLUG, &id).drift.expect("drift");
-    let stored: Vec<Value> = item
-        .evidence
-        .rows
-        .iter()
-        .map(|row| serde_json::to_value(row).unwrap())
-        .collect();
-    assert_eq!(stored, all[..64], "the first 64 by key");
+    assert_eq!(stored_rows(&item), all[..64], "the first 64 by key");
+    assert_eq!(view_rows(&item), without_levels(&all[..64]));
     assert_eq!(item.evidence.more, (all.len() - 64) as u64);
 }
 

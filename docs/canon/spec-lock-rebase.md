@@ -15,7 +15,7 @@ The migration writer (ADR-0050, `architecture-code.md#spec-lock`; CLI `lock_reba
 `spec lock rebase [--json]`; accept's refusals (`spec-lock-accept.md` "Exits"): exit 2 off a terminal (nothing read), on usage, config, `[code]`, git, an unmerged lock; 1 if `spec.lock` or the config is not `HEAD`'s. Then:
 
 1. No lock: exit 1 `no spec.lock: nothing to rebase`; this build's: exit 0 `nothing to change`; not UTF-8, unreadable by `None`, another `norm_recipe`: exit 2, the reader's text (the last `Some`'s).
-2. Each `file_blob` by OID, one `read_blobs` session (raw `cat-file --batch`, `GIT_NO_LAZY_FETCH`; failing: exit 2); never `HEAD`'s tree, index, working tree or `commit`. A blob parses once; a panic or no tree: exit 2 naming file and OID.
+2. Each `file_blob` by OID, one `read_blobs` session (raw `cat-file --batch`, `GIT_NO_LAZY_FETCH`; failing: exit 2); never `HEAD`'s tree, index, working tree or `commit`. A blob parses once; a panic (``re-deriving `<file>` at blob <oid> failed``) or no tree: exit 2 naming file and OID.
 3. Per entry, key order: located, given levels, hashed as accept's, or dropped; all but its code kept.
 4. Rows, the question, re-reads (changed: exit 1 `spec.lock changed while being rebased; nothing written`), the commit.
 
@@ -42,4 +42,3 @@ Verify's `HEAD` lock (`spec-verify.md` "Base"; `--changed`, `--staged`): `Some` 
 - A module and its inline `mod` marked for one node and relation: the `mod`'s entry drops `ambiguous`, the module's too if the `mod` ends its symbol (`mod a` in `a.rs`).
 - git < 2.44 ignores `GIT_NO_LAZY_FETCH`: a partial clone may fetch a missing blob.
 - From the binary upgrade to the rebase commit a project's verify hook refuses every commit (cause 6), under `enforce` or plain `spec verify` a Fix row that one too: switch to `enforce-introduced` before the upgrade (`HEAD`'s stricter mode counts), else it takes `--no-verify` or the hook off.
-- A panic hashing or naming reads "the Rust parser failed on …" (`lock-levels-verify.md` RD-9).

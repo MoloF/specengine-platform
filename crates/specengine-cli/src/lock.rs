@@ -1101,8 +1101,8 @@ pub(crate) struct Facts<'a> {
 /// item's levels (`item_levels`, an inline `mod` as its `mod_item`), the
 /// file's module's (`module_levels`), a RON file's value hashes paired
 /// with their comments by range (task spec `lock-levels`, "Accept").
-/// `spec verify --tests` calls it as accept's own predicate (task spec
-/// `verify-tests`, "Verifiable").
+/// `spec verify --tests` calls it as accept's own predicate (canon
+/// `spec-verify-tests`, "Runnable and verifiable").
 pub(crate) fn committed_bindings(
     repo: &Repo,
     tree: &CodeTree,
@@ -1434,7 +1434,7 @@ fn classify_found(
         (None, None) => codes.of(&found).map(|hashed| Verified {
             rev: pair.facts.rev,
             spec_hash: pair.facts.spec_hash.to_owned(),
-            code: EntryCode::Levels(level_code(found.levels.clone(), &hashed)),
+            code: EntryCode::Levels(level_code(found.levels, &hashed)),
             file_blob: pair.blob.to_owned(),
             commit: pair.facts.commit.to_owned(),
             verified_at: pair.facts.today.to_owned(),

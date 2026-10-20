@@ -48,8 +48,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 use specengine_core::check::canonical_id;
 use specengine_core::drift::{
-    DRIFT_ROWS_MAX, DriftEvidence, DriftLock, DriftMarker, DriftRow, HashedEntry, HashedRow,
-    drift_hash_input, drift_summary, raises,
+    DRIFT_ROWS_MAX, HashedEntry, HashedRow, drift_hash_input, drift_summary, raises,
 };
 use specengine_core::intake::{IntakeSeverity, NODE_IDS_MAX};
 use specengine_core::lock::{LOCK_FILE, lock_code};
@@ -553,17 +552,17 @@ fn new_drift(
     author: &Author,
     task: Option<&str>,
 ) -> Result<NewDrift, CliError> {
-    let stored: Vec<DriftRow> = findings
+    let stored: Vec<VerifyRow> = findings
         .iter()
         .take(DRIFT_ROWS_MAX)
         .map(|row| {
             let mut shown = shown(row);
             shown.pre_existing = true;
-            drift_row(&shown)
+            shown
         })
         .collect();
-    let evidence = DriftEvidence {
-        rows: stored,
+    let evidence = StoredEvidence {
+        rows: &stored,
         more: (findings.len().saturating_sub(DRIFT_ROWS_MAX)) as u64,
     };
     let evidence = serde_json::to_string(&evidence)
@@ -605,36 +604,13 @@ fn new_drift(
     })
 }
 
-/// A shown row as stored: `spec verify --json`'s row, key for key.
-fn drift_row(row: &VerifyRow) -> DriftRow {
-    DriftRow {
-        node: row.node.clone(),
-        relation: row.relation.to_owned(),
-        file: row.file.clone(),
-        kind: row.kind.map(str::to_owned),
-        symbol: row.symbol.clone(),
-        item_kind: row.item_kind.clone(),
-        state: row.state.as_str().to_owned(),
-        category: row.category.clone(),
-        detail: row.detail.clone(),
-        class: row.class.map(str::to_owned),
-        pre_existing: row.pre_existing,
-        markers: row
-            .markers
-            .iter()
-            .map(|marker| DriftMarker {
-                line: marker.line,
-                rev: marker.rev,
-            })
-            .collect(),
-        node_rev: row.node_rev,
-        lock: row.lock.as_ref().map(|lock| DriftLock {
-            rev: lock.rev,
-            commit: lock.commit.clone(),
-            verified_at: lock.verified_at.clone(),
-        }),
-        compared: row.compared.map(str::to_owned),
-    }
+/// An item's `drift` column as written: `{"rows":[…],"more":<n>}`, each
+/// row `spec verify --json`'s own serialization, `levels` included; core's
+/// `DriftEvidence` reads it back past the keys its rows do not name.
+#[derive(Serialize)]
+struct StoredEvidence<'a> {
+    rows: &'a [VerifyRow],
+    more: u64,
 }
 
 /// A judged row as its item's hash covers it (no line, no time, no

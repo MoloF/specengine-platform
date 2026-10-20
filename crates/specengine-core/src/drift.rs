@@ -336,11 +336,13 @@ pub struct HashedRow<'a> {
     /// The node's revision R and `norm_hash` H at the commit judged.
     pub rev: Option<u32>,
     pub norm_hash: Option<&'a str>,
-    /// The cascade's current fact: an item compared changed by its levels,
-    /// `<level>:<digest>` per changed level of `sig`, `body`, `,`-joined in
-    /// canonical order (`body:b3:…`); a `module` or `ron` row changed by
-    /// its blob, the blob's OID; else `None`. No item's file blob: an edit
-    /// beside the item is the same drift.
+    /// The cascade's current fact, any kind, on a row whose levels' digests
+    /// were compared and found changed whatever its state (`code_changed`,
+    /// `raised`, `conflict`): `<level>:<digest>` per changed level, this
+    /// run's digest, `,`-joined in canonical order (`body:b3:…,deps:b3:…`);
+    /// else `None` (`levels_changed`, equal by blob, nothing compared).
+    /// Never a file's blob OID: an edit beside the unit, a sibling RON
+    /// value's or a neighbour item's, is the same drift.
     pub code: Option<&'a str>,
 }
 

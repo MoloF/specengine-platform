@@ -1,4 +1,4 @@
-//! `spec symbols` (task spec `symbol-reads`, "Lookup", "spec symbols"):
+//! `spec symbols` (canon `symbol-reads`, "Lookup", "spec symbols"):
 //! the code index's targets for one of four forms, each with its direct
 //! markers — a QUERY looked up in tiers (`exact`, `suffix`, `name`: the
 //! store's B-tree searches, the name key from `specengine-code`'s

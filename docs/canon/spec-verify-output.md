@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-20
 ---
 
 # `spec verify`'s output: rows, hints, summary, JSON
@@ -20,7 +20,7 @@ pre-existing check | unlocked | R-20 | configures | assets/data/movement.ron | r
 verify: blocked [enforce-introduced]: 1 fix, 1 check (1 pre-existing), 0 cannot, 11 ok; 9 by blob, 3 by ast; 1 skipped
 ```
 
-A row: `<class> | <state>[ <category>][ <detail>] | <node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]`, class `fix`, `check`, `cannot`, prefixed `pre-existing `; a keyless row's binding is `unanchored` or `cannot_verify` and its category, as accept prints it (`spec-lock-accept.md` "Steps" 8). The summary's `[<mode>]` is the mode the verdict used, also with a run cause (plain `enforce-introduced`: `[enforce]`), absent when `[verify]` cannot be read; `(<n> pre-existing)` only with a base; `by blob`, `by ast` count rows by `compared`; `skipped` the `queue` and `other_project` markers.
+A row: `<class> | <state>[ <category>][ <detail>] | <node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]`, class `fix`, `check`, `cannot`, prefixed `pre-existing `; `code_ahead`'s details: `code_changed body,deps`, `levels_changed sig,body->sig` (`spec-verify.md` "States"); a keyless row's binding is `unanchored` or `cannot_verify` and its category, as accept prints it (`spec-lock-accept.md` "Steps" 8). The summary's `[<mode>]` is the mode the verdict used, also with a run cause (plain `enforce-introduced`: `[enforce]`), absent when `[verify]` cannot be read; `(<n> pre-existing)` only with a base; `by blob`, `by ast` count rows by `compared`; `skipped` the `queue` and `other_project` markers.
 
 ## Hints
 
@@ -49,14 +49,15 @@ One `hint: <state>[ <category>]: <step>` per (state, category) present, in state
  "rows":[{"node":"R-12","relation":"implements","file":"crates/game/src/stamina.rs","kind":"item",
    "symbol":"game::stamina::regen_system","item_kind":"function_item","state":"conflict","category":null,
    "detail":null,"class":"fix","pre_existing":false,"markers":[{"line":41,"rev":2}],"node_rev":3,
-   "lock":{"rev":2,"commit":"a0cea48<33 hex>","verified_at":"2026-10-10"},"compared":"ast"}],
+   "lock":{"rev":2,"commit":"a0cea48<33 hex>","verified_at":"2026-10-10"},"compared":"ast",
+   "levels":{"lock":["sig","body"],"markers":["sig","body"],"changed":["body"]}}],
  "delta":{"symbols":null,"bindings":{"moved":null,"ambiguous":[],"lost":[],"stale":[<R-12's six key fields>]},
    "affected_nodes":["R-12"],"tests_reaching":null},
  "cannot":[],"notes":[]}
 ```
 
 - `mode`: the summary's, `null` when `[verify]` cannot be read; `base`: `null` (plain), `"HEAD"`, `"unborn"`; `verdict`: `clean`, `observed`, `blocked`, `cannot-verify`.
-- `rows`: every row, `ok` too, in key order; a keyless row's `kind`, `symbol`, `item_kind` `null`; `markers` `[]` for a lock-only row, `rev` `null` when unversioned or malformed; `node_rev` `null` when unknown or gone; `lock` `null` without an entry; `class` `null` for `ok`; `compared` `blob`, `ast` or `null`. A run cause: `rows` `[]`.
+- `rows`: every row, `ok` too, in key order; a keyless row's `kind`, `symbol`, `item_kind` `null`; `markers` `[]` for a lock-only row, `rev` `null` when unversioned or malformed; `node_rev` `null` when unknown or gone; `lock` `null` without an entry; `class` `null` for `ok`; `compared` `blob`, `ast` or `null`; last, `levels`, L_lock, L_mark and the levels whose digest changed, in canonical order (`changed` `null` unless `compared` is `ast`), `null` without an E or a bound marker or with an `Invalid` list: 16 keys. A run cause: `rows` `[]`.
 - `delta`: 05 s5.2's reply without `ms`, over the rows not Pre-existing: `bindings.lost` the `broken_binding` rows, `stale` `code_ahead` and `conflict`, `ambiguous` `cannot_verify ambiguous_*`, each a list of row keys (`node`, `relation`, `file`, `kind`, `symbol`, `item_kind`); `affected_nodes` the sorted distinct resolved nodes of non-`ok` rows; `bindings.moved` `null` until 5c, `tests_reaching` until 7a (`bundle-bindings`), `symbols` until 7b (`impact`).
 - `cannot`: the run causes' lines, in order; `notes`: the `note:` texts.
 

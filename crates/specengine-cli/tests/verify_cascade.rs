@@ -1,12 +1,14 @@
 //! docs/features/spec-verify.md TE-5 and RD-4: the cascade at verify
 //! level (AC-2) over `fixtures/verify-ecs`, its nodes accepted: an equal
-//! blob is never parsed or hashed; a changed blob of a `module` or a RON
-//! value is a change by itself; a changed blob of an item is re-hashed
-//! whole, so rustfmt (default and `max_width = 60`), a comment or a
-//! neighbour's edit leave it `ok` and a body edit makes it `code_ahead`;
-//! the counters pinned. Under `core.autocrlf` the same verdicts, the
-//! literal limit (`docs/canon/spec-verify.md` "Known limits": a
-//! multi-line literal holding CRLF reads `code_ahead`) pinned.
+//! blob is never parsed or hashed; a changed blob of an item is re-hashed
+//! by its levels, so rustfmt (default and `max_width = 60`), a comment or a
+//! neighbour's edit leave it `ok` and a body edit makes it `code_ahead
+//! code_changed body`; the counters pinned. Since
+//! docs/features/lock-levels-verify.md (RD-6, TE-7) a `module` or a RON
+//! value is judged by its digests too: a sibling RON value's edit leaves
+//! the RON row `ok`, an edit in a default-levels module's file drifts it;
+//! under `core.autocrlf` every row reads LF's state, category and detail,
+//! by `ast`.
 
 mod common;
 mod lock_common;
@@ -20,8 +22,11 @@ use lock_common::LockRepo;
 use serde_json::{Value, json};
 use verify_common::{ECS_LIB, MOVEMENT, STAMINA, Verify, ecs, verify};
 
-/// Each row's `(state, category, compared)` by its node and symbol.
-fn states(run: &Verify) -> Vec<(String, String, Value, Value, Value)> {
+/// A row's `(node, symbol, state, category, detail, compared)`.
+type Said = (String, String, Value, Value, Value, Value);
+
+/// Each row's `(state, category, detail, compared)` by its node and symbol.
+fn states(run: &Verify) -> Vec<Said> {
     run.rows()
         .into_iter()
         .map(|row| {
@@ -30,21 +35,30 @@ fn states(run: &Verify) -> Vec<(String, String, Value, Value, Value)> {
                 row["symbol"].as_str().unwrap_or_default().to_owned(),
                 row["state"].clone(),
                 row["category"].clone(),
+                row["detail"].clone(),
                 row["compared"].clone(),
             )
         })
         .collect()
 }
 
-/// The six rows of verify-ecs, each `(state, category, compared)`.
+/// What one row says: `(state, category, detail, compared)`.
+type Cell = (
+    &'static str,
+    Option<&'static str>,
+    Option<&'static str>,
+    &'static str,
+);
+
+/// The six rows of verify-ecs, each `(state, category, detail, compared)`.
 fn ecs_rows(
-    build: (&str, Option<&str>, &str),
-    module: (&str, Option<&str>, &str),
-    drain: (&str, Option<&str>, &str),
-    regen: (&str, Option<&str>, &str),
-    ron: (&str, Option<&str>, &str),
-    base_regen: (&str, Option<&str>, &str),
-) -> Vec<(String, String, Value, Value, Value)> {
+    build: Cell,
+    module: Cell,
+    drain: Cell,
+    regen: Cell,
+    ron: Cell,
+    base_regen: Cell,
+) -> Vec<Said> {
     [
         ("PERK-DRAIN", "crates/game::stamina::drain_system", drain),
         ("PERK-REGEN", "crates/game::stamina::regen_system", regen),
@@ -54,22 +68,26 @@ fn ecs_rows(
         ("TUNE-01", "crates/game::stamina::BASE_REGEN", base_regen),
     ]
     .into_iter()
-    .map(|(node, symbol, (state, category, compared))| {
+    .map(|(node, symbol, (state, category, detail, compared))| {
         (
             node.to_owned(),
             symbol.to_owned(),
             json!(state),
             json!(category),
+            json!(detail),
             json!(compared),
         )
     })
     .collect()
 }
 
-const OK_BLOB: (&str, Option<&str>, &str) = ("ok", None, "blob");
-const OK_AST: (&str, Option<&str>, &str) = ("ok", None, "ast");
-const CHANGED_AST: (&str, Option<&str>, &str) = ("code_ahead", Some("code_changed"), "ast");
-const CHANGED_BLOB: (&str, Option<&str>, &str) = ("code_ahead", Some("code_changed"), "blob");
+const OK_BLOB: Cell = ("ok", None, None, "blob");
+const OK_AST: Cell = ("ok", None, None, "ast");
+/// An item's or a module's `body` changed (docs/features/lock-levels-verify.md
+/// "Level-aware verify" step 4).
+const BODY_AST: Cell = ("code_ahead", Some("code_changed"), Some("body"), "ast");
+/// A RON value changed: its `sig` = `body` = the value hash (Q46).
+const VALUE_AST: Cell = ("code_ahead", Some("code_changed"), Some("sig,body"), "ast");
 
 /// `rustfmt --edition 2024 [--config max_width=60]` over `text`, through
 /// stdin, outside any project's `rustfmt.toml`.
@@ -138,12 +156,19 @@ fn blob_equal_entries_are_not_hashed() {
     );
 }
 
-/// RD-4: a RON value and a module are compared by their file's blob alone:
-/// an edit anywhere in the file (the RON's unbound field, the module's
-/// unbound struct) is `code_ahead`, by `blob`. M: a RON blob change `ok`.
+/// docs/features/lock-levels-verify.md RD-6 (replacing 4a's
+/// `blob_only_binding_change_is_code_ahead`): a RON value and a module are
+/// judged by their levels' digests once their file's blob changed. The
+/// RON's unbound sibling (`sprint_cost`) edited: `regen_per_second` `ok` by
+/// `ast`; the module's file gaining a field in its unbound `App`: the file
+/// module (no list: `sig`, `body`; its `body` the file) `code_ahead
+/// code_changed body` by `ast`, the error-free `build` beside it `ok` by
+/// `ast`. Its text line carries the detail; the RON prints none; the
+/// cascade counts both by `ast`. M7: RON judged by blob (the RON row
+/// `code_ahead code_changed` by `blob`).
 #[test]
-fn blob_only_binding_change_is_code_ahead() {
-    let repo = ecs("verify-blob-only");
+fn ron_sibling_edit_is_ok() {
+    let repo = ecs("verify-ron-sibling");
     repo.replace(MOVEMENT, "sprint_cost: 4.0,", "sprint_cost: 5.0,");
     repo.replace(
         ECS_LIB,
@@ -153,19 +178,32 @@ fn blob_only_binding_change_is_code_ahead() {
     let run = verify(&repo, &[]);
     assert_eq!(
         states(&run),
-        ecs_rows(
-            OK_AST,
-            CHANGED_BLOB,
-            OK_BLOB,
-            OK_BLOB,
-            CHANGED_BLOB,
-            OK_BLOB
-        )
+        ecs_rows(OK_AST, BODY_AST, OK_BLOB, OK_BLOB, OK_AST, OK_BLOB),
+        "{}",
+        run.text.show()
     );
-    assert_eq!(run.json["cascade"], json!({"by_blob": 5, "by_ast": 1}));
+    assert_eq!(run.json["cascade"], json!({"by_blob": 3, "by_ast": 3}));
     assert_eq!((run.verdict(), run.code()), ("observed", 0));
-    run.has_line("check | code_ahead code_changed | TUNE-01 | configures | assets/data/movement.ron | ron root.regen_per_second");
-    run.has_line("check | code_ahead code_changed | PERK-STAMINA | implements | crates/game/src/lib.rs | module crates/game");
+    run.has_line("check | code_ahead code_changed body | PERK-STAMINA | implements | crates/game/src/lib.rs | module crates/game");
+    assert!(
+        !run.text.stdout.contains("| TUNE-01 |"),
+        "the RON value prints no row:\n{}",
+        run.text.show()
+    );
+    assert_eq!(
+        run.summary(),
+        "verify: observed [observe]: 0 fix, 1 check, 0 cannot, 5 ok; 3 by blob, 3 by ast; 0 skipped"
+    );
+    // The RON value itself edited: `code_changed sig,body` by `ast`.
+    repo.replace(MOVEMENT, "regen_per_second: 2.5,", "regen_per_second: 3.0,");
+    let value = verify(&repo, &[]);
+    assert_eq!(
+        states(&value),
+        ecs_rows(OK_AST, BODY_AST, OK_BLOB, OK_BLOB, VALUE_AST, OK_BLOB),
+        "{}",
+        value.text.show()
+    );
+    value.has_line("check | code_ahead code_changed sig,body | TUNE-01 | configures | assets/data/movement.ron | ron root.regen_per_second");
 }
 
 /// RD-4, TE-5: comment edits (inside the body, the doc comment above, a
@@ -250,7 +288,7 @@ fn rustfmt_and_neighbour_edits_are_ok_a_body_edit_is_not() {
     let edited = verify(&repo, &[]);
     assert_eq!(
         states(&edited),
-        ecs_rows(OK_BLOB, OK_BLOB, OK_AST, CHANGED_AST, OK_BLOB, OK_AST)
+        ecs_rows(OK_BLOB, OK_BLOB, OK_AST, BODY_AST, OK_BLOB, OK_AST)
     );
     assert_eq!((edited.verdict(), edited.code()), ("observed", 0));
     assert_eq!(edited.json["cascade"], json!({"by_blob": 3, "by_ast": 3}));
@@ -301,6 +339,7 @@ fn autocrlf_items_verify_as_lf_but_the_literal() {
         (
             row["state"].clone(),
             row["category"].clone(),
+            row["detail"].clone(),
             row["compared"].clone(),
         )
     };
@@ -320,7 +359,7 @@ fn autocrlf_items_verify_as_lf_but_the_literal() {
     }
     assert_eq!(
         regen(&run, "crates/game::stamina::REGEN_HELP"),
-        (json!("ok"), json!(null), json!("ast")),
+        (json!("ok"), json!(null), json!(null), json!("ast")),
         "the literal limit lifted by the CR rule"
     );
     repo.replace(
@@ -331,7 +370,7 @@ fn autocrlf_items_verify_as_lf_but_the_literal() {
     let comment = verify(&repo, &[]);
     assert_eq!(
         regen(&comment, "crates/game::stamina::regen_system"),
-        (json!("ok"), Value::Null, json!("ast"))
+        (json!("ok"), Value::Null, Value::Null, json!("ast"))
     );
     let body = repo
         .read(STAMINA)
@@ -340,19 +379,29 @@ fn autocrlf_items_verify_as_lf_but_the_literal() {
     let edited = verify(&repo, &[]);
     assert_eq!(
         regen(&edited, "crates/game::stamina::regen_system"),
-        (json!("code_ahead"), json!("code_changed"), json!("ast"))
+        (
+            json!("code_ahead"),
+            json!("code_changed"),
+            json!("body"),
+            json!("ast")
+        )
     );
 }
 
-/// TE-5, Q9 (decided 2026-10-13, the owner's pre-approval, review open):
-/// under `core.autocrlf`, every file checked out with CRLF and `git
-/// status` clean, the items give the LF verdicts (`ok`, by their hash);
-/// the module and the RON value, compared by their blob alone (`hash-object
-/// --no-filters` hashes the CRLF bytes), read `code_ahead code_changed` by
-/// `blob`: a known limit until slice 5b. Nothing else differs. M: a CRLF
-/// item judged changed; a module or RON row judged without its blob.
+/// docs/features/lock-levels-verify.md TE-7 (CRLF inverted; 4a's TE-5,
+/// Q9): under `core.autocrlf`, every file checked out with CRLF and `git
+/// status` clean, every row reads LF's state, category and detail: the
+/// items, the module and the RON value `ok`, by `ast` (`hash-object
+/// --no-filters` hashes the CRLF bytes, so the blob differs from
+/// `file_blob`; the levels apply the CR rule), `levels.changed` empty;
+/// `clean`. The same edits over LF and over CRLF (a body edit, a field in
+/// the module's file, the RON value) give the same states, categories and
+/// details, every one by `ast`. 4a's known limit (the module and the RON
+/// `code_ahead` by blob) is gone. M: a CRLF item judged changed; a module
+/// or RON row judged by its blob.
 #[test]
-fn autocrlf_items_same_module_and_ron_code_ahead() {
+fn autocrlf_items_module_and_ron_verify_as_lf() {
+    let lf_repo = ecs("verify-autocrlf-lf");
     let repo = ecs("verify-autocrlf");
     let lf = verify(&repo, &[]);
     assert_eq!(
@@ -363,14 +412,60 @@ fn autocrlf_items_same_module_and_ron_code_ahead() {
     let crlf = verify(&repo, &[]);
     assert_eq!(
         states(&crlf),
-        ecs_rows(OK_AST, CHANGED_BLOB, OK_AST, OK_AST, CHANGED_BLOB, OK_AST),
+        ecs_rows(OK_AST, OK_AST, OK_AST, OK_AST, OK_AST, OK_AST),
         "{}",
         crlf.text.show()
     );
-    assert_eq!(crlf.json["cascade"], json!({"by_blob": 2, "by_ast": 4}));
-    assert_eq!((crlf.verdict(), crlf.code()), ("observed", 0));
+    for row in crlf.rows() {
+        assert_eq!(row["levels"]["changed"], json!([]), "{row}");
+    }
+    assert_eq!(crlf.json["cascade"], json!({"by_blob": 0, "by_ast": 6}));
+    assert_eq!((crlf.verdict(), crlf.code()), ("clean", 0));
     assert_eq!(
         crlf.summary(),
-        "verify: observed [observe]: 0 fix, 2 check, 0 cannot, 4 ok; 2 by blob, 4 by ast; 0 skipped"
+        "verify: clean [observe]: 0 fix, 0 check, 0 cannot, 6 ok; 0 by blob, 6 by ast; 0 skipped"
     );
+
+    // The same edits over LF and over the CRLF checkout.
+    let edits: [(&str, &str, &str); 3] = [
+        (
+            STAMINA,
+            "(stamina.current + rate * dt)",
+            "(stamina.current + 2.0 * rate * dt)",
+        ),
+        (
+            ECS_LIB,
+            "pub systems: Vec<&'static str>,",
+            "pub systems: Vec<&'static str>,\n    pub paused: bool,",
+        ),
+        (MOVEMENT, "regen_per_second: 2.5,", "regen_per_second: 3.0,"),
+    ];
+    for (file, from, to) in edits {
+        lf_repo.replace(file, from, to);
+        let text = repo.read(file);
+        let crlf_from = from.replace('\n', "\r\n");
+        assert_eq!(text.matches(&crlf_from).count(), 1, "{file}: {from:?}");
+        repo.write(
+            file,
+            text.replacen(&crlf_from, &to.replace('\n', "\r\n"), 1),
+        );
+    }
+    let lf_edited = verify(&lf_repo, &[]);
+    let crlf_edited = verify(&repo, &[]);
+    let expected = ecs_rows(OK_AST, BODY_AST, OK_AST, BODY_AST, VALUE_AST, OK_AST);
+    assert_eq!(states(&lf_edited), expected, "{}", lf_edited.text.show());
+    assert_eq!(
+        states(&crlf_edited),
+        expected,
+        "{}",
+        crlf_edited.text.show()
+    );
+    let level_objects = |run: &Verify| -> Vec<Value> {
+        run.rows()
+            .into_iter()
+            .map(|row| row["levels"].clone())
+            .collect()
+    };
+    assert_eq!(level_objects(&crlf_edited), level_objects(&lf_edited));
+    assert_eq!(crlf_edited.text.stdout, lf_edited.text.stdout);
 }

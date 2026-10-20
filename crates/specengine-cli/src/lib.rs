@@ -135,10 +135,9 @@
 //!   checked and stored as the worktree's advisory snapshot after `done`
 //!   over an unchanged tree; [`layer_c_state`] that snapshot's freshness;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
-//!   `refs`, `symbols`),
-//!   blocked (`check`, `verify`) or refused by the proposal or its target
-//!   (the queue's commands), 2 could not run (`check`: could not check;
-//!   `verify`: could not verify).
+//!   `refs`, `symbols`), blocked (`check`, `verify`) or refused by the
+//!   proposal or its target (the queue's commands), 2 could not run
+//!   (`check`: could not check; `verify`: could not verify).
 //!
 //! One database state gives one stdout, byte for byte: nothing depends on
 //! time, storage order or the absolute root (`check`: one tree, config,
@@ -379,7 +378,8 @@ pub use task::{
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
-    VerifiedTree, VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow, verify,
+    VerifiedTree, VerifyLevels, VerifyLock, VerifyMarker, VerifyOutcome, VerifyRequest, VerifyRow,
+    verify,
 };
 pub use verify_tests::{
     VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest, VerifyTestsRow,

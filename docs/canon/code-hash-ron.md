@@ -8,7 +8,7 @@ reviewed: 2026-10-20
 
 # Code hash: the RON value
 
-The hash of the value a RON comment anchors (`code-identity.md` "RON binding"): a `ron` entry's `sig_hash` and `body_hash` in `spec.lock` format 2 (`spec-lock.md` "Entry"), judged from 5b-1b (`lock-levels-verify.md`; by `file_blob` until then). v3's header, `put` and CR rule (`code-hash.md` "Levels"), its own tag; `code-hash-eval.md` measures it. A recorded digest changes only with `LEVEL_RECIPE` and a rebase of every lock (ADR-0050).
+The hash of the value a RON comment anchors (`code-identity.md` "RON binding"): a `ron` entry's `sig_hash` and `body_hash` in `spec.lock` format 2 (`spec-lock.md` "Entry"), judged by its levels (`spec-verify.md` "Cascade"). v3's header, `put` and CR rule (`code-hash.md` "Levels"), its own tag; `code-hash-eval.md` measures it. A recorded digest changes only with `LEVEL_RECIPE` and a rebase of every lock (ADR-0050).
 
 ## Entry point
 

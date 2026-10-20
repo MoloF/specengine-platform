@@ -186,7 +186,7 @@ pub fn indexed_name_file(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) 
 pub fn file_place(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> (String, FileRole) {
     let label = file
         .package
-        .map(package_label)
+        .map(dir_text)
         .filter(|label| !label.is_empty())
         .unwrap_or_else(|| ROOT_PACKAGE.to_owned());
     let role = file
@@ -200,12 +200,14 @@ pub fn file_place(file: &NamedFile<'_>, index: Option<&TargetIndex<'_>>) -> (Str
     (label, role)
 }
 
-/// A package directory as a qpath's label: `/`-separated. Only where `\`
-/// separates components is it rewritten (as the CLI's `dir_text`): on Unix
-/// it is a character of a name, so a directory holding one keeps one
-/// spelling.
-fn package_label(package: &Path) -> String {
-    let text = package.to_string_lossy();
+/// A root-relative directory as text: `/`-separated, `""` the root. Only
+/// where `\` separates components is it rewritten: on Unix it is a
+/// character of a name, so a directory holding one keeps one spelling. The
+/// one rule for a package directory as a qpath's label ([`file_place`])
+/// and for a directory the CLI's code index stores.
+#[must_use]
+pub fn dir_text(dir: &Path) -> String {
+    let text = dir.to_string_lossy();
     if std::path::MAIN_SEPARATOR == '\\' {
         text.replace('\\', "/")
     } else {

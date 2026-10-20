@@ -135,7 +135,7 @@ pub use levels::{
 pub use markers::{DEFAULT_LEVELS, Level, LevelError, Levels, Marker, Relation, markers_in};
 pub use naming::{
     DISCRIMINATOR_SEPARATOR, FileNames, Name, NamedFile, Names, PlacedNames, ROOT_PACKAGE,
-    file_place, indexed_name_file, name_file, name_files, path_targets, placed_name_file,
+    dir_text, file_place, indexed_name_file, name_file, name_files, path_targets, placed_name_file,
     query_name, tree_passes,
 };
 pub use qpath::{

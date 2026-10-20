@@ -24,14 +24,20 @@
 //! - **Key** ([`RowKey`]): a lock key ([`EntryKey`]) or a keyless
 //!   binding's place, ordered as `EntryKey`, a keyless binding (no kind,
 //!   symbol or item kind) first.
+//! - **Levels** ([`RowLevels`], [`changed_levels`]): a bound row's level
+//!   sets (the entry's, its markers' united), C their union without
+//!   `path`, and step 4's comparison of C's digests, level names and
+//!   digest strings in, the levels that changed out; the producer hands
+//!   the outcome over in a [`Comparison`].
 //! - **Judge** ([`judge_row`]): the first state of "States" that applies,
-//!   with its category, detail and how the code was compared.
+//!   with its category, detail (`code_changed <levels>`, `levels_changed
+//!   <from>-><to>`) and how the code was compared.
 //! - **Verdict** ([`verdict`]): `cannot-verify` on any `cannot_verify`
 //!   row or run cause, in every mode; `blocked` on a Fix row (under
 //!   `enforce-introduced` one not Pre-existing); Check rows never block.
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::ops::Range;
 
@@ -39,7 +45,7 @@ use serde::Deserialize;
 use toml::Spanned;
 
 use crate::check::Mode;
-use crate::lock::{EntryKey, LockKind, LockRelation, Verified, key_problem};
+use crate::lock::{EntryKey, LevelCode, LockKind, LockLevel, LockRelation, Verified, key_problem};
 use crate::project_toml::ProjectError;
 
 /// The keys `[verify]` takes.
@@ -766,20 +772,121 @@ pub struct MarkerFact {
     pub bad_levels: bool,
 }
 
+/// The level sets a bound row with an entry is judged by: L_lock, the
+/// entry's `levels`; L_mark, its markers' effective levels united (a
+/// marker without a list: `sig`, `body`). Level names only: core reads no
+/// code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowLevels {
+    /// L_lock.
+    pub lock: BTreeSet<LockLevel>,
+    /// L_mark.
+    pub markers: BTreeSet<LockLevel>,
+}
+
+impl RowLevels {
+    /// C = (L_lock ∪ L_mark) ∖ {`path`}, in canonical order: the levels
+    /// whose digests are compared (`path` never is here). Empty only when
+    /// both sides are `[path]`.
+    pub fn compared(&self) -> BTreeSet<LockLevel> {
+        self.lock
+            .union(&self.markers)
+            .copied()
+            .filter(|level| *level != LockLevel::Path)
+            .collect()
+    }
+
+    /// L_lock ≠ L_mark: a marker narrowed or widened since the entry was
+    /// accepted (or an ID resolving to the node anew).
+    pub fn differ(&self) -> bool {
+        self.lock != self.markers
+    }
+
+    /// `levels_changed`'s detail: `<L_lock>-><L_mark>`, each set whole,
+    /// `path` included, `,`-joined in canonical order (`sig,body->sig`).
+    pub fn change(&self) -> String {
+        format!("{}->{}", level_list(&self.lock), level_list(&self.markers))
+    }
+}
+
+/// `levels`, `,`-joined in their order.
+fn level_list<'a>(levels: impl IntoIterator<Item = &'a LockLevel>) -> String {
+    levels
+        .into_iter()
+        .map(|level| level.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// One side's three level digests, as the lock writes them (`b3:` + 64
+/// lowercase hex): an entry's, or this run's made by accept's own
+/// functions (a RON value's `sig` and `body` its value hash, its `deps`
+/// the empty set's). Never a fingerprint or `body_bytes`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LevelDigests<'a> {
+    pub sig: &'a str,
+    pub body: &'a str,
+    pub deps: &'a str,
+}
+
+impl<'a> LevelDigests<'a> {
+    /// A format-2 entry's code, or one rendered now, read for its digests.
+    pub fn of(code: &'a LevelCode) -> Self {
+        Self {
+            sig: &code.sig_hash,
+            body: &code.body_hash,
+            deps: &code.deps_hash,
+        }
+    }
+
+    /// The digest of `level`; `None` for `path`, which has none here.
+    pub fn level(&self, level: LockLevel) -> Option<&'a str> {
+        match level {
+            LockLevel::Path => None,
+            LockLevel::Sig => Some(self.sig),
+            LockLevel::Body => Some(self.body),
+            LockLevel::Deps => Some(self.deps),
+        }
+    }
+}
+
+/// Step 4 of "States": C's digests `now` against the `entry`'s, the levels
+/// whose digest differs, in canonical order. Pure: level names and digest
+/// strings in, the outcome a producer hands over in
+/// [`Comparison::Digests`].
+pub fn changed_levels(
+    levels: &RowLevels,
+    entry: &LevelDigests<'_>,
+    now: &LevelDigests<'_>,
+) -> Vec<LockLevel> {
+    levels
+        .compared()
+        .into_iter()
+        .filter(|level| entry.level(*level) != now.level(*level))
+        .collect()
+}
+
 /// How a bound binding's code compares with its lock entry, as its
-/// producer found it (the cascade, an index's OIDs, an indexed hash): the
-/// judge never compares hashes itself.
+/// producer found it (the cascade, an index's OIDs): the judge maps the
+/// outcome to a category and a detail, never compares a hash itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Comparison {
-    /// Equal to the entry, by the file's blob or by the item's `sig` and
-    /// `body` digests.
-    Equal(Compared),
-    /// Changed since the entry, by the blob (`module`, `ron`) or by the
-    /// item's `sig` or `body` digest after the blob differed.
-    Changed(Compared),
-    /// The item's levels refused: its first error category, snake case.
+    /// Step 2: the file's blob equals the entry's `file_blob`, nothing
+    /// parsed; L_lock ≠ L_mark still reads `levels_changed`.
+    Blob(RowLevels),
+    /// Step 3: C is empty (both sides `[path]`): nothing parsed or
+    /// compared, the code unchanged.
+    PathOnly,
+    /// Step 4: C's digests compared with the entry's, `changed` those that
+    /// differ in canonical order ([`changed_levels`]).
+    Digests {
+        levels: RowLevels,
+        changed: Vec<LockLevel>,
+    },
+    /// The unit's digests refused: its first error category, snake case.
     CannotVerify(String),
-    /// Not compared: no entry to compare with, or no hash made.
+    /// Not compared: no entry to compare with, a marker's level list
+    /// malformed, or no digest made (no tree, no RON pair).
     NotHashed,
 }
 
@@ -902,8 +1009,8 @@ impl Class {
 }
 
 /// How the code side was compared with the entry: by the file's blob
-/// alone, or by the item's digests after the blob differed (`ast`: format
-/// 2's `sig` and `body`, whatever the levels; the name kept, no new key).
+/// alone, or by the digests of C's levels after the blob differed (`ast`,
+/// every kind; the name kept, no new key). Neither when C is empty.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Compared {
     Blob,
@@ -925,8 +1032,8 @@ pub struct Judgement {
     pub state: State,
     pub category: Option<String>,
     pub detail: Option<String>,
-    /// `None`: no entry, or the state was decided before the code was
-    /// compared.
+    /// `None`: no entry, the state was decided before the code was
+    /// compared, or C was empty.
     pub compared: Option<Compared>,
 }
 
@@ -963,6 +1070,7 @@ pub const MARKER_BEHIND: &str = "marker_behind";
 pub const SPEC_CHANGED: &str = "spec_changed";
 pub const SAME_REVISION: &str = "same_revision";
 pub const CODE_CHANGED: &str = "code_changed";
+pub const LEVELS_CHANGED: &str = "levels_changed";
 pub const RAISED: &str = "raised";
 
 /// The row's state: the first of "States" that applies.
@@ -1079,12 +1187,20 @@ pub fn judge_row(facts: &RowFacts) -> Judgement {
         // Not reached: every other node or code fact is decided above.
         return Judgement::new(State::CannotVerify, None, None);
     };
-    let (code_changed, compared) = match &facts.code {
-        CodeFact::Bound(Comparison::Equal(by)) => (false, *by),
-        CodeFact::Bound(Comparison::Changed(by)) => (true, *by),
+    // "Code changed": step 2's or step 4's outcome, as a category and a
+    // detail; C empty (step 3) compares nothing.
+    let (change, compared) = match &facts.code {
+        CodeFact::Bound(Comparison::Blob(levels)) => {
+            (level_change(levels, &[]), Some(Compared::Blob))
+        }
+        CodeFact::Bound(Comparison::PathOnly) => (None, None),
+        CodeFact::Bound(Comparison::Digests { levels, changed }) => {
+            (level_change(levels, changed), Some(Compared::Ast))
+        }
         // An entry whose code was never compared is never `ok`.
         _ => return Judgement::new(State::CannotVerify, Some(ITEM_ERROR), None),
     };
+    let code_changed = change.is_some();
     let spec_changed = (rev, hash) != (entry.rev, entry.spec_hash.as_str());
     let raised = rev > entry.rev && written().any(|n| n == rev);
     let mut judged = if lagging && !code_changed {
@@ -1096,8 +1212,8 @@ pub fn judge_row(facts: &RowFacts) -> Judgement {
             SPEC_CHANGED
         };
         Judgement::new(State::SpecAhead, Some(category), None)
-    } else if code_changed && !spec_changed {
-        Judgement::new(State::CodeAhead, Some(CODE_CHANGED), None)
+    } else if let (Some((category, detail)), false) = (&change, spec_changed) {
+        Judgement::new(State::CodeAhead, Some(category), Some(detail))
     } else if spec_changed && raised {
         Judgement::new(State::CodeAhead, Some(RAISED), None)
     } else if spec_changed && code_changed {
@@ -1105,8 +1221,22 @@ pub fn judge_row(facts: &RowFacts) -> Judgement {
     } else {
         Judgement::new(State::Ok, None, None)
     };
-    judged.compared = Some(compared);
+    judged.compared = compared;
     judged
+}
+
+/// A compared row's code change as a category and a detail: `code_changed`
+/// and the `changed` levels `,`-joined (`body,deps`) when a digest
+/// changed; else `levels_changed` and `<L_lock>-><L_mark>` when the sets
+/// differ; else `None`, the code unchanged.
+fn level_change(levels: &RowLevels, changed: &[LockLevel]) -> Option<(&'static str, String)> {
+    if !changed.is_empty() {
+        Some((CODE_CHANGED, level_list(changed)))
+    } else if levels.differ() {
+        Some((LEVELS_CHANGED, levels.change()))
+    } else {
+        None
+    }
 }
 
 // --------------------------------------------------------------- verdict

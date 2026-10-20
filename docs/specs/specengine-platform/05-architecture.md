@@ -132,7 +132,7 @@ Layer A details:
 
 ### 5.2. Canonical AST hash
 
-The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 recorded, and **`specengine-hash/v3`** (5a-1 `hash-levels`), format 2's: a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recorded since 5b-1a (`docs/canon/spec-lock.md` "Entry"); level-aware verify: 5b-1b `lock-levels-verify.md`.
+The shipped recipes, their formulas, traps, measurement and limits: `docs/canon/code-hash.md` (`crates/specengine-code/README.md` "Hash recipe" points there): **`specengine-hash/v2`**, the whole-item hash `spec.lock` format 1 recorded, and **`specengine-hash/v3`** (5a-1 `hash-levels`), format 2's: a symbol's levels `sig`, `body`, `deps` (beside `path`, the lock key) and fingerprints `skeleton`, `quote`, `body_bytes`. **A binding declares which levels it depends on** (`// @implements RULE-X@3 [sig]`, default `[sig, body]`: `code-identity.md` "Marker grammar"): an interface requirement `sig`, an invariant `body` + `deps`, a "lives here" note `path`, so a refactor is not an alarm the owner learns to ignore. Recorded since 5b-1a (`docs/canon/spec-lock.md` "Entry"), judged by them since 5b-1b (`docs/canon/spec-verify.md` "Cascade").
 
 - Option `--deep`: hashes of called functions from the same crate are added, depth 1.
 
@@ -163,12 +163,12 @@ Following a rename and telling copies apart takes three fingerprints, not one (c
 
 **Drift-check cascade** — the next level runs only if the previous one said "changed":
 
-1. **git blob OID** of the file matches the lock → all bindings in the file are fresh, no parsing (Swimm `file_blobs` technique). "Which nodes could this commit touch" reduces to a set intersection of changed paths;
+1. **git blob OID** of the file matches the lock → all bindings in the file are fresh, no parsing, only a binding's level sets compared (Swimm `file_blobs` technique). "Which nodes could this commit touch" reduces to a set intersection of changed paths;
 2. *(dropped: a normalized-text fallback would pass a symbol that does not parse, which is `cannot_verify`, exit 2; `docs/canon/spec-verify.md` "Cascade")*;
-3. **canonical AST hash** of the symbol (§5.2);
+3. **the declared levels' digests** (§5.2) of every kind (an item, a module, a RON value): the lock's and the markers' levels united, minus `path`; a `[path]`-only binding stops before (`docs/canon/spec-verify.md` "Cascade");
 4. *(optional, later)* **LLM audit** only over nodes flagged at steps 2–3. The audit runs in a **clean context** of a separate agent without Edit/Write, and every behavioural claim must carry a `file:line` quote.
 
-| spec_hash ≠ lock | ast_hash ≠ lock | sync | Action |
+| spec_hash ≠ lock | a level digest ≠ lock | sync | Action |
 |---|---|---|---|
 | no | no | `ok` | — |
 | yes | no | `spec_ahead` | a `drift` item (`docs/canon/proposal-drift.md`): approve, `--editorial` for `same_revision`, or reject; a "bring code to spec" task: `reject --follow-up code` (`docs/canon/proposal-completion.md` "Reject") |
