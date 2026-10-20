@@ -101,6 +101,9 @@ pub use resolve::{Resolution, Resolver, canonical_id, feature_scoped};
 pub use spec_graph::{
     CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
 };
+/// A file's bytes for a reference's written form (`crate::roadmap`'s
+/// `depends_on`, resolved as the check resolves it).
+pub(crate) use text::FileText;
 pub use text::{date_from_unix_days, front_matter_failure, is_calendar_date, is_date_shaped};
 pub use unapplied::{Unapplied, unapplied_amendments};
 pub use working_set::worst_w;

@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-import]
 owner: owner
-reviewed: 2026-10-04
+reviewed: 2026-10-20
 ---
 
 # specengine-import — importers of existing spec corpora
@@ -87,7 +87,7 @@ Refused at the key's line: an unknown key, a wrong type, a bad regex or glob; an
 
 ## Layout
 
-`layout::emit(&CensusConfig, &Import, &[SourceDocument], &Scheme) -> Layout` (`layout/`; rules: `docs/canon/import-layout.md`), pure, never fails: `files` (`TreeFile {path, kind: Residue | Record, content}`, sorted), `emission` (`Emitted {path, line, id, form, after, place, reason, conflicts}` per definition, `DocumentPlace {source, after, moved, feature}` per document), `headers` (`HeaderOutcome`), `scheme_toml`, `diagnostics`; `holds(path)`, counters; `Reason::ALL` = the stdout `reasons` keys. Inputs: `import::run_walked`, `layout::read_sources(root, &walk.documents)`, `Scheme::parse` (the before scheme, after core loads it). **The caller sets** each `SourceDocument.header_unparsed` (core's parse of the source under the before scheme fails: `frontmatter-yaml`, `-unclosed`, `-not-mapping`, not UTF-8) and `header_not_mapping` (`frontmatter-not-mapping`); `read_sources` leaves both `false`. For the verifier: `source_body(config, text) -> SourceBody {lines, excluded, headings, field_rows, field_table_line}`, the import's reading of a body; `carried_fields`, `field_keys`, `section_heading`, `s_heading`, `emit_scheme`, `toml_text` (the hand-written TOML writer); `typed_keys() -> Vec<(String, CoreType)>`, the copy of core's `TYPED_KEYS` (same order and variant names, pinned by an eval test), with `core_type`, `parses_as`.
+`layout::emit(&CensusConfig, &Import, &[SourceDocument], &Scheme) -> Layout` (`layout/`; rules: `docs/canon/import-layout.md`), pure, never fails: `files` (`TreeFile {path, kind: Residue | Record, content}`, sorted), `emission` (`Emitted {path, line, id, form, after, place, reason, conflicts}` per definition, `DocumentPlace {source, after, moved, feature}` per document), `headers` (`HeaderOutcome`), `scheme_toml`, `diagnostics`; `holds(path)`, counters; `Reason::ALL` = the stdout `reasons` keys. Inputs: `import::run_walked`, `layout::read_sources(root, &walk.documents)`, `Scheme::parse` (the before scheme, after core loads it). **The caller sets** each `SourceDocument.header_unparsed` (core's parse of the source under the before scheme fails: `frontmatter-yaml`, `-unclosed`, `-not-mapping`, not UTF-8) and `header_not_mapping` (`frontmatter-not-mapping`); `read_sources` leaves both `false`. For the verifier: `source_body(config, text) -> SourceBody {lines, excluded, headings, field_rows, field_table_line}`, the import's reading of a body; `carried_fields`, `field_keys`, `section_heading`, `s_heading`, `emit_scheme`, `toml_text` (the hand-written TOML writer); `typed_keys() -> Vec<(String, CoreType)>`, the copy of core's `TYPED_KEYS` (30, same order and variant names, `TextOrInteger` for `estimate`, pinned by an eval test), with `core_type`, `parses_as`.
 
 ## Before report
 

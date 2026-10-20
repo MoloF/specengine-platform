@@ -1,0 +1,363 @@
+{
+  "release": null,
+  "pool": false,
+  "reason": null,
+  "prefix": "WORK",
+  "dir": "work",
+  "unit": null,
+  "current": "next",
+  "counts": {
+    "open": 17,
+    "done": 5
+  },
+  "cut": null,
+  "total": {
+    "min": 27,
+    "max": 44,
+    "unestimated": 2
+  },
+  "groups": [
+    {
+      "group": "release",
+      "name": "now",
+      "current": false,
+      "mvp_cut": false,
+      "open": 0,
+      "done": 2,
+      "sum": {
+        "min": 0,
+        "max": 0,
+        "unestimated": 0
+      },
+      "items": []
+    },
+    {
+      "group": "release",
+      "name": "next",
+      "current": true,
+      "mvp_cut": false,
+      "open": 10,
+      "done": 1,
+      "sum": {
+        "min": 21,
+        "max": 35,
+        "unestimated": 2
+      },
+      "items": [
+        {
+          "position": 1,
+          "id": "WORK-017",
+          "title": "Σύνδεση με το δημαρχείο",
+          "path": "work/WORK-017.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p0",
+          "estimate": {
+            "min": 3,
+            "max": 5
+          },
+          "waits_on": [
+            "WORK-030"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 2,
+          "id": "WORK-013",
+          "title": "Κρατήσεις",
+          "path": "work/WORK-013.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p1",
+          "estimate": null,
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 3,
+          "id": "WORK-014",
+          "title": "Ειδοποιήσεις",
+          "path": "work/WORK-014.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p1",
+          "estimate": {
+            "min": 0,
+            "max": 0
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 4,
+          "id": "WORK-020",
+          "title": "Μεταφορά βιβλίων",
+          "path": "work/WORK-020.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p1",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [
+            "WORK-021"
+          ],
+          "cycle": true
+        },
+        {
+          "position": 5,
+          "id": "WORK-021",
+          "title": "Αποθήκη",
+          "path": "work/WORK-021.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p1",
+          "estimate": null,
+          "waits_on": [
+            "WORK-020"
+          ],
+          "cycle": true
+        },
+        {
+          "position": 6,
+          "id": "WORK-022",
+          "title": "Απογραφή",
+          "path": "work/WORK-022.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p0",
+          "estimate": {
+            "min": 10,
+            "max": 20
+          },
+          "waits_on": [
+            "WORK-021"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 7,
+          "id": "WORK-010",
+          "title": "Δανεισμός στο γκισέ",
+          "path": "work/WORK-010.md",
+          "status": "in-progress",
+          "release": "next",
+          "priority": "p2",
+          "estimate": {
+            "min": 1,
+            "max": 3
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 8,
+          "id": "WORK-011",
+          "title": "Επιστροφές",
+          "path": "work/WORK-011.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p1",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [
+            "WORK-010"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 9,
+          "id": "WORK-012",
+          "title": "Πρόστιμα καθυστέρησης",
+          "path": "work/WORK-012.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p0",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [
+            "WORK-011"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 10,
+          "id": "WORK-016",
+          "title": "Αναζήτηση",
+          "path": "work/WORK-016.md",
+          "status": "draft",
+          "release": "next",
+          "priority": "p9",
+          "estimate": {
+            "min": 1,
+            "max": 1
+          },
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    },
+    {
+      "group": "release",
+      "name": "later",
+      "current": false,
+      "mvp_cut": false,
+      "open": 3,
+      "done": 1,
+      "sum": {
+        "min": 6,
+        "max": 9,
+        "unestimated": 0
+      },
+      "items": [
+        {
+          "position": 1,
+          "id": "WORK-030",
+          "title": "Ψηφιακά βιβλία",
+          "path": "work/WORK-030.md",
+          "status": "draft",
+          "release": "later",
+          "priority": "p1",
+          "estimate": {
+            "min": 3,
+            "max": 6
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 2,
+          "id": "WORK-031",
+          "title": "読書会",
+          "path": "docs/spec/WORK-031.md",
+          "status": "in-progress",
+          "release": "later",
+          "priority": "p2",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 3,
+          "id": "WORK-032",
+          "title": null,
+          "path": "work/WORK-032.md",
+          "status": "draft",
+          "release": "later",
+          "priority": null,
+          "estimate": {
+            "min": 1,
+            "max": 1
+          },
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    },
+    {
+      "group": "pool",
+      "name": null,
+      "current": false,
+      "mvp_cut": false,
+      "open": 2,
+      "done": 1,
+      "sum": {
+        "min": 3,
+        "max": 4,
+        "unestimated": 0
+      },
+      "items": [
+        {
+          "position": null,
+          "id": "WORK-040",
+          "title": "Εφαρμογή κινητού",
+          "path": "work/WORK-040.md",
+          "status": "draft",
+          "release": null,
+          "priority": "p0",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": null,
+          "id": "WORK-041",
+          "title": "Ηχητικά βιβλία",
+          "path": "work/WORK-041.md",
+          "status": "draft",
+          "release": null,
+          "priority": null,
+          "estimate": {
+            "min": 1,
+            "max": 2
+          },
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    },
+    {
+      "group": "unplaced",
+      "name": null,
+      "current": false,
+      "mvp_cut": false,
+      "open": 2,
+      "done": 0,
+      "sum": {
+        "min": 5,
+        "max": 5,
+        "unestimated": 1
+      },
+      "items": [
+        {
+          "position": null,
+          "id": "WORK-051",
+          "title": "Εργαστήρια",
+          "path": "work/WORK-051.md",
+          "status": "draft",
+          "release": "Next",
+          "priority": "p0",
+          "estimate": {
+            "min": 5,
+            "max": 5
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": null,
+          "id": "WORK-050",
+          "title": "Καφετερία",
+          "path": "work/WORK-050.md",
+          "status": "draft",
+          "release": "backlog",
+          "priority": "p1",
+          "estimate": null,
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "WORK-016: priority \"p9\" is not in [roadmap] priorities",
+    "WORK-021: estimate \"4-2\" is not N or N-M",
+    "WORK-031: outside [roadmap] dir work",
+    "WORK-050: release \"backlog\" is not in [roadmap] releases",
+    "WORK-051: release \"Next\" is not in [roadmap] releases",
+    "depends_on cycle: WORK-020, WORK-021"
+  ],
+  "truncated": false,
+  "omitted": 0
+}

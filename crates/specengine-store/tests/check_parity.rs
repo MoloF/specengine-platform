@@ -23,8 +23,9 @@
 //! half): the core render set is the committed `docs/index.md`, its archive
 //! shard `docs/index-archive.md` and its live shards
 //! `docs/index-canon-spec.md`, `docs/index-canon.md`,
-//! `docs/index-decisions.md` and `docs/index-crates.md` byte for byte
-//! (index-shards AC-12), each header naming X and G; every walked document
+//! `docs/index-decisions.md`, `docs/index-crates.md` and
+//! `docs/index-roadmap.md` byte for byte (index-shards AC-12;
+//! roadmap-items SW-4), each header naming X and G; every walked document
 //! but `class: generated` is listed once across the set, the archive's
 //! Archive exactly the Tier 3 files, each live shard exactly the live files
 //! it is the first to claim (`docs/canon/spec-*.md` before
@@ -671,9 +672,10 @@ fn the_core_render_is_the_committed_index() {
     assert_eq!(generator.command, EXPORT);
     assert_eq!(generator.gate(), GATE);
     assert_eq!(generator.writes, INDEX_OUTPUTS);
-    // Five shards (index-shards, ADR-0030): the archive, then the live
+    // Six shards (index-shards, ADR-0030): the archive, then the live
     // ones, each with its one claim (docs/README.md "Generated"), the
-    // `spec-*` canon before the rest of the canon.
+    // `spec-*` canon before the rest of the canon, the plan items last
+    // (docs/features/roadmap-items.md SW-4).
     let mut want = vec![(INDEX_SHARD, ShardKind::Tier3)];
     want.extend(
         INDEX_LIVE_SHARDS
@@ -727,7 +729,8 @@ fn the_core_render_is_the_committed_index() {
     // Every section is exercised here but `No class — fix`: Canon, Specs
     // and the pointers in the root, the Archive alone in the archive shard,
     // Canon alone in each canon shard, Decisions alone in the decisions
-    // shard, Canon alone in the crates shard; the root holds no decision
+    // shard, Canon alone in the crates shard, Specs alone in the plan
+    // shard; the root holds no decision
     // (each is claimed or Tier 3) and no `docs/canon/` document (each is
     // claimed).
     let root = set[0].bytes.as_str();
@@ -757,6 +760,7 @@ fn the_core_render_is_the_committed_index() {
             format!("`{}`", INDEX_LIVE_SHARDS[2].1),
         ),
         (&set[5], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[3].1)),
+        (&set[6], "## Specs", format!("`{}`", INDEX_LIVE_SHARDS[4].1)),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -784,8 +788,13 @@ fn the_core_render_is_the_committed_index() {
     }
     assert_eq!(
         section_lines(root, SHARDS).len(),
-        5,
-        "{INDEX}: five pointers"
+        6,
+        "{INDEX}: six pointers"
+    );
+    // No plan item in the root: each is claimed or Tier 3.
+    assert!(
+        !root.contains("](roadmap/"),
+        "{INDEX}: a docs/roadmap/ document"
     );
     // Independent of the walk's order.
     input.files.reverse();
@@ -1114,7 +1123,7 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     // Three Tier 3 seeds sit under the decisions shard's claim: Tier 3
     // places before the claims.
-    let [_, _, (_, decisions), _] = INDEX_LIVE_SHARDS;
+    let [_, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
     assert_eq!(
         COMPACTION_SEEDS
             .iter()
@@ -1324,7 +1333,7 @@ fn each_seed_blocks_exactly_its_target() {
     // unclaimed one the root, a claimed one its shard), a Tier 3 line the
     // archive only, a document turning Tier 3 the output it leaves and the
     // archive, an output edited or deleted itself only.
-    let [(canon_spec, _), (canon, _), (decisions, _), (crates, _)] = INDEX_LIVE_SHARDS;
+    let [(canon_spec, _), (canon, _), (decisions, _), (crates, _), _] = INDEX_LIVE_SHARDS;
     for (name, outputs) in [
         ("docs/index.md hand-edited", &[INDEX][..]),
         ("tier: 0 off CLAUDE.md", &[INDEX]),

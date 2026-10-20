@@ -25,26 +25,29 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 /// config order, each with its one claim (`shards`, `claims`; docs/README.md
 /// "Generated"): Tier 2 canon (cited by path, found by scope; the `spec-*`
 /// command canons first, since 2026-10-15), what is read by id (decisions)
-/// and by path (crate READMEs). Claims overlap (`docs/canon/spec-*.md` is
-/// within `docs/canon/*.md`): the first matching claim wins
-/// ([`claiming_shard`]).
-pub const INDEX_LIVE_SHARDS: [(&str, &str); 4] = [
+/// and by path (crate READMEs), and the plan items (since
+/// docs/features/roadmap-items.md, SW-4). Claims overlap
+/// (`docs/canon/spec-*.md` is within `docs/canon/*.md`): the first matching
+/// claim wins ([`claiming_shard`]).
+pub const INDEX_LIVE_SHARDS: [(&str, &str); 5] = [
     ("docs/index-canon-spec.md", "docs/canon/spec-*.md"),
     ("docs/index-canon.md", "docs/canon/*.md"),
     ("docs/index-decisions.md", "docs/decisions/*.md"),
     ("docs/index-crates.md", "crates/*/README.md"),
+    ("docs/index-roadmap.md", "docs/roadmap/*.md"),
 ];
 
 /// The index set of the root config in config order: the root, then the
 /// shards. The index entry's `writes`, the render's outputs and the export's
 /// lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 6] = [
+pub const INDEX_OUTPUTS: [&str; 7] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
     INDEX_LIVE_SHARDS[1].0,
     INDEX_LIVE_SHARDS[2].0,
     INDEX_LIVE_SHARDS[3].0,
+    INDEX_LIVE_SHARDS[4].0,
 ];
 
 /// X: the registered export command of the index (`[[generators]] command`).

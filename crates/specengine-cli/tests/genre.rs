@@ -17,8 +17,9 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// The words no CLI source may hold (the spec's list; pass 2a.1 adds
 /// `cargo xtask`, docs/features/spec-cli-check.md AC-13; pass 2b this
 /// repository's registered command prefix, docs/features/spec-cli-switch.md
-/// AC-15).
-const FORBIDDEN: [&str; 19] = [
+/// AC-15; docs/features/roadmap-items.md this repository's plan prefix and
+/// its shard).
+const FORBIDDEN: [&str; 21] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -37,6 +38,9 @@ const FORBIDDEN: [&str; 19] = [
     "index-decisions",
     "index-crates",
     "index-records",
+    "index-roadmap",
+    // docs/features/roadmap-items.md SW-4: this repository's `[ids] RM`.
+    "RM-",
     // docs/features/spec-cli-graph.md AC-03: no root rule by a prefix of
     // either fixture's scheme.
     "DOM-",

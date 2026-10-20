@@ -76,8 +76,8 @@ spec mcp                                 # on a trigger: MCP stdio bridge
 # tree and nodes
 spec tree [ROOT] [--depth N] [--kind K] [--archive]  # shipped: docs/canon/spec-cli-graph.md
 spec show ID [--links [--archive]] [--bindings --history]
-spec new KIND [--parent ID] [TITLE]      # the registry issues the ID, opens $EDITOR
-spec edit ID                             # owner edit = instantly applied proposal
+spec new KIND [--parent ID] [TITLE]      # unbuilt: the registry issues the ID, opens $EDITOR
+spec edit ID                             # unbuilt: owner edit = instantly applied proposal
 spec search "query"
 spec graph ID [--impact] [--type T] [--depth N] [--archive] [--format dot|mermaid]
 spec refs REF [--json]                   # reverse lookup from the code index, shipped: docs/canon/code-bindings.md
@@ -115,6 +115,7 @@ spec resolve [--timeout S] [--json]                 # layer C on request (shippe
 # checks, rounds, lifecycle
 spec check [--staged | --changed] [--baseline F] [--debt]
 spec health                                          # shipped: docs/canon/health.md, rows 4-5 health-code.md
+spec roadmap [--release R | --pool] [--json]         # shipped: docs/canon/spec-roadmap.md; the plan items' path and pool
 spec round new [--limit N] | round answer FILE | --staged  # shipped: docs/canon/round.md
 spec ship SLUG [--accepted]
 spec compact --dry-run

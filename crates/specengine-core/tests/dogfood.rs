@@ -4,7 +4,9 @@
 //! Every file the committed root `specengine.toml` walks (a std walk
 //! filtered by its walk scope, no cargo subprocess;
 //! docs/features/spec-cli-switch.md AC-13) parses under the scheme
-//! {ADR, width 4} with no front-matter diagnostic and no exception
+//! {ADR, width 4} (since docs/features/roadmap-items.md SW-4 with {RM,
+//! width 4}, the plan items; the root config's `[ids]` is exactly these
+//! two) with no front-matter diagnostic and no exception
 //! (`INVALID_YAML` is empty); every ADR's `id` equals its file stem, with no
 //! exemption; every `canon:` is a path with an anchor. The four files the
 //! Q-2 edit quoted parse strictly and keep their quoted scalar.
@@ -39,8 +41,19 @@ const QUOTED_BY_Q2: [(&str, &str); 4] = [
     ("docs/features/phase-0-spikes.md", "ref"),
 ];
 
+/// The repository's scheme: `ADR` and, since docs/features/roadmap-items.md
+/// SW-4, `RM` (the plan items under `docs/roadmap/`); the root config's
+/// `[ids]` is exactly it.
 fn adr_scheme() -> IdScheme {
-    IdScheme::new(vec![PrefixSpec::number("ADR", "decision", 4)]).unwrap()
+    let scheme = IdScheme::new(vec![
+        PrefixSpec::number("ADR", "decision", 4),
+        PrefixSpec::number("RM", "plan-item", 4),
+    ])
+    .unwrap();
+    let declared = <IdScheme as specengine_core::IdSchemeToml>::from_toml(&root_toml())
+        .expect("the root [ids]");
+    assert_eq!(declared, scheme, "the root config's [ids]");
+    scheme
 }
 
 /// The committed root `specengine.toml`.

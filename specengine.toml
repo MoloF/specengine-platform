@@ -14,6 +14,7 @@ exclude    = ["**/_*.md", "**/fixtures/**", "**/target/**", "**/target.noindex/*
 
 [ids]
 ADR = { kind = "decision", width = 4 }
+RM  = { kind = "plan-item", width = 4 }   # plan items, docs/roadmap/ (ADR-0052)
 
 [budgets]
 tier0_bytes    = 16384
@@ -25,7 +26,7 @@ canon_bytes    = 12288
 [classes]
 canon     = { required = ["class", "tier", "scope", "owner", "reviewed"], closed = true }
 decision  = { required = ["class", "id", "title", "status", "date", "scope"], optional = ["canon", "supersedes", "ref"], closed = true }
-spec      = { required = ["class", "status", "scope"], optional = ["ref", "shipped", "adrs"], closed = true }
+spec      = { required = ["class", "status", "scope"], optional = ["ref", "shipped", "adrs", "id", "links", "release", "priority", "estimate"], closed = true }
 generated = { required = ["class", "generator", "source"], closed = true }
 
 [check]
@@ -42,14 +43,26 @@ paths = ["docs/features/*.md"]
 when  = { status = "shipped" }
 parts = ["Implementation"]
 
+# The plan: items found by prefix, the path computed by `spec roadmap` (ADR-0052; docs/canon/spec-roadmap.md).
+# mvp: the rest of Phases 0-2; v1: Phases 3, 4 and 6; v2: Phase 5 (08 s2).
+[roadmap]
+prefix     = "RM"
+dir        = "docs/roadmap"
+releases   = ["mvp", "v1", "v2"]
+mvp_cut    = "mvp"
+priorities = ["must", "should", "could"]
+unit       = "days"
+
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"
-writes  = ["docs/index.md", "docs/index-archive.md", "docs/index-canon-spec.md", "docs/index-canon.md", "docs/index-decisions.md", "docs/index-crates.md"]
+writes  = ["docs/index.md", "docs/index-archive.md", "docs/index-canon-spec.md", "docs/index-canon.md", "docs/index-decisions.md", "docs/index-crates.md",
+           "docs/index-roadmap.md"]
 index   = true
 gate    = "cargo run -q -p specengine-cli -- check"
-# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons first, the first matching claim wins), decisions (read by id) and crate READMEs (by path): docs/README.md "Generated".
+# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md "Generated".
 shards  = [{ path = "docs/index-archive.md", tier3 = true },
            { path = "docs/index-canon-spec.md", claims = ["docs/canon/spec-*.md"] },
            { path = "docs/index-canon.md", claims = ["docs/canon/*.md"] },
            { path = "docs/index-decisions.md", claims = ["docs/decisions/*.md"] },
-           { path = "docs/index-crates.md", claims = ["crates/*/README.md"] }]
+           { path = "docs/index-crates.md", claims = ["crates/*/README.md"] },
+           { path = "docs/index-roadmap.md", claims = ["docs/roadmap/*.md"] }]

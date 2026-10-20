@@ -13,7 +13,10 @@
 //! projection too; since docs/features/bevy-roles.md (`INDEX_FORMAT` 10,
 //! "Formats") the stub emits role rows, so it pins `code_roles` as well;
 //! docs/features/layer-c-resolve.md (R7) makes it `INDEX_FORMAT` 11 for the
-//! three layer C snapshot tables.
+//! three layer C snapshot tables; docs/features/roadmap-items.md (RD-2)
+//! makes it `INDEX_FORMAT` 12 for the typed `release`, `priority` and
+//! `estimate` (`fields`, no longer `extra`), and the dump reads
+//! `fixtures/roadmap-a` beside spec-a and spec-b, the corpus that sets them.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -136,13 +139,17 @@ fn other_worktrees_read_not_indexed_until_they_are_updated() {
     );
 }
 
-/// The dump of spec-a and spec-b, each in a fresh DB of its own with the
-/// stub analyzer's code rows (`code_stub`), with the scratch root masked:
-/// what a fresh index of the current format stores.
+/// The corpora of the format dump: spec-a, spec-b and, since
+/// `INDEX_FORMAT` 12, roadmap-a (the typed plan keys).
+const DUMPED: [&str; 3] = ["spec-a", "spec-b", "roadmap-a"];
+
+/// The dump of [`DUMPED`], each in a fresh DB of its own with the stub
+/// analyzer's code rows (`code_stub`), with the scratch root masked: what
+/// a fresh index of the current format stores.
 fn format_dump() -> String {
     let scratch = Scratch::new("format-history");
     let mut out = String::new();
-    for name in ["spec-a", "spec-b"] {
+    for name in DUMPED {
         let corpus = Corpus::copy_of(name, &scratch, name);
         let mut index =
             SqliteIndex::open(scratch.db(name), "format-history", &corpus.root).expect("open");
@@ -280,6 +287,9 @@ const SERIALISED: &[&str] = &[
     "nodes[].fields.refs[].id",
     "nodes[].fields.links.*[].id",
     "nodes[].fields.raised_by.*",
+    "nodes[].fields.release",
+    "nodes[].fields.priority",
+    "nodes[].fields.estimate",
     "links[].src",
     "links[].src_span",
     "links[].type",
@@ -396,7 +406,7 @@ fn key_paths(value: &serde_json::Value, path: &str, in_value: bool, out: &mut BT
 fn the_fixture_dumps_exercise_every_serialised_field() {
     let scratch = Scratch::new("format-fields");
     let mut seen = BTreeSet::new();
-    for name in ["spec-a", "spec-b"] {
+    for name in DUMPED {
         let corpus = Corpus::copy_of(name, &scratch, name);
         let mut index = corpus.open(&scratch.db(name));
         corpus.update(&mut index);
@@ -417,21 +427,21 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
         .collect();
     assert!(
         missing.is_empty(),
-        "serialised fields no fixture of spec-a or spec-b sets (the format dump \
-         cannot see a change to them):\n{}",
+        "serialised fields no dumped fixture sets (the format dump cannot see a \
+         change to them):\n{}",
         missing.join("\n")
     );
 }
 
-/// docs/features/layer-c-resolve.md R7 (its "Tables"): the three layer C
-/// snapshot tables make `INDEX_FORMAT` 11, and the history is the ten
-/// earlier lines, verbatim (symbol-index's `9` and bevy-roles' `10` among
-/// them), followed by exactly one `11 <hash>` line (no earlier `11`).
-/// Replaces bevy-roles' format-10 pin (its F1, S5), whose line stays
-/// verbatim. M: `INDEX_FORMAT` kept at 10; an earlier line edited.
+/// docs/features/roadmap-items.md RD-2 M2 (`INDEX_FORMAT` kept at 11): the
+/// typed plan keys make `INDEX_FORMAT` 12, and the history is the eleven
+/// earlier lines, verbatim (layer-c-resolve's `11` among them), followed by
+/// exactly one `12 <hash>` line (no earlier `12`). Replaces layer-c's
+/// format-11 pin, whose line stays verbatim. M: `INDEX_FORMAT` kept at 11;
+/// an earlier line edited.
 #[test]
-fn layer_c_pins_format_11_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 11);
+fn roadmap_items_pin_format_12_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 12);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -451,11 +461,12 @@ fn layer_c_pins_format_11_with_one_new_history_line() {
         "8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650",
         "9 8c4c50d29560a9d26db29690a4d03de1b5a453910d8cb646809c433cf2a331c1",
         "10 59e87cae8512cc3a5391034deb0531b0fa2c4df8c16b095dc3de95a9e4146f4c",
+        "11 1faa605a4770475ee82fbf05ba8a01ff12724866e707482d9454e98d6cb6f5c1",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "bevy-roles' history plus exactly one new line:\n{history}"
+        "layer-c's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -464,15 +475,15 @@ fn layer_c_pins_format_11_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "11", "the new line is format 11: {last}");
+    assert_eq!(format, "12", "the new line is format 12: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("11 ")).count(),
+        lines.iter().filter(|line| line.starts_with("12 ")).count(),
         1,
-        "no earlier `11` line"
+        "no earlier `12` line"
     );
 }
 

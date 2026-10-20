@@ -31,6 +31,8 @@ pub enum CoreType {
     ReferenceList,
     /// A mapping; no scalar is one.
     Mapping,
+    /// A string, or an integer kept as its decimal text.
+    TextOrInteger,
 }
 
 /// Core's typed keys.
@@ -64,10 +66,13 @@ enum TypedKey {
     Refs,
     Links,
     RaisedBy,
+    Release,
+    Priority,
+    Estimate,
 }
 
 /// Every [`TypedKey`], in core's table order.
-const TYPED: [TypedKey; 27] = [
+const TYPED: [TypedKey; 30] = [
     TypedKey::Id,
     TypedKey::Kind,
     TypedKey::Class,
@@ -95,6 +100,9 @@ const TYPED: [TypedKey; 27] = [
     TypedKey::Refs,
     TypedKey::Links,
     TypedKey::RaisedBy,
+    TypedKey::Release,
+    TypedKey::Priority,
+    TypedKey::Estimate,
 ];
 
 impl TypedKey {
@@ -114,12 +122,15 @@ impl TypedKey {
             | Self::Severity
             | Self::Generator
             | Self::Source
-            | Self::Acceptance => CoreType::Text,
+            | Self::Acceptance
+            | Self::Release
+            | Self::Priority => CoreType::Text,
             Self::Tier | Self::Rev => CoreType::Integer,
             Self::Scope | Self::Aliases => CoreType::List,
             Self::Parent | Self::WorkingAnswer | Self::Canon => CoreType::Reference,
             Self::Supersedes | Self::Adrs | Self::Refs => CoreType::ReferenceList,
             Self::Links | Self::RaisedBy => CoreType::Mapping,
+            Self::Estimate => CoreType::TextOrInteger,
         }
     }
 
@@ -160,9 +171,9 @@ fn canonical_integer(text: &str) -> bool {
 }
 
 /// Whether `text`, carried under `key`, reads back in core's type when
-/// [`value_text`] writes it: any text under a string, reference or list key
-/// or an untyped one, a canonical integer under an integer key, never a
-/// scalar under a mapping key.
+/// [`value_text`] writes it: any text under a string, reference, list or
+/// string-or-integer key or an untyped one, a canonical integer under an
+/// integer key, never a scalar under a mapping key.
 pub fn parses_as(key: &str, text: &str) -> bool {
     match core_type(key) {
         Some(CoreType::Integer) => canonical_integer(text),
@@ -183,12 +194,14 @@ fn reference_items(text: &str) -> Vec<String> {
 }
 
 /// The YAML text of a value the layout writes under `key`: a canonical
-/// integer under an integer key plain, under a list key a one-item flow
-/// list, under a reference-list key a flow list of its comma-separated
-/// items, anything else double-quoted.
+/// integer under an integer or a string-or-integer key plain, under a list
+/// key a one-item flow list, under a reference-list key a flow list of its
+/// comma-separated items, anything else double-quoted.
 pub(super) fn value_text(key: &str, text: &str) -> String {
     match core_type(key) {
-        Some(CoreType::Integer) if canonical_integer(text) => text.to_owned(),
+        Some(CoreType::Integer | CoreType::TextOrInteger) if canonical_integer(text) => {
+            text.to_owned()
+        }
         Some(CoreType::List) => yaml::sequence(&[text.to_owned()]),
         Some(CoreType::ReferenceList) => yaml::sequence(&reference_items(text)),
         _ => yaml::quoted(text),
@@ -199,7 +212,8 @@ pub(super) fn value_text(key: &str, text: &str) -> String {
 /// `value`, the lenient reader's text) carried as written under the typed
 /// key `key`, retyped where core would not read it in its type: a plain
 /// scalar under a string or reference key quoted when YAML may read it
-/// otherwise, a quoted canonical integer under an integer key unquoted, a
+/// otherwise (under a string-or-integer key, unless it is a canonical
+/// integer), a quoted canonical integer under an integer key unquoted, a
 /// scalar under a list key wrapped as a one-item flow list, under a
 /// reference-list key split at its commas into a flow list (a quoted
 /// scalar holding a YAML escape — `\` inside double quotes, `''` inside
@@ -219,6 +233,13 @@ pub(super) fn retyped_scalar(key: &str, written: &str, value: &str) -> Option<St
     match core_type(key)? {
         CoreType::Text | CoreType::Reference
             if !quoted_written && !yaml::reads_as_string(written) =>
+        {
+            Some(yaml::quoted(value))
+        }
+        CoreType::TextOrInteger
+            if !quoted_written
+                && !yaml::reads_as_string(written)
+                && !canonical_integer(written) =>
         {
             Some(yaml::quoted(value))
         }

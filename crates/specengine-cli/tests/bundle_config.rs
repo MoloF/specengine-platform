@@ -294,17 +294,17 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 11, the stamp
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 12, the stamp
 /// of the code index (docs/features/symbol-index.md "Tables", TE-3), of its
-/// role table (`docs/canon/code-roles.md` "Table"; bevy-roles S5) and of the
-/// layer C snapshot (docs/features/layer-c-resolve.md "Tables", R7), and
-/// the store's format history is its eleven lines: bevy-roles' ten,
-/// verbatim, and one `11 <hash>`. M: the dump changed, the stamp kept (the
-/// store's `format.rs` turns red on the dump; this pins the stamp and the
-/// file).
+/// role table (`docs/canon/code-roles.md` "Table"; bevy-roles S5), of the
+/// layer C snapshot (docs/features/layer-c-resolve.md "Tables", R7) and of
+/// the typed plan keys (docs/features/roadmap-items.md RD-2), and the
+/// store's format history is its twelve lines: layer-c's eleven, verbatim,
+/// and one `12 <hash>`. M: the dump changed, the stamp kept (the store's
+/// `format.rs` turns red on the dump; this pins the stamp and the file).
 #[test]
-fn ac16_index_format_is_eleven() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 11);
+fn ac16_index_format_is_twelve() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 12);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -320,20 +320,21 @@ fn ac16_index_format_is_eleven() {
 8 91ccc1a3282ffd1e683fe3249b67d018a824fde88b1a052a52f5411c99892650
 9 8c4c50d29560a9d26db29690a4d03de1b5a453910d8cb646809c433cf2a331c1
 10 59e87cae8512cc3a5391034deb0531b0fa2c4df8c16b095dc3de95a9e4146f4c
+11 1faa605a4770475ee82fbf05ba8a01ff12724866e707482d9454e98d6cb6f5c1
 ";
-    let eleventh = history
+    let twelfth = history
         .strip_prefix(earlier)
-        .unwrap_or_else(|| panic!("the ten earlier lines stay verbatim:\n{history}"));
-    let (format, hash) = eleventh
+        .unwrap_or_else(|| panic!("the eleven earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = twelfth
         .strip_suffix('\n')
         .and_then(|line| line.split_once(' '))
-        .unwrap_or_else(|| panic!("one more line, `11 <hash>`:\n{history}"));
-    assert_eq!(format, "11", "{history}");
+        .unwrap_or_else(|| panic!("one more line, `12 <hash>`:\n{history}"));
+    assert_eq!(format, "12", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
-        "a BLAKE3 hex: {eleventh:?}"
+        "a BLAKE3 hex: {twelfth:?}"
     );
-    assert_eq!(history.lines().count(), 11, "eleven lines:\n{history}");
+    assert_eq!(history.lines().count(), 12, "twelve lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and

@@ -1,0 +1,47 @@
+# Fixture corpus roadmap-b (docs/features/roadmap-items.md, "Fixtures
+# `roadmap-a`, `roadmap-b`"): the plan of a neighbourhood lending library's
+# desk service, "Agora Lending"; non-Latin titles (Greek, one Japanese), IDs
+# Latin. Its own words: prefix WORK (width 3), kind work-package, releases
+# now, next, later (not alphabetical), priorities p0, p1, p2; no mvp_cut, no
+# unit. expected.json is `spec roadmap --json`, expected.txt its stdout.
+#
+# The cells (every item under work/ but one; docs/ holds the non-item
+# documents SHELF-*):
+# - a release whose items are all done, `current` skips it: now (WORK-001
+#   shipped, WORK-002 abandoned);
+# - a chain of three against its priorities: WORK-010 (p2) <- WORK-011 (p1)
+#   <- WORK-012 (p0), in next;
+# - an equal-priority tie in ID order: WORK-013, WORK-014 (p1); an unequal
+#   one without edges: WORK-017 (p0) before WORK-016 (off-scale);
+# - a two-item cycle of equal priority: WORK-020 <-> WORK-021 in next;
+#   WORK-022 depends on it;
+# - a depends_on on a done item (WORK-010 -> WORK-001), on a non-item
+#   document (WORK-013 -> SHELF-LOANS), on an item of a later release
+#   (WORK-017 -> WORK-030);
+# - estimates: integers (WORK-011: 2, WORK-014: 0), ranges (WORK-010: 1-3,
+#   WORK-022: 10-20, WORK-012: 2-2 printed 2), a bad one (WORK-021: 4-2), an
+#   absent one (WORK-013);
+# - an off-scale priority: WORK-016 (p9); an absent one: WORK-032;
+# - an in-progress item: WORK-010, WORK-031; done ones beside open ones:
+#   WORK-019 (shipped, next), WORK-033 (abandoned, later);
+# - the pool: WORK-040, WORK-041 open, WORK-042 abandoned;
+# - unknown releases: WORK-050 (backlog), WORK-051 (Next: releases are
+#   case-sensitive), unplaced;
+# - an item outside dir: docs/spec/WORK-031.md (later);
+# - an item without a title: WORK-032 (no H1).
+
+[project]
+slug = "agora-lending"
+
+[paths]
+roots = ["docs", "work"]
+
+[ids]
+WORK  = { kind = "work-package", width = 3 }
+SHELF = { kind = "lending-area", shape = "name" }
+
+[roadmap]
+prefix     = "WORK"
+dir        = "work"
+releases   = ["now", "next", "later"]
+priorities = ["p0", "p1", "p2"]

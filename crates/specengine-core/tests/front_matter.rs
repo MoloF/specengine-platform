@@ -630,3 +630,108 @@ fn repeated_or_collection_keys_are_dropped_once_each_and_the_first_stays() {
     );
     assert_no_repeated_json_key("top level", &parsed);
 }
+
+// ------------------------------------- docs/features/roadmap-items.md RD-2
+
+/// A plan item's front-matter: `release`, `priority` and `estimate` are
+/// typed (`fields`, no `unknown-key`).
+fn roadmap_keys(lines: &str) -> ParsedFile {
+    parse_str(
+        &format!("---\nclass: spec\nid: R-12\nstatus: draft\n{lines}---\n\n# Item\n"),
+        &spec_a(),
+    )
+}
+
+/// RD-2 M1 (`estimate: 3` read as `frontmatter-type`): a YAML integer
+/// estimate reads as its decimal text; a string as written; the release
+/// and the priority as written; none of the three is `unknown-key`.
+#[test]
+fn estimate_integer_reads() {
+    let parsed = roadmap_keys("release: v1\npriority: should\nestimate: 3\n");
+    assert_eq!(codes(&parsed), [], "{:?}", parsed.diagnostics);
+    let document = parsed.document().unwrap();
+    let fields = document.fields.as_ref().expect("fields");
+    assert_eq!(fields.estimate.as_deref(), Some("3"));
+    assert_eq!(fields.release.as_deref(), Some("v1"));
+    assert_eq!(fields.priority.as_deref(), Some("should"));
+    assert_eq!(document.extra.as_deref(), Some(&[][..]), "nothing in extra");
+
+    for (yaml, text) in [
+        ("estimate: \"2-4\"", "2-4"),
+        ("estimate: 2-4", "2-4"),
+        ("estimate: 0", "0"),
+        ("estimate: 1000000", "1000000"),
+        ("estimate: -3", "-3"),
+        ("estimate: '7'", "7"),
+        ("estimate: soon", "soon"),
+    ] {
+        let parsed = roadmap_keys(&format!("{yaml}\n"));
+        assert_eq!(codes(&parsed), [], "{yaml}: {:?}", parsed.diagnostics);
+        let fields = parsed.document().unwrap().fields.clone().expect("fields");
+        assert_eq!(fields.estimate.as_deref(), Some(text), "{yaml}");
+    }
+    // A null leaves the key absent, as every typed key.
+    let parsed = roadmap_keys("estimate:\nrelease: ~\n");
+    assert_eq!(codes(&parsed), []);
+    let fields = parsed.document().unwrap().fields.clone().expect("fields");
+    assert_eq!((fields.estimate, fields.release), (None, None));
+}
+
+/// RD-2: a value of another type is `frontmatter-type` at its line, the
+/// key absent from `fields` and kept raw in `extra`.
+#[test]
+fn mistyped_roadmap_keys_are_frontmatter_type_in_extra() {
+    for (yaml, key) in [
+        ("estimate: [1]", "estimate"),
+        ("estimate: {a: 1}", "estimate"),
+        ("estimate: 2.5", "estimate"),
+        ("estimate: true", "estimate"),
+        ("release: [v1]", "release"),
+        ("release: 3", "release"),
+        ("priority: {}", "priority"),
+        ("priority: [must]", "priority"),
+    ] {
+        let parsed = roadmap_keys(&format!("{yaml}\n"));
+        assert_eq!(
+            codes(&parsed),
+            [("frontmatter-type".to_owned(), 5)],
+            "{yaml}: {:?}",
+            parsed.diagnostics
+        );
+        let document = parsed.document().unwrap();
+        let fields = document.fields.as_ref().expect("fields");
+        assert_eq!(
+            (&fields.estimate, &fields.release, &fields.priority),
+            (&None, &None, &None),
+            "{yaml}"
+        );
+        let extra: Vec<&str> = document
+            .extra
+            .as_ref()
+            .expect("extra")
+            .iter()
+            .map(|entry| entry.key.as_str())
+            .collect();
+        assert_eq!(extra, [key], "{yaml}");
+    }
+}
+
+/// RD-2 / TE-2: `fixtures/spec-a`'s `priority: high` is typed now: its
+/// `unknown-key` is gone, `playtest`'s stays.
+#[test]
+fn spec_a_priority_is_typed() {
+    let (_, bytes) = md_files(&fixture("spec-a"))
+        .into_iter()
+        .find(|(path, _)| path.ends_with("stamina-tuning.md"))
+        .expect("stamina-tuning.md");
+    let parsed = parse_str(&String::from_utf8(bytes).unwrap(), &spec_a());
+    let fields = parsed.document().unwrap().fields.clone().expect("fields");
+    assert_eq!(fields.priority.as_deref(), Some("high"));
+    assert_eq!(
+        codes(&parsed),
+        [
+            ("frontmatter-type".to_owned(), 6),
+            ("unknown-key".to_owned(), 12)
+        ]
+    );
+}

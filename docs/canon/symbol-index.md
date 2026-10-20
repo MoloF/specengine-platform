@@ -20,7 +20,7 @@ The code index stores every `[code]` file's rows beside the same worktree's spec
 
 ## Tables
 
-`INDEX_FORMAT` 11: nine `STRICT` tables created with the schema in every DB (columns: store `schema.rs`), IDs and revs as written; layer C's three: `layer-c.md` "Tables". `code_files.file_id` is an `INTEGER PRIMARY KEY`; the per-file tables key on `(file, ord)`, `file` that `file_id`, and cascade; `code_worktrees.wt` references `worktrees`, `code_files` and `code_packages` reference `code_worktrees`.
+`INDEX_FORMAT` 12: nine `STRICT` tables created with the schema in every DB (columns: store `schema.rs`), IDs and revs as written; layer C's three: `layer-c.md` "Tables". `code_files.file_id` is an `INTEGER PRIMARY KEY`; the per-file tables key on `(file, ord)`, `file` that `file_id`, and cascade; `code_worktrees.wt` references `worktrees`, `code_files` and `code_packages` reference `code_worktrees`.
 
 | Table | Key | Columns |
 |---|---|---|

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-10
+reviewed: 2026-10-20
 ---
 
 # spec check: index render, generators, graph warnings
@@ -51,7 +51,7 @@ None compared on a `walk_gap` (a `read_error`, an `UnreadableDir`, a written `Mi
 
 ## §11.6: the generator registry
 
-This repository's entry, less its `spec-*` shard:
+This repository's entry, less two of its shards:
 
 ```toml
 [[generators]]

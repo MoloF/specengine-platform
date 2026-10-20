@@ -1,0 +1,45 @@
+# Fixture corpus roadmap-a (docs/features/roadmap-items.md, "Fixtures
+# `roadmap-a`, `roadmap-b`"): the plan of a small harbor game, "Tide
+# Runner"; English titles. Its own words: prefix RM, kind plan-item,
+# releases alpha, beta, launch, priorities must, should, could, unit days.
+# expected.json is `spec roadmap --json`, expected.txt its stdout.
+#
+# The cells (every item under plan/ but one; docs/ holds the non-item
+# documents BAY-*, one of them with the section RM-0090):
+# - a release whose items are all done, `current` skips it: alpha
+#   (RM-0001 shipped, RM-0002 abandoned with a bad estimate "soon", no note);
+# - a chain of three against its priorities: RM-0010 (could) <- RM-0011
+#   (should) <- RM-0012 (must), in beta;
+# - an equal-priority tie in ID order: RM-0013, RM-0014 (should);
+#   an unequal one without edges: RM-0017 (must) before RM-0016 (could);
+# - a two-item cycle: RM-0020 <-> RM-0021 in launch; RM-0022 depends on it
+#   (through the section RM-0020#BAY-CREW: `#section` ignored);
+# - a depends_on on a done item (RM-0010 -> RM-0001), on a non-item document
+#   (RM-0013 -> BAY-HARBOR), on an item of a later release (RM-0014 ->
+#   RM-0030), on a section with the prefix (RM-0016 -> RM-0090, no item);
+# - estimates: an integer (RM-0011: 3), a range (RM-0010: 2-4), a bad one
+#   (RM-0012: 4-2), an absent one (RM-0013);
+# - an off-scale priority: RM-0018 (urgent);
+# - an in-progress item: RM-0010; done ones beside open ones: RM-0019
+#   (shipped, beta), RM-0031 (abandoned, launch);
+# - the pool: RM-0040, RM-0041 open, RM-0042 shipped;
+# - an unknown release: RM-0050 (someday), unplaced;
+# - an item outside dir: docs/spec/RM-0060.md (launch).
+
+[project]
+slug = "tide-runner"
+
+[paths]
+roots = ["docs", "plan"]
+
+[ids]
+RM  = { kind = "plan-item",   width = 4 }
+BAY = { kind = "harbor-zone", shape = "name" }
+
+[roadmap]
+prefix     = "RM"
+dir        = "plan"
+releases   = ["alpha", "beta", "launch"]
+mvp_cut    = "beta"
+priorities = ["must", "should", "could"]
+unit       = "days"

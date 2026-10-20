@@ -136,8 +136,12 @@
 //!   command that spawns the layer C executable (Unix only), its reply
 //!   checked and stored as the worktree's advisory snapshot after `done`
 //!   over an unchanged tree; [`layer_c_state`] that snapshot's freshness;
+//! - [`roadmap()`]: `spec roadmap [--release R | --pool]` (task spec
+//!   `roadmap-items`), the plan of the `[roadmap]` items computed from the
+//!   repository's files over the index it updates, never the queue; a
+//!   `--release` naming no release is an outcome with its reason, exit 1;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
-//!   `refs`, `symbols`), blocked (`check`, `verify`) or refused by the
+//!   `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or refused by the
 //!   proposal or its target (the queue's commands), 2 could not run
 //!   (`check`: could not check; `verify`: could not verify).
 //!
@@ -155,14 +159,14 @@
 //! accept`, which writes only `spec.lock` and commits it alone, and `spec
 //! lock regen`, which writes only `spec.lock` (canon `spec-lock`,
 //! "Travel and writes"); `index`, `verify`, `refs`, `symbols`, `unmapped`,
-//! `search`, `show`, `tree`, `graph`, `bundle`, `propose`, `inbox`,
+//! `search`, `show`, `tree`, `graph`, `bundle`, `roadmap`, `propose`, `inbox`,
 //! `review`, `reject`, `import-state`, `round new` and `resolve` write only
 //! the data directory (`propose question`, `discrepancy` and `decision`
 //! too), `export state` only its dump (never inside the worktree), `check`,
 //! `health` and `serve` nothing (the daemon `serve` execs writes its data
 //! directory).
 //! Nothing found in the corpus is fatal to the indexed reads (`search`,
-//! `show`, `tree`, `graph`, `bundle`): broken or unreadable files are
+//! `show`, `tree`, `graph`, `bundle`, `roadmap`): broken or unreadable files are
 //! indexed with their diagnostics and never change their exit code. The
 //! walked reads differ: `check` cannot check, and `health` cannot run
 //! (exit 2), when a file cannot be read.
@@ -214,6 +218,7 @@ mod refresh;
 mod refs;
 mod review;
 mod revisions;
+mod roadmap;
 mod roles;
 mod round;
 mod search;
@@ -310,6 +315,7 @@ pub use refs::{
     BindingRow, CodeCount, MarkerRow, MentionRow, RefsNode, RefsOutcome, RefsRequest, refs,
 };
 pub use review::{ReviewRequest, review, review_brief};
+pub use roadmap::{RoadmapOutcome, RoadmapRequest, roadmap};
 pub use roles::{RoleCounts, SubjectCounts, role_counts};
 pub use round::{
     AnswerOutcome, RoundAnswer, RoundAnswerBody, RoundAnswerEntry, RoundAnswerRequest,
@@ -528,6 +534,8 @@ pub enum Outcome {
     Bump(Box<BumpOutcome>),
     /// `health`: the unapplied amendments of the working tree.
     Health(HealthOutcome),
+    /// `roadmap`: the plan of the `[roadmap]` items.
+    Roadmap(Box<RoadmapOutcome>),
     /// `refs`: what in the code names a node.
     Refs(Box<RefsOutcome>),
     /// `symbols`: the code index's targets of one form.
@@ -590,6 +598,7 @@ impl Outcome {
             Self::Index(index) if index.code_error.is_some() => Exit::CannotRun,
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
             Self::Symbols(symbols) if symbols.reason.is_some() => Exit::NotFound,
+            Self::Roadmap(roadmap) if roadmap.reason.is_some() => Exit::NotFound,
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
             Self::LockRebase(rebase) => rebase.exit(),
@@ -625,6 +634,7 @@ impl Outcome {
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Bump(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
+            Self::Roadmap(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Symbols(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Unmapped(outcome) => (&outcome.messages, None),
@@ -712,6 +722,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Bump(outcome) => bump::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
+        Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Symbols(outcome) => symbols::render_text(outcome),
         Outcome::Unmapped(outcome) => unmapped::render_text(outcome),
@@ -753,6 +764,7 @@ impl serde::Serialize for Outcome {
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Bump(outcome) => outcome.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
+            Self::Roadmap(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Symbols(outcome) => outcome.serialize(serializer),
             Self::Unmapped(outcome) => outcome.serialize(serializer),

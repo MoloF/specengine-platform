@@ -279,6 +279,9 @@ impl Reader<'_> {
                 }
                 _ => self.mistyped(&name, &value, line, "a mapping"),
             },
+            "release" => self.out.fields.release = self.string(&name, &value, line),
+            "priority" => self.out.fields.priority = self.string(&name, &value, line),
+            "estimate" => self.out.fields.estimate = self.text_or_integer(&name, &value, line),
             _ => {
                 self.out.diagnostics.push(Diagnostic::new(
                     DiagnosticCode::UnknownKey,
@@ -314,6 +317,20 @@ impl Reader<'_> {
             YValue::Str(text) => Some(text.clone()),
             _ => {
                 self.mistyped(name, value, line, "a string");
+                None
+            }
+        }
+    }
+
+    /// A string as written, or an integer as its decimal text (`3` → `"3"`);
+    /// anything else is `frontmatter-type`.
+    fn text_or_integer(&mut self, name: &str, value: &YNode, line: usize) -> Option<String> {
+        match &value.value {
+            YValue::Str(text) => Some(text.clone()),
+            YValue::Int(number) => Some(number.to_string()),
+            YValue::UInt(number) => Some(number.to_string()),
+            _ => {
+                self.mistyped(name, value, line, "a string or an integer");
                 None
             }
         }
@@ -661,11 +678,13 @@ pub enum KeyType {
     ReferenceList,
     /// A mapping.
     Mapping,
+    /// A string as written, or an integer kept as its decimal text.
+    TextOrInteger,
 }
 
 /// Every typed front-matter key and its [`KeyType`]; any other key is
 /// untyped (`unknown-key`, kept in `extra`).
-pub const TYPED_KEYS: [(&str, KeyType); 27] = [
+pub const TYPED_KEYS: [(&str, KeyType); 30] = [
     ("id", KeyType::Text),
     ("kind", KeyType::Text),
     ("class", KeyType::Text),
@@ -693,6 +712,9 @@ pub const TYPED_KEYS: [(&str, KeyType); 27] = [
     ("refs", KeyType::ReferenceList),
     ("links", KeyType::Mapping),
     ("raised_by", KeyType::Mapping),
+    ("release", KeyType::Text),
+    ("priority", KeyType::Text),
+    ("estimate", KeyType::TextOrInteger),
 ];
 
 /// Keys with a type: a null value leaves them absent.

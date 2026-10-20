@@ -1,0 +1,353 @@
+{
+  "release": null,
+  "pool": false,
+  "reason": null,
+  "prefix": "RM",
+  "dir": "plan",
+  "unit": "days",
+  "current": "beta",
+  "counts": {
+    "open": 16,
+    "done": 5
+  },
+  "cut": {
+    "release": "beta",
+    "min": 14,
+    "max": 17,
+    "unestimated": 2
+  },
+  "total": {
+    "min": 23,
+    "max": 29,
+    "unestimated": 2
+  },
+  "groups": [
+    {
+      "group": "release",
+      "name": "alpha",
+      "current": false,
+      "mvp_cut": false,
+      "open": 0,
+      "done": 2,
+      "sum": {
+        "min": 0,
+        "max": 0,
+        "unestimated": 0
+      },
+      "items": []
+    },
+    {
+      "group": "release",
+      "name": "beta",
+      "current": true,
+      "mvp_cut": true,
+      "open": 8,
+      "done": 1,
+      "sum": {
+        "min": 14,
+        "max": 17,
+        "unestimated": 2
+      },
+      "items": [
+        {
+          "position": 1,
+          "id": "RM-0017",
+          "title": "Save and load",
+          "path": "plan/RM-0017.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "must",
+          "estimate": {
+            "min": 5,
+            "max": 5
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 2,
+          "id": "RM-0013",
+          "title": "Dock layout pass",
+          "path": "plan/RM-0013.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "should",
+          "estimate": null,
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 3,
+          "id": "RM-0014",
+          "title": "Cargo manifest screen",
+          "path": "plan/RM-0014.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "should",
+          "estimate": {
+            "min": 1,
+            "max": 2
+          },
+          "waits_on": [
+            "RM-0030"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 4,
+          "id": "RM-0010",
+          "title": "Tide engine core",
+          "path": "plan/RM-0010.md",
+          "status": "in-progress",
+          "release": "beta",
+          "priority": "could",
+          "estimate": {
+            "min": 2,
+            "max": 4
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 5,
+          "id": "RM-0011",
+          "title": "Boat physics",
+          "path": "plan/RM-0011.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "should",
+          "estimate": {
+            "min": 3,
+            "max": 3
+          },
+          "waits_on": [
+            "RM-0010"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 6,
+          "id": "RM-0012",
+          "title": "Harbor crane controls",
+          "path": "plan/RM-0012.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "must",
+          "estimate": null,
+          "waits_on": [
+            "RM-0011"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 7,
+          "id": "RM-0016",
+          "title": "Gull ambience",
+          "path": "plan/RM-0016.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "could",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 8,
+          "id": "RM-0018",
+          "title": "Storm warning siren",
+          "path": "plan/RM-0018.md",
+          "status": "draft",
+          "release": "beta",
+          "priority": "urgent",
+          "estimate": {
+            "min": 1,
+            "max": 1
+          },
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    },
+    {
+      "group": "release",
+      "name": "launch",
+      "current": false,
+      "mvp_cut": false,
+      "open": 5,
+      "done": 1,
+      "sum": {
+        "min": 9,
+        "max": 12,
+        "unestimated": 0
+      },
+      "items": [
+        {
+          "position": 1,
+          "id": "RM-0030",
+          "title": "Ferry routes",
+          "path": "plan/RM-0030.md",
+          "status": "draft",
+          "release": "launch",
+          "priority": "must",
+          "estimate": {
+            "min": 2,
+            "max": 2
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": 2,
+          "id": "RM-0021",
+          "title": "Ferry ticket booth",
+          "path": "plan/RM-0021.md",
+          "status": "draft",
+          "release": "launch",
+          "priority": "should",
+          "estimate": {
+            "min": 1,
+            "max": 1
+          },
+          "waits_on": [
+            "RM-0020"
+          ],
+          "cycle": true
+        },
+        {
+          "position": 3,
+          "id": "RM-0020",
+          "title": "Ferry crew roster",
+          "path": "plan/RM-0020.md",
+          "status": "draft",
+          "release": "launch",
+          "priority": "could",
+          "estimate": {
+            "min": 3,
+            "max": 5
+          },
+          "waits_on": [
+            "RM-0021"
+          ],
+          "cycle": true
+        },
+        {
+          "position": 4,
+          "id": "RM-0022",
+          "title": "Ferry launch event",
+          "path": "plan/RM-0022.md",
+          "status": "draft",
+          "release": "launch",
+          "priority": "must",
+          "estimate": {
+            "min": 2,
+            "max": 3
+          },
+          "waits_on": [
+            "RM-0030",
+            "RM-0020"
+          ],
+          "cycle": false
+        },
+        {
+          "position": 5,
+          "id": "RM-0060",
+          "title": "Weather sync",
+          "path": "docs/spec/RM-0060.md",
+          "status": "draft",
+          "release": "launch",
+          "priority": "could",
+          "estimate": {
+            "min": 1,
+            "max": 1
+          },
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    },
+    {
+      "group": "pool",
+      "name": null,
+      "current": false,
+      "mvp_cut": false,
+      "open": 2,
+      "done": 1,
+      "sum": {
+        "min": 5,
+        "max": 5,
+        "unestimated": 1
+      },
+      "items": [
+        {
+          "position": null,
+          "id": "RM-0040",
+          "title": "Fishing side quest",
+          "path": "plan/RM-0040.md",
+          "status": "draft",
+          "release": null,
+          "priority": "should",
+          "estimate": {
+            "min": 5,
+            "max": 5
+          },
+          "waits_on": [],
+          "cycle": false
+        },
+        {
+          "position": null,
+          "id": "RM-0041",
+          "title": "Photo mode",
+          "path": "plan/RM-0041.md",
+          "status": "draft",
+          "release": null,
+          "priority": null,
+          "estimate": null,
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    },
+    {
+      "group": "unplaced",
+      "name": null,
+      "current": false,
+      "mvp_cut": false,
+      "open": 1,
+      "done": 0,
+      "sum": {
+        "min": 2,
+        "max": 6,
+        "unestimated": 0
+      },
+      "items": [
+        {
+          "position": null,
+          "id": "RM-0050",
+          "title": "Co-op mode",
+          "path": "plan/RM-0050.md",
+          "status": "draft",
+          "release": "someday",
+          "priority": "must",
+          "estimate": {
+            "min": 2,
+            "max": 6
+          },
+          "waits_on": [],
+          "cycle": false
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "RM-0012: estimate \"4-2\" is not N or N-M",
+    "RM-0018: priority \"urgent\" is not in [roadmap] priorities",
+    "RM-0050: release \"someday\" is not in [roadmap] releases",
+    "RM-0060: outside [roadmap] dir plan",
+    "depends_on cycle: RM-0020, RM-0021"
+  ],
+  "truncated": false,
+  "omitted": 0
+}

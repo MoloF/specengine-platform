@@ -304,6 +304,9 @@ acceptance: manual
 aliases: [LAMP-1]
 raised_by: {role: owner}
 difficulty: hard
+release: v1
+priority: should
+estimate: 2-4
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]
@@ -643,6 +646,11 @@ fn never_counted_changes() -> Vec<(&'static str, &'static str, &'static str)> {
             "raised_by: {role: owner}\n",
             "raised_by: {role: agent}\n",
         ),
+        // docs/features/roadmap-items.md RD-2: moving an item in the plan
+        // is no change of its meaning.
+        ("release", "release: v1\n", "release: v2\n"),
+        ("priority", "priority: should\n", "priority: must\n"),
+        ("estimate", "estimate: 2-4\n", "estimate: 3\n"),
     ]
 }
 
@@ -689,6 +697,9 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         "acceptance",
         "aliases",
         "raised_by",
+        "release",
+        "priority",
+        "estimate",
     ]
     .into_iter()
     .collect();

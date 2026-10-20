@@ -313,6 +313,8 @@ const PROJECT_NAMES: &[&str] = &[
     "index-decisions",
     "index-crates",
     "index-records",
+    // docs/features/roadmap-items.md SW-4: this repository's plan shard.
+    "index-roadmap",
 ];
 
 #[test]
@@ -324,8 +326,10 @@ fn the_check_source_names_no_prefix_path_or_file_of_a_project() {
             prefixes.extend(spec.aliases_from.iter().cloned());
         }
     }
-    // This repository's own scheme: `[ids] ADR` (spec, Data).
+    // This repository's own scheme: `[ids] ADR` (spec, Data) and, since
+    // docs/features/roadmap-items.md SW-4, `[ids] RM`.
     prefixes.insert("ADR".to_owned());
+    prefixes.insert("RM".to_owned());
     let mut offenders = Vec::new();
     let sources = check_sources();
     assert!(sources.len() >= 11, "{sources:?}");

@@ -2886,7 +2886,8 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
         .map(|(key, kind)| (key, format!("{kind:?}")))
         .collect();
     assert_eq!(import, core, "import's typed keys vs core's, in order");
-    assert_eq!(core.len(), 27);
+    // docs/features/roadmap-items.md RD-2: `release`, `priority`, `estimate`.
+    assert_eq!(core.len(), 30);
 
     let scheme = IdScheme::new(vec![PrefixSpec::number("X", "x", 1)]).unwrap();
     let codes = |key: &str, value: &str| -> Vec<DiagnosticCode> {
@@ -2911,12 +2912,13 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
             KeyType::Integer => (true, true, true),
             KeyType::List | KeyType::ReferenceList => (true, false, true),
             KeyType::Mapping => (true, true, false),
+            KeyType::TextOrInteger => (false, true, true),
         };
         assert_eq!(
             shape, want,
             "{key}: {kind:?} (word, list, mapping mistyped)"
         );
-        if kind == KeyType::Integer {
+        if matches!(kind, KeyType::Integer | KeyType::TextOrInteger) {
             assert!(!mistyped(key, "2"), "{key}: an integer");
         }
         for value in ["word", "[X-1]", "{}", "2"] {

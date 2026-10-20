@@ -20,11 +20,13 @@
 //!   a discrepancy needs it.
 //! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
 //!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
-//!   `verify`, which are only name-checked here (their readers are the
-//!   check's, [`crate::gate`]'s for `zones` and `gate`, [`crate::code_toml`]'s
-//!   and [`crate::verify`]'s, read only where code is read): a bad `[gate]`
-//!   or `[verify]` fails no read; any other key is an error at its line, so
-//!   a `[path]` typo cannot silently fall back to the default walk.
+//!   `verify`, `health`, `roadmap`, which are only name-checked here (their
+//!   readers are the check's, [`crate::gate`]'s for `zones` and `gate`,
+//!   [`crate::code_toml`]'s and [`crate::verify`]'s, read only where code is
+//!   read, [`crate::health_toml`]'s and [`crate::roadmap_toml`]'s, read only
+//!   by `spec health` and `spec roadmap`): a bad `[gate]`, `[verify]` or
+//!   `[roadmap]` fails no read; any other key is an error at its line, so a
+//!   `[path]` typo cannot silently fall back to the default walk.
 //!
 //! Every error is `file:line: message` through [`ProjectError::at`].
 
@@ -302,6 +304,8 @@ struct RawFile {
     verify: Option<IgnoredAny>,
     #[serde(default)]
     health: Option<IgnoredAny>,
+    #[serde(default)]
+    roadmap: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.

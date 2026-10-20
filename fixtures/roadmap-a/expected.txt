@@ -1,0 +1,22 @@
+roadmap: 16 open, 5 done; current beta; to beta 14-17 days, 2 unestimated; total 23-29 days, 2 unestimated
+release alpha | 0 open, 2 done | 0 days
+release beta | current | mvp cut | 8 open, 1 done | 14-17 days, 2 unestimated
+  1. RM-0017 | Save and load | draft | must | 5 | plan/RM-0017.md
+  2. RM-0013 | Dock layout pass | draft | should | - | plan/RM-0013.md
+  3. RM-0014 | Cargo manifest screen | draft | should | 1-2 | waits on RM-0030 | plan/RM-0014.md
+  4. RM-0010 | Tide engine core | in-progress | could | 2-4 | plan/RM-0010.md
+  5. RM-0011 | Boat physics | draft | should | 3 | waits on RM-0010 | plan/RM-0011.md
+  6. RM-0012 | Harbor crane controls | draft | must | - | waits on RM-0011 | plan/RM-0012.md
+  7. RM-0016 | Gull ambience | draft | could | 2 | plan/RM-0016.md
+  8. RM-0018 | Storm warning siren | draft | urgent | 1 | plan/RM-0018.md
+release launch | 5 open, 1 done | 9-12 days
+  1. RM-0030 | Ferry routes | draft | must | 2 | plan/RM-0030.md
+  2. RM-0021 | Ferry ticket booth | draft | should | 1 | waits on RM-0020 | cycle | plan/RM-0021.md
+  3. RM-0020 | Ferry crew roster | draft | could | 3-5 | waits on RM-0021 | cycle | plan/RM-0020.md
+  4. RM-0022 | Ferry launch event | draft | must | 2-3 | waits on RM-0030, RM-0020 | plan/RM-0022.md
+  5. RM-0060 | Weather sync | draft | could | 1 | docs/spec/RM-0060.md
+pool | 2 open, 1 done | 5 days, 1 unestimated
+  - RM-0040 | Fishing side quest | draft | should | 5 | plan/RM-0040.md
+  - RM-0041 | Photo mode | draft | - | - | plan/RM-0041.md
+unplaced | 1 open, 0 done | 2-6 days
+  - RM-0050 | Co-op mode | draft | must | 2-6 | plan/RM-0050.md | release someday

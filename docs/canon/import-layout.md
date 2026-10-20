@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-import, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-04
+reviewed: 2026-10-20
 ---
 
 # Import layout: the emitter and the after-tree
@@ -34,7 +34,7 @@ Definitions only; references and rows without an ID stay. A prefix's target is i
 
 Record files and headers alike. Values double-quoted. A typed core key (core `TYPED_KEYS`, pinned to `layout::typed_keys()`) is written in core's type where its text parses as it:
 
-- an integer key: a canonical integer plain (`007`, `+1` stay quoted); text keys, dates included, stay quoted;
+- an integer key, or `estimate` (text or integer): a canonical integer plain (`007`, `+1` stay quoted); text keys, dates included, stay quoted;
 - a list key: a one-item flow list;
 - `refs`, `adrs`, `supersedes`: the text split at commas, items trimmed, empty items dropped; a quoted scalar with a real escape (`\` in double quotes, `''` in single) stays one item;
 - a mapping key: never from a scalar.

@@ -339,7 +339,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                  subject = \"{LOOKALIKE}\"\nreason = \"kept for the importer\"\n\
                  expires = \"2999-01-01\"\n\n\
                  [[debt]]\ncode = \"unknown-key\"\npath = \"docs/features/stamina-tuning.md\"\n\
-                 subject = \"priority\"\nreason = \"kept for the playtest\"\n\
+                 subject = \"playtest\"\nreason = \"kept for the playtest\"\n\
                  expires = \"2998-06-30\"\n\n\
                  [[debt]]\ncode = \"ref-dangling\"\npath = \"docs/none.md\"\n\
                  subject = \"X-9\"\nreason = \"the file is gone\"\nexpires = \"2997-03-15\"\n"

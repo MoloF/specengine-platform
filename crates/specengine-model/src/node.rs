@@ -137,6 +137,17 @@ pub struct Fields {
     pub links: Option<OrderedMap<Vec<Reference>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raised_by: Option<OrderedMap<FmValue>>,
+    /// A plan item's release, as written; never counted by a node's
+    /// meaning hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<String>,
+    /// A plan item's priority, as written; never counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<String>,
+    /// A plan item's estimate: a string as written, or a YAML integer as its
+    /// decimal text; never counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimate: Option<String>,
 }
 
 /// A place a `path#name` link can land on: a heading's GitHub slug, a

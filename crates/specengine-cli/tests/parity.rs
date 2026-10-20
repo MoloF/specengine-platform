@@ -7,10 +7,11 @@
 //! the export never runs in this repository; index-shards AC-12): with
 //! `docs/index.md`, its archive shard `docs/index-archive.md` and its live
 //! shards `docs/index-canon-spec.md`, `docs/index-canon.md`,
-//! `docs/index-decisions.md` and `docs/index-crates.md` deleted, X
-//! recreates all six byte-identical to the working tree's, one `wrote` line
-//! each in config order; run again it reports all `unchanged` and keeps the
-//! mtimes, the JSON with `shards` (the five, in order);
+//! `docs/index-decisions.md`, `docs/index-crates.md` and
+//! `docs/index-roadmap.md` (docs/features/roadmap-items.md SW-4) deleted, X
+//! recreates all seven byte-identical to the working tree's, one `wrote`
+//! line each in config order; run again it reports all `unchanged` and keeps
+//! the mtimes, the JSON with `shards` (the six, in order);
 //! `--stdout` prints the same bytes, one `==> <path> <==` block per output;
 //! one byte edited in an output → `spec check` exit 1, one `index-drift`
 //! naming X on that output only.
@@ -256,6 +257,7 @@ fn export_index_recreates_this_repository_s_index() {
         "## Canon",
         "## Decisions",
         "## Canon",
+        "## Specs",
     ];
     for (at, (output, heading)) in outputs.iter().zip(headings).enumerate() {
         let mut edited = working[at].clone();

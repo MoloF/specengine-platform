@@ -10,11 +10,11 @@ reviewed: 2026-10-20
 
 A local specification engine for projects built with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: shipped: Phases 0-1 (parser, index, reads, graph, bundle, check, shards, layer A, pilot W), Phase 2 slices 1-7, `daemon-read`, `decision-staging`, `plugin-*`, `round`, `spec-serve`, `kind-*`, `health-left`, Phase 3 `code-refs`, `norm-hash`, `spec-lock`, `spec-verify`, `rev-discipline`, `rev-rule`, `drift-queue`, `drift-follow-up`, `hash-levels`, `hash-levels-ron`, `hash-levels-eval`, `hash-levels-use-lists`, `lock-levels`, `lock-rebase`, `lock-levels-verify`, `anchor-states`, `symbol-discriminator`, `symbol-index`, `symbol-reads`, `code-tools`, `bevy-roles`, `bevy-roles-reads`, `verify-tests`, `verify-task`, `health-code`, `health-code-ui`, `health-ui-follow-up`, `citation-sweep`, `constant-census`, `layer-c`, `layer-c-resolve`, Phase 4 `ui-*`. Plan: `docs/specs/specengine-platform/08-roadmap.md`.
+State: shipped: Phases 0-1 (parser, index, reads, graph, bundle, check, shards, layer A, pilot W), Phase 2 slices 1-7, `daemon-read`, `decision-staging`, `plugin-*`, `round`, `spec-serve`, `kind-*`, `health-left`, Phase 3 `code-refs`, `norm-hash`, `spec-lock`, `spec-verify`, `rev-discipline`, `rev-rule`, `drift-queue`, `drift-follow-up`, `hash-levels`, `hash-levels-ron`, `hash-levels-eval`, `hash-levels-use-lists`, `lock-levels`, `lock-rebase`, `lock-levels-verify`, `anchor-states`, `symbol-discriminator`, `symbol-index`, `symbol-reads`, `code-tools`, `bevy-roles`, `bevy-roles-reads`, `verify-tests`, `verify-task`, `health-code`, `health-code-ui`, `health-ui-follow-up`, `citation-sweep`, `constant-census`, `layer-c`, `layer-c-resolve`, Phase 4 `ui-*`, Phase 6 `roadmap-items`. Plan: `spec roadmap` (items in `docs/roadmap/`), `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 
-`CLAUDE.md` -> `docs/index.md` -> at most three documents. The root lists Tier 0-1 canon and live specs; `docs/canon/*`, decisions and crate READMEs are in the live shards it links, one step each. A third step is an index or canon defect: fix it. The archive is read by id only. Long files: headings first, then the needed section. Details: `docs/README.md`.
+`CLAUDE.md` -> `docs/index.md` -> at most three documents. The root lists Tier 0-1 canon and live specs; `docs/canon/*`, decisions, crate READMEs and plan items are in the live shards it links, one step each. A third step is an index or canon defect: fix it. The archive is read by id only. Long files: headings first, then the needed section. Details: `docs/README.md`.
 
 ## Rules that must not be broken
 
@@ -59,7 +59,7 @@ The pre-commit hook and CI reject a red check (`docs/README.md` "Enforcement").
 
 ## Layout
 
-- `docs/` -- `canon/`, `decisions/`, specs (`features/`, `specs/`), index, archive.
+- `docs/` -- `canon/`, `decisions/`, specs (`features/`, `specs/`), plan items (`roadmap/`), index, archive.
 - `crates/specengine-{model,core,store,cli,code,eval,import,mcp,http,ra}` -- the corpus model and reference grammar, the parser and check, the index (SQLite + FTS5), the `spec` binary, layer A parsing and hashing, the measurement harness, the corpus census, the stdio MCP server, the daemon, layer C (outside `default-members`); each has a Tier 1 `README.md`.
 - `fixtures/` -- test corpora with `expected.json`; `bevy-mini`, `ra-mini` workspace-excluded.
 - `.claude/` -- pipeline roles and commands.

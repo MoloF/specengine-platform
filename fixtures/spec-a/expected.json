@@ -198,7 +198,7 @@
         "- mentions inline AC-07",
         "AC-07 mentions inline R-12"
       ],
-      "diagnostics": ["frontmatter-type:6", "unknown-key:9", "unknown-key:12"]
+      "diagnostics": ["frontmatter-type:6", "unknown-key:12"]
     }
   }
 }
