@@ -3,6 +3,7 @@ import {
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
+  type RoadmapOptions,
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
@@ -19,6 +20,7 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
   RoundAnswersBody,
@@ -35,7 +37,7 @@ import type {
 // graph and the check `docs/features/ui-live.md` "Data", the tasks
 // `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon",
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
-// `docs/features/health-left.md` "Data"):
+// `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints"):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -342,6 +344,21 @@ export class HttpClient implements SpecEngineClient {
    */
   async getHealth(project: string): Promise<HealthReport> {
     return (await request("GET", `${projectPath(project)}/health`)) as HealthReport;
+  }
+
+  /**
+   * `spec roadmap --json` as the browser view, uncut (`crates/specengine-http/README.md`
+   * "Endpoints"): no query for the whole plan, else `release` or `pool=true`, never both (the
+   * options' type cannot hold the pair the daemon refuses, 400). A 404 is the exit-1 document (a
+   * `release` naming no release, `reason` set), resolved as data; a 503 (no `[roadmap]`, a bad
+   * table) and an older daemon's 404 reject in the daemon's words. Takes its query's AbortSignal.
+   */
+  async getRoadmap(project: string, options?: RoadmapOptions, signal?: AbortSignal): Promise<RoadmapDocument> {
+    const query = queryOf([
+      ["release", options?.release],
+      ["pool", options?.pool === true ? true : undefined],
+    ]);
+    return (await request("GET", `${projectPath(project)}/roadmap${query}`, { signal })) as RoadmapDocument;
   }
 
   /**

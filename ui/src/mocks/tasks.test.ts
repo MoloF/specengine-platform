@@ -189,10 +189,28 @@ describe("the cases the slice names (Data, Mock)", () => {
     ]);
   });
 
-  it("place no task on a plan: no mock project has a [roadmap], so each package's roadmap is null", () => {
+  it("place two harbor-sim tasks on the plan: T-0109 (in progress) and T-0112 (ready) execute items, every other package's roadmap is null (Q-8 of roadmap-screen)", async () => {
     const stored = [...mockTasks("harbor-sim").tasks, ...mockTasks("ledger-api").tasks, ...largeTasks()];
     expect(stored.length).toBeGreaterThan(300);
+    // Stored null: the mock's package takes the task's place from the plan when read.
     expect(stored.filter((entry) => entry.roadmap !== null).map((entry) => entry.id)).toEqual([]);
+    const client = new MockClient("normal", { now: () => NOW });
+    const placed: [string, TaskPackage["roadmap"]][] = [];
+    for (const [slug, list] of [["harbor-sim", mockTasks("harbor-sim")], ["ledger-api", mockTasks("ledger-api")]] as const) {
+      for (const entry of list.tasks) {
+        const pkg = await packageFrom(client, slug, entry.id);
+        if (pkg.roadmap !== null) {
+          placed.push([entry.id, pkg.roadmap]);
+        }
+      }
+    }
+    expect(placed.map(([id, place]) => [id, place?.item, place?.group, place?.position])).toEqual([
+      ["T-0109", "PLAN-0006", "release", 1],
+      ["T-0112", "PLAN-0012", "release", 1],
+    ]);
+    expect([task("harbor-sim", "T-0109").status, task("harbor-sim", "T-0112").status]).toEqual(["in_progress", "ready"]);
+    expect(task("harbor-sim", "T-0109").targets.map((target) => target.id)).toContain("PLAN-0006");
+    expect(task("harbor-sim", "T-0112").targets.map((target) => target.id)).toContain("PLAN-0012");
   });
 });
 

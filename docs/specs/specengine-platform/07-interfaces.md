@@ -149,6 +149,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
+| **Roadmap** | the plan, read-only: a lane per release (current, the MVP cut, range bars), the pool with its tasks, unplaced items; each card's waits and executing tasks; a lazy chain canvas, Lanes its text twin (`docs/canon/spec-roadmap-screen.md`) |
 | **Health** | "what is left" (rows 4-5 from `spec health`: `docs/canon/health-code.md`; drawn by `health-code-ui`), drift, budgets, W metrics |
 | **Questions** | the round's sheet and its answers, staged at once, each confirmed on a terminal (`docs/canon/round-ui.md`); print, paste later |
 

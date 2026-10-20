@@ -10,6 +10,9 @@ import {
   aLink,
   anAmendment,
   aProposal,
+  aRoadmap,
+  aRoadmapGroup,
+  aRoadmapItem,
   aTaskEntry,
   aTaskPackage,
 } from "../test/builders";
@@ -142,6 +145,14 @@ describe("each method hits its URL (AC-09)", () => {
       (client) => client.getTask("alpha", `${String.fromCodePoint(0x422)}-0001/x`),
       "/api/projects/alpha/tasks/%D0%A2-0001%2Fx",
     ],
+    // UI-6 of docs/features/roadmap-screen.md: the three queries; the screen sends the first.
+    ["getRoadmap: no query, the whole plan", (client) => client.getRoadmap("harbor-sim"), "/api/projects/harbor-sim/roadmap"],
+    [
+      "getRoadmap: `release` encoded once, non-Latin text as UTF-8",
+      (client) => client.getRoadmap("a b", { release: `v1 & ${String.fromCodePoint(0x3b1)}` }),
+      "/api/projects/a%20b/roadmap?release=v1%20%26%20%CE%B1",
+    ],
+    ["getRoadmap: `pool=true`", (client) => client.getRoadmap("harbor-sim", { pool: true }), "/api/projects/harbor-sim/roadmap?pool=true"],
   ])("%s", async (_name, call, url) => {
     await call(new HttpClient());
     expect(urlsOf(fetchStub)).toEqual([url]);
@@ -203,6 +214,7 @@ describe("each method hits its URL (AC-09)", () => {
     ["getGraph", (client, signal) => client.getGraph("alpha", { ref: "R-1" }, signal)],
     ["getTasks", (client, signal) => client.getTasks("alpha", signal)],
     ["getTask", (client, signal) => client.getTask("alpha", "T-0001", signal)],
+    ["getRoadmap", (client, signal) => client.getRoadmap("alpha", undefined, signal)],
   ])("%s hands the caller's AbortSignal to fetch (ui-live-tasks: a superseded read is aborted)", async (_name, call) => {
     const controller = new AbortController();
     await call(new HttpClient(), controller.signal);
@@ -318,6 +330,36 @@ describe("answers (AC-09)", () => {
     const error = await rejection(call(new HttpClient()));
     expect(error).toBeInstanceOf(ClientError);
     expect([error.status, error.message, error.notServed, isNotServed(error)]).toEqual([status, message, false, false]);
+  });
+
+  it("resolves the plan's 200 as sent, and its 404 exit-1 document as data, `reason` set and `groups` empty (UI-6 of roadmap-screen)", async () => {
+    const plan = aRoadmap([aRoadmapGroup("release", "beta", [aRoadmapItem({ id: "RM-0001", waits_on: ["RM-0001"], cycle: true })], { current: true })]);
+    const missing = { ...plan, release: "nope", reason: 'no release "nope" in [roadmap] releases (alpha, beta)', groups: [] };
+    stubFetch((url) => (url.includes("release=") ? jsonAnswer(404, missing) : jsonAnswer(200, plan)));
+    const client = new HttpClient();
+    expect(await client.getRoadmap("alpha")).toEqual(plan);
+    expect(await client.getRoadmap("alpha", { release: "nope" })).toEqual(missing);
+  });
+
+  it.each<[string, (client: HttpClient) => Promise<unknown>, number, string]>([
+    ["the plan's 503 (no [roadmap])", (client) => client.getRoadmap("ledger-api"), 503, "spec: specengine.toml has no [roadmap]"],
+    ["the plan's 503 (a bad table), two lines verbatim", (client) => client.getRoadmap("alpha"), 503, "specengine.toml:12: `roadmap.prefix`: expected a string, found an integer\nsecond line"],
+    ["the plan's 400 (an option refused)", (client) => client.getRoadmap("alpha", { release: "v1" }), 400, "`release` and `pool=true` together: give one"],
+    ["the plan's 404 error body (a daemon older than the route)", (client) => client.getRoadmap("alpha"), 404, "no route GET /api/projects/alpha/roadmap: try tree, nodes, search"],
+  ])("rejects %s with a ClientError, the daemon's message verbatim (UI-6 of roadmap-screen)", async (_name, call, status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    const error = await rejection(call(new HttpClient()));
+    expect(error).toBeInstanceOf(ClientError);
+    expect([error.status, error.message, error.notServed]).toEqual([status, message, false]);
+  });
+
+  it("rejects the plan's read with status 0 when no response came (UI-6 of roadmap-screen)", async () => {
+    stubFetch(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    const error = await rejection(new HttpClient().getRoadmap("alpha"));
+    expect(error.status).toBe(0);
+    expect(error.message).toBe("GET /api/projects/alpha/roadmap: no response from the daemon (Failed to fetch)");
   });
 
   it("resolves the graph's 404 exit-1 document as data, its reason set (AC-03 of ui-live)", async () => {

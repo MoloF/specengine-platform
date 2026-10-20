@@ -54,14 +54,14 @@ export function sectionHash(project: string, section: SectionId, id: string | nu
 /** The home's label in the nav and the palette. */
 export const OVERVIEW_LABEL = "Overview";
 
-/** One entry of the nav: the home, then the six sections. */
+/** One entry of the nav: the home, then the seven sections. */
 export interface NavEntry {
   key: "overview" | SectionId;
   label: string;
   hash: string;
 }
 
-/** The nav in order: Overview first, then the six sections (07 §3 "Web UI — screens"). */
+/** The nav in order: Overview first, then the seven sections (07 §3 "Web UI — screens"). */
 export function navOf(project: string): NavEntry[] {
   return [
     { key: "overview", label: OVERVIEW_LABEL, hash: homeHash(project) },

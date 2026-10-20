@@ -61,6 +61,9 @@ const PATHS = {
   findingError: "M8 1.8 14.2 8 8 14.2 1.8 8Z M8 5.2v3.4 M8 10.6v.2",
   findingWarning: "M8 2.2 14.3 13.5H1.7L8 2.2Z M8 6.4v3.4 M8 11.6v.2",
   debt: "M2.5 3.5h11v10h-11Z M2.5 6.5h11 M5.5 2v3 M10.5 2v3",
+  // The Roadmap (docs/features/roadmap-screen.md): the current release, the MVP cut's rule.
+  current: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M8 5.8a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z",
+  cutLine: "M1.5 8h2.5 M6.75 8h2.5 M12 8h2.5 M8 2.5v3 M8 10.5v3",
   debtExpired: "M2.5 3.5h11v10h-11Z M2.5 6.5h11 M5.5 2v3 M10.5 2v3 M6 8.6l4 3.3 M10 8.6l-4 3.3",
 } as const;
 

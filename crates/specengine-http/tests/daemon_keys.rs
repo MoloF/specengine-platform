@@ -105,6 +105,21 @@
 //! RD-9 of docs/features/roadmap-surfaces.md (Q-D, Q-H): `TaskPackage`
 //! holds `roadmap` after `bundle` (26 keys; `null` on A, which has no
 //! `[roadmap]`); no set more until 3a.
+//!
+//! TE-1 of docs/features/roadmap-screen.md (Phase 6, 3a), its Rust half:
+//! ten sets more, 66 in all, last, in `docs/canon/spec-roadmap.md`
+//! "Command"'s order: `RoadmapDocument` (15 keys), `RoadmapCounts` (2),
+//! `RoadmapCut` (4), `RoadmapSum` (3: `total` and every group's `sum`),
+//! `RoadmapGroup` (8), `RoadmapItem` (11), `RoadmapEstimate` (2),
+//! `RoadmapItemTask` (2), `RoadmapPoolTask` (4), and the package's
+//! `TaskRoadmap` (7), from a git copy of `fixtures/roadmap-a` served as
+//! `tide-runner` by a daemon of its own ([`tide_runner`]: T-0001 on the
+//! open item RM-0012, T-0002 a pool task on the non-item document
+//! BAY-HARBOR): `GET roadmap` (200), `GET roadmap?release=nope` (404, the
+//! exit-1 document, `groups` empty) and `GET tasks/T-0001` (its `roadmap`
+//! an object; the package's keys `TaskPackage`'s). The ten are the key
+//! sets of docs/canon/spec-roadmap-screen.md "Rules". M: a key dropped from
+//! a roadmap set of the fixture.
 
 mod common;
 mod task_state;
@@ -616,6 +631,37 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         );
     }
 
+    // roadmap-screen: tide-runner's plan, the exit-1 document and the item
+    // task's package, from a daemon of its own.
+    let (roadmaps, tide_package) = tide_runner(&scratch, &cwd);
+    let roadmap_groups = items(&roadmaps, "groups");
+    let roadmap_items = items(&roadmap_groups, "items");
+    let roadmap_sums = [objects(&roadmaps, "total"), objects(&roadmap_groups, "sum")].concat();
+    let estimates = objects(&with_object(&roadmap_items, "estimate"), "estimate");
+    let item_tasks = items(&roadmap_items, "tasks");
+    let pool_tasks = items(&roadmaps, "pool_tasks");
+    let task_roadmaps = objects(std::slice::from_ref(&tide_package), "roadmap");
+    assert_eq!(
+        roadmap_groups.len(),
+        5,
+        "alpha, beta, launch, pool, unplaced on the plain read alone: {roadmaps:?}"
+    );
+    assert_eq!(
+        item_tasks,
+        ["{\"id\":\"T-0001\",\"status\":\"draft\"}"],
+        "T-0001 on RM-0012's line alone: {roadmaps:?}"
+    );
+    assert_eq!(pool_tasks.len(), 1, "T-0002 alone: {roadmaps:?}");
+    assert!(
+        pool_tasks[0].starts_with("{\"id\":\"T-0002\",")
+            && pool_tasks[0].ends_with("\"targets\":[\"BAY-HARBOR\"]}"),
+        "{pool_tasks:?}"
+    );
+    assert!(
+        task_roadmaps[0].starts_with("{\"item\":\"RM-0012\",\"group\":\"release\","),
+        "{task_roadmaps:?}"
+    );
+
     vec![
         (
             "Project",
@@ -689,7 +735,13 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         ),
         (
             "TaskPackage",
-            one_key_set("TaskPackage", &packages, keys_of),
+            // roadmap-screen: tide-runner's package (its `roadmap` an
+            // object) has A's keys too.
+            one_key_set(
+                "TaskPackage",
+                &[packages.clone(), vec![tide_package.clone()]].concat(),
+                keys_of,
+            ),
         ),
         (
             "TaskTarget",
@@ -857,7 +909,89 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "UnboundMarker",
             one_key_set("UnboundMarker", &unbound_markers, keys_of),
         ),
+        (
+            "RoadmapDocument",
+            one_key_set("RoadmapDocument", &roadmaps, keys_of),
+        ),
+        (
+            "RoadmapCounts",
+            one_key_set("RoadmapCounts", &objects(&roadmaps, "counts"), keys_of),
+        ),
+        (
+            "RoadmapCut",
+            one_key_set("RoadmapCut", &objects(&roadmaps, "cut"), keys_of),
+        ),
+        (
+            "RoadmapSum",
+            one_key_set("RoadmapSum", &roadmap_sums, keys_of),
+        ),
+        (
+            "RoadmapGroup",
+            one_key_set("RoadmapGroup", &roadmap_groups, keys_of),
+        ),
+        (
+            "RoadmapItem",
+            one_key_set("RoadmapItem", &roadmap_items, keys_of),
+        ),
+        (
+            "RoadmapEstimate",
+            one_key_set("RoadmapEstimate", &estimates, keys_of),
+        ),
+        (
+            "RoadmapItemTask",
+            one_key_set("RoadmapItemTask", &item_tasks, keys_of),
+        ),
+        (
+            "RoadmapPoolTask",
+            one_key_set("RoadmapPoolTask", &pool_tasks, keys_of),
+        ),
+        (
+            "TaskRoadmap",
+            one_key_set("TaskRoadmap", &task_roadmaps, keys_of),
+        ),
     ]
+}
+
+/// roadmap-screen, TE-1 (`docs/features/roadmap-screen.md`): a git copy of
+/// `fixtures/roadmap-a` served as `tide-runner` with a `HOME` and a daemon
+/// of its own; T-0001 (`draft`) on the open item RM-0012 (beta, waiting on
+/// RM-0011), T-0002 (`draft`) on BAY-HARBOR, a document that is no item (a
+/// pool task). Its plain `GET roadmap` (200) and `GET roadmap?release=nope`
+/// (404, the exit-1 document), then T-0001's package.
+fn tide_runner(scratch: &Scratch, cwd: &std::path::Path) -> (Vec<String>, String) {
+    let home = scratch.home("r");
+    let root = scratch.repo("roadmap-a", "tide", "main");
+    let calls = task_state::Calls::new(scratch, &root, &home);
+    let on_item = calls.new_task("RM-0012", "Crane controls pass", false);
+    let in_pool = calls.new_task("BAY-HARBOR", "Harbor zone pass", false);
+    assert_eq!([on_item.as_str(), in_pool.as_str()], ["T-0001", "T-0002"]);
+    let server = Server::serve(&home, cwd, &[&root]);
+    let r = "/api/projects/tide-runner";
+    let plain = server
+        .get(&format!("{r}/roadmap"))
+        .status(200)
+        .text()
+        .to_owned();
+    let missing = server
+        .get(&format!("{r}/roadmap?release=nope"))
+        .status(404)
+        .text()
+        .to_owned();
+    let document: serde_json::Value = serde_json::from_str(&missing).expect("the exit-1 document");
+    assert!(
+        document["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("\"nope\"")),
+        "{missing}"
+    );
+    assert_eq!(document["groups"], serde_json::json!([]), "{missing}");
+    let package = server
+        .get(&format!("{r}/tasks/{on_item}"))
+        .status(200)
+        .text()
+        .to_owned();
+    drop(server);
+    (vec![plain, missing], package)
 }
 
 /// drift-queue, TE-11
@@ -1094,9 +1228,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        56,
+        66,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
-         health-code: 56)"
+         health-code: 56; roadmap-screen: 66)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1249,8 +1383,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // (`{hash, rows, more}` as stored, rows untyped).
     assert_eq!(sets[45].0, "DriftEvidence");
     assert_eq!(sets[45].1, ["hash", "rows", "more"]);
-    // health-code's ten, last, in "The document"'s order (AC-9).
-    let ten: Vec<(&str, Vec<String>)> = sets[46..].to_vec();
+    // health-code's ten, in "The document"'s order (AC-9).
+    let ten: Vec<(&str, Vec<String>)> = sets[46..56].to_vec();
     let want: [(&str, &[&str]); 10] = [
         ("HealthCode", &["files", "rs", "ron", "skipped"]),
         ("HealthAssumes", &["state", "causes", "counts", "rows"]),
@@ -1310,6 +1444,69 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         assert_eq!(*name, want_name);
         assert_eq!(keys, want_keys, "{name}");
     }
+    // roadmap-screen's ten, last (TE-1): `docs/canon/spec-roadmap.md`
+    // "Command"'s JSON, every key present, in order; the package's
+    // `roadmap` as `docs/canon/task-package.md` "Package" sends it.
+    let roadmap: Vec<(&str, Vec<String>)> = sets[56..].to_vec();
+    let want: [(&str, &[&str]); 10] = [
+        (
+            "RoadmapDocument",
+            &[
+                "release",
+                "pool",
+                "reason",
+                "prefix",
+                "dir",
+                "unit",
+                "current",
+                "counts",
+                "cut",
+                "total",
+                "groups",
+                "pool_tasks",
+                "notes",
+                "truncated",
+                "omitted",
+            ],
+        ),
+        ("RoadmapCounts", &["open", "done"]),
+        ("RoadmapCut", &["release", "min", "max", "unestimated"]),
+        ("RoadmapSum", &["min", "max", "unestimated"]),
+        (
+            "RoadmapGroup",
+            &[
+                "group", "name", "current", "mvp_cut", "open", "done", "sum", "items",
+            ],
+        ),
+        (
+            "RoadmapItem",
+            &[
+                "position", "id", "title", "path", "status", "release", "priority", "estimate",
+                "waits_on", "cycle", "tasks",
+            ],
+        ),
+        ("RoadmapEstimate", &["min", "max"]),
+        ("RoadmapItemTask", &["id", "status"]),
+        ("RoadmapPoolTask", &["id", "status", "title", "targets"]),
+        (
+            "TaskRoadmap",
+            &[
+                "item", "group", "release", "position", "of", "priority", "waits_on",
+            ],
+        ),
+    ];
+    assert_eq!(roadmap.len(), want.len(), "{names:?}");
+    for ((name, keys), (want_name, want_keys)) in roadmap.iter().zip(want) {
+        assert_eq!(*name, want_name);
+        assert_eq!(keys, want_keys, "{name}");
+    }
+    assert_eq!(
+        roadmap
+            .iter()
+            .map(|(_, keys)| keys.len())
+            .collect::<Vec<_>>(),
+        [15, 2, 4, 3, 8, 11, 2, 2, 4, 7]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1330,11 +1527,12 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 56 sets (41 until
+/// unchanged, no new key): the fixture holds 66 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
-/// docs/features/drift-queue.md its `DriftEvidence`, TE-11, and
-/// docs/features/health-code.md its ten, AC-9); a decision
+/// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
+/// docs/features/health-code.md its ten, AC-9, and
+/// docs/features/roadmap-screen.md its ten, TE-1); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1348,10 +1546,10 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        56,
-        "56 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
-         rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence` and \
-         health-code's ten (AC-9)"
+        66,
+        "66 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+         rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
+         health-code's ten (AC-9) and roadmap-screen's ten (TE-1)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1465,13 +1663,15 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 56 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 66 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
-/// docs/features/drift-queue.md its `DriftEvidence`, TE-11, and
-/// docs/features/health-code.md its ten, AC-9); "Data"'s
-/// amendment raised through `spec propose amendment` is
-/// served with the fixture's `Proposal` keys in order (`kind`
+/// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
+/// docs/features/health-code.md its ten, AC-9, and
+/// docs/features/roadmap-screen.md its ten, TE-1, the key sets of
+/// docs/canon/spec-roadmap-screen.md "Rules"); the amendment of
+/// docs/features/kind-amendment.md "Data", raised through `spec propose
+/// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
 /// ID), its inbox entry with `InboxEntry`'s; a same-origin `POST
 /// .../decision` with `option`, `answer` or `canon` is 400 naming the
@@ -1486,10 +1686,10 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        56,
-        "56 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
-         rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence` and \
-         health-code's ten (AC-9)"
+        66,
+        "66 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+         rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
+         health-code's ten (AC-9) and roadmap-screen's ten (TE-1)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

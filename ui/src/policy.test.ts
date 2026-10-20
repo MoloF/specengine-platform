@@ -180,7 +180,7 @@ describe("source policy", () => {
   });
 
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/"];
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
@@ -372,6 +372,35 @@ describe("source policy", () => {
       "{item.reason !== null && <p>{item.reason}</p>}",
       "<span className=\"kind-tag\">{oneLine(marker.relation)}</span>",
     ]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  it("compares no release, priority, unit, status or lane name in the Roadmap: the plan's vocabulary is shown raw, never branched on (roadmap-screen)", () => {
+    const outside = (path: string) => !path.startsWith("/src/roadmap/") || /\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
+      expect.arrayContaining(["/src/roadmap/RoadmapView.tsx", "/src/roadmap/RoadmapLanes.tsx", "/src/roadmap/RoadmapChain.tsx", "/src/roadmap/text.ts"]),
+    );
+    const field = "\\.(release|priority|unit|status|name|mvpCut)\\b";
+    const equality = "([!=]==?)(?!=)";
+    const absent = "(null|undefined)\\b";
+    const compared = new RegExp(
+      [
+        `${field}\\s*${equality}(?!\\s*${absent})`,
+        `(?<!${absent}\\s*)${equality}\\s*[\\w.?]*${field}`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `${field}\\s*(&&|\\|\\|)`,
+        `\\[[^\\]]*${field}\\s*\\]`,
+        `\\.(includes|has|indexOf|startsWith|endsWith|test|filter|find|some|every|sort)\\([^)]*${field}`,
+      ].join("|"),
+    );
+    expect(offending(compared, outside)).toEqual([]);
+    // The detector itself.
+    for (const line of ['if (item.status === "shipped") {', "const rank = RANKS[item.priority];", 'group.name === "mvp" && <p />', "const kept = items.filter(inRelease(item.release));"]) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["<Badge look={itemStatusLook(item.status)} />", "return release === null ? a : b;", "if (isRelease(group) && group.name !== null) {"]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }
   });

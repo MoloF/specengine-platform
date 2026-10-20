@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # spec roadmap: plan items and the computed path
@@ -113,4 +113,4 @@ From the walked files alone (`--staged`: staged blobs and config): no `HOME`, sl
 
 ## Surfaces
 
-The reading root's plan, built as `spec roadmap`'s, read once per command: the package's `roadmap` and brief line (`task-package.md` "Package", "Brief"; core `task_item`: the item and group a task executes); MCP `get_roadmap {release?, pool?}`, capped, no table (`mcp-read.md` "Tools"); the daemon's `GET .../roadmap`, `View::Browser`: uncut, `omitted` 0, the join's notes stderr only (`crates/specengine-http/README.md`).
+The reading root's plan, built as `spec roadmap`'s, read once per command: the package's `roadmap` and brief line (`task-package.md` "Package", "Brief"; core `task_item`: the item and group a task executes); MCP `get_roadmap {release?, pool?}`, capped, no table (`mcp-read.md` "Tools"); the daemon's `GET .../roadmap`, `View::Browser`: uncut, `omitted` 0, the join's notes stderr only (`crates/specengine-http/README.md`). The screen: `spec-roadmap-screen.md`.

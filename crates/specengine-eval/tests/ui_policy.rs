@@ -48,6 +48,13 @@
 //! `blocked` exemption widened to all of `src`, to all of `provisional.ts` or
 //! to the other hold words.
 //!
+//! - docs/features/roadmap-screen.md TE-2: the mock plan's seven words
+//!   (`MOCK_PLAN`: releases, priorities, unit, each quoted in a file of
+//!   `src/mocks/`, disjoint from this repository's `[roadmap]` and
+//!   the mock kinds) and this repository's own `[roadmap]` words are quoted
+//!   nowhere in `ui/src` outside the mocks and tests; a positive control on
+//!   a scratch `ui/`. M: `"keel"` compared in a component.
+//!
 //! - docs/features/ui-embed.md T6 (WA 11, the daemon's page policy
 //!   `default-src 'self'`): `ui/index.html` holds no `<script>` without
 //!   `src`, no `<style>`, no `style=` or `on*=` attribute; nor does the
@@ -1029,6 +1036,172 @@ fn mock_kinds_are_disjoint_and_never_quoted_in_app_code() {
     assert!(
         found.is_empty(),
         "a project's kind quoted in app code (AC-19, ADR-0031):\n{}",
+        found.join("\n")
+    );
+}
+
+/// TE-2 of docs/features/roadmap-screen.md: harbor-sim's `[roadmap]` words
+/// (docs/canon/spec-roadmap-screen.md "Mock", declared in
+/// `ui/src/mocks/roadmap.ts`; ledger-api has no plan): its releases, its
+/// priorities and its unit, each quoted in a file of [`MOCKS_DIR`].
+const MOCK_PLAN: [(&str, &[&str]); 3] = [
+    ("releases", &["keel", "hull", "sails"]),
+    ("priorities", &["gale", "breeze", "calm"]),
+    ("unit", &["tides"]),
+];
+
+/// The mocks, where the plan words are declared (relative to `ui/`).
+const MOCKS_DIR: &str = "src/mocks/";
+
+/// `word` quoted whole on `line`, between two of the same quote mark.
+fn quotes(line: &str, word: &str) -> bool {
+    ['"', '\'', '`']
+        .iter()
+        .any(|quote| line.contains(&format!("{quote}{word}{quote}")))
+}
+
+/// `path:line: text` for each line outside the mocks and the tests that
+/// quotes one of `words`.
+fn plan_word_hits(files: &[(String, String)], words: &[String]) -> Vec<String> {
+    hits(files, is_mock_or_test, |line| {
+        words.iter().any(|word| quotes(line, word))
+    })
+}
+
+/// [`MOCK_PLAN`]'s seven words, in order.
+fn mock_plan_words() -> Vec<String> {
+    MOCK_PLAN
+        .iter()
+        .flat_map(|(_, words)| words.iter())
+        .map(|word| (*word).to_owned())
+        .collect()
+}
+
+/// This repository's own plan words: `specengine.toml` `[roadmap]`
+/// `releases`, `priorities` and `unit` (the owner's manual check reads this
+/// plan through `spec serve`).
+fn own_plan_words() -> Vec<String> {
+    let path = repository_root().join("specengine.toml");
+    let config: toml::Value =
+        toml::from_str(&read(&path)).unwrap_or_else(|error| panic!("specengine.toml: {error}"));
+    let roadmap = config
+        .get("roadmap")
+        .and_then(toml::Value::as_table)
+        .expect("specengine.toml has a [roadmap] table");
+    let mut out = Vec::new();
+    for key in ["releases", "priorities"] {
+        let list = roadmap
+            .get(key)
+            .and_then(toml::Value::as_array)
+            .unwrap_or_else(|| panic!("[roadmap] {key}: an array"));
+        out.extend(
+            list.iter()
+                .map(|word| word.as_str().expect("a string").to_owned()),
+        );
+    }
+    out.push(
+        roadmap
+            .get("unit")
+            .and_then(toml::Value::as_str)
+            .expect("[roadmap] unit: a string")
+            .to_owned(),
+    );
+    out
+}
+
+/// TE-2's positive control on a scratch `ui/`: a mock plan word (`"keel"`
+/// among them) quoted in app code is flagged, whichever its quote mark; the
+/// same word unquoted, as the head of a longer word, in the mocks, in
+/// `src/test/` or in a test file is not.
+#[test]
+fn the_plan_word_scan_flags_app_code_only() {
+    let words = mock_plan_words();
+    let [release, priority, unit] = MOCK_PLAN.map(|(_, words)| words[0]);
+    assert_eq!(release, "keel");
+    let lanes = format!("if (group.name === \"{release}\") return null;\n");
+    let card = format!("const top = '{priority}';\n");
+    let units = format!("export const unit = `{unit}`;\n");
+    let note = format!("// the {release} lane comes first\nconst many = \"{release}s\";\n");
+    let mock = format!("export const plan = [\"{release}\", '{priority}', `{unit}`];\n");
+    let ui = ScratchUi::new(
+        "plan-words",
+        &[
+            ("src/roadmap/Lanes.tsx", lanes.as_str()),
+            ("src/roadmap/Card.tsx", card.as_str()),
+            ("src/app/units.ts", units.as_str()),
+            ("src/roadmap/Note.tsx", note.as_str()),
+            ("src/mocks/roadmap.ts", mock.as_str()),
+            ("src/test/builders.ts", mock.as_str()),
+            ("src/roadmap/RoadmapView.test.tsx", mock.as_str()),
+        ],
+    );
+    let mut found = plan_word_hits(&ui_sources_in(&ui.0), &words);
+    found.sort();
+    let mut want = vec![
+        format!("ui/src/app/units.ts:1: {}", units.trim()),
+        format!("ui/src/roadmap/Card.tsx:1: {}", card.trim()),
+        format!("ui/src/roadmap/Lanes.tsx:1: {}", lanes.trim()),
+    ];
+    want.sort();
+    assert_eq!(found, want);
+}
+
+/// TE-2 (docs/features/roadmap-screen.md, ADR-0008, ADR-0031): the mock
+/// plan's seven words are each quoted in [`MOCKS_DIR`] (a test file there
+/// does not count), distinct,
+/// disjoint from this repository's `[roadmap]` words and from
+/// [`MOCK_KINDS`], and quoted nowhere in app code, nor is any of this
+/// repository's own (the "Genre" rule: vocabulary only from the document).
+/// M: `group.name === "keel"` in a component.
+#[test]
+fn mock_plan_words_are_never_quoted_in_app_code() {
+    let files = ui_sources();
+    let mocks: Vec<&(String, String)> = files
+        .iter()
+        .filter(|(path, _)| {
+            path.starts_with(MOCKS_DIR)
+                && !path.ends_with(".test.ts")
+                && !path.ends_with(".test.tsx")
+        })
+        .collect();
+    let words = mock_plan_words();
+    let missing: Vec<&String> = words
+        .iter()
+        .filter(|word| {
+            !mocks
+                .iter()
+                .any(|(_, text)| text.lines().any(|line| quotes(line, word)))
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "no file of ui/{MOCKS_DIR} quotes {missing:?} (docs/canon/spec-roadmap-screen.md \
+         \"Mock\"; MOCK_PLAN follows the mocks' words)"
+    );
+    let unique: BTreeSet<&String> = words.iter().collect();
+    assert_eq!(
+        unique.len(),
+        words.len(),
+        "the plan words repeat: {words:?}"
+    );
+    let own = own_plan_words();
+    assert!(own.len() >= 3, "this repository's plan words: {own:?}");
+    let kinds: Vec<&str> = MOCK_KINDS.iter().flat_map(|(_, kinds)| *kinds).collect();
+    let shared: Vec<&String> = words
+        .iter()
+        .filter(|word| own.contains(word) || kinds.contains(&word.as_str()))
+        .collect();
+    assert!(
+        shared.is_empty(),
+        "the mock plan's words {shared:?} are also this repository's [roadmap] \
+         ({own:?}) or a mock kind ({kinds:?})"
+    );
+    let all: Vec<String> = words.iter().chain(&own).cloned().collect();
+    let found = plan_word_hits(&files, &all);
+    assert!(
+        found.is_empty(),
+        "a plan's release, priority or unit quoted in app code (roadmap-screen TE-2, \
+         ADR-0008):\n{}",
         found.join("\n")
     );
 }

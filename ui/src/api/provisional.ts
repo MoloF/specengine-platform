@@ -1209,3 +1209,107 @@ export interface TaskPackage {
   updated_at: string;
   notes: string[];
 }
+
+// The plan (docs/features/roadmap-screen.md): `spec roadmap --json` as the daemon's browser view
+// sends it, uncut (`omitted` 0), every key present, in `docs/canon/spec-roadmap.md` "Command"'s
+// order. Release and priority names, the unit and an item's `status:` are project vocabulary
+// (ADR-0008), plain strings shown as written and never compared; a task's state is the queue's.
+
+/**
+ * `spec roadmap --json`: the whole plan's line (`counts`, `current`, `cut`, `total`) and its groups;
+ * `reason` set (the daemon's 404, the exit-1 document) when `release` names no release, `groups`
+ * then empty. `notes` are the plan's; the join's go to stderr only, never here.
+ * Source: `docs/canon/spec-roadmap.md` "Command".
+ */
+export interface RoadmapDocument {
+  release: string | null;
+  pool: boolean;
+  reason: string | null;
+  prefix: string;
+  dir: string;
+  unit: string | null;
+  current: string | null;
+  counts: RoadmapCounts;
+  cut: RoadmapCut | null;
+  total: RoadmapSum;
+  groups: RoadmapGroup[];
+  pool_tasks: RoadmapPoolTask[];
+  notes: string[];
+  truncated: boolean;
+  omitted: number;
+}
+
+/** The whole plan's open and done items. Source: `docs/canon/spec-roadmap.md` "Command". */
+export interface RoadmapCounts {
+  open: number;
+  done: number;
+}
+
+/** The MVP cut's sum: the releases from the first through `mvp_cut`. Source: `docs/canon/spec-roadmap.md` "Command". */
+export interface RoadmapCut {
+  release: string;
+  min: number;
+  max: number;
+  unestimated: number;
+}
+
+/** A sum over open items: the estimated bounds added, the others counted. Source: `docs/canon/spec-roadmap.md` "Command". */
+export interface RoadmapSum {
+  min: number;
+  max: number;
+  unestimated: number;
+}
+
+/**
+ * A group of the plan, in served order: each release, then the pool, then unplaced; `name` null
+ * but for a release; its open items listed, its done ones counted. Source: `docs/canon/spec-roadmap.md` "Command".
+ */
+export interface RoadmapGroup {
+  group: RoadmapGroupKind;
+  name: string | null;
+  current: boolean;
+  mvp_cut: boolean;
+  open: number;
+  done: number;
+  sum: RoadmapSum;
+  items: RoadmapItem[];
+}
+
+/**
+ * An open item: `position` 1-based in a release, null elsewhere; `status`, `release` (null when
+ * absent or mistyped) and `priority` as written; `waits_on` its open predecessors, never a hold on
+ * it (ADR-0012); `tasks` the open tasks executing it. Source: `docs/canon/spec-roadmap.md` "Command".
+ */
+export interface RoadmapItem {
+  position: number | null;
+  id: string;
+  title: string | null;
+  path: string;
+  status: string | null;
+  release: string | null;
+  priority: string | null;
+  estimate: RoadmapEstimate | null;
+  waits_on: string[];
+  cycle: boolean;
+  tasks: RoadmapItemTask[];
+}
+
+/** An item's estimate in the plan's unit; absent or unreadable: the item's `estimate` null. Source: `docs/canon/spec-roadmap.md` "Command". */
+export interface RoadmapEstimate {
+  min: number;
+  max: number;
+}
+
+/** An open task executing the item, by number, its state verbatim. Source: `docs/canon/spec-roadmap.md` "Command". */
+export interface RoadmapItemTask {
+  id: string;
+  status: TaskStatus;
+}
+
+/** An open task executing no open item: a pool task, its stored targets. Source: `docs/canon/spec-roadmap.md` "Command". */
+export interface RoadmapPoolTask {
+  id: string;
+  status: TaskStatus;
+  title: string | null;
+  targets: string[];
+}

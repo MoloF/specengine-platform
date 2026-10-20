@@ -67,6 +67,8 @@ export const queryKeys = {
   health: (project: string) => ["health", project] as const,
   /** The round's sheet; `limit` null: the daemon's default (`docs/features/ui-round.md` "Data"). */
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
+  /** The whole plan, `spec roadmap --json` with neither option (`docs/features/roadmap-screen.md`). */
+  roadmap: (project: string) => ["roadmap", project] as const,
 };
 
 /** Every round sheet of a project, whatever its limit. */
@@ -188,11 +190,12 @@ function eventId(payload: unknown): string | null {
 
 /**
  * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
- * spec (every tree, node, search, bundle and graph of it, its check and its unapplied amendments,
- * each `[read, project, …]`; `docs/features/ui-live.md` "Rules and edge cases",
- * `docs/features/health-left.md` "Description and interactions").
+ * spec (every tree, node, search, bundle and graph of it, its check, its unapplied amendments and
+ * its plan, each `[read, project, …]`; `docs/features/ui-live.md` "Rules and edge cases",
+ * `docs/features/health-left.md` "Description and interactions", `docs/features/roadmap-screen.md`:
+ * an item's file is a spec file).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health", "roadmap"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -263,8 +266,10 @@ const TASK_EVENT = "task.";
  * `id`: every task of it), never the inbox, a proposal or a spec read
  * (`docs/features/ui-live-tasks.md` "Data"). Every `proposal.*` and `task.*` event also reads that
  * project's round sheets again, a read in flight aborted
- * (`docs/features/ui-round.md` "Description and interactions"). No other project's read, and no
- * other read. A stream this client opened again after the browser gave up on it (events may be
+ * (`docs/features/ui-round.md` "Description and interactions"). The plan is read again on a
+ * `task.*` event, `proposal.applied` and a gap, a read in flight aborted, never on a stage,
+ * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). No
+ * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads and the round sheets of the project again. Only the reads on screen are fetched, once each
  * but the health read's one more after a walk (the check and the health read only while Health
@@ -319,6 +324,13 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         }
       }
     };
+    // The plan lists each open task beside the item it executes, or among the pool tasks: a task
+    // event reads it again, a read in flight aborted (`docs/features/roadmap-screen.md`); an apply
+    // and a gap read it as a read of the spec. No other event: a stage, a new proposal, an
+    // approval, a rejection or a refused apply changes no item file and no task.
+    const readPlanAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.roadmap(project), exact: true });
+    };
     /** The task list and every task of the project, whatever task is open. */
     const readTasksAgain = () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(project), exact: true });
@@ -344,6 +356,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
             void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(project), exact: true });
             void queryClient.invalidateQueries({ queryKey: queryKeys.task(project, id), exact: true });
           }
+          readPlanAgain();
           return;
         }
         if (!event.type.startsWith(PROPOSAL_EVENT)) {
@@ -626,6 +639,20 @@ export function useStageDecision(project: string) {
     },
   });
 }
+
+/**
+ * The project's whole plan (`docs/features/roadmap-screen.md`): one read, neither option sent, its
+ * query's AbortSignal taken (a read superseded by a live event's is aborted). Read on entering the
+ * Roadmap, on "Read again" (`refetch`) and, while the Roadmap is on screen, after a `task.*` event,
+ * `proposal.applied` or a gap (useLiveQueue); never on window focus.
+ */
+export function useRoadmap(project: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.roadmap(project), queryFn: ({ signal }) => client.getRoadmap(project, undefined, signal) });
+}
+
+/** The plan's read as the Roadmap shares it among its parts. */
+export type RoadmapQuery = ReturnType<typeof useRoadmap>;
 
 /** The round sheet at `limit` (null: the daemon's default); while another limit is read, the last sheet stays up. */
 export function useRound(project: string, limit: number | null) {

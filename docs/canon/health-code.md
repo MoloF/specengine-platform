@@ -126,4 +126,4 @@ Rows 4-5 `cannot`, `code` null, row 3 measured, exit 0: a bad `[code]` (`<config
 
 ## Tests
 
-CLI `tests/health.rs`, `health_rows/` (parity, failures, read-only, determinism, genre), `code_refs_walk.rs` (`NEW_MODULES` 17); store `queue_bare_reads.rs`; http `tests/health.rs`, `daemon_keys.rs` (56 sets); UI `daemonKeys.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs`.
+CLI `tests/health.rs`, `health_rows/` (parity, failures, read-only, determinism, genre), `code_refs_walk.rs` (`NEW_MODULES` 17); store `queue_bare_reads.rs`; http `tests/health.rs`, `daemon_keys.rs` (66 sets); UI `daemonKeys.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs`.

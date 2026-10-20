@@ -5,6 +5,7 @@ import {
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
+  type RoadmapOptions,
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
@@ -19,6 +20,7 @@ import type {
   NodeView,
   Project,
   Proposal,
+  RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
   RoundSheet,
@@ -38,6 +40,7 @@ import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
+import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
 
@@ -183,7 +186,42 @@ export class MockClient implements SpecEngineClient {
     await this.read();
     const entry = this.project(project);
     const stored = this.taskStore(project).tasks.find((candidate) => candidate.id === id);
-    return structuredClone(stored === undefined ? taskNotFound(id) : packageOf(stored, entry.proposals));
+    return structuredClone(stored === undefined ? taskNotFound(id) : packageOf(stored, entry.proposals, taskPlaceOf(this.planOf(project), id)));
+  }
+
+  /**
+   * The project's plan for the scenario (src/mocks/roadmap.ts), its tasks joined, read only; the
+   * daemon serves its own (`crates/specengine-http/README.md` "Endpoints"). A project with no
+   * `[roadmap]` (ledger-api) is refused 503 in the CLI's words in every scenario. `release` keeps
+   * that release's group, `pool` the pool and unplaced, as `spec roadmap` does; a release not
+   * listed answers the exit-1 document, as data.
+   */
+  async getRoadmap(project: string, options?: RoadmapOptions): Promise<RoadmapDocument> {
+    await this.read();
+    this.project(project);
+    const whole = this.planOf(project);
+    if (whole === null) {
+      throw noPlan();
+    }
+    if (options === undefined) {
+      return structuredClone(whole);
+    }
+    if (options.pool === true) {
+      return structuredClone({ ...whole, pool: true, groups: whole.groups.filter((group) => group.group !== "release") });
+    }
+    const release = options.release;
+    const kept = whole.groups.filter((group) => group.group === "release" && group.name === release);
+    if (kept.length === 0) {
+      const names = whole.groups.flatMap((group) => (group.group === "release" && group.name !== null ? [group.name] : []));
+      return structuredClone({ ...whole, release, reason: `no release "${release}" in [roadmap] releases (${names.join(", ")})`, groups: [] });
+    }
+    return structuredClone({ ...whole, release, groups: kept });
+  }
+
+  /** The project's plan document now, its tasks joined; null without `[roadmap]`. */
+  private planOf(project: string): RoadmapDocument | null {
+    const plan = mockPlan(project, this.scenario);
+    return plan === null ? null : roadmapOf(plan, this.taskStore(project));
   }
 
   /**

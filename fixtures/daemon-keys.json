@@ -54,5 +54,15 @@
   "AssumedNode": ["id", "path", "line", "status", "successor", "proposals"],
   "UnboundCounts": ["rules", "selected", "bound", "unbound"],
   "UnboundRow": ["id", "kind", "title", "path", "line", "rules", "mentions", "markers"],
-  "UnboundMarker": ["path", "line", "column", "relation", "id_state", "binding", "reason"]
+  "UnboundMarker": ["path", "line", "column", "relation", "id_state", "binding", "reason"],
+  "RoadmapDocument": ["release", "pool", "reason", "prefix", "dir", "unit", "current", "counts", "cut", "total", "groups", "pool_tasks", "notes", "truncated", "omitted"],
+  "RoadmapCounts": ["open", "done"],
+  "RoadmapCut": ["release", "min", "max", "unestimated"],
+  "RoadmapSum": ["min", "max", "unestimated"],
+  "RoadmapGroup": ["group", "name", "current", "mvp_cut", "open", "done", "sum", "items"],
+  "RoadmapItem": ["position", "id", "title", "path", "status", "release", "priority", "estimate", "waits_on", "cycle", "tasks"],
+  "RoadmapEstimate": ["min", "max"],
+  "RoadmapItemTask": ["id", "status"],
+  "RoadmapPoolTask": ["id", "status", "title", "targets"],
+  "TaskRoadmap": ["item", "group", "release", "position", "of", "priority", "waits_on"]
 }

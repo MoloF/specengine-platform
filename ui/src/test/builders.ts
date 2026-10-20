@@ -16,6 +16,10 @@ import type {
   HealthUnbound,
   InboxEntry,
   Proposal,
+  RoadmapDocument,
+  RoadmapGroup,
+  RoadmapItem,
+  RoadmapSum,
   RoundItem,
   RoundSheet,
   SearchHit,
@@ -571,4 +575,64 @@ export function aRoundItem(fields: Partial<RoundItem> & { id: string }): RoundIt
 /** A round sheet of `items` as given, in that order: `more`, `minutes`, `notes` as passed or none. */
 export function aRoundSheet(items: RoundItem[], fields: Partial<Omit<RoundSheet, "items">> = {}): RoundSheet {
   return { project: "alpha", items, more: 0, minutes: items.length === 0 ? 0 : 1, notes: [], ...fields };
+}
+
+/** A plan item for tests: open, `draft`, no priority, release, estimate, wait or task unless given. */
+export function aRoadmapItem(fields: Partial<RoadmapItem> & Pick<RoadmapItem, "id">): RoadmapItem {
+  return {
+    position: null,
+    title: `Title of ${fields.id}`,
+    path: `plan/${fields.id}.md`,
+    status: "draft",
+    release: null,
+    priority: null,
+    estimate: null,
+    waits_on: [],
+    cycle: false,
+    tasks: [],
+    ...fields,
+  };
+}
+
+/** The sum of items as the plan adds it: estimated bounds added, the rest counted. */
+export function sumOfItems(items: readonly RoadmapItem[]): RoadmapSum {
+  return items.reduce<RoadmapSum>(
+    (sum, item) =>
+      item.estimate === null
+        ? { ...sum, unestimated: sum.unestimated + 1 }
+        : { ...sum, min: sum.min + item.estimate.min, max: sum.max + item.estimate.max },
+    { min: 0, max: 0, unestimated: 0 },
+  );
+}
+
+/**
+ * A group for tests: `release` with a name, else the pool or unplaced (name null); its items as
+ * given, a release's numbered from 1 unless a position is given; open, done and sum from them.
+ */
+export function aRoadmapGroup(group: string, name: string | null, items: RoadmapItem[], fields: Partial<Omit<RoadmapGroup, "items">> = {}): RoadmapGroup {
+  const placed = items.map((item, index) => (group === "release" && item.position === null ? { ...item, position: index + 1, release: item.release ?? name } : item));
+  return { group, name, current: false, mvp_cut: false, open: placed.length, done: 0, sum: sumOfItems(placed), items: placed, ...fields };
+}
+
+/** A whole plan for tests, every key present: counts, current and total from the groups unless given; no cut. */
+export function aRoadmap(groups: RoadmapGroup[], fields: Partial<RoadmapDocument> = {}): RoadmapDocument {
+  const releases = groups.filter((group) => group.group === "release");
+  return {
+    release: null,
+    pool: false,
+    reason: null,
+    prefix: "RM",
+    dir: "plan",
+    unit: "days",
+    current: releases.find((group) => group.current)?.name ?? null,
+    counts: { open: groups.reduce((count, group) => count + group.open, 0), done: groups.reduce((count, group) => count + group.done, 0) },
+    cut: null,
+    total: sumOfItems(releases.flatMap((group) => group.items)),
+    groups,
+    pool_tasks: [],
+    notes: [],
+    truncated: false,
+    omitted: 0,
+    ...fields,
+  };
 }

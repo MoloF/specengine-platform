@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RoadmapOptions } from "./client";
 import source from "./client.ts?raw";
 
 // AC-01 of docs/features/ui-tree-node.md: each read names its endpoint in the comment above it;
@@ -42,6 +43,11 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ["getCheck", '/** GET /api/projects/:p/check (crates/specengine-http/README.md "Endpoints"; every verdict a 200 document) */'],
     // AC-U1 of docs/features/health-left.md: the comment of its "Data".
     ["getHealth", "/** GET /api/projects/:p/health (= spec health --json); no AbortSignal, as getCheck */"],
+    // docs/features/roadmap-screen.md (Data): the route 2b serves, the browser view, uncut.
+    [
+      "getRoadmap",
+      '/** GET /api/projects/:p/roadmap (crates/specengine-http/README.md "Endpoints"; = spec roadmap --json, the browser view, uncut; 404 the exit-1 document) */',
+    ],
   ])("%s says %s", (method, comment) => {
     expect(commentAbove(method)).toBe(comment);
   });
@@ -106,6 +112,17 @@ describe("the check's read (AC-01 of ui-health)", () => {
     const block = /export interface SpecEngineClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? "";
     const names = [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");
     expect(names.filter((name) => /fix|apply|check/i.test(name))).toEqual(["getCheck"]);
+  });
+});
+
+describe("the plan's read (UI-6 of roadmap-screen)", () => {
+  it("is one read typed as the plan document, taking its query's AbortSignal, its options release or pool, never both", () => {
+    expect(source).toContain("getRoadmap(project: string, options?: RoadmapOptions, signal?: AbortSignal): Promise<RoadmapDocument>;");
+    expect(source).toContain("export type RoadmapOptions = { release: string; pool?: never } | { pool: true; release?: never };");
+    // The pair the daemon refuses (400) cannot be written.
+    // @ts-expect-error -- `release` with `pool` is no RoadmapOptions
+    const both: RoadmapOptions = { release: "beta", pool: true };
+    expect(both).toBeDefined();
   });
 });
 

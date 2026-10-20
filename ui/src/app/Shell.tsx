@@ -11,6 +11,7 @@ import { InboxView } from "../inbox/InboxView";
 import { OutsideStageAlert } from "../inbox/OutsideStageAlert";
 import { Palette } from "../palette/Palette";
 import { createRoundMemory } from "../round/memory";
+import { RoadmapView, type RoadmapMemory, type RoadmapTab } from "../roadmap/RoadmapView";
 import { QuestionsView } from "../round/QuestionsView";
 import { TasksView } from "../tasks/TasksView";
 import { TreeView } from "../tree/TreeView";
@@ -138,7 +139,7 @@ function ProjectSwitcher({
   );
 }
 
-/** Header, the home and the six sections, the current view inside its own error boundary, the jump palette. */
+/** Header, the home and the seven sections, the current view inside its own error boundary, the jump palette. */
 export function Shell({ scenario }: { scenario: string | null }) {
   const hash = useHash();
   const route = parseHash(hash);
@@ -166,6 +167,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
       recall: (project) => graphSettings.current.get(project),
       remember: (project, settings) => {
         graphSettings.current.set(project, settings);
+      },
+    }),
+    [],
+  );
+  /** The Roadmap's tab per project for this page's life; never in the hash (docs/features/roadmap-screen.md). */
+  const roadmapTabs = useRef(new Map<string, RoadmapTab>());
+  const roadmapMemory = useMemo<RoadmapMemory>(
+    () => ({
+      recall: (project) => roadmapTabs.current.get(project),
+      remember: (project, tab) => {
+        roadmapTabs.current.set(project, tab);
       },
     }),
     [],
@@ -343,6 +355,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
+  } else if (route.section === "roadmap") {
+    view = <RoadmapView key={route.project} project={route.project} itemId={route.id} memory={roadmapMemory} />;
   } else if (route.section === "tree") {
     view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
   } else if (route.section === "graph") {

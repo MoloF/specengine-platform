@@ -7,10 +7,12 @@ import type {
   TaskNotFound,
   TaskPackage,
   TaskProposal,
+  TaskRoadmap,
   TaskRun,
   TaskTarget,
 } from "../api/types";
 import type { MockProposal, StoredReview } from "./build";
+import { DEEP_BERTH_ITEM, TIDE_TABLES_ITEM } from "./roadmap";
 
 // The tasks of the mock projects (docs/features/ui-tasks.md "Data", Mock): the list of
 // `docs/canon/tasks.md` "Commands" and the package of `docs/canon/task-package.md` "Package", as
@@ -25,8 +27,10 @@ import type { MockProposal, StoredReview } from "./build";
 // an unreadable row. ledger-api: T-0031 in progress, T-0033 in plan review, both with a profile.
 // `large` adds T-0200 to T-0519, the seven states in turn, T-0200 at every cap of the package
 // (its 128 changed nodes past the diffs' total: 32 diffs, 96 entries `diff` null); each other one
-// in progress claimed with run 1 open, as T-0109. No mock project has a `[roadmap]`, so every
-// package's `roadmap` is null (docs/features/roadmap-surfaces.md "Data"; the plan's mocks: 3a).
+// in progress claimed with run 1 open, as T-0109. harbor-sim's plan (src/mocks/roadmap.ts,
+// docs/features/roadmap-screen.md): T-0109 and T-0112 each target a plan item, which it executes;
+// the stored `roadmap` stays null and the mock's package takes it from the plan when read
+// (docs/canon/task-package.md "Package"); every other open task executes no item, a pool task.
 
 /** A diff's cap and the package's total over its diffs, in bytes (`docs/canon/task-package.md` "Caps"). */
 const DIFF_MAX = 8192;
@@ -300,7 +304,11 @@ function harborTasks(): MockTasks {
         title: "One loader for both tide-table formats",
         goal: "The tide-table loader reads the documented format; the sample format is decided by the owner.",
         stale: true,
-        targets: [target("MEC-TIDES", TIDE_FILE, "mechanic", "Tide cycle"), target("MEC-TIDE-TABLES", TABLES_FILE, "mechanic", "Tide tables")],
+        targets: [
+          target("MEC-TIDES", TIDE_FILE, "mechanic", "Tide cycle"),
+          target("MEC-TIDE-TABLES", TABLES_FILE, "mechanic", "Tide tables"),
+          target(TIDE_TABLES_ITEM, `docs/plan/${TIDE_TABLES_ITEM}.md`, null, "Tide tables from both survey formats"),
+        ],
         criteria: [{ ref: "MEC-TIDE-TABLES", text: "The tide table of a scenario lists high and low water per day." }],
         plan: "1. Read the documented format.\n2. Keep the sample format behind a flag until PR-0045 is decided.",
         spec_snapshot: snapshotOf(utc(2, 13), "/work/harbor-sim/T-0109", "task/T-0109", [t0109Tides, t0109Tables]),
@@ -352,7 +360,11 @@ function harborTasks(): MockTasks {
         title: "Berth 4 draft data",
         goal: "The scenario data and RULE-BERTH-DRAFT agree on berth 4.",
         stale: false,
-        targets: [berthDraft, target("DOM-BERTHS", BERTHS_FILE, "domain", "Berths and moorings")],
+        targets: [
+          berthDraft,
+          target("DOM-BERTHS", BERTHS_FILE, "domain", "Berths and moorings"),
+          target(DEEP_BERTH_ITEM, `docs/plan/${DEEP_BERTH_ITEM}.md`, null, "Deep-draft berth 4"),
+        ],
         criteria: [{ ref: "RULE-BERTH-DRAFT", text: "Berth 4 is limited to 12.0 m draft." }],
         plan: "Align berths.ron with the spec once PR-0044 is decided.",
         spec_snapshot: snapshotOf(utc(5, 9), "/work/harbor-sim", "main", t0112Nodes),
@@ -655,8 +667,11 @@ function listsProposal(stored: StoredTask, nodes: ReadonlySet<string>, review: S
   return review.task_id === stored.id || [...review.target_ids, ...amendedOf(review)].some((id) => nodes.has(id));
 }
 
-/** `spec task show T --json`: the stored task with its proposals and assumptions read from the queue now. */
-export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]): TaskPackage {
+/**
+ * `spec task show T --json`: the stored task with its proposals and assumptions read from the queue
+ * now, and its place on the plan when given (src/mocks/roadmap.ts), else the stored one.
+ */
+export function packageOf(stored: StoredTask, proposals: readonly MockProposal[], roadmap: TaskRoadmap | null = stored.roadmap): TaskPackage {
   const nodes = nodesOf(stored);
   const listed = proposals
     .filter(({ review }) => LISTED_PROPOSAL.has(review.status))
@@ -692,7 +707,7 @@ export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]
     claim: stored.claim,
     runs: stored.runs,
     bundle: stored.bundle,
-    roadmap: stored.roadmap,
+    roadmap,
     author: stored.author,
     created_at: stored.created_at,
     updated_at: stored.updated_at,

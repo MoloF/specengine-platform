@@ -9,6 +9,7 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
   RoundSheet,
@@ -67,12 +68,19 @@ export interface RoundOptions {
 }
 
 /**
+ * `spec roadmap`: `--release R` or `--pool`, never both (the daemon refuses the pair, 400): one of
+ * the two, the other key absent, so the pair cannot be written; or neither, the whole plan. The
+ * Roadmap screen sends neither.
+ */
+export type RoadmapOptions = { release: string; pool?: never } | { pool: true; release?: never };
+
+/**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
- * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data"; 07 §3). Only the
- * bootstrap, src/main.tsx, picks the implementation. A read answered with exit 1 (404 for tree,
- * nodes, bundle, a proposal, graph, task) resolves to its document, `reason` (a proposal: the last
- * of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
+ * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data", the plan's
+ * `crates/specengine-http/README.md` "Endpoints"; 07 §3). Only the bootstrap, src/main.tsx, picks
+ * the implementation. A read answered with exit 1 (404 for tree, nodes, bundle, a proposal, graph,
+ * task, roadmap) resolves to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
  * the daemon's status and message verbatim (exit 2: 503; no response: 0; a read the daemon does not
  * serve yet, none today: `notServed`, 501, nothing requested). A decision is only staged here and
@@ -82,6 +90,8 @@ export interface RoundOptions {
  * question round (`docs/features/ui-round.md` "Data") reads the sheet and stages its answers in one
  * POST, answered 200 whatever each answer became; `spec round answer --staged` confirms them on a
  * terminal. Tasks are read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
+ * The plan is read only too: an item moves when its file's front-matter is edited
+ * (`docs/canon/spec-roadmap.md` "Items").
  *
  * `signal`: the query's AbortSignal. A read superseded before it answered (a burst of live events
  * reading the same task again) is aborted, so the daemon, which drops a request whose client left,
@@ -117,6 +127,8 @@ export interface SpecEngineClient {
   getCheck(project: string): Promise<CheckReport>;
   /** GET /api/projects/:p/health (= spec health --json); no AbortSignal, as getCheck */
   getHealth(project: string): Promise<HealthReport>;
+  /** GET /api/projects/:p/roadmap (crates/specengine-http/README.md "Endpoints"; = spec roadmap --json, the browser view, uncut; 404 the exit-1 document) */
+  getRoadmap(project: string, options?: RoadmapOptions, signal?: AbortSignal): Promise<RoadmapDocument>;
   // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus
   // `updated_at` as this page read it (changed since: 409); both answer the review document.
   /** POST /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; stages, nothing applied) */

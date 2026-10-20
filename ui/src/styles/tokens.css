@@ -126,6 +126,18 @@
   --mark-parent-cycle: var(--sync-predated);
   --mark-unknown: var(--severity-unknown);
 
+  /* The Roadmap (docs/features/roadmap-screen.md): its marks, each a label and an icon, never colour
+     alone, none of them a hold on work; an item's status is project vocabulary, so neutral. The
+     range bar: solid to a release's min, striped from min to max, on a track. */
+  --roadmap-current: var(--accent);
+  --roadmap-cut: var(--attention);
+  --roadmap-cycle: var(--sync-predated);
+  --roadmap-waits: var(--severity-low);
+  --roadmap-unestimated: var(--severity-unknown);
+  --roadmap-status: var(--severity-unknown);
+  --roadmap-bar: var(--accent);
+  --roadmap-bar-track: var(--border-control);
+
   /* A search hit inside a snippet (with weight and an underline, never colour alone). */
   --highlight-surface: #4a3a10;
   --highlight-line: var(--attention);

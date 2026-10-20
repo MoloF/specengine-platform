@@ -11,6 +11,9 @@ import {
   aGraphView,
   aHealthReport,
   aProposal,
+  aRoadmap,
+  aRoadmapGroup,
+  aRoadmapItem,
   aTaskEntry,
   aTaskPackage,
   aTaskProposal,
@@ -25,7 +28,8 @@ import { renderApp } from "../test/render";
 // 404 the exit-1 document) or its refusal in its own words with Retry; never "Not built yet".
 // AC-11 of docs/features/ui-live-tasks.md: Tasks, a task, Home's task panel and the palette's
 // tasks the same way, from `/tasks` and `/tasks/:id`; AC-12: the Inbox card's Task fact from the
-// served review document.
+// served review document. UI-6 of docs/features/roadmap-screen.md: the Roadmap from `/roadmap`, its
+// refusals in the daemon's words with Retry and the fixed line.
 
 const NOT_BUILT = "Not built yet: the daemon has no endpoint for this read";
 
@@ -403,5 +407,59 @@ describe("the Inbox card's Task fact over the daemon (AC-12 of ui-live-tasks)", 
     await within(other).findByRole("heading", { level: 3, name: "Provenance" });
     const fact = Array.from(other.querySelectorAll(".fact")).find((item) => item.querySelector("dt")?.textContent === "Task");
     expect(fact?.querySelector("dd")?.textContent).toBe("No task");
+  });
+});
+
+describe("Roadmap over the daemon (UI-6 of roadmap-screen)", () => {
+  const FIXED_LINE = "A project has a plan once its specengine.toml has a [roadmap] table";
+
+  /** The daemon: one project, an empty queue, `/roadmap` answered by `answer`; anything else its 404. */
+  function roadmapDaemon(answer: () => Response) {
+    return stubFetch((url) => {
+      if (url === "/api/projects") {
+        return jsonAnswer(200, [{ slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" }]);
+      }
+      if (url === "/api/projects/alpha/inbox") {
+        return jsonAnswer(200, { proposals: [], notes: [] });
+      }
+      if (url.startsWith("/api/projects/alpha/roadmap")) {
+        return answer();
+      }
+      return errorAnswer(404, `no route ${url}`);
+    });
+  }
+
+  it("draws the served plan from one `/roadmap` read, no query sent; never Not built yet", async () => {
+    const plan = aRoadmap(
+      [
+        aRoadmapGroup("release", "beta", [aRoadmapItem({ id: "RM-0011", tasks: [{ id: "T-0001", status: "in_progress" }] })], { current: true, mvp_cut: true }),
+        aRoadmapGroup("pool", null, [aRoadmapItem({ id: "RM-0040", waits_on: ["RM-0011"] })]),
+      ],
+      { cut: { release: "beta", min: 0, max: 0, unestimated: 1 } },
+    );
+    const fetchStub = roadmapDaemon(() => jsonAnswer(200, plan));
+    renderApp(new HttpClient(), "#/alpha/roadmap");
+    await screen.findByRole("tab", { name: "Lanes" });
+    expect(document.querySelector(".roadmap-line")?.textContent).toBe("2 open, 0 done; current beta; to beta 0 days, 1 unestimated; total 0 days, 1 unestimated");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["beta", "Pool"]);
+    expect(urlsOf(fetchStub).filter((url) => url.includes("/roadmap"))).toEqual(["/api/projects/alpha/roadmap"]);
+    expect(screen.queryByText(NOT_BUILT)).toBeNull();
+  });
+
+  it.each([
+    ["a 503: no [roadmap]", 503, "spec: specengine.toml has no [roadmap]"],
+    ["a 503: a bad table, its line verbatim", 503, "specengine.toml:14: `roadmap.mvp_cut`: \"v9\" is not in `roadmap.releases`"],
+    ["an older daemon's 404 error body", 404, "no route GET /api/projects/alpha/roadmap: try tree, nodes, search"],
+  ])("%s: the daemon's words in an alert, Retry, the fixed line; never Not built yet", async (_name, status, message) => {
+    const fetchStub = roadmapDaemon(() => errorAnswer(status, message));
+    renderApp(new HttpClient(), "#/alpha/roadmap");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(`The plan could not be read${message}`);
+    expect(document.querySelector(".roadmap-no-plan")?.textContent).toBe(FIXED_LINE);
+    expect(screen.queryByText(NOT_BUILT)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(urlsOf(fetchStub).filter((url) => url.includes("/roadmap"))).toHaveLength(2);
+    });
   });
 });

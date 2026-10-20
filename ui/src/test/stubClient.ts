@@ -4,6 +4,7 @@ import {
   type BundleOptions,
   type GraphOptions,
   type NodeOptions,
+  type RoadmapOptions,
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
@@ -18,6 +19,7 @@ import type {
   NodeView,
   Project,
   Proposal,
+  RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
   RoundSheet,
@@ -29,7 +31,23 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
-import { aBundle, aCheckReport, aGraphNode, aGraphView, aHealthReport, aNode, aRoundSheet, aSearchResults, aTreeNode, aTreeView, entryOf, noReview } from "./builders";
+import {
+  aBundle,
+  aCheckReport,
+  aGraphNode,
+  aGraphView,
+  aHealthReport,
+  aNode,
+  aRoadmap,
+  aRoadmapGroup,
+  aRoadmapItem,
+  aRoundSheet,
+  aSearchResults,
+  aTreeNode,
+  aTreeView,
+  entryOf,
+  noReview,
+} from "./builders";
 
 /** When the stub stores a stage: one fixed time, so a test can name it. */
 export const STAGED_AT = "2026-10-06T09:14:02Z";
@@ -126,6 +144,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       state.proposals = state.proposals.map((proposal) => (proposal.id === id ? updated : proposal));
       return Promise.resolve(structuredClone(updated));
     }),
+    // The plan: one release, current, holding one open item (docs/features/roadmap-screen.md).
+    getRoadmap: vi.fn<(project: string, options?: RoadmapOptions, signal?: AbortSignal) => Promise<RoadmapDocument>>(() =>
+      Promise.resolve(aRoadmap([aRoadmapGroup("release", "beta", [aRoadmapItem({ id: "RM-0001", title: "First item" })], { current: true })])),
+    ),
     getRound: vi.fn<(project: string, options?: RoundOptions, signal?: AbortSignal) => Promise<RoundSheet>>(() =>
       Promise.resolve(structuredClone(state.round)),
     ),

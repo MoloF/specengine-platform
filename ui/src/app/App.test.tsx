@@ -30,19 +30,20 @@ function navLink(name: string): HTMLElement {
 }
 
 describe("the shell (AC-11)", () => {
-  it("lists the home and the six sections in order and marks the current one", async () => {
+  it("lists the home and the seven sections in order and marks the current one", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
     expect(navLinks().map((link) => link.textContent)).toEqual([
       "Overview",
       "Inbox",
       "Tasks",
+      "Roadmap",
       "Spec tree",
       "Graph",
       "Health",
       "Questions",
     ]);
-    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null]);
+    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null]);
     expect(navLinks()[0]?.getAttribute("href")).toBe("#/alpha");
     expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/tasks");
   });
@@ -59,6 +60,19 @@ describe("the shell (AC-11)", () => {
     expect(client.getRound).toHaveBeenCalledTimes(1);
     const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Questions");
+  });
+
+  it("builds the Roadmap: its heading, its one plan read, never Questions (UI-2 of roadmap-screen)", async () => {
+    const client = stubClient();
+    renderApp(client, "#/alpha/roadmap");
+    expect(await screen.findByRole("heading", { level: 1, name: "Roadmap" })).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "Lanes" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1, name: "Questions" })).toBeNull();
+    expect(screen.queryByText(/Not built yet/)).toBeNull();
+    expect(client.getRoadmap).toHaveBeenCalledTimes(1);
+    expect(client.getRound).not.toHaveBeenCalled();
+    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    expect(current?.textContent).toBe("Roadmap");
   });
 
   it("builds the Graph: its heading and options, no stand-in", async () => {

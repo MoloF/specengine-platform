@@ -29,6 +29,15 @@ import type {
   Proposal,
   QueueEvent,
   RevisionChange,
+  RoadmapCounts,
+  RoadmapCut,
+  RoadmapDocument,
+  RoadmapEstimate,
+  RoadmapGroup,
+  RoadmapItem,
+  RoadmapItemTask,
+  RoadmapPoolTask,
+  RoadmapSum,
   RoundAnswerEntry,
   RoundAnswersOutcome,
   RoundItem,
@@ -52,6 +61,7 @@ import type {
   TaskNotFound,
   TaskPackage,
   TaskProposal,
+  TaskRoadmap,
   TaskRun,
   TaskTarget,
   UnappliedAmendment,
@@ -82,10 +92,12 @@ import type {
 // and health-code's ten (UI-1, AC-9 of docs/features/health-code.md: the health document's `code`,
 // `assumes`, `unbound` after `notes`, rows 4-5 and their parts, the fifty-sixth and last
 // `UnboundMarker`); roadmap-surfaces adds a key, no set (UI-1 of docs/features/roadmap-surfaces.md:
-// the package's `roadmap` after `bundle`, 26 keys). A key the types carry ahead of the file is
-// listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that
-// file is absent the comparison is skipped, saying so; once it exists it names all fifty-six, in
-// the slices' order.
+// the package's `roadmap` after `bundle`, 26 keys); roadmap-screen's ten (UI-1, TE-1 of
+// docs/features/roadmap-screen.md: the plan document, its counts, cut, sums, groups, items,
+// estimates, item tasks, pool tasks, and the package's `TaskRoadmap`, the sixty-sixth and last). A
+// key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key
+// the file already names fails. While that file is absent the comparison is skipped, saying so;
+// once it exists it names all sixty-six, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -440,6 +452,63 @@ const KEYS = {
     binding: true,
     reason: true,
   } satisfies Record<keyof UnboundMarker, true>,
+  // docs/canon/spec-roadmap.md "Command": the plan document and its parts, keys in its order;
+  // docs/canon/task-package.md "Package": the package's `roadmap` (roadmap-screen's ten).
+  RoadmapDocument: {
+    release: true,
+    pool: true,
+    reason: true,
+    prefix: true,
+    dir: true,
+    unit: true,
+    current: true,
+    counts: true,
+    cut: true,
+    total: true,
+    groups: true,
+    pool_tasks: true,
+    notes: true,
+    truncated: true,
+    omitted: true,
+  } satisfies Record<keyof RoadmapDocument, true>,
+  RoadmapCounts: { open: true, done: true } satisfies Record<keyof RoadmapCounts, true>,
+  RoadmapCut: { release: true, min: true, max: true, unestimated: true } satisfies Record<keyof RoadmapCut, true>,
+  RoadmapSum: { min: true, max: true, unestimated: true } satisfies Record<keyof RoadmapSum, true>,
+  RoadmapGroup: {
+    group: true,
+    name: true,
+    current: true,
+    mvp_cut: true,
+    open: true,
+    done: true,
+    sum: true,
+    items: true,
+  } satisfies Record<keyof RoadmapGroup, true>,
+  RoadmapItem: {
+    position: true,
+    id: true,
+    title: true,
+    path: true,
+    status: true,
+    release: true,
+    priority: true,
+    estimate: true,
+    waits_on: true,
+    cycle: true,
+    tasks: true,
+  } satisfies Record<keyof RoadmapItem, true>,
+  RoadmapEstimate: { min: true, max: true } satisfies Record<keyof RoadmapEstimate, true>,
+  RoadmapItemTask: { id: true, status: true } satisfies Record<keyof RoadmapItemTask, true>,
+  RoadmapPoolTask: { id: true, status: true, title: true, targets: true } satisfies Record<keyof RoadmapPoolTask, true>,
+  TaskRoadmap: {
+    item: true,
+    group: true,
+    release: true,
+    position: true,
+    of: true,
+    priority: true,
+    waits_on: true,
+  } satisfies Record<keyof TaskRoadmap, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -514,6 +583,16 @@ const CITED: Record<Named, string> = {
   UnboundCounts: "rules, selected, bound, unbound",
   UnboundRow: "id, kind, title, path, line, rules, mentions, markers",
   UnboundMarker: "path, line, column, relation, id_state, binding, reason",
+  RoadmapDocument: "release, pool, reason, prefix, dir, unit, current, counts, cut, total, groups, pool_tasks, notes, truncated, omitted",
+  RoadmapCounts: "open, done",
+  RoadmapCut: "release, min, max, unestimated",
+  RoadmapSum: "min, max, unestimated",
+  RoadmapGroup: "group, name, current, mvp_cut, open, done, sum, items",
+  RoadmapItem: "position, id, title, path, status, release, priority, estimate, waits_on, cycle, tasks",
+  RoadmapEstimate: "min, max",
+  RoadmapItemTask: "id, status",
+  RoadmapPoolTask: "id, status, title, targets",
+  TaskRoadmap: "item, group, release, position, of, priority, waits_on",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -595,8 +674,28 @@ const HEALTH_CODE: readonly Named[] = [
   "UnboundMarker",
 ];
 
+/** The fifty-six types the fixture named before roadmap-screen. */
+const BEFORE_ROADMAP_SCREEN: readonly Named[] = [...BEFORE_HEALTH_CODE, ...HEALTH_CODE];
+
+/**
+ * roadmap-screen's ten: the plan document and its parts in `docs/canon/spec-roadmap.md` "Command"'s
+ * order, then the package's `TaskRoadmap` (docs/features/roadmap-screen.md UI-1, TE-1).
+ */
+const ROADMAP_SCREEN: readonly Named[] = [
+  "RoadmapDocument",
+  "RoadmapCounts",
+  "RoadmapCut",
+  "RoadmapSum",
+  "RoadmapGroup",
+  "RoadmapItem",
+  "RoadmapEstimate",
+  "RoadmapItemTask",
+  "RoadmapPoolTask",
+  "TaskRoadmap",
+];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_HEALTH_CODE, ...HEALTH_CODE];
+const ALL: readonly Named[] = [...BEFORE_ROADMAP_SCREEN, ...ROADMAP_SCREEN];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -620,8 +719,7 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * drift-queue's TE-11 wrote its review `drift` and `DriftEvidence` set
- * (`docs/features/drift-queue.md` "Review, inbox, round, stage").
+ * roadmap-screen's TE-1 wrote its ten sets (docs/features/roadmap-screen.md).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -655,7 +753,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(DRIFT_QUEUE.map((name) => served(name))).toEqual([["hash", "rows", "more"]]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("drift");
     expect(BEFORE_HEALTH_CODE.at(-1)).toBe("DriftEvidence");
-    expect(ALL.at(-1)).toBe("UnboundMarker");
+    expect(BEFORE_ROADMAP_SCREEN.at(-1)).toBe("UnboundMarker");
+    expect(ALL.at(-1)).toBe("TaskRoadmap");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -674,7 +773,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since drift-queue's TE-11 wrote its keys into the file", () => {
+  it("lists ahead of the fixture only keys their types serve, none since roadmap-screen's TE-1 wrote its ten sets into the file", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -733,8 +832,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_REV_DISCIPLINE).toHaveLength(44);
     expect(BEFORE_DRIFT_QUEUE).toHaveLength(45);
     expect(BEFORE_HEALTH_CODE).toHaveLength(46);
-    expect(ALL).toHaveLength(56);
-    expect(new Set(ALL).size).toBe(56);
+    expect(BEFORE_ROADMAP_SCREEN).toHaveLength(56);
+    expect(ALL).toHaveLength(66);
+    expect(new Set(ALL).size).toBe(66);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -742,8 +842,27 @@ describe("the daemon's document types (AC-09)", () => {
     expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 3)).toEqual(["bundle", "roadmap", "author"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^  roadmap: TaskRoadmap \| null;$/m);
-    // The TaskRoadmap set comes with 3a's roadmap document (docs/features/roadmap-surfaces.md "Decisions", Q-H).
-    expect(NAMES.filter((name) => name.includes("Roadmap"))).toEqual([]);
+    // The TaskRoadmap set came with 3a's roadmap document (docs/features/roadmap-screen.md UI-1): the ten names.
+    expect(NAMES.filter((name) => name.includes("Roadmap"))).toEqual([...ROADMAP_SCREEN]);
+  });
+
+  it("counts roadmap-screen's ten: 15, 2, 4, 3, 8, 11, 2, 2, 4, 7, after health-code's (UI-1 of roadmap-screen)", () => {
+    expect(ROADMAP_SCREEN.map((name) => served(name).length)).toEqual([15, 2, 4, 3, 8, 11, 2, 2, 4, 7]);
+    expect(ALL.slice(BEFORE_ROADMAP_SCREEN.length)).toEqual([...ROADMAP_SCREEN]);
+    expect(served("RoadmapItem").slice(-2)).toEqual(["cycle", "tasks"]);
+    expect(served("RoadmapCut").slice(1)).toEqual(served("RoadmapSum"));
+  });
+
+  it.each<Named>(ROADMAP_SCREEN)("%s declares its keys in provisional.ts in the record's order (UI-1 of roadmap-screen)", (type) => {
+    expect(declaredKeys(type)).toEqual(Object.keys(KEYS[type]));
+  });
+
+  it.each<Named>(ROADMAP_SCREEN.filter((name) => name !== "TaskRoadmap"))('%s cites `docs/canon/spec-roadmap.md` "Command"; TaskRoadmap keeps the package\'s citation (UI-1 of roadmap-screen)', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/spec-roadmap.md` "Command"');
+    const own = source.indexOf("export interface TaskRoadmap ");
+    expect(source.slice(source.lastIndexOf("/**", own), own)).toContain('`docs/canon/task-package.md` "Package"');
   });
 
   it("counts health-left's three: 3 document keys (6 since health-code's three follow them), 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
@@ -879,12 +998,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the fifty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten", () => {
+  it("names exactly the sixty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all fifty-six, in the slices' order.
+    // None is ahead of the file today: it names all sixty-six, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(56);
+    expect(Object.keys(sets)).toHaveLength(66);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -913,7 +1032,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(45);
-    expect(Object.keys(sets).at(-1)).toBe("UnboundMarker");
+    expect(Object.keys(sets).at(BEFORE_ROADMAP_SCREEN.length - 1)).toBe("UnboundMarker");
+    expect(Object.keys(sets).at(-1)).toBe("TaskRoadmap");
     expect(sets.InboxEntry).not.toContain("drift");
   });
 
@@ -928,8 +1048,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names health-code's ten after DriftEvidence, in the types' order and with their keys (UI-1, AC-9 of health-code)", () => {
-    expect(Object.keys(sets).slice(BEFORE_HEALTH_CODE.length)).toEqual([...HEALTH_CODE]);
+    expect(Object.keys(sets).slice(BEFORE_HEALTH_CODE.length, BEFORE_ROADMAP_SCREEN.length)).toEqual([...HEALTH_CODE]);
     expect(HEALTH_CODE.map((name) => sets[name])).toEqual(HEALTH_CODE.map((name) => served(name)));
+  });
+
+  it("names roadmap-screen's ten after UnboundMarker, last, in the types' order and with their keys (UI-1, TE-1 of roadmap-screen)", () => {
+    expect(Object.keys(sets).slice(BEFORE_ROADMAP_SCREEN.length)).toEqual([...ROADMAP_SCREEN]);
+    expect(ROADMAP_SCREEN.map((name) => sets[name])).toEqual(ROADMAP_SCREEN.map((name) => served(name)));
+    expect(ROADMAP_SCREEN.map((name) => sets[name]?.length)).toEqual([15, 2, 4, 3, 8, 11, 2, 2, 4, 7]);
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

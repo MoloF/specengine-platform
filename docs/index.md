@@ -24,7 +24,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/health-drift.md](features/health-drift.md) health-drift: Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/features/impact.md](features/impact.md) impact: the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
 - [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols, the next plugin MINOR · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
-- [docs/features/roadmap-screen.md](features/roadmap-screen.md) roadmap-screen (Phase 6, 3a): the Roadmap screen, read-only · ui · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-node.md](features/verify-node.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress

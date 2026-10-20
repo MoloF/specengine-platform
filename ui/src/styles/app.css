@@ -475,6 +475,12 @@ textarea.field {
 .tone-unbound-homoglyph { --badge-color: var(--unbound-homoglyph); }
 .tone-unbound-unanchored { --badge-color: var(--unbound-unanchored); }
 .tone-unbound-cannot-verify { --badge-color: var(--unbound-cannot-verify); }
+.tone-roadmap-current { --badge-color: var(--roadmap-current); }
+.tone-roadmap-cut { --badge-color: var(--roadmap-cut); }
+.tone-roadmap-cycle { --badge-color: var(--roadmap-cycle); }
+.tone-roadmap-waits { --badge-color: var(--roadmap-waits); }
+.tone-roadmap-unestimated { --badge-color: var(--roadmap-unestimated); }
+.tone-roadmap-status { --badge-color: var(--roadmap-status); }
 .tone-unbound-relation { --badge-color: var(--unbound-relation); }
 .tone-unbound-unknown { --badge-color: var(--unbound-unknown); }
 
@@ -4033,4 +4039,280 @@ mark {
 .budget-slot-label {
   color: var(--text-secondary);
   font-size: var(--font-size-s);
+}
+
+/* The Roadmap (docs/features/roadmap-screen.md): the header line, the lanes and their cards, the
+   cut's rule, the range bars, the chain canvas's lanes and rule. Every mark is a badge (label and
+   icon); long and non-Latin titles wrap. */
+.roadmap-results {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.roadmap-head,
+.roadmap-reread-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.roadmap-line {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-s);
+  overflow-wrap: anywhere;
+}
+
+.roadmap-failure {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.roadmap-empty {
+  max-width: 72ch;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.roadmap-unlisted {
+  flex-wrap: wrap;
+}
+
+.roadmap-lanes {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  min-width: 0;
+}
+
+.roadmap-jumps ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap-lane {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.roadmap-lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.roadmap-lane-name {
+  overflow-wrap: anywhere;
+}
+
+.roadmap-lane-counts,
+.roadmap-lane-sum {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.roadmap-lane-sum {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.roadmap-bar {
+  display: inline-flex;
+  width: 12rem;
+  max-width: 40vw;
+  height: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--roadmap-bar-track);
+  border-radius: var(--radius-s);
+}
+
+.roadmap-bar-solid {
+  background: var(--roadmap-bar);
+}
+
+.roadmap-bar-range {
+  background: repeating-linear-gradient(135deg, var(--roadmap-bar) 0 2px, transparent 2px 5px);
+}
+
+.roadmap-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap-card {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  height: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+  scroll-margin-top: var(--space-6);
+}
+
+.roadmap-card[aria-current="true"] {
+  border: 2px solid var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.roadmap-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--font-size-m);
+  font-weight: 600;
+}
+
+.roadmap-position {
+  color: var(--text-secondary);
+}
+
+.roadmap-card-facts,
+.roadmap-waits,
+.roadmap-pool-task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--font-size-s);
+}
+
+.roadmap-tasks,
+.roadmap-pool-task-list {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap-task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-s);
+}
+
+.roadmap-path,
+.roadmap-pool-task-targets {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.roadmap-pool-tasks {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.roadmap-cut-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--roadmap-cut);
+  font-weight: 600;
+}
+
+.roadmap-cut-rule::before,
+.roadmap-cut-rule::after {
+  content: "";
+  flex: 1 1 0;
+  border-top: 2px dashed var(--roadmap-cut);
+}
+
+.roadmap-cut-rule span {
+  flex: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.roadmap-notes {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
+.chain-lane {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-1) 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-control);
+  color: var(--text-primary);
+  font-size: var(--font-size-s);
+}
+
+.chain-lane p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.chain-lane-name {
+  font-weight: 650;
+}
+
+.chain-lane-marks {
+  color: var(--text-secondary);
+}
+
+.chain-lane .icon,
+.chain-cut .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.chain-cut {
+  width: 2px;
+  border-left: 2px dashed var(--roadmap-cut);
+  pointer-events: none;
+}
+
+.chain-cut-label {
+  position: absolute;
+  top: 0;
+  left: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-s);
+  background: var(--surface-canvas);
+  color: var(--roadmap-cut);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.chain-box.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chain-box-tasks {
+  flex-wrap: wrap;
 }

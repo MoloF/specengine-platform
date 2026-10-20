@@ -90,6 +90,8 @@ const FINDING = ["error", "warning", "unknown"];
 // docs/features/health-code-ui.md: row 4's states (`unknown` an item no queue holds, as `missing`) and row 5's reasons.
 const ASSUMED = ["pending", "as-assumed", "otherwise", "applied", "rejected", "missing", "archived", "in-question", "unknown"];
 const UNBOUND = ["homoglyph", "unanchored", "cannot-verify", "relation", "unknown"];
+// docs/features/roadmap-screen.md: the Roadmap's marks, the neutral item status, the range bar and its track.
+const ROADMAP = ["current", "cut", "cycle", "waits", "unestimated", "status", "bar", "bar-track"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
   ...LINK.map((value) => `--link-${value}`),
@@ -104,6 +106,7 @@ const STATUS = [
   ...FINDING.map((value) => `--finding-${value}`),
   ...ASSUMED.map((value) => `--assumed-${value}`),
   ...UNBOUND.map((value) => `--unbound-${value}`),
+  ...ROADMAP.map((value) => `--roadmap-${value}`),
   "--attention",
   // The graph canvas (docs/features/ui-graph.md): edges and minimap nodes are read against the surfaces.
   "--graph-edge",
@@ -204,6 +207,17 @@ describe("tokens.css (AC-09)", () => {
     for (const state of ASSUMED) {
       for (const surface of SURFACES) {
         expect([state, surface, contrast(`--assumed-${state}`, surface) >= 3]).toEqual([state, surface, true]);
+      }
+    }
+  });
+
+  it("gives the Roadmap's five marks five colours, each at least 3:1 on every surface, the item status a neutral one (roadmap-screen)", () => {
+    const marks = ["current", "cut", "cycle", "waits", "unestimated"].map((mark) => resolve(`--roadmap-${mark}`).toLowerCase());
+    expect(new Set(marks).size).toBe(5);
+    expect(resolve("--roadmap-status").toLowerCase()).toBe(resolve("--severity-unknown").toLowerCase());
+    for (const role of ROADMAP) {
+      for (const surface of SURFACES) {
+        expect([role, surface, contrast(`--roadmap-${role}`, surface) >= 3]).toEqual([role, surface, true]);
       }
     }
   });
