@@ -13,7 +13,8 @@
 //!   `rust-toolchain`, `.cargo/config` (so neither `.toml` form),
 //!   `build-script-build` or `build_script_build`, nor `Cargo.toml` but
 //!   `code_walk.rs`' `MANIFEST`; and the slice's new CLI and store modules
-//!   (every `src/` file not there at 0a03df7, [`BEFORE`]) hold no literal
+//!   (every `src/` file not there at 0a03df7, [`BEFORE`], nor added by a
+//!   later slice, [`LATER`]) hold no literal
 //!   equal to `/`, `#`, `.`, `!`, `[`, `]`, `().`, nor one holding
 //!   `impl#[`. M: `agrees` split at `/` in the CLI; a `Cargo.lock` literal
 //!   in the CLI.
@@ -132,6 +133,15 @@ const BEFORE: &[&str] = &[
     "crates/specengine-store/src/verify_git.rs",
     "crates/specengine-store/src/worktree.rs",
     "crates/specengine-store/src/write.rs",
+];
+
+/// The CLI's and the store's modules later slices added: not the slice's,
+/// so outside its punctuation rule (verify-node's `#` is the RON
+/// `<file>#<symbol>` separator of `--symbol`, docs/features/verify-node.md).
+const LATER: &[&str] = &[
+    "crates/specengine-cli/src/lock_rebase.rs",
+    "crates/specengine-cli/src/roadmap.rs",
+    "crates/specengine-cli/src/verify_node.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.
@@ -772,7 +782,7 @@ fn no_scip_or_cargo_literal_outside_code_and_ra() {
                 }
             }
             let cli_or_store = file.starts_with(CLI_SRC) || file.starts_with(STORE_SRC);
-            if !cli_or_store || BEFORE.contains(&file.as_str()) {
+            if !cli_or_store || BEFORE.contains(&file.as_str()) || LATER.contains(&file.as_str()) {
                 continue;
             }
             for literal in &literals {

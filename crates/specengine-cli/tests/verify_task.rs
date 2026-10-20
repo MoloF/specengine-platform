@@ -205,6 +205,8 @@ fn verify_with(
         &VerifyRequest {
             tree,
             task: task.map(str::to_owned),
+            node: None,
+            symbol: None,
             git: repo.git_env(&env.cwd),
         },
     );
@@ -634,16 +636,19 @@ fn top_keys(raw: &str) -> Vec<String> {
 }
 
 /// The premises: this file's model reproduces plain's own document and
-/// text (no run cause, `task` `null`).
+/// text (no run cause; `task`, and since docs/features/verify-node.md
+/// `node`, `symbol` and `omitted`, `null`).
 fn plain_premises(plain: &Run) {
     let document = plain.json();
     let rows = plain.rows();
-    assert_eq!(
-        document["task"],
-        Value::Null,
-        "plain's `task`: {}",
-        plain.what
-    );
+    for key in ["task", "node", "symbol", "omitted"] {
+        assert_eq!(
+            document[key],
+            Value::Null,
+            "plain's `{key}`: {}",
+            plain.what
+        );
+    }
     assert_eq!(top_keys(&plain.json_text()), TOP_KEYS, "plain's keys");
     assert_eq!(
         document["cannot"],
@@ -698,6 +703,13 @@ fn differential(plain: &Run, run: &Run, case: &Case<'_>) -> Vec<Value> {
     );
     assert_eq!(top_keys(&run.json_text()), TOP_KEYS, "{context}: keys");
     assert_eq!(document["task"], case.id, "{context}: `task`");
+    for key in ["node", "symbol", "omitted"] {
+        assert_eq!(
+            document[key],
+            Value::Null,
+            "{context}: `{key}` (verify-node)"
+        );
+    }
     for key in ["mode", "base", "cannot"] {
         assert_eq!(document[key], base[key], "{context}: `{key}` is plain's");
     }

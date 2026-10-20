@@ -8,7 +8,7 @@ reviewed: 2026-10-16
 
 # MCP code tools: `find_symbols`, `refs`, `unmapped`
 
-The MCP twins of `spec symbols`, `spec refs` and `spec unmapped` (07 §1.2): which item sits at a name or `PATH:LINE` and what binds it, what binds a node, where code has no spec, without Bash or reading files. Each is one CLI library call through `read.rs`' `call` and `Answer`, so the read tools' contract holds unchanged (`mcp-read.md`: "Tools" parity, annotations, `_meta`, flat schemas, mirrors; "No project, discovery, state"; "Size"). Here only what is the code tools' own; the commands: `symbol-reads.md`, `spec-cli-refs.md`, `symbol-index.md`. 6b-2 adds `check_binding` (`docs/features/verify-node.md`).
+The MCP twins of `spec symbols`, `spec refs` and `spec unmapped` (07 §1.2): which item sits at a name or `PATH:LINE` and what binds it, what binds a node, where code has no spec, without Bash or reading files. Each is one CLI library call through `read.rs`' `call` and `Answer`, so the read tools' contract holds unchanged (`mcp-read.md`: "Tools" parity, annotations, `_meta`, flat schemas, mirrors; "No project, discovery, state"; "Size"). Here only what is the code tools' own; the commands: `symbol-reads.md`, `spec-cli-refs.md`, `symbol-index.md`. 6b-2b adds `check_binding` (`docs/features/check-binding.md`).
 
 ## Tools
 

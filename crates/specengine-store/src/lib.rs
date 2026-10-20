@@ -50,6 +50,8 @@
 //!   a fresh rebuild ([`SqliteIndex::update_code`], [`CodeReport`];
 //!   [`SqliteIndex::clear_code`] without `[code]`); read back as
 //!   [`SqliteIndex::stored_names`] (one file's names),
+//!   [`SqliteIndex::code_selection`] (the files a read picks from the
+//!   refs, each with its names and its BLAKE3, in one transaction),
 //!   [`SqliteIndex::code_refs`] (files, markers, mentions) and
 //!   [`SqliteIndex::code_symbols`]; looked up in tiers
 //!   ([`SqliteIndex::lookup_symbols`], [`SymbolTier`]: one B-tree search
@@ -130,9 +132,9 @@ pub use check::{
 pub use code::{
     AMBIGUITY_DUPLICATE, AMBIGUITY_PATH_ATTRIBUTE, AMBIGUITY_UNROOTED, BoundSymbol, CodeAnalyzer,
     CodeDeclRow, CodeFileRows, CodeFileState, CodeListing, CodeMarkerRow, CodeMentionRow,
-    CodePackageRow, CodeRefs, CodeReport, CodeRoleRow, CodeSnapshot, CodeSymbolRow, ListedCodeFile,
-    ROLE_SHARED, ROLE_UNROOTED, SnapshotSymbols, StoredBinding, StoredMarker, StoredMention,
-    StoredName, StoredNames, StoredSymbol,
+    CodePackageRow, CodeRefs, CodeReport, CodeRoleRow, CodeSelection, CodeSnapshot, CodeSymbolRow,
+    ListedCodeFile, ROLE_SHARED, ROLE_UNROOTED, SelectedFile, SnapshotSymbols, StoredBinding,
+    StoredMarker, StoredMention, StoredName, StoredNames, StoredSymbol,
 };
 pub use error::StoreError;
 pub use git::{GitEnv, same_dir};

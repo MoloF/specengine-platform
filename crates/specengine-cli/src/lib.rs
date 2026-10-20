@@ -31,7 +31,8 @@
 //! canon `spec-lock`, "`spec lock regen`") and `spec lock rebase`
 //! ([`lock_rebase`]: task spec `lock-rebase`); `spec verify [--changed |
 //! --staged]` ([`verify`]: canon `spec-verify`, "Rows", "Verdict and
-//! exit"; `--task T [--changed]`: task spec `verify-task`), drift between
+//! exit"; `--task T [--changed]`: task spec `verify-task`; `--node REF`:
+//! task spec `verify-node`), drift between
 //! `spec.lock` and the tree, read-only; task spec
 //! `drift-queue`: `spec propose drift` ([`propose_drift`]), the drift of
 //! `HEAD`'s commit queued as `drift` items for the owner, approved by the
@@ -123,6 +124,8 @@
 //!   and marker binding, Fix, Check or Pre-existing findings, the verdict
 //!   under `[verify] mode`; its run causes are in the report (exit 2);
 //!   `--task` keeps the rows of a task's nodes (task spec `verify-task`);
+//!   `--node REF [--symbol QPATH]` one node's, judged over the files the
+//!   code index picks ([`VerifyNode`]; task spec `verify-node`);
 //!   [`verify_tests`]: `spec verify --tests [--task T]` (task spec
 //!   `verify-tests`), the `@verifies` tests run by the project's own
 //!   command after the owner's [`Consent`], Unix only;
@@ -239,6 +242,7 @@ mod test_runner;
 mod tree;
 mod unmapped;
 mod verify;
+mod verify_node;
 mod verify_rows;
 mod verify_tests;
 
@@ -391,8 +395,8 @@ pub use task::{
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
-    VerifiedTree, VerifyAnchor, VerifyLevels, VerifyLock, VerifyMarker, VerifyOutcome, VerifyPlace,
-    VerifyRequest, VerifyRow, verify,
+    VerifiedTree, VerifyAnchor, VerifyLevels, VerifyLock, VerifyMarker, VerifyNode, VerifyOutcome,
+    VerifyPlace, VerifyRequest, VerifyRow, verify,
 };
 pub use verify_tests::{
     VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest, VerifyTestsRow,

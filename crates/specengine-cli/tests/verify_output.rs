@@ -504,6 +504,16 @@ fn verify_json_every_key_present() {
     let json = &run.json;
     let raw = &run.json_run.stdout;
     assert_eq!(raw_order(raw, 0), TOP_KEYS);
+    // docs/canon/spec-verify-output.md "JSON": `node`, `symbol`, `omitted`
+    // `null` in every mode but `--node` (verify-node), plain too.
+    for key in ["task", "node", "symbol", "omitted"] {
+        assert_eq!(json[key], Value::Null, "`{key}` under --changed");
+    }
+    let whole = verify(&repo, &[]);
+    assert_eq!(raw_order(&whole.json_run.stdout, 0), TOP_KEYS);
+    for key in ["task", "node", "symbol", "omitted"] {
+        assert_eq!(whole.json[key], Value::Null, "plain's `{key}`");
+    }
     let object_keys = |value: &Value| -> Vec<String> {
         let mut keys: Vec<String> = value.as_object().expect("object").keys().cloned().collect();
         keys.sort();

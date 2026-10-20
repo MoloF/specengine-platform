@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # `spec verify`: drift between `spec.lock` and the tree
 
-`spec verify [--changed | --staged] [--json]` (+ `--root`, `--config`; `--task T`, not with `--staged`: `spec-verify-scope.md`) judges every lock key against the tree: a state per row, findings Fix, Check or Pre-existing, exit 0, 1 or 2 under `[verify] mode` (ADR-0042, `architecture-code.md#verify`). Read-only: it writes only the data directory (the index refresh; `--staged` not even that), never `spec.lock`, the worktree, a git object, a queue row or an event (`--tests`: `spec-verify-tests.md`). `spec check`, this repository's hook, CI, MCP, HTTP, UI and the gate never run it. Judge: core `verify` (`VerifyConfig`, `verify_from_toml`, `RowKey`, `judge_row(&RowFacts)`, `verdict`, `is_pre_existing`), pure; git: store `VerifyGit`; command: CLI `verify.rs`, `verify_rows.rs`. Its text, hints and JSON: `docs/canon/spec-verify-output.md`.
+`spec verify [--changed | --staged] [--json]` (+ `--root`, `--config`; `--task T`, not with `--staged`, and `--node REF [--symbol QPATH]`: `spec-verify-scope.md`) judges every lock key against the tree: a state per row, findings Fix, Check or Pre-existing, exit 0, 1 or 2 under `[verify] mode` (ADR-0042, `architecture-code.md#verify`). Read-only: it writes only the data directory (the index refresh; `--staged` not even that), never `spec.lock`, the worktree, a git object, a queue row or an event (`--tests`: `spec-verify-tests.md`). `spec check`, this repository's hook, CI, MCP, HTTP, UI and the gate never run it. Judge: core `verify` (`VerifyConfig`, `verify_from_toml`, `RowKey`, `judge_row(&RowFacts)`, `verdict`, `is_pre_existing`), pure; git: store `VerifyGit`; command: CLI `verify.rs`, `verify_rows.rs`. Its text, hints and JSON: `docs/canon/spec-verify-output.md`.
 
 ## The `[verify]` table
 
@@ -47,7 +47,7 @@ Per row: R, H the node's revision and `norm_hash` (`norm_input` + `b3_hash` over
 
 ## Cascade
 
-Per bound row with an E, the first step that applies: (1) a marker's level list `Invalid`: not compared (`bad_marker bad_levels`); (2) the blob OID (on disk one `git hash-object --no-filters --stdin-paths`, never `-w`; at a commit its tree's) equals `file_blob`: no digest differs, nothing parsed, `compared` `blob`; (3) C = ∅ (both `[path]`): nothing parsed; an edit moves only `compared`, `blob` to null (a move: `spec-verify-anchors.md`); (4) C's digests made as accept makes them (`spec-lock.md` "Entry"; CLI `lock.rs` `level_code`), each changed file parsed once from the walk's text (a `[deps]` RON value never drifts), against E's by core `changed_levels`, `compared` `ast`; refused: `cannot_verify`. Never the walk's item state or a text level (05 s5.3's fallback passes an unparseable item); fingerprints, `body_bytes` only pair. One code walk (`read_tree`) per call.
+Per bound row with an E, the first step that applies: (1) a marker's level list `Invalid`: not compared (`bad_marker bad_levels`); (2) the blob OID (on disk one `git hash-object --no-filters --stdin-paths`, never `-w`; at a commit its tree's) equals `file_blob`: no digest differs, nothing parsed, `compared` `blob`; (3) C = ∅ (both `[path]`): nothing parsed; an edit moves only `compared`, `blob` to null (a move: `spec-verify-anchors.md`); (4) C's digests made as accept makes them (`spec-lock.md` "Entry"; CLI `lock.rs` `level_code`), each changed file parsed once from the walk's text (a `[deps]` RON value never drifts), against E's by core `changed_levels`, `compared` `ast`; refused: `cannot_verify`. Never the walk's item state or a text level (05 s5.3's fallback passes an unparseable item); fingerprints, `body_bytes` only pair. One code walk (`read_tree`; `--node`: its files) per call.
 
 ## Base
 

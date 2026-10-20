@@ -36,6 +36,9 @@
 //!   output does not depend on where the tree is checked out). No package:
 //!   unrooted. No subprocess.
 //!
+//! Some files only ([`partial_tree`], `spec verify --node`): bound and
+//! anchored as the walk binds them, named by the code index's names.
+//!
 //! A commit's code tree (`spec verify --changed`'s base,
 //! canon `spec-verify`, "Base") is built from its blobs by
 //! [`tree_of_blobs`]: the same binding and naming, the commit's manifests
@@ -48,7 +51,7 @@ use std::fs::{self, FileType};
 use std::path::{Path, PathBuf};
 
 use specengine_code::{
-    CommentAnchor, NamedFile, Names, PackageTargets, ROOT_PACKAGE, RustBinding, RustParser,
+    CommentAnchor, Name, NamedFile, Names, PackageTargets, ROOT_PACKAGE, RustBinding, RustParser,
     TargetSource, bind_file, comment_anchors, layout_targets, name_files,
 };
 use specengine_core::CodeConfig;
@@ -286,6 +289,65 @@ pub(crate) fn tree_of_blobs(
     };
     tree.names = name_tree(&tree.rust, &mut blobs);
     tree.manifests = blobs.seen;
+    Ok(tree)
+}
+
+/// Why [`partial_tree`] gave no tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PartialGap {
+    /// The walk's gap, as [`read_tree`] words it: the grammar, or a Rust
+    /// file the parser gives no tree.
+    Walk(String),
+    /// A Rust file whose names were not given, or do not name each of its
+    /// items: the names were made from other bytes.
+    Names(String),
+}
+
+/// Some files of the tree only (`spec verify --node`, task spec
+/// `verify-node`): each of `files` (root-relative, with its bytes) bound
+/// or anchored as [`read_tree`] does, content that is not UTF-8 skipped and
+/// counted; each Rust file's module and item names are those `names` gives
+/// for its path (the code index's), never made here: no package or
+/// manifest is looked up. A file `files` does not hold is not in the tree.
+pub(crate) fn partial_tree(
+    files: BTreeMap<String, Vec<u8>>,
+    mut names: impl FnMut(&str) -> Option<(Name, Vec<Name>)>,
+) -> Result<CodeTree, PartialGap> {
+    let mut parser = RustParser::new()
+        .map_err(|error| PartialGap::Walk(format!("the Rust grammar cannot be loaded: {error}")))?;
+    let mut tree = CodeTree::empty();
+    for (path, bytes) in files {
+        let Ok(text) = String::from_utf8(bytes) else {
+            tree.skipped += 1;
+            tree.not_utf8.insert(path);
+            continue;
+        };
+        if path.ends_with(RUST_EXTENSION) {
+            let binding = bind_file(&mut parser, &text).ok_or_else(|| {
+                PartialGap::Walk(format!(
+                    "`{path}` cannot be parsed (the parser gave no tree)"
+                ))
+            })?;
+            let Some((module, items)) =
+                names(&path).filter(|(_, items)| items.len() == binding.analysis.items.len())
+            else {
+                return Err(PartialGap::Names(path));
+            };
+            tree.names.modules.push(module);
+            tree.names.items.push(items);
+            tree.rust.push(RustFile {
+                path,
+                text,
+                binding,
+            });
+        } else {
+            tree.ron.push(RonFile {
+                anchors: comment_anchors(&text),
+                path,
+                text,
+            });
+        }
+    }
     Ok(tree)
 }
 

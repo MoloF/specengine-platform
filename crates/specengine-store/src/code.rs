@@ -340,6 +340,36 @@ pub struct StoredNames {
     pub items: Vec<StoredName>,
 }
 
+/// One stored file a selection picked
+/// ([`SqliteIndex::code_selection`]): its names and the BLAKE3 of the
+/// bytes its rows were derived from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectedFile {
+    pub path: String,
+    /// `None` when the file could not be read.
+    blake3: Option<String>,
+    /// As [`SqliteIndex::stored_names`] gives them: `None` for a file of
+    /// another language, unreadable or not UTF-8.
+    pub names: Option<StoredNames>,
+}
+
+impl SelectedFile {
+    /// Whether `bytes` are the bytes its rows were derived from (their
+    /// BLAKE3 is the stored one): its names are those of `bytes`.
+    #[must_use]
+    pub fn holds(&self, bytes: &[u8]) -> bool {
+        self.blake3.as_deref() == Some(hash_bytes(bytes).as_str())
+    }
+}
+
+/// A selection's one read snapshot: the refs it was made from and the
+/// stored files it picked, by path.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CodeSelection {
+    pub refs: CodeRefs,
+    pub files: Vec<SelectedFile>,
+}
+
 /// One stored file as a read sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodeFileState {
@@ -469,55 +499,31 @@ impl SqliteIndex {
     /// Reads no code: a file edited since keeps its stored names.
     pub fn stored_names(&self, path: &str) -> Result<Option<StoredNames>, StoreError> {
         with_worktree(self, |tx, wt| {
-            let file = tx
-                .query_row(
-                    "SELECT file_id, module, role, declared_by IS NOT NULL
-                     FROM code_files WHERE wt = ?1 AND path = ?2",
-                    (wt, path),
-                    |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, Option<String>>(1)?,
-                            row.get::<_, Option<String>>(2)?,
-                            row.get::<_, bool>(3)?,
-                        ))
-                    },
-                )
-                .optional()
-                .db()?;
-            let Some((file_id, Some(module), role, declared)) = file else {
+            Ok(selected_in(tx, wt, path)?.and_then(|file| file.names))
+        })
+    }
+
+    /// One read snapshot of a selection (`docs/canon/symbol-index.md`
+    /// "Crates and seams", 6b's partial tree): [`Self::code_refs`]' files,
+    /// markers and mentions, then, in the same transaction, each stored
+    /// file of the paths `select` picks from them with its names
+    /// ([`Self::stored_names`]) and the BLAKE3 its rows were derived from
+    /// ([`SelectedFile::holds`]), by path; a path not stored is absent.
+    /// `Ok(None)` when no code is indexed (`select` is not called).
+    pub fn code_selection(
+        &self,
+        select: impl FnOnce(&CodeRefs) -> BTreeSet<String>,
+    ) -> Result<Option<CodeSelection>, StoreError> {
+        with_worktree(self, |tx, wt| {
+            if stored_code_fp(tx, wt)?.is_none() {
                 return Ok(None);
-            };
-            let facts = FileFacts {
-                declared,
-                role: role.as_deref(),
-            };
-            let mut statement = tx
-                .prepare(
-                    "SELECT qpath, discriminator, twin_files FROM symbols
-                     WHERE file = ?1 ORDER BY ord",
-                )
-                .db()?;
-            let items = statement
-                .query_map([file_id], |row| {
-                    let twin_files: i64 = row.get(2)?;
-                    Ok(StoredName {
-                        qpath: row.get(0)?,
-                        ambiguity: facts.item_ambiguity(twin_files).map(str::to_owned),
-                        discriminator: row.get(1)?,
-                    })
-                })
-                .db()?
-                .collect::<Result<Vec<_>, _>>()
-                .db()?;
-            Ok(Some(StoredNames {
-                module: StoredName {
-                    qpath: module,
-                    ambiguity: facts.module_ambiguity().map(str::to_owned),
-                    discriminator: None,
-                },
-                items,
-            }))
+            }
+            let refs = refs_in(tx, wt)?;
+            let mut files = Vec::new();
+            for path in select(&refs) {
+                files.extend(selected_in(tx, wt, &path)?);
+            }
+            Ok(Some(CodeSelection { refs, files }))
         })
     }
 
@@ -739,6 +745,77 @@ impl FileFacts<'_> {
         self.module_ambiguity()
             .or_else(|| (twin_files > 0).then_some(AMBIGUITY_DUPLICATE))
     }
+}
+
+/// One stored file inside the caller's transaction: its BLAKE3 and its
+/// names (`None` without a module: a file of another language, unreadable
+/// or not UTF-8); `None` when the path is not stored.
+fn selected_in(
+    tx: &Transaction<'_>,
+    wt: i64,
+    path: &str,
+) -> Result<Option<SelectedFile>, StoreError> {
+    let file = tx
+        .query_row(
+            "SELECT file_id, blake3, module, role, declared_by IS NOT NULL
+             FROM code_files WHERE wt = ?1 AND path = ?2",
+            (wt, path),
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, bool>(4)?,
+                ))
+            },
+        )
+        .optional()
+        .db()?;
+    let Some((file_id, blake3, module, role, declared)) = file else {
+        return Ok(None);
+    };
+    let Some(module) = module else {
+        return Ok(Some(SelectedFile {
+            path: path.to_owned(),
+            blake3,
+            names: None,
+        }));
+    };
+    let facts = FileFacts {
+        declared,
+        role: role.as_deref(),
+    };
+    let mut statement = tx
+        .prepare(
+            "SELECT qpath, discriminator, twin_files FROM symbols
+             WHERE file = ?1 ORDER BY ord",
+        )
+        .db()?;
+    let items = statement
+        .query_map([file_id], |row| {
+            let twin_files: i64 = row.get(2)?;
+            Ok(StoredName {
+                qpath: row.get(0)?,
+                ambiguity: facts.item_ambiguity(twin_files).map(str::to_owned),
+                discriminator: row.get(1)?,
+            })
+        })
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    Ok(Some(SelectedFile {
+        path: path.to_owned(),
+        blake3,
+        names: Some(StoredNames {
+            module: StoredName {
+                qpath: module,
+                ambiguity: facts.module_ambiguity().map(str::to_owned),
+                discriminator: None,
+            },
+            items,
+        }),
+    }))
 }
 
 /// The stored `code_fp` of the worktree, if it has code rows.

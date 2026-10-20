@@ -35,7 +35,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`, `roadmap`; `content` = the neutral brief | shipped; `next`: the first `ready` by the plan (`docs/canon/spec-roadmap.md` "Next") |
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | shipped; only `ready`; opens a run |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | shipped; -> `review` |
-| `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only |
+| `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only; its CLI twin `spec verify --node` shipped (`docs/canon/spec-verify-scope.md`), the tool is 6b-2b's |
 | `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | shipped; `verified` is set by `spec verify`, not by this call |
 | `complete_task` | `task_id` | task status | shipped; run reported -> `done` |
 
@@ -105,6 +105,7 @@ spec task approve T | changes T --note "..." | cancel T
 spec symbols QUERY | --node REF | --file F | --at F:L   # shipped: docs/canon/symbol-reads.md; unbound nodes: spec health
 spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md
 spec verify --task T [--changed] [--json]           # shipped: docs/canon/spec-verify-scope.md; the task's nodes' rows
+spec verify --node REF [--symbol QPATH] [--json]    # shipped: docs/canon/spec-verify-scope.md; one node's files
 spec verify --tests [--task T] [--json]             # shipped: docs/canon/spec-verify-tests.md; the owner's terminal, [y/N]
 spec bump [--staged] [--json]                       # read-only: nodes to raise (shipped: docs/canon/node-revision.md)
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md

@@ -220,7 +220,7 @@ enum Command {
         #[arg(long, value_name = "S", default_value_t = specengine_cli::RESOLVE_TIMEOUT_DEFAULT, value_parser = clap::value_parser!(u64).range(specengine_cli::RESOLVE_TIMEOUT_MIN..=specengine_cli::RESOLVE_TIMEOUT_MAX))]
         timeout: u64,
     },
-    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode. With --task T: only the rows of task T's nodes, the verdict and exit theirs. With --tests: run the tests `@verifies` binds through the project's `[verify] tests` command, on a terminal after one [y/N], over a clean committed tree; exit 0 verified, 1 not verified, 2 refused, interrupted or when it cannot run.
+    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode. With --task T: only the rows of task T's nodes, the verdict and exit theirs. With --node REF: only the rows of REF's bindings, `ok` too, judged over the files the code index picks, the verdict and exit theirs. With --tests: run the tests `@verifies` binds through the project's `[verify] tests` command, on a terminal after one [y/N], over a clean committed tree; exit 0 verified, 1 not verified, 2 refused, interrupted or when it cannot run.
     Verify {
         /// Judge against HEAD too: a finding HEAD already has is pre-existing.
         #[arg(long)]
@@ -234,6 +234,12 @@ enum Command {
         /// Only task T's nodes (its targets, criteria and affected nodes, and the sections they contain): the rows of those nodes, or with --tests their bound tests.
         #[arg(long, value_name = "T", conflicts_with = "staged")]
         task: Option<String>,
+        /// Only the rows of REF's bindings (an ID, alias, slug/ID, ID#SECTION or root-relative .md path; never its sections'), judged over the files the code index picks.
+        #[arg(long, value_name = "REF", conflicts_with_all = ["changed", "staged", "task", "tests"])]
+        node: Option<String>,
+        /// With --node: only the rows whose symbol is QPATH, byte for byte (a RON value's `<file>#<path>` too; a moved row's old symbol too).
+        #[arg(long, value_name = "QPATH", requires = "node")]
+        symbol: Option<String>,
     },
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
     Export {
@@ -954,9 +960,12 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             changed,
             staged,
             task,
+            node,
+            symbol,
             ..
         } => {
-            // clap refuses `--staged` with `--changed` or `--task`.
+            // clap refuses `--staged` with `--changed` or `--task`, `--node`
+            // with either, `--task` or `--tests`, `--symbol` without `--node`.
             let tree = if staged {
                 VerifiedTree::Staged
             } else if changed {
@@ -970,6 +979,8 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &VerifyRequest {
                     tree,
                     task,
+                    node,
+                    symbol,
                     git: process_git(env),
                 },
             )?))

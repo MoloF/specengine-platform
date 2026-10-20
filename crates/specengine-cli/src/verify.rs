@@ -54,6 +54,11 @@
 //! cause is never filtered. A row naming no node now and a set node no
 //! kept row reaches are each counted in a note; the task is read, never
 //! changed.
+//!
+//! `--node REF [--symbol QPATH]` (task spec `verify-node`; `--changed`,
+//! `--staged` and `--task` excluded, usage errors): [`crate::verify_node`]
+//! judges only the files the code index picks; its text prints `ok` rows
+//! too, cut at [`OUTPUT_CAP_CHARS`] as its JSON's `rows` are.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -66,13 +71,15 @@ use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, veri
 use specengine_core::{CodeConfig, ProjectConfig};
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
 
+use crate::cap::OUTPUT_CAP_CHARS;
 use crate::code_walk::read_tree;
 use crate::corpus::indexed;
 use crate::lock::{build_recipes, read_lock};
-use crate::node_set::{Named, named_task, task_set};
+use crate::node_set::{Named, NodeSet, named_task, task_set};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text, locate};
 use crate::proposals::{escaped_error, open_context};
 use crate::refs::{Corpus, NodeKey};
+use crate::verify_node::verify_node;
 use crate::verify_rows::{
     Anchor, CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
     IndexShare, Judged, Row, RunCause, Walked, judge_commit, judge_walk, read_commit, read_head,
@@ -82,11 +89,19 @@ use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 /// The run causes of "Verdict and exit", by place (the others are the
 /// judge's, `verify_rows`).
 const CAUSE_UNMERGED: u8 = 5;
-const CAUSE_DATA: u8 = 8;
+pub(crate) const CAUSE_DATA: u8 = 8;
 
 /// `--task` with `--staged`, as the library refuses it (`main`: clap's
 /// conflict; task spec `verify-task`): a commit being recorded has no task.
 const STAGED_TASK: &str = "the argument '--task <T>' cannot be used with '--staged'";
+
+/// `--node` with a base or another scope, and `--symbol` without `--node`,
+/// as the library refuses them (`main`: clap's conflicts and `requires`;
+/// task spec `verify-node`): one node's rows, judged plain.
+const NODE_CHANGED: &str = "the argument '--node <REF>' cannot be used with '--changed'";
+const NODE_STAGED: &str = "the argument '--node <REF>' cannot be used with '--staged'";
+const NODE_TASK: &str = "the argument '--node <REF>' cannot be used with '--task <T>'";
+const SYMBOL_ALONE: &str = "the following required arguments were not provided: --node <REF>";
 
 /// What `spec verify` judges, and whether against `HEAD`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -108,8 +123,27 @@ pub struct VerifyRequest {
     /// `--task T` as written: the rows kept to the task's nodes (task spec
     /// `verify-task`); refused with `--staged`.
     pub task: Option<String>,
+    /// `--node REF` as written: the rows kept to its holders' bindings,
+    /// judged over the files the code index picks (task spec
+    /// `verify-node`); refused with `--changed`, `--staged` or `--task`.
+    pub node: Option<String>,
+    /// `--symbol QPATH` as written: `--node`'s rows kept to one symbol;
+    /// refused without `--node`.
+    pub symbol: Option<String>,
     /// Git's environment (`--staged`: its `GIT_INDEX_FILE` names the index).
     pub git: GitEnv,
+}
+
+/// `--node`'s scope as judged (task spec `verify-node`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyNode {
+    /// REF as written, trimmed.
+    pub reference: String,
+    /// Its holders' canonical IDs (`slug/ID` when feature-scoped; a holder
+    /// without an ID: its citation), in holder order.
+    pub ids: Vec<String>,
+    /// `--symbol`'s QPATH as written.
+    pub symbol: Option<String>,
 }
 
 /// One marker of a row: its line and `@N` (`None`: unversioned or
@@ -216,10 +250,14 @@ pub struct VerifyOutcome {
     pub base: Option<&'static str>,
     /// `--task`'s task ID; `None` without it.
     pub task: Option<String>,
+    /// `--node`'s scope; `None` without it.
+    pub node: Option<VerifyNode>,
     pub verdict: Verdict,
-    /// Every row, `ok` too, in key order (`--task`: those of its nodes).
+    /// Every row, `ok` too, in key order (`--task`, `--node`: those of its
+    /// nodes).
     pub rows: Vec<VerifyRow>,
-    /// Markers skipped: `queue` and `other_project` IDs (`--task`: 0).
+    /// Markers skipped: `queue` and `other_project` IDs (`--task`,
+    /// `--node`: 0).
     pub skipped: usize,
     /// The run causes, in order.
     pub cannot: Vec<String>,
@@ -248,13 +286,28 @@ impl VerifyOutcome {
     }
 }
 
-/// `spec verify`: only discovery (and `--task`'s task) fails the call;
-/// every later failure is a run cause of the outcome (exit 2).
+/// `spec verify`: only discovery (and `--task`'s task, and `--node`'s REF
+/// and its index) fails the call; every later failure is a run cause of
+/// the outcome (exit 2).
 pub fn verify(
     env: &Env,
     globals: &Globals,
     request: &VerifyRequest,
 ) -> Result<VerifyOutcome, CliError> {
+    if let Some(reference) = &request.node {
+        let refused = match request.tree {
+            VerifiedTree::Changed => Some(NODE_CHANGED),
+            VerifiedTree::Staged => Some(NODE_STAGED),
+            VerifiedTree::WorkingTree => request.task.is_some().then_some(NODE_TASK),
+        };
+        if let Some(refused) = refused {
+            return Err(CliError::spec(refused));
+        }
+        return verify_node(env, globals, reference, request);
+    }
+    if request.symbol.is_some() {
+        return Err(CliError::spec(SYMBOL_ALONE));
+    }
     if request.tree == VerifiedTree::Staged {
         if request.task.is_some() {
             return Err(CliError::spec(STAGED_TASK));
@@ -277,59 +330,12 @@ pub fn verify(
     let mut messages = Vec::new();
     let mut causes: Vec<RunCause> = Vec::new();
     let label = &project.config_label;
-
-    // (1), (2): the config's `[code]` and `[verify]`.
-    let code = match CodeConfig::from_toml(&text) {
-        Ok(Some(code)) => Some(code),
-        Ok(None) => {
-            causes.push(RunCause::new(
-                CAUSE_NO_CODE,
-                format!(
-                    "{label} has no [code] table: the code layer is off (add [code] with roots)"
-                ),
-            ));
-            None
-        }
-        Err(error) => {
-            causes.push(RunCause::new(CAUSE_CONFIG, error.at(label)));
-            None
-        }
-    };
-    let configured = match verify_from_toml(&text) {
-        Ok(config) => Some(config.mode),
-        Err(error) => {
-            causes.push(RunCause::new(CAUSE_CONFIG, error.at(label)));
-            None
-        }
-    };
-
-    // (4), (5): git, and the lock's unmerged stages.
-    let mut git = match VerifyGit::open(&project.root, &request.git) {
-        Ok(git) => Some(git),
-        Err(cause) => {
-            causes.push(RunCause::new(CAUSE_GIT, cause.message));
-            None
-        }
-    };
-    if let Some(open) = &mut git {
-        match open.is_unmerged(LOCK_FILE) {
-            Ok(false) => {}
-            Ok(true) => causes.push(RunCause::new(
-                CAUSE_UNMERGED,
-                format!("{LOCK_FILE} is unmerged: run spec lock regen"),
-            )),
-            Err(cause) => causes.push(RunCause::new(CAUSE_GIT, cause.message)),
-        }
-    }
-
-    // (6): the lock, against this build's recipes.
-    let lock = match read_lock(&project.root, &build_recipes()) {
-        Ok(read) => Some(read.lock),
-        Err(error) => {
-            causes.push(RunCause::new(CAUSE_LOCK, unprefixed(&error)));
-            None
-        }
-    };
+    let PlainReads {
+        code,
+        configured,
+        git,
+        lock,
+    } = plain_reads(&project, &text, &request.git, &mut causes);
 
     // (8): the spec corpus, the index refreshed, every file read again.
     let input = match indexed(env, &project, &mut messages, true) {
@@ -396,12 +402,94 @@ pub fn verify(
         has_base: changed,
         base,
         task: task.map(|task| task.id),
+        node: None,
         head_mode,
         judged,
         causes,
         messages,
         label,
     }))
+}
+
+/// What plain verify reads before the spec corpus and the code: `[code]`,
+/// `[verify] mode`, the git session and the lock, each `None` when its
+/// cause is listed.
+pub(crate) struct PlainReads {
+    pub code: Option<CodeConfig>,
+    pub configured: Option<Mode>,
+    pub git: Option<VerifyGit>,
+    pub lock: Option<specengine_core::lock::Lock>,
+}
+
+/// Plain's run causes (1), (2) (the config's `[code]` and `[verify]`),
+/// (4), (5) (git, and the lock's unmerged stages) and (6) (the lock,
+/// against this build's recipes), in that order, into `causes`.
+pub(crate) fn plain_reads(
+    project: &ProjectRoot,
+    text: &str,
+    git_env: &GitEnv,
+    causes: &mut Vec<RunCause>,
+) -> PlainReads {
+    let label = &project.config_label;
+
+    // (1), (2): the config's `[code]` and `[verify]`.
+    let code = match CodeConfig::from_toml(text) {
+        Ok(Some(code)) => Some(code),
+        Ok(None) => {
+            causes.push(RunCause::new(
+                CAUSE_NO_CODE,
+                format!(
+                    "{label} has no [code] table: the code layer is off (add [code] with roots)"
+                ),
+            ));
+            None
+        }
+        Err(error) => {
+            causes.push(RunCause::new(CAUSE_CONFIG, error.at(label)));
+            None
+        }
+    };
+    let configured = match verify_from_toml(text) {
+        Ok(config) => Some(config.mode),
+        Err(error) => {
+            causes.push(RunCause::new(CAUSE_CONFIG, error.at(label)));
+            None
+        }
+    };
+
+    // (4), (5): git, and the lock's unmerged stages.
+    let mut git = match VerifyGit::open(&project.root, git_env) {
+        Ok(git) => Some(git),
+        Err(cause) => {
+            causes.push(RunCause::new(CAUSE_GIT, cause.message));
+            None
+        }
+    };
+    if let Some(open) = &mut git {
+        match open.is_unmerged(LOCK_FILE) {
+            Ok(false) => {}
+            Ok(true) => causes.push(RunCause::new(
+                CAUSE_UNMERGED,
+                format!("{LOCK_FILE} is unmerged: run spec lock regen"),
+            )),
+            Err(cause) => causes.push(RunCause::new(CAUSE_GIT, cause.message)),
+        }
+    }
+
+    // (6): the lock, against this build's recipes.
+    let lock = match read_lock(&project.root, &build_recipes()) {
+        Ok(read) => Some(read.lock),
+        Err(error) => {
+            causes.push(RunCause::new(CAUSE_LOCK, unprefixed(&error)));
+            None
+        }
+    };
+    PlainReads {
+        code,
+        configured,
+        git,
+        lock,
+    }
 }
 
 /// `--task`'s filter (task spec `verify-task`): `judged`'s rows kept to
@@ -426,17 +514,10 @@ fn keep_task_rows(
     let mut reached: BTreeSet<NodeKey> = BTreeSet::new();
     let mut nameless = 0usize;
     judged.rows.retain(|row| {
-        let node = row.key.node.as_str();
-        let written = [node];
-        let markers: &[&str] = if row.markers.is_empty() {
-            &[]
-        } else {
-            &written
-        };
-        let entry = row.entry.as_ref().map(|_| node);
-        let nodes = set.row_nodes(&mut corpus, markers, entry);
+        let nodes = row_set_nodes(row, &set, &mut corpus);
         if nodes.is_empty() {
-            if !named.any(&mut corpus, markers, entry) {
+            let (markers, entry) = row_halves(row);
+            if !named.any(&mut corpus, markers.as_slice(), entry) {
                 nameless += 1;
             }
             return false;
@@ -459,31 +540,59 @@ fn keep_task_rows(
     }
 }
 
+/// "A row in a set" by its key's node (see [`keep_task_rows`]): the
+/// marker half when the row has markers, the entry half when it has an
+/// entry.
+pub(crate) fn row_set_nodes(
+    row: &Row,
+    set: &NodeSet,
+    corpus: &mut Corpus<'_>,
+) -> BTreeSet<NodeKey> {
+    let (markers, entry) = row_halves(row);
+    set.row_nodes(corpus, markers.as_slice(), entry)
+}
+
+/// A row's two halves as "A row in a set" reads them: its key's node as
+/// its markers' ID (none without a marker), and as its entry's node (none
+/// without an entry).
+fn row_halves(row: &Row) -> (Vec<&str>, Option<&str>) {
+    let node = row.key.node.as_str();
+    let markers = if row.markers.is_empty() {
+        Vec::new()
+    } else {
+        vec![node]
+    };
+    (markers, row.entry.as_ref().map(|_| node))
+}
+
 /// What a run gathered before its verdict.
-struct Gathered<'a> {
+pub(crate) struct Gathered<'a> {
     /// `[verify] mode`; `None` when it cannot be read.
-    configured: Option<Mode>,
+    pub configured: Option<Mode>,
     /// `--changed` or `--staged`.
-    has_base: bool,
-    base: Option<&'static str>,
+    pub has_base: bool,
+    pub base: Option<&'static str>,
     /// `--task`'s task ID.
-    task: Option<String>,
-    head_mode: HeadMode,
-    judged: Option<Judged>,
-    causes: Vec<RunCause>,
-    messages: Vec<Message>,
+    pub task: Option<String>,
+    /// `--node`'s scope.
+    pub node: Option<VerifyNode>,
+    pub head_mode: HeadMode,
+    pub judged: Option<Judged>,
+    pub causes: Vec<RunCause>,
+    pub messages: Vec<Message>,
     /// The config as named.
-    label: &'a str,
+    pub label: &'a str,
 }
 
 /// The outcome: the mode the verdict uses, shown as such whether rows were
 /// judged or a run cause stopped them; the rows only when no cause.
-fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
+pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
     let Gathered {
         configured,
         has_base,
         base,
         task,
+        node,
         head_mode,
         judged,
         mut causes,
@@ -509,6 +618,7 @@ fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
         mode,
         base,
         task,
+        node,
         verdict,
         rows,
         skipped,
@@ -636,6 +746,7 @@ fn verify_staged(
         has_base: true,
         base,
         task: None,
+        node: None,
         head_mode,
         judged,
         causes,
@@ -793,7 +904,7 @@ fn judged_mode(
 }
 
 /// A CLI error's message without its `spec: ` prefix.
-fn unprefixed(error: &CliError) -> String {
+pub(crate) fn unprefixed(error: &CliError) -> String {
     error
         .message
         .strip_prefix("spec: ")
@@ -954,7 +1065,8 @@ fn counts(outcome: &VerifyOutcome) -> Counts {
 }
 
 /// A row's line ([`FindingLine`]); its binding a keyless row's words, else
-/// [`keyed_binding`], else empty.
+/// [`keyed_binding`], else empty; an `ok` row's class `-` (only `--node`
+/// prints one).
 fn row_line(row: &VerifyRow) -> String {
     let binding = match &row.keyless {
         Some((word, category)) => format!("{word} {category}"),
@@ -963,7 +1075,7 @@ fn row_line(row: &VerifyRow) -> String {
     };
     FindingLine {
         pre_existing: row.pre_existing,
-        class: row.class.unwrap_or("ok"),
+        class: row.class.unwrap_or(OK_CLASS),
         state: row.state.as_str(),
         category: row.category.as_deref(),
         detail: row.detail.as_deref(),
@@ -1173,26 +1285,69 @@ fn state_hints(rows: &[VerifyRow]) -> Vec<String> {
         .collect()
 }
 
-/// The text report: the non-`ok` rows in key order, each followed by its
-/// moved row's old place or its ambiguous row's candidates, the `cannot:`
-/// lines, the hints, the summary.
+/// An `ok` row's class as `--node` prints it.
+const OK_CLASS: &str = "-";
+
+/// A printed row's block: its line, then its moved row's old place or its
+/// ambiguous row's candidates, each line ended.
+fn row_block(row: &VerifyRow) -> String {
+    let mut out = row_line(row);
+    out.push('\n');
+    if let Some(anchor) = &row.anchor {
+        for (word, place) in anchor.from.iter().map(|from| ("moved from", from)).chain(
+            anchor
+                .candidates
+                .iter()
+                .flatten()
+                .map(|to| ("candidate", to)),
+        ) {
+            out.push_str(&place_line(word, place));
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// The rows printed, and how many are not: plain and `--task` print each
+/// non-`ok` row, uncut; `--node` (task spec `verify-node`) every row, `ok`
+/// too, while their blocks stay within [`OUTPUT_CAP_CHARS`] characters,
+/// then none (the JSON's `rows` and `omitted`).
+fn printed(outcome: &VerifyOutcome) -> (Vec<&VerifyRow>, usize) {
+    if outcome.node.is_none() {
+        let rows = outcome
+            .rows
+            .iter()
+            .filter(|row| row.class.is_some())
+            .collect();
+        return (rows, 0);
+    }
+    let mut used = 0usize;
+    let mut rows = Vec::new();
+    for row in &outcome.rows {
+        let block = row_block(row).chars().count();
+        if used + block > OUTPUT_CAP_CHARS {
+            break;
+        }
+        used += block;
+        rows.push(row);
+    }
+    let omitted = outcome.rows.len() - rows.len();
+    (rows, omitted)
+}
+
+/// The text report: the rows printed in key order, each followed by its
+/// moved row's old place or its ambiguous row's candidates (`--node`: the
+/// tail when cut), the `cannot:` lines, the hints, the summary.
 pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     let mut out = String::new();
-    for row in outcome.rows.iter().filter(|row| row.class.is_some()) {
-        out.push_str(&row_line(row));
-        out.push('\n');
-        if let Some(anchor) = &row.anchor {
-            for (word, place) in anchor.from.iter().map(|from| ("moved from", from)).chain(
-                anchor
-                    .candidates
-                    .iter()
-                    .flatten()
-                    .map(|to| ("candidate", to)),
-            ) {
-                out.push_str(&place_line(word, place));
-                out.push('\n');
-            }
-        }
+    let (rows, omitted) = printed(outcome);
+    for row in rows {
+        out.push_str(&row_block(row));
+    }
+    if omitted > 0 {
+        out.push_str(&format!(
+            "[truncated: {omitted} rows not shown; narrow with --symbol QPATH]\n"
+        ));
     }
     for cause in &outcome.cannot {
         out.push_str(&format!("cannot: {}\n", one_line(cause)));
@@ -1221,10 +1376,19 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     } else {
         String::new()
     };
-    // `--task`: `verify --task <T>: ` (task spec `verify-task`).
-    let command = match &outcome.task {
-        Some(task) => format!("verify --task {task}"),
-        None => "verify".to_owned(),
+    // `--task`: `verify --task <T>: ` (task spec `verify-task`); `--node`:
+    // `verify --node <REF>[ --symbol <QPATH>]: ` (task spec `verify-node`).
+    let command = match (&outcome.task, &outcome.node) {
+        (Some(task), _) => format!("verify --task {task}"),
+        (None, Some(node)) => {
+            let mut command = format!("verify --node {}", one_line(&node.reference));
+            if let Some(symbol) = &node.symbol {
+                command.push_str(" --symbol ");
+                command.push_str(&one_line(symbol));
+            }
+            command
+        }
+        (None, None) => "verify".to_owned(),
     };
     out.push_str(&format!(
         "{command}: {}{mode}: {} fix, {} check{pre_existing}, {} cannot, {} ok{moved}; {} by \
@@ -1317,19 +1481,32 @@ struct DeltaJson<'a> {
     tests_reaching: Option<()>,
 }
 
+/// The rows `--node`'s cut leaves out (task spec `verify-node`).
+#[derive(Serialize)]
+struct OmittedJson {
+    rows: usize,
+}
+
 #[derive(Serialize)]
 struct VerifyJson<'a> {
     mode: Option<&'static str>,
     base: Option<&'static str>,
     /// `--task`'s ID, `null` without it (task spec `verify-task`).
     task: Option<&'a str>,
+    /// `--node`'s holders' IDs and `--symbol`'s QPATH, `null` without
+    /// `--node` (task spec `verify-node`).
+    node: Option<&'a [String]>,
+    symbol: Option<&'a str>,
     verdict: &'static str,
     counts: CountsJson,
     cascade: CascadeJson,
-    rows: &'a [VerifyRow],
+    /// The rows the text prints (`--node`) or every row, `ok` too.
+    rows: Vec<&'a VerifyRow>,
     delta: DeltaJson<'a>,
     cannot: &'a [String],
     notes: Vec<String>,
+    /// `--node`'s rows not printed; `null` without `--node`.
+    omitted: Option<OmittedJson>,
 }
 
 impl Serialize for VerifyOutcome {
@@ -1350,10 +1527,20 @@ impl Serialize for VerifyOutcome {
             .filter(|row| row.class.is_some() && row.resolved)
             .map(|row| row.node.as_str())
             .collect();
+        // `--node`: the rows its text prints; plain and `--task`: every row.
+        let (rows, omitted) = match &self.node {
+            Some(_) => {
+                let (rows, omitted) = printed(self);
+                (rows, Some(OmittedJson { rows: omitted }))
+            }
+            None => (self.rows.iter().collect(), None),
+        };
         let document = VerifyJson {
             mode: self.mode.map(Mode::as_str),
             base: self.base,
             task: self.task.as_deref(),
+            node: self.node.as_ref().map(|node| node.ids.as_slice()),
+            symbol: self.node.as_ref().and_then(|node| node.symbol.as_deref()),
             verdict: self.verdict.as_str(),
             counts: CountsJson {
                 rows: counts.rows,
@@ -1368,7 +1555,7 @@ impl Serialize for VerifyOutcome {
                 by_blob: counts.by_blob,
                 by_ast: counts.by_ast,
             },
-            rows: &self.rows,
+            rows,
             delta: DeltaJson {
                 symbols: None,
                 bindings: BindingsJson {
@@ -1409,6 +1596,7 @@ impl Serialize for VerifyOutcome {
             },
             cannot: &self.cannot,
             notes: self.notes(),
+            omitted,
         };
         document.serialize(serializer)
     }

@@ -65,9 +65,13 @@ pub const STAMINA_MD: &str = "docs/spec/stamina.md";
 pub const MODES: [&str; 3] = ["observe", "enforce-introduced", "enforce"];
 
 /// The keys of the JSON document, in order ("Output"; `task` after `base`
-/// since docs/features/verify-task.md "spec verify --task", **JSON**).
-pub const TOP_KEYS: [&str; 10] = [
-    "mode", "base", "task", "verdict", "counts", "cascade", "rows", "delta", "cannot", "notes",
+/// since docs/features/verify-task.md "spec verify --task", **JSON**;
+/// `node`, `symbol` after `task` and `omitted` last since
+/// docs/features/verify-node.md "spec verify --node", **JSON**: `null`
+/// in every other mode).
+pub const TOP_KEYS: [&str; 13] = [
+    "mode", "base", "task", "node", "symbol", "verdict", "counts", "cascade", "rows", "delta",
+    "cannot", "notes", "omitted",
 ];
 
 /// The keys of a row, in order ("Output"; `levels` after `compared` since
