@@ -12,7 +12,7 @@ adrs: [ADR-0050]
 
 5b-1a (`lock-levels.md`) records levels and every level's digest, but verify still judges as v2 did: a `[sig]` marker reads a body edit as drift, as `[sig, body]` does, and any edit of a RON file or a module's file is drift for everything bound in it (05:137's "every refactor an alarm the owner learns to ignore"). This slice makes the declared levels count. It changes no lock byte: every digest it compares is already in format 2.
 
-Delivered: verify judging every kind by levels, C = (L_lock ∪ L_mark) ∖ `path`; `code_changed <levels>` and `levels_changed <from>-><to>`; `module` and `ron` judged by digest; JSON `levels`; a stored drift row's `levels`; a row's `code` without a blob OID; 4a's CRLF limit lifted for `module` and `ron`. Order (`lock-levels.md` Q22, 08 s2): after 5b-2 `lock-rebase.md`; then the carry-overs ("Later"), then 5c.
+Delivered: verify judging every kind by levels, C = (L_lock ∪ L_mark) ∖ `path`; `code_changed <levels>` and `levels_changed <from>-><to>`; `module` and `ron` judged by digest; JSON `levels`; a stored drift row's `levels`; a row's `code` without a blob OID; 4a's CRLF limit lifted for `module` and `ron`. Order (`lock-levels.md` Q22, 08 s2): after 5b-2 (`lock-rebase.md`, shipped 2026-10-20); then the carry-overs ("Later"), then 5c.
 
 ## Description and interactions
 
@@ -74,7 +74,7 @@ test-engineer:
 spec-writer:
 
 - [x] SW-1 -- this spec, split from `lock-levels.md` 2026-10-20 (Q22); `export index`, `check` clean.
-- [ ] SW-3 -- at shipping, bytes measured 2026-10-20: `spec-verify.md` (11 745 before 5b-1a and 5b-2) "States", "Cascade", "Known limits": about −400 B, net ≤ 0; `spec-verify-output.md` (9 204) "JSON" `levels`: ≤ +400 B; `proposal-drift-item.md` "The item" `code`, "Store"; 05 s5.3; 08 AC-2; `CLAUDE.md` State.
+- [ ] SW-3 -- at shipping, bytes measured 2026-10-20: `spec-verify.md` (11 961 after 5b-2) "States", "Cascade", "Known limits": about −400 B, net ≤ 0; `spec-verify-output.md` (9 204) "JSON" `levels`: ≤ +400 B; `proposal-drift-item.md` "The item" `code`, "Store"; 05 s5.3; 08 AC-2; `CLAUDE.md` State.
 
 ## Files
 
@@ -95,15 +95,16 @@ Any lock byte (5b-1a); `spec lock rebase` (5b-2); 5c's anchors (`anchor-states.m
 
 ## Later
 
-**The carry-overs**: an XS slice after this one, before 5c (`lock-levels.md` Q22; 08 s2); the one place they are listed. No behaviour change but RD-12's.
+**The carry-overs**: an XS slice after this one, before 5c (`lock-levels.md` Q22; 08 s2); the one place they are listed. No behaviour change but RD-12's and 5b-2's panic text.
 
 - RD-12 -- `spec bump`'s hint (Q17, 4b-2's follow-up): CLI `bump.rs` `REQUIRED_HINT`, when no `required` row has a `write` (each shows `-`): `hint: required: spec.lock vouches for the old text: send the change through the queue (spec propose update) and have the owner approve it with --editorial`; else today's text. Canon `node-revision.md` "Raising": "(both ways out)" -> "(its ways out)", 1 B saved (12 283 of 12 288). M: both ways out named -> `required_hint_without_a_line_names_only_editorial` (CLI `rev_bump.rs`).
 - From 6b-1's review 1 (`code-tools.md`; nits; owner pre-approved 2026-10-16):
   - One function for a stored directory's text: code `naming.rs` `package_label` and CLI `code_index.rs` `dir_text` become one public function in `specengine-code` the CLI calls. Done when `code_index.rs` defines no `dir_text`; `code_format_history.txt` gains no line.
   - CLI `symbols.rs:1` cites task spec `symbol-reads`, "Lookup": re-point it to `` `docs/canon/symbol-reads.md` "Lookup" `` (data form, `doc_pointers.rs`); then that shipped spec's "Lookup" heading may go (spec-writer).
   - CLI `lib.rs:136-137`: re-wrap the `Exit` doc bullet's short "`refs`, `symbols`)," line.
-- From 5b-1a's review (`lock-levels.md` "Implementation"; nits; owner pre-approved 2026-10-20): core `render_block` gains `debug_assert!`s (the entry's kind matches the lock's format, `levels` non-empty); CLI `revisions.rs`' unreachable re-parse fallback text dropped or its comment pointed at the invariant; one `pub(crate)` `lock_digest` for CLI `lock.rs` and `verify_rows.rs`; `found.levels` moved, not cloned, in CLI `lock.rs`; CLI `lock.rs`' citation task spec `verify-tests`, "Verifiable" (no such heading) re-pointed to canon `spec-verify-tests`, "Runnable and verifiable". No behaviour change.
-- Files: code `naming.rs`; core `lock.rs`; CLI `code_index.rs`, `symbols.rs`, `lib.rs`, `bump.rs`, `revisions.rs`, `lock.rs`, `verify_rows.rs`; test `rev_bump.rs`.
+- From 5b-1a's review (`lock-levels.md` "Implementation"; nits; owner pre-approved 2026-10-20): core `render_block` gains `debug_assert!`s (the entry's kind matches the lock's format, `levels` non-empty); CLI `revisions.rs`' unreachable re-parse fallback text dropped or its comment pointed at the invariant; CLI `verify_rows.rs`' own `lock_digest` dropped for `lock.rs`' (`pub(crate)` since 5b-2); `found.levels` moved, not cloned, in CLI `lock.rs`; CLI `lock.rs`' citation task spec `verify-tests`, "Verifiable" (no such heading) re-pointed to canon `spec-verify-tests`, "Runnable and verifiable". No behaviour change.
+- From 5b-2's review (`lock-rebase.md` "Implementation"; owner pre-approved 2026-10-20): CLI `lock_rebase.rs`' `catch_unwind` in `rederive_rust` wraps hashing and corpus resolution too, so their panic reads "the Rust parser failed on …": narrow it to `parse` and `bind_tree` as accept's sites, or word it "re-deriving `<file>` at blob <oid> failed" (canon `spec-lock-rebase.md` "Known limits" then loses that line); drop core `DropReason`'s unused `PartialOrd, Ord, Hash` and CLI `RebaseOutcome::written`.
+- Files: code `naming.rs`; core `lock.rs`; CLI `code_index.rs`, `symbols.rs`, `lib.rs`, `bump.rs`, `revisions.rs`, `lock.rs`, `verify_rows.rs`, `lock_rebase.rs`; test `rev_bump.rs`.
 
 ## Open
 
@@ -116,11 +117,11 @@ Any lock byte (5b-1a); `spec lock rebase` (5b-2); 5c's anchors (`anchor-states.m
 | Q25 `DriftRow.levels` | optional, lenient: any JSON after `compared`, never validated | four tests' array rows (S9) and mixed-build queues read as corrupt |
 | Q26 `verify_rows.rs`' pin | requires `item_levels(`; bans `hash_item(`, `hash_node(`, `hash_bound_items(`; its errored item's `item.state` and `HashState` allowed there only | a code accessor, `unbound()` rewritten |
 
-Numbers shared with `lock-levels.md` (Q22-Q24, Q27-Q31 and the rest there; Q25, Q26 moved here at its shipping) and `lock-rebase.md`; S-n: `lock-levels.md`'s 2026-10-20 list.
+Numbers shared with `lock-levels.md` (Q22-Q24, Q27-Q31 and the rest there; Q25, Q26 moved here at its shipping) and `lock-rebase.md` (its list at fc5ea38); S-n: `lock-levels.md`'s 2026-10-20 list.
 
 ## Dependencies and ordering
 
-- **Needs 5b-1a** (`lock-levels.md`, shipped 2026-10-20; canon `spec-lock.md`): format 2's levels and digests, accept's hashing (verify's digests are accept's), `lock_code`, the golden. **After 5b-2** (`lock-rebase.md`), which rewrites `verify_rows.rs`' `read_head` and base first; none of its code is needed here.
+- **Needs 5b-1a** (`lock-levels.md`, shipped 2026-10-20; canon `spec-lock.md`): format 2's levels and digests, accept's hashing (verify's digests are accept's), `lock_code`, the golden. **After 5b-2** (shipped 2026-10-20; canon `spec-lock-rebase.md` "The base"): `read_head` reads `HEAD`'s lock through `head_lock`; none of its code is needed here.
 - **Before**: the carry-overs, then 5c (`anchor-states.md`: the judge's steps, `levels` JSON), 8a-2 (`verify-task.md`: `levels` in rows), 6b-2, 7a (`bundle-bindings.md` "Sync"), 8b, 9b.
 
 ## Implementation

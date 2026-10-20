@@ -1849,7 +1849,8 @@ fn not_completed_by(repo: &LockRepo, id: &str, commit: &str, why: &str, new_comm
 /// `spec.lock` that carries every trailer (`Lock`, `Lock-mode: accept`,
 /// `Decided-by`, `Proposal`) does not (`has no spec.lock`: the approve
 /// makes its own lock commit on top); this run's lock commit without
-/// `Lock-mode`, or with `Lock-mode: regen`, does not (``has no `Lock-mode:
+/// `Lock-mode`, or with `Lock-mode: regen` or `rebase`
+/// (docs/features/lock-rebase.md Q39), does not (``has no `Lock-mode:
 /// accept` or `editorial` trailer``: the approve finds nothing to accept,
 /// the item stays `open`); a reject notes each, no longer refused by it
 /// (drift-follow-up Q11). M: the blob check removed; the `Lock-mode` check
@@ -1873,8 +1874,9 @@ fn only_an_accepts_lock_commit_completes_a_drift_item() {
     assert_eq!(repo.lock(), None);
     not_completed_by(&repo, &id, &commit, "has no spec.lock", true);
 
-    // This run's lock commit, its `Lock-mode` dropped or rewritten.
-    for mode in [None, Some("regen")] {
+    // This run's lock commit, its `Lock-mode` dropped or rewritten (a
+    // rebase's too: docs/features/lock-rebase.md RD-5, Q39, a guard).
+    for mode in [None, Some("regen"), Some("rebase")] {
         let repo = drifted(
             &format!("da-complete-{}", mode.unwrap_or("none")),
             cap_changed,

@@ -8,7 +8,7 @@ reviewed: 2026-10-20
 
 # `spec.lock`: the file, its entries, `spec lock regen`
 
-`<root>/spec.lock`, one per project root beside `specengine.toml`, committed: per marker binding, a node's revision and `norm_hash` paired with its code's level digests at a commit, so drift can be told from `ok`. Neither a spec file nor `generated`: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock` (ADR-0041, ADR-0050). Built, writing format 2 only: `spec lock accept REF [--editorial]` (`docs/canon/spec-lock-accept.md`; a drift approve runs it), `spec lock regen` (below) and `spec approve --editorial`, refreshing vouching entries in its apply commit (`docs/canon/proposal-revisions.md` "Editorial approve"). Model: core `lock` (`parse_lock`, `render_lock`, `lock_code`, `LockFormat`, `EntryCode`, `REBASE_STEP`, `key_problem`/`KeyProblem`, the merges, `vouches`, `refresh_editorial`), pure; git: store `WorktreeGit` (`blob_at`, `blob_oid`, `status_entries`, `is_ignored`, `unmerged_stages`, `reset_path`); commands: CLI `lock.rs`, `lock_regen.rs` (their READMEs). Readers: "Entry"; verify: `spec-verify.md`; the rule: `node-revision.md` "Raising". Plain `spec check`, the index, the UI, the gate and the daemon never read it (MCP, HTTP: a review's vouching count; MCP `report_drift`). No `[code]`, no lock.
+`<root>/spec.lock`, one per project root beside `specengine.toml`, committed: per marker binding, a node's revision and `norm_hash` paired with its code's level digests at a commit, so drift can be told from `ok`. Neither a spec file nor `generated`: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock` (ADR-0041, ADR-0050). Built, writing format 2 only: `spec lock accept REF [--editorial]` (`docs/canon/spec-lock-accept.md`; a drift approve runs it), `spec lock regen` (below), `spec lock rebase` (`docs/canon/spec-lock-rebase.md`) and `spec approve --editorial`, refreshing vouching entries in its apply commit (`docs/canon/proposal-revisions.md` "Editorial approve"). Model: core `lock` (`parse_lock`, `render_lock`, `lock_code`, `LockFormat`, `EntryCode`, `REBASE_STEP`, `key_problem`/`KeyProblem`, the merges, `vouches`, `refresh_editorial`, `plan_rebase`), pure; git: store `WorktreeGit` (`blob_at`, `blob_oid`, `status_entries`, `is_ignored`, `unmerged_stages`, `reset_path`), `VerifyGit::read_blobs`; commands: CLI `lock.rs`, `lock_regen.rs`, `lock_rebase.rs` (their READMEs). Readers: "Entry"; verify: `spec-verify.md`; the rule: `node-revision.md` "Raising". Plain `spec check`, the index, the UI, the gate and the daemon never read it (MCP, HTTP: a review's vouching count; MCP `report_drift`). No `[code]`, no lock.
 
 ## The file
 
@@ -99,10 +99,10 @@ Side-symmetric; reads no code or spec file, computes no hash: each choice keeps 
 
 ## Travel and writes
 
-Each lock travels on its worktree's branch; git's `index.lock` orders commits; branches meet in a merge (regen). Writes: the data directory, `spec.lock`, accept's one commit; no queue row, event or index change.
+Each lock travels on its worktree's branch; git's `index.lock` orders commits; branches meet in a merge (regen). Writes: the data directory, `spec.lock`, accept's or rebase's one commit; no queue row, event or index change.
 
 ## Known limits
 
-- A grammar (tree-sitter-rust, its ABI) or `LEVEL_RECIPE` bump changes `code_recipe`: such a lock, as a format-1 one, exits 2 at every `Some` reader until `spec lock rebase` (5b-2); regen too when only the base stage differs (both sides rebased since): `git checkout --ours spec.lock`, then accept the other side's nodes.
+- A grammar (tree-sitter-rust, its ABI) or `LEVEL_RECIPE` bump changes `code_recipe`: such a lock, as a format-1 one, exits 2 at every `Some` reader until `spec lock rebase` (`spec-lock-rebase.md`); regen too when only the base stage differs (both sides rebased since): `git checkout --ours spec.lock`, then accept the other side's nodes.
 - Commits decay (rebase, squash, gc): a `commit` may name nothing; a renamed ID's entries stay until `accept <old ID>` drops them (`spec-lock-accept.md` "A gone node").
 - Cooperative: a faked terminal passes (ADR-0034); the gate skips `spec.lock`.

@@ -23,6 +23,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
 - [docs/canon/spec-lock-accept.md](canon/spec-lock-accept.md) spec lock accept: the owner's lock commit · crates/specengine-cli, crates/specengine-store · tier 2
+- [docs/canon/spec-lock-rebase.md](canon/spec-lock-rebase.md) spec lock rebase: an old lock carried into this build's · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-lock.md](canon/spec-lock.md) spec.lock: the file, its entries, spec lock regen · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-output.md](canon/spec-verify-output.md) spec verify's output: rows, hints, summary, JSON · crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-tests.md](canon/spec-verify-tests.md) spec verify --tests: bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2

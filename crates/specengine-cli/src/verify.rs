@@ -281,12 +281,13 @@ pub fn verify(
                 lock: &lock,
             };
             match run(env, globals, &walked, &mut open, changed) {
-                Ok((rows, at_head, unborn)) => {
+                Ok((rows, at_head, unborn, lock_note)) => {
                     if unborn {
                         base = Some("unborn");
                     }
                     head_mode = at_head;
                     judged = Some(rows);
+                    messages.extend(lock_note.map(Message::Note));
                 }
                 Err(cause) => causes.push(cause),
             }
@@ -385,7 +386,7 @@ fn verify_staged(
         None => None,
     };
     let label = located.config_label.as_str();
-    let messages = Vec::new();
+    let mut messages = Vec::new();
     let mut causes: Vec<RunCause> = Vec::new();
 
     // (4), (5): the index git names.
@@ -460,12 +461,13 @@ fn verify_staged(
         (true, Some(project), Some(code), Some((mut git, listing))) => {
             let config = staged_text.as_deref().map(str::as_bytes);
             match judge_index(env, globals, &project, code, &mut git, listing, config) {
-                Ok((rows, at_head, unborn)) => {
+                Ok((rows, at_head, unborn, lock_note)) => {
                     if unborn {
                         base = Some("unborn");
                     }
                     head_mode = at_head;
                     judged = Some(rows);
+                    messages.extend(lock_note.map(Message::Note));
                 }
                 Err(cause) => causes.push(cause),
             }
@@ -517,8 +519,8 @@ fn staged_config(
 
 /// The index's side read through the one-commit seam, `HEAD`'s read over
 /// it, and its rows judged against `HEAD`'s; `config` the index's config
-/// bytes when it is the config judged. `HEAD`'s mode, and whether it is
-/// unborn.
+/// bytes when it is the config judged. `HEAD`'s mode, whether it is
+/// unborn, and the note when `HEAD`'s lock gave way to the index's.
 fn judge_index(
     env: &Env,
     globals: &Globals,
@@ -527,7 +529,7 @@ fn judge_index(
     git: &mut VerifyGit,
     listing: CommitListing,
     config: Option<&[u8]>,
-) -> Result<(Judged, HeadMode, bool), RunCause> {
+) -> Result<(Judged, HeadMode, bool, Option<String>), RunCause> {
     let side = read_commit(project, git, CommitConfig::of_index(listing, code.clone()))?;
     let config_path = config_path(env, globals, project);
     let share = IndexShare {
@@ -542,7 +544,7 @@ fn judge_index(
     )?;
     let judged = judge_commit(&side, project, Some(&head))?;
     let unborn = head.is_unborn();
-    Ok((judged, head.mode, unborn))
+    Ok((judged, head.mode, unborn, head.lock_note))
 }
 
 /// A state as its name.
@@ -550,14 +552,16 @@ fn state_name<S: serde::Serializer>(state: &State, serializer: S) -> Result<S::O
     serializer.serialize_str(state.as_str())
 }
 
-/// The base when asked, and the judge over the one walk.
+/// The base when asked, and the judge over the one walk; `HEAD`'s mode,
+/// whether it is unborn, and the note when `HEAD`'s lock gave way to the
+/// disk's.
 fn run(
     env: &Env,
     globals: &Globals,
     walked: &Walked<'_>,
     git: &mut VerifyGit,
     changed: bool,
-) -> Result<(crate::verify_rows::Judged, HeadMode, bool), RunCause> {
+) -> Result<(crate::verify_rows::Judged, HeadMode, bool, Option<String>), RunCause> {
     let head = if changed {
         let config = config_path(env, globals, walked.project);
         Some(read_head(walked, git, config.as_deref(), None)?)
@@ -565,14 +569,14 @@ fn run(
         None
     };
     let judged = judge_walk(walked, git, head.as_ref())?;
-    let (head_mode, unborn) = match head {
+    let (head_mode, unborn, lock_note) = match head {
         Some(head) => {
             let unborn = head.is_unborn();
-            (head.mode, unborn)
+            (head.mode, unborn, head.lock_note)
         }
-        None => (HeadMode::Absent, false),
+        None => (HeadMode::Absent, false, None),
     };
-    Ok((judged, head_mode, unborn))
+    Ok((judged, head_mode, unborn, lock_note))
 }
 
 /// The config's root-relative path, for `HEAD`'s counterpart: the root's

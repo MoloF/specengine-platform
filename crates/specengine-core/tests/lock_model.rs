@@ -10,10 +10,14 @@
 //! digests and OIDs are made-up values of the right form, each field's
 //! distinct so a swapped field shows. Format 1 (`spec-lock.md` "Entry"
 //! before 5b-1a) is read only without the build's recipes (Q10).
+//! docs/features/lock-rebase.md RD-1..RD-3 ("The plan", R9): the format-1
+//! golden planned into format 2 with each entry's code given (the
+//! format-2 golden's digests) renders as the format-2 golden.
 
 use specengine_core::lock::{
-    AcceptInput, Change, LOCK_HEADER, Lock, LockFormat, LockLevel, Recipes, lock_code,
-    merge_accept, parse_lock, refresh_editorial, render_lock,
+    AcceptInput, Change, DropReason, EntryCode, EntryKey, Fingerprints, LOCK_HEADER, LevelCode,
+    Lock, LockFormat, LockKind, LockLevel, Recipes, Verified, lock_code, merge_accept, parse_lock,
+    plan_rebase, refresh_editorial, render_lock,
 };
 
 const HEADER: &str = "# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit";
@@ -1410,4 +1414,195 @@ fn the_core_lock_module_knows_no_domain() {
         found.is_empty(),
         "crates/specengine-core/src/lock.rs names {found:?}"
     );
+}
+
+// ------------------------------------------------------------- the rebase
+
+/// The digit a golden entry was made of (its `file_blob`'s hex).
+fn digit_of(verified: &Verified) -> char {
+    verified.file_blob.chars().next().expect("a file_blob")
+}
+
+/// The format-2 golden's code of the entry of `key` made of `digit`
+/// ([`block_with`]'s digests; fingerprints but for a RON value).
+fn golden_code(key: &EntryKey, digit: char) -> LevelCode {
+    LevelCode {
+        levels: [LockLevel::Sig, LockLevel::Body].into_iter().collect(),
+        sig_hash: digest('a', digit),
+        body_hash: digest('b', digit),
+        deps_hash: digest('c', digit),
+        fingerprints: (key.kind != LockKind::Ron).then(|| Fingerprints {
+            skeleton_hash: digest('d', digit),
+            quote_hash: digest('e', digit),
+            body_bytes: 200 + digit.to_digit(16).expect("a hex digit"),
+        }),
+    }
+}
+
+/// The format-1 golden, read without the build's recipes.
+fn format_1_lock() -> Lock {
+    parse_lock(&golden_format_1(), None).unwrap_or_else(|error| panic!("{error}"))
+}
+
+/// lock-rebase.md "The plan" (R9), RD-2: the format-1 golden planned with
+/// each entry's code re-derived (the format-2 golden's digests) is the
+/// format-2 golden at the build's recipes, byte for byte: format 2 by
+/// type (no `ast_hash`), every key, `rev`, `spec_hash`, `file_blob`,
+/// `commit`, `verified_at` kept; a row per entry in key order, every
+/// entry asked once, in key order.
+#[test]
+fn the_rebase_plan_of_the_format_1_golden_is_the_golden() {
+    let old = format_1_lock();
+    assert_eq!(old.format, LockFormat::One);
+    let mut asked = Vec::new();
+    let plan = plan_rebase::<()>(&old, &build(), |key, verified| {
+        asked.push(key.clone());
+        Ok(Ok(golden_code(key, digit_of(verified))))
+    })
+    .expect("a plan");
+    let keys: Vec<EntryKey> = old.entries.keys().cloned().collect();
+    assert_eq!(asked, keys, "each entry once, in key order");
+    assert_eq!(plan.lock.format, LockFormat::Two);
+    assert_eq!(plan.lock.recipes, build());
+    let rendered = render_lock(&plan.lock);
+    assert_eq!(rendered, golden());
+    assert!(!rendered.contains("ast_hash"), "{rendered}");
+    assert_eq!(
+        parse(&rendered),
+        plan.lock,
+        "reads back with the build's recipes"
+    );
+    for (key, verified) in &plan.lock.entries {
+        let held = &old.entries[key];
+        assert_eq!(
+            (
+                verified.rev,
+                &verified.spec_hash,
+                &verified.file_blob,
+                &verified.commit,
+                &verified.verified_at
+            ),
+            (
+                held.rev,
+                &held.spec_hash,
+                &held.file_blob,
+                &held.commit,
+                &held.verified_at
+            ),
+            "{key:?}"
+        );
+        assert!(matches!(verified.code, EntryCode::Levels(_)), "{key:?}");
+    }
+    let row_keys: Vec<EntryKey> = plan.rows.iter().map(|row| row.key.clone()).collect();
+    assert_eq!(row_keys, keys);
+    assert!(
+        plan.rows
+            .iter()
+            .all(|row| row.result == Ok([LockLevel::Sig, LockLevel::Body].into_iter().collect()))
+    );
+    assert_eq!((plan.rebased(), plan.dropped()), (8, 0));
+}
+
+/// RD-3: an entry given a drop reason is named in its row with it and
+/// left out of the lock (verify then shows it `unlocked`); the others are
+/// the golden's. Each reason's text as rows and `--json` name it.
+#[test]
+fn the_rebase_plan_drops_an_entry_with_its_reason() {
+    let reasons = [
+        ('1', DropReason::BlobMissing, "blob_missing"),
+        (
+            '2',
+            DropReason::CannotVerify(Some("missing".to_owned())),
+            "cannot_verify missing",
+        ),
+        ('3', DropReason::BadLevels, "bad_levels"),
+        (
+            '4',
+            DropReason::CannotVerify(Some("trailing_content".to_owned())),
+            "cannot_verify trailing_content",
+        ),
+        ('5', DropReason::Ambiguous, "ambiguous"),
+        ('6', DropReason::SymbolGone, "symbol_gone"),
+        ('7', DropReason::HashMismatch, "hash_mismatch"),
+    ];
+    for (digit, reason, text) in &reasons {
+        assert_eq!(reason.text(), *text);
+        let old = format_1_lock();
+        let plan = plan_rebase::<()>(&old, &build(), |key, verified| {
+            let at = digit_of(verified);
+            Ok(if at == *digit {
+                Err(reason.clone())
+            } else {
+                Ok(golden_code(key, at))
+            })
+        })
+        .expect("a plan");
+        let kept: Vec<String> = golden_blocks()
+            .into_iter()
+            .enumerate()
+            .filter(|(index, _)| PLACES[*index].7 != *digit)
+            .map(|(_, block)| block)
+            .collect();
+        assert_eq!(render_lock(&plan.lock), with_blocks(&kept), "{text}");
+        assert_eq!((plan.rebased(), plan.dropped()), (7, 1), "{text}");
+        let dropped: Vec<_> = plan.rows.iter().filter(|row| row.result.is_err()).collect();
+        assert_eq!(dropped.len(), 1);
+        assert_eq!(dropped[0].result, Err(reason.clone()));
+        assert_eq!(digit_of(&old.entries[&dropped[0].key]), *digit);
+    }
+    assert_eq!(DropReason::NotUtf8.text(), "not_utf8");
+    assert_eq!(DropReason::CannotVerify(None).text(), "cannot_verify");
+    // Every entry dropped: an empty format-2 lock at the build's recipes.
+    let plan = plan_rebase::<()>(&format_1_lock(), &build(), |_, _| {
+        Ok(Err(DropReason::BlobMissing))
+    })
+    .expect("a plan");
+    assert_eq!(render_lock(&plan.lock), preamble());
+    assert_eq!((plan.rebased(), plan.dropped()), (0, 8));
+}
+
+/// "The plan": the levels written are the code's (format 1's from its
+/// blob's markers, format 2's as written): a format-2 lock of another
+/// `code_recipe` keeps none of its old code, and the row names the
+/// levels.
+#[test]
+fn the_rebase_plan_writes_the_given_levels_and_recipes() {
+    let old = parse_lock(
+        &golden().replacen(CODE, "specengine-hash/v3 tree-sitter-rust/0.24.1 abi/15", 1),
+        None,
+    )
+    .expect("another code_recipe reads without the build");
+    let deps: std::collections::BTreeSet<LockLevel> = [LockLevel::Deps].into_iter().collect();
+    let plan = plan_rebase::<()>(&old, &build(), |key, verified| {
+        let mut code = golden_code(key, digit_of(verified));
+        code.levels = deps.clone();
+        Ok(Ok(code))
+    })
+    .expect("a plan");
+    assert_eq!(plan.lock.recipes, build());
+    assert_eq!(
+        render_lock(&plan.lock),
+        golden().replace("levels = [\"sig\", \"body\"]", "levels = [\"deps\"]")
+    );
+    assert!(plan.rows.iter().all(|row| row.result == Ok(deps.clone())));
+}
+
+/// "The plan": the first error of the re-derivation (a git or parser
+/// failure: exit 2, nothing written) ends the plan; no entry after it is
+/// asked.
+#[test]
+fn the_rebase_plan_stops_at_the_first_error() {
+    let old = format_1_lock();
+    let mut asked = 0;
+    let result = plan_rebase(&old, &build(), |key, verified| {
+        asked += 1;
+        if asked == 3 {
+            Err(format!("cannot parse {}", key.file))
+        } else {
+            Ok(Ok(golden_code(key, digit_of(verified))))
+        }
+    });
+    assert_eq!(asked, 3);
+    let error = result.expect_err("the third entry's error");
+    assert!(error.starts_with("cannot parse "), "{error}");
 }

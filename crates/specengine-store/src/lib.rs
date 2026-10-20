@@ -162,7 +162,7 @@ pub use symbols::{SymbolHit, SymbolTier};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use verify_git::{
     COMMIT_NOT_A_BLOB, CommitEntry, CommitEntryKind, CommitFile, CommitListing, INDEX_LABEL,
-    IndexRefusal, MISSING_COMMIT_BLOB, VerifyGit,
+    IndexRefusal, MISSING_COMMIT_BLOB, ObjectBlob, VerifyGit,
 };
 pub use worktree::{
     ChangedPath, CreateFileError, CreatedFile, GitError, ListedWorktree, Merge, Operation,

@@ -2,8 +2,9 @@
 //! format 2: task spec `lock-levels`, "Format 2", "Readers"): the reader,
 //! the canonical render, an accept's merge into one node's entries
 //! (`docs/canon/spec-lock-accept.md` "Steps", step 6), the editorial
-//! refresh (its "`--editorial`"), a gone node's drop (its "A gone node")
-//! and `spec lock regen`'s merge of a conflict's stages
+//! refresh (its "`--editorial`"), a gone node's drop (its "A gone node"),
+//! `spec lock rebase`'s plan (task spec `lock-rebase`: [`plan_rebase`],
+//! [`DropReason`]) and `spec lock regen`'s merge of a conflict's stages
 //! (`docs/canon/spec-lock.md` "`spec lock regen`"). Pure: the text in, the
 //! values out; no hash is computed and no file or git object read here
 //! (the CLI hashes, reads and writes); the code side is digest strings, the
@@ -1437,6 +1438,124 @@ pub fn drop_node(old: &Lock, node: &str) -> (Lock, Vec<EntryKey>) {
         lock.entries.remove(key);
     }
     (lock, dropped)
+}
+
+// ---------------------------------------------------------------- rebase
+
+/// Why `spec lock rebase` drops an entry (task spec `lock-rebase`): the
+/// first that applies, in this order. A dropped entry is named, never
+/// guessed; the binding then reads `unlocked`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DropReason {
+    /// No object of the entry's `file_blob` (gc, a partial or shallow
+    /// clone), or an object of another type.
+    BlobMissing,
+    /// The blob is not UTF-8.
+    NotUtf8,
+    /// No unit of the blob is a candidate for the key.
+    SymbolGone,
+    /// The ties leave none or several candidates; an ambiguous RON anchor.
+    Ambiguous,
+    /// A format-1 entry whose key a marker with a malformed level list
+    /// gives: never the default levels.
+    BadLevels,
+    /// The located unit gives no digests: its first category, if any.
+    CannotVerify(Option<String>),
+    /// A format-1 item's whole digest is not made again from its blob.
+    HashMismatch,
+}
+
+impl DropReason {
+    /// The reason as a row and `--json` name it: `blob_missing`,
+    /// `not_utf8`, `symbol_gone`, `ambiguous`, `bad_levels`,
+    /// `cannot_verify[ <category>]`, `hash_mismatch`.
+    pub fn text(&self) -> String {
+        match self {
+            Self::BlobMissing => "blob_missing".to_owned(),
+            Self::NotUtf8 => "not_utf8".to_owned(),
+            Self::SymbolGone => "symbol_gone".to_owned(),
+            Self::Ambiguous => "ambiguous".to_owned(),
+            Self::BadLevels => "bad_levels".to_owned(),
+            Self::CannotVerify(Some(category)) => format!("cannot_verify {category}"),
+            Self::CannotVerify(None) => "cannot_verify".to_owned(),
+            Self::HashMismatch => "hash_mismatch".to_owned(),
+        }
+    }
+}
+
+/// One entry re-derived from its own blob: its code at the build's
+/// recipes, or why it is dropped. A kept entry takes a [`LevelCode`], so
+/// no format-1 code reaches a rebased lock.
+pub type Rederived = Result<LevelCode, DropReason>;
+
+/// What a rebase did to one entry: the levels written, or why it is
+/// dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RebaseRow {
+    pub key: EntryKey,
+    pub result: Result<BTreeSet<LockLevel>, DropReason>,
+}
+
+/// A rebase: the new lock and a row per old entry, in key order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RebasePlan {
+    /// Format 2 at the build's recipes, every kept entry's key, `rev`,
+    /// `spec_hash`, `file_blob`, `commit` and `verified_at` as they were.
+    pub lock: Lock,
+    pub rows: Vec<RebaseRow>,
+}
+
+impl RebasePlan {
+    /// Entries kept, their code re-derived.
+    pub fn rebased(&self) -> usize {
+        self.rows.iter().filter(|row| row.result.is_ok()).count()
+    }
+
+    /// Entries dropped.
+    pub fn dropped(&self) -> usize {
+        self.rows.iter().filter(|row| row.result.is_err()).count()
+    }
+}
+
+/// `spec lock rebase`'s plan (ADR-0050): `old` (any format and
+/// `code_recipe`; the caller has refused another `norm_recipe`) carried
+/// into format 2 at `build`, each entry in key order given its code by
+/// `rederive` (from its own `file_blob`, never another tree) or dropped
+/// with its reason. Kept byte for byte: the key, `rev`, `spec_hash`,
+/// `file_blob`, `commit`, `verified_at`; written: the levels, the three
+/// digests, the fingerprints. The first error of `rederive` ends the plan.
+pub fn plan_rebase<E>(
+    old: &Lock,
+    build: &Recipes,
+    mut rederive: impl FnMut(&EntryKey, &Verified) -> Result<Rederived, E>,
+) -> Result<RebasePlan, E> {
+    let mut lock = Lock::empty(build.clone());
+    let mut rows = Vec::with_capacity(old.entries.len());
+    for (key, verified) in &old.entries {
+        let result = match rederive(key, verified)? {
+            Ok(code) => {
+                let levels = code.levels.clone();
+                lock.entries.insert(
+                    key.clone(),
+                    Verified {
+                        rev: verified.rev,
+                        spec_hash: verified.spec_hash.clone(),
+                        code: EntryCode::Levels(code),
+                        file_blob: verified.file_blob.clone(),
+                        commit: verified.commit.clone(),
+                        verified_at: verified.verified_at.clone(),
+                    },
+                );
+                Ok(levels)
+            }
+            Err(reason) => Err(reason),
+        };
+        rows.push(RebaseRow {
+            key: key.clone(),
+            result,
+        });
+    }
+    Ok(RebasePlan { lock, rows })
 }
 
 // ----------------------------------------------------------------- regen

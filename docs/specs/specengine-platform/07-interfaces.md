@@ -107,6 +107,7 @@ spec verify --tests [--task T] [--json]             # shipped: docs/canon/spec-v
 spec bump [--staged] [--json]                       # read-only: nodes to raise (shipped: docs/canon/node-revision.md)
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md
 spec lock regen                                     # a merge conflicting in spec.lock: docs/canon/spec-lock.md
+spec lock rebase [--json]                           # an older format or code_recipe (shipped: docs/canon/spec-lock-rebase.md)
 spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/gate.md
 spec resolve [--timeout S] [--json]                 # layer C on request (shipped: docs/canon/layer-c.md, ADR-0049)
 

@@ -8,7 +8,9 @@
 //! the refusal naming it and both ways out; raised by hand, a
 //! whitespace-only edit and an unlocked node pass; `observe` passes with
 //! the finding in `--json`, `enforce-introduced` and `enforce` refuse.
-//! The texts are `docs/features/rev-rule.md` "Data".
+//! The texts are `docs/features/rev-rule.md` "Data". 4b-2's carry-over
+//! (rev-rule.md TE-3, Q18; docs/features/lock-rebase.md TE-7): the
+//! commit `spec lock rebase` makes passes the same hook under `enforce`.
 
 #![cfg(unix)]
 
@@ -17,6 +19,7 @@ mod lock_common;
 mod rev_rule_common;
 mod verify_common;
 
+use lock_common::{LockRepo, golden_format_1_text};
 use rev_rule_common::{
     BOUND, BOUND_EDIT, BOUND_LINE, COUNTER_MD, GOAL_EDIT, GOAL_MD, PIECE_EDIT, PIECE_LINE,
     REGEN_EDIT, STAMINA_EDIT, STAMINA_MD, STEP_EDIT, check_mode, commit_hooked, error_line,
@@ -167,4 +170,34 @@ fn te1_game_crate_unraised_refused_raised_passes() {
     let output = commit_hooked(&repo, "an unlocked node");
     assert!(output.status.success(), "{}", shown(&output));
     assert_eq!(hook_runs(&log), 2);
+}
+
+/// docs/features/lock-rebase.md TE-7 (4b-2's carry-over: rev-rule.md
+/// TE-3, Q18; a scenario, no mutation: Q38): code-a's format-1 golden
+/// committed under `[check] mode = "enforce"`, a `pre-commit` hook running
+/// the built `spec check --staged --root .`; `spec lock rebase` on a
+/// terminal, `y`: the hook runs on the rebase commit and passes (a
+/// lock-only commit changes no `norm_hash`), the commit made, the lock
+/// alone, exit 0.
+#[test]
+fn te7_rebase_commit_passes_a_check_staged_hook_under_enforce() {
+    let repo = LockRepo::code_a("te7-rebase");
+    repo.write("spec.lock", golden_format_1_text());
+    check_mode(&repo, "enforce");
+    repo.commit_all("the format-1 lock, enforce");
+    let log = hook_check(&repo);
+    let head = repo.head();
+    let run = repo.spec_pty(&repo.root, &["lock", "rebase"], Some("y"));
+    run.code(0);
+    assert!(run.asked, "{}", run.show());
+    let commit = repo.head();
+    assert_ne!(commit, head, "the commit made");
+    assert_eq!(repo.changed(&commit), ["spec.lock"]);
+    assert_eq!(repo.parents(&commit), [head]);
+    assert!(
+        run.stdout.ends_with(&format!("committed {commit}\n")),
+        "{}",
+        run.show()
+    );
+    assert_eq!(hook_runs(&log), 1, "the hook ran and passed");
 }

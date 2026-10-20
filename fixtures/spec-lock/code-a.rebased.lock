@@ -1,0 +1,183 @@
+# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit
+format = 2
+norm_recipe = "specengine-norm/v1"
+code_recipe = "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15"
+
+[[binding]]
+node = "GOAL-01"
+rev = 1
+spec_hash = "b3:7cd723d219491d3f7b5b39a50675c421d5c705eb3a6caaf538d30aeb6be9bc62"
+relation = "implements"
+file = "crates/tally/src/counter.rs"
+kind = "item"
+symbol = "crates/tally::counter::Tally::value"
+item_kind = "function_item"
+levels = ["body"]
+sig_hash = "b3:b2350b5b72daae88b6f94d7b50220ba643da39bb33cc63e8bf446ce9e43e34a8"
+body_hash = "b3:ed07cd4723eb5ac0f6e2d1ea5f909d9c74053cfd0d97837015e6cbcf033de609"
+deps_hash = "b3:dc3905e4443a1de6f1d90f4782879e8b5b993ce64e2e13bd77fb6d298e0f9bcb"
+skeleton_hash = "b3:f6e9f5a80b3e9082a121d973b731e954d4cae4e2471e30d85e84fc5eaa9034cd"
+quote_hash = "b3:bc3c69c12fa1a124c1164e24c3badf23e5a055e6c899c6e10c37438e73c34cc1"
+body_bytes = 12
+file_blob = "59de121b876dfb1a2239f334411628bf7b8d72d6"
+commit = "85a2c98493892e599cf32e176533225ba892f410"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "LAW-BOUND"
+rev = 2
+spec_hash = "b3:e16dd714eef77ecdc9f7387b19dde743514c1a34accfae672d07bf7c36509708"
+relation = "implements"
+file = "crates/tally/src/counter.rs"
+kind = "item"
+symbol = "crates/tally::counter::<Tally as fmt::Display>::fmt"
+item_kind = "function_item"
+levels = ["sig", "body"]
+sig_hash = "b3:9c8a6c1ef53189de38cfdcab8fd2fb0a266949dcdf468ba8841a2d82be5ac1d6"
+body_hash = "b3:bb6307a47b3c367f2f7772ff3c09ce9b2bb6200a436a23982aa725044084fe3f"
+deps_hash = "b3:876c92efb571a3c6c5579a46836dc4f38113f944be44ea8fac807d4e8e03bb04"
+skeleton_hash = "b3:d48924c2f34f475c3f1304245cb7e05f77a2f0a386d4fdeeea23b3f4f9a40291"
+quote_hash = "b3:021f0e083b7b0dd8891e69f3452c4384fee59bcc6bb590aee810f4f083dcd02c"
+body_bytes = 25
+file_blob = "59de121b876dfb1a2239f334411628bf7b8d72d6"
+commit = "82f6593a2654f7d98414f298d4a13064cf2f6e8f"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "LAW-BOUND"
+rev = 2
+spec_hash = "b3:e16dd714eef77ecdc9f7387b19dde743514c1a34accfae672d07bf7c36509708"
+relation = "verifies"
+file = "crates/tally/tests/bounds.rs"
+kind = "item"
+symbol = "crates/tally::test:bounds::stops_at_cap"
+item_kind = "function_item"
+levels = ["body"]
+sig_hash = "b3:b7538c4eaef5dde695e9a819f42be75374cd6fb5eca74f6db7fb9ff6944fedad"
+body_hash = "b3:53fb08e7fe8c15b1cd3eca30b3b18e755e61c77e54f117e8aa6fd85b42bc9ee0"
+deps_hash = "b3:112f44533ecb94f3c4ecfe4073660452cb1406aea1752fc76cfb8b09db8322ec"
+skeleton_hash = "b3:45772fc06167a6040f9032345c5dd48f4f292f35fa4581ebbdf392f5b1148a14"
+quote_hash = "b3:7bd66d6e18c449cf2061d3bfadc1f781d9d19e56c10991440e9f35093c23f9ca"
+body_bytes = 85
+file_blob = "e84f074a0fb8d4894a380d6eb78d6576d39a0740"
+commit = "82f6593a2654f7d98414f298d4a13064cf2f6e8f"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "LAW-BOUND"
+rev = 2
+spec_hash = "b3:e16dd714eef77ecdc9f7387b19dde743514c1a34accfae672d07bf7c36509708"
+relation = "configures"
+file = "crates/tally/src/counter.rs"
+kind = "item"
+symbol = "crates/tally::counter::CAP"
+item_kind = "const_item"
+levels = ["sig", "body"]
+sig_hash = "b3:1d84a8ba3c3b5152a2152988361ab55ea641d5e623a271e503df321db7c1d0d6"
+body_hash = "b3:3a018f2e181351ebe097b1d780f624c881acb162b69cf5528041bd8099c05186"
+deps_hash = "b3:dc3905e4443a1de6f1d90f4782879e8b5b993ce64e2e13bd77fb6d298e0f9bcb"
+skeleton_hash = "b3:6a2a9d3f6874f9be2afcb3a1a0ed76c1f97f5f06c0d284ffc866635888520f77"
+quote_hash = "b3:8809f1199471f09516656c67a9aae625bc0ac545c8d8e161cc1d4252ea6adf81"
+body_bytes = 2
+file_blob = "59de121b876dfb1a2239f334411628bf7b8d72d6"
+commit = "82f6593a2654f7d98414f298d4a13064cf2f6e8f"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "LAW-BOUND"
+rev = 2
+spec_hash = "b3:e16dd714eef77ecdc9f7387b19dde743514c1a34accfae672d07bf7c36509708"
+relation = "configures"
+file = "data/limits.ron"
+kind = "ron"
+symbol = "root.cap"
+levels = ["sig", "body"]
+sig_hash = "b3:3ea6e0f403e2a7dbcba8e50456140482b0b0123c62ad1117b3f0e342e306867a"
+body_hash = "b3:3ea6e0f403e2a7dbcba8e50456140482b0b0123c62ad1117b3f0e342e306867a"
+deps_hash = "b3:dc3905e4443a1de6f1d90f4782879e8b5b993ce64e2e13bd77fb6d298e0f9bcb"
+file_blob = "51ded2117cd4a3dbcf2bdd1d218155b3ff64fc9f"
+commit = "82f6593a2654f7d98414f298d4a13064cf2f6e8f"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "PIECE-COUNTER"
+rev = 3
+spec_hash = "b3:4673d640e76fcdca60d6875148f781d65fbb97f89370ac89b674a5a5c5d6cfea"
+relation = "implements"
+file = "crates/tally/src/counter.rs"
+kind = "item"
+symbol = "crates/tally::counter::Tally"
+item_kind = "struct_item"
+levels = ["sig", "body"]
+sig_hash = "b3:a17aec79e956036a063eeb532cd04de6828bde667b4d01e13f1f8e24d1ece22b"
+body_hash = "b3:2ef4f062d267a9e03e7fc7a24e57df701753f2b60cf0bd051a40948400b25d25"
+deps_hash = "b3:dc3905e4443a1de6f1d90f4782879e8b5b993ce64e2e13bd77fb6d298e0f9bcb"
+skeleton_hash = "b3:4ef21f86da61412039658aacee1f34d2d140138d8fad9744465de2b53a53e702"
+quote_hash = "b3:e236952a3b6d28b3a1f976ac136210101b3d07220e74e11edd41d1722711e3b1"
+body_bytes = 11
+file_blob = "59de121b876dfb1a2239f334411628bf7b8d72d6"
+commit = "2ba8a3bce6422b0b9a15afe89954c2c6e0de98f8"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "PIECE-COUNTER"
+rev = 3
+spec_hash = "b3:4673d640e76fcdca60d6875148f781d65fbb97f89370ac89b674a5a5c5d6cfea"
+relation = "implements"
+file = "crates/tally/src/lib.rs"
+kind = "module"
+symbol = "crates/tally"
+levels = ["sig", "body"]
+sig_hash = "b3:053919cf4b76577ee9c30ac54cadb669a3cdb60755f8b74d7c12eb381049ce2c"
+body_hash = "b3:728949240ffebfcced693fc7c6dfeb862001f98a6371ce2ceafcfa1f8cb4bfe3"
+deps_hash = "b3:dc3905e4443a1de6f1d90f4782879e8b5b993ce64e2e13bd77fb6d298e0f9bcb"
+skeleton_hash = "b3:b713a101096ecf0252eab2d1b8f5fecae07c553eb9c2819d4ce4f55ef0ea891b"
+quote_hash = "b3:0a49ea137c97204854553599e09053a4976c77c6761789b5642ee807085cbaed"
+body_bytes = 81
+file_blob = "c9068771bc2e75d2b224d8583cf2c285a23ba8e3"
+commit = "2ba8a3bce6422b0b9a15afe89954c2c6e0de98f8"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "PIECE-COUNTER"
+rev = 3
+spec_hash = "b3:4673d640e76fcdca60d6875148f781d65fbb97f89370ac89b674a5a5c5d6cfea"
+relation = "verifies"
+file = "crates/tally/tests/bounds.rs"
+kind = "module"
+symbol = "crates/tally::test:bounds"
+levels = ["sig", "body"]
+sig_hash = "b3:b7681d8119ee631173cdc7a6372c1bd10997e7e8cd58138d0dd36457c75c4215"
+body_hash = "b3:433e554af8c2af4ba8cf9be551a19f0866b8c0a236967fcf54f7baab84d0a767"
+deps_hash = "b3:112f44533ecb94f3c4ecfe4073660452cb1406aea1752fc76cfb8b09db8322ec"
+skeleton_hash = "b3:5b16d1b083d5c0c484a83d5003a54ac5d9822f43fdea30287bda8b2a10a5c247"
+quote_hash = "b3:4605bc058029fdb34e70d17ff43a92ee1107ade38fd5ba803bf31392c82746ba"
+body_bytes = 222
+file_blob = "e84f074a0fb8d4894a380d6eb78d6576d39a0740"
+commit = "2ba8a3bce6422b0b9a15afe89954c2c6e0de98f8"
+verified_by = "owner"
+verified_at = "2026-10-08"
+
+[[binding]]
+node = "PIECE-COUNTER"
+rev = 3
+spec_hash = "b3:4673d640e76fcdca60d6875148f781d65fbb97f89370ac89b674a5a5c5d6cfea"
+relation = "configures"
+file = "data/limits.ron"
+kind = "ron"
+symbol = "root"
+levels = ["sig", "body"]
+sig_hash = "b3:6672953b28ae87f65b0e3830ca4366232bee7192b7605a626d7189cca5b362cd"
+body_hash = "b3:6672953b28ae87f65b0e3830ca4366232bee7192b7605a626d7189cca5b362cd"
+deps_hash = "b3:dc3905e4443a1de6f1d90f4782879e8b5b993ce64e2e13bd77fb6d298e0f9bcb"
+file_blob = "51ded2117cd4a3dbcf2bdd1d218155b3ff64fc9f"
+commit = "2ba8a3bce6422b0b9a15afe89954c2c6e0de98f8"
+verified_by = "owner"
+verified_at = "2026-10-08"

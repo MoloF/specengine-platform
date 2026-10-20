@@ -30,7 +30,7 @@ No file, table, key or schema changes but verify's output and the drift hash's p
 
 ### The pairing
 
-WA-1, WA-4, WA-5, Q2. **Sides** (Q7): wherever verify's judge runs, each side alone, its own entries with its own markers, before its cascade: the disk (plain, `--changed`); `HEAD` (`--changed`'s and `--staged`'s base, with the current lock: `lock-rebase.md` "The base"); the index (`--staged`); one commit (`judge_commit`: `spec propose drift`, MCP `report_drift`). One seam in `verify_rows.rs`; 6b-2's `--node` pairs before its filter.
+WA-1, WA-4, WA-5, Q2. **Sides** (Q7): wherever verify's judge runs, each side alone, its own entries with its own markers, before its cascade: the disk (plain, `--changed`); `HEAD` (`--changed`'s and `--staged`'s base, with the current lock: `spec-lock-rebase.md` "The base"); the index (`--staged`); one commit (`judge_commit`: `spec propose drift`, MCP `report_drift`). One seam in `verify_rows.rs`; 6b-2's `--node` pairs before its filter.
 
 Per **group** (node, relation, kind, item_kind; to core an opaque key, Q13), T = `TRIVIAL_BODY_BYTES` (124 today, 08 AC-15; TE-1 may move it, Q12):
 

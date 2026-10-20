@@ -48,7 +48,9 @@
 //!    the lock written atomically (a first one created and given its
 //!    intent-to-add entry), `git commit --only spec.lock` with hooks run,
 //!    its message `spec: lock <ID>` and the trailers `Lock:`, `Lock-mode:`,
-//!    `Decided-by:` and the caller's; a failure restores the bytes;
+//!    `Decided-by:` and the caller's; a failure restores the bytes (`spec
+//!    lock rebase`, [`crate::lock_rebase`], takes this same commit under its
+//!    own [`LockSubject`]: `spec: lock rebase`, no `Lock:`);
 //! 6. the commit, the branch's tip (`refs/heads/<branch>`), verified as
 //!    `spec approve` verifies its own, and more: one parent, the old
 //!    `HEAD`; only `spec.lock` changed; a `Lock:` trailer naming the node;
@@ -125,8 +127,14 @@ const REV_IGNORED: &str = "`spec lock accept` locks the node's revision at HEAD"
 /// core's: `Lock:`, `Lock-mode:`, `Proposal:`).
 const DECIDED_BY_TRAILER: &str = "Decided-by";
 
-/// Step 9's refusal (the spec's words).
-const CHANGED_WHILE_ACCEPTING: &str = "spec.lock changed while being accepted; nothing written";
+/// Step 9's refusal (the spec's words): `spec.lock changed while being
+/// accepted; nothing written`, a rebase's `… rebased …`.
+fn changed_while(subject: &LockSubject<'_>) -> String {
+    format!(
+        "{LOCK_FILE} changed while being {}; nothing written",
+        subject.being()
+    )
+}
 
 /// A dirty input's states.
 const MODIFIED: &str = "modified";
@@ -178,7 +186,8 @@ pub struct LockPrompt<'a> {
 /// the terminal; only `y` or `yes` consents).
 pub type LockConsent<'a> = &'a mut dyn FnMut(&LockPrompt<'_>) -> bool;
 
-/// Which write an accept is.
+/// Which write an accept is; or a rebase, whose commit takes the same path
+/// ([`crate::lock_rebase`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LockMode {
@@ -186,11 +195,14 @@ pub enum LockMode {
     Editorial,
     /// A gone node's entries dropped (`Lock-mode: accept`).
     Gone,
+    /// `spec lock rebase` (`Lock-mode: rebase`): no accept's, so outside
+    /// [`LockMode::TRAILERS`].
+    Rebase,
 }
 
 impl LockMode {
     /// Every `Lock-mode:` value an accept's commit carries (a drift item's
-    /// completion takes these alone).
+    /// completion takes these alone; never a rebase's).
     pub(crate) const TRAILERS: [&'static str; 2] =
         [Self::Accept.trailer(), Self::Editorial.trailer()];
 
@@ -199,6 +211,40 @@ impl LockMode {
         match self {
             Self::Accept | Self::Gone => "accept",
             Self::Editorial => EDITORIAL,
+            Self::Rebase => "rebase",
+        }
+    }
+}
+
+/// What a lock commit is of: its message's subject line and `Lock:`
+/// trailer, its third check, the words of a refusal when the lock changed
+/// meanwhile, and the rows the owner is shown.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum LockSubject<'a> {
+    /// An accept, an editorial refresh, a gone node's drop: `spec: lock
+    /// <node>`, `Lock: <node>`, checked for that trailer; the outcome's
+    /// rows.
+    Node(&'a str),
+    /// A rebase: `spec: lock rebase`, no `Lock:` trailer, checked for
+    /// `Lock-mode: rebase` and no `Lock:`; its own rows' text.
+    Rebase { rows: &'a str },
+}
+
+impl LockSubject<'_> {
+    /// The message up to its `Lock-mode:` trailer: the subject line, the
+    /// empty line, an accept's `Lock:` trailer.
+    fn message_head(&self) -> String {
+        match self {
+            Self::Node(node) => format!("spec: lock {node}\n\n{LOCK_TRAILER}: {node}\n"),
+            Self::Rebase { .. } => "spec: lock rebase\n\n".to_owned(),
+        }
+    }
+
+    /// The write's participle in "changed while being …".
+    const fn being(&self) -> &'static str {
+        match self {
+            Self::Node(_) => "accepted",
+            Self::Rebase { .. } => "rebased",
         }
     }
 }
@@ -279,8 +325,18 @@ pub struct LockOutcome {
 
 impl LockOutcome {
     fn new(request: &LockAcceptRequest, mode: LockMode) -> Self {
+        Self::blank(request.reference.clone(), mode)
+    }
+
+    /// The outcome a rebase's commit runs under ([`crate::lock_rebase`]
+    /// maps what it gets back): no reference, node or rows.
+    pub(crate) fn of_rebase() -> Self {
+        Self::blank(String::new(), LockMode::Rebase)
+    }
+
+    fn blank(reference: String, mode: LockMode) -> Self {
         Self {
-            reference: request.reference.clone(),
+            reference,
             node: None,
             rev: None,
             mode,
@@ -341,7 +397,7 @@ pub(crate) struct Repo {
 impl Repo {
     /// Git in the worktree holding `project`: `HEAD` born, on a branch,
     /// no operation in progress (exit 2 otherwise).
-    fn open(project: &ProjectRoot, env: &GitEnv) -> Result<Self, CliError> {
+    pub(crate) fn open(project: &ProjectRoot, env: &GitEnv) -> Result<Self, CliError> {
         let at_root = WorktreeGit::new(&project.root, env)
             .map_err(|error| CliError::spec(format!("cannot run git: {error}")))?;
         let place = at_root.place(&project.root).map_err(|error| match error {
@@ -404,7 +460,7 @@ impl Repo {
 }
 
 /// A git failure: exit 2.
-fn git_error(error: specengine_store::GitError) -> CliError {
+pub(crate) fn git_error(error: specengine_store::GitError) -> CliError {
     CliError::spec(format!("git: {error}"))
 }
 
@@ -1008,7 +1064,7 @@ fn accept(
         repo,
         &read,
         &merge.lock,
-        &message_node,
+        &LockSubject::Node(&message_node),
         question,
         outcome,
         consent,
@@ -1269,7 +1325,7 @@ struct FileCodes {
 
 /// A lockable binding's digests: an item's or a module's levels and
 /// fingerprints, or a RON value's hash.
-enum Hashed<'a> {
+pub(crate) enum Hashed<'a> {
     Levels(&'a LevelHashes),
     Ron(Digest),
 }
@@ -1313,12 +1369,12 @@ impl FileCodes {
 }
 
 /// `b3:` and a digest's lowercase hex, as the lock writes it.
-fn lock_digest(digest: &Digest) -> String {
+pub(crate) fn lock_digest(digest: &Digest) -> String {
     format!("{HASH_PREFIX}{}", digest.to_hex())
 }
 
 /// The lock's name of a marker's level.
-fn lock_level(level: Level) -> LockLevel {
+pub(crate) fn lock_level(level: Level) -> LockLevel {
     match level {
         Level::Path => LockLevel::Path,
         Level::Sig => LockLevel::Sig,
@@ -1330,7 +1386,7 @@ fn lock_level(level: Level) -> LockLevel {
 /// A format-2 entry's code: `levels` and every level's digest (a RON
 /// value's `sig` and `body` its hash, its `deps` the empty set's, no
 /// fingerprint; canon `code-hash-ron`, "RON value").
-fn level_code(levels: BTreeSet<LockLevel>, hashed: &Hashed<'_>) -> LevelCode {
+pub(crate) fn level_code(levels: BTreeSet<LockLevel>, hashed: &Hashed<'_>) -> LevelCode {
     match hashed {
         Hashed::Levels(hashes) => LevelCode {
             levels,
@@ -1545,7 +1601,7 @@ fn parsed_node(
 
 /// Each input that is not tracked and clean, with its state. `spec.lock`
 /// absent and not at `HEAD` is clean (a first lock).
-fn dirty_inputs(
+pub(crate) fn dirty_inputs(
     repo: &Repo,
     inputs: &BTreeSet<String>,
     lock_exists: bool,
@@ -1651,7 +1707,7 @@ pub(crate) fn is_code_path(code: &CodeConfig, path: &str) -> bool {
 }
 
 /// Exit 1's reason for dirty inputs.
-fn dirty_reason(dirty: &[(String, &'static str)]) -> String {
+pub(crate) fn dirty_reason(dirty: &[(String, &'static str)]) -> String {
     let named: Vec<String> = dirty
         .iter()
         .map(|(path, state)| format!("`{path}` {state}"))
@@ -1750,7 +1806,7 @@ fn editorial(
         repo,
         &read,
         &refreshed.lock,
-        &message_node,
+        &LockSubject::Node(&message_node),
         question,
         outcome,
         consent,
@@ -1801,28 +1857,42 @@ fn drop_gone(
         repo.worktree
     );
     write_and_commit(
-        env, project, repo, &read, &lock, written, question, outcome, consent, trailers,
+        env,
+        project,
+        repo,
+        &read,
+        &lock,
+        &LockSubject::Node(written),
+        question,
+        outcome,
+        consent,
+        trailers,
     )
 }
 
 // ------------------------------------------------------------ the commit
 
 /// Steps 8 to 10: the identity, an ignored first lock, the question, the
-/// place and the bytes read again, the write and the commit.
+/// place and the bytes read again, the write and the commit; `subject`
+/// what the commit is of (an accept's node, or a rebase: its message, its
+/// third check, its rows).
 #[allow(clippy::too_many_arguments)]
-fn write_and_commit(
+pub(crate) fn write_and_commit(
     env: &Env,
     project: &ProjectRoot,
     repo: &Repo,
     read: &ReadLock,
     lock: &Lock,
-    node: &str,
+    subject: &LockSubject<'_>,
     question: String,
     mut outcome: LockOutcome,
     consent: LockConsent<'_>,
     trailers: &[LockTrailer],
 ) -> Result<LockOutcome, CliError> {
-    let rows = rows_text(&outcome.rows);
+    let rows = match subject {
+        LockSubject::Node(_) => rows_text(&outcome.rows),
+        LockSubject::Rebase { rows } => (*rows).to_owned(),
+    };
     let decided_by = repo.git.committer_ident().map_err(|error| {
         CliError::spec(format!(
             "no committer identity in {} ({error}): set user.name and user.email",
@@ -1867,7 +1937,7 @@ fn write_and_commit(
         || branch.as_deref() != Some(repo.branch.as_str())
         || bytes != read.bytes
     {
-        return Ok(outcome.refused(CHANGED_WHILE_ACCEPTING));
+        return Ok(outcome.refused(&changed_while(subject)));
     }
 
     // The write.
@@ -1886,7 +1956,8 @@ fn write_and_commit(
             Ok(created) => Some(created),
             Err(CreateFileError::Exists) => {
                 return Ok(outcome.refused(&format!(
-                    "{LOCK_FILE} appeared while being accepted; nothing written"
+                    "{LOCK_FILE} appeared while being {}; nothing written",
+                    subject.being()
                 )));
             }
             Err(error) => {
@@ -1899,8 +1970,8 @@ fn write_and_commit(
 
     // The commit.
     let mut message = format!(
-        "spec: lock {node}\n\n{LOCK_TRAILER}: {node}\n{LOCK_MODE_TRAILER}: {}\n\
-         {DECIDED_BY_TRAILER}: {decided_by}\n",
+        "{}{LOCK_MODE_TRAILER}: {}\n{DECIDED_BY_TRAILER}: {decided_by}\n",
+        subject.message_head(),
         outcome.mode.trailer()
     );
     for trailer in trailers {
@@ -1924,7 +1995,7 @@ fn write_and_commit(
     let branch = repo.branch.as_str();
     let tip = || repo.git.commit_of(&format!("refs/heads/{branch}"));
     let check =
-        |commit: &str| check_lock_commit(repo, commit, &top_path, node, &rendered, trailers);
+        |commit: &str| check_lock_commit(repo, commit, &top_path, subject, &rendered, trailers);
     let undo =
         |commit: &str| format!("`git reset --soft {commit}^` undoes it, its changes kept staged");
     let undo_back = Undo {
@@ -2115,17 +2186,18 @@ enum Check {
 
 /// `commit` against this run's lock commit (`spec approve`'s three checks
 /// and two more): its parents the old `HEAD` alone, `spec.lock` the only
-/// path it changes, a `Lock:` trailer naming the node, its `spec.lock`
-/// blob the bytes the owner confirmed (a hook that rewrote and staged the
-/// lock, a concurrent accept of the node, fail it); then, apart from these
-/// four, each of `trailers` (the caller's, `Proposal:` of a drift item's
+/// path it changes, a `Lock:` trailer naming the node (a rebase's: a
+/// `Lock-mode: rebase` trailer and no `Lock:`), its `spec.lock` blob the
+/// bytes the owner confirmed (a hook that rewrote and staged the lock, a
+/// concurrent accept of the node, fail it); then, apart from these four,
+/// each of `trailers` (the caller's, `Proposal:` of a drift item's
 /// approve) present with its value (a hook dropping one fails it, the
 /// commit still this run's: [`Check::Untrailed`]).
 fn check_lock_commit(
     repo: &Repo,
     commit: &str,
     top_path: &str,
-    node: &str,
+    subject: &LockSubject<'_>,
     rendered: &str,
     trailers: &[LockTrailer],
 ) -> Check {
@@ -2156,10 +2228,31 @@ fn check_lock_commit(
         )),
         Err(error) => unread.push(format!("what it changes cannot be read: {error}")),
     }
-    match repo.git.trailer_values(commit, LOCK_TRAILER) {
-        Ok(values) if values.iter().any(|value| value == node) => {}
-        Ok(_) => wrong.push(format!("it has no `{LOCK_TRAILER}: {node}` trailer")),
-        Err(error) => unread.push(format!("its trailers cannot be read: {error}")),
+    match subject {
+        LockSubject::Node(node) => match repo.git.trailer_values(commit, LOCK_TRAILER) {
+            Ok(values) if values.iter().any(|value| value == node) => {}
+            Ok(_) => wrong.push(format!("it has no `{LOCK_TRAILER}: {node}` trailer")),
+            Err(error) => unread.push(format!("its trailers cannot be read: {error}")),
+        },
+        LockSubject::Rebase { .. } => {
+            let mode = LockMode::Rebase.trailer();
+            match (
+                repo.git.trailer_values(commit, LOCK_MODE_TRAILER),
+                repo.git.trailer_values(commit, LOCK_TRAILER),
+            ) {
+                (Ok(modes), Ok(nodes)) => {
+                    if !modes.iter().any(|value| value == mode) {
+                        wrong.push(format!("it has no `{LOCK_MODE_TRAILER}: {mode}` trailer"));
+                    }
+                    if !nodes.is_empty() {
+                        wrong.push(format!("it has a `{LOCK_TRAILER}:` trailer"));
+                    }
+                }
+                (Err(error), _) | (_, Err(error)) => {
+                    unread.push(format!("its trailers cannot be read: {error}"));
+                }
+            }
+        }
     }
     // A commit deleting the file fails this check (it may pass the
     // changed paths', which a deletion of `spec.lock` alone satisfies).

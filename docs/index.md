@@ -26,7 +26,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/features/impact.md](features/impact.md) impact: the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
 - [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols, the next plugin MINOR · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
 - [docs/features/lock-levels-verify.md](features/lock-levels-verify.md) lock-levels-verify (5b-1b): verify by levels · crates/specengine-core, crates/specengine-cli · draft
-- [docs/features/lock-rebase.md](features/lock-rebase.md) lock-rebase (5b-2): spec lock rebase · crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures · draft
 - [docs/features/roadmap.md](features/roadmap.md) Roadmap and backlog (planned) · specengine · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/features/verify-node.md](features/verify-node.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft

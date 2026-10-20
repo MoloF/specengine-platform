@@ -37,13 +37,13 @@ use specengine_cli::{
     Exit, ExportIndexRequest, ExportStateRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress,
     GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest,
     InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
-    LockAcceptRequest, LockPrompt, LockRegenRequest, Outcome, ProposeRequest, ProposedText,
-    QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoundAnswerRequest,
-    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
-    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
-    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
-    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest, VerifyTestsRequest,
-    render_json, render_text,
+    LockAcceptRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest,
+    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
+    RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest,
+    ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree,
+    VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -359,6 +359,8 @@ enum LockCommand {
     },
     /// After a merge conflicting in spec.lock: merge its stages per entry (no code read, no hash computed), ask [y/N] on the terminal, write the working-tree file; then git add and commit the merge. Exit 0 written, 1 no conflict or not confirmed, 2 cannot run.
     Regen,
+    /// Carry spec.lock into this build's format and code recipe: each entry's hashes made again from its own committed blob, its revision, spec hash, blob, commit and date kept; an entry that cannot be made again is dropped and named. Lists the entries, asks [y/N] on the terminal, commits spec.lock alone. Exit 0 committed or nothing to change, 1 refused (a dirty input, no lock, not confirmed, the commit failed or unverified), 2 cannot run.
+    Rebase,
 }
 
 #[derive(Subcommand)]
@@ -1404,6 +1406,21 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 env,
                 globals,
                 &LockRegenRequest {
+                    git: process_git(env),
+                },
+                &mut consent,
+            )?))
+        }
+        Command::Lock {
+            command: LockCommand::Rebase,
+        } => {
+            // Before anything is read: the lock is the owner's alone.
+            require_terminal("lock rebase")?;
+            let mut consent = |prompt: &LockPrompt<'_>| show_and_ask(prompt, json);
+            Outcome::LockRebase(Box::new(specengine_cli::lock_rebase(
+                env,
+                globals,
+                &LockRebaseRequest {
                     git: process_git(env),
                 },
                 &mut consent,

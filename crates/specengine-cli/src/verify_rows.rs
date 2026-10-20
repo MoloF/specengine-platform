@@ -49,7 +49,7 @@ use specengine_code::{
 };
 use specengine_core::check::{CheckFile, CheckInput, Mode, canonical_id};
 use specengine_core::lock::{
-    EntryCode, HASH_PREFIX, LOCK_FILE, Lock, LockKind, LockLevel, Verified, parse_lock,
+    EntryCode, HASH_PREFIX, LOCK_FILE, Lock, LockFormat, LockKind, LockLevel, Verified, parse_lock,
 };
 use specengine_core::verify::{
     CodeFact, Compared, Comparison, Judgement, MarkerFact, MarkerRev, NodeFact, RowBinding,
@@ -115,9 +115,13 @@ pub(crate) struct HeadSide {
     input: CheckInput,
     /// `None`: the working tree's walk, equal to the commit's.
     tree: Option<CodeTree>,
-    /// The commit's lock, parsed (absent: empty).
+    /// The commit's lock, parsed (absent: empty); the judged lock when
+    /// `HEAD`'s is only unrebased ([`HeadSide::lock_note`]).
     pub lock: Lock,
     pub mode: HeadMode,
+    /// `HEAD`'s lock gave way to the judged one: the note saying so
+    /// (stderr and `--json` `notes`).
+    pub lock_note: Option<String>,
 }
 
 impl HeadSide {
@@ -536,7 +540,7 @@ fn code_ref(target: &Target, rust: Option<usize>) -> CodeRef {
 }
 
 /// The canonical cited ID of the node at `at`; `None` when it has no ID.
-fn node_id(corpus: &Corpus<'_>, project: &ProjectRoot, at: NodeKey) -> Option<String> {
+pub(crate) fn node_id(corpus: &Corpus<'_>, project: &ProjectRoot, at: NodeKey) -> Option<String> {
     let path = corpus.resolver.paths().get(at.file)?;
     let id = corpus
         .files
@@ -839,7 +843,9 @@ impl LineStarts {
 /// walk when every code file and every manifest the naming read is. An
 /// unborn `HEAD`: no side, every row introduced. Causes: git's (4); a
 /// listed object missing or no blob, `HEAD`'s lock invalid, a file the
-/// parser fails on (7).
+/// parser fails on (7). `HEAD`'s lock only unrebased (format 1, another
+/// `code_recipe`) beside a judged lock of this build's: `HEAD`'s rows are
+/// judged with the judged lock, under a note ([`HeadSide::lock_note`]).
 ///
 /// Over the index's side (`index`: `spec verify --staged`; `walked` its
 /// side), a `HEAD` file whose (path, OID) the index holds as a regular
@@ -860,6 +866,7 @@ pub(crate) fn read_head(
             tree: None,
             lock: Lock::empty(build_recipes()),
             mode: HeadMode::Absent,
+            lock_note: None,
         });
     };
     let project = walked.project;
@@ -922,11 +929,11 @@ pub(crate) fn read_head(
         return Err(RunCause::new(CAUSE_BASE, first));
     }
 
-    // The lock at HEAD, parsed against this build's recipes (the index
-    // side's when it shares it).
-    let lock = match (shared_lock, read.remove(LOCK_FILE)) {
-        (Some(lock), _) => lock,
-        (None, None) => Lock::empty(build_recipes()),
+    // The lock at HEAD (the index side's when it shares it), or the judged
+    // lock in its place when HEAD's is only unrebased.
+    let (lock, lock_note) = match (shared_lock, read.remove(LOCK_FILE)) {
+        (Some(lock), _) => (lock, None),
+        (None, None) => (Lock::empty(build_recipes()), None),
         (None, Some(CommitFile::Unreadable(why))) => {
             return Err(RunCause::new(
                 CAUSE_BASE,
@@ -936,8 +943,7 @@ pub(crate) fn read_head(
         (None, Some(CommitFile::Bytes(bytes))) => {
             let text = std::str::from_utf8(&bytes)
                 .map_err(|_| RunCause::new(CAUSE_BASE, format!("HEAD's {LOCK_FILE}: not UTF-8")))?;
-            parse_lock(text, Some(&build_recipes()))
-                .map_err(|error| RunCause::new(CAUSE_BASE, format!("HEAD's {error}")))?
+            head_lock(text, walked.lock)?
         }
     };
 
@@ -1046,7 +1052,38 @@ pub(crate) fn read_head(
         tree,
         lock,
         mode,
+        lock_note,
     })
+}
+
+/// `HEAD`'s lock, read in a rebase's order (task spec `lock-rebase`,
+/// "The base"): this build's, as it is; else, at this build's
+/// `norm_recipe`, a format-1 lock or one of another `code_recipe` gives way
+/// to `judged` (the disk's lock, the index's under `--staged`) when that
+/// one is this build's, so a rebase's commit, which changes no key, `rev`,
+/// `spec_hash` or `file_blob`, reads as at `HEAD`: `judged` and the note
+/// saying so.
+/// `HEAD`'s lock unreadable, of another `norm_recipe`, or beside a judged
+/// lock not this build's: cause (7), the strict reader's text.
+fn head_lock(text: &str, judged: &Lock) -> Result<(Lock, Option<String>), RunCause> {
+    let build = build_recipes();
+    let strict = match parse_lock(text, Some(&build)) {
+        Ok(lock) => return Ok((lock, None)),
+        Err(error) => RunCause::new(CAUSE_BASE, format!("HEAD's {error}")),
+    };
+    let Ok(old) = parse_lock(text, None) else {
+        return Err(strict);
+    };
+    if old.recipes.norm != build.norm || judged.format != LockFormat::Two || judged.recipes != build
+    {
+        return Err(strict);
+    }
+    let note = format!(
+        "HEAD's {LOCK_FILE} is format {} (\"{}\"): judged with the current lock",
+        old.format.number(),
+        old.recipes.code
+    );
+    Ok((judged.clone(), Some(note)))
 }
 
 // ------------------------------------------------------------ one commit

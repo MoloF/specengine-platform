@@ -14,6 +14,9 @@
 //! text is the subject, or with stdin null where the refusal of a
 //! non-terminal is.
 //!
+//! `spec lock rebase` runs alike ([`rebase`]: the library at no clock, a
+//! rebase keeping `verified_at` and `commit`).
+//!
 //! Only the lock test binaries include this module (`mod lock_common;`).
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -41,6 +44,10 @@ use specengine_store::GitEnv;
 
 use crate::common::git::Sandbox;
 use crate::common::{NORM_SUFFIX, RUN_TIMEOUT, Run, SPEC, Scratch, snapshot, spec_with};
+
+/// `spec lock rebase` (docs/features/lock-rebase.md): `LockRepo::rebase`,
+/// `RebaseAttempt`, the rebased golden.
+pub mod rebase;
 
 /// The clock of every library accept unless a test names another: its
 /// date is not the day the suite runs on, so a lock written with the

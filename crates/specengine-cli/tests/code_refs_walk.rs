@@ -1359,8 +1359,13 @@ fn manifests_name_packages_alike_from_any_root() {
 /// `lock_regen.rs` reads no item's `.state` (a judgement's, a level list's
 /// or a printed row's only). docs/features/symbol-index.md RD-13: the code
 /// index's analyzer joins, hashing through `item_levels` alone (the pin
-/// names per file the entries it must call). `verify_rows.rs` joins in
-/// 5b-1b (Q26), `lock_rebase.rs` in 5b-2.
+/// names per file the entries it must call). docs/features/lock-rebase.md
+/// RD-7 ("Rules": the pin, Q16, R11): `lock_rebase.rs` joins, hashing
+/// through `item_levels`, `module_levels` and, for the v2 cross-check,
+/// `hash_bound_items` (read by `.digest()`), never `hash_item` or
+/// `hash_node`, naming no `HashState`, reading no `.state` but a
+/// judgement's, a level list's or a printed row's. `verify_rows.rs` joins
+/// in 5b-1b (Q26).
 #[test]
 fn nothing_outside_the_binder_reads_an_items_state() {
     const HASHING: [&str; 5] = [
@@ -1370,7 +1375,7 @@ fn nothing_outside_the_binder_reads_an_items_state() {
         "item_levels(",
         "module_levels(",
     ];
-    let pinned: [(&str, &[&str]); 6] = [
+    let pinned: [(&str, &[&str]); 7] = [
         ("crates/specengine-cli/src/code_walk.rs", &[]),
         ("crates/specengine-cli/src/refs.rs", &[]),
         ("crates/specengine-code/src/naming.rs", &[]),
@@ -1379,6 +1384,10 @@ fn nothing_outside_the_binder_reads_an_items_state() {
             &["item_levels(", "module_levels("],
         ),
         ("crates/specengine-cli/src/lock_regen.rs", &[]),
+        (
+            "crates/specengine-cli/src/lock_rebase.rs",
+            &["item_levels(", "module_levels(", "hash_bound_items("],
+        ),
         (ANALYZER_MODULE, &["item_levels("]),
     ];
     for (file, entries) in pinned {

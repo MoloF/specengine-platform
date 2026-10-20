@@ -96,7 +96,7 @@ verified_by = "owner"       # owner only (CI writes nothing) — review record: 
 verified_at = "2026-09-28"
 ```
 
-Committed with the code, written only on the owner's terminal (ADR-0041), by `apply_proposal` only under `--editorial` (ADR-0043); `spec lock regen` resolves its conflicts. Shipped as `format = 1`, now `format = 2` (`norm_recipe`, `code_recipe`; per binding its `levels` and every level's digest in place of `ast_hash`): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
+Committed with the code, written only on the owner's terminal (ADR-0041), by `apply_proposal` only under `--editorial` (ADR-0043); `spec lock regen` resolves its conflicts, `spec lock rebase` carries an older format or `code_recipe` over (`docs/canon/spec-lock-rebase.md`). Shipped as `format = 1`, now `format = 2` (`norm_recipe`, `code_recipe`; per binding its `levels` and every level's digest in place of `ast_hash`): `docs/canon/spec-lock.md`. It turns "the spec matches the code" into a **verifiable fact at a specific commit**.
 
 **What goes into `norm_hash`** (after Doorstop): the section text and semantic fields (`links`, for records `working_answer` etc.). **Excluded** are presentational and process fields: `title`, `status`, `tier`, `owner`, `reviewed`. Renaming a heading must not invalidate coverage. Shipped as recipe `specengine-norm/v1`, with the revision rule (ADR-0040): `docs/canon/node-revision.md`.
 

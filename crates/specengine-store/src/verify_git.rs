@@ -23,6 +23,10 @@
 //! as a [`CommitListing`] labelled [`INDEX_LABEL`]; then the same session
 //! reads `HEAD` and the blobs.
 //!
+//! `spec lock rebase` (task spec `lock-rebase`) reads objects by
+//! OID alone ([`VerifyGit::read_blobs`]): in the session, each OID once,
+//! raw bytes, never a path, a tree, the index or the working tree.
+//!
 //! Every failure is a [`Cause`] at `.` with a fixed message, never git's
 //! text or an absolute path.
 
@@ -102,6 +106,18 @@ pub enum CommitFile {
     Unreadable(&'static str),
 }
 
+/// An object read by its OID alone ([`VerifyGit::read_blobs`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ObjectBlob {
+    /// A blob: its raw bytes, no filter applied.
+    Bytes(Vec<u8>),
+    /// No object of that OID in the database (gc, a partial or shallow
+    /// clone: no fetch is tried), or a text that is no OID.
+    Missing,
+    /// An object of another type (a tree, a commit, a tag).
+    Foreign,
+}
+
 impl CommitListing {
     /// The commit's full OID; the index's listing: [`INDEX_LABEL`].
     pub fn label(&self) -> &str {
@@ -138,6 +154,14 @@ impl CommitListing {
         let (_, listed) = walk_index(&self.entries, scope);
         listed.into_keys().collect()
     }
+}
+
+/// A full object name: 40 (SHA-1) or 64 (SHA-256) lowercase hex.
+fn is_object_name(text: &str) -> bool {
+    matches!(text.len(), 40 | 64)
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn commit_entry(entry: &Entry) -> CommitEntry {
@@ -288,6 +312,36 @@ impl VerifyGit {
             files.insert(path.to_owned(), file);
         }
         Ok(files)
+    }
+
+    /// The objects `oids` name, by OID alone, each asked of the session
+    /// once however often it is given (`GIT_NO_LAZY_FETCH`: a missing one
+    /// is never fetched) and moved out of it (no second copy). A text that
+    /// is not 40 or 64 lowercase hex names no object: [`ObjectBlob::Missing`],
+    /// never asked (the session would read it as a revision). The cause:
+    /// git cannot be run or its reply cannot be read.
+    pub fn read_blobs<'o>(
+        &mut self,
+        oids: impl IntoIterator<Item = &'o str>,
+    ) -> Result<BTreeMap<String, ObjectBlob>, Cause> {
+        let mut read = BTreeMap::new();
+        for oid in oids {
+            if read.contains_key(oid) {
+                continue;
+            }
+            if !is_object_name(oid) {
+                read.insert(oid.to_owned(), ObjectBlob::Missing);
+                continue;
+            }
+            self.staged.blob(oid).map_err(|failure| failure.cause())?;
+            let object = match self.staged.objects.remove(oid) {
+                Some(Blob::Bytes(bytes)) => ObjectBlob::Bytes(bytes),
+                Some(Blob::Foreign) => ObjectBlob::Foreign,
+                Some(Blob::Missing) | None => ObjectBlob::Missing,
+            };
+            read.insert(oid.to_owned(), object);
+        }
+        Ok(read)
     }
 
     /// Ends the session: it must end cleanly.
