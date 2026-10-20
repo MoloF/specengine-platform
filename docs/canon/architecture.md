@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-12
+reviewed: 2026-10-20
 ---
 
 # SpecEngine architecture rules
@@ -15,6 +15,7 @@ The rules all code is written by, each with the ADRs that introduced it and hold
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
 - The operational database lives outside the repository, in `~/Library/Application Support/specengine/` beside the daemon's files (`docs/canon/serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `docs/canon/queue-backup.md`). ADR-0003.
+- A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`docs/canon/spec-roadmap.md`). ADR-0052.
 
 <a id="layout"></a>
 ## Spec layout in a project
@@ -56,7 +57,7 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`) and which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
 <a id="ids"></a>
 ## Identifiers

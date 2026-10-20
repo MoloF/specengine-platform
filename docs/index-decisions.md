@@ -60,3 +60,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0049](decisions/ADR-0049.md) Layer C runs as its own executable, on request, and only advises · code · accepted
 - [ADR-0050](decisions/ADR-0050.md) spec lock rebase re-hashes the lock from the bytes the owner accepted · architecture · accepted
 - [ADR-0051](decisions/ADR-0051.md) Health's code rows read the code index the call refreshes, as spec refs does · architecture · accepted
+- [ADR-0052](decisions/ADR-0052.md) Plan items are files in git; tasks execute them; position is computed · architecture · accepted
